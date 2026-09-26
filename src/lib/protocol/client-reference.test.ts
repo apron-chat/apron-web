@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, userIn, type ClientSnapshot } from './client';
 import { safeAvatar, safeLink, sameOriginMedia, serverOrigin } from './embeds';
-import { FakeSocket, settle } from './fake-socket';
+import { FakeSocket } from './fake-socket';
 
 /** Operations whose outcome a test does not await still settle when the client stops. */
 function quiet(value: { promise: Promise<unknown> } | Promise<unknown> | undefined): void {
