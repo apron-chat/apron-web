@@ -5,461 +5,116 @@ import {
 	compareLogIds,
 	createTimeline,
 	decodeHistoryRecords,
-	timelineEvents,
 	type DecodedRecords,
-	type ReactionSummary,
-	type RoomRename,
-	type TimelineState
+	type ReactionSummary
 } from './reducer';
 import {
+	isJsonObject,
+	isString,
+	isLogId,
+	isIdentity,
 	cloneJson,
-	decodeMembership,
 	decodeMessage,
+	decodeRoom,
 	decodeNotice,
 	decodeReactions,
-	decodeRoom,
-	isIdentity,
-	isJsonObject,
-	isLogId,
-	isString,
-	type Capability,
-	type Embed,
-	type Identity,
+	decodeMembership,
 	type JsonObject,
-	type JsonValue,
+	type Capability,
+	type Identity,
 	type MessageBody,
+	type Embed,
 	type MessageRecord,
-	type ReactionSet,
-	type RoomDelivery,
 	type RoomRecord,
-	type RpcError,
-	type ServerExt,
 	type ServerParams,
+	type ServerExt,
+	type RoomDelivery,
+	type RpcError,
 	type WireFrame
 } from './types';
+import {
+	DEFAULT_ROOM_ID,
+	type ChatClientOptions,
+	type ClientSnapshot,
+	type ConnectionStatus,
+	type CreateRoomOptions,
+	type MessageFormat,
+	type MessagePatch,
+	type MessageResult,
+	type Notice,
+	type OperationHandle,
+	type RoomListing,
+	type RoomPatch,
+	type RoomResult,
+	type SendOptions,
+	type UploadState
+} from './client-types';
+import {
+	AUTOFILL_CHALLENGE_MS,
+	AUTOFILL_MIN_REFRESH_MS,
+	AUTOFILL_REFRESH_MARGIN_MS,
+	FIRST_LOG_ID,
+	MAX_TYPING_S,
+	MAX_UNANSWERED_PINGS,
+	NO_NOTICES,
+	PASSKEY_IDLE_POLL_MS,
+	PASSKEY_IDLE_WAIT_MS,
+	PING_FRAME,
+	REQUEST_TIMEOUT_MS,
+	RETRY_AFTER_MAX_MS,
+	ROOM_LIST_REUSE_MS,
+	STABLE_CONNECTION_MS,
+	THREAD_PAGE_SIZE,
+	TYPING_REFRESH_MS,
+	TYPING_TIMEOUT_S,
+	absent,
+	canonicalJson,
+	decrement,
+	historyParams,
+	increment,
+	isEmbedded,
+	makeRequestId,
+	maxDefined,
+	mergeIdentity,
+	messageClientFields,
+	newRoomState,
+	reconnectDelay,
+	recordBytes,
+	recoveryBufferFits,
+	rejectedHandle,
+	retryAfterMilliseconds,
+	roomClientFields,
+	roomTitle,
+	sameEmojiSet,
+	typingKey,
+	userFacingRpcError,
+	validHistoryMetadata,
+	type LiveRecord,
+	type PendingRequest,
+	type PendingSave,
+	type RoomState,
+	type TypingState,
+	type ValidHistoryResponse
+} from './client-internals';
+import { capabilitiesOf } from './client-views';
 
+export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
-
-export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'offline';
-export type MessageFormat = 'plain' | 'markdown';
-
-/**
- * A transient notice (PROTOCOL.md §3.5, Appendix A.1): a `message` without
- * `message_id`, such as a `@private` command reply, or a local one such as a
- * command's error. It shows in its room for the session and is never stored
- * as a snapshot, so it never takes part in replay.
- */
-export interface Notice {
-	/** Unique within the session. */
-	key: string;
-	room_id: string;
-	from: Identity;
-	body?: MessageBody;
-	/**
-	 * Where it sits in the room's timeline: after every message whose
-	 * `message_id` is at most this position, the newest the room had when the
-	 * notice arrived.
-	 */
-	after: string;
-	/** When it arrived, in epoch milliseconds (notices carry no `log_id`). */
-	at: number;
-	/**
-	 * It arrived before this connection authenticated, such as a server's
-	 * welcome. Servers send those again on each connection, so a new one
-	 * replaces the last rather than stacking (PROTOCOL.md Appendix B).
-	 */
-	welcome?: boolean;
-}
-
-/**
- * One visible room: a room the user has joined on this connection (cap
- * `rooms`), else one a message arrived in, or a room opened without joining
- * it (`viewRoom`, `joined: false`). Threads are rooms with `parentRoomId`
- * (PROTOCOL.md §3.4, §4.3).
- */
-export interface RoomSnapshot {
-	id: string;
-	/** Display title: the record's `title`, falling back to the `room_id`. */
-	title: string;
-	/**
-	 * The user has joined it (or, without cap `rooms`, it is a room messages
-	 * arrive in): it delivers live. A room opened with `viewRoom` is not joined
-	 * and changes only when it loads.
-	 */
-	joined: boolean;
-	/** The stored room record (client fields plus `log_id`), without delivery fields. */
-	record?: RoomRecord;
-	/** Set for threads; fixed at creation. */
-	parentRoomId?: string;
-	/** The room's description or thread starter, as a message ID. */
-	introMessageId?: string;
-	/**
-	 * The latest stored snapshot of the intro message (it may live in another
-	 * room, usually the parent for a thread), when known.
-	 */
-	introMessage?: MessageRecord;
-	/** Opaque extension data from the room record. */
-	ext?: JsonObject;
-	/** Title changes seen in the room's log, ascending (absent when none). */
-	renames?: RoomRename[];
-	/** Greatest `log_id` known in the room's log. */
-	latestLogId?: string;
-	/** Advertised lower bound of retrievable history, `null` when none. */
-	historyLogId?: string | null;
-	/**
-	 * Messages homed in this room with their aggregated reactions. While an
-	 * automatic history recovery runs the published timeline is held (empty
-	 * for a rebuild) and replaced when the recovery completes or fails.
-	 */
-	timeline: TimelineState;
-	/** An automatic history recovery is running. */
-	recovering: boolean;
-	/** The last recovery or `loadRoom` failed; `loadRoom` retries. */
-	recoveryError?: string;
-	/**
-	 * History for this room has been loaded on this connection: always true
-	 * without cap `history`; for top-level rooms after the first recovery; for
-	 * threads after `loadRoom` completed.
-	 */
-	loaded: boolean;
-	/** A `loadRoom` request is in flight. */
-	loading: boolean;
-	/**
-	 * A thread loaded newest-first has older records to fetch with
-	 * `loadOlder`; its message count is a lower bound until they are.
-	 */
-	olderAvailable?: boolean;
-	/** A `loadOlder` request is in flight. */
-	loadingOlder?: boolean;
-	/** Your read cursor in this room (§4.4), as the server last reported or you advanced it. */
-	readMessageId?: string;
-	/**
-	 * The room's members (§4.3.2): started from a complete `members` listing
-	 * (`room_list` with `members`, or `room_update` `joined`) and kept current by
-	 * the memberships received live and in history. Each is the listed or
-	 * recorded user object; render it through the kept one. Undefined until
-	 * anything is known.
-	 */
-	members?: Identity[];
-	/** Transient notices shown in this room this session, in arrival order. */
-	notices: readonly Notice[];
-}
-
-/**
- * A visible room as `room_list` returns it (§4.3.1): its record, its head,
- * and its members. Listing a room does not join it.
- */
-export interface RoomListing {
-	id: string;
-	title: string;
-	record: RoomRecord;
-	parentRoomId?: string;
-	latestLogId?: string;
-	historyLogId?: string | null;
-	/** The room's members when the listing asked for them (`members: true`), else empty. */
-	members: Identity[];
-	/** The user has joined it: it is in the joined set on this connection. */
-	joined: boolean;
-}
-
-/** The room a client posts to without naming one: the server's default room (§3.5), before its `room_id` is known. */
-export const DEFAULT_ROOM_ID = '';
-
-/** A file this client is writing to an embed's `write_url` (§4.6.3). */
-export interface UploadState {
-	name: string;
-	/** Fraction written, 0–1, once the write started. */
-	progress?: number;
-	/** Why the write failed; the server then publishes the message without the embed. */
-	failed?: string;
-}
-
-export interface PendingOperation {
-	id: string;
-	method: string;
-	room?: string;
-	messageId?: string;
-	createdAt: number;
-}
-
-/** A typing indicator shown for another user (§4.4). */
-export interface TypingSnapshot {
-	room: string;
-	from: Identity;
-}
-
-export type Capabilities = Record<Capability, boolean>;
-
-export interface ClientSnapshot {
-	status: ConnectionStatus;
-	/** True once the server has accepted this connection's auth request. */
-	authenticated: boolean;
-	authBusy?: boolean;
-	passkeySession?: boolean;
-	/**
-	 * Signed in as a guest on a server whose guests only read (the demo
-	 * worker's `ext.demo.guest_posting: false`): posting, reacting, and room
-	 * changes are denied until the user signs in.
-	 */
-	readOnly?: boolean;
-	/** This browser has signed in to this server with a passkey before. */
-	passkeyHint?: boolean;
-	error?: string;
-	server?: ServerParams;
-	/** Which optional features the current `server` frame advertises (§4). */
-	capabilities: Capabilities;
-	you?: Identity;
-	/**
-	 * Visible rooms in the order they were listed, joined, or opened (a
-	 * `room_list` lists the most recently active first).
-	 */
-	rooms: RoomSnapshot[];
-	activeRoom?: string;
-	pending: PendingOperation[];
-	typing: TypingSnapshot[];
-	/**
-	 * One kept user object per `user_id` (§3.3), merged field by field from
-	 * every current object: `you`, `new` in `user`, and room `members` and
-	 * `users`. Recorded objects (`from`, a membership's `user`) never merge
-	 * into it. Render a user with `userIn`, which follows renames and falls
-	 * back field by field to the recorded object the frame carries.
-	 */
-	users: Record<string, Identity>;
-	/**
-	 * The latest recorded object seen per `user_id` (a message's or
-	 * reaction's `from`, a membership's `user`), by `log_id`. Never merged into
-	 * `users`: a fallback where no frame carries one, such as a mention in
-	 * text, and what tells apart users who share a display name.
-	 */
-	recordedUsers: Record<string, Identity>;
-	/** Retired `user_id`s mapped to the identity that replaced them (a `user` notification with `old`). */
-	userAliases: Record<string, string>;
-	/** Files being written to upload embeds, by `embed_id`. */
-	uploads: Record<string, UploadState>;
-	/** Top-level rooms from the latest `room_list`, joined or not; undefined until listed. */
-	directory?: RoomListing[];
-	/** Threads per parent room from the latest `room_list` with `parent_room_id`. */
-	threadDirectory: Record<string, RoomListing[]>;
-	showReconnectDivider: boolean;
-	/** Server supplied retry delay for the most recent temporary limit. */
-	retryAfterMs?: number;
-	/** The server denied the connection (§1.1): no reconnect until the user acts (`retryNow`). */
-	held?: boolean;
-	/**
-	 * When the transport dropped (or failed to open) while the client kept
-	 * running; cleared once a connection authenticates again. The protocol
-	 * state is rebuilt from the new connection, so a UI that wants to stay put
-	 * holds its own copy of the last authenticated snapshot meanwhile.
-	 */
-	disconnectedAt?: number;
-}
-
-export interface OperationHandle<T extends JsonObject = JsonObject> {
-	id: string;
-	promise: Promise<T>;
-}
-
-export interface MessageResult extends JsonObject {
-	message_id: string;
-}
-
-export interface RoomResult extends JsonObject {
-	room_id: string;
-}
-
-export interface SendOptions {
-	/** The message replied to; it may be in any room. */
-	replyTo?: string;
-	embeds?: Embed[];
-	/** The `user_id`s the message mentions (§3.5), sent as `body.mentions`. */
-	mentions?: string[];
-	ext?: JsonObject;
-}
-
-/**
- * Changes to a saved message. Absent keys keep the latest snapshot's value;
- * `null` removes `reply_to` or `ext`. Saves always resubmit every client field
- * (§4.2).
- */
-export interface MessagePatch {
-	room_id?: string;
-	body?: MessageBody;
-	reply_to?: string | null;
-	ext?: JsonObject | null;
-	deleted?: true;
-}
-
-export interface CreateRoomOptions {
-	/** Creates a thread under this room. */
-	parentRoomId?: string;
-	title?: string;
-	/** A bare reference to the room's description or the thread's starting message. */
-	introMessageId?: string;
-	ext?: JsonObject;
-}
-
-/**
- * Changes to a room's client fields. Absent keys keep the latest record's
- * value; `null` clears. `parent_room_id` is fixed at creation.
- */
-export interface RoomPatch {
-	title?: string | null;
-	introMessageId?: string | null;
-	ext?: JsonObject | null;
-}
-
-export interface ChatClientOptions {
-	serverUrl: string;
-	displayName?: string;
-	onChange?: (snapshot: ClientSnapshot) => void;
-}
-
-/**
- * How a room is in the client's rooms: `joined` (visible and live; without cap
- * `rooms`, any room messages arrive in), `viewed` (opened without joining,
- * loaded through history only), or `pending` (kept from the last connection
- * and resuming its recovery while the new connection's `room_list` decides
- * whether it is still joined; not visible).
- */
-type RoomKind = 'joined' | 'viewed' | 'pending';
-
-interface RoomState {
-	id: string;
-	kind: RoomKind;
-	/** Known head: greatest `latest_log_id` or live record `log_id` for this room. */
-	latestLogId?: string;
-	historyLogId?: string | null;
-	/** Effective lower bound F, monotonic; undefined until a bound is seen. */
-	floor?: string;
-	/** Checkpoint C of automatic recovery. */
-	checkpoint?: string;
-	recovery?: RecoveryState;
-	recoveryGeneration: number;
-	recoveryError?: string;
-	/** Settled when the running (or next) automatic recovery completes or fails. */
-	waiters: Array<{ resolve: () => void; reject: (error: Error) => void }>;
-	/** Thread checkpoint T of `loadRoom`. */
-	loadCheckpoint?: string;
-	/**
-	 * Kept from an earlier connection: a thread's records after T are not
-	 * loaded yet, so it reports unloaded until the next `loadRoom` catches up.
-	 */
-	resumed?: boolean;
-	/**
-	 * A thread loaded newest-first: the `first_log_id` of its oldest loaded
-	 * page, below which `loadOlder` pages backward while `hasOlder`.
-	 */
-	olderBefore?: string;
-	hasOlder?: boolean;
-	loadingOlder?: boolean;
-	loadGeneration: number;
-	loading: boolean;
-	/** The published timeline; rebuilt from the store when dirty and not recovering. */
-	timeline: TimelineState;
-	dirty: boolean;
-	/** The connection on which a room without a record last recovered from a message's position. */
-	recoveredOn?: number;
-}
-
-function newRoomState(id: string, kind: RoomKind = 'joined'): RoomState {
-	return { id, kind, recoveryGeneration: 0, waiters: [], loadGeneration: 0, loading: false, timeline: createTimeline(id), dirty: true };
-}
-
-/** `embedded` marks a `reply_to`/`intro_message` snapshot, which installs regardless of its room's bound. */
-type LiveRecord = { kind: 'message'; record: MessageRecord; embedded?: boolean } | { kind: 'reaction'; record: ReactionSet };
-
-interface PendingSave {
-	requestId: string;
-	/** The submitted client fields (params without `message_id`/`room_id` key for rooms). */
-	state: JsonObject;
-	/** The stored record's `log_id` when the save was submitted. */
-	baseLog?: string;
-	/** The result arrived but no matching record yet: the next newer record settles it. */
-	confirmed: boolean;
-}
-
-interface RecoveryState {
-	/**
-	 * Fixed H for the whole recovery. A recovery sent right behind `auth`,
-	 * before any room record is known, starts without it and takes it from its
-	 * first page's `latest_log_id` (§4.1 recovery, step 1).
-	 */
-	head?: string;
-	/** Next position to request; undefined means from the start of the log. */
-	nextAfter?: string;
-	/**
-	 * Live records for the room received during the recovery. They are applied
-	 * to the store on arrival; the buffer bounds memory and lets a rebuild
-	 * restore the ones at or above the new bound.
-	 */
-	buffer: LiveRecord[];
-	bufferBytes: number;
-	requestId?: string;
-	generation: number;
-}
-
-interface PendingRequest<T extends JsonObject = JsonObject> {
-	id: string;
-	method: string;
-	params: JsonObject;
-	visible: boolean;
-	allowBeforeAuth: boolean;
-	createdAt: number;
-	sentConnection?: number;
-	timer: ReturnType<typeof setTimeout>;
-	resolve: (result: T) => void;
-	reject: (error: Error) => void;
-}
-
-interface TypingState {
-	room: string;
-	from: Identity;
-	timer: ReturnType<typeof setTimeout>;
-}
-
-type ValidHistoryResponse = JsonObject & {
-	more: boolean;
-	latest_log_id: string;
-	history_log_id: string | null;
-};
-
-const REQUEST_TIMEOUT_MS = 20_000;
-const HISTORY_PAGE_SIZE = 200;
-/** A thread opens on its newest page this size; older pages load as the reader scrolls back. */
-const THREAD_PAGE_SIZE = 50;
-const MAX_RECONNECT_DELAY_MS = 60_000;
-/** How long a typing indicator this client sends should persist without a refresh, in the `activity` frame's `typing` seconds. */
-const TYPING_TIMEOUT_S = 15;
-/** The longest a received typing indicator is shown without a refresh. */
-const MAX_TYPING_S = 300;
-/** How often the indicator is refreshed while typing continues: well inside the timeout, and far from one frame per keystroke. */
-const TYPING_REFRESH_MS = 12_000;
-/** The liveness ping (§1), sent as these exact bytes so a server can answer without parsing. */
-const PING_FRAME = '{"method":"ping"}';
-/** Pings a socket may leave unanswered for a whole interval before it is presumed dead. */
-const MAX_UNANSWERED_PINGS = 1;
-/**
- * How long a connection must stay authenticated before the reconnect backoff
- * starts over. Resetting on auth alone let a server that closes right after
- * auth be reconnected to every half second, each time paying for a new session.
- */
-const STABLE_CONNECTION_MS = 30_000;
-/** How long a `room_list` result is reused for the same parent unless the caller asks for fresher. */
-const ROOM_LIST_REUSE_MS = 10_000;
-const MAX_HISTORY_BUFFER_ENTRIES = 1_000;
-const MAX_HISTORY_BUFFER_BYTES = 1_048_576;
-const RETRY_AFTER_MAX_MS = 24 * 60 * 60 * 1000;
-/** Passkey autofill re-issues its login challenge this long before the server's `timeout`. */
-const AUTOFILL_REFRESH_MARGIN_MS = 10_000;
-const AUTOFILL_MIN_REFRESH_MS = 15_000;
-/** Assumed challenge lifetime when the server's options carry no `timeout`. */
-const AUTOFILL_CHALLENGE_MS = 120_000;
-/** How long a passkey ceremony waits for in-flight requests (history, a rename) before giving up. */
-const PASSKEY_IDLE_WAIT_MS = 5_000;
-const PASSKEY_IDLE_POLL_MS = 50;
-/** The lowest possible log_id: the `after` bound when no lower bound is known. */
-const FIRST_LOG_ID = '1';
-const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command'];
+export { recoveryBufferFits, reconnectDelay } from './client-internals';
+export {
+	canEdit,
+	canManageRooms,
+	canReact,
+	capabilitiesOf,
+	childRooms,
+	defaultWebSocketUrl,
+	findMessage,
+	hasHistory,
+	normalizeWebSocketUrl,
+	timelineMessages,
+	topLevelRooms,
+	userIn
+} from './client-views';
 
 /**
  * A browser-only Apron protocol v6 session; instantiate one per mounted UI.
@@ -3163,257 +2818,4 @@ export class ChatClient {
 		const snapshot = this.snapshot();
 		for (const listener of this.listeners) listener(snapshot);
 	}
-}
-
-/**
- * How to render a user (§3.3): field by field, the kept object for its
- * `user_id` (following a retired ID to the identity that replaced it), else
- * the recorded object the frame carries (`from`, a membership's `user`), and
- * the display name falls back to the `user_id` last. Returns the kept object
- * itself when it has every field the recorded one has.
- */
-export function userIn(snapshot: Pick<ClientSnapshot, 'users' | 'userAliases'>, recorded: Identity): Identity {
-	let id = recorded.user_id;
-	for (let hops = 0; hops < 8 && snapshot.userAliases[id] !== undefined; hops += 1) id = snapshot.userAliases[id];
-	const kept = snapshot.users[id] ?? snapshot.users[recorded.user_id];
-	if (!kept) return recorded;
-	const missing = Object.keys(recorded).filter((key) => key !== 'user_id' && !Object.hasOwn(kept, key) && recorded[key] !== undefined && recorded[key] !== null);
-	if (!missing.length) return kept;
-	const merged: JsonObject = Object.create(null);
-	for (const key of missing) merged[key] = recorded[key];
-	return Object.assign(merged, kept) as Identity;
-}
-
-/** Messages of a room in timeline order. */
-export function timelineMessages(room: RoomSnapshot | undefined): MessageRecord[] {
-	return room ? timelineEvents(room.timeline) : [];
-}
-
-/** Finds a message in any visible room's published timeline (for example a cross-room reply target). */
-export function findMessage(rooms: readonly RoomSnapshot[], messageId: string): MessageRecord | undefined {
-	for (const room of rooms) {
-		const message = room.timeline.events[messageId];
-		if (message) return message;
-	}
-	return undefined;
-}
-
-/** Rooms without a parent, in listing order. */
-export function topLevelRooms(rooms: readonly RoomSnapshot[]): RoomSnapshot[] {
-	return rooms.filter((room) => room.parentRoomId === undefined);
-}
-
-/** Direct children (threads) of a room, in listing order. */
-export function childRooms(rooms: readonly RoomSnapshot[], parentRoomId: string): RoomSnapshot[] {
-	return rooms.filter((room) => room.parentRoomId === parentRoomId);
-}
-
-/** Whether a `server` frame advertises a capability (§4). Capabilities gate UI, not authorization. */
-function hasCapability(server: ServerParams | undefined, cap: Capability): boolean {
-	return server?.caps?.includes(cap) === true;
-}
-
-export function capabilitiesOf(server: ServerParams | undefined): Capabilities {
-	return Object.fromEntries(CAPABILITIES.map((cap) => [cap, hasCapability(server, cap)])) as Capabilities;
-}
-
-/** Edit, move, and delete controls (cap `edit`). */
-export const canEdit = (server: ServerParams | undefined) => hasCapability(server, 'edit');
-/** Room and thread creation and room updates (cap `rooms`). */
-export const canManageRooms = (server: ServerParams | undefined) => hasCapability(server, 'rooms');
-/** Reaction controls (cap `reactions`). */
-export const canReact = (server: ServerParams | undefined) => hasCapability(server, 'reactions');
-/** History recovery and paging (cap `history`). */
-export const hasHistory = (server: ServerParams | undefined) => hasCapability(server, 'history');
-
-export function defaultWebSocketUrl(locationLike?: Location): string {
-	const configured = import.meta.env.VITE_DEFAULT_SERVER_URL;
-	if (configured) return configured;
-	if (!locationLike) return 'ws://localhost:8080/ws';
-	const protocol = locationLike.protocol === 'https:' ? 'wss:' : 'ws:';
-	return `${protocol}//${locationLike.host}/ws`;
-}
-
-export function normalizeWebSocketUrl(input: string, locationLike?: Location): string {
-	const value = input.trim();
-	if (!value) return defaultWebSocketUrl(locationLike);
-	if (value.startsWith('ws://') || value.startsWith('wss://')) return new URL(value).toString();
-	if (value.startsWith('http://') || value.startsWith('https://')) {
-		return new URL(value.replace(/^http/, 'ws')).toString();
-	}
-	if (value.startsWith('/')) {
-		const base = locationLike ? `${locationLike.protocol === 'https:' ? 'wss:' : 'ws:'}//${locationLike.host}` : 'ws://localhost:5173';
-		return `${base}${value}`;
-	}
-	return new URL(`ws://${value}`).toString();
-}
-
-function makeRequestId(method: string): string {
-	const random = globalThis.crypto?.randomUUID?.();
-	return `${method}_${random ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
-}
-
-function rejectedHandle<T extends JsonObject>(method: string, error: Error, id = makeRequestId(method)): OperationHandle<T> {
-	const promise = Promise.reject(error);
-	// Callers that only look at the handle id must not trigger an unhandled rejection.
-	promise.catch(() => undefined);
-	return { id, promise };
-}
-
-function typingKey(room: string, userId: string): string {
-	return JSON.stringify([room, userId]);
-}
-
-function increment(id: string): string {
-	return (BigInt(id) + 1n).toString();
-}
-
-function decrement(id: string): string {
-	return (BigInt(id) - 1n).toString();
-}
-
-function maxDefined(a: string | undefined, b: string | undefined): string | undefined {
-	if (a === undefined) return b;
-	if (b === undefined) return a;
-	return compareLogIds(a, b) >= 0 ? a : b;
-}
-
-/** A message's client fields (§4.2), as a save would submit them. */
-function messageClientFields(record: MessageRecord): JsonObject {
-	const fields: JsonObject = { room_id: record.room_id };
-	if (record.body !== undefined) fields.body = record.body;
-	if (record.reply_to) fields.reply_to = { message_id: record.reply_to.message_id };
-	if (record.deleted === true) fields.deleted = true;
-	if (record.ext !== undefined) fields.ext = record.ext;
-	return fields;
-}
-
-/** A room's client fields other than `parent_room_id`, as an update would submit them. */
-function roomClientFields(record: RoomRecord): JsonObject {
-	const fields: JsonObject = {};
-	if (record.title !== undefined) fields.title = record.title;
-	if (record.intro_message) fields.intro_message = { message_id: record.intro_message.message_id };
-	if (record.ext !== undefined) fields.ext = record.ext;
-	return fields;
-}
-
-/** JSON with object keys sorted, for order-insensitive comparison (prototype-like keys included). */
-function canonicalJson(value: JsonValue): string {
-	if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
-	if (isJsonObject(value)) {
-		return `{${Object.keys(value).filter((key) => value[key] !== undefined).sort()
-			.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
-	}
-	return JSON.stringify(value ?? null);
-}
-
-/** Shared by rooms without notices, so their snapshots compare equal. */
-const NO_NOTICES: readonly Notice[] = Object.freeze([]);
-
-/** A room's display title: its record's `title`, else its `room_id` (§3.4). */
-function roomTitle(roomId: string, record: RoomRecord | undefined): string {
-	if (typeof record?.title === 'string' && record.title) return record.title;
-	if (roomId === DEFAULT_ROOM_ID) return 'Default room';
-	return roomId;
-}
-
-/**
- * One user object merged into the kept one (§3.3): a present field replaces
- * the kept value, an empty value (`""`, `{}`) removes it, and a missing (or
- * `null`) field leaves it. Returns `current` itself when nothing changes.
- */
-function mergeIdentity(current: Identity | undefined, incoming: Identity): Identity {
-	const next: JsonObject = Object.create(null);
-	if (current) Object.assign(next, current);
-	next.user_id = incoming.user_id;
-	let changed = !current;
-	for (const key of Object.keys(incoming)) {
-		if (key === 'user_id') continue;
-		const value = incoming[key];
-		if (value === undefined || value === null) continue;
-		if (value === '' || (isJsonObject(value) && Object.keys(value).length === 0)) {
-			if (Object.hasOwn(next, key)) {
-				delete next[key];
-				changed = true;
-			}
-			continue;
-		}
-		if (!Object.hasOwn(next, key) || canonicalJson(next[key]) !== canonicalJson(value)) {
-			next[key] = cloneJson(value);
-			changed = true;
-		}
-	}
-	return changed ? next as Identity : current!;
-}
-
-function sameEmojiSet(left: readonly string[], right: readonly string[]): boolean {
-	const a = new Set(left), b = new Set(right);
-	return a.size === b.size && [...a].every((emoji) => b.has(emoji));
-}
-
-function isEmbedded(live: LiveRecord): boolean {
-	return live.kind === 'message' && live.embedded === true;
-}
-
-/** A forward page; without `before` (a recovery that has no head yet) it runs to the end of the log (§4.1). */
-function historyParams(roomId: string, after: string | undefined, before: string | undefined): JsonObject {
-	return { room_id: roomId, after: after ?? FIRST_LOG_ID, ...(before !== undefined ? { before } : {}), limit: HISTORY_PAGE_SIZE };
-}
-
-/** Record arrays that a history page may omit when empty (§4.1). */
-const HISTORY_ARRAYS = ['rooms', 'messages', 'reactions', 'membership'];
-
-function validHistoryMetadata(result: JsonObject): result is ValidHistoryResponse {
-	if (HISTORY_ARRAYS.some((key) => result[key] !== undefined && !Array.isArray(result[key]))) return false;
-	if (typeof result.more !== 'boolean' || !isLogId(result.latest_log_id)) return false;
-	if (result.history_log_id !== null && !isLogId(result.history_log_id)) return false;
-	return result.history_log_id === null || compareLogIds(result.history_log_id, result.latest_log_id) <= 0;
-}
-
-function recordBytes(record: unknown): number {
-	try {
-		return new TextEncoder().encode(JSON.stringify(record)).byteLength;
-	} catch {
-		return MAX_HISTORY_BUFFER_BYTES + 1;
-	}
-}
-
-/** Pure admission check used to keep live/recovery memory bounded. */
-export function recoveryBufferFits(
-	entryCount: number,
-	bufferBytes: number,
-	record: unknown,
-	maxEntries = MAX_HISTORY_BUFFER_ENTRIES,
-	maxBytes = MAX_HISTORY_BUFFER_BYTES
-): boolean {
-	return entryCount < maxEntries && bufferBytes + recordBytes(record) <= maxBytes;
-}
-
-/** `retry_after` errors carry `data.retry_after`, a delay in seconds (§1.1). */
-function retryAfterMilliseconds(error: RpcError): number | undefined {
-	if (error.code !== -32002 || !isJsonObject(error.data) || typeof error.data.retry_after !== 'number') return undefined;
-	if (!Number.isFinite(error.data.retry_after) || error.data.retry_after < 0) return undefined;
-	return Math.min(RETRY_AFTER_MAX_MS, Math.ceil(error.data.retry_after * 1000));
-}
-
-function userFacingRpcError(error: RpcError): string {
-	const retryAfter = retryAfterMilliseconds(error);
-	if (retryAfter !== undefined) {
-		const seconds = Math.max(1, Math.ceil(retryAfter / 1000));
-		if (error.message) return `${error.message} Try again in ${seconds}s.`;
-		return `Temporarily limited. Try again in ${seconds}s.`;
-	}
-	return error.message || `Request failed (${error.code})`;
-}
-
-/** Whether the page is hidden or the browser reports no network; false outside a browser. */
-function absent(): boolean {
-	return globalThis.document?.visibilityState === 'hidden' || globalThis.navigator?.onLine === false;
-}
-
-export function reconnectDelay(attempt: number, random = 0.5, retryAfterMs?: number): number {
-	const boundedAttempt = Math.max(1, Math.floor(attempt));
-	const base = Math.min(MAX_RECONNECT_DELAY_MS, 500 * 2 ** Math.min(7, boundedAttempt - 1));
-	const jitter = 0.8 + Math.min(1, Math.max(0, random)) * 0.4;
-	return Math.max(retryAfterMs ?? 0, Math.round(base * jitter));
 }
