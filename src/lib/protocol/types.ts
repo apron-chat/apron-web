@@ -241,7 +241,7 @@ export function cloneJson<T extends JsonValue>(value: T): T {
 }
 
 /** A bare reference `{message_id}` from a reference or embedded snapshot, if valid. */
-export function toMessageRef(value: unknown): MessageRef | undefined {
+function toMessageRef(value: unknown): MessageRef | undefined {
 	if (!isJsonObject(value) || !isLogId(value.message_id)) return undefined;
 	return { message_id: value.message_id };
 }

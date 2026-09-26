@@ -87,7 +87,7 @@ export function rgbTriple(color: string): string | undefined {
 }
 
 /** The app tokens emoji-mart's colors follow: accent is the rust `accent`, text is `ink`, the ground `bg-200`. */
-export const PICKER_COLORS = {
+const PICKER_COLORS = {
 	'--rgb-accent': '--accent',
 	'--rgb-color': '--ink',
 	'--rgb-background': '--bg-200',

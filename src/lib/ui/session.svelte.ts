@@ -5,7 +5,7 @@ import { connectionStateOf, isSessionReady, reconnectErrorOf } from './connectio
 type HeldSession = { rooms: RoomSnapshot[]; activeRoom?: string; you?: Identity; server?: ServerParams };
 
 /** How long a reconnect may run quietly before the UI escalates and offers a manual retry. */
-export const RECONNECT_STALL_MS = 10_000;
+const RECONNECT_STALL_MS = 10_000;
 
 export const blankSnapshot = (): ClientSnapshot => ({
 	status: 'idle', authenticated: false, capabilities: capabilitiesOf(undefined), rooms: [], pending: [], typing: [], users: {}, recordedUsers: {}, userAliases: {}, uploads: {}, threadDirectory: {}, showReconnectDivider: false

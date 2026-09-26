@@ -4,12 +4,12 @@ import type { MessageRecord } from '$lib/protocol/types';
 export const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 /** Log IDs (and so message IDs, the creation `log_id`) are epoch milliseconds (§2); anything else has no time. */
-export function idMillis(id: string): number | undefined {
+function idMillis(id: string): number | undefined {
 	const millis = Number(id);
 	return Number.isSafeInteger(millis) && millis > 0 ? millis : undefined;
 }
 
-export function eventMillis(event: MessageRecord): number | undefined {
+function eventMillis(event: MessageRecord): number | undefined {
 	return idMillis(event.message_id);
 }
 

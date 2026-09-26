@@ -16,7 +16,7 @@ import type { Identity } from '$lib/protocol/types';
 export const BASELINE_MIN_MEMBERS = 21;
 
 /** How many names a line spells out before it counts the rest ("and 4 others"). */
-export const LISTED_NAMES = 3;
+const LISTED_NAMES = 3;
 
 /** Whether a record is a baseline: every entry a join, and more of them than a line should hold. */
 export function isBaseline(record: MembershipRecord): boolean {

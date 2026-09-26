@@ -6,7 +6,7 @@ import { embedsOf, senderName, textOf } from './messages';
 import { dayKey, dayKeyOf, dayLabel, dayLabelOf, eventTime, idTime, isGrouped } from './time';
 
 /** Longest title a thread started from a message gets, in characters. */
-export const THREAD_TITLE_MAX = 60;
+const THREAD_TITLE_MAX = 60;
 
 /**
  * A thread as the sidebar and the room feed see it: a room with a
@@ -94,7 +94,7 @@ export function threadEntry(room: RoomSnapshot): ThreadEntry {
 }
 
 /** A thread the viewer has not joined, from a listing: a card without a count, since its history isn't loaded. */
-export function unjoinedThreadEntry(listing: RoomListing, message?: (messageId: string) => MessageRecord | undefined): ThreadEntry {
+function unjoinedThreadEntry(listing: RoomListing, message?: (messageId: string) => MessageRecord | undefined): ThreadEntry {
 	const introId = listing.record.intro_message?.message_id;
 	const intro = introId !== undefined ? message?.(introId) : undefined;
 	const anchor = introId ?? (isLogId(listing.id) ? listing.id : listing.record.log_id);

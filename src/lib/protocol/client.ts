@@ -3189,11 +3189,6 @@ export function timelineMessages(room: RoomSnapshot | undefined): MessageRecord[
 	return room ? timelineEvents(room.timeline) : [];
 }
 
-/** Aggregated reactions of a message in a room's timeline, if any. */
-export function messageReactions(room: RoomSnapshot | undefined, messageId: string): ReactionSummary[] | undefined {
-	return room?.timeline.reactions[messageId];
-}
-
 /** Finds a message in any visible room's published timeline (for example a cross-room reply target). */
 export function findMessage(rooms: readonly RoomSnapshot[], messageId: string): MessageRecord | undefined {
 	for (const room of rooms) {
@@ -3214,7 +3209,7 @@ export function childRooms(rooms: readonly RoomSnapshot[], parentRoomId: string)
 }
 
 /** Whether a `server` frame advertises a capability (§4). Capabilities gate UI, not authorization. */
-export function hasCapability(server: ServerParams | undefined, cap: Capability): boolean {
+function hasCapability(server: ServerParams | undefined, cap: Capability): boolean {
 	return server?.caps?.includes(cap) === true;
 }
 
@@ -3327,7 +3322,7 @@ function roomTitle(roomId: string, record: RoomRecord | undefined): string {
  * the kept value, an empty value (`""`, `{}`) removes it, and a missing (or
  * `null`) field leaves it. Returns `current` itself when nothing changes.
  */
-export function mergeIdentity(current: Identity | undefined, incoming: Identity): Identity {
+function mergeIdentity(current: Identity | undefined, incoming: Identity): Identity {
 	const next: JsonObject = Object.create(null);
 	if (current) Object.assign(next, current);
 	next.user_id = incoming.user_id;
@@ -3422,6 +3417,3 @@ export function reconnectDelay(attempt: number, random = 0.5, retryAfterMs?: num
 	const jitter = 0.8 + Math.min(1, Math.max(0, random)) * 0.4;
 	return Math.max(retryAfterMs ?? 0, Math.round(base * jitter));
 }
-
-// Re-exported for callers that build saves or projections themselves.
-export { cloneJson };

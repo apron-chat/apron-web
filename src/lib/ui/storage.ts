@@ -11,7 +11,7 @@ const KEY = {
 export type RecentServer = { url: string; label?: string };
 export type SidebarPrefs = { width: number; collapsed: boolean };
 
-export const RECENT_SERVERS_MAX = 5;
+const RECENT_SERVERS_MAX = 5;
 
 function read(key: string): string | null {
 	try {
