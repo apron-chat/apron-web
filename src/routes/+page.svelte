@@ -26,15 +26,19 @@
 	import { FeedbackState } from '$lib/ui/feedback.svelte';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { UnreadTracker } from '$lib/ui/unread.svelte';
-	import { isOwn, mentionsMe, peopleIn, replySnippet, senderName } from '$lib/ui/messages';
+	import { isOwn, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { loadDisplayName, loadRecentServers, loadServerUrl, rememberServer, saveDisplayName, type RecentServer } from '$lib/ui/storage';
 	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadTitleFor } from '$lib/ui/timeline';
-	import { dayLabelOf, idDateTime, idIso, idTime } from '$lib/ui/time';
-	import { playPing, tabTitle } from '$lib/ui/attention';
+	import { idDateTime, idIso, idTime } from '$lib/ui/time';
+	import { tabTitle } from '$lib/ui/attention';
+	import { FloatingDay } from '$lib/ui/floating-day.svelte';
+	import { PaneDrafts } from '$lib/ui/pane-drafts.svelte';
+	import { PagePresence } from '$lib/ui/presence.svelte';
+	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
 
 	/** A thread this viewer created, opened once its `room_update` has arrived. */
 	type PendingOpen = { room: string; thread: string };
@@ -62,25 +66,16 @@
 	const feedback = new FeedbackState();
 	const mentions = new MentionTracker();
 	const unread = new UnreadTracker();
-	/** Whether this tab is in front: a hidden tab doesn't read what arrives. */
-	let pageVisible = $state(typeof document === 'undefined' || document.visibilityState === 'visible');
-	/** Whether this window has focus: a mention while it doesn't alerts the tab. */
-	let pageFocused = $state(typeof document === 'undefined' || document.hasFocus());
-	/** A mention arrived while you were away; the title flashes until you're back. */
-	let attention = $state(false);
-	let titleFlash = $state(false);
-	let alertedMentions = 0;
-	/** The day at the top of the timeline, floated there only while you scroll back. */
-	let floatingDay = $state('');
-	let floatingDayShown = $state(false);
-	let floatingDayTimer: ReturnType<typeof setTimeout> | undefined;
+	const presence = new PagePresence();
+	const floatingDay = new FloatingDay();
+	const drafts = new PaneDrafts();
+	const reveal = new ProgressiveReveal(REVEAL_CHUNK_ITEMS, () => messageScroll, keepPlace);
 	const selection = new MessageSelection();
 	const sidebar = new SidebarLayout();
 
 	let client = $state<ChatClient | undefined>();
 	let serverInput = $state('');
 	let displayName = $state('');
-	let composerText = $state('');
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
 	let composerMentions = $state<string[]>([]);
 	let connectOpen = $state(false);
@@ -94,9 +89,6 @@
 	/** The open thread's `room_id`; undefined in the room view. */
 	let activeThread = $state<string | undefined>();
 	let selectedRoomId = $state<string | undefined>();
-	let drafts = $state<Record<string, string>>({});
-	let replyDrafts = $state<Record<string, string | undefined>>({});
-	let replyId = $state<string | undefined>();
 	let pendingOpen = $state<PendingOpen | undefined>();
 	/** A room or thread joined from the directory, opened once its `room_update` has arrived. */
 	let pendingJoin = $state<string | undefined>();
@@ -117,10 +109,6 @@
 	/** Where the last scroll event, or automatic scroll to the latest item, left the list. */
 	let lastScrollTop: number | undefined;
 	let highlightTimer: ReturnType<typeof setTimeout> | undefined;
-	/** Oldest timeline items not rendered yet (see FIRST_PAINT_ITEMS). */
-	let hiddenItems = $state(0);
-	let revealFrame = 0;
-	let revealTimer: ReturnType<typeof setTimeout> | undefined;
 
 	let snapshot = $derived(session.snapshot);
 	/** The top-level room open in the pane (or behind the open thread). */
@@ -140,7 +128,7 @@
 	let timeline = $derived(activeThread
 		? buildThreadTimeline({ messages, intro, renames: paneRoom?.renames, moreReplies: Boolean(threadRoom?.olderAvailable), notices: paneRoom?.notices })
 		: buildRoomTimeline({ messages, threads, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships }));
-	let shownTimeline = $derived(hiddenItems > 0 ? timeline.slice(Math.min(hiddenItems, timeline.length)) : timeline);
+	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
@@ -180,33 +168,18 @@
 	});
 
 	$effect(() => {
-		unread.observe(session.rooms, session.you, paneRoom?.id, latestVisible && pageVisible);
+		unread.observe(session.rooms, session.you, paneRoom?.id, latestVisible && presence.visible);
 	});
 
 	// Nobody is attending a hidden or unfocused tab (§4.4): the server may push instead.
 	$effect(() => {
-		const away = !(pageVisible && pageFocused);
+		const away = presence.away;
 		if (client && session.ready) untrack(() => client?.setAway(away));
 	});
 
-	// Each mention that lands while you're in another window or tab chimes once and flags the tab.
 	$effect(() => {
 		const arrived = mentions.arrived;
-		if (arrived === alertedMentions) return;
-		alertedMentions = arrived;
-		if (untrack(() => pageFocused && pageVisible)) return;
-		attention = true;
-		playPing();
-	});
-
-	$effect(() => {
-		if (!attention) {
-			titleFlash = false;
-			return;
-		}
-		titleFlash = true;
-		const timer = setInterval(() => (titleFlash = !titleFlash), 1000);
-		return () => clearInterval(timer);
+		untrack(() => presence.noteMentions(arrived));
 	});
 
 	// The New divider is placed once per visit, from the read cursor the server kept.
@@ -222,7 +195,7 @@
 		const room = paneRoom;
 		const last = messages[messages.length - 1];
 		// Only once this pane's divider is in place: advancing first would hide what was new.
-		if (!client || !room || !last || !latestVisible || !pageVisible || !room.loaded || !session.ready || newDivider.room !== room.id || !newDivider.fixed) return;
+		if (!client || !room || !last || !latestVisible || !presence.visible || !room.loaded || !session.ready || newDivider.room !== room.id || !newDivider.fixed) return;
 		untrack(() => client?.markRead(room.id, last.message_id));
 	});
 
@@ -375,8 +348,9 @@
 		return () => {
 			if (typingTimer) clearTimeout(typingTimer);
 			if (highlightTimer) clearTimeout(highlightTimer);
-			stopRevealing();
-			if (floatingDayTimer) clearTimeout(floatingDayTimer);
+			reveal.stop();
+			floatingDay.dispose();
+			presence.dispose();
 			feedback.dispose();
 			mentions.dispose();
 			session.dispose();
@@ -403,13 +377,11 @@
 
 	/** The connect form was submitted: whatever belonged to the previous backend goes. */
 	function leaveBackend(): void {
-		saveCurrentDraft();
+		drafts.open(undefined);
 		selectedRoomId = undefined;
 		activeThread = undefined;
 		pendingOpen = undefined;
 		startingThreads = {};
-		composerText = '';
-		replyId = undefined;
 		threadEditorOpen = false;
 		selection.cancel();
 		session.forget();
@@ -437,27 +409,12 @@
 		return JSON.stringify([client?.url ?? serverInput, roomId]);
 	}
 
-	/** The room the composer's draft belongs to: the open thread, else the room. */
-	function paneKey(): string | undefined {
-		return selectedRoomId !== undefined ? draftKey(activeThread ?? selectedRoomId) : undefined;
-	}
-
-	function saveCurrentDraft(): void {
-		const key = paneKey();
-		if (!key) return;
-		drafts = { ...drafts, [key]: composerText };
-		replyDrafts = { ...replyDrafts, [key]: replyId };
-	}
-
 	/** Moves the pane to a room or one of its threads, keeping each destination's draft and reply. */
 	function setDestination(roomId: string, thread: string | undefined): void {
 		if (selectedRoomId === roomId && activeThread === thread) return;
-		saveCurrentDraft();
 		selectedRoomId = roomId;
 		activeThread = thread;
-		const key = draftKey(thread ?? roomId);
-		composerText = drafts[key] ?? '';
-		replyId = replyDrafts[key];
+		drafts.open(draftKey(thread ?? roomId));
 		editingId = undefined;
 		threadEditorOpen = false;
 		selection.cancel();
@@ -467,42 +424,7 @@
 		if (thread) mentions.clearRoom(thread);
 		stickToBottom = true;
 		// A thread opens at its intro, at the top, so it renders whole.
-		revealFrom(thread ? 0 : timeline.length - FIRST_PAINT_ITEMS);
-	}
-
-	/** Renders the timeline from `hidden` items in, then reveals the older ones after each paint. */
-	function revealFrom(hidden: number): void {
-		stopRevealing();
-		hiddenItems = Math.max(0, hidden);
-		if (hiddenItems > 0) scheduleReveal();
-	}
-
-	function scheduleReveal(): void {
-		revealFrame = requestAnimationFrame(() => {
-			revealFrame = 0;
-			revealTimer = setTimeout(revealChunk, 0);
-		});
-	}
-
-	async function revealChunk(): Promise<void> {
-		revealTimer = undefined;
-		const scroller = messageScroll;
-		const height = scroller?.scrollHeight ?? 0;
-		const top = scroller?.scrollTop ?? 0;
-		hiddenItems = Math.max(0, hiddenItems - REVEAL_CHUNK_ITEMS);
-		if (hiddenItems > 0) scheduleReveal();
-		await tick();
-		// Older items land above: keep the reader's place unless the pane follows the latest.
-		if (!scroller || messageScroll !== scroller || stickToBottom) return;
-		scroller.scrollTop = top + (scroller.scrollHeight - height);
-		lastScrollTop = scroller.scrollTop;
-	}
-
-	function stopRevealing(): void {
-		if (revealFrame) cancelAnimationFrame(revealFrame);
-		if (revealTimer) clearTimeout(revealTimer);
-		revealFrame = 0;
-		revealTimer = undefined;
+		reveal.from(thread ? 0 : timeline.length - FIRST_PAINT_ITEMS);
 	}
 
 	/** Opens a room, or a thread under it, switching the top-level room first when it differs. */
@@ -561,8 +483,7 @@
 
 	function composerInput(): void {
 		if (!client || !paneRoom) return;
-		const key = paneKey();
-		if (key) drafts = { ...drafts, [key]: composerText };
+		drafts.saveText();
 		const roomId = paneRoom.id;
 		client.sendTyping(roomId, true);
 		if (typingTimer) clearTimeout(typingTimer);
@@ -576,26 +497,16 @@
 	 * a local notice in the pane, where its replies land too.
 	 */
 	function sendMessage(): void {
-		if (!client || !paneRoom || !canCompose || !composerText.trim()) return;
+		if (!client || !paneRoom || !canCompose || !drafts.text.trim()) return;
 		const chat = client;
-		const draft = composerText;
+		const draft = drafts.text;
 		const roomId = paneRoom.id;
-		const reply = replyId;
+		const reply = drafts.reply;
 		const originKey = draftKey(roomId);
 		const mentions = composerMentions;
 		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms });
 		const restore = () => {
-			// A failed send gives the draft back, unless something else has been typed since.
-			const currentKey = paneKey();
-			if (!drafts[originKey] && !replyDrafts[originKey] && !(currentKey === originKey && (composerText || replyId))) {
-				drafts = { ...drafts, [originKey]: draft };
-				replyDrafts = { ...replyDrafts, [originKey]: reply };
-			}
-			if (currentKey === originKey && !composerText && !replyId) {
-				composerText = drafts[originKey];
-				replyId = replyDrafts[originKey];
-				composer?.focus();
-			}
+			if (drafts.restore(originKey, draft, reply)) composer?.focus();
 		};
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
@@ -663,10 +574,10 @@
 		if (!client || !paneRoom || !canCompose || !session.snapshot.capabilities['embed:upload']) return;
 		const chat = client;
 		const roomId = paneRoom.id;
-		const reply = replyId;
-		const action = composerAction(composerText, { command: snapshot.capabilities.command, rooms: false });
+		const reply = drafts.reply;
+		const action = composerAction(drafts.text, { command: snapshot.capabilities.command, rooms: false });
 		const command = action.kind === 'command';
-		const text = action.kind === 'message' ? action.text : composerText;
+		const text = action.kind === 'message' ? action.text : drafts.text;
 		const mentions = composerMentions;
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		const joining = command ? undefined : joinFirst(chat, paneRoom);
@@ -755,23 +666,17 @@
 	}
 
 	function clearComposer(roomId: string): void {
-		const key = draftKey(roomId);
-		composerText = '';
-		replyId = undefined;
-		drafts = { ...drafts, [key]: '' };
-		replyDrafts = { ...replyDrafts, [key]: undefined };
+		drafts.clear(draftKey(roomId));
 	}
 
 	function beginReply(event: MessageRecord): void {
 		if (!canCompose || event.deleted) return;
-		replyId = event.message_id;
-		saveCurrentDraft();
+		drafts.setReply(event.message_id);
 		composer?.focus();
 	}
 
 	function cancelReply(): void {
-		replyId = undefined;
-		saveCurrentDraft();
+		drafts.setReply(undefined);
 		composer?.focus();
 	}
 
@@ -841,7 +746,7 @@
 			openDestination(destination.room, destination.thread);
 			stickToBottom = false;
 		}
-		revealFrom(0);
+		reveal.from(0);
 		const node = await renderedMessage(id);
 		if (!node) return;
 		stickToBottom = false;
@@ -889,7 +794,7 @@
 		if (top < OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
 		if (!atBottom && stickToBottom) seenCount = messages.length;
 		stickToBottom = atBottom;
-		floatDay(atBottom);
+		floatingDay.update(messageScroll, atBottom);
 	}
 
 	/**
@@ -909,33 +814,18 @@
 			return; // The next scroll back tries again.
 		}
 		await tick();
-		if (messageScroll !== scroller || stickToBottom) return;
-		// Where the browser anchored the view itself this is already the position.
-		scroller.scrollTop = top + (scroller.scrollHeight - height);
-		lastScrollTop = scroller.scrollTop;
+		keepPlace(scroller, top, height);
 	}
 
-	/** While you scroll back, the day you're reading floats at the top; it fades once you stop. */
-	function floatDay(atBottom: boolean): void {
-		if (floatingDayTimer) clearTimeout(floatingDayTimer);
-		if (!messageScroll || atBottom) {
-			floatingDayShown = false;
-			return;
-		}
-		// The first message still showing below the top edge; rows are in order, so bisect.
-		const top = messageScroll.getBoundingClientRect().top;
-		const rows = messageScroll.querySelectorAll<HTMLElement>('article[data-message-id]');
-		let low = 0;
-		let high = rows.length - 1;
-		while (low < high) {
-			const middle = (low + high) >> 1;
-			if (rows[middle].getBoundingClientRect().bottom <= top) low = middle + 1;
-			else high = middle;
-		}
-		const label = rows.length ? dayLabelOf(rows[low].dataset.messageId ?? '') : '';
-		floatingDay = label;
-		floatingDayShown = Boolean(label);
-		floatingDayTimer = setTimeout(() => (floatingDayShown = false), 1200);
+	/**
+	 * Older items landed above: keeps what was on screen in place, given the
+	 * list's scroll top and height from before, unless the pane follows the
+	 * latest. Where the browser anchored the view itself this is already the position.
+	 */
+	function keepPlace(scroller: HTMLElement | undefined, top: number, height: number): void {
+		if (!scroller || messageScroll !== scroller || stickToBottom) return;
+		scroller.scrollTop = top + (scroller.scrollHeight - height);
+		lastScrollTop = scroller.scrollTop;
 	}
 
 	// --- Editing ---
@@ -1043,15 +933,11 @@
 	}
 </script>
 
-<svelte:window onkeydown={windowKeydown} onfocus={() => { pageFocused = true; attention = false; }} onblur={() => (pageFocused = false)} />
-<svelte:document onvisibilitychange={() => {
-	pageVisible = document.visibilityState === 'visible';
-	pageFocused = document.hasFocus();
-	if (pageVisible && pageFocused) attention = false;
-}} />
+<svelte:window onkeydown={windowKeydown} onfocus={() => presence.focus()} onblur={() => presence.blur()} />
+<svelte:document onvisibilitychange={() => presence.visibilityChanged()} />
 
 <svelte:head>
-	<title>{tabTitle(unread.total, titleFlash)}</title>
+	<title>{tabTitle(unread.total, presence.titleFlash)}</title>
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
 </svelte:head>
 
@@ -1135,7 +1021,7 @@
 			{/if}
 
 			<div class="ap-timeline" bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
-				<div class="day-float" class:day-float-shown={floatingDayShown} aria-hidden="true" data-testid="floating-day"><span>{floatingDay}</span></div>
+				<div class="day-float" class:day-float-shown={floatingDay.shown} aria-hidden="true" data-testid="floating-day"><span>{floatingDay.label}</span></div>
 				{#if snapshot.showReconnectDivider}
 					<div class="ap-divider ap-divider-gap" role="separator" data-testid="reconnect-divider"><span>Reconnected · earlier messages aren’t available</span></div>
 				{/if}
@@ -1205,7 +1091,7 @@
 			<div class="ap-typing typing-row" aria-live="polite">
 				{#if typingNames.length > 0}
 					<TypingDots />
-					{typingNames.length === 1 ? `${typingNames[0]} is typing` : typingNames.length === 2 ? `${typingNames[0]} and ${typingNames[1]} are typing` : 'Several people are typing'}…
+					{typingLine(typingNames)}
 				{/if}
 			</div>
 
@@ -1220,14 +1106,14 @@
 			{:else}
 				<Composer
 					bind:this={composer}
-					bind:value={composerText}
+					bind:value={drafts.text}
 					bind:mentions={composerMentions}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!canCompose}
 					canUpload={snapshot.capabilities['embed:upload']}
 					canCommand={snapshot.capabilities.command}
 					{people}
-					replyPreview={replyId ? replyPreview(replyId) : undefined}
+					replyPreview={drafts.reply ? replyPreview(drafts.reply) : undefined}
 					oninput={composerInput} onsend={sendMessage} onfiles={sendFiles} oncancelreply={cancelReply}
 					onmention={() => listMembers(MEMBERS_FRESH_MS)}
 				/>

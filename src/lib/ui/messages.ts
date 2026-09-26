@@ -118,3 +118,11 @@ export function spanOf(order: string[], picked: string[]): string[] {
 	if (indexes.length < 2) return picked;
 	return order.slice(Math.min(...indexes), Math.max(...indexes) + 1);
 }
+
+/** The typing row's sentence for the people typing in the pane, or '' when no one is. */
+export function typingLine(names: readonly string[]): string {
+	if (names.length === 0) return '';
+	if (names.length === 1) return `${names[0]} is typing…`;
+	if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
+	return 'Several people are typing…';
+}
