@@ -17,6 +17,7 @@ npm run dev       # Vite serves the UI and proxies /ws, /write/, /files/, /strea
 npm run check     # svelte-check
 npm test          # reducer and replay unit tests
 npm run build     # writes the static site to build/
+npm run design:bundle  # builds the design system's components to dist-design/
 npm run preview
 ```
 
@@ -67,9 +68,9 @@ git submodule update --init && npm run build
 ```
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `npm run check`,
-`npm test`, and `npm run build` on every pull request and on `main`. Branch
-protection on `main` requires its `test` check, so only tested changes reach
-the production build. To deploy by hand, with Wrangler on `PATH`:
+`npm test`, `npm run build` and `npm run design:bundle` on every pull request
+and on `main`. Branch protection on `main` requires its `test` check, so only
+tested changes reach the production build. To deploy by hand, with Wrangler on `PATH`:
 
 ```sh
 npm run build
