@@ -1,6 +1,6 @@
 // Builds the Apron design system's bundle from src/lib/design: components/bundle.js (one classic script that sets
 // window.Apron) and components/bundle.css (tokens-independent component styles), under dist-design/project/.
-// Also each components/<Name>/preview.html. Publish those files to the design system artifact; its tokens.css comes from its own tokens.json.
+// Also index.d.ts and each components/<Name>/preview.html. Publish those files to the design system artifact; its tokens.css comes from its own tokens.json.
 import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import { build } from 'vite';
 
@@ -24,8 +24,8 @@ if (/<\/style/i.test(css)) throw new Error('bundle.css must not contain </style'
 mkdirSync(OUT, { recursive: true });
 writeFileSync(`${OUT}/bundle.js`, `/* @ds-bundle: ${JSON.stringify(header)} */\n${js}`);
 writeFileSync(`${OUT}/bundle.css`, css);
-// Props documentation; keep it in step with the components' Props interfaces.
-writeFileSync(`${OUT}/index.d.ts`, readFileSync('src/lib/design/index.d.ts'));
+// Props documentation, generated from each component's `interface Props`.
+await import('./design-dts.js');
 rmSync('dist-design/bundle.js');
 
 // One live preview per component (and the layout pages), mounted with window.Apron.render.

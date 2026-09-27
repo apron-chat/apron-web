@@ -1,7 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	/** The thread room's `intro_message`, pinned under the header: rendered + sanitized Markdown as `children`, or plain `summary`. */
-	let { summary, children }: { summary?: string; children?: Snippet } = $props();
+	interface Props {
+		summary?: string;
+		children?: Snippet;
+	}
+	let { summary, children }: Props = $props();
 </script>
 
 <section class="ap-summary" aria-label="Thread summary">

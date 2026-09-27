@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { cx } from './util';
 	/** A mention chip (Appendix A.3). Whether a message mentions someone is `body.mentions` (§3.5), not the chip. */
 	interface Props {
 		user_id?: string;
@@ -17,4 +16,4 @@
 
 {#if roomId}<button type="button" class="ap-mention ap-mention-room" data-room-id={id} onclick={onopen} title="Open {shown}">{shown}</button>
 {:else if unknown}<span class="ap-mention-unknown">@{id}</span>
-{:else}<span class={cx('ap-mention', me && 'ap-mention-me')} data-user-id={id} title={id !== shown ? '@' + id : undefined}>@{shown}</span>{/if}
+{:else}<span class={['ap-mention', me && 'ap-mention-me']} data-user-id={id} title={id !== shown ? '@' + id : undefined}>@{shown}</span>{/if}

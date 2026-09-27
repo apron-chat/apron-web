@@ -10,10 +10,6 @@ export interface Sender {
 	id?: string;
 }
 
-export function cx(...parts: unknown[]): string {
-	return parts.filter(Boolean).join(' ');
-}
-
 export function uid(u: { user_id?: string; id?: string } | undefined | null): string | undefined {
 	return u ? u.user_id || u.id : undefined;
 }

@@ -2,12 +2,12 @@
 	import Avatar from './Avatar.svelte';
 	import Button from './Button.svelte';
 	import TypingDots from './TypingDots.svelte';
-	import { cx } from './util';
 
 	interface Props {
 		userId: string;
 		/** Display name — sent as `me` `{name}` (§3.3); `you.name` in the result is the answer. `bind:name` in Svelte. */
 		name?: string;
+		/** Change notification for callers that can't bind (plain pages); fires after `name` updates. */
 		oninput?: (name: string) => void;
 		avatar?: string;
 		/** Caps `command` and `embed:upload`: a `/avatar` command with one `upload` embed (§4.6.6). */
@@ -50,7 +50,7 @@
 		</div>
 	</div>
 	<label class="ap-fieldlabel">Handle
-		<input class="ap-field" bind:value={name} oninput={() => oninput?.(name)} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" />
+		<input class="ap-field" bind:value={() => name, (v) => { name = v; oninput?.(v); }} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" />
 	</label>
 	<p class="ap-profedit-hint">ID <code>{userId}</code> · set by the server, can’t be changed</p>
 	{#if status === 'altered'}<p class="ap-profedit-note" role="status">The server saved your handle as “{serverName}”.</p>{/if}
@@ -63,7 +63,7 @@
 			{:else}
 				<span class="ap-profedit-row">
 					<Button size="sm" onclick={onaddpasskey} disabled={saving} label="Add passkey" />
-					<span class={cx('ap-profedit-hint', passkey === 'declined' && 'ap-profedit-err')}>{passkey === 'declined' ? 'The server didn’t accept it. Your token still works.' : passkey === 'cancelled' ? 'Cancelled. Your token still works.' : 'Signed in with a token'}</span>
+					<span class={['ap-profedit-hint', passkey === 'declined' && 'ap-profedit-err']}>{passkey === 'declined' ? 'The server didn’t accept it. Your token still works.' : passkey === 'cancelled' ? 'Cancelled. Your token still works.' : 'Signed in with a token'}</span>
 				</span>
 			{/if}
 		</div>

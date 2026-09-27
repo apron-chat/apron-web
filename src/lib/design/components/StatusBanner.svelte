@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { ConnectionState } from './types';
 
-	const STATUS = {
+	const STATUS: Record<ConnectionState, [tone: 'ok' | 'warn' | 'danger', label: string]> = {
 		connected: ['ok', 'Connected'],
 		connecting: ['warn', 'Connecting…'],
 		reconnecting: ['warn', 'Connection lost. Reconnecting…'],
@@ -9,11 +10,10 @@
 		offline: ['danger', 'Offline'],
 		denied: ['danger', 'Signed out'],
 		error: ['danger', 'Something went wrong']
-	} as const;
+	};
 
 	interface Props {
-		/** waiting: `retry_after` · denied: don't reconnect until the user acts (§1.1) · reconnecting: also when a `pong` stops coming (§1) */
-		state: keyof typeof STATUS;
+		state: ConnectionState;
 		/** The server's error `message`, shown as is (§1.1). */
 		message?: string;
 		children?: Snippet;
@@ -22,7 +22,7 @@
 		action?: Snippet;
 	}
 	let { state, message, children, retryIn, action }: Props = $props();
-	const s = $derived(STATUS[state] || STATUS.connecting);
+	const s = $derived(STATUS[state] ?? STATUS.connecting);
 </script>
 
 <div class="ap-status" role="status">

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { ReactionChip } from './types';
-	import { cx } from './util';
 
 	const PALETTE = ['👍', '❤️', '😂', '🎉', '😮', '😢', '👀', '✅'];
 
@@ -18,6 +17,7 @@
 	}
 	let { reactions, open, palette = PALETTE, disabled, ontoggle, onopen, onclose }: Props = $props();
 	const chips = $derived((reactions || []).filter((r) => r.count > 0));
+	const picks = $derived([...new Set(palette)]);
 	const mine = $derived(new Set(chips.filter((c) => c.mine).map((c) => c.emoji)));
 </script>
 
@@ -26,7 +26,7 @@
 		{#each chips as c (c.emoji)}
 			<button
 				type="button"
-				class={cx('ap-rchip', c.mine && 'ap-rchip-mine')}
+				class={['ap-rchip', c.mine && 'ap-rchip-mine']}
 				aria-pressed={!!c.mine}
 				title={c.who ? `${c.who} reacted with ${c.emoji}` : c.emoji}
 				aria-label={`${c.emoji} ${c.count}${c.mine ? ', including yours. Remove yours' : '. Add yours'}`}
@@ -39,8 +39,8 @@
 {/if}
 {#if open}
 	<div class="ap-rpalette" role="toolbar" tabindex="-1" aria-label="Pick a reaction" onkeydown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onclose?.(); } }}>
-		{#each palette as e (e)}
-			<button type="button" class={cx('ap-rpick', mine.has(e) && 'ap-rpick-mine')} aria-pressed={mine.has(e)} aria-label="React with {e}" title={e} {disabled} onclick={() => { onclose?.(); ontoggle?.(e); }}>{e}</button>
+		{#each picks as e (e)}
+			<button type="button" class={['ap-rpick', mine.has(e) && 'ap-rpick-mine']} aria-pressed={mine.has(e)} aria-label="React with {e}" title={e} {disabled} onclick={() => { onclose?.(); ontoggle?.(e); }}>{e}</button>
 		{/each}
 		<button type="button" class="ap-rpick ap-rpick-close" aria-label="Close reactions" title="Close" onclick={onclose}>×</button>
 	</div>

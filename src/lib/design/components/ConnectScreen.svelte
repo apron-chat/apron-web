@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Button from './Button.svelte';
 	import TypingDots from './TypingDots.svelte';
-	import { cx, initials } from './util';
+	import { initials } from './util';
 
 	const SCHEME: Record<string, [string, string]> = {
 		guest: ['Guest', 'No token needed; the server picks a guest identity.'],
@@ -42,9 +42,9 @@
 			<input class="ap-field" placeholder="How others see you" bind:value={name} disabled={busy} maxlength="64" autocomplete="nickname" />
 		</label>
 		<div class="ap-fieldlabel">Sign in with
-			<div class="ap-seg" role="radiogroup">
+			<div class="ap-seg" role="radiogroup" aria-label="Sign in with">
 				{#each schemes as k (k)}
-					<button type="button" role="radio" aria-checked={k === current} class={cx('ap-seg-item', k === current && 'ap-seg-on')} onclick={() => (scheme = k)} disabled={busy}>{(SCHEME[k] || [k])[0]}</button>
+					<button type="button" role="radio" aria-checked={k === current} class={['ap-seg-item', k === current && 'ap-seg-on']} onclick={() => (scheme = k)} disabled={busy}>{(SCHEME[k] || [k])[0]}</button>
 				{/each}
 			</div>
 		</div>

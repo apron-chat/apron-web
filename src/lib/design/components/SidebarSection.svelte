@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { cx } from './util';
 
 	interface Props {
 		title: string;
@@ -17,7 +16,7 @@
 	}
 </script>
 
-<section class={cx('ap-sect', !open && 'ap-sect-closed')}>
+<section class={['ap-sect', !open && 'ap-sect-closed']}>
 	<div class="ap-sect-head">
 		<button type="button" class="ap-sect-toggle" aria-expanded={open} onclick={toggle}><span class="ap-sect-caret" aria-hidden="true">▾</span>{title}</button>
 		{@render action?.()}

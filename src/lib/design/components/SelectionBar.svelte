@@ -11,7 +11,7 @@
 		onselectrange?: () => void;
 		status?: 'idle' | 'saving';
 	}
-	let { count = 0, threads = [], onmove, onnewthread, oncancel, onselectrange, status = 'idle' }: Props = $props();
+	let { count, threads = [], onmove, onnewthread, oncancel, onselectrange, status = 'idle' }: Props = $props();
 	let open = $state(false);
 	const saving = $derived(status === 'saving');
 </script>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Avatar from './Avatar.svelte';
 	import type { Sender } from './types';
-	import { cx, uid } from './util';
+	import { uid } from './util';
 
 	interface Props {
 		query?: string;
@@ -10,7 +10,7 @@
 		onpick?: (p: Sender) => void;
 		onhover?: (i: number) => void;
 	}
-	let { query = '', people = [], active = 0, onpick, onhover }: Props = $props();
+	let { query = '', people, active = 0, onpick, onhover }: Props = $props();
 	const q = $derived(query.toLowerCase());
 	function split(text: string): [string, string, string] | null {
 		const i = q ? text.toLowerCase().indexOf(q) : -1;
@@ -24,10 +24,10 @@
 	<div class="ap-mpick" role="listbox" aria-label="Mention someone"><div class="ap-mpick-empty">{q ? `No one here matches “${q}”` : 'People in this room'}</div></div>
 {:else}
 	<ul class="ap-mpick" role="listbox" aria-label="Mention someone">
-		{#each people as p, i (uid(p))}
+		{#each people as p, i (uid(p) ?? i)}
 			{@const pid = uid(p) || ''}
 			{@const name = p.name || pid}
-			<li role="option" aria-selected={i === active} class={cx('ap-mpick-item', i === active && 'ap-mpick-active')} onmousedown={(e) => { e.preventDefault(); onpick?.(p); }} onmouseenter={() => onhover?.(i)}>
+			<li role="option" aria-selected={i === active} class={['ap-mpick-item', i === active && 'ap-mpick-active']} onmousedown={(e) => { e.preventDefault(); onpick?.(p); }} onmouseenter={() => onhover?.(i)}>
 				<Avatar {name} src={p.avatar} size="sm" />
 				<span class="ap-mpick-name">{@render mark(name)}</span>
 				{#if pid !== name}<span class="ap-mpick-id">@{@render mark(pid)}</span>{/if}

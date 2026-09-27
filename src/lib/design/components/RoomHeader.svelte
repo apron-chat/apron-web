@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import Button from './Button.svelte';
-	import { cx } from './util';
 
 	interface Props {
 		room: string;
@@ -32,7 +31,7 @@
 		{:else}
 			<h1 class="ap-roomhead-name">{name || room}</h1>
 		{/if}
-		{#if sub}<p class={cx('ap-roomhead-sub', typing.length && 'ap-roomhead-typing')}>{sub}</p>{/if}
+		{#if sub}<p class={['ap-roomhead-sub', typing.length && 'ap-roomhead-typing']}>{sub}</p>{/if}
 	</div>
 	{#if children || (thread && onedit)}
 		<div class="ap-roomhead-actions">
