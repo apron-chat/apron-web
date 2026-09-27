@@ -456,7 +456,7 @@ a.ap-embed-ogcard:hover { background: var(--bg-300); }
 .ap-rchip:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
 .ap-rchip-mine { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .ap-rchip:disabled { cursor: default; }
-.ap-rchip-emoji { font-size: 15px; }
+.ap-rchip-emoji { font-family: var(--font-emoji); font-size: 15px; }
 .ap-rchip-count { font-weight: 600; }
 .ap-rchip-add { width: 26px; justify-content: center; padding: 0; font-size: 15px; visibility: hidden; }
 .ap-msg:hover .ap-rchip-add, .ap-msg:focus-within .ap-rchip-add { visibility: visible; }
