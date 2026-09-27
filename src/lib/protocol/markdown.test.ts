@@ -212,3 +212,23 @@ describe('arbitrary HTML', () => {
 		expect(html).toContain('class="ap-align-center"');
 	});
 });
+
+describe('emoji', () => {
+	const emoji = (text: string) => `<span class="ap-emoji">${text}</span>`;
+
+	it('wraps emoji in plain and markdown bodies, whole sequences at a time', () => {
+		expect(renderPlain('ok 👍🏽 go')).toBe(`ok ${emoji('👍🏽')} go`);
+		expect(renderMarkdown('**yes** ❤️')).toBe(`<p><strong>yes</strong> ${emoji('❤️')}</p>\n`);
+		expect(renderPlain('👩‍👩‍👧 🇨🇦 1️⃣ 🏴󠁧󠁢󠁳󠁣󠁴󠁿')).toBe([emoji('👩‍👩‍👧'), emoji('🇨🇦'), emoji('1️⃣'), emoji('🏴󠁧󠁢󠁳󠁣󠁴󠁿')].join(' '));
+		expect(renderPlain('🎉🎉')).toBe(emoji('🎉') + emoji('🎉'));
+	});
+
+	it('leaves text-default symbols, code and links alone', () => {
+		expect(renderPlain('© ❤ ™ 1 #')).toBe('© ❤ ™ 1 #');
+		expect(renderMarkdown('`🎉` [🎉](https://example.com)')).not.toContain('ap-emoji');
+	});
+
+	it('keeps mentions working beside emoji', () => {
+		expect(renderPlain('🎉@alice', resolve)).toBe(`${emoji('🎉')}<span class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</span>`);
+	});
+});

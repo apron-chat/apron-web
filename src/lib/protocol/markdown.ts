@@ -70,6 +70,15 @@ const MENTION = /@(@?[A-Za-z0-9_.-]+)/g;
  */
 const BARE_URL = /\bhttps?:\/\/(?:(?!&(?:lt|gt|quot);)[^\s<])+/gi;
 
+/**
+ * An emoji as the picker draws it: a flag (two regional indicators), a keycap,
+ * or a pictograph shown as emoji by default or by its U+FE0F selector, with
+ * skin tones, ZWJ joins and flag tags. A bare text-default pictograph (©, ❤
+ * without U+FE0F) stays text.
+ */
+const EMOJI =
+	/\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3|(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F)(?:\p{Emoji_Modifier}|\uFE0F|[\u{E0020}-\u{E007F}])*(?:\u200D\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|\uFE0F)*)*/gu;
+
 /** Every link in a message opens in a new tab, without telling the site where it came from. */
 const LINK_ATTRS = ' rel="noreferrer noopener" target="_blank"';
 
@@ -171,11 +180,19 @@ function linkifyText(text: string, resolve?: MentionResolver): string {
 			if (url === trimmed) break;
 		}
 		if (!/^https?:\/\/[^/?#]/i.test(url)) continue;
-		out += chipText(text.slice(index, match.index), resolve);
+		out += chipText(emojiText(text.slice(index, match.index)), resolve);
 		out += `<a href="${url}"${LINK_ATTRS}>${url}</a>`;
 		index = match.index + url.length;
 	}
-	return out + chipText(text.slice(index), resolve);
+	return out + chipText(emojiText(text.slice(index)), resolve);
+}
+
+/**
+ * Wraps each emoji in escaped text so it renders in the picker's color emoji
+ * faces (`--font-emoji`) rather than whatever glyph the text face carries.
+ */
+function emojiText(text: string): string {
+	return text.replace(EMOJI, (emoji) => `<span class="ap-emoji">${emoji}</span>`);
 }
 
 /** Replaces mentions in escaped text. Escaped entities never contain ID characters after an `@`. */
