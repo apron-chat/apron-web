@@ -1,10 +1,9 @@
 <script lang="ts">
-	import { appearanceSettings, sanitizeFontFamily, type ThemeMode } from '$lib/ui/appearance.svelte';
+	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
 	import FontFamilyField from './FontFamilyField.svelte';
 
 	type LocalFontAccessWindow = Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> };
-	type FontBrowserState = 'idle' | 'loading' | 'ready' | 'unsupported' | 'denied' | 'error' | 'empty';
 
 	interface Props {
 		open?: boolean;

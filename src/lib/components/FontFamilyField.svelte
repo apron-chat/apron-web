@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { sanitizeFontFamily } from '$lib/ui/appearance.svelte';
+	import { sanitizeFontFamily, type FontBrowserState } from '$lib/ui/appearance.svelte';
 
-	type FontBrowserState = 'idle' | 'loading' | 'ready' | 'unsupported' | 'denied' | 'error' | 'empty';
 
 	interface Props {
 		id: string;

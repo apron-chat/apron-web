@@ -1,4 +1,6 @@
 export type ThemeMode = 'system' | 'light' | 'dark';
+/** Where the installed-font suggestions stand (the Local Font Access API asks permission). */
+export type FontBrowserState = 'idle' | 'loading' | 'ready' | 'unsupported' | 'denied' | 'error' | 'empty';
 
 export interface AppearancePreferences {
 	mode: ThemeMode;
@@ -9,8 +11,6 @@ export interface AppearancePreferences {
 
 export const DEFAULT_APPEARANCE: AppearancePreferences = { mode: 'system', interfaceFont: '', chatFont: '', monoFont: '' };
 const STORAGE_KEY = 'apron.appearance';
-const SANS_FALLBACK = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
-const MONO_FALLBACK = "ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace";
 
 /** One browser-local appearance preference set, shared by the shell and Preferences dialog. */
 export class AppearanceSettings {
@@ -62,9 +62,15 @@ function applyAppearance(preferences: AppearancePreferences): void {
 	const root = document.documentElement;
 	if (preferences.mode === 'system') delete root.dataset.theme;
 	else root.dataset.theme = preferences.mode;
-	setFont(root, '--font-sans', preferences.interfaceFont, SANS_FALLBACK);
+	setFont(root, '--font-sans', preferences.interfaceFont, 'var(--font-sans-system)');
 	setFont(root, '--font-chat', preferences.chatFont, 'var(--font-sans)');
-	setFont(root, '--font-mono', preferences.monoFont, MONO_FALLBACK);
+	setFont(root, '--font-mono', preferences.monoFont, 'var(--font-mono-system)');
+	// The browser's own chrome takes the chosen theme's ground too; System restores app.html's.
+	const ground = getComputedStyle(root).getPropertyValue('--bg-100').trim();
+	for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+		meta.dataset.system ??= meta.content;
+		meta.content = preferences.mode === 'system' || !ground ? meta.dataset.system : ground;
+	}
 }
 
 function setFont(root: HTMLElement, property: string, family: string, fallback: string): void {

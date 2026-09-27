@@ -28,10 +28,13 @@
 	--shadow-popover: 0 8px 24px rgba(4, 4, 10, 0.6);
 	--shadow-float: 0 2px 8px rgba(4, 4, 10, 0.55);
 
-	/* Type: system faces only; Apron ships no font files. */
-	--font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+	/* Type: system faces only; Apron ships no font files. A font chosen in
+	   Preferences goes in front of the system stack (appearance.svelte.ts). */
+	--font-sans-system: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+	--font-mono-system: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+	--font-sans: var(--font-sans-system);
 	--font-chat: var(--font-sans);
-	--font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+	--font-mono: var(--font-mono-system);
 
 	/* Spacing: the 4px scale. */
 	--space-1: 4px;
@@ -87,7 +90,13 @@
 	}
 }
 
+:root[data-theme='dark'] {
+	color-scheme: dark;
+}
+
+/* A theme chosen in Preferences: native controls and scrollbars follow it too. */
 :root[data-theme='light'] {
+	color-scheme: light;
 	--bg-rail: #dddad4;
 	--bg-000: #ebe8e3;
 	--bg-100: #f8f6f3;

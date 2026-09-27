@@ -60,7 +60,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-msg-handle { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--ink-muted); overflow-wrap: anywhere; }
 .ap-msg-compact .ap-msg-handle { margin-right: var(--space-2); }
 .ap-msg-meta { display: inline-flex; gap: var(--space-2); font-size: 12px; line-height: 16px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-.ap-msg-text { overflow-wrap: anywhere; }
+.ap-msg-text { overflow-wrap: anywhere; font-family: var(--font-chat); }
 .ap-msg-text p { margin: 0; }
 .ap-msg-text p + p { margin-top: var(--space-2); }
 .ap-msg-text a { color: var(--denim); }

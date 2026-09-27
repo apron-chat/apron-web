@@ -20,7 +20,3 @@
 <!-- The one full emoji picker, outside the shell so nothing in it clips the popover. -->
 <EmojiPopover />
 <UpdateNotice />
-
-<style>
-	:global(.ap-msg-text) { font-family: var(--font-chat); }
-</style>
