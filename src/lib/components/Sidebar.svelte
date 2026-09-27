@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { SessionView } from '$lib/ui/session.svelte';
+	import type { NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
 	import { sidebarRooms, type ThreadEntry } from '$lib/ui/timeline';
 	import ProfileBar from './ProfileBar.svelte';
 
@@ -18,6 +19,13 @@
 		unread: Record<string, number>;
 		displayName: string;
 		passkeyUnavailable?: string;
+		notificationsEnabled: boolean;
+		notificationsSupported: boolean;
+		notificationPermission: 'default' | 'granted' | 'denied' | 'unsupported';
+		notificationScope: NotificationScope;
+		onnotifications: () => void;
+		onnotificationscope: (scope: NotificationScope) => void;
+		ontestnotifications: () => Promise<NotificationTestResult>;
 		onconnect: () => void;
 		onroom: (room: RoomSnapshot) => void;
 		onthread: (thread: string) => void;
@@ -27,7 +35,7 @@
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string) => void;
 	}
-	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, onconnect, onroom, onthread, onjoin, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, onconnect, onroom, onthread, onjoin, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own. */
 	let rooms = $derived(sidebarRooms(session.rooms));
 	let canBrowse = $derived(session.canManageRooms && session.ready);
@@ -161,7 +169,7 @@
 			</section>
 		{/if}
 	</div>
-	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {onsignout} {onsignin} />
+	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notificationScope} {onnotifications} {onnotificationscope} {ontestnotifications} {onsignout} {onsignin} />
 </aside>
 
 <style>

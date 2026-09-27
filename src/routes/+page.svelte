@@ -25,6 +25,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState } from '$lib/ui/feedback.svelte';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
+	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker } from '$lib/ui/unread.svelte';
 	import { isOwn, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
@@ -40,6 +41,7 @@
 	import { PaneDrafts } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
+	import { loadNotificationScope, loadNotificationsEnabled, notificationPermission, requestNotificationPermission, saveNotificationScope, saveNotificationsEnabled, type NotificationPermissionState, type NotificationScope, type NotificationTestResult } from '$lib/ui/notifications';
 
 	/** A thread this viewer created, opened once its `room_update` has arrived. */
 	type PendingOpen = { room: string; thread: string };
@@ -66,11 +68,15 @@
 	const session = new SessionView();
 	const feedback = new FeedbackState();
 	const mentions = new MentionTracker();
+	const incomingMessages = new IncomingMessageTracker();
 	const unread = new UnreadTracker();
 	const presence = new PagePresence();
 	const floatingDay = new FloatingDay();
 	const drafts = new PaneDrafts();
 	const reveal = new ProgressiveReveal(REVEAL_CHUNK_ITEMS, () => messageScroll, keepPlace);
+	let notificationsEnabled = $state(false);
+	let notificationScope = $state<NotificationScope>('mentions');
+	let notificationState = $state<NotificationPermissionState>(notificationPermission());
 	const selection = new MessageSelection();
 	const sidebar = new SidebarLayout();
 
@@ -167,7 +173,11 @@
 	});
 
 	$effect(() => {
-		mentions.observe(session.rooms, session.you, paneRoom?.id, latestVisible);
+		const arrivedMentions = mentions.observe(session.rooms, session.you, paneRoom?.id, latestVisible);
+		const arrivedMessages = incomingMessages.observe(session.rooms, session.you);
+		if (!notificationsEnabled || notificationState !== 'granted' || !presence.away) return;
+		const selected = notificationScope === 'everything' ? arrivedMessages : arrivedMentions;
+		for (const event of selected) showMessageNotification(event);
 	});
 
 	$effect(() => {
@@ -182,7 +192,8 @@
 
 	$effect(() => {
 		const arrived = mentions.arrived;
-		untrack(() => presence.noteMentions(arrived));
+		const playSound = !notificationsEnabled || notificationState !== 'granted';
+		untrack(() => presence.noteMentions(arrived, playSound));
 	});
 
 	// The New divider is placed once per visit, from the read cursor the server kept.
@@ -341,6 +352,9 @@
 		serverInput = loadServerUrl() ?? defaultWebSocketUrl(window.location);
 		displayName = loadDisplayName();
 		recentServers = loadRecentServers();
+		notificationsEnabled = loadNotificationsEnabled();
+		notificationScope = loadNotificationScope();
+		notificationState = notificationPermission();
 		const chat = new ChatClient(normalizeWebSocketUrl(serverInput, window.location), displayName);
 		const unsubscribe = chat.subscribe((next) => {
 			session.apply(next, chat);
@@ -387,8 +401,79 @@
 		startingThreads = {};
 		threadEditorOpen = false;
 		selection.cancel();
+		mentions.reset();
+		incomingMessages.reset();
 		session.forget();
 		directory.forget();
+	}
+
+	function updateNotificationScope(scope: NotificationScope): void {
+		notificationScope = scope;
+		saveNotificationScope(scope);
+	}
+
+	async function toggleNotifications(): Promise<void> {
+		if (notificationsEnabled) {
+			notificationsEnabled = false;
+			saveNotificationsEnabled(false);
+			return;
+		}
+		notificationState = await requestNotificationPermission();
+		if (notificationState === 'granted') {
+			notificationsEnabled = true;
+			saveNotificationsEnabled(true);
+		}
+	}
+
+	/** Sends a sample OS/browser notification without enabling ongoing mention alerts. */
+	async function testNotifications(): Promise<NotificationTestResult> {
+		if (typeof Notification === 'undefined' || !globalThis.isSecureContext) {
+			notificationState = 'unsupported';
+			return 'unsupported';
+		}
+		let permission: NotificationPermissionState = Notification.permission;
+		if (permission === 'default') permission = await requestNotificationPermission();
+		notificationState = permission;
+		if (permission === 'denied') return 'denied';
+		if (permission !== 'granted') return 'unsupported';
+		try {
+			const notification = new Notification('shazow · general', {
+				body: '@you Hey! This is an example message notification from Apron.',
+				tag: `apron:test:${client?.url ?? 'local'}`,
+				data: { test: true }
+			});
+			notification.onclick = () => {
+				window.focus();
+				notification.close();
+			};
+			return 'sent';
+		} catch {
+			return 'error';
+		}
+	}
+
+	/** Desktop alerts are opt-in and limited to the selected message types while Apron is away. */
+	function showMessageNotification(event: MessageRecord): void {
+		if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || !client) return;
+		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
+		if (!room) return;
+		const text = event.body?.text?.replace(/\s+/g, ' ').trim() ?? '';
+		const body = text.length > 180 ? `${text.slice(0, 179)}…` : text;
+		try {
+			const notification = new Notification(`${senderName(event)} · ${room.title}`, {
+				body: body || 'New message',
+				tag: `apron:${client.url}:${room.id}:${event.message_id}`,
+				data: { roomId: room.parentRoomId ?? room.id, threadId: room.parentRoomId ? room.id : undefined }
+			});
+			notification.onclick = () => {
+				window.focus();
+				const destination = notification.data as { roomId?: string; threadId?: string } | undefined;
+				if (destination?.roomId) openDestination(destination.roomId, destination.threadId);
+				notification.close();
+			};
+		} catch {
+			// Permission may be revoked between the check and construction.
+		}
 	}
 
 	function connected(): void {
@@ -979,6 +1064,7 @@
 >
 	<Sidebar
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
+		notificationsEnabled={notificationsEnabled} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notificationScope={notificationScope} onnotifications={toggleNotifications} onnotificationscope={updateNotificationScope} ontestnotifications={testNotifications}
 		onconnect={() => openConnect()} onsignin={(name) => openConnect({ passkey: true, name })}
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} onsignout={() => session.forget()}
 	/>

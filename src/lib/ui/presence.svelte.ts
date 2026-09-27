@@ -33,13 +33,13 @@ export class PagePresence {
 		if (!this.away) this.setAttention(false);
 	}
 
-	/** Each mention that lands (by the running count) while you're away chimes once and flags the tab. */
-	noteMentions(arrived: number): void {
+	/** Each mention that lands (by the running count) while you're away flags the tab, and can chime. */
+	noteMentions(arrived: number, playSound = true): void {
 		if (arrived === this.alerted) return;
 		this.alerted = arrived;
 		if (!this.away) return;
 		this.setAttention(true);
-		playPing();
+		if (playSound) playPing();
 	}
 
 	dispose(): void {
