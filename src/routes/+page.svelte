@@ -834,9 +834,12 @@
 
 	// --- Editing ---
 
-	/** Your own messages in the open pane can be picked for a move (cap `edit`); a thread's intro from another room can't. */
+	/**
+	 * Any message in the open pane can be picked for a move (cap `edit`), anyone's:
+	 * the server decides whose it lets you move. A thread's intro from another room can't.
+	 */
 	function canSelect(event: MessageRecord): boolean {
-		return session.canEdit && isOwn(event, session.you) && !event.deleted && event.room_id === paneRoom?.id;
+		return session.canEdit && !event.deleted && event.room_id === paneRoom?.id;
 	}
 
 	/** What the toolbar offers: only what the server can do, and only on messages this viewer may change. */
