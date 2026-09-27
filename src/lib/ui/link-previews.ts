@@ -51,12 +51,12 @@ export function parseGitHubLink(value: string): GitHubLink | undefined {
 	return undefined;
 }
 
-/** The distinct GitHub links in a message's text, in order, up to `LINK_PREVIEWS_MAX`. */
-export function findGitHubLinks(text: string): GitHubLink[] {
+/** The distinct GitHub links in a message's text, in order, up to `LINK_PREVIEWS_MAX`, leaving out URLs in `skip`. */
+export function findGitHubLinks(text: string, skip: readonly string[] = []): GitHubLink[] {
 	const found = new Map<string, GitHubLink>();
 	for (const match of text.matchAll(GITHUB_URL)) {
 		const link = parseGitHubLink(match[0].replace(/[.,:;!?*_~]+$/, ''));
-		if (link && !found.has(link.url)) found.set(link.url, link);
+		if (link && !found.has(link.url) && !skip.includes(link.url)) found.set(link.url, link);
 		if (found.size >= LINK_PREVIEWS_MAX) break;
 	}
 	return [...found.values()];
@@ -142,17 +142,27 @@ export class LinkPreviews {
 	private readonly known = new Map<string, OpenGraph | null>();
 	private readonly pending = new Map<string, Promise<void>>();
 	private blockedUntil = 0;
+	private readonly listeners = new Set<() => void>();
 
 	constructor(private readonly fetcher: typeof fetch = (...args) => globalThis.fetch(...args), private readonly now: () => number = Date.now) {}
+
+	/** Calls `listener` whenever a fetched preview arrives; returns the unsubscribe. */
+	subscribe(listener: () => void): () => void {
+		this.listeners.add(listener);
+		return () => this.listeners.delete(listener);
+	}
 
 	/** Starts fetching previews for the GitHub links in `text`; resolves when they have settled. */
 	prefetch(text: string): Promise<void> {
 		return Promise.all(findGitHubLinks(text).map((link) => this.load(link))).then(() => undefined);
 	}
 
-	/** `link` embeds for the GitHub links in `text`: fetched details where they've arrived, else what the URL says. */
-	embeds(text: string): Embed[] {
-		return findGitHubLinks(text).flatMap((link) => {
+	/**
+	 * `link` embeds for the GitHub links in `text`: fetched details where
+	 * they've arrived, else what the URL says. Links in `dismissed` are left out.
+	 */
+	embeds(text: string, dismissed: readonly string[] = []): Embed[] {
+		return findGitHubLinks(text, dismissed).flatMap((link) => {
 			const og = this.known.get(link.url) ?? fallbackPreview(link);
 			return og ? [{ kind: 'link', url: link.url, og }] : [];
 		});
@@ -197,6 +207,7 @@ export class LinkPreviews {
 	private remember(url: string, og: OpenGraph | null): void {
 		if (this.known.size >= CACHE_MAX) this.known.delete(this.known.keys().next().value as string);
 		this.known.set(url, og);
+		for (const listener of this.listeners) listener();
 	}
 }
 

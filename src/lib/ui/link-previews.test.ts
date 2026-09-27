@@ -87,6 +87,22 @@ describe('LinkPreviews', () => {
 		expect(fetcher).toHaveBeenCalledTimes(2);
 	});
 
+	it('leaves out dismissed links, letting later ones in under the cap, and tells listeners when details arrive', async () => {
+		const fetcher = vi.fn(async () => json({ title: 'T', state: 'open' }));
+		const previews = new LinkPreviews(fetcher as unknown as typeof fetch);
+		const text = 'https://github.com/a/b/pull/1 https://github.com/a/b/pull/2 https://github.com/a/b/pull/3 https://github.com/a/b/pull/4';
+		expect(previews.embeds(text, ['https://github.com/a/b/pull/2']).map((embed) => embed.url)).toEqual([
+			'https://github.com/a/b/pull/1', 'https://github.com/a/b/pull/3', 'https://github.com/a/b/pull/4'
+		]);
+		const listener = vi.fn();
+		const unsubscribe = previews.subscribe(listener);
+		await previews.prefetch('https://github.com/a/b/pull/1');
+		expect(listener).toHaveBeenCalledTimes(1);
+		unsubscribe();
+		await previews.prefetch('https://github.com/a/b/pull/2');
+		expect(listener).toHaveBeenCalledTimes(1);
+	});
+
 	it('survives a failed request', async () => {
 		const previews = new LinkPreviews((async () => { throw new TypeError('offline'); }) as unknown as typeof fetch);
 		await previews.prefetch('https://github.com/a/b/pull/1');

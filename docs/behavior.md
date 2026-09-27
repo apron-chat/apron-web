@@ -199,7 +199,9 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](ht
   is fetched once, and a rate-limited answer pauses fetching until the limit
   resets. A message sent before the details arrive, or linking a private
   repository, gets a card built from the URL alone ("Pull request #60"). The
-  server may keep, replace, or drop this `og`.
+  server may keep, replace, or drop this `og`. The cards show above the
+  composer as you write, each with an **(x)** that sends the message without
+  it; the draft forgets removed previews once it is sent or cleared.
 
 With the `edit` cap, each embed on your own messages shows an **(x)** on its
 corner while hovered (always on touch screens), which saves the message without

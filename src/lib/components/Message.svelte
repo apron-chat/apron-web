@@ -11,6 +11,7 @@
 	import ReactionBar from './ReactionBar.svelte';
 	import SystemNotice, { noticeScope } from './SystemNotice.svelte';
 	import Embed from './embeds/Embed.svelte';
+	import EmbedRemove from './embeds/EmbedRemove.svelte';
 
 	const LONG_PRESS_MS = 500;
 
@@ -279,9 +280,7 @@
 						<div class="embed-slot">
 							<Embed {embed} upload={embed.embed_id ? uploads[embed.embed_id] : undefined} />
 							{#if canRemoveEmbeds && !writing(embed)}
-								<button class="embed-remove" type="button" aria-label="Remove embed" title="Remove" onclick={() => onremoveembed(embed)}>
-									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-								</button>
+								<EmbedRemove label="Remove embed" onremove={() => onremoveembed(embed)} />
 							{/if}
 						</div>
 					{/each}
@@ -343,18 +342,8 @@
 	.reply-static { cursor: default; }
 	.reply-static:hover { background: var(--bg-200); }
 	.plain { white-space: pre-wrap; }
-	/* An embed's remove button sits on its corner, shown while the embed is hovered or focused (always on touch). */
+	/* An embed's remove button sits on its corner (EmbedRemove). */
 	.embed-slot { position: relative; max-width: 100%; }
-	.embed-remove {
-		position: absolute; top: calc(-1 * var(--space-2)); right: calc(-1 * var(--space-2));
-		display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
-		border: 1px solid var(--line-strong); border-radius: 50%;
-		background: var(--bg-100); color: var(--ink-muted); cursor: pointer;
-		opacity: 0; transition: opacity .12s;
-	}
-	.embed-slot:hover .embed-remove, .embed-remove:focus-visible { opacity: 1; }
-	.embed-remove:hover { background: var(--bg-300); color: var(--ink); }
-	@media (hover: none) { .embed-remove { opacity: 1; } }
 	.markdown :global(blockquote) {
 		margin: var(--space-2) 0;
 		padding: var(--space-1) var(--space-3);

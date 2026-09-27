@@ -8,6 +8,8 @@
 	import { linkPreviews } from '$lib/ui/link-previews';
 	import { clockLabel } from '$lib/ui/time';
 	import MentionPicker from './MentionPicker.svelte';
+	import Embed from './embeds/Embed.svelte';
+	import EmbedRemove from './embeds/EmbedRemove.svelte';
 
 	const MENTION_MATCHES_MAX = 8;
 
@@ -20,6 +22,11 @@
 		 * no longer mentioned.
 		 */
 		mentions?: string[];
+		/**
+		 * Link previews removed from this draft, by URL: the message goes out
+		 * without them. Emptied with the draft.
+		 */
+		dismissed?: string[];
 		placeholder: string;
 		disabled: boolean;
 		/** Attachments and voice clips (cap `embed:upload`, §4.6.4): each file goes out as an `upload` embed. */
@@ -41,7 +48,7 @@
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
 	}
-	let { value = $bindable(), mentions = $bindable([]), placeholder, disabled, canUpload, canCommand = false, people, replyPreview, oninput, onsend, onfiles, oncancelreply, onmention }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, canCommand = false, people, replyPreview, oninput, onsend, onfiles, oncancelreply, onmention }: Props = $props();
 
 	let field = $state<HTMLDivElement | undefined>();
 	let attachInput = $state<HTMLInputElement | undefined>();
@@ -68,6 +75,19 @@
 	let empty = $state(true);
 	let command = $derived(canCommand && isCommand(value));
 	let emojiOpen = $derived(emojiPicker.isOpenFor(emojiButton));
+	/** Bumped when a fetched preview arrives, so the previews below are redrawn. */
+	let previewsArrived = $state(0);
+	/** The link embeds the draft will be sent with (a command takes none). */
+	let previews = $derived.by(() => {
+		void previewsArrived;
+		return command || disabled ? [] : linkPreviews.embeds(value, dismissed);
+	});
+
+	$effect(() => linkPreviews.subscribe(() => previewsArrived++));
+	// A sent or cleared draft forgets which previews were removed.
+	$effect(() => {
+		if (!value.trim() && untrack(() => dismissed.length)) dismissed = [];
+	});
 
 	/** People whose name or ID starts with the query; someone it names exactly comes first. */
 	function matching(text: string): MentionPerson[] {
@@ -98,6 +118,7 @@
 	export function reset(): void {
 		query = undefined;
 		lastSelection = undefined;
+		dismissed = [];
 		emojiPicker.release(emojiButton);
 		stopRecording(false);
 	}
@@ -346,6 +367,12 @@
 		refreshQuery();
 	}
 
+	/** Drops a link's preview from this draft; typing carries on in the field. */
+	function dismissPreview(url: string): void {
+		dismissed = [...dismissed, url];
+		focus();
+	}
+
 	function attach(input: HTMLInputElement): void {
 		const files = [...(input.files ?? [])];
 		input.value = '';
@@ -398,6 +425,16 @@
 	<div class="reply-draft" data-testid="reply-draft" role="status">
 		<span>{`Replying to ${replyPreview}`}</span>
 		<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" aria-label="Cancel reply" onclick={oncancelreply}>Cancel reply</button>
+	</div>
+{/if}
+{#if previews.length > 0}
+	<div class="previews" data-testid="link-previews" aria-label="Link previews to send">
+		{#each previews as embed (embed.url)}
+			<div class="embed-slot">
+				<Embed {embed} />
+				<EmbedRemove label="Remove preview" onremove={() => dismissPreview(embed.url ?? '')} />
+			</div>
+		{/each}
 	</div>
 {/if}
 <div class="wrap">
@@ -476,6 +513,10 @@
 	/* The mention picker anchors to the composer and grows upward. */
 	.wrap { position: relative; }
 	.reply-draft { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-4); font-size: 13px; line-height: 18px; color: var(--ink-muted); }
+	/* Previews of the draft's links, above the field; each can be removed before sending. */
+	.previews { display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-3) var(--space-4) var(--space-2); }
+	.embed-slot { position: relative; flex: 0 1 320px; min-width: 0; }
+	.embed-slot :global(.ap-embed) { width: 100%; min-width: 0; }
 	.reply-draft span { min-width: 0; overflow-wrap: anywhere; }
 	/* The field is an editable div so mentions can be chips; it sizes like the design system's textarea. */
 	.field { height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }

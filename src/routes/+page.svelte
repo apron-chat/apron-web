@@ -79,6 +79,8 @@
 	let displayName = $state('');
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
 	let composerMentions = $state<string[]>([]);
+	/** Link previews removed from the composer's draft, by URL. */
+	let composerDismissed = $state<string[]>([]);
 	let connectOpen = $state(false);
 	/** The sign-in scheme the connect screen opens with, when something asked for one. */
 	let connectScheme = $state<Scheme | undefined>();
@@ -513,7 +515,7 @@
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
 			if (!action.text.trim()) return;
-			const embeds = linkPreviews.embeds(action.text);
+			const embeds = linkPreviews.embeds(action.text, composerDismissed);
 			const post = () => feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}) }), 'Sending…', restore);
 			const joining = joinFirst(chat, paneRoom);
 			if (joining) {
@@ -582,7 +584,7 @@
 		const command = action.kind === 'command';
 		const text = action.kind === 'message' ? action.text : drafts.text;
 		const mentions = composerMentions;
-		const embeds = command ? [] : linkPreviews.embeds(text);
+		const embeds = command ? [] : linkPreviews.embeds(text, composerDismissed);
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };
 		const joining = command ? undefined : joinFirst(chat, paneRoom);
 		const { sent, uploaded } = joining
@@ -1120,6 +1122,7 @@
 					bind:this={composer}
 					bind:value={drafts.text}
 					bind:mentions={composerMentions}
+					bind:dismissed={composerDismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!canCompose}
 					canUpload={snapshot.capabilities['embed:upload']}
