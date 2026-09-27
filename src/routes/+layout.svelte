@@ -3,6 +3,7 @@
 	import '$lib/design/apron.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import EmojiPopover from '$lib/components/EmojiPopover.svelte';
+	import UpdateNotice from '$lib/components/UpdateNotice.svelte';
 
 	let { children } = $props();
 </script>
@@ -14,3 +15,4 @@
 {@render children()}
 <!-- The one full emoji picker, outside the shell so nothing in it clips the popover. -->
 <EmojiPopover />
+<UpdateNotice />

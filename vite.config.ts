@@ -9,7 +9,9 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter()
+			adapter: adapter(),
+			// Open tabs look for a newer deploy every 5 minutes and offer a reload (UpdateNotice).
+			version: { pollInterval: 5 * 60 * 1000 }
 		})
 	],
 	test: {
