@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { count99, cx } from './util';
+	import { count99 } from './util';
 
 	interface Props {
 		/** Default: the round `fab`, or the rust `bar` when there are `mentions`. */
@@ -24,7 +24,7 @@
 		<span aria-hidden="true">↓</span>{#if count}<span class="ap-count ap-jumpfab-count">{count99(count)}</span>{/if}
 	</button>
 {:else}
-	<div class={cx('ap-jumpbar', mentions && 'ap-jumpbar-at')} role="status">
+	<div class={['ap-jumpbar', mentions && 'ap-jumpbar-at']} role="status">
 		{#if mentions}<span class="ap-count ap-count-at" aria-hidden="true">@</span>{/if}
 		<span class="ap-jumpbar-text">{label}</span>
 		<button type="button" class="ap-jumpbar-btn" onclick={mentions && onjumpmention ? onjumpmention : onjump}>{mentions ? 'Jump to mention' : count ? 'Jump to new' : 'Jump to latest'}</button>

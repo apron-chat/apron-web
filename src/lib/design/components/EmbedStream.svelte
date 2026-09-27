@@ -1,14 +1,13 @@
 <script lang="ts">
 	/* stream (§4.6.5): live while url is set (the consumer streams GET url into text), finished when text replaces url */
 	import type { EmbedProps } from './types';
-	import { cx } from './util';
 
 	let props: EmbedProps = $props();
 	const live = $derived(!!props.url && !props.done);
 	const fmt = $derived(props.format === 'terminal' ? 'terminal' : props.format === 'markdown' ? 'markdown' : 'plain');
 </script>
 
-<div class={cx('ap-embed', 'ap-embed-stream', 'ap-embed-stream-' + fmt, live && 'ap-embed-stream-live')}>
+<div class={['ap-embed', 'ap-embed-stream', 'ap-embed-stream-' + fmt, live && 'ap-embed-stream-live']}>
 	<div class="ap-embed-streamhead">
 		<span class="ap-embed-streamkind">{fmt === 'terminal' ? 'Terminal' : fmt === 'markdown' ? 'Live text' : 'Output'}</span>
 		{#if live}<span class="ap-embed-livebadge" role="status"><i aria-hidden="true"></i>Live</span>

@@ -1,15 +1,21 @@
 <script lang="ts">
 	import type { BackendEntry } from './types';
-	import { count99, cx, initials } from './util';
+	import { count99, initials } from './util';
 
-	let { backends, active, onselect, onadd }: { backends: BackendEntry[]; active?: string; onselect?: (id: string) => void; onadd?: () => void } = $props();
+	interface Props {
+		backends: BackendEntry[];
+		active?: string;
+		onselect?: (id: string) => void;
+		onadd?: () => void;
+	}
+	let { backends, active, onselect, onadd }: Props = $props();
 </script>
 
 <nav class="ap-rail" aria-label="Backends">
-	{#each backends || [] as b (b.id)}
+	{#each backends as b (b.id)}
 		<button
 			type="button"
-			class={cx('ap-rail-item', b.id === active && 'ap-rail-active', b.unread && 'ap-rail-unread', b.state === 'offline' && 'ap-rail-offline')}
+			class={['ap-rail-item', b.id === active && 'ap-rail-active', b.unread && 'ap-rail-unread', b.state === 'offline' && 'ap-rail-offline']}
 			onclick={() => onselect?.(b.id)}
 			aria-current={b.id === active ? 'true' : undefined}
 			title={b.label}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Avatar from './Avatar.svelte';
 	import type { Sender } from './types';
-	import { cx, uid } from './util';
+	import { uid } from './util';
 
 	interface Props {
 		/** The thread's `room_id` (a room with `parent_room_id`, §3.4). */
@@ -29,7 +29,7 @@
 {#if moved}
 	<div class="ap-thread ap-thread-moved"><span>{'Moved to '}</span><button type="button" class="ap-link" onclick={onopen}>{shown}</button></div>
 {:else}
-	<button type="button" class={cx('ap-thread', preview && 'ap-thread-2')} onclick={onopen}>
+	<button type="button" class={['ap-thread', preview && 'ap-thread-2']} onclick={onopen}>
 		<span class="ap-thread-head">
 			{#if faces.length}<span class="ap-thread-faces" aria-hidden="true">{#each faces as f, i (uid(f) || i)}<Avatar name={f.name || uid(f)} src={f.avatar} size="sm" />{/each}</span>{/if}
 			<span class="ap-thread-name">{shown}</span>

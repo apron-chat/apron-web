@@ -5,7 +5,7 @@
 	import ReactionBar from './ReactionBar.svelte';
 	import ReplyPreview from './ReplyPreview.svelte';
 	import type { EmbedProps, ReactionChip, ReplyPreviewProps, Sender } from './types';
-	import { cx, times, uid } from './util';
+	import { times, uid } from './util';
 
 	interface Props {
 		/** Omit only for a system line about the room itself (room records carry no sender). A `@private` notice has no `messageId`: render it, never store it (§3.5). */
@@ -58,113 +58,116 @@
 		selected?: boolean;
 		onselect?: (e: Event) => void;
 	}
-	let p: Props = $props();
+	let {
+		messageId, sender, handle, text, children, embeds, timestamp, time, grouped, status = 'sent', onretry, edited, deleted,
+		system: systemProp, scope: scopeProp, mention, pinged, highlighted, density = 'cozy', actions, footer, replyTo, onjumpto,
+		reactions, reacting, palette, canReact, onreact, onopenreact, onclosereact, selectMode, selected, onselect
+	}: Props = $props();
 
-	const s = $derived(p.sender || ({} as Partial<Sender>));
+	const s = $derived(sender || ({} as Partial<Sender>));
 	const sid = $derived(uid(s));
 	const name = $derived(s.name || sid);
-	const system = $derived(p.system != null ? p.system : String(sid || '').charAt(0) === '@');
-	const scope = $derived(p.scope || (sid === '@server' ? 'server' : sid === '@room' ? 'room' : sid === '@private' ? 'private' : undefined));
-	const showHandle = $derived(!!sid && sid !== name && (p.handle != null ? p.handle : p.density !== 'compact'));
-	const status = $derived(p.status || 'sent');
-	const t = $derived(times(p.timestamp, p.time));
-	const sel = $derived(!!p.selectMode);
+	const system = $derived(systemProp ?? String(sid || '').startsWith('@'));
+	const scope = $derived(scopeProp || (sid === '@server' ? 'server' : sid === '@room' ? 'room' : sid === '@private' ? 'private' : undefined));
+	const showHandle = $derived(!!sid && sid !== name && (handle ?? density !== 'compact'));
+	const t = $derived(times(timestamp, time));
+	const sel = $derived(!!selectMode);
 	const noticeTitle = $derived(s.name && s.name !== sid ? `${s.name} (${sid})` : sid);
-	const cls = $derived(cx('ap-msg', p.grouped && 'ap-msg-grouped', status === 'pending' && 'ap-msg-pending', p.mention && 'ap-msg-mention', p.pinged && 'ap-msg-pinged', p.highlighted && 'ap-msg-highlighted', sel && 'ap-msg-selectable', sel && p.selected && 'ap-msg-selected', p.density === 'compact' && 'ap-msg-compact'));
-	const hasMeta = $derived((p.edited && !p.deleted) || status === 'pending');
+	const cls = $derived(['ap-msg', grouped && 'ap-msg-grouped', status === 'pending' && 'ap-msg-pending', mention && 'ap-msg-mention', pinged && 'ap-msg-pinged', highlighted && 'ap-msg-highlighted', sel && 'ap-msg-selectable', sel && selected && 'ap-msg-selected', density === 'compact' && 'ap-msg-compact']);
+	const hasMeta = $derived((edited && !deleted) || status === 'pending');
 
 	function rowClick(e: MouseEvent) {
 		if (!sel) return;
 		if ((e.target as Element)?.closest?.('a, button, input, textarea')) return;
-		p.onselect?.(e);
+		onselect?.(e);
 	}
 	function checkKey(e: KeyboardEvent) {
 		if (e.key === ' ' || e.key === 'Enter') {
 			e.preventDefault();
-			p.onselect?.(e);
+			onselect?.(e);
 		}
 	}
 </script>
 
 {#snippet textBody(tag: 'div' | 'span')}
-	<svelte:element this={tag} class="ap-msg-text">{#if p.children}{@render p.children()}{:else}{p.text}{/if}</svelte:element>
+	<svelte:element this={tag} class="ap-msg-text">{#if children}{@render children()}{:else}{text}{/if}</svelte:element>
 {/snippet}
 {#snippet tomb()}<span class="ap-msg-tomb">Message deleted</span>{/snippet}
 {#snippet timeEl(text: string | undefined, className?: string)}
 	{#if text}<time class={className} datetime={t.iso} title={t.exact}>{text}</time>{/if}
 {/snippet}
-{#snippet meta()}{#if p.edited && !p.deleted}<span>edited</span>{/if}{#if status === 'pending'}<span>Sending…</span>{/if}{/snippet}
-{#snippet quote()}{#if p.replyTo && !p.deleted}<ReplyPreview onjump={p.onjumpto} {...p.replyTo} />{/if}{/snippet}
-{#snippet embeds()}
-	{#if p.embeds && p.embeds.length}<div class="ap-msg-embeds">{#each p.embeds as e, i (e.embed_id || i)}<Embed {...e} />{/each}</div>{/if}
+{#snippet meta()}{#if edited && !deleted}<span>edited</span>{/if}{#if status === 'pending'}<span>Sending…</span>{/if}{/snippet}
+{#snippet quote()}{#if replyTo && !deleted}<ReplyPreview onjump={onjumpto} {...replyTo} />{/if}{/snippet}
+{#snippet embedList()}
+	{#if embeds && embeds.length}<div class="ap-msg-embeds">{#each embeds as e, i (e.embed_id || i)}<Embed {...e} />{/each}</div>{/if}
 {/snippet}
 {#snippet failed()}
-	{#if status === 'failed'}<div class="ap-msg-failed">Not sent · <button type="button" class="ap-link" onclick={p.onretry}>Retry</button></div>{/if}
+	{#if status === 'failed'}<div class="ap-msg-failed">Not sent · <button type="button" class="ap-link" onclick={onretry}>Retry</button></div>{/if}
 {/snippet}
 {#snippet check()}
-	{#if sel}<span class="ap-msg-check" role="checkbox" aria-checked={!!p.selected} aria-label="Select message" tabindex="0" onkeydown={checkKey}>{p.selected ? '✓' : ''}</span>{/if}
+	{#if sel}<span class="ap-msg-check" role="checkbox" aria-checked={!!selected} aria-label="Select message" tabindex="0" onkeydown={checkKey}>{selected ? '✓' : ''}</span>{/if}
 {/snippet}
 {#snippet actionBar()}
-	{#if p.actions && !p.deleted && !sel}<div class="ap-msg-actions">{@render p.actions()}</div>{/if}
+	{#if actions && !deleted && !sel}<div class="ap-msg-actions">{@render actions()}</div>{/if}
 {/snippet}
 
 {#if system && !sel && scope}
 	<!-- A scoped notice: a left-aligned card titled by its sender as the server names it (§3.3). -->
-	<article class={cx('ap-notice', scope === 'private' && 'ap-notice-private')} data-message-id={p.messageId} data-scope={scope} tabindex="-1">
+	<article class={['ap-notice', scope === 'private' && 'ap-notice-private']} data-message-id={messageId} data-scope={scope} tabindex="-1">
 		<div class="ap-notice-head"><span class="ap-notice-title">{noticeTitle}</span>{@render timeEl(t.short, 'ap-notice-time')}</div>
-		<div class="ap-notice-body">{#if p.deleted}{@render tomb()}{:else}{@render textBody('div')}{/if}</div>
+		<div class="ap-notice-body">{#if deleted}{@render tomb()}{:else}{@render textBody('div')}{/if}</div>
 	</article>
 {:else if system && !sel}
-	<article class="ap-msg ap-msg-system" data-message-id={p.messageId} tabindex="-1">
-		{#if p.sender}<span class="ap-msg-system-who">{name}</span>{/if}
-		<div class="ap-msg-system-body">{#if p.deleted}{@render tomb()}{:else}{@render textBody('div')}{/if}</div>
+	<article class="ap-msg ap-msg-system" data-message-id={messageId} tabindex="-1">
+		{#if sender}<span class="ap-msg-system-who">{name}</span>{/if}
+		<div class="ap-msg-system-body">{#if deleted}{@render tomb()}{:else}{@render textBody('div')}{/if}</div>
 		{@render timeEl(t.short, 'ap-msg-system-time')}
 	</article>
-{:else if p.density === 'compact'}
+{:else if density === 'compact'}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article class={cls} data-message-id={p.messageId} tabindex="-1" onclick={rowClick}>
+	<article class={cls} data-message-id={messageId} tabindex="-1" onclick={rowClick}>
 		{@render check()}
 		<time class="ap-msg-ctime" datetime={t.iso} title={t.exact}>{t.short}</time>
 		<div class="ap-msg-main">
 			<span class="ap-msg-sender">{name}</span>
 			{#if showHandle}<span class="ap-msg-handle">@{sid}</span>{/if}
-			{#if p.deleted}{@render tomb()}{:else}
+			{#if deleted}{@render tomb()}{:else}
 				{@render quote()}
 				{@render textBody('span')}
 				{#if hasMeta}<span class="ap-msg-meta">{@render meta()}</span>{/if}
-				{@render embeds()}
+				{@render embedList()}
 				{@render failed()}
 			{/if}
-			{@render p.footer?.()}
+			{@render footer?.()}
 		</div>
 		{@render actionBar()}
 	</article>
 {:else}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article class={cls} data-message-id={p.messageId} tabindex="-1" onclick={rowClick}>
+	<article class={cls} data-message-id={messageId} tabindex="-1" onclick={rowClick}>
 		{@render check()}
 		<div class="ap-msg-gutter">
-			{#if p.grouped}<time class="ap-msg-hovertime" datetime={t.iso} title={t.exact}>{t.compact}</time>
+			{#if grouped}<time class="ap-msg-hovertime" datetime={t.iso} title={t.exact}>{t.compact}</time>
 			{:else}<Avatar {name} src={s.avatar} />{/if}
 		</div>
 		<div class="ap-msg-main">
-			{#if !p.grouped}
+			{#if !grouped}
 				<header class="ap-msg-head">
 					<span class="ap-msg-sender">{name}</span>
 					{#if showHandle}<span class="ap-msg-handle">@{sid}</span>{/if}
 					<span class="ap-msg-meta">{@render timeEl(t.short)}{@render meta()}</span>
 				</header>
 			{:else if hasMeta}<div class="ap-msg-meta">{@render meta()}</div>{/if}
-			{#if p.deleted}<div class="ap-msg-tomb">Message deleted</div>{:else}
+			{#if deleted}<div class="ap-msg-tomb">Message deleted</div>{:else}
 				{@render quote()}
-				{#if p.children || p.text != null}{@render textBody('div')}{/if}
-				{@render embeds()}
+				{#if children || text != null}{@render textBody('div')}{/if}
+				{@render embedList()}
 				{@render failed()}
-				{#if (p.reactions && p.reactions.length) || p.reacting}
-					<ReactionBar reactions={p.reactions || []} open={p.reacting} palette={p.palette} disabled={p.canReact === false} ontoggle={p.onreact} onopen={p.onopenreact} onclose={p.onclosereact} />
+				{#if (reactions && reactions.length) || reacting}
+					<ReactionBar reactions={reactions || []} open={reacting} palette={palette} disabled={canReact === false} ontoggle={onreact} onopen={onopenreact} onclose={onclosereact} />
 				{/if}
 			{/if}
-			{@render p.footer?.()}
+			{@render footer?.()}
 		</div>
 		{@render actionBar()}
 	</article>

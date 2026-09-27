@@ -78,3 +78,6 @@ export interface BackendEntry {
 	mentions?: number;
 	state?: 'online' | 'offline';
 }
+
+/** waiting: `retry_after` · denied: don't reconnect until the user acts (§1.1) · reconnecting: also when a `pong` stops coming (§1) */
+export type ConnectionState = 'connected' | 'connecting' | 'reconnecting' | 'waiting' | 'offline' | 'denied' | 'error';

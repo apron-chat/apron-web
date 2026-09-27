@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { cx } from './util';
-
 	interface Props {
 		/** date: between days · new: above the first message after your `read_message_id` · gap: history unavailable before here. */
 		kind?: 'date' | 'new' | 'gap';
@@ -16,4 +14,4 @@
 	const hidden = $derived(isSticky && !scrolling);
 </script>
 
-<div class={cx('ap-divider', 'ap-divider-' + kind, isSticky && 'ap-divider-sticky', hidden && 'ap-divider-idle')} role="separator" aria-label={text} aria-hidden={hidden || undefined}><span>{text}</span></div>
+<div class={['ap-divider', 'ap-divider-' + kind, isSticky && 'ap-divider-sticky', hidden && 'ap-divider-idle']} role="separator" aria-label={text} aria-hidden={hidden || undefined}><span>{text}</span></div>

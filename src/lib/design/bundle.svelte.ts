@@ -1,18 +1,23 @@
 /* Entry for the design system bundle: one classic script that sets window.Apron.
    Built by `npm run design:bundle`; see scripts/design-bundle.js. */
-import { createRawSnippet, mount, unmount, type Component, type Snippet } from 'svelte';
+import { createRawSnippet, flushSync, mount, unmount, type Component, type Snippet } from 'svelte';
 import * as components from './components';
+import SnippetHost from './SnippetHost.svelte';
 
-type Props = Record<string, unknown>;
+type Props = Record<string, any>;
 
-/** Mount a component into `target`. Change `handle.props.x = …` (or `handle.set({...})`) and it re-renders. */
-function render(C: Component<any>, target: Element, initial: Props = {}) {
+/** Mount a component into `target`. Change `handle.props.x = …` (or `handle.set({...})`) and it re-renders.
+    Edits made inside a component (a typed draft) are not written back here: listen with its `oninput`. */
+function render<P extends Props>(C: Component<P>, target: Element, initial: P = {} as P) {
 	const props = $state({ ...initial });
 	const instance = mount(C, { target, props });
+	// Plain pages read the DOM right after mounting: render synchronously.
+	flushSync();
 	return {
 		props,
-		set(patch: Props) {
+		set(patch: Partial<P>) {
 			Object.assign(props, patch);
+			flushSync();
 		},
 		destroy() {
 			unmount(instance);
@@ -26,7 +31,7 @@ function html(markup: string): Snippet {
 }
 
 /** A snippet prop that renders another component: `footer: Apron.part(Apron.ThreadMarker, { thread: 'deploy' })`. */
-function part(C: Component<any>, props: Props = {}): Snippet {
+function part<P extends Props>(C: Component<P>, props: P = {} as P): Snippet {
 	return createRawSnippet(() => ({
 		render: () => '<span style="display:contents"></span>',
 		setup(el) {
@@ -38,23 +43,14 @@ function part(C: Component<any>, props: Props = {}): Snippet {
 
 /** Several snippets in a row, for one snippet prop. */
 function parts(...snippets: Snippet[]): Snippet {
-	return createRawSnippet(() => ({
-		render: () => '<span style="display:contents"></span>',
-		setup(el) {
-			const cleanups = snippets.map((s) => {
-				const host = document.createElement('span');
-				host.style.display = 'contents';
-				el.appendChild(host);
-				// Render each snippet through a tiny host component.
-				const instance = mount(SnippetHost, { target: host, props: { snippet: s } });
-				return () => unmount(instance);
-			});
-			return () => cleanups.forEach((c) => c());
-		}
-	}));
+	return part(SnippetHost, { snippets });
 }
 
-import SnippetHost from './SnippetHost.svelte';
-
 const Apron = { ...components, render, html, part, parts, mount, unmount };
-(window as unknown as { Apron: typeof Apron }).Apron = Apron;
+
+declare global {
+	interface Window {
+		Apron: typeof Apron;
+	}
+}
+window.Apron = Apron;
