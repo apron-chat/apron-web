@@ -32,6 +32,12 @@ export interface MentionPerson {
  */
 const MENTION = /@(@?[A-Za-z0-9_.-]+)/g;
 
+/**
+ * A bare `http(s)://` link in escaped text: it runs to whitespace or an escaped
+ * `<`, `>` or `"`, which can't appear in a URL as typed.
+ */
+const BARE_URL = /\bhttps?:\/\/(?:(?!&(?:lt|gt|quot);)[^\s<])+/gi;
+
 /** Sources rendered to HTML (before mentions are linked) kept for reuse, least recently used first. */
 const CACHE_SIZE = 2000;
 const rendered = new Map<string, string>();
@@ -55,12 +61,12 @@ function commonmark(source: string): string {
 
 /** CommonMark rendering with raw HTML and unsafe URL schemes disabled, keeping typed line breaks. */
 export function renderMarkdown(source: string, resolve?: MentionResolver): string {
-	return linkMentions(commonmark(source), resolve);
+	return linkText(commonmark(source), resolve);
 }
 
-/** A plain body as HTML: escaped, with mentions linked. Line breaks are kept by CSS (`pre-wrap`). */
+/** A plain body as HTML: escaped, with bare links and mentions linked. Line breaks are kept by CSS (`pre-wrap`). */
 export function renderPlain(source: string, resolve?: MentionResolver): string {
-	return chipText(escapeHtml(source), resolve);
+	return linkifyText(escapeHtml(source), resolve);
 }
 
 function escapeHtml(value: string): string {
@@ -77,18 +83,18 @@ function mentionChip(target: MentionTarget): string {
 }
 
 /**
- * Links `@id` in the rendered HTML's text, leaving tags, attributes and code
- * alone: an ID inside `<code>` is code, not a mention.
+ * Links bare URLs and `@id` in the rendered HTML's text, leaving tags,
+ * attributes, code and existing links alone: an ID inside `<code>` is code,
+ * not a mention.
  */
-function linkMentions(html: string, resolve?: MentionResolver): string {
-	if (!resolve) return html;
+function linkText(html: string, resolve?: MentionResolver): string {
 	let out = '';
 	let index = 0;
 	let codeDepth = 0;
 	while (index < html.length) {
 		const tagStart = html.indexOf('<', index);
 		const text = html.slice(index, tagStart === -1 ? undefined : tagStart);
-		out += codeDepth > 0 ? text : chipText(text, resolve);
+		out += codeDepth > 0 ? text : linkifyText(text, resolve);
 		if (tagStart === -1) break;
 		const tagEnd = html.indexOf('>', tagStart);
 		if (tagEnd === -1) {
@@ -102,6 +108,31 @@ function linkMentions(html: string, resolve?: MentionResolver): string {
 		index = tagEnd + 1;
 	}
 	return out;
+}
+
+/**
+ * Links bare URLs in escaped text, then mentions in the text between them. The
+ * match is already escaped, so it serves as both the `href` and the label.
+ * Trailing punctuation is left out, as is a closing `)` with no opening one in
+ * the link, so "(see https://example.com)." links just the URL.
+ */
+function linkifyText(text: string, resolve?: MentionResolver): string {
+	let out = '';
+	let index = 0;
+	for (const match of text.matchAll(BARE_URL)) {
+		let url = match[0];
+		for (;;) {
+			const trimmed = url.replace(/(?:[.,:;!?'*_~]|&amp;|&#39;)+$/, '');
+			const opens = trimmed.split('(').length, closes = trimmed.split(')').length;
+			url = trimmed.endsWith(')') && closes > opens ? trimmed.slice(0, -1) : trimmed;
+			if (url === trimmed) break;
+		}
+		if (!/^https?:\/\/[^/?#]/i.test(url)) continue;
+		out += chipText(text.slice(index, match.index), resolve);
+		out += `<a href="${url}" rel="noreferrer noopener" target="_blank">${url}</a>`;
+		index = match.index + url.length;
+	}
+	return out + chipText(text.slice(index), resolve);
 }
 
 /** Replaces mentions in escaped text. Escaped entities never contain ID characters after an `@`. */

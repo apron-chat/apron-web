@@ -57,3 +57,36 @@ describe('rendering the same source again', () => {
 		expect(renderMarkdown(source)).toBe('<p>Handing <strong>this</strong> to @alice.</p>\n');
 	});
 });
+
+describe('bare links', () => {
+	const link = (url: string) => `<a href="${url}" rel="noreferrer noopener" target="_blank">${url}</a>`;
+
+	it('links http and https URLs in markdown and plain bodies', () => {
+		expect(renderMarkdown('see https://example.com/a?b=1&c=2 now')).toBe(`<p>see ${link('https://example.com/a?b=1&amp;c=2')} now</p>\n`);
+		expect(renderPlain('go to http://example.com')).toBe(`go to ${link('http://example.com')}`);
+	});
+
+	it('leaves trailing punctuation and an unmatched closing paren out', () => {
+		expect(renderPlain('(see https://example.com/x).')).toBe(`(see ${link('https://example.com/x')}).`);
+		expect(renderPlain('https://en.wikipedia.org/wiki/Foo_(bar), ok')).toBe(`${link('https://en.wikipedia.org/wiki/Foo_(bar)')}, ok`);
+		expect(renderPlain('"https://example.com"')).toBe(`&quot;${link('https://example.com')}&quot;`);
+	});
+
+	it('stops at markup and escapes what it links', () => {
+		expect(renderPlain('<https://example.com/"x>')).toBe(`&lt;${link('https://example.com/')}&quot;x&gt;`);
+		expect(renderMarkdown('**https://example.com**')).toBe(`<p><strong>${link('https://example.com')}</strong></p>\n`);
+	});
+
+	it('leaves links, code, other schemes and bare schemes alone', () => {
+		expect(renderMarkdown('[docs](https://example.com)')).toBe('<p><a href="https://example.com">docs</a></p>\n');
+		expect(renderMarkdown('`https://example.com`')).toBe('<p><code>https://example.com</code></p>\n');
+		expect(renderMarkdown('```\nhttps://example.com\n```')).not.toContain('<a ');
+		expect(renderPlain('javascript:alert(1) ftp://example.com https://')).not.toContain('<a ');
+	});
+
+	it('does not turn an @ inside a URL into a mention', () => {
+		const html = renderPlain('@alice https://example.com/@alice', resolve);
+		expect(html).toContain(link('https://example.com/@alice'));
+		expect(html.match(/ap-mention/g)).toHaveLength(1);
+	});
+});
