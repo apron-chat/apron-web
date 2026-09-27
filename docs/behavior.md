@@ -157,9 +157,9 @@ Escape leaves select mode.
 A reply's quote may point into another room: clicking it opens that room or
 thread, loading the thread's history if needed, and highlights the message.
 
-With the `reactions` cap, a message's **React** action opens a small emoji
-palette, whose **More emoji** button opens the full emoji picker; a pick there
-toggles like a pick in the palette. Reactions show as chips under the message: emoji and count,
+With the `reactions` cap, a message's **React** action opens the full emoji
+picker right away, its frequently used row starting from emoji-mart's own
+defaults; a pick toggles your reaction with that emoji. Reactions show as chips under the message: emoji and count,
 highlighted when one is yours, with a tooltip naming who reacted. Clicking a
 chip toggles your reaction. Tombstones show no reactions.
 

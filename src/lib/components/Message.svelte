@@ -3,6 +3,7 @@
 	import { renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 	import type { MessageRecord } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { emojiAnchor, emojiPicker } from '$lib/ui/emoji-picker.svelte';
 	import { embedsOf, isSystem, replySnippet, senderName, textOf } from '$lib/ui/messages';
 	import type { ReactionChip } from '$lib/ui/reactions';
 	import { eventTime, idDateTime, idIso, idTimeCompact } from '$lib/ui/time';
@@ -72,7 +73,9 @@
 	 * room noticeably slower.
 	 */
 	let engaged = $state(false);
-	let paletteOpen = $state(false);
+	/** The React action's button: the emoji picker opens beside it. */
+	let reactButton = $state<HTMLButtonElement | undefined>();
+	let reacting = $derived(emojiPicker.isOpenFor(reactButton));
 	let draft = $state('');
 	let longPress: ReturnType<typeof setTimeout> | undefined;
 
@@ -99,11 +102,6 @@
 	let chips = $derived(event.deleted ? [] : reactions);
 	let hasActions = $derived(!selecting && (caps.reply || caps.edit || caps.removeReply || caps.react || caps.startThread));
 
-	// Tombstones hide their reactions, and select mode stands the palette down.
-	$effect(() => {
-		if (event.deleted || selecting || !caps.react) paletteOpen = false;
-	});
-
 	$effect(() => {
 		if (editing) draft = text;
 		else moreOpen = false;
@@ -122,6 +120,11 @@
 	function save(): void {
 		if (!draft.trim()) return;
 		onsave(draft);
+	}
+
+	/** React opens the full picker; a pick toggles that reaction, as a chip does. */
+	function openReact(): void {
+		if (reactButton) emojiPicker.toggle({ anchor: reactButton, onpick: onreact });
 	}
 
 	function act(action: () => void): void {
@@ -270,7 +273,7 @@
 			{/if}
 		{/if}
 		{#if !event.deleted}
-			<ReactionBar {chips} enabled={caps.react} {paletteOpen} ontoggle={onreact} onclosepalette={() => (paletteOpen = false)} />
+			<ReactionBar {chips} enabled={caps.react} ontoggle={onreact} />
 		{/if}
 	</div>
 	{#if hasActions && engaged}
@@ -283,7 +286,18 @@
 					<button class="ap-actions-btn" type="button" aria-label="Reply to message" onclick={() => act(onreply)}>Reply</button>
 				{/if}
 				{#if caps.react && !event.deleted}
-					<button class="ap-actions-btn" type="button" data-testid="react" aria-label="React" title="React" aria-expanded={paletteOpen} onclick={() => act(() => (paletteOpen = !paletteOpen))}>React</button>
+					<button
+						class="ap-actions-btn"
+						type="button"
+						data-testid="react"
+						aria-label="React"
+						title="React"
+						aria-haspopup="dialog"
+						aria-expanded={reacting}
+						bind:this={reactButton}
+						use:emojiAnchor
+						onclick={() => act(openReact)}
+					>React</button>
 				{/if}
 				{#if caps.startThread}
 					<button class="ap-actions-btn" type="button" data-testid="start-thread" aria-label="Start thread" title="Start thread" disabled={startingThread} onclick={() => act(onstartthread)}>{startingThread ? 'Starting…' : 'Start thread'}</button>

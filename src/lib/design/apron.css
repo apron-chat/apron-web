@@ -35,6 +35,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-msg-highlighted, .ap-msg-highlighted:hover { background: var(--bg-300); }
 .ap-msg-actions { position: absolute; top: -14px; right: var(--space-2); z-index: 2; visibility: hidden; }
 .ap-msg:hover .ap-msg-actions, .ap-msg:focus-within .ap-msg-actions, .ap-msg-actions:focus-within { visibility: visible; }
+/* The toolbar stays up while its React button's emoji picker is open. */
+.ap-msg-actions:has([aria-expanded='true']) { visibility: visible; }
 /* select mode: a check column on the left; the whole row toggles */
 .ap-msg-selectable { grid-template-columns: 24px var(--avatar-md) minmax(0, 1fr); cursor: pointer; user-select: none; }
 .ap-msg-selectable.ap-msg-compact { grid-template-columns: 24px 40px minmax(0, 1fr); }
@@ -429,7 +431,7 @@ a.ap-embed-ogcard:hover { background: var(--bg-300); }
 .ap-embed-site { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 .ap-embed-desc { font-size: 13px; line-height: 18px; color: var(--ink-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 
-/* ReactionBar — chips under a message, and the palette */
+/* ReactionBar — chips under a message */
 .ap-reactions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
 .ap-rchip { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1); height: 26px; padding: 0 var(--space-2); box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); color: var(--ink-muted); font-size: 13px; line-height: 16px; font-variant-numeric: tabular-nums; cursor: pointer; }
 .ap-rchip:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
@@ -439,10 +441,6 @@ a.ap-embed-ogcard:hover { background: var(--bg-300); }
 .ap-rchip-count { font-weight: 600; }
 .ap-rchip-add { width: 26px; justify-content: center; padding: 0; font-size: 15px; visibility: hidden; }
 .ap-msg:hover .ap-rchip-add, .ap-msg:focus-within .ap-rchip-add { visibility: visible; }
-.ap-rpalette { display: inline-flex; align-self: flex-start; max-width: 100%; flex-wrap: wrap; gap: 2px; margin-top: var(--space-1); padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-float); }
-.ap-rpick { font: inherit; display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); font-size: 18px; line-height: 1; cursor: pointer; }
-.ap-rpick:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
-.ap-rpick-mine { background: var(--accent-soft); }
 
 /* Room mentions and unknown mentions */
 .ap-mention-room { font: inherit; border: 0; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }

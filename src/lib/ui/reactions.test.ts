@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ReactionSummary } from '$lib/protocol/client';
-import { REACTION_PALETTE, reactionChips, whoReacted } from './reactions';
+import { reactionChips, whoReacted } from './reactions';
 
 const summary = (emoji: string, users: string[], mine = false): ReactionSummary => ({
 	emoji,
@@ -36,10 +36,5 @@ describe('reaction chips', () => {
 		// Callers render reactors through the kept user objects (§3.3).
 		expect(whoReacted(summary('👍', ['ada', 'bob']), 'you', (user) => `${user.user_id}!`)).toBe('ada! and bob!');
 		expect(reactionChips([summary('👍', ['ada'])], 'you', false, () => 'Kept')[0].title).toBe('Kept reacted with 👍');
-	});
-
-	it('offers a small fixed palette of distinct emoji', () => {
-		expect(REACTION_PALETTE).toHaveLength(8);
-		expect(new Set(REACTION_PALETTE).size).toBe(REACTION_PALETTE.length);
 	});
 });

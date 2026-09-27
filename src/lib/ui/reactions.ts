@@ -6,9 +6,6 @@ export type NameOf = (user: Identity) => string;
 
 const recordedName: NameOf = (user) => user.name || user.user_id;
 
-/** The fixed palette the React action offers (one emoji sequence each, the interoperable baseline). */
-export const REACTION_PALETTE = ['👍', '❤️', '😂', '🎉', '😮', '😢', '👀', '✅'] as const;
-
 /** How many names a chip's tooltip lists before summing up the rest. */
 const NAMES_MAX = 8;
 
