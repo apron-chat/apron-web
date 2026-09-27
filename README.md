@@ -26,6 +26,18 @@ demo Worker from
 [apron-chat/apron-server-cloudflare](https://github.com/apron-chat/apron-server-cloudflare)
 (`npx wrangler dev --port 8080`).
 
+The server the client opens first is `VITE_DEFAULT_SERVER_URL` from the build
+(the connect screen switches to any other, and remembers it):
+
+- `npm run dev` leaves it unset, so it uses same-origin `/ws`, proxied to
+  port 8080. To start dev against another server, set it in `.env.local`.
+- Builds (`npm run build`, production, and Previews) read `.env.production`:
+  `wss://server.apron.chat/`, the reference server for testing and demos. To
+  build for another server, set it in `.env.production.local` (`.env.local`
+  doesn't override `.env.production`) or on the command line, e.g.
+  `VITE_DEFAULT_SERVER_URL=wss://chat.example/ npm run build`. Set it empty for
+  same-origin `/ws`.
+
 The unit tests replay the implementation-agnostic protocol fixtures in
 [shazow/apron](https://github.com/shazow/apron), checked out as the `protocol`
 submodule and pinned to a commit. Dependabot opens a pull request when it
