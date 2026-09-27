@@ -30,6 +30,7 @@
 
 	/* Type: system faces only; Apron ships no font files. */
 	--font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+	--font-chat: var(--font-sans);
 	--font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
 	/* Spacing: the 4px scale. */
