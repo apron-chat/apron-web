@@ -5,13 +5,15 @@ it does.
 
 The UI follows the Apron design system. `src/lib/design/tokens.css` holds its
 color, type, spacing, radius and size tokens as CSS custom properties (dark is
-the reference theme; light follows `prefers-color-scheme`), and
+the reference theme; light follows `prefers-color-scheme`, or `data-theme` on
+the root when Preferences picks one), and
 `src/lib/design/apron.css` is the design system's component stylesheet copied
 verbatim. The Svelte components under `src/lib/components` wrap its `ap-*`
 classes one to one with the system's React components — `ConnectScreen`,
 `Sidebar` and `ProfileBar`, `RoomHeader` and `ThreadEditor`, `ThreadCard`,
 `Message` with its `ReactionBar`, `Composer` with its `MentionPicker`, `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
+`PreferencesDialog` with its `FontFamilyField`,
 `StatusBanner`, `Avatar` — and carry only the layout glue each needs. Re-copy
 `apron.css` when the design system changes rather than editing it here.
 
@@ -19,6 +21,8 @@ classes one to one with the system's React components — `ConnectScreen`,
 thread is open, per-room drafts) and composes the components. The
 reactive state behind it lives in `src/lib/ui` as small classes — `SessionView`
 (the last authenticated view, held through a reconnect), `MentionTracker`,
+`IncomingMessageTracker` (new messages from others, for notifications),
+`AppearanceSettings` (theme and fonts),
 `UnreadTracker`, `MessageSelection`, `FeedbackState`, `SidebarLayout`,
 `PaneDrafts` (the composer's text and reply per room and thread),
 `PagePresence` (whether the tab is attended, and the mention alert),
@@ -30,7 +34,10 @@ lines, `reactions.ts` turns reaction summaries into chips, `emoji.ts`
 places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
 picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previews.ts` builds GitHub link previews, `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
-`storage.ts` keeps everything remembered between visits under `apron.*` keys.
+`storage.ts` keeps everything remembered between visits under `apron.*` keys
+(`notifications.ts` and `appearance.svelte.ts` keep their own preferences, and
+`notifications.ts` shows notifications, through `service-worker.ts` where the
+page can't).
 
 Protocol types, replay reduction, and the WebSocket session live under
 `src/lib/protocol` and speak Apron protocol v6. `client.ts` holds the session,

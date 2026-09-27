@@ -96,6 +96,20 @@ on replayed history), raises an `@` badge on a room you aren't reading, and,
 when it lands above the fold, turns the jump bar rust with **Jump to mention**.
 Text that merely contains your `@user_id` does none of that.
 
+A mention that lands while the tab is hidden or unfocused flashes the tab title
+and plays a soft chime. **Preferences** (the gear beside your profile) can turn
+on desktop notifications instead, for mentions or for every message from
+someone else; turning them on asks the browser's permission, and **Send test**
+shows a sample. While they're on, a notification replaces the chime (the chime
+still plays if one couldn't be shown), each room keeps one notification that
+the next message replaces (its newest mention, else its newest message), and
+clicking it opens that room or thread. Where the page can't show notifications
+itself (Android Chrome) the service worker shows them. Permission revoked in the
+browser's site settings reads as off. **Appearance** picks a light or dark theme
+over the system's, and an installed font for the interface, messages and code
+(suggested from installed fonts where the browser allows listing them). All of
+these stay on this device.
+
 With the `command` cap, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.8](https://github.com/shazow/apron/blob/main/PROTOCOL.md#48-command)): the composer shows a **Command** tag, sets the line in
 monospace, and **Run** replaces **Send**. `/nick` (a `me` request), `/join`,
