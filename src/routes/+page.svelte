@@ -36,6 +36,7 @@
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
+	import { linkPreviews } from '$lib/ui/link-previews';
 	import { PaneDrafts } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
@@ -491,7 +492,8 @@
 	}
 
 	/**
-	 * Sends the composer's text: a message with the draft's mentions (§3.5), or
+	 * Sends the composer's text: a message with the draft's mentions (§3.5) and
+	 * previews of its GitHub links as `link` embeds (§4.6.1), or
 	 * with cap `command` a command (§4.8), which `/nick`, `/join`, `/leave` and
 	 * `/topic` turn into the requests they spell. A command's failure shows as
 	 * a local notice in the pane, where its replies land too.
@@ -511,7 +513,8 @@
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
 			if (!action.text.trim()) return;
-			const post = () => feedback.track(chat.send(roomId, action.text, 'markdown', options), 'Sending…', restore);
+			const embeds = linkPreviews.embeds(action.text);
+			const post = () => feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}) }), 'Sending…', restore);
 			const joining = joinFirst(chat, paneRoom);
 			if (joining) {
 				joining.then(post, (cause: unknown) => {
@@ -579,7 +582,8 @@
 		const command = action.kind === 'command';
 		const text = action.kind === 'message' ? action.text : drafts.text;
 		const mentions = composerMentions;
-		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
+		const embeds = command ? [] : linkPreviews.embeds(text);
+		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };
 		const joining = command ? undefined : joinFirst(chat, paneRoom);
 		const { sent, uploaded } = joining
 			? (() => {

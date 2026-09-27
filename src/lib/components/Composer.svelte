@@ -5,6 +5,7 @@
 	import { emojiAnchor, emojiPicker } from '$lib/ui/emoji-picker.svelte';
 	import { isCommand } from '$lib/ui/commands';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { linkPreviews } from '$lib/ui/link-previews';
 	import { clockLabel } from '$lib/ui/time';
 	import MentionPicker from './MentionPicker.svelte';
 
@@ -447,6 +448,7 @@
 				onkeyup={refreshQuery}
 				onclick={refreshQuery}
 				onblur={blur}
+				onpaste={(event) => void linkPreviews.prefetch(event.clipboardData?.getData('text/plain') ?? '')}
 			></div>
 		{/if}
 		<span class="ap-composer-tools">

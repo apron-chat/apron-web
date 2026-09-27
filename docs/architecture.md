@@ -28,7 +28,7 @@ helpers: `timeline.ts` groups threads under their rooms and builds the room and
 thread views, `membership.ts` nets runs of joins and leaves and words their
 lines, `reactions.ts` turns reaction summaries into chips, `emoji.ts`
 places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
-picker and loads emoji-mart), `draft.ts` edits the composer's draft, `messages.ts`
+picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previews.ts` builds GitHub link previews, `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys.
 

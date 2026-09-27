@@ -192,6 +192,14 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](ht
   480px. **`html`** embeds are sanitized with DOMPurify before insertion.
 - Any other kind renders from its `og` as a link card, else as the fallback card
   with its kind name and its `url` or `text`.
+- **Link previews**: a message with GitHub pull request, issue, commit, or
+  repository links (up to three) carries a `link` embed for each, with an `og`
+  the sender builds. Pasting a link fetches its title, state, author, and an
+  excerpt from the GitHub REST API, which allows cross-origin reads; each link
+  is fetched once, and a rate-limited answer pauses fetching until the limit
+  resets. A message sent before the details arrive, or linking a private
+  repository, gets a card built from the URL alone ("Pull request #60"). The
+  server may keep, replace, or drop this `og`.
 
 Media in `og` and stream URLs load only from the chat server's own origin;
 links may point anywhere `http(s)`.
