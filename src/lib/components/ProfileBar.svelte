@@ -11,6 +11,7 @@
 	import TypingDots from './TypingDots.svelte';
 
 	type Status = 'idle' | 'saving' | 'altered' | 'declined';
+
 	interface Props {
 		client: ChatClient;
 		session: SessionView;
@@ -293,7 +294,6 @@
 	.ap-profile-settings svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 	.ap-profile-pop { max-height: calc(100dvh - 96px); overflow-y: auto; }
 	.ap-profile-pop .ap-profedit-actions { flex-wrap: wrap; }
-
 	.signin-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 	.signin-actions { align-items: center; }
 	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import type { NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
+	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
 	import { sidebarRooms, type ThreadEntry } from '$lib/ui/timeline';
 	import ProfileBar from './ProfileBar.svelte';
 
@@ -21,7 +21,7 @@
 		passkeyUnavailable?: string;
 		notificationsEnabled: boolean;
 		notificationsSupported: boolean;
-		notificationPermission: 'default' | 'granted' | 'denied' | 'unsupported';
+		notificationPermission: NotificationPermissionState;
 		notificationScope: NotificationScope;
 		onnotifications: () => void;
 		onnotificationscope: (scope: NotificationScope) => void;

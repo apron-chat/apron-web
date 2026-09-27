@@ -78,7 +78,7 @@
 		role="combobox"
 		aria-autocomplete="list"
 		aria-expanded={open}
-		aria-controls="{id}-options"
+		aria-controls={open ? `${id}-options` : undefined}
 		aria-activedescendant={open && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
 		aria-describedby="{id}-hint"
 		maxlength="64"
