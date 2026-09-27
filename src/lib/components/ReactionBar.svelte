@@ -44,7 +44,7 @@
 	.chip:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
 	.chip.mine { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 	.chip:disabled { cursor: default; }
-	.emoji { font-size: 15px; line-height: 16px; }
+	.emoji { font-family: var(--font-emoji); font-size: 15px; line-height: 16px; }
 	.count { font-weight: 600; }
 	.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 	@media (prefers-reduced-motion: reduce) {

@@ -35,6 +35,8 @@
 	--font-sans: var(--font-sans-system);
 	--font-chat: var(--font-sans);
 	--font-mono: var(--font-mono-system);
+	/* Color emoji faces, in emoji-mart's order, so reactions match its picker (system-ui may carry text-style glyphs). */
+	--font-emoji: 'EmojiMart', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Segoe UI', 'Apple Color Emoji', 'Twemoji Mozilla', 'Noto Color Emoji', 'Android Emoji';
 
 	/* Spacing: the 4px scale. */
 	--space-1: 4px;
