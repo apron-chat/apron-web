@@ -38,6 +38,9 @@ const MENTION = /@(@?[A-Za-z0-9_.-]+)/g;
  */
 const BARE_URL = /\bhttps?:\/\/(?:(?!&(?:lt|gt|quot);)[^\s<])+/gi;
 
+/** Every link in a message opens in a new tab, without telling the site where it came from. */
+const LINK_ATTRS = ' rel="noreferrer noopener" target="_blank"';
+
 /** Sources rendered to HTML (before mentions are linked) kept for reuse, least recently used first. */
 const CACHE_SIZE = 2000;
 const rendered = new Map<string, string>();
@@ -84,7 +87,7 @@ function mentionChip(target: MentionTarget): string {
 
 /**
  * Links bare URLs and `@id` in the rendered HTML's text, leaving tags,
- * attributes, code and existing links alone: an ID inside `<code>` is code,
+ * attributes, code and existing links alone (which open in a new tab): an ID inside `<code>` is code,
  * not a mention.
  */
 function linkText(html: string, resolve?: MentionResolver): string {
@@ -101,7 +104,9 @@ function linkText(html: string, resolve?: MentionResolver): string {
 			out += html.slice(tagStart);
 			break;
 		}
-		const tag = html.slice(tagStart, tagEnd + 1);
+		let tag = html.slice(tagStart, tagEnd + 1);
+		// A link in chat opens in a new tab, leaving the conversation where it was.
+		if (/^<a\s/i.test(tag)) tag = `${tag.slice(0, -1)}${LINK_ATTRS}>`;
 		if (/^<(code|pre|a)[\s>]/i.test(tag)) codeDepth += 1;
 		else if (/^<\/(code|pre|a)\s*>$/i.test(tag) && codeDepth > 0) codeDepth -= 1;
 		out += tag;
@@ -129,7 +134,7 @@ function linkifyText(text: string, resolve?: MentionResolver): string {
 		}
 		if (!/^https?:\/\/[^/?#]/i.test(url)) continue;
 		out += chipText(text.slice(index, match.index), resolve);
-		out += `<a href="${url}" rel="noreferrer noopener" target="_blank">${url}</a>`;
+		out += `<a href="${url}"${LINK_ATTRS}>${url}</a>`;
 		index = match.index + url.length;
 	}
 	return out + chipText(text.slice(index), resolve);

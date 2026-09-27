@@ -31,7 +31,7 @@ describe('mentions (Appendix A.3)', () => {
 		expect(renderMarkdown('`@alice` stays', resolve)).not.toContain('ap-mention');
 		expect(renderMarkdown('```\n@alice\n```', resolve)).not.toContain('ap-mention');
 		const html = renderMarkdown('[@alice](https://example.com/@alice)', resolve);
-		expect(html).toContain('href="https://example.com/@alice"');
+		expect(html).toContain('<a href="https://example.com/@alice" rel="noreferrer noopener" target="_blank">');
 		expect(html).not.toContain('ap-mention');
 	});
 
@@ -78,10 +78,15 @@ describe('bare links', () => {
 	});
 
 	it('leaves links, code, other schemes and bare schemes alone', () => {
-		expect(renderMarkdown('[docs](https://example.com)')).toBe('<p><a href="https://example.com">docs</a></p>\n');
+		expect(renderMarkdown('[docs](https://example.com)')).toBe('<p><a href="https://example.com" rel="noreferrer noopener" target="_blank">docs</a></p>\n');
 		expect(renderMarkdown('`https://example.com`')).toBe('<p><code>https://example.com</code></p>\n');
 		expect(renderMarkdown('```\nhttps://example.com\n```')).not.toContain('<a ');
 		expect(renderPlain('javascript:alert(1) ftp://example.com https://')).not.toContain('<a ');
+	});
+
+	it('opens markdown links and autolinks in a new tab too', () => {
+		expect(renderMarkdown('[docs](https://example.com "Docs")')).toBe('<p><a href="https://example.com" title="Docs" rel="noreferrer noopener" target="_blank">docs</a></p>\n');
+		expect(renderMarkdown('<https://example.com>')).toBe(`<p>${link('https://example.com')}</p>\n`);
 	});
 
 	it('does not turn an @ inside a URL into a mention', () => {
