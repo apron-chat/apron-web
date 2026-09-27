@@ -34,6 +34,11 @@ update by hand, run `git -C protocol fetch origin main`, check out the commit
 you want, and commit `protocol`. The end-to-end browser tests against the Go
 server are in shazow/apron's `tests/interop`.
 
+The favicon and app icons are generated from the logo in that submodule,
+`protocol/art/apron-logo.svg`: run `npm run icons` after it changes (or
+`npm run icons -- path/to/logo.svg` for another file) and commit the results
+in `static/` and `src/lib/assets/favicon.svg`.
+
 ## Deployment
 
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs
