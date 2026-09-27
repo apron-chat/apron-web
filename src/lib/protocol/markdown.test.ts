@@ -95,3 +95,48 @@ describe('bare links', () => {
 		expect(html.match(/ap-mention/g)).toHaveLength(1);
 	});
 });
+
+describe('tables', () => {
+	it('renders a GFM table with alignment, inline markdown, and short rows padded', () => {
+		expect(renderMarkdown('| Name | Count |\n| :-- | --: |\n| **a** | 1 |\n| b |')).toBe(
+			'<div class="ap-table"><table>\n<thead>\n<tr>\n<th align="left">Name</th><th align="right">Count</th>\n</tr>\n</thead>\n' +
+				'<tbody>\n<tr>\n<td align="left"><strong>a</strong></td><td align="right">1</td>\n</tr>\n' +
+				'<tr>\n<td align="left">b</td><td align="right"></td>\n</tr>\n</tbody>\n</table></div>\n'
+		);
+	});
+
+	it('keeps the lines before the header as a paragraph and needs no outer pipes', () => {
+		const html = renderMarkdown('Results\na | b\n--|--\n1 | 2');
+		expect(html).toMatch(/^<p>Results<\/p>\n<div class="ap-table"><table>/);
+		expect(html).toContain('<th>a</th><th>b</th>');
+		expect(html).toContain('<td>1</td><td>2</td>');
+	});
+
+	it('omits the body of a header-only table and drops extra cells', () => {
+		expect(renderMarkdown('| a |\n| - |')).not.toContain('<tbody>');
+		expect(renderMarkdown('| a |\n| - |\n| 1 | 2 |')).toContain('<td>1</td>\n</tr>');
+	});
+
+	it('takes an escaped pipe as a literal, in code too, and links mentions in cells', () => {
+		const html = renderMarkdown('| cmd | who |\n|---|---|\n| `a \\| b` | @alice |', resolve);
+		expect(html).toContain('<td><code>a | b</code></td>');
+		expect(html).toContain('data-user-id="alice"');
+	});
+
+	it('renders tables inside quotes and list items', () => {
+		expect(renderMarkdown('> | a |\n> |---|')).toMatch(/^<blockquote>\n<div class="ap-table"><table>/);
+		expect(renderMarkdown('- item\n\n  | a |\n  |---|')).toContain('<li>\n<p>item</p>\n<div class="ap-table">');
+	});
+
+	it('stays safe inside cells', () => {
+		const html = renderMarkdown('| a | b |\n|---|---|\n| <img src=x onerror=alert(1)> | [x](javascript:alert(1)) |');
+		expect(html).not.toContain('<img');
+		expect(html).not.toContain('javascript:');
+	});
+
+	it('leaves pipes that are not a table as text', () => {
+		expect(renderMarkdown('a | b')).toBe('<p>a | b</p>\n');
+		expect(renderMarkdown('| a | b |\n| --- |')).toBe('<p>| a | b |<br />| --- |</p>\n');
+		expect(renderMarkdown('```\n| a |\n|---|\n```')).toBe('<pre><code>| a |\n|---|\n</code></pre>\n');
+	});
+});

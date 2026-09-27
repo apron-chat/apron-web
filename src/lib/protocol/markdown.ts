@@ -1,8 +1,90 @@
-import { HtmlRenderer, Parser } from 'commonmark';
+import { HtmlRenderer, Node, Parser } from 'commonmark';
 
 const parser = new Parser();
 // A line break typed in a chat message is meant: soft breaks render as `<br />`, not as a space.
 const renderer = new HtmlRenderer({ safe: true, softbreak: '<br />' });
+
+/**
+ * GitHub-flavored tables, which CommonMark lacks: after block parsing, a
+ * paragraph whose line is followed by a delimiter row (`| --- | :-: |`) becomes
+ * a table from that line on, and each cell is parsed as inline Markdown.
+ */
+const INTERNALS = parser as unknown as { processInlines(block: Node): void; inlineParser: { parse(block: Node): void } };
+const processInlines = INTERNALS.processInlines;
+INTERNALS.processInlines = function (this: typeof INTERNALS, doc: Node) {
+	const paragraphs: Node[] = [];
+	const walker = doc.walker();
+	for (let event = walker.next(); event; event = walker.next()) {
+		if (event.entering && event.node.type === 'paragraph') paragraphs.push(event.node);
+	}
+	for (const paragraph of paragraphs) {
+		for (const cell of splitTable(paragraph)) this.inlineParser.parse(cell);
+	}
+	processInlines.call(this, doc);
+};
+
+type Align = '' | 'left' | 'center' | 'right';
+type RawNode = Node & { _string_content: string | null; onEnter: string; onExit: string };
+
+/** `| :--- | ---: |`: each cell a run of dashes, with a colon on the side it aligns to. */
+const DELIMITER_ROW = /^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+
+/** A row's cells: split at unescaped pipes, an outer pipe on either end optional; `\|` is a literal pipe. */
+function tableCells(line: string): string[] {
+	let text = line.trim();
+	if (text.startsWith('|')) text = text.slice(1);
+	if (text.endsWith('|') && !text.endsWith('\\|')) text = text.slice(0, -1);
+	return text.split(/(?<!\\)\|/).map((cell) => cell.trim().replace(/\\\|/g, '|'));
+}
+
+/** Our own markup around the children: a block starts on its own line, an inline (a cell) doesn't. */
+function tableNode(onEnter: string, onExit: string, type: 'custom_block' | 'custom_inline' = 'custom_block'): RawNode {
+	const node = new Node(type) as RawNode;
+	node.onEnter = onEnter;
+	node.onExit = onExit;
+	return node;
+}
+
+/**
+ * Turns the table in a paragraph, if any, into nodes after it (the lines before
+ * the header stay the paragraph) and answers the cells, whose inlines are yet to parse.
+ */
+function splitTable(paragraph: Node): RawNode[] {
+	const content = (paragraph as RawNode)._string_content ?? '';
+	const lines = content.replace(/\n$/, '').split('\n');
+	const at = lines.findIndex((line, index) => {
+		const header = lines[index - 1];
+		return header !== undefined && (header.includes('|') || line.includes('|')) && DELIMITER_ROW.test(line) && tableCells(line).length === tableCells(header).length;
+	});
+	if (at < 1) return [];
+	const aligns: Align[] = tableCells(lines[at]).map((cell) => cell.startsWith(':') ? (cell.endsWith(':') ? 'center' : 'left') : cell.endsWith(':') ? 'right' : '');
+	const cells: RawNode[] = [];
+	const row = (line: string, tag: 'th' | 'td') => {
+		const tr = tableNode('<tr>', '</tr>');
+		const texts = tableCells(line);
+		aligns.forEach((align, index) => {
+			const cell = tableNode(`<${tag}${align ? ` align="${align}"` : ''}>`, `</${tag}>`, 'custom_inline');
+			cell._string_content = texts[index] ?? '';
+			tr.appendChild(cell);
+			cells.push(cell);
+		});
+		return tr;
+	};
+	// Wide tables scroll inside the message rather than widening it.
+	const table = tableNode('<div class="ap-table"><table>', '</table></div>');
+	const head = tableNode('<thead>', '</thead>');
+	head.appendChild(row(lines[at - 1], 'th'));
+	table.appendChild(head);
+	if (lines.length > at + 1) {
+		const body = tableNode('<tbody>', '</tbody>');
+		for (const line of lines.slice(at + 1)) body.appendChild(row(line, 'td'));
+		table.appendChild(body);
+	}
+	paragraph.insertAfter(table);
+	if (at === 1) paragraph.unlink();
+	else (paragraph as RawNode)._string_content = lines.slice(0, at - 1).join('\n') + '\n';
+	return cells;
+}
 
 /**
  * What an `@id` mention names (Appendix A.3): a known user, rendered with
