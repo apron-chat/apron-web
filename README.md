@@ -56,6 +56,12 @@ VITE_DEFAULT_SERVER_URL=wss://server.apron.chat/ npm run build
 wrangler deploy
 ```
 
+Pull requests get a Preview from Cloudflare Workers Builds, which is connected
+to this repository in the Cloudflare dashboard and comments the Preview URL on
+the pull request: `https://<branch>-apron-web.shazow.workers.dev`. Its build
+command sets `VITE_DEFAULT_SERVER_URL=wss://server.apron.chat/` and its deploy
+command is a no-op, so production still deploys only from the workflow above.
+
 The backend deploys separately, from
 [apron-chat/apron-server-cloudflare](https://github.com/apron-chat/apron-server-cloudflare).
 The apex `apron.chat` is reserved for docs.
