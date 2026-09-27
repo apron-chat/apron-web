@@ -91,6 +91,23 @@ describe('ChatClient operations', () => {
 		expect(deleted).toMatchObject({ message_id: '100', room_id: 'general', deleted: true });
 	});
 
+	it('removes one embed by embed_id, or by value for servers that store embeds as given', async () => {
+		await connect();
+		const link = { kind: 'link', url: 'https://github.com/a/b/pull/1', og: { title: 'PR' } };
+		socket.receive({ method: 'message', params: message('100', {
+			body: { text: 'see', format: 'markdown', embeds: [{ embed_id: 'e1', kind: 'upload', title: 'a.png' }, link, { embed_id: 'e2', kind: 'upload', title: 'b.png' }] }
+		}) });
+		quiet(client.removeEmbed('100', { embed_id: 'e1', kind: 'upload' }));
+		expect(socket.request('message').params.body).toEqual({ text: 'see', format: 'markdown', embeds: [link, { embed_id: 'e2', kind: 'upload', title: 'b.png' }] });
+		// Later removals build on the unconfirmed save.
+		quiet(client.removeEmbed('100', { og: { title: 'PR' }, url: 'https://github.com/a/b/pull/1', kind: 'link' }));
+		expect(socket.request('message').params.body).toEqual({ text: 'see', format: 'markdown', embeds: [{ embed_id: 'e2', kind: 'upload', title: 'b.png' }] });
+		quiet(client.removeEmbed('100', { embed_id: 'e2', kind: 'upload' }));
+		expect(socket.request('message').params.body).toEqual({ text: 'see', format: 'markdown' });
+		const missing = client.removeEmbed('100', { embed_id: 'e2', kind: 'upload' });
+		await expect(missing.promise).rejects.toThrow('no longer in the message');
+	});
+
 	it('rejects saves of messages that are not loaded without sending anything', async () => {
 		await connect();
 		const handle = client.editMessage('404', 'nope');

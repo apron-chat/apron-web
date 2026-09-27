@@ -873,6 +873,23 @@ export class ChatClient {
 		return this.saveMessage(messageId, { body });
 	}
 
+	/**
+	 * Saves the message without one embed (§4.6.2): the one with `embed_id`,
+	 * or for a server that stores embeds as given, the first equal to `embed`.
+	 * The server SHOULD delete content it hosted for it.
+	 */
+	removeEmbed(messageId: string, embed: Embed): OperationHandle<MessageResult> {
+		const current = this.messageBase(messageId);
+		const body = isJsonObject(current?.body) ? current.body : {};
+		const embeds = Array.isArray(body.embeds) ? body.embeds : [];
+		const wanted = embed.embed_id ?? canonicalJson(embed);
+		const index = embeds.findIndex((entry) => isJsonObject(entry) && (typeof entry.embed_id === 'string' ? entry.embed_id : canonicalJson(entry)) === wanted);
+		if (!current || index === -1) return rejectedHandle('message', new Error('The embed is no longer in the message'));
+		const rest = embeds.filter((_, at) => at !== index);
+		const { embeds: _embeds, ...others } = body;
+		return this.saveMessage(messageId, { body: rest.length ? { ...others, embeds: rest } : others });
+	}
+
 	/** Moves a message to another room (for example into a thread); the server delivers the snapshot to both. */
 	moveMessage(messageId: string, roomId: string): OperationHandle<MessageResult> {
 		return this.saveMessage(messageId, { room_id: roomId });

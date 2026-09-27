@@ -201,6 +201,14 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](ht
   repository, gets a card built from the URL alone ("Pull request #60"). The
   server may keep, replace, or drop this `og`.
 
+With the `edit` cap, each embed on your own messages shows an **(x)** on its
+corner while hovered (always on touch screens), which saves the message without
+that embed ([PROTOCOL.md §4.6.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#462-embed-identity)): it is identified by `embed_id`, or by
+value on servers that store embeds as given. Removing an upload or stream asks
+first, since the server deletes its content. A message's last embed has no (x)
+when there is no text (delete the message instead), nor does an upload still
+being written.
+
 Media in `og` and stream URLs load only from the chat server's own origin;
 links may point anywhere `http(s)`.
 

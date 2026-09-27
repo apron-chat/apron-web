@@ -4,7 +4,7 @@
 	import { ChatClient, childRooms, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, type RoomSnapshot } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
-	import type { MessageRecord } from '$lib/protocol/types';
+	import type { Embed, MessageRecord } from '$lib/protocol/types';
 	import Composer from '$lib/components/Composer.svelte';
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
 	import ConnectScreen, { type Scheme } from '$lib/components/ConnectScreen.svelte';
@@ -864,6 +864,13 @@
 		feedback.track(client.deleteMessage(event.message_id), 'Deleting message…');
 	}
 
+	/** The (x) on one of your embeds: saves the message without it. Hosted files go with it, so those ask first. */
+	function removeEmbed(event: MessageRecord, embed: Embed): void {
+		if (!client || !session.canEdit) return;
+		if ((embed.kind === 'upload' || embed.kind === 'stream') && !confirm('Remove this attachment? Its file will be deleted.')) return;
+		feedback.track(client.removeEmbed(event.message_id, embed), 'Removing embed…');
+	}
+
 	function removeReply(event: MessageRecord): void {
 		if (!client || !session.canEdit) return;
 		feedback.track(client.setMessageReply(event.message_id, null), 'Removing reply reference…');
@@ -1078,6 +1085,7 @@
 								oncanceledit={() => (editingId = undefined)}
 								ondelete={() => deleteMessage(event)}
 								onremovereply={() => removeReply(event)}
+								onremoveembed={(embed) => removeEmbed(event, embed)}
 								onstartthread={() => startThread(event)}
 								onreact={(emoji) => react(event, emoji)}
 								onbeginselect={() => beginSelect(event)}
