@@ -40,3 +40,16 @@ export class IncomingMessageTracker {
 		return incoming;
 	}
 }
+
+/**
+ * One notification per room for a batch of arrivals, so a reconnect doesn't
+ * raise one per missed message: the room's newest mention, else its newest message.
+ */
+export function notificationsByRoom(events: MessageRecord[], mentioned: ReadonlySet<string>): MessageRecord[] {
+	const chosen = new Map<string, MessageRecord>();
+	for (const event of events) {
+		const current = chosen.get(event.room_id);
+		if (!current || mentioned.has(event.message_id) || !mentioned.has(current.message_id)) chosen.set(event.room_id, event);
+	}
+	return [...chosen.values()];
+}

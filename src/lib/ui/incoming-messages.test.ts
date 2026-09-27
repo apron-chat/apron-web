@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createTimeline } from '$lib/protocol/reducer';
 import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
-import { IncomingMessageTracker } from './incoming-messages';
+import { IncomingMessageTracker, notificationsByRoom } from './incoming-messages';
 
 const me = { user_id: 'guest_me', name: 'sam' };
 
@@ -35,5 +35,15 @@ describe('incoming message tracking', () => {
 		tracker.reset();
 		tracker.observe([room([message(15), message(20)], { latestLogId: '20' })], me);
 		expect(tracker.observe([room([message(15), message(20), message(21)])], me).map((event) => event.message_id)).toEqual(['21']);
+	});
+});
+
+describe('notifications by room', () => {
+	const inRoom = (id: number, roomId: string): MessageRecord => ({ ...message(id), room_id: roomId });
+
+	it('keeps each room\'s newest message, preferring its newest mention', () => {
+		const events = [inRoom(1, 'general'), inRoom(2, 'general'), inRoom(3, 'random'), inRoom(4, 'general'), inRoom(5, 'random')];
+		expect(notificationsByRoom(events, new Set()).map((event) => event.message_id)).toEqual(['4', '5']);
+		expect(notificationsByRoom(events, new Set(['2'])).map((event) => event.message_id)).toEqual(['2', '5']);
 	});
 });

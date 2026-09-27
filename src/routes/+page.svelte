@@ -25,7 +25,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState } from '$lib/ui/feedback.svelte';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
-	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
+	import { IncomingMessageTracker, notificationsByRoom } from '$lib/ui/incoming-messages';
 	import { UnreadTracker } from '$lib/ui/unread.svelte';
 	import { isOwn, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
@@ -41,7 +41,8 @@
 	import { PaneDrafts } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { loadNotificationScope, loadNotificationsEnabled, notificationPermission, requestNotificationPermission, saveNotificationScope, saveNotificationsEnabled, type NotificationPermissionState, type NotificationScope, type NotificationTestResult } from '$lib/ui/notifications';
+	import { loadNotificationScope, loadNotificationsEnabled, notificationClickTarget, notificationPermission, requestNotificationPermission, saveNotificationScope, saveNotificationsEnabled, showNotification, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { playPing } from '$lib/ui/attention';
 
 	/** A thread this viewer created, opened once its `room_update` has arrived. */
 	type PendingOpen = { room: string; thread: string };
@@ -77,6 +78,10 @@
 	let notificationsEnabled = $state(false);
 	let notificationScope = $state<NotificationScope>('mentions');
 	let notificationState = $state<NotificationPermissionState>(notificationPermission());
+	/** On, and still allowed: the browser's permission can be revoked or reset behind the setting. */
+	let notificationsActive = $derived(notificationsEnabled && notificationState === 'granted');
+	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
+	const tabId = Math.random().toString(36).slice(2);
 	const selection = new MessageSelection();
 	const sidebar = new SidebarLayout();
 
@@ -175,9 +180,11 @@
 	$effect(() => {
 		const arrivedMentions = mentions.observe(session.rooms, session.you, paneRoom?.id, latestVisible);
 		const arrivedMessages = incomingMessages.observe(session.rooms, session.you);
-		if (!notificationsEnabled || notificationState !== 'granted' || !presence.away) return;
-		const selected = notificationScope === 'everything' ? arrivedMessages : arrivedMentions;
-		for (const event of selected) showMessageNotification(event);
+		if (!notificationsActive || !presence.away) return;
+		const mentioned = new Set(arrivedMentions.map((event) => event.message_id));
+		// Everything includes an edit that adds you, which isn't a new message.
+		const selected = notificationScope === 'everything' ? [...arrivedMessages, ...arrivedMentions] : arrivedMentions;
+		for (const event of notificationsByRoom(selected, mentioned)) untrack(() => void notifyMessage(event, mentioned.has(event.message_id)));
 	});
 
 	$effect(() => {
@@ -192,7 +199,8 @@
 
 	$effect(() => {
 		const arrived = mentions.arrived;
-		const playSound = !notificationsEnabled || notificationState !== 'granted';
+		// A notification chimes instead; `notifyMessage` chimes if it couldn't show one.
+		const playSound = !notificationsActive;
 		untrack(() => presence.noteMentions(arrived, playSound));
 	});
 
@@ -355,6 +363,13 @@
 		notificationsEnabled = loadNotificationsEnabled();
 		notificationScope = loadNotificationScope();
 		notificationState = notificationPermission();
+		const worker = navigator.serviceWorker;
+		worker?.addEventListener('message', notificationClicked);
+		let permission: PermissionStatus | undefined;
+		navigator.permissions?.query({ name: 'notifications' }).then((status) => {
+			permission = status;
+			status.onchange = refreshNotificationPermission;
+		}).catch(() => undefined);
 		const chat = new ChatClient(normalizeWebSocketUrl(serverInput, window.location), displayName);
 		const unsubscribe = chat.subscribe((next) => {
 			session.apply(next, chat);
@@ -368,6 +383,8 @@
 			reveal.stop();
 			floatingDay.dispose();
 			presence.dispose();
+			worker?.removeEventListener('message', notificationClicked);
+			if (permission) permission.onchange = null;
 			feedback.dispose();
 			mentions.dispose();
 			session.dispose();
@@ -413,7 +430,7 @@
 	}
 
 	async function toggleNotifications(): Promise<void> {
-		if (notificationsEnabled) {
+		if (notificationsActive) {
 			notificationsEnabled = false;
 			saveNotificationsEnabled(false);
 			return;
@@ -423,6 +440,11 @@
 			notificationsEnabled = true;
 			saveNotificationsEnabled(true);
 		}
+	}
+
+	/** Permission changes in the browser's site settings, outside the page. */
+	function refreshNotificationPermission(): void {
+		notificationState = notificationPermission();
 	}
 
 	/** Sends a sample OS/browser notification without enabling ongoing mention alerts. */
@@ -436,44 +458,36 @@
 		notificationState = permission;
 		if (permission === 'denied') return 'denied';
 		if (permission !== 'granted') return 'unsupported';
-		try {
-			const notification = new Notification('shazow · general', {
-				body: '@you Hey! This is an example message notification from Apron.',
-				tag: `apron:test:${client?.url ?? 'local'}`,
-				data: { test: true }
-			});
-			notification.onclick = () => {
-				window.focus();
-				notification.close();
-			};
-			return 'sent';
-		} catch {
-			return 'error';
-		}
+		const shown = await showNotification('Apron', { body: 'This is a test. New messages will show up like this.', tag: 'apron:test' }, () => window.focus());
+		return shown ? 'sent' : 'error';
 	}
 
 	/** Desktop alerts are opt-in and limited to the selected message types while Apron is away. */
-	function showMessageNotification(event: MessageRecord): void {
-		if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || !client) return;
+	async function notifyMessage(event: MessageRecord, mention: boolean): Promise<void> {
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
-		if (!room) return;
+		if (!room || !client) return;
 		const text = event.body?.text?.replace(/\s+/g, ' ').trim() ?? '';
 		const body = text.length > 180 ? `${text.slice(0, 179)}…` : text;
-		try {
-			const notification = new Notification(`${senderName(event)} · ${room.title}`, {
-				body: body || 'New message',
-				tag: `apron:${client.url}:${room.id}:${event.message_id}`,
-				data: { roomId: room.parentRoomId ?? room.id, threadId: room.parentRoomId ? room.id : undefined }
-			});
-			notification.onclick = () => {
-				window.focus();
-				const destination = notification.data as { roomId?: string; threadId?: string } | undefined;
-				if (destination?.roomId) openDestination(destination.roomId, destination.threadId);
-				notification.close();
-			};
-		} catch {
-			// Permission may be revoked between the check and construction.
-		}
+		const target: NotificationTarget = { tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}) };
+		const shown = await showNotification(`${senderName(event)} · ${room.title}`, {
+			body: body || 'New message',
+			// One per room: a newer message replaces it and alerts again.
+			tag: `apron:${client.url}:${room.id}`,
+			renotify: true,
+			data: target
+		}, () => openNotificationTarget(target));
+		if (!shown && mention) playPing();
+	}
+
+	function openNotificationTarget(target: NotificationTarget): void {
+		window.focus();
+		if (target.tab === tabId && target.server === client?.url) openDestination(target.roomId, target.threadId);
+	}
+
+	/** The service worker relays a click on a notification it showed to every tab. */
+	function notificationClicked(event: MessageEvent): void {
+		const target = notificationClickTarget(event.data);
+		if (target) openNotificationTarget(target);
 	}
 
 	function connected(): void {
@@ -1038,8 +1052,8 @@
 	}
 </script>
 
-<svelte:window onkeydown={windowKeydown} onfocus={() => presence.focus()} onblur={() => presence.blur()} />
-<svelte:document onvisibilitychange={() => presence.visibilityChanged()} />
+<svelte:window onkeydown={windowKeydown} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
+<svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); }} />
 
 <svelte:head>
 	<title>{tabTitle(unread.total, presence.titleFlash)}</title>
@@ -1064,7 +1078,7 @@
 >
 	<Sidebar
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
-		notificationsEnabled={notificationsEnabled} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notificationScope={notificationScope} onnotifications={toggleNotifications} onnotificationscope={updateNotificationScope} ontestnotifications={testNotifications}
+		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notificationScope={notificationScope} onnotifications={toggleNotifications} onnotificationscope={updateNotificationScope} ontestnotifications={testNotifications}
 		onconnect={() => openConnect()} onsignin={(name) => openConnect({ passkey: true, name })}
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} onsignout={() => session.forget()}
 	/>

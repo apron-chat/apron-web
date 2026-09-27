@@ -53,3 +53,56 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 		return 'unsupported';
 	}
 }
+
+/** Where a click on a message notification leads: the tab and backend that raised it, and the room or thread. */
+export interface NotificationTarget {
+	tab: string;
+	server: string;
+	roomId: string;
+	threadId?: string;
+}
+
+/** What the service worker posts to the app's tabs when one of its notifications is clicked. */
+export const NOTIFICATION_CLICK = 'apron:notification-click';
+
+/** `renotify` is standard but missing from TypeScript's DOM types. */
+export type ShowNotificationOptions = NotificationOptions & { renotify?: boolean };
+
+/**
+ * Shows a notification from the page, or through the service worker where the
+ * page may not (Android Chrome's `Notification` constructor throws). Resolves
+ * whether one was shown. `onclick` handles a click on the page's own
+ * notification; a click on the service worker's posts `NOTIFICATION_CLICK`.
+ */
+export async function showNotification(title: string, options: ShowNotificationOptions, onclick: () => void): Promise<boolean> {
+	if (notificationPermission() !== 'granted') return false;
+	try {
+		const notification = new Notification(title, options);
+		notification.onclick = () => {
+			onclick();
+			notification.close();
+		};
+		return true;
+	} catch {
+		// Only the service worker may show notifications here.
+	}
+	try {
+		const registration = await globalThis.navigator?.serviceWorker?.getRegistration();
+		if (!registration) return false;
+		await registration.showNotification(title, options);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/** A `NOTIFICATION_CLICK` message's target, if the message is one. */
+export function notificationClickTarget(message: unknown): NotificationTarget | undefined {
+	if (!message || typeof message !== 'object') return undefined;
+	const { type, target } = message as { type?: unknown; target?: unknown };
+	if (type !== NOTIFICATION_CLICK || !target || typeof target !== 'object') return undefined;
+	const { tab, server, roomId, threadId } = target as Record<string, unknown>;
+	if (typeof tab !== 'string' || typeof server !== 'string' || typeof roomId !== 'string') return undefined;
+	if (threadId !== undefined && typeof threadId !== 'string') return undefined;
+	return { tab, server, roomId, ...(threadId !== undefined ? { threadId } : {}) };
+}

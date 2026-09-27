@@ -3,12 +3,14 @@
 /// <reference lib="esnext" />
 /// <reference lib="webworker" />
 import { base, build, files, prerendered, version } from '$service-worker';
+import { NOTIFICATION_CLICK } from '$lib/ui/notifications';
 
 /**
  * Keeps each deploy's app files cached so the app opens fast, still opens
  * offline, and a tab left open across a deploy can still load its lazy chunks.
  * Only the app's own files and page loads are handled: the WebSocket,
  * uploads, files, streams and every backend's URLs go straight to the network.
+ * It also shows message notifications where a page can't show its own.
  */
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -52,4 +54,19 @@ sw.addEventListener('fetch', (event) => {
 	if (ASSETS.has(url.pathname) || url.pathname.startsWith(`${base}/_app/immutable/`)) {
 		event.respondWith((async () => (await (await caches.open(CACHE)).match(request)) ?? (await caches.match(request)) ?? fetch(request))());
 	}
+});
+
+// A notification shown through here (see `showNotification`): bring a tab forward, and
+// tell the tabs, so the one that raised it opens the room.
+sw.addEventListener('notificationclick', (event) => {
+	event.notification.close();
+	event.waitUntil((async () => {
+		const tabs = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
+		if (tabs.length === 0) {
+			await sw.clients.openWindow(APP_PAGE);
+			return;
+		}
+		for (const tab of tabs) tab.postMessage({ type: NOTIFICATION_CLICK, target: event.notification.data });
+		await tabs[0].focus();
+	})());
 });
