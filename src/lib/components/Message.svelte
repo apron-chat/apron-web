@@ -345,6 +345,13 @@
 	.plain { white-space: pre-wrap; }
 	/* An embed's remove button sits on its corner (EmbedRemove). */
 	.embed-slot { position: relative; max-width: 100%; }
+	/*
+	 * The slot shrinks to fit its embed, where a percentage width can't
+	 * resolve: a link card or stream would size the slot by its longest line
+	 * and leave the (x) floating past its edge. The same widths, in pixels.
+	 */
+	.embed-slot :global(.ap-embed-ogcard) { width: 420px; max-width: 100%; }
+	.embed-slot :global(.ap-embed-stream) { width: var(--embed-max-w); max-width: 100%; }
 	.markdown :global(blockquote) {
 		margin: var(--space-2) 0;
 		padding: var(--space-1) var(--space-3);
