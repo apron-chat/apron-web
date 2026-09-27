@@ -189,8 +189,8 @@
 				</div>
 				<div class="ap-pref-setting ap-pref-font-setting">
 					<div class="ap-pref-font-heading">
-						<strong>Fonts</strong>
-						<p class="ap-profedit-hint">Customize the interface, chat, and monospace fonts on this device.</p>
+						<strong>Fonts</strong> <span class="ap-pref-experimental">Experimental</span>
+						<p class="ap-profedit-hint">Customize the interface, chat, and monospace fonts on this device. Font choices are an experiment and will be replaced by a choice of themes.</p>
 					</div>
 					<p class="ap-pref-help ap-font-access-status" id="ap-font-access-status" role="status" aria-live="polite">
 						{#if fontBrowserState === 'unsupported'}
@@ -240,6 +240,7 @@
 	.ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
 	.ap-pref-setting { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 	.ap-pref-setting strong { font-size: 14px; }
+	.ap-pref-experimental { display: inline-block; margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: 11px; line-height: 18px; font-weight: 500; vertical-align: 1px; }
 	.ap-pref-setting p { max-width: 420px; margin: var(--space-1) 0 0; }
 	.ap-pref-theme-setting label { color: var(--ink); font-size: 14px; font-weight: 600; cursor: pointer; }
 	.ap-pref-theme-setting select { flex: none; }

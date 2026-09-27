@@ -108,8 +108,9 @@ clicking it opens that room or thread. Where the page can't show notifications
 itself (Android Chrome) the service worker shows them. Permission revoked in the
 browser's site settings reads as off. **Appearance** picks a light or dark theme
 over the system's, and an installed font for the interface, messages and code
-(suggested from installed fonts where the browser allows listing them). All of
-these stay on this device.
+(suggested from installed fonts where the browser allows listing them); the
+font choice is marked experimental, to be replaced by a choice of themes. All
+of these stay on this device; settings aren't synced.
 
 With the `command` cap, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.8](https://github.com/shazow/apron/blob/main/PROTOCOL.md#48-command)): the composer shows a **Command** tag, sets the line in
