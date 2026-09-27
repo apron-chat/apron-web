@@ -1,0 +1,20 @@
+<!-- @dsCard group="Timeline" height=250 subtitle="Chips, and a message that pings you" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Mention</title></head>
+<body>
+<div id="root" style="padding: 12px 0"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' };
+  // Chips come from your Markdown renderer as markup (Appendix A.3); A.Mention renders one on its own.
+  add(A.Message, { sender: alice, time: '14:02', children: A.html('<p>Handing the rollback to <span class="ap-mention" data-user-id="dana" title="@dana">@Dana</span> and <span class="ap-mention" data-user-id="bob" title="@bob">@Bob</span>.</p>') });
+  add(A.Message, { sender: bob, time: '14:05', mention: true, pinged: true, children: A.html('<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> can you check the migration logs?</p>') });
+  add(A.Message, { sender: bob, time: '14:05', grouped: true, children: A.html('<p>cc <span class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</span></p>') });
+  var row = document.createElement('div'); row.className = 'ap-row'; root.appendChild(row);
+  add(A.Mention, { user_id: 'dana', name: 'Dana' }, row); add(A.Mention, { user_id: 'sam', name: 'Sam', me: true }, row);
+  add(A.Mention, { roomId: 'ops', title: 'Ops' }, row); add(A.Mention, { user_id: 'ghost_9', unknown: true }, row);
+</script>
+</body>
+</html>

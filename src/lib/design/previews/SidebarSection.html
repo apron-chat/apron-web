@@ -1,0 +1,17 @@
+<!-- @dsCard group="Navigation" height=260 subtitle="Collapsible room group" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SidebarSection</title></head>
+<body>
+<div id="root" style="background:var(--bg-000);width:248px;padding:12px 8px;box-sizing:border-box"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var rooms = function (list) { return A.parts.apply(null, list.map(function (p) { return A.part(A.RoomItem, p); })); };
+  add(A.SidebarSection, { title: 'Rooms', action: A.part(A.Button, { size: 'sm', variant: 'ghost', 'aria-label': 'New room', label: '+' }),
+    children: rooms([{ room: 'general', name: 'General', active: true }, { room: 'ops', name: 'Ops', unread: 12 }, { room: 'deploy', name: 'Deploy', nested: true, unread: 2 }, { room: 'design', name: 'Design' }]) });
+  add(A.SidebarSection, { title: 'Muted', children: rooms([{ room: 'random', name: 'Random' }]) });
+  add(A.SidebarSection, { title: 'Archive', open: false, children: rooms([{ room: 'old', name: 'Old' }]) });
+</script>
+</body>
+</html>

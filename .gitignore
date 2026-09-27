@@ -28,3 +28,6 @@ vite.config.ts.timestamp-*
 .direnv/
 devenv.local.nix
 devenv.local.yaml
+
+# Design system bundle output
+/dist-design

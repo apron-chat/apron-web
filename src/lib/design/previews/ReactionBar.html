@@ -1,0 +1,15 @@
+<!-- @dsCard group="Timeline" height=200 subtitle="Chips, mine, palette open" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ReactionBar</title></head>
+<body>
+<div id="root" class="ap-stack"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.ReactionBar, { reactions: [{ emoji: '👍', count: 3, mine: true, who: 'Sam, Dana, Priya' }, { emoji: '🎉', count: 1, who: 'Dana' }, { emoji: '👀', count: 2, who: 'Priya, Ops bot' }] });
+  var gap = document.createElement('div'); gap.style.height = '8px'; root.appendChild(gap);
+  add(A.ReactionBar, { reactions: [{ emoji: '✅', count: 1, mine: true }], open: true });
+</script>
+</body>
+</html>

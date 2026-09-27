@@ -1,0 +1,14 @@
+<!-- @dsCard group="Timeline" height=72 subtitle="Who is typing" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>TypingIndicator</title></head>
+<body>
+<div id="root" class="ap-stack" style="padding-left:0"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.TypingIndicator, { names: ['Alice'] });
+  add(A.TypingIndicator, { names: ['Alice', 'Bob', 'Dana'] });
+</script>
+</body>
+</html>

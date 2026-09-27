@@ -1,0 +1,22 @@
+<!-- @dsCard group="Timeline" height=520 subtitle="Select mode with the bar" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SelectionBar</title></head>
+<body>
+<div id="root" style="padding-top:8px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' }, dana = { user_id: 'dana', name: 'Dana' };
+  add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.', selectMode: true });
+  add(A.Message, { sender: bob, time: '14:04', text: 'Worker pods are restarting in a loop.', selectMode: true, selected: true });
+  add(A.Message, { sender: bob, time: '14:04', grouped: true, text: 'Crash is in the new queue client.', selectMode: true, selected: true });
+  add(A.Message, { sender: dana, time: '14:20', text: 'Rolled back worker to 1.8.3.', selectMode: true, selected: true });
+  add(A.Message, { sender: alice, time: '14:31', text: 'Retro at 16:00, same link as last week.', selectMode: true });
+  add(A.SelectionBar, { count: 3, threads: [{ thread: 'deploy', name: 'Deploy' }, { thread: 'mig-0042', name: 'Migration 0042' }], onselectrange: function () {} });
+  add(A.SelectionBar, { count: 3, status: 'saving' });
+  var narrow = document.createElement('div'); narrow.style.width = '470px'; root.appendChild(narrow);
+  add(A.SelectionBar, { count: 3, threads: [{ thread: 'deploy', name: 'Deploy' }], onselectrange: function () {} }, narrow);
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+<!-- @dsCard group="Embeds" height=470 subtitle="Live terminal, live Markdown, finished" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>EmbedStream</title></head>
+<body>
+<div id="root" class="ap-stack"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.EmbedStream, { kind: 'stream', format: 'terminal', url: '#', text: '$ make deploy\nbuilding api… ok\nrunning migrations 0041..0042… ok\npushing image registry/api:4f2c… ' });
+  add(A.EmbedStream, { kind: 'stream', format: 'markdown', url: '#', children: A.html('<p>The spike lines up with the <code>orders_idx</code> rebuild. I would roll back</p>') });
+  add(A.EmbedStream, { kind: 'stream', format: 'terminal', done: true, truncated: true, text: '… 214 lines\ntests: 812 passed, 0 failed\ndone in 3m12s' });
+</script>
+</body>
+</html>

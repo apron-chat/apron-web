@@ -1,4 +1,4 @@
-/* Apron design system component styles — copied verbatim from the design system bundle (project/components/bundle.css). Do not hand-edit; re-copy when the design system changes. */
+/* Apron component styles. The source of truth: the design system's components/bundle.css is built from this file (npm run design:bundle). */
 /* Apron — component styles over tokens.css. Every class is ap-*. */
 body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 22px; background: var(--bg-100); color: var(--ink); -webkit-font-smoothing: antialiased; }
 .ap-stack { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); }
@@ -134,6 +134,11 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-divider { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-6) var(--space-4) var(--space-2); font-size: 12px; line-height: 16px; font-weight: 500; color: var(--ink-muted); }
 .ap-divider::before, .ap-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .ap-divider-sticky { position: sticky; top: var(--space-2); z-index: 1; }
+.ap-divider-date { justify-content: center; }
+.ap-divider-date::before, .ap-divider-date::after { content: none; }
+.ap-divider-sticky { transition: opacity 150ms ease-out, visibility 150ms; }
+.ap-divider-idle { opacity: 0; visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .ap-divider-sticky { transition: none; } }
 .ap-divider-date span { padding: 3px var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); color: var(--ink); }
 .ap-divider-new { color: var(--denim); }
 .ap-divider-new::before, .ap-divider-new::after { background: var(--denim); }
@@ -247,6 +252,18 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 
 /* Thread rows nested under their room, and the open-thread header breadcrumb */
 .ap-room-nested { padding: 3px var(--space-3) 3px calc(var(--space-3) + var(--space-4)); font-size: 13px; line-height: 18px; }
+.ap-roomrow { position: relative; }
+.ap-room-exit { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: calc(var(--radius-md) - 2px); background: transparent; color: var(--ink-muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease, background-color .12s ease, color .12s ease; }
+.ap-roomrow-nested .ap-room-exit { width: 24px; height: 24px; }
+.ap-roomrow:hover .ap-room-exit, .ap-roomrow:focus-within .ap-room-exit { opacity: 1; pointer-events: auto; }
+.ap-roomrow:hover .ap-room .ap-count, .ap-roomrow:focus-within .ap-room .ap-count { visibility: hidden; }
+.ap-roomrow:hover .ap-room, .ap-roomrow:focus-within .ap-room { padding-right: 36px; }
+.ap-roomrow-nested:hover .ap-room, .ap-roomrow-nested:focus-within .ap-room { padding-right: 32px; }
+.ap-room-exit:hover { background: var(--bg-200); color: var(--ink); }
+.ap-roomrow-active .ap-room-exit:hover { background: var(--bg-100); }
+.ap-room-exit:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: -2px; }
+@media (hover: none) { .ap-roomrow-active .ap-room-exit { opacity: 1; pointer-events: auto; } .ap-roomrow-active .ap-room .ap-count { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .ap-room-exit { transition: none; } }
 .ap-roomhead-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ap-roomhead-crumb { font: inherit; padding: 0; border: 0; background: none; color: var(--ink-muted); cursor: pointer; }
 .ap-roomhead-crumb:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
@@ -451,7 +468,7 @@ a.ap-embed-ogcard:hover { background: var(--bg-300); }
 .ap-embed-site { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 .ap-embed-desc { font-size: 13px; line-height: 18px; color: var(--ink-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 
-/* ReactionBar — chips under a message */
+/* ReactionBar — chips under a message, and the palette */
 .ap-reactions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
 .ap-rchip { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1); height: 26px; padding: 0 var(--space-2); box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); color: var(--ink-muted); font-size: 13px; line-height: 16px; font-variant-numeric: tabular-nums; cursor: pointer; }
 .ap-rchip:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
@@ -460,6 +477,10 @@ a.ap-embed-ogcard:hover { background: var(--bg-300); }
 .ap-rchip-emoji { font-family: var(--font-emoji); font-size: 15px; }
 .ap-rchip-count { font-weight: 600; }
 .ap-rchip-add { width: 26px; justify-content: center; padding: 0; font-size: 15px; visibility: hidden; }
+.ap-rpalette { display: inline-flex; align-self: flex-start; max-width: 100%; flex-wrap: wrap; gap: 2px; margin-top: var(--space-1); padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-float); }
+.ap-rpick { font: inherit; display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.ap-rpick:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
+.ap-rpick-mine { background: var(--accent-soft); }
 .ap-msg:hover .ap-rchip-add, .ap-msg:focus-within .ap-rchip-add { visibility: visible; }
 
 /* Room mentions and unknown mentions */
