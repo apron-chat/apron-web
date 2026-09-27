@@ -1,0 +1,15 @@
+<!-- @dsCard group="Timeline" height=170 subtitle="Summary row and moved marker" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ThreadMarker</title></head>
+<body>
+<div id="root" class="ap-stack" style="align-items:flex-start"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', count: 7, lastReply: '14:32', participants: [{ user_id: 'bob', name: 'Bob' }, { user_id: 'alice', name: 'Alice Chen' }, { user_id: 'dana', name: 'Dana' }], latest: { sender: { user_id: 'dana', name: 'Dana' }, text: 'Rolled back worker to 1.8.3, re-running the migration now.' } });
+  add(A.ThreadMarker, { thread: 'mig-0042', name: 'Migration 0042', count: 1, summary: 'Lock held on accounts table' });
+  add(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', moved: true });
+</script>
+</body>
+</html>

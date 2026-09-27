@@ -1,0 +1,34 @@
+/* Apron's presentational components: the design system's source of truth. They take plain props (no client, no stores),
+   so the app, previews and design mockups all render the same code. Section numbers (§, Appendix) refer to PROTOCOL.md. */
+export { default as Button } from './Button.svelte';
+export { default as Avatar } from './Avatar.svelte';
+export { default as Message } from './Message.svelte';
+export { default as Embed } from './Embed.svelte';
+export { default as EmbedUpload } from './EmbedUpload.svelte';
+export { default as EmbedStream } from './EmbedStream.svelte';
+export { default as EmbedCard } from './EmbedCard.svelte';
+export { default as EmbedFrame } from './EmbedFrame.svelte';
+export { default as EmbedHtml } from './EmbedHtml.svelte';
+export { default as EmbedFallback } from './EmbedFallback.svelte';
+export { default as ReactionBar } from './ReactionBar.svelte';
+export { default as ThreadMarker } from './ThreadMarker.svelte';
+export { default as TimelineDivider } from './TimelineDivider.svelte';
+export { default as TypingIndicator } from './TypingIndicator.svelte';
+export { default as Composer } from './Composer.svelte';
+export { default as RoomItem } from './RoomItem.svelte';
+export { default as StatusBanner } from './StatusBanner.svelte';
+export { default as MessageActions } from './MessageActions.svelte';
+export { default as JumpBar } from './JumpBar.svelte';
+export { default as RoomHeader } from './RoomHeader.svelte';
+export { default as SidebarSection } from './SidebarSection.svelte';
+export { default as BackendRail } from './BackendRail.svelte';
+export { default as ProfileBar } from './ProfileBar.svelte';
+export { default as ProfileEditor } from './ProfileEditor.svelte';
+export { default as ReplyPreview } from './ReplyPreview.svelte';
+export { default as ThreadSummary } from './ThreadSummary.svelte';
+export { default as ThreadEditor } from './ThreadEditor.svelte';
+export { default as ConnectScreen } from './ConnectScreen.svelte';
+export { default as SelectionBar } from './SelectionBar.svelte';
+export { default as Mention } from './Mention.svelte';
+export { default as MentionPicker } from './MentionPicker.svelte';
+export type * from './types';

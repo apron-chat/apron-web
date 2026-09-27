@@ -1,0 +1,15 @@
+<!-- @dsCard group="Timeline" height=200 subtitle="Quote above a reply" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ReplyPreview</title></head>
+<body>
+<div id="root" style="padding: 20px 0 12px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' };
+  add(A.Message, { sender: bob, time: '14:05', text: 'Yes — but only after the canary has been green for ten minutes.', replyTo: { messageId: '1', sender: alice, snippet: 'Deploy is green, rolling to prod now. Anyone object if I skip the canary wait?' } });
+  add(A.Message, { sender: alice, time: '14:06', text: 'Fair. Waiting.', replyTo: { messageId: '2', sender: bob, deleted: true } });
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<!-- @dsCard group="Layout" height=560 width=1280 page subtitle="Guest by default; token revealed" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ConnectScreen</title><style>html,body{height:100%}</style></head>
+<body>
+<div id="root" style="height:560px;display:grid;grid-template-columns:1fr 1fr"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.ConnectScreen, { recent: [{ url: 'wss://chat.work.example/ws', label: 'Work' }, { url: 'wss://home.lab:8443/apron', label: 'Home lab' }] });
+  add(A.ConnectScreen, { url: 'wss://chat.work.example/ws', name: 'Alice', schemes: ['token', 'webauthn'], scheme: 'token', error: 'The server refused that token. Check it and try again.' });
+</script>
+</body>
+</html>

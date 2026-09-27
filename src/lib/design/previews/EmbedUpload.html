@@ -1,0 +1,18 @@
+<!-- @dsCard group="Embeds" height=560 subtitle="Image, audio, file, uploading, failed" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>EmbedUpload</title></head>
+<body>
+<div id="root" class="ap-stack"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var img = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAeAAAADIAgMAAABNMtrpAAAACVBMVEXgkl+aZEgoKDWyMqtSAAAEJ0lEQVR42u2XPa6jMBSFjxHuKfL242IWQDHFK1nFaKqR1zMLiii9CuTKmoIQDPg3dmKNdFMZg/h0Lj7n3rC/aPPrQGACE5jABCYwgQlMYAITmMAEJjCBCUxgAhOYwAQmMIEJTGACE7gV2KhGYP2rEVhBNgEbibkJWGM0sgVYcQ7VAiwHjEsD8AKBHtPnwYoBTOjPg+UNwC3zeFUAGwgALNNRFcCaAQBG82nw1AMAeN7x6ipUelgXYvksWDOxLm5ZgV0OVv1jwcT8SbCRw7YcchxVDNYQ2zIrsIvBiu/rnMAuBu+VRlZgd8VmEvtFTmCXgmdmX6UH9lIKlr19lRzYZupKKz0erlMDe+aFYM2O14mBvcixEDz1p420wJ6+Cg/Xs0HsxyslsO9MFIKfDcJyVPx4Gfmz1E6qv2wlBPY3L/axHC5b8cBe2FgKXiCum7HANtOtOLkUc2zGAnvmohgsb47NSGAvcizOauOqdCywp6/yJjEz53YwsO+bAUvAsnfvBwLbyJ/lbfHcIFIC+5tX6Mea+e54A3u1cClY9b47vsB+WLgQbByxFQnsh4ULwdptpkBgbxYuBNtzbVpgbxYuBPsr7Qns+6GHvgxeApV2BvZu4TKwYqG7jsD+5nXmameDCAS2ZeEisAlW+hrYtoWLwJpFHjgFtm3hIvDURx44BvbBwiXg61wbDuyDhUPgOVppEQPbgX2/Pu4B/5GvNghXYJ8sHAAvEclGDvHPsQf2N0/9f6x4eCzXEHHwM7DPFvaDjRzG+dUGcQnsi4X9YM1EWHJKpZ+BfbGwHzz1QEiySan0FthXC3vBBiMQkjyzNLffjHRZ2Ate3xuQLPs0MMPssrAXvDYev2TvXOsIbJeFfeCtxXsl68RKA9xpYR9484pX8tSngiHYmAzeU8kjOaFB7MfLOy50gfz3SE5oEJaj0sFWId2SVXqlA78udGTdkuXwFvAhHFySF4i3gA/To0uyYngH+KTHITky174KPjW8q2RTp9Jn8GW0uEie61T6DL549CJZ9m8BX9PwJDm9QWSBHa89SdaVKn0Cuz7gUbLq3wJ2WeUg2dSJrTPYHUq2ZF3JTCewe2q1JafNtblgXx0tydUqfQD7Gu0uealW6QPYO9I8JataZjqA/dnwlFypQZzAgRR+SDb1Km2DA3IeknW9Slvg4MFZJU/9O8BBi3Ij8+badHAkDMc5b65NB0feyo2s1yAO4Nj3G+d6DcIGRxs8N78rmmkHx0epsV6DsMHxTOI1zzTQp6f/+A7FKWWsyn2A6x7YDHDVaMgB1wzhHHC1KT0XPDO0AVccLLLAC0QbcN0sTAc3MPEKbmDiFdzAxAC6JiYG0DUxMYCuiYkBdE1MDKBrYmIADF+NFLM2XHQ/0Ag8tAKDwAQmMIEJTGACE5jABCYwgf8b8D+oSDT8+Vx1dgAAAABJRU5ErkJggg==';
+  add(A.EmbedUpload, { kind: 'upload', url: '#', title: 'p99-latency.png', og: { image: { url: img, width: 480, height: 200, alt: 'p99 latency over the last hour' } } });
+  add(A.EmbedUpload, { kind: 'upload', url: '#', title: 'voice-0:12.webm', og: { audio: { url: '#' } } });
+  add(A.EmbedUpload, { kind: 'upload', url: '#', title: 'migration-0042.log', og: { description: 'text/plain · 18 KB' } });
+  add(A.EmbedUpload, { kind: 'upload', title: 'deploy-plan.pdf', progress: 0.62 });
+  add(A.EmbedUpload, { kind: 'upload', title: 'screenshot.png', failed: true });
+</script>
+</body>
+</html>

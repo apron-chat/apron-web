@@ -1,0 +1,36 @@
+<!-- @dsCard group="Timeline" height=1000 subtitle="Cozy, compact, echo, edit, delete, reactions, system lines, notice cards, shared names" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Message</title></head>
+<body>
+<div id="root" style="padding: 20px 0 12px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' }, me = { user_id: 'sam', name: 'Sam' };
+  var at = function (hh, mm) { var d = new Date(); d.setHours(hh, mm, 7, 0); return d.getTime(); };
+  var acts = A.part(A.MessageActions, { items: [{ label: 'Reply', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }], onmore: function () {} });
+  add(A.Message, { sender: alice, timestamp: at(14, 2), text: 'Deploy is green, rolling to prod now.', actions: acts, highlighted: true,
+    footer: A.part(A.ThreadMarker, { thread: 'deploy-4-2', name: 'Deploy', count: 7, lastReply: '14:32', participants: [bob, alice, me] }) });
+  add(A.Message, { sender: alice, timestamp: at(14, 2), grouped: true, edited: true, children: A.html('<p>Canary looks fine: <code>p99 = 41ms</code></p>') });
+  add(A.Message, { sender: alice, time: '14:03', grouped: true, children: A.html('<p>The fix, for the record:</p><pre><code><span class="ap-diff-hunk">@@ worker/queue.go @@</span><span class="ap-diff-del">client.Timeout = 2 * time.Second</span><span class="ap-diff-add">client.Timeout = 30 * time.Second</span><span>client.Retry = backoff.Default</span></code></pre>') });
+  add(A.Message, { sender: bob, time: '14:04', text: 'Ship it.', replyTo: { messageId: '1724803380000', sender: alice, snippet: 'The fix, for the record: @@ worker/queue.go @@ …' },
+    reactions: [{ emoji: '👍', count: 2, mine: true, who: 'Sam, Alice' }, { emoji: '🎉', count: 1, who: 'Dana' }] });
+  add(A.Message, { system: true, timestamp: at(14, 4), text: 'Dana joined' });
+  add(A.Message, { sender: { user_id: '@room', name: 'Ops' }, timestamp: at(14, 4), text: 'Poll closed: Tuesday wins, 7 votes to 4.' });
+  add(A.Message, { system: true, timestamp: at(14, 4), children: A.html('Thread renamed to <span class="ap-msg-text">“Deploy”</span>') });
+  add(A.Message, { sender: bob, time: '14:05', mention: true, pinged: true, children: A.html('<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> can you check the migration logs? <span class="ap-mention" data-user-id="dana" title="@dana">@Dana</span> already looked.</p>') });
+  add(A.Message, { sender: bob, time: '14:05', grouped: true, deleted: true });
+  add(A.Message, { sender: me, time: '14:06', status: 'pending', text: 'On it, pulling them up.' });
+  add(A.Message, { sender: me, time: '14:06', grouped: true, status: 'failed', text: 'Looks like the lock timed out.' });
+  add(A.Message, { sender: { user_id: '@private', name: 'System message to you' }, time: '14:07',
+    children: A.html('<p>Your bot signs in as <strong>Bot of Sam</strong> (<code>bot_sam</code>) with this token. It replaces any earlier one, so keep it secret.</p><pre><code>apron_bot_h58Ecmun2BeA4ZG2PTgpsfyzknAGbt8Mn8seiWtiT3E</code><button type="button" class="ap-btn ap-btn-sm ap-notice-copy">Copy</button></pre>') });
+  add(A.TimelineDivider, { kind: 'date', label: 'Compact density', sticky: false });
+  add(A.Message, { density: 'compact', sender: alice, time: '14:10', text: 'Retrying with a longer lock timeout.' });
+  add(A.Message, { density: 'compact', sender: bob, time: '14:11', edited: true, text: 'Worked. Closing the incident.' });
+  add(A.Message, { density: 'compact', sender: me, time: '14:11', status: 'pending', text: 'Thanks both.' });
+  add(A.Message, { density: 'compact', sender: { user_id: 'alex.r', name: 'Alex' }, handle: true, time: '14:12', text: 'Two of us are called Alex here,' });
+  add(A.Message, { density: 'compact', sender: { user_id: 'guest_7', name: 'Alex' }, handle: true, time: '14:12', text: 'so both names carry their @user_id.' });
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!-- @dsCard group="Identity" height=760 subtitle="Handle, avatar, passkey states" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ProfileEditor</title></head>
+<body>
+<div id="root" style="display:grid;grid-template-columns:repeat(2,232px);gap:16px;padding:16px;align-items:start"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, canPasskey: true });
+  add(A.ProfileEditor, { userId: 'alice', name: 'alice', canUpload: true, status: 'altered', serverName: 'alice_2' });
+  add(A.ProfileEditor, { userId: 'guest_7', name: 'Admin', status: 'declined' });
+  add(A.ProfileEditor, { userId: 'guest_7', name: 'Alice', canPasskey: true, passkey: 'waiting' });
+  add(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, canPasskey: true, passkey: 'done' });
+  add(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canPasskey: true, passkey: 'declined' });
+</script>
+</body>
+</html>
