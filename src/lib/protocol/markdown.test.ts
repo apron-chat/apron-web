@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { renderMarkdown, renderPlain, type MentionResolver } from './markdown';
 
@@ -43,7 +44,7 @@ describe('mentions (Appendix A.3)', () => {
 
 describe('line breaks', () => {
 	it('keeps a typed line break inside a paragraph, and paragraphs apart', () => {
-		expect(renderMarkdown('Deploy plan\nWe cut at 14:00')).toBe('<p>Deploy plan<br />We cut at 14:00</p>\n');
+		expect(renderMarkdown('Deploy plan\nWe cut at 14:00')).toBe('<p>Deploy plan<br>\nWe cut at 14:00</p>\n');
 		expect(renderMarkdown('one\n\ntwo')).toBe('<p>one</p>\n<p>two</p>\n');
 		expect(renderMarkdown('```\na\nb\n```')).toBe('<pre><code>a\nb\n</code></pre>\n');
 	});
@@ -69,11 +70,11 @@ describe('bare links', () => {
 	it('leaves trailing punctuation and an unmatched closing paren out', () => {
 		expect(renderPlain('(see https://example.com/x).')).toBe(`(see ${link('https://example.com/x')}).`);
 		expect(renderPlain('https://en.wikipedia.org/wiki/Foo_(bar), ok')).toBe(`${link('https://en.wikipedia.org/wiki/Foo_(bar)')}, ok`);
-		expect(renderPlain('"https://example.com"')).toBe(`&quot;${link('https://example.com')}&quot;`);
+		expect(renderPlain('"https://example.com"')).toBe(`"${link('https://example.com')}"`);
 	});
 
 	it('stops at markup and escapes what it links', () => {
-		expect(renderPlain('<https://example.com/"x>')).toBe(`&lt;${link('https://example.com/')}&quot;x&gt;`);
+		expect(renderPlain('<https://example.com/"x>')).toBe(`&lt;${link('https://example.com/')}"x&gt;`);
 		expect(renderMarkdown('**https://example.com**')).toBe(`<p><strong>${link('https://example.com')}</strong></p>\n`);
 	});
 
@@ -99,17 +100,17 @@ describe('bare links', () => {
 describe('tables', () => {
 	it('renders a GFM table with alignment, inline markdown, and short rows padded', () => {
 		expect(renderMarkdown('| Name | Count |\n| :-- | --: |\n| **a** | 1 |\n| b |')).toBe(
-			'<div class="ap-table"><table>\n<thead>\n<tr>\n<th align="left">Name</th><th align="right">Count</th>\n</tr>\n</thead>\n' +
-				'<tbody>\n<tr>\n<td align="left"><strong>a</strong></td><td align="right">1</td>\n</tr>\n' +
-				'<tr>\n<td align="left">b</td><td align="right"></td>\n</tr>\n</tbody>\n</table></div>\n'
+			'<div class="ap-table"><table>\n<thead>\n<tr>\n<th class="ap-align-left">Name</th>\n<th class="ap-align-right">Count</th>\n</tr>\n</thead>\n' +
+				'<tbody>\n<tr>\n<td class="ap-align-left"><strong>a</strong></td>\n<td class="ap-align-right">1</td>\n</tr>\n' +
+				'<tr>\n<td class="ap-align-left">b</td>\n<td class="ap-align-right"></td>\n</tr>\n</tbody>\n</table></div>\n'
 		);
 	});
 
 	it('keeps the lines before the header as a paragraph and needs no outer pipes', () => {
 		const html = renderMarkdown('Results\na | b\n--|--\n1 | 2');
 		expect(html).toMatch(/^<p>Results<\/p>\n<div class="ap-table"><table>/);
-		expect(html).toContain('<th>a</th><th>b</th>');
-		expect(html).toContain('<td>1</td><td>2</td>');
+		expect(html).toContain('<th>a</th>\n<th>b</th>');
+		expect(html).toContain('<td>1</td>\n<td>2</td>');
 	});
 
 	it('omits the body of a header-only table and drops extra cells', () => {
@@ -130,13 +131,84 @@ describe('tables', () => {
 
 	it('stays safe inside cells', () => {
 		const html = renderMarkdown('| a | b |\n|---|---|\n| <img src=x onerror=alert(1)> | [x](javascript:alert(1)) |');
-		expect(html).not.toContain('<img');
-		expect(html).not.toContain('javascript:');
+		expect(html).toContain('<td>&lt;img src=x onerror=alert(1)&gt;</td>');
+		expect(html).not.toContain('<a');
 	});
 
 	it('leaves pipes that are not a table as text', () => {
 		expect(renderMarkdown('a | b')).toBe('<p>a | b</p>\n');
-		expect(renderMarkdown('| a | b |\n| --- |')).toBe('<p>| a | b |<br />| --- |</p>\n');
+		expect(renderMarkdown('| a | b |\n| --- |')).toBe('<p>| a | b |<br>\n| --- |</p>\n');
 		expect(renderMarkdown('```\n| a |\n|---|\n```')).toBe('<pre><code>| a |\n|---|\n</code></pre>\n');
+	});
+});
+
+describe('arbitrary HTML', () => {
+	/** Every element the browser would build from the HTML. */
+	const elements = (html: string) => {
+		const template = document.createElement('template');
+		template.innerHTML = html;
+		return template.content.querySelectorAll('*');
+	};
+	/** Handlers, styles and non-http(s) links, as `tag attr=value`. */
+	const unsafe = (html: string) =>
+		[...elements(html)].flatMap((element) =>
+			[...element.attributes]
+				.filter(({ name, value }) => /^on|^style$/i.test(name) || (/^(href|src)$/i.test(name) && !/^https?:\/\//i.test(value)))
+				.map(({ name, value }) => `${element.tagName} ${name}=${value}`)
+		);
+
+	const vectors = [
+		'<script>alert(1)</script>',
+		'<img src=x onerror=alert(1)>',
+		'<div onclick="alert(1)">x</div>',
+		'<iframe src="https://example.com"></iframe>',
+		'<style>body{display:none}</style>',
+		'<a href="javascript:alert(1)">x</a>',
+		'hi <b onmouseover=alert(1)>there</b>',
+		'<!-- comment --><svg onload=alert(1)>',
+		'<details open ontoggle=alert(1)>',
+		'> <script>alert(1)</script>',
+		'- <img src=x onerror=alert(1)>',
+		'# <span style="color:red">x</span>',
+		'**<u>x</u>**'
+	];
+
+	it.each(vectors)('shows %s as text', (source) => {
+		const html = renderMarkdown(source);
+		expect(html).toContain('&lt;');
+		const tags = [...elements(html)].map((element) => element.tagName.toLowerCase());
+		expect(tags.every((tag) => ['p', 'br', 'strong', 'blockquote', 'ul', 'li', 'h1', 'a'].includes(tag))).toBe(true);
+		expect(unsafe(html)).toEqual([]);
+	});
+
+	it('does not link unsafe schemes', () => {
+		for (const source of ['[x](javascript:alert(1))', '[x](JaVaScRiPt:alert(1))', '[x](vbscript:msgbox(1))', '[x](data:text/html;base64,PHNjcmlwdD4=)', '<javascript:alert(1)>', '![x](javascript:alert(1))']) {
+			const html = renderMarkdown(source);
+			expect(html, source).not.toMatch(/<a |<img /);
+		}
+		expect(renderMarkdown('[x](&#106;avascript:alert(1))')).not.toContain('<a ');
+	});
+
+	it('escapes attributes it does write', () => {
+		expect(renderMarkdown('[x](https://example.com/"onmouseover="alert(1) "t\\"itle")')).not.toMatch(/"\s*onmouseover=/);
+		expect(renderMarkdown('```js" onclick="alert(1)\nx\n```')).toBe('<pre><code class="language-js&quot;">x\n</code></pre>\n');
+	});
+
+	it('keeps linking bare URLs and mentions from breaking out of attributes', () => {
+		for (const source of [
+			'https://example.com/"onmouseover="alert(1)',
+			'<a href="https://example.com/x"onmouseover="alert(1)">',
+			'[x](https://example.com "t> https://example.com/y/onmouseover=alert(1)//")',
+			'[x](https://example.com "@alice onmouseover=alert(1)")'
+		]) {
+			expect(unsafe(renderMarkdown(source, resolve)), source).toEqual([]);
+			expect(unsafe(renderPlain(source, resolve)), source).toEqual([]);
+		}
+	});
+
+	it('keeps inline styles and handlers out of rendered markup', () => {
+		const html = renderMarkdown('| a |\n|:-:|\n| b |');
+		expect(html).not.toContain('style=');
+		expect(html).toContain('class="ap-align-center"');
 	});
 });

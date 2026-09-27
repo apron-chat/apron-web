@@ -69,8 +69,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-msg-text table { border-collapse: collapse; overflow-wrap: normal; }
 .ap-msg-text th, .ap-msg-text td { padding: var(--space-1) var(--space-3); border: 1px solid var(--line); text-align: left; vertical-align: top; }
 .ap-msg-text th { font-weight: 600; background: var(--bg-200); }
-.ap-msg-text th[align="center"], .ap-msg-text td[align="center"] { text-align: center; }
-.ap-msg-text th[align="right"], .ap-msg-text td[align="right"] { text-align: right; }
+.ap-msg-text .ap-align-center { text-align: center; }
+.ap-msg-text .ap-align-right { text-align: right; }
 .ap-msg-pending .ap-msg-text { color: var(--ink-muted); }
 .ap-msg-tomb { font-style: italic; color: var(--ink-muted); }
 .ap-msg-failed { font-size: 12px; line-height: 16px; color: var(--danger); margin-top: 2px; }
