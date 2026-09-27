@@ -3,9 +3,10 @@
 What the web client does, feature by feature, and which protocol capabilities
 each needs. [architecture.md](architecture.md) covers how the code is laid out.
 
-The default connection is same-origin `/ws` in a browser unless
-`VITE_DEFAULT_SERVER_URL` is set at build time.
-Local development and ordinary builds retain the same-origin default.
+The default connection is `VITE_DEFAULT_SERVER_URL` from the build, which
+`.env.production` sets to `wss://server.apron.chat/` for every production build
+(web.apron.chat and pull request Previews). Local development, and a build with
+`VITE_DEFAULT_SERVER_URL=` (empty), use same-origin `/ws` instead.
 After a failed WebSocket handshake, the client makes a bounded HTTP diagnostic
 request to the same URL with `?apron_connection_status=1`. Supporting servers
 can expose a capacity error and `Retry-After` through CORS; the client displays
