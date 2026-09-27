@@ -86,7 +86,10 @@ the field reads by name while the wire stays ID-based, and each chip's `user_id`
 goes in `body.mentions` ([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)): a chip deleted before sending mentions no one,
 and an edit resubmits the message's mentions. A rendered body (plain or Markdown, never inside
 code) shows a known user's mention as a chip with their current name, a room's
-as a link that opens it (or joins it), and unknown IDs as written. Only
+as a link that opens it (or joins it), and unknown IDs as written. A fenced
+code block that names a known language (` ```ts `, ` ```py `, ` ```diff `, …)
+is syntax-highlighted once that language's highlighter loads, fetched the first
+time a block needs it; other blocks stay plain. Only
 `body.mentions` decides who is mentioned: a message that lists you tints its
 row with a rust rule, pulses once as it arrives or when an edit adds you (never
 on replayed history), raises an `@` badge on a room you aren't reading, and,

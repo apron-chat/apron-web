@@ -3,6 +3,7 @@
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import type { Embed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { highlightCode } from '$lib/ui/highlight';
 	import { renderTerminal } from '$lib/ui/terminal';
 
 	const RECONNECT_MS = 2000;
@@ -57,7 +58,7 @@
 		{/if}
 	</div>
 	{#if format === 'markdown'}
-		<div class="ap-embed-streambody ap-msg-text">{@html renderMarkdown(text)}{#if live}<span class="ap-embed-caret" aria-hidden="true"></span>{/if}</div>
+		<div class="ap-embed-streambody ap-msg-text" use:highlightCode={text}>{@html renderMarkdown(text)}{#if live}<span class="ap-embed-caret" aria-hidden="true"></span>{/if}</div>
 	{:else if format === 'terminal'}
 		<pre class="ap-embed-streambody" aria-live={live ? 'polite' : undefined}>{#each terminal as span, index (index)}{#if span.className || span.style}<span class={span.className || undefined} style={span.style || undefined}>{span.text}</span>{:else}{span.text}{/if}{/each}{#if live}<span class="ap-embed-caret" aria-hidden="true"></span>{/if}</pre>
 	{:else}

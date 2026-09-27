@@ -4,6 +4,7 @@
 	import type { Embed as EmbedData, MessageRecord } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { emojiAnchor, emojiPicker } from '$lib/ui/emoji-picker.svelte';
+	import { highlightCode } from '$lib/ui/highlight';
 	import { embedsOf, isSystem, replySnippet, senderName, textOf } from '$lib/ui/messages';
 	import type { ReactionChip } from '$lib/ui/reactions';
 	import { eventTime, idDateTime, idIso, idTimeCompact } from '$lib/ui/time';
@@ -195,7 +196,7 @@
 	<article data-timeline-item class="ap-msg ap-msg-system" data-message-id={event.message_id} tabindex="-1" onclick={click}>
 		<span class="ap-msg-system-who">{name}</span>
 		<div class="ap-msg-system-body">
-			{#if event.deleted}<span class="ap-msg-tomb">Message deleted</span>{:else}<div class="ap-msg-text" class:plain={event.body?.format !== 'markdown'}>{@html body}</div>{/if}
+			{#if event.deleted}<span class="ap-msg-tomb">Message deleted</span>{:else}<div class="ap-msg-text" class:plain={event.body?.format !== 'markdown'} use:highlightCode={body}>{@html body}</div>{/if}
 		</div>
 		{#if time}<time class="ap-msg-system-time" datetime={isoTime} title={fullTime}>{time}</time>{/if}
 	</article>
@@ -269,7 +270,7 @@
 			{#if text}
 				<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
 				{#if event.body?.format === 'markdown'}
-					<div class="ap-msg-text markdown">{@html body}</div>
+					<div class="ap-msg-text markdown" use:highlightCode={body}>{@html body}</div>
 				{:else}
 					<div class="ap-msg-text plain">{@html body}</div>
 				{/if}

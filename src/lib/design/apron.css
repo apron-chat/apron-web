@@ -67,6 +67,19 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-msg-text code { font-family: var(--font-mono); font-size: 13px; background: var(--bg-300); border-radius: var(--radius-sm); padding: 1px var(--space-1); }
 .ap-msg-text pre { font-family: var(--font-mono); font-size: 13px; line-height: 22px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); margin: var(--space-1) 0; overflow-x: auto; }
 .ap-msg-text pre code { background: none; padding: 0; }
+/* highlighted code (highlight.js classes), in the theme's own colors */
+.ap-msg-text .hljs-comment, .ap-msg-text .hljs-quote { color: var(--ink-muted); font-style: italic; }
+.ap-msg-text .hljs-meta { color: var(--ink-muted); }
+.ap-msg-text .hljs-keyword, .ap-msg-text .hljs-selector-tag, .ap-msg-text .hljs-doctag, .ap-msg-text .hljs-meta .hljs-keyword { color: var(--term-magenta); }
+.ap-msg-text .hljs-string, .ap-msg-text .hljs-regexp, .ap-msg-text .hljs-symbol, .ap-msg-text .hljs-meta .hljs-string { color: var(--ok); }
+.ap-msg-text .hljs-number, .ap-msg-text .hljs-literal, .ap-msg-text .hljs-bullet { color: var(--warn); }
+.ap-msg-text .hljs-title, .ap-msg-text .hljs-section, .ap-msg-text .hljs-selector-id, .ap-msg-text .hljs-selector-class { color: var(--denim); }
+.ap-msg-text .hljs-built_in, .ap-msg-text .hljs-type, .ap-msg-text .hljs-title.class_ { color: var(--accent); }
+.ap-msg-text .hljs-attr, .ap-msg-text .hljs-attribute, .ap-msg-text .hljs-property, .ap-msg-text .hljs-variable, .ap-msg-text .hljs-template-variable, .ap-msg-text .hljs-name { color: var(--term-cyan); }
+.ap-msg-text .hljs-addition { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.ap-msg-text .hljs-deletion { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.ap-msg-text .hljs-emphasis { font-style: italic; }
+.ap-msg-text .hljs-strong { font-weight: 700; }
 .ap-msg-text .ap-table { max-width: 100%; overflow-x: auto; margin: var(--space-1) 0; }
 .ap-msg-text table { border-collapse: collapse; overflow-wrap: normal; }
 .ap-msg-text th, .ap-msg-text td { padding: var(--space-1) var(--space-3); border: 1px solid var(--line); text-align: left; vertical-align: top; }

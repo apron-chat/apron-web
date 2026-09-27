@@ -11,6 +11,7 @@
 <script lang="ts">
 	import type { Identity } from '$lib/protocol/types';
 	import { copyCode } from '$lib/ui/copy-code';
+	import { highlightCode } from '$lib/ui/highlight';
 
 	/**
 	 * A scoped system message as the design system draws it: a left-aligned
@@ -43,7 +44,7 @@
 		{#if time?.short}<time class="ap-notice-time" datetime={time.iso} title={time.full}>{time.short}</time>{/if}
 	</div>
 	<div class="ap-notice-body">
-		{#if deleted}<span class="ap-msg-tomb">Message deleted</span>{:else}<div class="ap-msg-text" class:plain use:copyCode={html}>{@html html}</div>{/if}
+		{#if deleted}<span class="ap-msg-tomb">Message deleted</span>{:else}<div class="ap-msg-text" class:plain use:copyCode={html} use:highlightCode={html}>{@html html}</div>{/if}
 	</div>
 </article>
 
