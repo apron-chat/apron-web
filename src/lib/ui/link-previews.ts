@@ -70,7 +70,7 @@ export function fallbackPreview(link: GitHubLink): OpenGraph | undefined {
 	return undefined;
 }
 
-/** Markdown and HTML comments reduced to a line of plain text, cut to fit a card. */
+/** Markdown reduced to a line of plain text, cut to fit a card; headings and HTML comments (as in PR templates) are left out. */
 export function excerpt(markdown: unknown): string | undefined {
 	if (typeof markdown !== 'string') return undefined;
 	const text = markdown
@@ -79,7 +79,8 @@ export function excerpt(markdown: unknown): string | undefined {
 		.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
 		.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
 		.replace(/<[^>]+>/g, ' ')
-		.replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, '')
+		.replace(/^\s{0,3}#{1,6}\s.*$/gm, ' ')
+		.replace(/^\s{0,3}(>|[-*+]|\d+\.)\s+/gm, '')
 		.replace(/[`*_~]+/g, '')
 		.replace(/\s+/g, ' ')
 		.trim();
@@ -119,7 +120,7 @@ export function previewFromApi(link: GitHubLink, data: Json): OpenGraph | undefi
 	}
 	const name = str(data.full_name);
 	if (!name) return undefined;
-	const stars = typeof data.stargazers_count === 'number' ? `★ ${data.stargazers_count.toLocaleString('en-US')}` : undefined;
+	const stars = typeof data.stargazers_count === 'number' && data.stargazers_count > 0 ? `★ ${data.stargazers_count.toLocaleString('en-US')}` : undefined;
 	const details = [str(data.language), stars].filter(Boolean).join(' · ');
 	const description = [excerpt(data.description), details].filter(Boolean).join(' — ');
 	return { site_name: 'GitHub', title: name, ...(description ? { description } : {}) };

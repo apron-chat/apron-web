@@ -29,7 +29,7 @@ describe('GitHub links', () => {
 
 describe('previews', () => {
 	it('boils markdown down to a short line', () => {
-		expect(excerpt('<!-- template -->\n## Summary\n\n- Moves the **Go** server to [its repo](https://x).\n```sh\nmake\n```')).toBe('Summary Moves the Go server to its repo.');
+		expect(excerpt('<!-- template -->\n## Summary\n\n- Moves the **Go** server to [its repo](https://x).\n```sh\nmake\n```')).toBe('Moves the Go server to its repo.');
 		expect(excerpt('x'.repeat(300))).toHaveLength(200);
 		expect(excerpt(null)).toBeUndefined();
 	});
@@ -49,6 +49,7 @@ describe('previews', () => {
 		expect(previewFromApi(commit, { commit: { message: 'Fix it\n\nBecause.', author: { name: 'Ada' } } })).toEqual({ site_name: 'GitHub · a/b', title: 'Fix it', description: 'Commit 5b0cc30 · by Ada — Because.' });
 		const repo = parseGitHubLink('https://github.com/a/b')!;
 		expect(previewFromApi(repo, { full_name: 'a/b', description: 'A chat protocol', language: 'Go', stargazers_count: 1234 })).toEqual({ site_name: 'GitHub', title: 'a/b', description: 'A chat protocol — Go · ★ 1,234' });
+		expect(previewFromApi(repo, { full_name: 'a/b', description: 'New', stargazers_count: 0 })?.description).toBe('New');
 	});
 });
 
