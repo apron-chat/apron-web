@@ -34,10 +34,10 @@ lines, `reactions.ts` turns reaction summaries into chips, `emoji.ts`
 places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
 picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previews.ts` builds GitHub link previews, `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
-`storage.ts` keeps everything remembered between visits under `apron.*` keys
-(`notifications.ts` and `appearance.svelte.ts` keep their own preferences, and
+`storage.ts` keeps everything remembered between visits under `apron.*` keys,
+Preferences included (on this device only; nothing is synced), and
 `notifications.ts` shows notifications, through `service-worker.ts` where the
-page can't).
+page can't.
 
 Protocol types, replay reduction, and the WebSocket session live under
 `src/lib/protocol` and speak Apron protocol v6. `client.ts` holds the session,

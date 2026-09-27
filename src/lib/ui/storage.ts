@@ -1,11 +1,17 @@
 import { isJsonObject, type JsonObject } from '$lib/protocol/types';
+import type { AppearancePreferences } from './appearance.svelte';
+import type { NotificationScope } from './notifications';
 
 /** Everything this client remembers between visits lives under one prefix. */
 const KEY = {
 	serverUrl: 'apron.serverUrl',
 	displayName: 'apron.displayName',
 	recentServers: 'apron.recentServers',
-	sidebar: 'apron.sidebar'
+	sidebar: 'apron.sidebar',
+	notificationsEnabled: 'apron.desktopNotifications',
+	notificationScope: 'apron.notificationScope',
+	/** app.html reads this one too, to apply the theme before the app loads. */
+	appearance: 'apron.appearance'
 } as const;
 
 export type RecentServer = { url: string; label?: string };
@@ -82,4 +88,33 @@ export function loadSidebarPrefs(): Partial<SidebarPrefs> {
 
 export function saveSidebarPrefs(prefs: SidebarPrefs): void {
 	write(KEY.sidebar, JSON.stringify(prefs));
+}
+
+export function loadNotificationsEnabled(): boolean {
+	return read(KEY.notificationsEnabled) === 'true';
+}
+
+export function saveNotificationsEnabled(enabled: boolean): void {
+	write(KEY.notificationsEnabled, String(enabled));
+}
+
+export function loadNotificationScope(): NotificationScope {
+	return read(KEY.notificationScope) === 'everything' ? 'everything' : 'mentions';
+}
+
+export function saveNotificationScope(scope: NotificationScope): void {
+	write(KEY.notificationScope, scope);
+}
+
+/** The saved theme and fonts as stored; `decodeAppearance` checks them. */
+export function loadAppearance(): unknown {
+	try {
+		return JSON.parse(read(KEY.appearance) ?? 'null');
+	} catch {
+		return undefined;
+	}
+}
+
+export function saveAppearance(preferences: AppearancePreferences): void {
+	write(KEY.appearance, JSON.stringify(preferences));
 }

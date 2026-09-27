@@ -1,3 +1,5 @@
+import { loadAppearance, saveAppearance } from './storage';
+
 export type ThemeMode = 'system' | 'light' | 'dark';
 /** Where the installed-font suggestions stand (the Local Font Access API asks permission). */
 export type FontBrowserState = 'idle' | 'loading' | 'ready' | 'unsupported' | 'denied' | 'error' | 'empty';
@@ -10,30 +12,20 @@ export interface AppearancePreferences {
 }
 
 export const DEFAULT_APPEARANCE: AppearancePreferences = { mode: 'system', interfaceFont: '', chatFont: '', monoFont: '' };
-const STORAGE_KEY = 'apron.appearance';
 
 /** One browser-local appearance preference set, shared by the shell and Preferences dialog. */
 export class AppearanceSettings {
 	current = $state<AppearancePreferences>({ ...DEFAULT_APPEARANCE });
 
 	load(): void {
-		try {
-			const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
-			if (raw) this.current = decodeAppearance(JSON.parse(raw));
-		} catch {
-			this.current = { ...DEFAULT_APPEARANCE };
-		}
+		this.current = decodeAppearance(loadAppearance());
 		applyAppearance(this.current);
 	}
 
 	update(next: AppearancePreferences): void {
 		this.current = decodeAppearance(next);
 		applyAppearance(this.current);
-		try {
-			globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(this.current));
-		} catch {
-			// Keep the preference for this visit if storage is unavailable.
-		}
+		saveAppearance(this.current);
 	}
 }
 

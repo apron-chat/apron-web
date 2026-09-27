@@ -32,7 +32,7 @@
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { loadDisplayName, loadRecentServers, loadServerUrl, rememberServer, saveDisplayName, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, rememberServer, saveDisplayName, saveNotificationScope, saveNotificationsEnabled, type RecentServer } from '$lib/ui/storage';
 	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadTitleFor } from '$lib/ui/timeline';
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
@@ -41,7 +41,7 @@
 	import { PaneDrafts } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { loadNotificationScope, loadNotificationsEnabled, notificationClickTarget, notificationPermission, requestNotificationPermission, saveNotificationScope, saveNotificationsEnabled, showNotification, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { notificationClickTarget, notificationPermission, requestNotificationPermission, showNotification, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 
 	/** A thread this viewer created, opened once its `room_update` has arrived. */
