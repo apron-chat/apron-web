@@ -508,14 +508,18 @@
 		const reply = drafts.reply;
 		const originKey = draftKey(roomId);
 		const mentions = composerMentions;
+		const dismissed = composerDismissed;
 		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms });
+		// A draft given back keeps the link previews that were removed from it.
 		const restore = () => {
-			if (drafts.restore(originKey, draft, reply)) composer?.focus();
+			if (!drafts.restore(originKey, draft, reply)) return;
+			composerDismissed = dismissed;
+			composer?.focus();
 		};
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
 			if (!action.text.trim()) return;
-			const embeds = linkPreviews.embeds(action.text, composerDismissed);
+			const embeds = linkPreviews.embeds(action.text, dismissed);
 			const post = () => feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}) }), 'Sending…', restore);
 			const joining = joinFirst(chat, paneRoom);
 			if (joining) {

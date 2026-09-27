@@ -5,13 +5,15 @@
 	import { emojiAnchor, emojiPicker } from '$lib/ui/emoji-picker.svelte';
 	import { isCommand } from '$lib/ui/commands';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { linkPreviews } from '$lib/ui/link-previews';
+	import { findGitHubLinks, linkPreviews } from '$lib/ui/link-previews';
 	import { clockLabel } from '$lib/ui/time';
 	import MentionPicker from './MentionPicker.svelte';
 	import Embed from './embeds/Embed.svelte';
 	import EmbedRemove from './embeds/EmbedRemove.svelte';
 
 	const MENTION_MATCHES_MAX = 8;
+	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
+	const PREVIEW_TYPING_PAUSE_MS = 800;
 
 	interface Props {
 		/** The draft as sent: mentions are `@user_id` (Appendix A.3); the field shows them as name chips. */
@@ -84,6 +86,13 @@
 	});
 
 	$effect(() => linkPreviews.subscribe(() => previewsArrived++));
+	// Typed links are looked up once typing pauses, so a half-typed URL isn't.
+	$effect(() => {
+		const text = value;
+		if (command || disabled || findGitHubLinks(text).length === 0) return;
+		const timer = setTimeout(() => void linkPreviews.prefetch(text), PREVIEW_TYPING_PAUSE_MS);
+		return () => clearTimeout(timer);
+	});
 	// A sent or cleared draft forgets which previews were removed.
 	$effect(() => {
 		if (!value.trim() && untrack(() => dismissed.length)) dismissed = [];
