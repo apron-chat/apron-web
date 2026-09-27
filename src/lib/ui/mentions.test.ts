@@ -37,7 +37,8 @@ describe('mention tracking', () => {
 		const general = room('general', [], { latestLogId: '10' });
 		const thread = room('t1', [], { parentRoomId: 'general', latestLogId: '10' });
 		tracker.observe([general, thread], me, 'general', true);
-		tracker.observe([general, room('t1', [mention(30, 't1')], { parentRoomId: 'general' })], me, 'general', true);
+		const arrived = tracker.observe([general, room('t1', [mention(30, 't1')], { parentRoomId: 'general' })], me, 'general', true);
+		expect(arrived.map((event) => event.message_id)).toEqual(['30']);
 		expect(tracker.pinged).toEqual(['30']);
 		expect(tracker.byRoom).toEqual({ general: 1, t1: 1 });
 		// In the open pane, above the fold: it joins the jump bar instead.

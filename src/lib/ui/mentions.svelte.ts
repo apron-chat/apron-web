@@ -1,6 +1,6 @@
 import type { RoomSnapshot } from '$lib/protocol/client';
 import { compareLogIds } from '$lib/protocol/reducer';
-import type { Identity } from '$lib/protocol/types';
+import type { Identity, MessageRecord } from '$lib/protocol/types';
 import { mentionsMe } from './messages';
 
 /** How long the mention pulse stays on a row; the animation itself runs once. */
@@ -34,8 +34,9 @@ export class MentionTracker {
 	 * Runs over every room after each snapshot; `pane` is the room (or thread)
 	 * the viewer is reading, `latestVisible` whether its end is on screen.
 	 */
-	observe(rooms: RoomSnapshot[], me: Identity | undefined, pane: string | undefined, latestVisible: boolean): void {
-		if (!me) return;
+	observe(rooms: RoomSnapshot[], me: Identity | undefined, pane: string | undefined, latestVisible: boolean): MessageRecord[] {
+		const arrived: MessageRecord[] = [];
+		if (!me) return arrived;
 		const visible = new Set(rooms.map((room) => room.id));
 		for (const room of rooms) {
 			let shown = this.shown.get(room.id);
@@ -59,6 +60,7 @@ export class MentionTracker {
 				// A new message, or an edit that adds you, after the watermark.
 				if (!mentioned || seen?.mentioned || (watermark !== undefined && compareLogIds(event.log_id, watermark) <= 0)) continue;
 				this.ping(id);
+				arrived.push(event);
 				this.arrived++;
 				if (room.id !== pane) {
 					const next = { ...this.byRoom, [badge]: (this.byRoom[badge] ?? 0) + 1 };
@@ -68,6 +70,16 @@ export class MentionTracker {
 				else if (!latestVisible && !this.unseen.includes(id)) this.unseen = [...this.unseen, id];
 			}
 		}
+		return arrived;
+	}
+
+	reset(): void {
+		this.dispose();
+		this.shown.clear();
+		this.watermarks.clear();
+		this.pinged = [];
+		this.byRoom = {};
+		this.unseen = [];
 	}
 
 	clearRoom(roomId: string): void {
