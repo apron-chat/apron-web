@@ -962,7 +962,7 @@
 	style:--sidebar-w="{sidebar.collapsed ? 0 : sidebar.width}px"
 >
 	<Sidebar
-		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} bind:displayName {passkeyUnavailable}
+		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 		onconnect={() => openConnect()} onsignin={(name) => openConnect({ passkey: true, name })}
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} onsignout={() => session.forget()}
 	/>

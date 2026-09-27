@@ -43,6 +43,16 @@ describe('unread tracking', () => {
 		expect(tracker.total).toBe(1);
 	});
 
+	it('counts replies in a thread you are not reading, until you open it', () => {
+		const tracker = new UnreadTracker();
+		const thread = (messages: MessageRecord[]) => room('plans', messages, { parentRoomId: 'general', latestLogId: '10' });
+		tracker.observe([room('general', [], { latestLogId: '10' }), thread([])], me, 'general', true);
+		tracker.observe([room('general', []), thread([message(20, 'plans'), message(21, 'plans', me.user_id)])], me, 'general', true);
+		expect(tracker.byRoom).toEqual({ plans: 1 });
+		tracker.observe([room('general', []), thread([message(20, 'plans'), message(21, 'plans', me.user_id)])], me, 'plans', true);
+		expect(tracker.byRoom).toEqual({});
+	});
+
 	it('drops arrivals that were deleted', () => {
 		const tracker = new UnreadTracker();
 		tracker.observe([room('general', [], { latestLogId: '10' }), room('random', [], { latestLogId: '10' })], me, 'general', true);

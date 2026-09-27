@@ -14,6 +14,8 @@
 		activeThread?: string;
 		/** Mentions of you that landed in rooms you weren't reading. */
 		mentions: Record<string, number>;
+		/** Messages from others that landed in rooms and threads you weren't reading. */
+		unread: Record<string, number>;
 		displayName: string;
 		passkeyUnavailable?: string;
 		onconnect: () => void;
@@ -25,7 +27,7 @@
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string) => void;
 	}
-	let { client, session, backendLabel, threads, activeThread, mentions, displayName = $bindable(), passkeyUnavailable, onconnect, onroom, onthread, onjoin, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, onconnect, onroom, onthread, onjoin, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own. */
 	let rooms = $derived(sidebarRooms(session.rooms));
 	let canBrowse = $derived(session.canManageRooms && session.ready);
@@ -103,11 +105,14 @@
 							<div class="threads" data-testid="thread-list" role="group" aria-label={`Threads in ${room.title}`}>
 								{#each threads as entry (entry.id)}
 									{@const open = activeThread === entry.id}
-									<button class="ap-room ap-room-nested" class:ap-room-active={open} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
+									{@const replies = open ? 0 : (unread[entry.id] ?? 0)}
+									<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
 										<span class="ap-room-text"><span class="ap-room-name">{entry.title}</span></span>
 										{#if mentions[entry.id] && !open}
 											{@const count = mentions[entry.id]}
 											<span class="ap-count ap-count-at" data-testid="thread-mentions" aria-label={`${count} ${count === 1 ? 'mention' : 'mentions'}`}>@{count > 1 ? count : ''}</span>
+										{:else if replies > 0}
+											<span class="ap-count ap-count-quiet" data-testid="thread-unread" aria-label={`${replies} unread ${replies === 1 ? 'reply' : 'replies'}`}>{replies > 99 ? '99+' : replies}</span>
 										{/if}
 										{#if entry.count !== undefined}
 											<small class="room-meta" aria-label={`${entry.count} ${entry.count === 1 ? 'message' : 'messages'}`}>{entry.count}</small>
