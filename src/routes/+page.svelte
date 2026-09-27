@@ -458,7 +458,7 @@
 		notificationState = permission;
 		if (permission === 'denied') return 'denied';
 		if (permission !== 'granted') return 'unsupported';
-		const shown = await showNotification('Apron', { body: 'This is a test. New messages will show up like this.', tag: 'apron:test' }, () => window.focus());
+		const shown = await showNotification('Apron', { body: 'This is a test. New messages will show up like this.', tag: 'apron:test', renotify: true }, () => window.focus());
 		return shown ? 'sent' : 'error';
 	}
 
