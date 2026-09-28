@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, userIn, type ClientSnapshot } from './client';
-import { safeAvatar, safeLink, sameOriginMedia, serverOrigin } from './embeds';
+import { embedMedia, parseOrigins, safeAvatar, safeLink, sameOriginMedia, serverOrigin } from './embeds';
 import { FakeSocket } from './fake-socket';
 
 /** Operations whose outcome a test does not await still settle when the client stops. */
@@ -245,6 +245,20 @@ describe('ChatClient reference features', () => {
 		expect(snapshot.uploads).toEqual({});
 	});
 
+	it('learns uploads are image-only from a 415 on a voice clip, and names a reused write URL', async () => {
+		await connect();
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 409 })));
+		const reused = client.sendFiles('general', '', [new File(['png'], 'me.png', { type: 'image/png' })]);
+		await socket.reply('message', { message_id: '52', embeds: [{ embed_id: 'embed_3', kind: 'upload', write_url: 'http://fake.test/write/y' }] });
+		await expect(reused.uploaded).rejects.toThrow('This upload link was already used');
+		expect(snapshot.imageOnlyUploads).toBeUndefined();
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 415 })));
+		const voice = client.sendFiles('general', '', [{ file: new File(['ogg'], 'voice-message.ogg', { type: 'audio/ogg' }) }]);
+		await socket.reply('message', { message_id: '53', embeds: [{ embed_id: 'embed_4', kind: 'upload', write_url: 'http://fake.test/write/z' }] });
+		await expect(voice.uploaded).rejects.toThrow(/does not accept this type/);
+		expect(snapshot.imageOnlyUploads).toBe(true);
+	});
+
 	it('shows a logged @server notice and resumes the room right behind auth after a reconnect', async () => {
 		await connect();
 		// A notice takes a log_id past the room's logged head.
@@ -311,5 +325,15 @@ describe('embed URL policy', () => {
 		expect(safeLink('https://example.com/a')).toBe('https://example.com/a');
 		expect(safeAvatar('https://gravatar.example/a.png', origin)).toBe('https://gravatar.example/a.png');
 		expect(safeAvatar('http://elsewhere.example/a.png', origin)).toBeUndefined();
+	});
+
+	it('loads embed media from trusted origins as well as the chat server', () => {
+		const trusted = parseOrigins('https://media.apron.chat, http://localhost:9000 http://media.example https://cdn.example/path nonsense');
+		expect(trusted).toEqual(['https://media.apron.chat', 'http://localhost:9000']);
+		expect(embedMedia('https://media.apron.chat/f/abc', 'https://server.apron.chat', trusted)).toBe('https://media.apron.chat/f/abc');
+		expect(embedMedia('https://server.apron.chat/files/x', 'https://server.apron.chat', trusted)).toBe('https://server.apron.chat/files/x');
+		expect(embedMedia('https://tracker.example/pixel.gif', 'https://server.apron.chat', trusted)).toBeUndefined();
+		// Streams stay on the chat server.
+		expect(sameOriginMedia('https://media.apron.chat/f/abc', 'https://server.apron.chat')).toBeUndefined();
 	});
 });

@@ -39,6 +39,11 @@ The server the client opens first is `VITE_DEFAULT_SERVER_URL` from the build
   `VITE_DEFAULT_SERVER_URL=wss://chat.example/ npm run build`. Set it empty for
   same-origin `/ws`.
 
+Embed media (upload previews, link card images) loads only from the chat
+server's own origin, plus the origins listed in `VITE_TRUSTED_MEDIA_ORIGINS`
+(comma-separated, set the same way). `.env.production` trusts
+`https://media.apron.chat`, where the reference server serves uploads.
+
 The unit tests replay the implementation-agnostic protocol fixtures in
 [shazow/apron](https://github.com/shazow/apron), checked out as the `protocol`
 submodule and pinned to a commit. Dependabot opens a pull request when it

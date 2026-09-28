@@ -4,6 +4,7 @@
 	import type { ChatClient, OperationHandle } from '$lib/protocol/client';
 	import { passkeyMessage } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { prepareAvatar } from '$lib/ui/images';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { saveDisplayName } from '$lib/ui/storage';
 	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
@@ -78,7 +79,9 @@
 		avatarStatus = 'uploading';
 		avatarError = '';
 		try {
-			await client.uploadAvatar(file);
+			// Cropped square, shrunk under the avatar limit, and stripped of metadata.
+			const { file: avatar } = await prepareAvatar(file);
+			await client.uploadAvatar(avatar);
 		} catch (cause) {
 			avatarError = cause instanceof Error ? cause.message : 'The avatar could not be uploaded';
 		} finally {

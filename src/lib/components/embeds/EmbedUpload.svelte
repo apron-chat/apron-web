@@ -1,7 +1,7 @@
 <script lang="ts">
 	import FileIcon from '@lucide/svelte/icons/file';
 	import type { UploadState } from '$lib/protocol/client';
-	import { safeLink, sameOriginMedia } from '$lib/protocol/embeds';
+	import { embedMedia, safeLink } from '$lib/protocol/embeds';
 	import type { Embed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
 
@@ -14,10 +14,12 @@
 	let url = $derived(safeLink(embed.url));
 	let og = $derived(embed.og ?? {});
 	let title = $derived(embed.title || og.title || 'File');
-	let image = $derived(sameOriginMedia(og.image?.url, directory.origin));
-	let video = $derived(sameOriginMedia(og.video?.url, directory.origin));
-	let audio = $derived(sameOriginMedia(og.audio?.url, directory.origin));
+	let image = $derived(embedMedia(og.image?.url, directory.origin));
+	let video = $derived(embedMedia(og.video?.url, directory.origin));
+	let audio = $derived(embedMedia(og.audio?.url, directory.origin));
 	let percent = $derived(upload?.progress !== undefined ? Math.round(upload.progress * 100) : undefined);
+	/** An image's size as sent, until the server's `og` arrives with the finished upload. */
+	let size = $derived(upload?.width && upload.height ? `${upload.width} × ${upload.height} · ` : '');
 
 	/** og width and height only reserve the aspect ratio (embed-max-w × embed-max-h clamp the box). */
 	function ratio(media: { width?: number; height?: number } | undefined): string | undefined {
@@ -36,7 +38,7 @@
 		{@render glyph()}
 		<span class="ap-embed-cardtext">
 			<span class="ap-embed-title">{title}</span>
-			<span class="ap-embed-detail">{upload?.failed ? `Upload failed · ${upload.failed}` : percent !== undefined ? `Uploading · ${percent}%` : 'Uploading…'}</span>
+			<span class="ap-embed-detail">{upload?.failed ? `Upload failed · ${upload.failed}` : percent !== undefined ? `${size}Uploading · ${percent}%` : `${size}Uploading…`}</span>
 		</span>
 		{#if percent !== undefined && !upload?.failed}
 			<span class="ap-embed-progress" aria-hidden="true"><i style:width="{percent}%"></i></span>
@@ -46,7 +48,7 @@
 	<figure class="ap-embed ap-embed-figure">
 		<!-- svelte-ignore a11y_media_has_caption -->
 		<video class="ap-embed-media" src={video} poster={image} controls preload="metadata" style:aspect-ratio={ratio(og.video) ?? ratio(og.image)}></video>
-		<figcaption class="ap-embed-caption"><a href={url} download={title}>{title}</a></figcaption>
+		<figcaption class="ap-embed-caption"><a href={url} download={title} target="_blank" rel="noreferrer noopener">{title}</a></figcaption>
 	</figure>
 {:else if audio}
 	<div class="ap-embed ap-embed-card ap-embed-audiocard">
@@ -59,7 +61,7 @@
 		<figcaption class="ap-embed-caption">{title}</figcaption>
 	</figure>
 {:else}
-	<a class="ap-embed ap-embed-card ap-embed-file" href={url} download={title}>
+	<a class="ap-embed ap-embed-card ap-embed-file" href={url} download={title} target="_blank" rel="noreferrer noopener">
 		{@render glyph()}
 		<span class="ap-embed-cardtext">
 			<span class="ap-embed-title">{title}</span>

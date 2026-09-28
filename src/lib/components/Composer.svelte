@@ -43,6 +43,8 @@
 		disabled: boolean;
 		/** Attachments and voice clips (cap `embed:upload`, §4.6.4): each file goes out as an `upload` embed. */
 		canUpload: boolean;
+		/** False once the server showed it takes images only: voice clips are hidden. */
+		canUploadAudio?: boolean;
 		/**
 		 * Cap `command` (§4.8): text starting with one `/` is a command, shown
 		 * with a Command tag in monospace and sent with Run.
@@ -62,7 +64,7 @@
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, oncancelreply, onmention }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, oncancelreply, onmention }: Props = $props();
 
 	/** Unique per composer, for the open picker's ID. */
 	const uid = $props.id();
@@ -90,7 +92,7 @@
 
 	let recording = $derived(recordSeconds !== undefined);
 	/** Voice messages need both uploads and a browser that can record. */
-	let canRecord = $derived(canUpload && typeof MediaRecorder !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia));
+	let canRecord = $derived(canUpload && canUploadAudio && typeof MediaRecorder !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia));
 	let matches = $derived(query === undefined ? [] : matching(query));
 	let emojiMatches = $derived(emojiFound && emojiData ? searchEmoji(emojiData, emojiFound.query) : []);
 	/** The IDs a typed `#room_id` collapses into a chip for. */
@@ -530,6 +532,21 @@
 		focus();
 	}
 
+	/**
+	 * A pasted image (or file) is attached like a picked one. Pasted text wins
+	 * when there is some: office apps put a picture of the selection beside it.
+	 */
+	function paste(event: ClipboardEvent): void {
+		const text = event.clipboardData?.getData('text/plain') ?? '';
+		const files = [...(event.clipboardData?.items ?? [])].flatMap((item) => (item.kind === 'file' ? [item.getAsFile()].filter((file): file is File => file !== null) : []));
+		if (canUpload && !disabled && !recording && files.length && !text.trim()) {
+			event.preventDefault();
+			onfiles(files);
+			return;
+		}
+		void linkPreviews.prefetch(text);
+	}
+
 	function attach(input: HTMLInputElement): void {
 		const files = [...(input.files ?? [])];
 		input.value = '';
@@ -701,7 +718,7 @@
 				onkeyup={refreshQuery}
 				onclick={refreshQuery}
 				onblur={blur}
-				onpaste={(event) => void linkPreviews.prefetch(event.clipboardData?.getData('text/plain') ?? '')}
+				onpaste={paste}
 			></div>
 		{/if}
 		<span class="ap-composer-tools">

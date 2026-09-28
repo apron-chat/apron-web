@@ -42,6 +42,39 @@ export function sameOriginMedia(value: unknown, origin: string | undefined): str
 }
 
 /**
+ * Parses a comma- or space-separated list of exact `https:` origins (or
+ * `http:` ones on localhost), dropping anything else.
+ */
+export function parseOrigins(value: string | undefined): string[] {
+	return (value ?? '').split(/[\s,]+/).flatMap((entry) => {
+		try {
+			const url = new URL(entry);
+			const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+			return url.origin === entry.replace(/\/$/, '') && (url.protocol === 'https:' || (url.protocol === 'http:' && local)) ? [url.origin] : [];
+		} catch {
+			return [];
+		}
+	});
+}
+
+/**
+ * Hosts the build trusts to serve embed media besides the chat server itself,
+ * such as a server's storage bucket (`VITE_TRUSTED_MEDIA_ORIGINS`).
+ */
+export const TRUSTED_MEDIA_ORIGINS = parseOrigins(import.meta.env.VITE_TRUSTED_MEDIA_ORIGINS);
+
+/**
+ * `og` media the client may load (§4.6.1): what `sameOriginMedia` allows,
+ * plus files on a trusted media origin.
+ */
+export function embedMedia(value: unknown, origin: string | undefined, trusted: readonly string[] = TRUSTED_MEDIA_ORIGINS): string | undefined {
+	const own = sameOriginMedia(value, origin);
+	if (own) return own;
+	const link = safeLink(value);
+	return link && trusted.includes(new URL(link).origin) ? link : undefined;
+}
+
+/**
  * An avatar to show (§4.6.6): `https:` URLs, small image data URLs, and
  * files the chat server hosts. Loaded as images only.
  */
@@ -71,7 +104,7 @@ export function writeEmbed(writeUrl: string, file: Blob, onProgress?: (progress:
 			...(file.type ? { headers: { 'Content-Type': file.type } } : {}),
 			...(signal ? { signal } : {})
 		}).then((response) => {
-			if (!response.ok) throw new Error(writeError(response.status));
+			if (!response.ok) throw new WriteError(response.status);
 			onProgress?.(1);
 		});
 	}
@@ -87,7 +120,7 @@ export function writeEmbed(writeUrl: string, file: Blob, onProgress?: (progress:
 				onProgress?.(1);
 				resolve();
 			} else {
-				reject(new Error(writeError(request.status)));
+				reject(new WriteError(request.status));
 			}
 		};
 		request.onerror = () => reject(new Error('The upload did not reach the server'));
@@ -97,10 +130,19 @@ export function writeEmbed(writeUrl: string, file: Blob, onProgress?: (progress:
 	});
 }
 
+/** A write the server refused, by HTTP status. */
+export class WriteError extends Error {
+	constructor(readonly status: number) {
+		super(writeError(status));
+	}
+}
+
 function writeError(status: number): string {
 	if (status === 413) return 'The file is larger than this server accepts';
 	if (status === 415) return 'The server does not accept this type of file';
-	if (status === 404 || status === 410) return 'The upload expired; attach the file again';
+	if (status === 409) return 'This upload link was already used';
+	if (status === 410) return 'The message was removed before the upload finished';
+	if (status === 404) return 'The upload expired; attach the file again';
 	return `The server refused the upload (${status})`;
 }
 

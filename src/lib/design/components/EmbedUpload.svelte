@@ -26,7 +26,7 @@
 	<figure class="ap-embed ap-embed-figure">
 		<!-- svelte-ignore a11y_media_has_caption -->
 		<video class="ap-embed-media" src={video} poster={image} controls preload="metadata" style={ogRatio(og.video) || ogRatio(og.image)}></video>
-		<figcaption class="ap-embed-caption"><a href={url} download={title}>{title}</a></figcaption>
+		<figcaption class="ap-embed-caption"><a href={url} download={title} target="_blank" rel="noreferrer noopener">{title}</a></figcaption>
 	</figure>
 {:else if audio}
 	<div class="ap-embed ap-embed-card ap-embed-audiocard">
@@ -35,11 +35,11 @@
 	</div>
 {:else if image}
 	<figure class="ap-embed ap-embed-figure">
-		<a href={url} class="ap-embed-imagelink"><img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} /></a>
+		<a href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener"><img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} /></a>
 		{#if caption !== false}<figcaption class="ap-embed-caption">{title}</figcaption>{/if}
 	</figure>
 {:else}
-	<a class="ap-embed ap-embed-card ap-embed-file" href={url} download={title}>
+	<a class="ap-embed ap-embed-card ap-embed-file" href={url} download={title} target="_blank" rel="noreferrer noopener">
 		<span class="ap-embed-fileglyph"><FileGlyph /></span>
 		<span class="ap-embed-cardtext">
 			<span class="ap-embed-title">{title}</span>

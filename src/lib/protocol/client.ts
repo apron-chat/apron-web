@@ -1,5 +1,5 @@
 import { conditionalPasskeysAvailable, immediatePasskeysAvailable, requestPasskey, type PasskeyMediation } from './webauthn';
-import { writeEmbed } from './embeds';
+import { WriteError, writeEmbed } from './embeds';
 import {
 	ProtocolStore,
 	compareLogIds,
@@ -47,6 +47,7 @@ import {
 	type RoomPatch,
 	type RoomResult,
 	type SendOptions,
+	type UploadFile,
 	type UploadState,
 	type WebSocketFactory
 } from './client-types';
@@ -155,6 +156,8 @@ export class ChatClient {
 	/** Read cursors per room, per user (§4.4). */
 	private readonly reads = new Map<string, Map<string, string>>();
 	private readonly uploads = new Map<string, UploadState>();
+	/** A 415 on a file that isn't an image: this server takes images only. */
+	private imageOnlyUploads = false;
 	/** Transient notices per room, for the session (§3.5). */
 	private readonly notices = new Map<string, Notice[]>();
 	/** Notices that arrived before there was a room to show them in; the first room shown takes them. */
@@ -470,6 +473,7 @@ export class ChatClient {
 			recordedUsers: Object.fromEntries([...this.recordedUsers].map(([id, entry]) => [id, entry.identity])),
 			userAliases: Object.fromEntries(this.userAliases),
 			uploads: Object.fromEntries(this.uploads),
+			...(this.imageOnlyUploads ? { imageOnlyUploads: true } : {}),
 			...(this.directory ? { directory: this.directory.map((listing) => this.withJoined(listing)) } : {}),
 			threadDirectory: Object.fromEntries([...this.threadDirectory].map(([parent, listings]) => [parent, listings.map((listing) => this.withJoined(listing))])),
 			showReconnectDivider: this.showReconnectDivider,
@@ -1252,9 +1256,10 @@ export class ChatClient {
 	 * finished. Progress and failures appear in the snapshot's `uploads`.
 	 */
 	sendFiles(
-		room: string, text: string, files: File[], format: MessageFormat = 'plain', options: SendOptions = {}, command = false
+		room: string, text: string, attached: Array<File | UploadFile>, format: MessageFormat = 'plain', options: SendOptions = {}, command = false
 	): { sent: Promise<JsonObject>; uploaded: Promise<void> } {
-		const uploads: Embed[] = files.map((file) => ({ kind: 'upload', ...(file.name ? { title: file.name } : {}) }));
+		const files = attached.map((item) => (item instanceof File ? { file: item } : item));
+		const uploads: Embed[] = files.map(({ file }) => ({ kind: 'upload', ...(file.name ? { title: file.name } : {}) }));
 		const embeds = [...(options.embeds ?? []), ...uploads];
 		// A command takes embeds as arguments, and its result lists their write URLs too (§4.6.3, §4.8).
 		const handle: OperationHandle = command ? this.command(room, text, { ...options, embeds }) : this.send(room, text, format, { ...options, embeds });
@@ -1272,18 +1277,18 @@ export class ChatClient {
 		const request = this.enqueueRequest('command', {
 			body: { text: '/avatar', embeds: [{ kind: 'upload', ...(file.name ? { title: file.name } : {}) }] }
 		}, { visible: true, allowBeforeAuth: false });
-		return request.promise.then((result) => this.writeUploads(result, [file]));
+		return request.promise.then((result) => this.writeUploads(result, [{ file }]));
 	}
 
 	/** Writes each file to the upload embed the result lists for it, in order. */
-	private async writeUploads(result: JsonObject, files: File[]): Promise<void> {
+	private async writeUploads(result: JsonObject, files: UploadFile[]): Promise<void> {
 		const written = (Array.isArray(result.embeds) ? result.embeds : [])
 			.filter((embed): embed is JsonObject => isJsonObject(embed) && embed.kind === 'upload' && typeof embed.write_url === 'string' && typeof embed.embed_id === 'string');
 		if (written.length < files.length) throw new Error('The server did not accept the attachment');
 		const failures: string[] = [];
-		await Promise.all(files.map(async (file, index) => {
+		await Promise.all(files.map(async ({ file, width, height }, index) => {
 			const embedId = written[index].embed_id as string;
-			const state: UploadState = { name: file.name || 'File', progress: 0 };
+			const state: UploadState = { name: file.name || 'File', progress: 0, ...(width && height ? { width, height } : {}) };
 			this.uploads.set(embedId, state);
 			this.emit();
 			try {
@@ -1294,6 +1299,7 @@ export class ChatClient {
 				this.uploads.delete(embedId);
 			} catch (cause) {
 				state.failed = cause instanceof Error ? cause.message : 'Upload failed';
+				if (cause instanceof WriteError && cause.status === 415 && !file.type.startsWith('image/')) this.imageOnlyUploads = true;
 				failures.push(state.failed);
 			}
 			this.emit();
