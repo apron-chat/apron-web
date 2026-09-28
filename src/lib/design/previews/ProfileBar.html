@@ -1,0 +1,16 @@
+<!-- @dsCard group="Identity" height=400 subtitle="Closed and open" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ProfileBar</title></head>
+<body>
+<div id="root" style="display:flex;gap:24px;align-items:flex-end;padding:16px;height:368px;box-sizing:border-box"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  function col() { var c = document.createElement('div'); c.style.cssText = 'width:248px;background:var(--bg-000);display:flex;flex-direction:column;justify-content:flex-end;height:100%'; root.appendChild(c); return c; }
+  add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work' }, col());
+  add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work', open: true,
+    editor: A.part(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true }) }, col());
+</script>
+</body>
+</html>

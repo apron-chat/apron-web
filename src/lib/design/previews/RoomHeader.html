@@ -1,0 +1,16 @@
+<!-- @dsCard group="Navigation" height=176 subtitle="Room, open thread, typing" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>RoomHeader</title></head>
+<body>
+<div id="root" class="ap-stack" style="padding:0;gap:12px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var noop = function () {};
+  add(A.RoomHeader, { room: 'ops', name: 'Ops', topic: 'Deploys and incidents. On-call: see pinned runbook.' });
+  add(A.RoomHeader, { room: 'ops', name: 'Ops', thread: 'mig-0042', threadName: 'Migration 0042', topic: 'Lock held on accounts table', onroom: noop, onedit: noop });
+  add(A.RoomHeader, { room: 'ops', name: 'Ops', thread: 'deploy', threadName: 'Deploy', typing: ['Alice'], onback: noop, onroom: noop });
+</script>
+</body>
+</html>

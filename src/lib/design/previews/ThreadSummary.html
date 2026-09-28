@@ -1,0 +1,14 @@
+<!-- @dsCard group="Timeline" height=190 subtitle="Pinned Markdown summary" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ThreadSummary</title></head>
+<body>
+<div id="root" style="padding-bottom:12px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.ThreadSummary, { children: A.html('<p>Worker <code>1.9.0</code> crash-looped on the new queue client. Resolved:</p><ul><li>Rolled back to <code>1.8.3</code></li><li>Re-ran migration 0042 once the lock cleared</li><li>Follow-up: <a href="#">raise the client timeout</a></li></ul>') });
+  add(A.ThreadSummary, { summary: 'Rotation for October. Swap requests in this thread by Friday.' });
+</script>
+</body>
+</html>

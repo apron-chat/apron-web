@@ -7,15 +7,29 @@ The UI follows the Apron design system. `src/lib/design/tokens.css` holds its
 color, type, spacing, radius and size tokens as CSS custom properties (dark is
 the reference theme; light follows `prefers-color-scheme`, or `data-theme` on
 the root when Preferences picks one), and
-`src/lib/design/apron.css` is the design system's component stylesheet copied
-verbatim. The Svelte components under `src/lib/components` wrap its `ap-*`
-classes one to one with the system's React components — `ConnectScreen`,
+`src/lib/design/apron.css` is its component stylesheet.
+
+This repository is the design system's source. `src/lib/design/components`
+holds its presentational Svelte 5 components (runes, snippets, typed `Props`,
+exported from `$lib/design/components`), and `src/lib/design/previews` a live
+preview page for each. `npm run design:bundle` builds them into
+`dist-design/project/components/`: `bundle.js` (one classic script, with the
+Svelte runtime inside, that sets `window.Apron` with `render`, `html`, `part`
+and `parts` for plain pages), `bundle.css` (`apron.css` itself), `index.d.ts`
+(generated from each component's `interface Props`) and each
+`<Name>/preview.html`. Publish those files to the design system artifact. Its
+tokens stay in the artifact's `tokens.json`; keep them in step with
+`tokens.css`.
+
+The Svelte components under `src/lib/components` wrap the `ap-*`
+classes one to one with the design system's components, adding the app's
+state and behavior — `ConnectScreen`,
 `Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` and `ThreadEditor`, `ThreadCard`,
 `Message` with its `ReactionBar`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`), `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`,
-`StatusBanner`, `Avatar` — and carry only the layout glue each needs. Re-copy
-`apron.css` when the design system changes rather than editing it here.
+`StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
+design system with the next `npm run design:bundle`.
 
 `src/routes/+page.svelte` owns the session and the navigation (which room or
 thread is open, per-room drafts) and composes the components. The

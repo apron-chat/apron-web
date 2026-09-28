@@ -1,0 +1,39 @@
+<!-- @dsCard group="Layout" height=640 width=1280 page subtitle="Room view: threads show as summary rows" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>App shell</title><style>html,body{height:100%}</style></head>
+<body>
+<div id="root" style="height:640px"><div class="ap-shell"><span id="rail" style="display:contents"></span><aside class="ap-shell-side" id="side"><div class="ap-shell-sidehead">Work</div><div class="ap-shell-sidebody" id="sidebody"></div></aside><main class="ap-shell-main" id="main"><span id="head" style="display:contents"></span><div class="ap-timeline" id="tl"></div><span id="foot" style="display:contents"></span></main></div></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' }, dana = { user_id: 'dana', name: 'Dana' }, me = { user_id: 'sam', name: 'Sam' };
+  var noop = function () {}, $ = function (id) { return document.getElementById(id); };
+  var acts = function () { return A.part(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }], onmore: noop }); };
+  function side(activeThread) {
+    var rooms = [
+      { room: 'general', name: 'General' }, { room: 'ops', name: 'Ops', active: !activeThread },
+      { room: 'deploy', name: 'Deploy', nested: true, active: activeThread === 'deploy', unread: activeThread ? 0 : 2 },
+      { room: 'mig-0042', name: 'Migration 0042', nested: true }, { room: 'oncall', name: 'On-call rotation', nested: true },
+      { room: 'design', name: 'Design', unread: 4, mentions: activeThread ? 0 : 1 }, { room: 'random', name: 'Random' }];
+    add(A.SidebarSection, { title: 'Rooms', children: A.parts.apply(null, rooms.map(function (r) { r.onleave = noop; return A.part(A.RoomItem, r); })) }, $('sidebody'));
+    add(A.ProfileBar, { you: me, backend: 'Work' }, $('side'));
+  }
+  add(A.BackendRail, { active: 'work', onadd: noop, backends: [{ id: 'home', label: 'Home lab', unread: true }, { id: 'work', label: 'Work' }, { id: 'family', label: 'Family chat', mentions: 2, unread: true }] }, $('rail'));
+  side(null);
+  add(A.RoomHeader, { room: 'ops', name: 'Ops', topic: 'Deploys and incidents' }, $('head'));
+  var tl = $('tl');
+  add(A.TimelineDivider, { kind: 'date', label: 'Today' }, tl);
+  add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.', actions: acts(),
+    footer: A.part(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', count: 7, lastReply: '14:32', participants: [bob, dana, me], latest: { sender: me, text: 'Re-running the migration now.' } }) }, tl);
+  add(A.Message, { sender: bob, time: '14:05', mention: true, children: A.html('<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> migration 0042 is holding a lock, can you look?</p>'),
+    footer: A.part(A.ThreadMarker, { thread: 'mig-0042', name: 'Migration 0042', count: 3, lastReply: '14:18', participants: [dana, me], summary: 'Lock held on accounts table by a stale worker' }) }, tl);
+  add(A.Message, { sender: dana, time: '14:21', text: 'Moved the worker chatter into Deploy.' }, tl);
+  add(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', moved: true }, tl);
+  add(A.TimelineDivider, { kind: 'new' }, tl);
+  add(A.Message, { sender: bob, time: '14:31', text: 'Retro at 16:00, same link as last week.', replyTo: { messageId: '1724803000000', sender: dana, snippet: 'Should we do the retro today or wait for the write-up?' } }, tl);
+  add(A.TypingIndicator, { names: ['Dana'] }, $('foot'));
+  add(A.Composer, { room: 'Ops', canUpload: true }, $('foot'));
+</script>
+</body>
+</html>

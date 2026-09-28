@@ -1,0 +1,14 @@
+<!-- @dsCard group="Identity" height=64 subtitle="Image or initials" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Avatar</title></head>
+<body>
+<div class="ap-row" id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.Avatar, { name: 'Alice Chen' }); add(A.Avatar, { name: 'bob' }); add(A.Avatar, { user_id: 'guest_1' });
+  add(A.Avatar, { name: 'Alice Chen', size: 'sm' }); add(A.Avatar, { name: 'deploy-bot', size: 'sm' });
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+<!-- @dsCard group="Feedback" height=150 subtitle="Connection state" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>StatusBanner</title></head>
+<body>
+<div id="root" class="ap-stack"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.StatusBanner, { state: 'connected' });
+  add(A.StatusBanner, { state: 'reconnecting', action: A.part(A.Button, { size: 'sm', label: 'Retry now' }) });
+  add(A.StatusBanner, { state: 'offline' });
+</script>
+</body>
+</html>

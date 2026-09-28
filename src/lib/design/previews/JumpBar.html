@@ -1,0 +1,15 @@
+<!-- @dsCard group="Timeline" height=150 subtitle="Floating button, and the mention bar" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>JumpBar</title></head>
+<body>
+<div id="root" class="ap-stack" style="padding:24px 0 16px"><div id="fabs" style="display:flex;gap:24px;align-items:center;justify-content:flex-end;padding:8px 16px"></div></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var fabs = document.getElementById('fabs');
+  add(A.JumpBar, {}, fabs); add(A.JumpBar, { count: 3 }, fabs); add(A.JumpBar, { count: 128 }, fabs);
+  add(A.JumpBar, { count: 12, mentions: 1 });
+</script>
+</body>
+</html>

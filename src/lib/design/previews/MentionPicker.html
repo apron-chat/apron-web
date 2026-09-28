@@ -1,0 +1,14 @@
+<!-- @dsCard group="Input" height=220 subtitle="Filtering on a prefix" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>MentionPicker</title></head>
+<body>
+<div id="root" style="position:relative;height:200px"><div id="pick" style="position:absolute;left:0;right:0;bottom:72px"></div><div id="field" style="position:absolute;left:0;right:0;bottom:0"></div></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.Composer, { room: 'Ops', canUpload: true, value: 'Handing this to @da' }, document.getElementById('field'));
+  add(A.MentionPicker, { query: 'da', active: 0, people: [{ user_id: 'dana', name: 'Dana' }, { user_id: 'dave.k', name: 'Dave Kim' }, { user_id: 'amanda', name: 'Amanda' }] }, document.getElementById('pick'));
+</script>
+</body>
+</html>

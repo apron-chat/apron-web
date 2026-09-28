@@ -1,0 +1,13 @@
+<!-- @dsCard group="Embeds" height=200 subtitle="Paused placeholder" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>EmbedFrame</title></head>
+<body>
+<div id="root" class="ap-stack"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.EmbedFrame, { kind: 'iframe', url: '#', height: 140, live: false, title: 'Grafana · api latency' });
+</script>
+</body>
+</html>

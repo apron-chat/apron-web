@@ -1,0 +1,17 @@
+<!-- @dsCard group="Actions" height=64 subtitle="Four variants" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Button</title></head>
+<body>
+<div class="ap-row" id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.Button, { variant: 'primary', label: 'Send' });
+  add(A.Button, { label: 'Load earlier messages' });
+  add(A.Button, { variant: 'ghost', label: 'Attach' });
+  add(A.Button, { variant: 'danger', label: 'Delete message' });
+  add(A.Button, { disabled: true, label: 'Join room' });
+</script>
+</body>
+</html>

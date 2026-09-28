@@ -1,0 +1,15 @@
+<!-- @dsCard group="Embeds" height=220 subtitle="URL, text, nothing" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>EmbedFallback</title></head>
+<body>
+<div id="root" class="ap-stack"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.EmbedFallback, { kind: 'poll', url: 'https://chat.example/poll/7' });
+  add(A.EmbedFallback, { kind: 'calendar', text: 'Standup · Mon 09:30' });
+  add(A.EmbedFallback, { kind: 'x-widget' });
+</script>
+</body>
+</html>
