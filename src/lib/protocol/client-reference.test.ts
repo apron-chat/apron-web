@@ -245,6 +245,20 @@ describe('ChatClient reference features', () => {
 		expect(snapshot.uploads).toEqual({});
 	});
 
+	it('learns uploads are image-only from a 415 on a voice clip, and names a reused write URL', async () => {
+		await connect();
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 409 })));
+		const reused = client.sendFiles('general', '', [new File(['png'], 'me.png', { type: 'image/png' })]);
+		await socket.reply('message', { message_id: '52', embeds: [{ embed_id: 'embed_3', kind: 'upload', write_url: 'http://fake.test/write/y' }] });
+		await expect(reused.uploaded).rejects.toThrow('This upload link was already used');
+		expect(snapshot.imageOnlyUploads).toBeUndefined();
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 415 })));
+		const voice = client.sendFiles('general', '', [{ file: new File(['ogg'], 'voice-message.ogg', { type: 'audio/ogg' }) }]);
+		await socket.reply('message', { message_id: '53', embeds: [{ embed_id: 'embed_4', kind: 'upload', write_url: 'http://fake.test/write/z' }] });
+		await expect(voice.uploaded).rejects.toThrow(/does not accept this type/);
+		expect(snapshot.imageOnlyUploads).toBe(true);
+	});
+
 	it('shows a logged @server notice and resumes the room right behind auth after a reconnect', async () => {
 		await connect();
 		// A notice takes a log_id past the room's logged head.

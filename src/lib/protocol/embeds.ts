@@ -71,7 +71,7 @@ export function writeEmbed(writeUrl: string, file: Blob, onProgress?: (progress:
 			...(file.type ? { headers: { 'Content-Type': file.type } } : {}),
 			...(signal ? { signal } : {})
 		}).then((response) => {
-			if (!response.ok) throw new Error(writeError(response.status));
+			if (!response.ok) throw new WriteError(response.status);
 			onProgress?.(1);
 		});
 	}
@@ -87,7 +87,7 @@ export function writeEmbed(writeUrl: string, file: Blob, onProgress?: (progress:
 				onProgress?.(1);
 				resolve();
 			} else {
-				reject(new Error(writeError(request.status)));
+				reject(new WriteError(request.status));
 			}
 		};
 		request.onerror = () => reject(new Error('The upload did not reach the server'));
@@ -97,10 +97,19 @@ export function writeEmbed(writeUrl: string, file: Blob, onProgress?: (progress:
 	});
 }
 
+/** A write the server refused, by HTTP status. */
+export class WriteError extends Error {
+	constructor(readonly status: number) {
+		super(writeError(status));
+	}
+}
+
 function writeError(status: number): string {
 	if (status === 413) return 'The file is larger than this server accepts';
 	if (status === 415) return 'The server does not accept this type of file';
-	if (status === 404 || status === 410) return 'The upload expired; attach the file again';
+	if (status === 409) return 'This upload link was already used';
+	if (status === 410) return 'The message was removed before the upload finished';
+	if (status === 404) return 'The upload expired; attach the file again';
 	return `The server refused the upload (${status})`;
 }
 

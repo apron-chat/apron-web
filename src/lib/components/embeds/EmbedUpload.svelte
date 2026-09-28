@@ -18,6 +18,8 @@
 	let video = $derived(sameOriginMedia(og.video?.url, directory.origin));
 	let audio = $derived(sameOriginMedia(og.audio?.url, directory.origin));
 	let percent = $derived(upload?.progress !== undefined ? Math.round(upload.progress * 100) : undefined);
+	/** An image's size as sent, until the server's `og` arrives with the finished upload. */
+	let size = $derived(upload?.width && upload.height ? `${upload.width} × ${upload.height} · ` : '');
 
 	/** og width and height only reserve the aspect ratio (embed-max-w × embed-max-h clamp the box). */
 	function ratio(media: { width?: number; height?: number } | undefined): string | undefined {
@@ -36,7 +38,7 @@
 		{@render glyph()}
 		<span class="ap-embed-cardtext">
 			<span class="ap-embed-title">{title}</span>
-			<span class="ap-embed-detail">{upload?.failed ? `Upload failed · ${upload.failed}` : percent !== undefined ? `Uploading · ${percent}%` : 'Uploading…'}</span>
+			<span class="ap-embed-detail">{upload?.failed ? `Upload failed · ${upload.failed}` : percent !== undefined ? `${size}Uploading · ${percent}%` : `${size}Uploading…`}</span>
 		</span>
 		{#if percent !== undefined && !upload?.failed}
 			<span class="ap-embed-progress" aria-hidden="true"><i style:width="{percent}%"></i></span>

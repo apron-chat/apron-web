@@ -139,10 +139,20 @@ export const DEFAULT_ROOM_ID = '';
 /** A file this client is writing to an embed's `write_url` (§4.6.3). */
 export interface UploadState {
 	name: string;
+	/** An image's dimensions as sent, shown while pending; the server fills in `og` once written. */
+	width?: number;
+	height?: number;
 	/** Fraction written, 0–1, once the write started. */
 	progress?: number;
 	/** Why the write failed; the server then publishes the message without the embed. */
 	failed?: string;
+}
+
+/** A file for an upload embed, with an image's dimensions when known. */
+export interface UploadFile {
+	file: File;
+	width?: number;
+	height?: number;
 }
 
 export interface PendingOperation {
@@ -207,6 +217,11 @@ export interface ClientSnapshot {
 	userAliases: Record<string, string>;
 	/** Files being written to upload embeds, by `embed_id`. */
 	uploads: Record<string, UploadState>;
+	/**
+	 * The server refused a file that isn't an image as the wrong type (415):
+	 * it takes images only, so voice clips have nowhere to go.
+	 */
+	imageOnlyUploads?: boolean;
 	/** Top-level rooms from the latest `room_list`, joined or not; undefined until listed. */
 	directory?: RoomListing[];
 	/** Threads per parent room from the latest `room_list` with `parent_room_id`. */

@@ -311,9 +311,12 @@ export function retryAfterMilliseconds(error: RpcError): number | undefined {
 export function userFacingRpcError(error: RpcError): string {
 	const retryAfter = retryAfterMilliseconds(error);
 	if (retryAfter !== undefined) {
+		// A daily limit (such as uploads) can be hours away.
 		const seconds = Math.max(1, Math.ceil(retryAfter / 1000));
-		if (error.message) return `${error.message} Try again in ${seconds}s.`;
-		return `Temporarily limited. Try again in ${seconds}s.`;
+		const minutes = Math.ceil(seconds / 60);
+		const wait = seconds < 60 ? `${seconds}s` : minutes < 60 ? `${minutes}m` : `${Math.ceil(minutes / 60)}h`;
+		if (error.message) return `${error.message} Try again in ${wait}.`;
+		return `Temporarily limited. Try again in ${wait}.`;
 	}
 	return error.message || `Request failed (${error.code})`;
 }

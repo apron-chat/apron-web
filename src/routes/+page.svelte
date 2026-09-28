@@ -3,7 +3,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, childRooms, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, childRooms, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, type RoomSnapshot, type UploadFile, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
@@ -27,6 +27,7 @@
 	import { backendHost, demoRetentionNotice, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState } from '$lib/ui/feedback.svelte';
+	import { prepareUpload } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker, notificationsByRoom } from '$lib/ui/incoming-messages';
 	import { UnreadTracker } from '$lib/ui/unread.svelte';
@@ -764,12 +765,14 @@
 	 * Sends picked files (cap `embed:upload`) as upload embeds, with whatever
 	 * is in the composer as the text; each file is written to the URL the
 	 * server hands back, and the message shows it pending until then. A command
-	 * takes them as arguments instead (§4.8).
+	 * takes them as arguments instead (§4.8). Images are shrunk and stripped
+	 * of their metadata first.
 	 */
-	function sendFiles(files: File[]): void {
+	async function sendFiles(picked: File[]): Promise<void> {
 		if (!client || !paneRoom || !canCompose || !session.snapshot.capabilities['embed:upload']) return;
 		const chat = client;
-		const roomId = paneRoom.id;
+		const room = paneRoom;
+		const roomId = room.id;
 		const reply = drafts.reply;
 		const action = composerAction(drafts.text, { command: snapshot.capabilities.command, rooms: false });
 		const command = action.kind === 'command';
@@ -777,14 +780,22 @@
 		const mentions = composerMentions;
 		const embeds = command ? [] : linkPreviews.embeds(text, composerDismissed);
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };
-		const joining = command ? undefined : joinFirst(chat, paneRoom);
+		feedback.pending(picked.length === 1 ? `Uploading ${picked[0].name || 'file'}…` : `Uploading ${picked.length} files…`);
+		let files: UploadFile[];
+		try {
+			files = await Promise.all(picked.map((file) => prepareUpload(file)));
+		} catch (cause) {
+			feedback.error(cause, 'Unable to attach the image');
+			return;
+		}
+		if (client !== chat) return;
+		const joining = command ? undefined : joinFirst(chat, room);
 		const { sent, uploaded } = joining
 			? (() => {
 				const posted = joining.then(() => chat.sendFiles(roomId, text, files, 'markdown', options, command));
 				return { sent: posted.then(({ sent }) => sent), uploaded: posted.then(({ uploaded }) => uploaded) };
 			})()
 			: chat.sendFiles(roomId, text, files, 'markdown', options, command);
-		feedback.pending(files.length === 1 ? `Uploading ${files[0].name || 'file'}…` : `Uploading ${files.length} files…`);
 		sent.then(() => {
 			clearComposer(roomId);
 		}, (cause: unknown) => {
@@ -1330,11 +1341,12 @@
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!canCompose}
 					canUpload={snapshot.capabilities['embed:upload']}
+					canUploadAudio={!snapshot.imageOnlyUploads}
 					canCommand={snapshot.capabilities.command}
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={sendMessage} onfiles={sendFiles} oncancelreply={cancelReply}
+					oninput={composerInput} onsend={sendMessage} onfiles={(files) => void sendFiles(files)} oncancelreply={cancelReply}
 					onmention={() => listMembers(MEMBERS_FRESH_MS)}
 				/>
 			{/if}
