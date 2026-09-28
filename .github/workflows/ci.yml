@@ -33,3 +33,5 @@ jobs:
       - run: npm run build
       # The design system bundle builds from src/lib/design.
       - run: npm run design:bundle
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser

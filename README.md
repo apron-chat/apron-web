@@ -20,7 +20,12 @@ npm test          # reducer and replay unit tests
 npm run build     # writes the static site to build/
 npm run design:bundle  # builds the design system's components to dist-design/
 npm run preview
+npm run test:browser # 390px sidebar smoke test against /__preview
 ```
+
+`npm run test:browser` starts an isolated Vite server and installs the
+Playwright Chromium binary on first use when no browser is available. Set
+`CHROMIUM_PATH` to use a system-managed Chromium instead.
 
 `npm run dev` needs a backend on port 8080: the Go reference server from
 [apron-chat/apron-server-go](https://github.com/apron-chat/apron-server-go)

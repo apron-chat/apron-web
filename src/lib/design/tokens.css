@@ -89,6 +89,13 @@
 	--rail-w: 64px;
 	--rail-tile: 40px;
 	--header-h: 48px;
+	--sidebar-toggle-w: 40px;
+}
+
+@property --sidebar-w {
+	syntax: '<length>';
+	inherits: true;
+	initial-value: 248px;
 }
 
 @media (prefers-color-scheme: light) {
