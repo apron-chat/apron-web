@@ -1,0 +1,33 @@
+name: Announce
+
+# Posts each pull request merged into main to the demo's general room, as the
+# bot whose token is the APRON_BOT_TOKEN secret (from /invite-bot) of the
+# announce environment. Without that secret the job succeeds without posting.
+# The environment's optional APRON_ROOM_ID variable picks another room.
+#
+# pull_request_target runs this workflow with secrets, even for pull requests
+# from forks. The apron-pr-bot action never checks out or runs the pull
+# request's head: the event's text reaches it only as JSON data.
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # APRON_BOT_TOKEN is a secret of this environment, which only jobs that
+    # name it can read.
+    environment: announce
+    steps:
+      - uses: apron-chat/apron-pr-bot@main
+        with:
+          server-url: wss://server.apron.chat/
+          token: ${{ secrets.APRON_BOT_TOKEN }}
+          # Optional; the room to post in, `general` when unset.
+          room-id: ${{ vars.APRON_ROOM_ID }}
