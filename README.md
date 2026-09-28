@@ -77,14 +77,6 @@ npm run build
 wrangler deploy
 ```
 
-[`.github/workflows/announce.yml`](.github/workflows/announce.yml) posts each
-pull request merged into `main` to the demo server's `general` room with the
-[apron-pr-bot](https://github.com/apron-chat/apron-pr-bot) action. Set the
-`APRON_BOT_TOKEN` secret of the `announce` environment to a token from
-`/invite-bot` to turn it on; without the secret the job succeeds without
-posting. Set the environment's `APRON_ROOM_ID` variable to post in a room
-other than `general`.
-
 The backend deploys separately, from
 [apron-chat/apron-server-cloudflare](https://github.com/apron-chat/apron-server-cloudflare).
 The apex `apron.chat` is reserved for docs.
