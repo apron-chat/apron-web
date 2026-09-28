@@ -14,6 +14,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
+		"test:browser": "node scripts/sidebar-browser-test.mjs",
 		"test:watch": "vitest",
 		"icons": "node scripts/icons.js"
 	},
@@ -23,6 +24,7 @@
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"jsdom": "^30.1.1",
+		"playwright": "^1.52.0",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
 		"typescript": "^6.0.3",
