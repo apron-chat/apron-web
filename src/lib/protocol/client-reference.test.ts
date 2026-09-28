@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, userIn, type ClientSnapshot } from './client';
-import { safeAvatar, safeLink, sameOriginMedia, serverOrigin } from './embeds';
+import { embedMedia, parseOrigins, safeAvatar, safeLink, sameOriginMedia, serverOrigin } from './embeds';
 import { FakeSocket } from './fake-socket';
 
 /** Operations whose outcome a test does not await still settle when the client stops. */
@@ -325,5 +325,15 @@ describe('embed URL policy', () => {
 		expect(safeLink('https://example.com/a')).toBe('https://example.com/a');
 		expect(safeAvatar('https://gravatar.example/a.png', origin)).toBe('https://gravatar.example/a.png');
 		expect(safeAvatar('http://elsewhere.example/a.png', origin)).toBeUndefined();
+	});
+
+	it('loads embed media from trusted origins as well as the chat server', () => {
+		const trusted = parseOrigins('https://media.apron.chat, http://localhost:9000 http://media.example https://cdn.example/path nonsense');
+		expect(trusted).toEqual(['https://media.apron.chat', 'http://localhost:9000']);
+		expect(embedMedia('https://media.apron.chat/f/abc', 'https://server.apron.chat', trusted)).toBe('https://media.apron.chat/f/abc');
+		expect(embedMedia('https://server.apron.chat/files/x', 'https://server.apron.chat', trusted)).toBe('https://server.apron.chat/files/x');
+		expect(embedMedia('https://tracker.example/pixel.gif', 'https://server.apron.chat', trusted)).toBeUndefined();
+		// Streams stay on the chat server.
+		expect(sameOriginMedia('https://media.apron.chat/f/abc', 'https://server.apron.chat')).toBeUndefined();
 	});
 });

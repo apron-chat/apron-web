@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { safeLink, sameOriginMedia } from '$lib/protocol/embeds';
+	import { embedMedia, safeLink } from '$lib/protocol/embeds';
 	import type { Embed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
 
@@ -7,7 +7,7 @@
 	let { embed }: { embed: Embed } = $props();
 	let url = $derived(safeLink(embed.url));
 	let og = $derived(embed.og ?? {});
-	let image = $derived(sameOriginMedia(og.image?.url, directory.origin));
+	let image = $derived(embedMedia(og.image?.url, directory.origin));
 	let title = $derived(og.title || embed.title || url || embed.kind);
 </script>
 

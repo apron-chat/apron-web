@@ -8,6 +8,12 @@ The default connection is `VITE_DEFAULT_SERVER_URL` from the build, which
 (web.apron.chat and pull request Previews). Local development, and a build with
 `VITE_DEFAULT_SERVER_URL=` (empty), use same-origin `/ws` instead.
 
+Embed media (`og` images, video and audio) loads from the chat server's origin
+and from the origins in `VITE_TRUSTED_MEDIA_ORIGINS`, which `.env.production`
+sets to `https://media.apron.chat`, the reference server's upload bucket.
+Streams load from the chat server's origin only. Every link in chat, from
+message text, link cards, uploads and HTML embeds, opens in a new tab.
+
 `/__preview` mounts this same app against a page-local in-memory WebSocket
 server, not the saved, configured, or same-origin backend. It seeds a guest,
 rooms, a thread, people, Markdown examples, and a message moved into the thread,
