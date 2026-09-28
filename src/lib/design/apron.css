@@ -154,14 +154,14 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 @keyframes ap-bob { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-3px); opacity: 1; } }
 
 /* Composer */
-.ap-composer { display: flex; align-items: flex-end; container-type: normal; gap: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) var(--space-4); background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
+.ap-composer { display: flex; align-items: flex-start; container-type: normal; gap: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) var(--space-4); background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
 .ap-composer:focus-within { border-color: var(--focus); }
-.ap-composer-tools { display: inline-flex; gap: 2px; align-self: flex-end; }
+.ap-composer-tools { display: inline-flex; gap: 2px; }
 .ap-iconbtn { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: calc(var(--radius-lg) - var(--space-2)); background: transparent; color: var(--ink-muted); cursor: pointer; }
 .ap-iconbtn:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
 .ap-iconbtn:disabled { opacity: .45; cursor: default; }
 .ap-iconbtn-rec, .ap-iconbtn-rec:hover { color: var(--danger); }
-.ap-composer-recording { flex: 1; display: inline-flex; align-items: center; gap: var(--space-2); height: 28px; box-sizing: border-box; padding: 0 var(--space-1); font-size: 15px; line-height: 22px; color: var(--ink); align-self: flex-end; }
+.ap-composer-recording { flex: 1; display: inline-flex; align-items: center; gap: var(--space-2); height: 28px; box-sizing: border-box; padding: 0 var(--space-1); font-size: 15px; line-height: 22px; color: var(--ink); }
 .ap-composer-recdot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--danger); animation: ap-blink 1s steps(1) infinite; }
 .ap-composer-rectime { font-variant-numeric: tabular-nums; color: var(--ink-muted); }
 @keyframes ap-blink { 50% { opacity: .25; } }
@@ -170,7 +170,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-composer-field::placeholder { color: var(--ink-muted); }
 .ap-composer-field:focus-visible { outline: 0; }
 .ap-composer-disabled { opacity: .6; }
-.ap-composer-cmdtag { flex: none; align-self: flex-end; display: inline-flex; align-items: center; height: 28px; box-sizing: border-box; padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: 13px; line-height: 18px; font-weight: 500; }
+.ap-composer-cmdtag { flex: none; display: inline-flex; align-items: center; height: 28px; box-sizing: border-box; padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: 13px; line-height: 18px; font-weight: 500; }
 .ap-composer-cmd .ap-composer-field { font-family: var(--font-mono); font-size: 13px; }
 
 /* RoomItem */
