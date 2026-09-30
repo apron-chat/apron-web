@@ -21,15 +21,17 @@ class Directory {
 	private rooms = $state.raw<Record<string, string>>({});
 	/**
 	 * Every known `user_id` by the display name it shows under: its kept name,
-	 * else the name it was last recorded with, else its `user_id`. Retired IDs
-	 * count as the identity that replaced them.
+	 * else (only when nothing is kept for it, not when it was cleared) the name
+	 * it was last recorded with, else its `user_id`. Retired IDs count as the
+	 * identity that replaced them.
 	 */
 	private readonly byName = $derived.by(() => {
 		const { users, recordedUsers, userAliases } = this.users;
 		const names = new Map<string, Set<string>>();
 		for (const id of new Set([...Object.keys(users), ...Object.keys(recordedUsers)])) {
 			if (userAliases[id] !== undefined) continue;
-			const name = users[id]?.name || recordedUsers[id]?.name || id;
+			const kept = users[id];
+			const name = (kept && Object.hasOwn(kept, 'name') ? kept.name : recordedUsers[id]?.name) || id;
 			let ids = names.get(name);
 			if (!ids) names.set(name, (ids = new Set()));
 			ids.add(id);
@@ -68,7 +70,7 @@ class Directory {
 		return from ? userIn(this.users, from) : undefined;
 	}
 
-	/** A display name: the kept `name`, else the recorded one, falling back to the `user_id`. */
+	/** A display name: the kept `name`, else the recorded one where none is kept; empty or unknown shows the `user_id`. */
 	name(from: Identity | undefined): string {
 		const person = this.person(from);
 		return person?.name || person?.user_id || 'Unknown sender';

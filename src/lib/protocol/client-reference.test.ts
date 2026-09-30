@@ -45,11 +45,13 @@ describe('ChatClient reference features', () => {
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' } } });
 		socket.receive({ method: 'message', params: { message_id: '21', log_id: '21', room_id: 'general', from: { user_id: 'bob', name: 'Robert' }, body: { text: 'hi' } } });
 		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' });
-		// A bare object changes nothing; an empty value removes the field.
+		// A bare object changes nothing; an empty value clears the field, and stays as the cleared value.
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob' } } });
 		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' });
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', avatar: '', ext: {} } } });
-		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby' });
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '', ext: {} });
+		// A stale from with an avatar doesn't bring the cleared one back (§3.3).
+		expect(userIn(snapshot, { user_id: 'bob', name: 'Bob', avatar: 'https://example.com/old.png' })).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '', ext: {} });
 		// The latest recorded object is kept apart, by log_id: an edit of an older message does not replace it.
 		socket.receive({ method: 'message', params: { message_id: '20', log_id: '22', room_id: 'general', from: { user_id: 'bob', name: 'Bob' }, body: { text: 'edited' } } });
 		expect(snapshot.recordedUsers.bob).toEqual({ user_id: 'bob', name: 'Bob' });
@@ -60,7 +62,7 @@ describe('ChatClient reference features', () => {
 		// `old` alone, or `user` with a room_id, is not an identity change (§3.3).
 		socket.receive({ method: 'user', params: { old: { user_id: 'bob' } } });
 		socket.receive({ method: 'user', params: { room_id: 'general', old: { user_id: 'bob' } } });
-		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby' });
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '', ext: {} });
 		// `you` merges into this connection's identity.
 		socket.receive({ method: 'user', params: { you: { user_id: 'guest_1', avatar: 'https://example.com/me.png' } } });
 		expect(snapshot.you).toEqual({ user_id: 'guest_1', name: 'Guest', avatar: 'https://example.com/me.png' });

@@ -13,10 +13,12 @@ const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'ac
 
 /**
  * How to render a user (§3.3): field by field, the kept object for its
- * `user_id` (following a retired ID to the identity that replaced it), else
- * the recorded object the frame carries (`from`, a membership's `user`), and
- * the display name falls back to the `user_id` last. Returns the kept object
- * itself when it has every field the recorded one has.
+ * `user_id` (following a retired ID to the identity that replaced it), and
+ * the recorded object the frame carries (`from`, a membership's `user`) only
+ * for fields the kept object lacks, so a field cleared there (kept as its
+ * empty value) stays cleared. Renderers treat an empty field as none, and an
+ * empty or unknown name as the `user_id`. Returns the kept object itself
+ * when it has every field the recorded one has.
  */
 export function userIn(snapshot: Pick<ClientSnapshot, 'users' | 'userAliases'>, recorded: Identity): Identity {
 	let id = recorded.user_id;

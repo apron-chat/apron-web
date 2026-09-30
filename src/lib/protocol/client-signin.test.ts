@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatClient, type ClientSnapshot } from './client';
+import { ChatClient, userIn, type ClientSnapshot } from './client';
 import { FakeSocket, settle } from './fake-socket';
 
 function latest(): FakeSocket {
@@ -375,13 +375,15 @@ describe('sign-in', () => {
 		expect(snapshot.server).not.toHaveProperty('welcome');
 	});
 
-	it('merges roles like any profile field, and an empty list removes them', async () => {
+	it('merges roles like any profile field, and an empty list clears them', async () => {
 		await latest().greet(['rooms'], { you: { user_id: 'guest_1', roles: ['admin'] } });
 		expect(snapshot.you?.roles).toEqual(['admin']);
 		latest().receive({ method: 'user', params: { new: { user_id: 'bot_1', name: 'Deploy', roles: ['bot'] } } });
 		expect(snapshot.users.bot_1.roles).toEqual(['bot']);
 		latest().receive({ method: 'user', params: { new: { user_id: 'bot_1', roles: [] } } });
-		expect(snapshot.users.bot_1).toEqual({ user_id: 'bot_1', name: 'Deploy' });
+		expect(snapshot.users.bot_1).toEqual({ user_id: 'bot_1', name: 'Deploy', roles: [] });
+		// Cleared stays cleared: a message's recorded `from` with the old roles doesn't bring them back.
+		expect(userIn(snapshot, { user_id: 'bot_1', roles: ['bot'] }).roles).toEqual([]);
 		latest().receive({ method: 'user', params: { you: { user_id: 'guest_1' } } });
 		await settle();
 		expect(snapshot.you?.roles).toEqual(['admin']);

@@ -52,10 +52,13 @@ The client keeps one user object per `user_id` ([PROTOCOL.md §3.3](https://gith
 every current object into it field by field — `you`, `user` notifications, and
 room `members` and `users` in `room_list` and `room_update` — so a rename or a
 new avatar shows on earlier messages too. A present field replaces, an empty
-one (`""`, `{}`) removes, and a missing one changes nothing. Recorded objects,
-a message's or reaction's `from` and a membership's `user`, describe the user
-as of their record and never merge. A user renders field by field: the kept
-object, else the recorded one the message carries, else the `user_id`. A
+one (`""`, `[]`, `{}`) clears it and is kept as cleared, and a missing one
+changes nothing. Recorded objects, a message's or reaction's `from` and a
+membership's `user`, describe the user as of their record and never merge. A
+user renders field by field from the kept object, falling back to the
+recorded one the message carries only for fields the kept object lacks, so a
+cleared avatar, name or `roles` stays cleared however stale the message; an
+empty or unknown name shows as the `user_id`. A
 `user` notification with `new` and `old` maps the retired ID to the new
 identity. Message headers show the name with the muted `@user_id` beside it,
 always when another user the client knows of shows under the same name, so no

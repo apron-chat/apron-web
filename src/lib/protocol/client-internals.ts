@@ -240,10 +240,12 @@ export function roomTitle(roomId: string, record: RoomRecord | undefined): strin
 }
 
 /**
- * One user object merged into the kept one (§3.3): a present field replaces
- * the kept value, an empty value (`""`, `{}`, or `[]` for `roles`) removes
- * it, and a missing (or `null`) field leaves it. Returns `current` itself
- * when nothing changes.
+ * One user object merged into the kept one (§3.3): each field it carries
+ * replaces the kept value, and a missing (or `null`) field leaves it. An
+ * empty value (`""`, `[]`, `{}`) means the field was cleared, and is kept as
+ * such rather than dropped, so rendering never falls back to a stale
+ * recorded object for it (see `userIn`). Returns `current` itself when
+ * nothing changes.
  */
 export function mergeIdentity(current: Identity | undefined, incoming: Identity): Identity {
 	const next: JsonObject = Object.create(null);
@@ -254,13 +256,6 @@ export function mergeIdentity(current: Identity | undefined, incoming: Identity)
 		if (key === 'user_id') continue;
 		const value = incoming[key];
 		if (value === undefined || value === null) continue;
-		if (value === '' || (isJsonObject(value) && Object.keys(value).length === 0) || (Array.isArray(value) && value.length === 0)) {
-			if (Object.hasOwn(next, key)) {
-				delete next[key];
-				changed = true;
-			}
-			continue;
-		}
 		if (!Object.hasOwn(next, key) || canonicalJson(next[key]) !== canonicalJson(value)) {
 			next[key] = cloneJson(value);
 			changed = true;
