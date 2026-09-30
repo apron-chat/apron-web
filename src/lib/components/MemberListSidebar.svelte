@@ -141,10 +141,12 @@
 	.add .ap-field { flex: 1; min-width: 0; height: 28px; font-size: 13px; }
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 	.member { display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: 13px; line-height: 18px; }
-	.member-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	/* Role badges follow the name, as beside a message's sender; the remove button takes the far right. */
+	.member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.member :global(.ap-roles) { flex: none; flex-wrap: nowrap; }
 	.member-name small { margin-left: 4px; color: var(--ink-muted); font-size: 11px; }
 	/* Remove shows on hover or focus, always on touch screens. */
-	.remove { flex: none; width: 24px; height: 24px; opacity: 0; }
+	.remove { flex: none; width: 24px; height: 24px; margin-left: auto; opacity: 0; }
 	.member:hover .remove, .member:focus-within .remove { opacity: 1; }
 	@media (hover: none) { .remove { opacity: 1; } }
 	@media (max-width: 959px) {
