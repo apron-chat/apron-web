@@ -47,6 +47,33 @@ describe('in-memory preview protocol', () => {
 		expect(client.snapshot().rooms.find((room) => room.id === created.room_id)?.parentRoomId).toBe('general');
 	});
 
+	it('keeps descriptions, private rooms, and members added or removed by others', async () => {
+		const server = new MemoryProtocolServer();
+		const client = new ChatClient('ws://apron-preview.invalid', 'Preview User', server.factory);
+		clients.push(client);
+		client.start();
+		await waitFor(() => client.snapshot().authenticated && client.snapshot().rooms.some((room) => room.id === 'general' && room.loaded));
+		const room = (id: string) => client.snapshot().rooms.find((candidate) => candidate.id === id);
+		expect(room('general')?.description).toMatch(/Say hello/);
+		expect(client.snapshot().users.ada.roles).toEqual(['admin']);
+
+		await client.updateRoom('general', { description: 'Deploys only' }).promise;
+		await waitFor(() => room('general')?.description === 'Deploys only');
+		expect(room('general')?.title).toBe('general');
+
+		const created = await client.createRoom({ title: 'Secret', private: true }).promise;
+		await waitFor(() => Boolean(room(created.room_id)));
+		expect(room(created.room_id)?.private).toBe(true);
+		await client.joinRoom(created.room_id, 'grace').promise;
+		await waitFor(() => Boolean(room(created.room_id)?.members?.some((member) => member.user_id === 'grace')));
+		await client.leaveRoom(created.room_id, 'grace').promise;
+		await waitFor(() => !room(created.room_id)?.members?.some((member) => member.user_id === 'grace'));
+		// Once left, a private room is invisible.
+		await client.leaveRoom(created.room_id).promise;
+		await waitFor(() => !room(created.room_id));
+		await expect(client.joinRoom(created.room_id).promise).rejects.toThrow('Unknown room');
+	});
+
 	it('moves messages with their author and resolves reactions in the latest room', async () => {
 		const server = new MemoryProtocolServer();
 		const client = new ChatClient('ws://apron-preview.invalid', 'Preview User', server.factory);

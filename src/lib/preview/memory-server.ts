@@ -5,7 +5,8 @@ export type PreviewRoom = {
 	room_id: string;
 	title: string;
 	parent_room_id?: string;
-	intro_message?: { message_id: string };
+	private?: boolean;
+	description?: string;
 	members: Set<string>;
 	messages: JsonObject[];
 	reactions: Map<string, Map<string, string[]>>;
@@ -24,12 +25,12 @@ type PreviewSocket = {
 	deliver(frame: WireFrame): void;
 };
 
-const people: Record<string, { user_id: string; name: string; avatar?: string }> = {
+const people: Record<string, { user_id: string; name: string; avatar?: string; roles?: string[] }> = {
 	preview_guest: { user_id: 'preview_guest', name: 'You' },
-	ada: { user_id: 'ada', name: 'Ada Lovelace' },
+	ada: { user_id: 'ada', name: 'Ada Lovelace', roles: ['admin'] },
 	grace: { user_id: 'grace', name: 'Grace Hopper' },
 	linus: { user_id: 'linus', name: 'Linus' },
-	margaret: { user_id: 'margaret', name: 'Margaret Hamilton' }
+	margaret: { user_id: 'margaret', name: 'Margaret Hamilton', roles: ['moderator'] }
 };
 
 const roomId = 'general';
@@ -54,6 +55,7 @@ export class MemoryProtocolServer {
 
 	constructor() {
 		const general = this.makeRoom(roomId, 'general', ['preview_guest', 'ada', 'grace', 'linus', 'margaret']);
+		general.description = 'Say hello. Everything here lives only as long as this page.';
 		for (const item of seed) {
 			const message = {
 				message_id: item.id, log_id: item.id, room_id: roomId,
@@ -64,7 +66,7 @@ export class MemoryProtocolServer {
 		}
 		const engineering = this.makeRoom('engineering', 'engineering', ['preview_guest', 'ada', 'linus']);
 		const thread = this.makeRoom('thread_deploy', 'Deploy checklist', ['preview_guest', 'ada', 'grace'], 'general');
-		thread.intro_message = { message_id: seed[2].id };
+		thread.description = 'What to check before a **deploy**: migrations, flags, and who is on call.';
 		for (const [n, author, text] of [
 			['1710000000005', 'ada', 'Thread replies are ordinary messages in a child room.'],
 			['1710000000006', 'grace', 'The protocol server is shared by all preview app interactions.']
@@ -123,7 +125,7 @@ export class MemoryProtocolServer {
 			server.sockets.add(socket);
 			socket.readyState = 1;
 			socket.onopen?.({} as Event);
-			socket.deliver({ method: 'server', params: { protocol: 6, name: 'Apron Preview', auth: ['guest'], ping: 60, caps: ['history', 'edit', 'rooms', 'reactions', 'activity', 'command'] } });
+			socket.deliver({ method: 'server', params: { protocol: 7, name: 'Apron Preview', auth: ['guest'], ping: 60, caps: ['history', 'edit', 'rooms', 'reactions', 'activity', 'command'] } });
 		});
 		return socket as unknown as WebSocket;
 	}
@@ -148,7 +150,7 @@ export class MemoryProtocolServer {
 				case 'reactions': this.react(socket, params, reply, fail); return;
 				case 'room_set': this.setRoom(socket, params, reply, fail); return;
 				case 'room_join': this.joinRoom(socket, params, reply, fail); return;
-				case 'room_leave': this.leaveRoom(socket, params, reply); return;
+				case 'room_leave': this.leaveRoom(socket, params, reply, fail); return;
 				case 'me': this.updateMe(socket, params, reply); return;
 				case 'activity': this.activity(socket, params); return;
 				case 'command': this.command(socket, params, reply, fail); return;
@@ -159,13 +161,15 @@ export class MemoryProtocolServer {
 
 	private roomRecord(room: PreviewRoom, members = false): JsonObject {
 		return { room_id: room.room_id, title: room.title, log_id: String(room.log_id), latest_log_id: String(room.log_id), history_log_id: room.messages.length ? room.messages[0].log_id : null,
-			...(room.parent_room_id ? { parent_room_id: room.parent_room_id } : {}), ...(room.intro_message ? { intro_message: room.intro_message } : {}), ...(members ? { members: [...room.members].map((id) => ({ user_id: id })) } : {}) };
+			...(room.parent_room_id ? { parent_room_id: room.parent_room_id } : {}), ...(room.private ? { private: true } : {}), ...(room.description ? { description: room.description } : {}),
+			...(members ? { members: [...room.members].map((id) => ({ user_id: id })) } : {}) };
 	}
 
 	private listRooms(params: JsonObject): JsonObject {
 		const parent = typeof params.parent_room_id === 'string' ? params.parent_room_id : undefined;
 		const exact = typeof params.room_id === 'string' ? params.room_id : undefined;
-		const rooms = [...this.rooms.values()].filter((room) => exact
+		// A private room is invisible to anyone but its members (§4.3.4); the one viewer here is preview_guest.
+		const rooms = [...this.rooms.values()].filter((room) => !this.hidden(room)).filter((room) => exact
 			? room.room_id === exact
 			: parent
 				? room.parent_room_id === parent
@@ -178,6 +182,13 @@ export class MemoryProtocolServer {
 		if (params.filter === 'joined') return { joined, users: Object.values(people) };
 		if (params.filter === 'not_joined') return { not_joined: notJoined, users: Object.values(people) };
 		return { joined, not_joined: notJoined, users: Object.values(people) };
+	}
+
+	/** A private room, or a thread of one, the viewer isn't in. */
+	private hidden(room: PreviewRoom | undefined): boolean {
+		if (!room) return false;
+		if (room.private && !room.members.has('preview_guest')) return true;
+		return this.hidden(room.parent_room_id ? this.rooms.get(room.parent_room_id) : undefined);
 	}
 
 	private history(params: JsonObject): JsonObject {
@@ -261,8 +272,13 @@ export class MemoryProtocolServer {
 			if (parent && !this.rooms.has(parent)) return fail('Unknown parent room');
 			const id = parent ? `thread_preview_${this.roomSerial++}` : `room_preview_${this.roomSerial++}`;
 			room = this.makeRoom(id, typeof p.title === 'string' ? p.title : id, ['preview_guest'], parent);
-			if (p.intro_message && typeof p.intro_message === 'object' && 'message_id' in p.intro_message) room.intro_message = p.intro_message as { message_id: string };
-		} else if (typeof p.title === 'string') room.title = p.title;
+			if (p.private === true) room.private = true;
+		} else {
+			// An update resubmits every client field; one left out is cleared (§4.3.4). It is a new room record.
+			room.title = typeof p.title === 'string' ? p.title : room.room_id;
+			this.nextLog(room);
+		}
+		room.description = typeof p.description === 'string' && p.description ? p.description : undefined;
 		const record = this.roomRecord(room, true);
 		socket.deliver({ method: 'room_update', params: { joined: [record], users: Object.values(people) } });
 		this.broadcast({ method: 'room_update', params: { updated: [this.roomRecord(room)] } }, room);
@@ -271,17 +287,30 @@ export class MemoryProtocolServer {
 
 	private joinRoom(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const room = this.rooms.get(String(p.room_id));
-		if (!room) return fail('Unknown room');
+		if (!room || this.hidden(room)) return fail('Unknown room');
+		if (typeof p.user_id === 'string' && p.user_id !== 'preview_guest') return this.changeMember(room, p.user_id, true, reply, fail);
 		room.members.add('preview_guest');
 		socket.deliver({ method: 'room_update', params: { joined: [this.roomRecord(room, true)], users: Object.values(people) } });
 		reply();
 	}
-	private leaveRoom(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void): void {
+	private leaveRoom(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const room = this.rooms.get(String(p.room_id));
+		if (room && typeof p.user_id === 'string' && p.user_id !== 'preview_guest') return this.changeMember(room, p.user_id, false, reply, fail);
 		room?.members.delete('preview_guest');
 		socket.deliver({ method: 'room_update', params: { left: [{ room_id: String(p.room_id) }] } });
 		reply();
 	}
+	/** Adds or removes another user (§4.3.2): a membership record to the room's members, before and after. */
+	private changeMember(room: PreviewRoom, userId: string, joined: boolean, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
+		const user = people[userId];
+		if (!user || !Object.hasOwn(people, userId)) return fail('Unknown user');
+		if (joined) room.members.add(userId);
+		const record = { log_id: this.nextLog(room), room_id: room.room_id, members: [{ user: { ...user }, joined }] };
+		this.broadcast({ method: 'membership', params: record }, room);
+		if (!joined) room.members.delete(userId);
+		reply();
+	}
+
 	private updateMe(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void): void {
 		if (typeof p.name === 'string') people.preview_guest.name = p.name || 'You';
 		const you = { ...people.preview_guest };
@@ -295,7 +324,7 @@ export class MemoryProtocolServer {
 	private command(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const text = (p.body as JsonObject | undefined)?.text;
 		if (text === '/help') {
-			socket.deliver({ method: 'message', params: { room_id: String(p.room_id ?? roomId), from: { user_id: '@private', name: 'System message to you' }, body: { text: 'Preview commands: /help. Room and message operations are handled in memory.' } } });
+			socket.deliver({ method: 'message', params: { room_id: String(p.room_id ?? roomId), from: { user_id: '~private', name: 'System message to you' }, body: { text: 'Preview commands: /help. Room and message operations are handled in memory.' } } });
 			reply();
 		} else fail(`Unknown command: ${String(text ?? '')}`);
 	}
