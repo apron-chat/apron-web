@@ -3,6 +3,7 @@
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { userIdToAdd } from '$lib/ui/members';
 	import Avatar from './Avatar.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 
@@ -29,7 +30,7 @@
 	let total = $derived(room?.members === undefined ? undefined : Math.max(room.memberCount ?? 0, room.members.length));
 	let truncated = $derived(total !== undefined && room?.members !== undefined && total > room.members.length);
 	let changing = $derived(canChange && !session.snapshot.memberChangesUnsupported && Boolean(client) && Boolean(room?.joined));
-	/** People this client knows of who aren't members yet, to pick from when adding someone. */
+	/** People this client knows of who aren't members yet, suggested by `user_id` when adding someone. */
 	let candidates = $derived.by(() => {
 		const current = new Set((room?.members ?? []).map((member) => member.user_id));
 		return Object.values(session.snapshot.users).filter((user) => !current.has(user.user_id) && !user.user_id.startsWith('~'));
@@ -44,20 +45,14 @@
 		adding = '';
 	});
 
-	/** A typed `@user_id`, bare ID, or a known user's display name. */
-	function userIdOf(typed: string): string | undefined {
-		const value = typed.trim().replace(/^@/, '');
-		if (!value) return undefined;
-		const lower = value.toLowerCase();
-		return candidates.find((user) => user.user_id === value)?.user_id
-			?? candidates.find((user) => user.name?.toLowerCase() === lower)?.user_id
-			?? value;
-	}
-
 	async function add(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		const userId = userIdOf(adding);
-		if (!client || !room || !userId || busy) return;
+		const userId = userIdToAdd(adding);
+		if (!userId) {
+			note = { text: 'Enter the person’s @user_id: names aren’t unique.', error: true };
+			return;
+		}
+		if (!client || !room || busy) return;
 		busy = true;
 		note = undefined;
 		try {
@@ -102,7 +97,7 @@
 				<form class="add" onsubmit={add} aria-label="Add a member">
 					<input class="ap-field" list="member-candidates" placeholder="Add by @user_id" aria-label="User to add" bind:value={adding} disabled={busy} autocomplete="off" spellcheck="false" />
 					<datalist id="member-candidates">
-						{#each candidates as user (user.user_id)}<option value={user.user_id}>{directory.name(user)}</option>{/each}
+						{#each candidates as user (user.user_id)}<option value={user.user_id}>{directory.name(user)} (@{user.user_id})</option>{/each}
 					</datalist>
 					<button class="ap-btn ap-btn-sm" type="submit" disabled={busy || !adding.trim()}>Add</button>
 				</form>

@@ -37,6 +37,22 @@ export function statusLabel(snapshot: ClientSnapshot, stalled: boolean): string 
 	return 'Waiting to connect';
 }
 
+/**
+ * What a scheme does on this server (§3.1, §3.2): with `server.signup`,
+ * `auth` lists the schemes that sign in and `signup` those that create an
+ * account; without it, every scheme in `auth` does both.
+ */
+export function schemeUse(server: Pick<ServerParams, 'auth' | 'signup'> | undefined, scheme: string): { signIn: boolean; signUp: boolean } {
+	const signIn = server?.auth.includes(scheme) === true;
+	return { signIn, signUp: server?.signup ? server.signup.includes(scheme) : signIn };
+}
+
+/** Every scheme a server offers for signing in or creating an account, in its order: `auth`, then the rest of `signup`. */
+export function offeredSchemes(server: Pick<ServerParams, 'auth' | 'signup'> | undefined): string[] {
+	if (!server) return [];
+	return [...new Set([...server.auth, ...(server.signup ?? [])])];
+}
+
 export function demoRetentionNotice(server: ServerParams | undefined): string {
 	const seconds = server?.ext?.demo?.retention_seconds;
 	if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return '';

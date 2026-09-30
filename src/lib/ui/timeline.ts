@@ -33,7 +33,8 @@ export interface ThreadEntry {
 	/**
 	 * Where the card sits in the parent room's feed: the thread's creation,
 	 * its `room_id` when that is a log ID, as both example servers mint it,
-	 * else its record's `log_id` (which moves on with each edit).
+	 * else the earliest of its records seen, which edits (a bot keeping the
+	 * description current) don't move.
 	 */
 	anchor?: string;
 	/**
@@ -79,7 +80,7 @@ export function threadEntry(room: RoomSnapshot): ThreadEntry {
 		participants = [event.from, ...participants.filter((sender) => sender.user_id !== event.from.user_id)].slice(0, 4);
 	}
 	const latest = messages[messages.length - 1];
-	const anchor = isLogId(room.id) ? room.id : room.record?.log_id;
+	const anchor = isLogId(room.id) ? room.id : room.firstRecordLogId ?? room.record?.log_id;
 	return {
 		id: room.id,
 		parentRoomId: room.parentRoomId ?? '',
@@ -98,7 +99,7 @@ export function threadEntry(room: RoomSnapshot): ThreadEntry {
 
 /** A thread the viewer has not joined, from a listing: a card without a count, since its history isn't loaded. */
 function unjoinedThreadEntry(listing: RoomListing): ThreadEntry {
-	const anchor = isLogId(listing.id) ? listing.id : listing.record.log_id;
+	const anchor = isLogId(listing.id) ? listing.id : listing.firstRecordLogId ?? listing.record.log_id;
 	const description = listing.record.description;
 	return {
 		id: listing.id,
@@ -151,14 +152,49 @@ export function threadTitleFor(event: MessageRecord | undefined): string {
 
 /**
  * The `description` of a thread started from a message (§3.4): the gist, the
- * message's text as written (Markdown, as this client posts it), shortened.
- * The message stays in the parent room; the thread's first reply points back
- * at it with `reply_to`. Undefined when the message has no text, or when its
- * title already says it all.
+ * message's text, shortened on a line or word boundary with any code fence
+ * it leaves open closed. A Markdown message is kept as written; a plain one
+ * (§3.5: `format` absent or `plain`) is escaped, since a description is
+ * Markdown. The message stays in the parent room; the thread's first reply
+ * points back at it with `reply_to`. Undefined when the message has no text,
+ * or when its title already says it all.
  */
 export function threadDescriptionFor(event: MessageRecord | undefined): string | undefined {
 	const text = event && !event.deleted ? textOf(event).trim() : '';
-	return text && text !== threadTitleFor(event) ? shorten(text, THREAD_DESCRIPTION_MAX) : undefined;
+	if (!text || text === threadTitleFor(event)) return undefined;
+	const markdown = event?.body?.format === 'markdown';
+	return shortenMarkdown(markdown ? text : escapeMarkdown(text), THREAD_DESCRIPTION_MAX);
+}
+
+/** Plain text as Markdown that renders as the same text: every character Markdown could read as syntax is escaped. */
+export function escapeMarkdown(text: string): string {
+	return text.replace(/[\\`*_{}[\]()#+\-.!|>~<]/g, (character) => `\\${character}`);
+}
+
+/**
+ * Markdown cut to at most about `max` characters: at the last line break (or
+ * else space) before the limit, never mid-word, with a code fence the cut
+ * leaves open closed, and an ellipsis after it.
+ */
+function shortenMarkdown(text: string, max: number): string {
+	const chars = [...text];
+	if (chars.length <= max) return text;
+	let cut = chars.slice(0, max - 1).join('');
+	const line = cut.lastIndexOf('\n');
+	const space = cut.lastIndexOf(' ');
+	if (line > max / 2) cut = cut.slice(0, line);
+	else if (space > max / 2) cut = cut.slice(0, space);
+	cut = cut.trimEnd();
+	const fences = cut.split('\n').map((row) => /^\s*(```|~~~)/.exec(row)?.[1]).filter((fence) => fence !== undefined);
+	return fences.length % 2 === 1 ? `${cut}\n${fences[fences.length - 1]}\n\n…` : `${cut}…`;
+}
+
+/**
+ * A thread of the room already started from a message, by the convention
+ * this client follows: its first loaded message replies to it.
+ */
+export function threadStartedFrom(rooms: readonly RoomSnapshot[], parentRoomId: string, messageId: string): string | undefined {
+	return childRooms(rooms, parentRoomId).find((room) => timelineMessages(room)[0]?.reply_to?.message_id === messageId)?.id;
 }
 
 /** At most `max` characters (code points), ending with "…" when cut. */

@@ -37,9 +37,10 @@
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, type RecentServer } from '$lib/ui/storage';
-	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadTitleFor } from '$lib/ui/timeline';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, type RecentServer } from '$lib/ui/storage';
+	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
 	import { takeEmailLink, type EmailLink } from '$lib/ui/email-link';
+	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
@@ -118,8 +119,10 @@
 	let editingId = $state<string | undefined>();
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
-	/** An emailed sign-in link this page was opened with (§4.10), until it has been used. */
+	/** An emailed sign-in link this page was opened with (§4.10), until the viewer answers whether to use it. */
 	let emailLink = $state<EmailLink | undefined>();
+	/** The link is being used: its code goes out as a fresh connection's first `auth`. */
+	let emailLinkBusy = $state(false);
 	/** Why the emailed link didn't sign in, for the connect screen, with its address prefilled. */
 	let emailLinkFailure = $state<{ email: string; error: string } | undefined>();
 	/** The open thread's `room_id`; undefined in the room view. */
@@ -137,6 +140,8 @@
 	let newDivider = $state<{ room: string; after?: string; fixed: boolean }>({ room: '', fixed: false });
 	/** Messages a thread is being started from, for the button's "Starting…". */
 	let startingThreads = $state<Record<string, true>>({});
+	/** Threads this page started, by the message they were started from: Start thread again opens the same one. */
+	const startedThreads = new Map<string, string>();
 	let mobilePane = $state<'rooms' | 'main'>('main');
 	/** Wide screens give the member list a column of its own; narrower ones overlay it on the conversation. */
 	let memberListWide = $state(false);
@@ -303,41 +308,13 @@
 		});
 	});
 
-	// An emailed sign-in link (§4.10) signs in once the server has answered and the connection's own
-	// sign-in has settled: as a guest or a kept session, or refused because this server has no guests.
-	$effect(() => {
-		const link = emailLink;
-		const chat = client;
-		if (!link || !chat || snapshot.status !== 'connected' || !snapshot.server || snapshot.authBusy) return;
-		if (!snapshot.authenticated && !snapshot.error) return;
-		emailLink = undefined;
-		const offered = snapshot.server.auth.includes('email');
-		untrack(() => {
-			feedback.pending('Signing in…');
-			chat.signInWithEmail(link.email, link.token).then(() => {
-				feedback.clear();
-				session.forget();
-			}, (cause: unknown) => {
-				const error = cause instanceof Error ? cause.message : 'The sign-in link didn’t work';
-				if (!offered) {
-					feedback.error(`This server doesn’t offer email sign-in: ${error}`);
-					return;
-				}
-				// The link may have expired or been used: the connect screen can send a new code.
-				feedback.clear();
-				emailLinkFailure = { email: link.email, error: `The sign-in link didn’t work: ${error}. Send a new code to try again.` };
-				connectScheme = 'email';
-				connectOpen = true;
-			});
-		});
-	});
-
 	// A server without guests (and no kept session to resume) can only be used signed in: the connect screen,
 	// with the server's welcome (§3.2), opens once by itself, rather than leaving an empty app and an error.
+	// Not while an emailed link waits for its answer or is being used: that is a sign-in already.
 	let promptedSignIn = false;
 	$effect(() => {
 		const server = snapshot.server;
-		if (previewMode || promptedSignIn || connectOpen || emailLink || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
+		if (previewMode || promptedSignIn || connectOpen || emailLink || emailLinkBusy || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
 		if (server.auth.includes('guest') || !snapshot.error) return;
 		promptedSignIn = true;
 		untrack(() => openConnect({ signIn: true }));
@@ -372,7 +349,7 @@
 		});
 	});
 
-	// A thread opens at its intro, unless only its newest replies are loaded: then it
+	// A thread opens at its top, unless only its newest replies are loaded: then it
 	// opens at those, like a room, and reading back loads the older ones.
 	$effect(() => {
 		const room = threadRoom;
@@ -411,7 +388,7 @@
 	});
 
 	// Stay pinned to the latest item while the pane fills in: a room's history, its threads'
-	// cards and intros land over several updates, not all of which change what the effect
+	// cards and summaries land over several updates, not all of which change what the effect
 	// above tracks. Follow the rendered content instead.
 	$effect(() => {
 		const scroll = messageScroll;
@@ -513,6 +490,44 @@
 	});
 
 	// --- Connecting ---
+
+	/**
+	 * The viewer confirmed an emailed link, having been shown its address and
+	 * server (§4.10: a link's token is presented on a connection that is not
+	 * signed in, once the user has confirmed both): switch to the server it
+	 * names, if another, then present its token as a fresh connection's first
+	 * `auth`, in place of resuming the kept session. A link never adds an
+	 * address to an account; that is the profile's Add email. A failure opens
+	 * the connect screen on Email with the address and the reason.
+	 */
+	function useEmailLink(): void {
+		const link = emailLink;
+		const chat = client;
+		emailLink = undefined;
+		if (!link || !chat) return;
+		if (link.server && link.server !== chat.url) {
+			leaveBackend();
+			serverInput = link.server;
+			saveServerUrl(link.server);
+			chat.setUrl(link.server);
+		} else {
+			session.forget();
+		}
+		emailLinkBusy = true;
+		feedback.pending('Signing in…');
+		chat.signInWithEmail(link.email, link.token).then(() => {
+			feedback.clear();
+			connectOpen = false;
+			emailLinkFailure = undefined;
+		}, (cause: unknown) => {
+			feedback.clear();
+			const error = cause instanceof Error ? cause.message : 'unknown error';
+			// The link may have expired or been used: the connect screen can send a new code.
+			emailLinkFailure = { email: link.email, error: `The sign-in link didn’t work (${error}). Send a new code to try again.` };
+			connectScheme = 'email';
+			connectOpen = true;
+		}).finally(() => (emailLinkBusy = false));
+	}
 
 	/** Replaces the page's URL without adding a history entry: through the router once it runs, else the browser. */
 	function scrubUrl(url: string): void {
@@ -1194,12 +1209,20 @@
 		const chat = client;
 		const roomId = activeRoom.id;
 		const id = event.message_id;
+		// A thread already started from this message (here, or by anyone whose first reply points at it) opens instead.
+		const existing = [startedThreads.get(id), threadStartedFrom(session.rooms, roomId, id)]
+			.find((thread) => thread !== undefined && session.rooms.some((room) => room.id === thread));
+		if (existing) {
+			chooseThread(existing);
+			return;
+		}
 		startingThreads = { ...startingThreads, [id]: true };
 		feedback.pending('Starting thread…');
 		try {
 			const description = threadDescriptionFor(event);
 			const result = await chat.createRoom({ parentRoomId: roomId, title: threadTitleFor(event), ...(description ? { description } : {}) }).promise;
 			if (typeof result.room_id !== 'string') throw new Error('Invalid room response');
+			startedThreads.set(id, result.room_id);
 			pendingOpen = { room: roomId, thread: result.room_id, replyTo: id };
 			feedback.clear();
 		} catch (cause) {
@@ -1261,6 +1284,13 @@
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
 </svelte:head>
 
+{#if client && emailLink}
+	<EmailLinkDialog
+		link={emailLink}
+		current={{ url: client.url, label: session.server?.name, ...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}) }}
+		onconfirm={useEmailLink} oncancel={() => (emailLink = undefined)}
+	/>
+{/if}
 {#if !client}
 	<div class="app ap-shell ap-shell-norail"></div>
 {:else if connectOpen}

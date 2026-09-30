@@ -37,7 +37,16 @@ describe('sign-in', () => {
 
 	const auths = () => latest().sent.filter((frame) => frame.method === 'auth');
 
-	it('asks for an email code, then signs in with it and keeps the bearer token it returns', async () => {
+	/** The fresh connection an email sign-in reconnects on, greeted by `auth`. */
+	function freshConnection(auth: string[], extra: Record<string, unknown> = {}): FakeSocket {
+		vi.advanceTimersByTime(0);
+		const socket = latest();
+		socket.open();
+		socket.receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'], ...extra } });
+		return socket;
+	}
+
+	it('asks for an email code, then presents it as a fresh connection’s first auth and keeps the bearer token', async () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
 		expect(snapshot.you?.user_id).toBe('guest_1');
 
@@ -50,21 +59,23 @@ describe('sign-in', () => {
 		expect(snapshot.you?.user_id).toBe('guest_1');
 		expect(snapshot.passkeySession).toBe(false);
 
+		const guestSocket = latest();
 		const signedIn = client.signInWithEmail('ada@example.com', ' 418092 ');
-		await vi.advanceTimersByTimeAsync(0);
-		const exchange = latest().request('auth');
-		expect(exchange.params).toEqual({ scheme: 'email', email: 'ada@example.com', token: '418092' });
-		// Other requests wait for the sign-in.
-		await expect(client.send('lobby', 'x').promise).rejects.toThrow('Finish signing in');
 		expect(snapshot.authBusy).toBe(true);
-		latest().receive({ id: exchange.id, result: { you: { user_id: 'ada', name: 'Ada' }, token: 'st_Hk41' } });
+		const socket = freshConnection(['email', 'token', 'guest']);
+		expect(socket).not.toBe(guestSocket);
+		// Never on the connection that was already someone: the code is this connection's first auth, rooms right behind.
+		expect(guestSocket.sent.filter((frame) => (frame.params as { token?: string } | undefined)?.token === '418092')).toEqual([]);
+		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list']);
+		const exchange = socket.request('auth');
+		expect(exchange.params).toMatchObject({ scheme: 'email', email: 'ada@example.com', token: '418092' });
+		socket.receive({ id: exchange.id, result: { you: { user_id: 'ada', name: 'Ada' }, token: 'st_Hk41' } });
 		await signedIn;
 		expect(snapshot.you).toEqual({ user_id: 'ada', name: 'Ada' });
 		expect(snapshot.passkeySession).toBe(true);
+		expect(snapshot.signedInWith).toBe('email');
 		expect(snapshot.authBusy).toBe(false);
 		expect(storage.get(TOKEN_KEY)).toBe('st_Hk41');
-		// A new identity lists its own rooms.
-		expect(latest().sent.filter((frame) => frame.method === 'room_list')).toHaveLength(2);
 
 		// The next connection resumes with the bearer token.
 		latest().drop();
@@ -73,14 +84,33 @@ describe('sign-in', () => {
 		expect(auths()[0].params).toMatchObject({ scheme: 'token', token: 'st_Hk41' });
 	});
 
-	it('reports a refused code and stays signed in as before', async () => {
+	it('presents the code instead of resuming a kept session', async () => {
+		storage.set(TOKEN_KEY, 'bob-session');
+		client.stop();
+		client = new ChatClient('ws://fake.test/');
+		client.subscribe((next) => (snapshot = next));
+		client.start();
+		await latest().greet([], { auth: ['email', 'token', 'guest'], you: { user_id: 'bob' } });
+		expect(auths()[0].params).toMatchObject({ scheme: 'token', token: 'bob-session' });
+		const signedIn = client.signInWithEmail('ada@example.com', '418092');
+		const socket = freshConnection(['email', 'token', 'guest']);
+		expect(auths()).toHaveLength(1);
+		expect(auths()[0].params).toMatchObject({ scheme: 'email', token: '418092' });
+		socket.receive({ id: socket.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_ada' } });
+		await signedIn;
+		expect(storage.get(TOKEN_KEY)).toBe('st_ada');
+	});
+
+	it('reports a refused code, and the fresh connection signs in as it otherwise would', async () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
 		const signedIn = client.signInWithEmail('ada@example.com', '000000');
-		await vi.advanceTimersByTimeAsync(0);
-		latest().receive({ id: latest().request('auth').id, error: { code: -32001, message: 'Invalid or expired code' } });
+		const socket = freshConnection(['email', 'token', 'guest']);
+		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Invalid or expired code' } });
 		await expect(signedIn).rejects.toThrow('Invalid or expired code');
-		expect(snapshot.you?.user_id).toBe('guest_1');
-		expect(snapshot.authenticated).toBe(true);
+		await settle();
+		expect(auths().map((frame) => (frame.params as { scheme: string }).scheme)).toEqual(['email', 'guest']);
+		await socket.reply('auth', { you: { user_id: 'guest_2' } });
+		expect(snapshot.you?.user_id).toBe('guest_2');
 		expect(storage.has(TOKEN_KEY)).toBe(false);
 	});
 
@@ -98,12 +128,47 @@ describe('sign-in', () => {
 		expect(snapshot.error).toMatch(/email/);
 		expect(snapshot.server?.welcome).toBe('Create an account with **email**.');
 		const signedIn = client.signInWithEmail('ada@example.com', '418092');
-		await vi.advanceTimersByTimeAsync(0);
-		latest().receive({ id: latest().request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_1' } });
+		const socket = freshConnection(['email', 'token']);
+		socket.receive({ id: socket.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_1' } });
 		await signedIn;
 		expect(snapshot.authenticated).toBe(true);
 		expect(snapshot.error).toBeUndefined();
-		expect(latest().request('room_list').params).toEqual({ filter: 'joined', members: true });
+		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
+	});
+
+	it('reports an email session it cannot resume as signed out, never a guest', async () => {
+		await latest().greet([], { auth: ['email', 'guest', 'webauthn'] });
+		const signedIn = client.signInWithEmail('ada@example.com', '418092');
+		const socket = freshConnection(['email', 'guest', 'webauthn']);
+		// No `token` in `auth`: nothing to resume with.
+		socket.receive({ id: socket.request('auth').id, result: { you: { user_id: 'ada' } } });
+		await signedIn;
+		expect(snapshot.passkeySession).toBe(true);
+		socket.drop();
+		vi.advanceTimersByTime(5_000);
+		const next = latest();
+		next.open();
+		next.receive({ method: 'server', params: { protocol: 7, auth: ['email', 'guest', 'webauthn'], caps: [] } });
+		await settle();
+		expect(next.sent.filter((frame) => frame.method === 'auth')).toEqual([]);
+		expect(snapshot.authenticated).toBe(false);
+		expect(snapshot.held).toBe(true);
+		expect(snapshot.error).toMatch(/email/);
+	});
+
+	it('adds an email to the signed-in account on the same connection', async () => {
+		await latest().greet([], { auth: ['email', 'token', 'guest'], token: 'st_guest' });
+		expect(snapshot.signedInWith).toBe('token');
+		const socket = latest();
+		const added = client.addEmail('ada@example.com', '418092');
+		await vi.advanceTimersByTimeAsync(0);
+		expect(latest()).toBe(socket);
+		const exchange = socket.request('auth');
+		expect(exchange.params).toEqual({ scheme: 'email', email: 'ada@example.com', token: '418092' });
+		socket.receive({ id: exchange.id, result: { you: { user_id: 'guest_1', name: 'Guest' } } });
+		expect((await added).user_id).toBe('guest_1');
+		expect(snapshot.signedInWith).toBe('email');
+		expect(storage.get(TOKEN_KEY)).toBe('st_guest');
 	});
 
 	it('saves a token rotated in reply to a token resume, and presents the latest next time', async () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ProtocolStore, applyRecords, createTimeline, decodeHistoryRecords, timelineEvents, type MembershipRecord, type TimelineState } from '$lib/protocol/reducer';
 import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
-import { buildRoomTimeline, buildThreadTimeline, homeRoomOf, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadPreview, threadTitleFor, type TimelineItem } from './timeline';
+import { buildRoomTimeline, buildThreadTimeline, homeRoomOf, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadPreview, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
 
@@ -78,7 +78,16 @@ describe('thread grouping', () => {
 		expect(partial.latestMessage).toBe(first);
 	});
 
+	it('finds a thread started from a message by its first reply', () => {
+		const parent = room('general', [message(0, 'alice')]);
+		const started = room('t9', [message(1000, 'bob', { room_id: 't9', reply_to: { message_id: String(base) } })], { parentRoomId: 'general' });
+		expect(threadStartedFrom([parent, started], 'general', String(base))).toBe('t9');
+		expect(threadStartedFrom([parent, started], 'general', String(base + 1))).toBeUndefined();
+	});
+
 	it('anchors a card at the thread’s creation', () => {
+		// Opaque room IDs: the first record seen, which later edits don't move.
+		expect(threadEntry(room('opaque', [], { parentRoomId: 'general', firstRecordLogId: '40', record: { room_id: 'opaque', log_id: '90' } })).anchor).toBe('40');
 		expect(threadEntry(room(String(base + 5000), [], { parentRoomId: 'general' })).anchor).toBe(String(base + 5000));
 		expect(threadEntry(room('opaque', [], { parentRoomId: 'general', record: { room_id: 'opaque', log_id: '42' } })).anchor).toBe('42');
 	});
@@ -101,10 +110,18 @@ describe('thread grouping', () => {
 	});
 
 	it('describes a thread started from a message with its text, shortened', () => {
-		expect(threadDescriptionFor(message(0, 'alice', { body: { text: '  Why did the **4pm** deploy fail?\nThe runner looked fine.\n' } }))).toBe('Why did the **4pm** deploy fail?\nThe runner looked fine.');
-		expect([...threadDescriptionFor(message(0, 'alice', { body: { text: 'x'.repeat(600) } }))!]).toHaveLength(500);
+		expect(threadDescriptionFor(message(0, 'alice', { body: { text: '  Why did the **4pm** deploy fail?\nThe runner looked fine.\n', format: 'markdown' } }))).toBe('Why did the **4pm** deploy fail?\nThe runner looked fine.');
+		expect([...threadDescriptionFor(message(0, 'alice', { body: { text: 'x'.repeat(600), format: 'markdown' } }))!]).toHaveLength(500);
 		expect(threadDescriptionFor(message(0, 'alice', { body: { embeds: [{ kind: 'image' }] } }))).toBeUndefined();
 		expect(threadDescriptionFor(message(0, 'alice', { deleted: true }))).toBeUndefined();
+		// Plain text stays the same text once read as Markdown.
+		expect(threadDescriptionFor(message(0, 'alice', { body: { text: '1. not a list\n*not bold* # nor a heading' } }))).toBe('1\\. not a list\n\\*not bold\\* \\# nor a heading');
+		// A long one is cut on a line boundary, closing the code fence it leaves open.
+		const fenced = `Look:\n${'word '.repeat(60)}\n\`\`\`\n${'const x = 1;\n'.repeat(40)}\`\`\``;
+		const cut = threadDescriptionFor(message(0, 'alice', { body: { text: fenced, format: 'markdown' } }))!;
+		expect(cut.split('\n').filter((row) => row.startsWith('```'))).toHaveLength(2);
+		expect(cut.endsWith('…')).toBe(true);
+		expect(cut.split('\n').filter((row) => row.startsWith('const')).every((row) => row === 'const x = 1;')).toBe(true);
 		// A short one-liner is all title.
 		expect(threadDescriptionFor(message(0, 'alice', { body: { text: 'Deploy?' } }))).toBeUndefined();
 	});

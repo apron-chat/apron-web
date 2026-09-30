@@ -68,6 +68,11 @@ export interface RoomSnapshot {
 	private?: boolean;
 	/** What the room is about (§3.4), Markdown by convention; absent when empty. */
 	description?: string;
+	/**
+	 * The least `log_id` of this room's records seen: where a thread's card
+	 * stays put in its parent's feed while edits give the record new `log_id`s.
+	 */
+	firstRecordLogId?: string;
 	/** Opaque extension data from the room record. */
 	ext?: JsonObject;
 	/** Title changes seen in the room's log, ascending (absent when none). */
@@ -128,6 +133,8 @@ export interface RoomListing {
 	id: string;
 	title: string;
 	record: RoomRecord;
+	/** As in `RoomSnapshot`. */
+	firstRecordLogId?: string;
 	parentRoomId?: string;
 	latestLogId?: string;
 	historyLogId?: string | null;
@@ -182,7 +189,13 @@ export interface ClientSnapshot {
 	/** True once the server has accepted this connection's auth request. */
 	authenticated: boolean;
 	authBusy?: boolean;
+	/** Signed in to a registered account (a passkey, an email, or a kept token), not as a guest. */
 	passkeySession?: boolean;
+	/**
+	 * How this browser signed in to that account: `token` means a kept token
+	 * is its only way back in here, worth adding a passkey or email to (§3.2).
+	 */
+	signedInWith?: 'webauthn' | 'email' | 'token';
 	/**
 	 * Signed in as a guest on a server whose guests only read (the demo
 	 * worker's `ext.demo.guest_posting: false`): posting, reacting, and room

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { capabilitiesOf, type ClientSnapshot } from '$lib/protocol/client';
-import { connectionStateOf, demoRetentionNotice, statusLabel } from './connection';
+import { connectionStateOf, demoRetentionNotice, offeredSchemes, schemeUse, statusLabel } from './connection';
 import { retryAfterLabel } from './time';
 
 const snapshot = (fields: Partial<ClientSnapshot>): ClientSnapshot => ({
@@ -37,5 +37,22 @@ describe('connection state', () => {
 		expect(demoRetentionNotice({ protocol: 7, auth: ['guest'], ext: { demo: { retention_seconds: 86_400 } } })).toMatch(/last day/);
 		expect(demoRetentionNotice({ protocol: 7, auth: ['guest'], ext: { demo: { retention_seconds: 7_200 } } })).toMatch(/last 2 hours/);
 		expect(demoRetentionNotice({ protocol: 7, auth: ['guest'], ext: {} })).toBe('');
+	});
+});
+
+describe('sign-in and sign-up schemes (server.signup)', () => {
+	it('lets auth do both without signup', () => {
+		const server = { auth: ['webauthn', 'email'] };
+		expect(schemeUse(server, 'email')).toEqual({ signIn: true, signUp: true });
+		expect(schemeUse(server, 'guest')).toEqual({ signIn: false, signUp: false });
+		expect(offeredSchemes(server)).toEqual(['webauthn', 'email']);
+	});
+
+	it('splits signing in from creating an account with signup', () => {
+		const server = { auth: ['webauthn'], signup: ['email'] };
+		expect(schemeUse(server, 'webauthn')).toEqual({ signIn: true, signUp: false });
+		expect(schemeUse(server, 'email')).toEqual({ signIn: false, signUp: true });
+		expect(offeredSchemes(server)).toEqual(['webauthn', 'email']);
+		expect(offeredSchemes(undefined)).toEqual([]);
 	});
 });

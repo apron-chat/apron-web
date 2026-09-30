@@ -58,6 +58,17 @@
 	let canUsePasskey = $derived(!!session.server?.auth.includes('webauthn'));
 	/** Email sign-in (§4.10), where the server offers it. */
 	let canUseEmail = $derived(!!session.server?.auth.includes('email'));
+	/**
+	 * Only this browser's kept token leads back into the account (a pasted or
+	 * invite token, §3.2): a gentle nudge to add a passkey or an email.
+	 */
+	let tokenOnly = $derived(Boolean(snapshot.passkeySession && snapshot.signedInWith === 'token' && (canUsePasskey || canUseEmail)));
+	/**
+	 * Adding an email to this account (§4.10): an explicit action, the code
+	 * requested and presented on this signed-in connection. An emailed link
+	 * never does this; it signs in.
+	 */
+	let addEmail = $state<{ step: 'address' | 'code'; email: string; code: string; busy: boolean; error: string } | undefined>();
 	function toggle(): void {
 		if (open) {
 			close();
@@ -71,6 +82,7 @@
 		passkeyError = '';
 		passkeyNotice = '';
 		avatarError = '';
+		addEmail = undefined;
 		open = true;
 	}
 
@@ -148,6 +160,35 @@
 		} catch (cause) {
 			passkeyError = passkeyMessage(cause);
 		}
+	}
+
+	/** The Add email form's next step: ask for a code for the address, then present it here. */
+	async function continueAddEmail(): Promise<void> {
+		const form = addEmail;
+		if (!form || form.busy) return;
+		form.error = '';
+		form.busy = true;
+		try {
+			if (form.step === 'address') {
+				await client.requestEmailCode(form.email);
+				form.step = 'code';
+			} else {
+				await client.addEmail(form.email, form.code);
+				addEmail = undefined;
+				passkeyNotice = `Added ${form.email} · sign in with it anywhere`;
+				return;
+			}
+		} catch (cause) {
+			form.error = cause instanceof Error ? cause.message : 'Unable to add the address';
+		}
+		form.busy = false;
+	}
+
+	/** Enter in the Add email fields continues that form, not the profile's. */
+	function addEmailKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		void continueAddEmail();
 	}
 
 	function resetDraft(): void {
@@ -246,10 +287,14 @@
 						{:else}
 							<span class="ap-profedit-row">
 								<span class="signin-actions">
+									<!-- Signed in (a guest too): a passkey registered or an email code presented here adds to this account (§4.9, §4.10). -->
+									{#if canUsePasskey && you}
+										<button class="ap-btn ap-btn-sm" type="button" data-testid="add-passkey" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
+									{/if}
+									{#if canUseEmail && you && !addEmail}
+										<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+									{/if}
 									{#if snapshot.passkeySession}
-										{#if canUsePasskey}
-											<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !you || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
-										{/if}
 										<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
 									{:else}
 										{#if canUsePasskey}
@@ -266,10 +311,26 @@
 									<span class="ap-profedit-hint ap-profedit-ok" role="status">{passkeyNotice}</span>
 								{:else if passkeyUnavailable && canUsePasskey && !canUseEmail}
 									<span class="ap-profedit-hint">{passkeyUnavailable}</span>
+								{:else if tokenOnly}
+									<span class="ap-profedit-hint" data-testid="token-only-nudge">Only this browser’s saved session gets you back into this account. Add {canUsePasskey && canUseEmail ? 'a passkey or an email' : canUsePasskey ? 'a passkey' : 'an email'} to sign in anywhere.</span>
 								{:else}
 									<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
 								{/if}
 							</span>
+							{#if addEmail}
+								<span class="add-email" role="group" aria-label="Add email">
+									{#if addEmail.step === 'address'}
+										<input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com" autocomplete="email" bind:value={addEmail.email} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+										<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.email.trim()} onclick={continueAddEmail}>Send code</button>
+									{:else}
+										<input class="ap-field ap-field-mono" aria-label="Code from the email" placeholder="Code" inputmode="numeric" autocomplete="one-time-code" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+										<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.code.trim()} onclick={continueAddEmail}>Add</button>
+									{/if}
+									<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>
+								</span>
+								{#if addEmail.error}<span class="ap-profedit-hint ap-profedit-err" role="alert">{addEmail.error}</span>
+								{:else if addEmail.step === 'code'}<span class="ap-profedit-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
+							{/if}
 						{/if}
 					</div>
 				{/if}
@@ -301,6 +362,8 @@
 
 <style>
 	.ap-profile { display: flex; align-items: center; gap: var(--space-1); }
+	.add-email { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
+	.add-email .ap-field { flex: 1; min-width: 0; height: 28px; font-size: 13px; }
 	.ap-profile-me { flex: 1; min-width: 0; width: auto; }
 	.ap-profile-settings { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; color: var(--ink-muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; }
 	.ap-profile-settings:hover { color: var(--ink); background: var(--bg-300); }

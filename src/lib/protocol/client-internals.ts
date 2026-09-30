@@ -68,6 +68,19 @@ export function newRoomState(id: string, kind: RoomKind = 'joined'): RoomState {
 /** `embedded` marks a `reply_to` snapshot, which installs regardless of its room's bound. */
 export type LiveRecord = { kind: 'message'; record: MessageRecord; embedded?: boolean } | { kind: 'reaction'; record: ReactionSet };
 
+/** How a kept session signed in (see `ChatClient.signedInWith`). */
+export type SignInMethod = 'webauthn' | 'email' | 'token';
+
+/** An email code (or a link's token) to present as the next connection's first `auth` (§4.10). */
+export interface PendingEmail {
+	email: string;
+	token: string;
+	/** The display name to apply once signed in. */
+	name?: string;
+	resolve: (named: OperationHandle | undefined) => void;
+	reject: (cause: Error) => void;
+}
+
 export interface PendingSave {
 	requestId: string;
 	/** The submitted client fields (params without `message_id`/`room_id` key for rooms). */
@@ -124,6 +137,8 @@ export type ValidHistoryResponse = JsonObject & {
 };
 
 export const REQUEST_TIMEOUT_MS = 20_000;
+/** The implementation string sent as `client` with `auth` (§3.2). */
+export const CLIENT_NAME = 'apron-web/0.4';
 /** The `unsupported` error code (§1.1): a method or an optional parameter the server does not implement. */
 export const UNSUPPORTED = -32601;
 const HISTORY_PAGE_SIZE = 200;

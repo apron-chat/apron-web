@@ -134,6 +134,11 @@ export interface ServerParams {
 	name?: string;
 	caps?: string[];
 	auth: string[];
+	/**
+	 * The schemes that create an account (§3.1, §3.2); `auth` then lists
+	 * those that sign in. Absent: `auth` does both.
+	 */
+	signup?: string[];
 	/** Markdown for the sign-in screen (§3.2): how this server's schemes fit together. */
 	welcome?: string;
 	/** Extension metadata (§3.1). */
@@ -364,22 +369,28 @@ export type SystemScope = 'server' | 'room' | 'private';
 
 const SYSTEM_SCOPES = new Map<string, SystemScope>([['~server', 'server'], ['~room', 'room'], ['~private', 'private']]);
 
-/**
- * Legacy fallback: protocol v6 named the three scoped system identities with
- * `@` (`@server`, `@room`, `@private`), and v7 moved them to `~`. Senders from
- * a v6 server still read as system notices (best-effort interop, §3.1); no
- * other `@` ID does, since `@` marks nothing in v7. Drop with v6 servers.
- */
-const LEGACY_SYSTEM_SCOPES = new Map<string, SystemScope>([['@server', 'server'], ['@room', 'room'], ['@private', 'private']]);
-
 /** A server-controlled sender (Appendix A.1, A.3): a `user_id` starting with `~`. */
 export function isSystemId(userId: string | undefined): boolean {
-	return typeof userId === 'string' && (userId.startsWith('~') || LEGACY_SYSTEM_SCOPES.has(userId));
+	return typeof userId === 'string' && userId.startsWith('~');
 }
 
 /** The scope a system identity states (`~server`, `~room`, `~private`), if it is one of those. */
 export function systemScope(userId: string | undefined): SystemScope | undefined {
-	return userId === undefined ? undefined : SYSTEM_SCOPES.get(userId) ?? LEGACY_SYSTEM_SCOPES.get(userId);
+	return userId === undefined ? undefined : SYSTEM_SCOPES.get(userId);
+}
+
+/**
+ * Legacy fallback, for servers before protocol v7 only: v6 named the three
+ * scoped system identities with `@` (`@server`, `@room`, `@private`); v7 moved
+ * them to `~`, and on a v7 server `@server` is an ordinary user. The client
+ * rewrites these senders from a v6 server to their `~` names as they arrive
+ * (best-effort interop, §3.1). Drop with v6 servers.
+ */
+const LEGACY_SYSTEM_IDS = new Map<string, string>([['@server', '~server'], ['@room', '~room'], ['@private', '~private']]);
+
+/** A v6 sender's v7 system identity, or undefined when it is not one of the three. */
+export function legacySystemId(userId: string): string | undefined {
+	return LEGACY_SYSTEM_IDS.get(userId);
 }
 
 /** The sender of notices this client shows only to you, such as a failed command's error (Appendix A.1). */

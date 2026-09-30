@@ -229,6 +229,16 @@ export class ProtocolStore {
 	}
 
 	/**
+	 * The least `log_id` of the room's records seen: its creation when that
+	 * record was seen, and in any case a position that edits don't move.
+	 */
+	firstRoomLogId(roomId: string): string | undefined {
+		let first: string | undefined;
+		for (const logId of this.roomTitles.get(roomId)?.keys() ?? []) if (first === undefined || compareLogIds(logId, first) < 0) first = logId;
+		return first;
+	}
+
+	/**
 	 * The room's title changes, ascending: each logged room record whose title
 	 * differs from the record just before it among those seen. History
 	 * compaction may drop records, so a rename between two unseen ones is missed.
