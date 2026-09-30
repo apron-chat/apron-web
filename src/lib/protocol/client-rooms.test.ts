@@ -175,32 +175,34 @@ describe('rooms by request (cap rooms)', () => {
 	it('keeps member lists from listings and memberships, whichever order they arrive in', async () => {
 		await authenticate(['rooms', 'history']);
 		// A guest's own join may arrive before anything is listed (the Go server logs it at auth).
-		socket.receive({ method: 'room_update', params: { membership: [{ log_id: '11', room_id: 'general', members: [{ user: { user_id: 'guest_1', name: 'Guest' }, joined: true }] }] } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '11', room_id: 'general', members: [{ user: { user_id: 'guest_1', name: 'Guest' }, joined: true }] }] } });
 		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '11', history_log_id: '10', members: [{ user_id: 'bob' }, { user_id: 'guest_1' }] }], users: [] });
-		await socket.reply('history', { membership: [{ log_id: '11', room_id: 'general', members: [{ user: { user_id: 'guest_1' }, joined: true }] }], first_log_id: '11', last_log_id: '11', more: false, latest_log_id: '11', history_log_id: '10' });
+		await socket.reply('history', { memberships: [{ log_id: '11', room_id: 'general', members: [{ user: { user_id: 'guest_1' }, joined: true }] }], first_log_id: '11', last_log_id: '11', more: false, latest_log_id: '11', history_log_id: '10' });
 		expect(room('general')?.members?.map((member) => member.user_id)).toEqual(['bob', 'guest_1']);
 		// Joining: one room_update with the room, its members, and the membership, then the result (§4.3.2).
 		const joined = client.joinRoom('ops');
-		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '20', title: 'Ops', latest_log_id: '21', history_log_id: '20', members: [{ user_id: 'dana' }, { user_id: 'guest_1' }] }], membership: [{ log_id: '21', room_id: 'ops', members: [{ user: { user_id: 'guest_1', name: 'Guest' }, joined: true }] }], users: [{ user_id: 'dana', name: 'Dana' }, { user_id: 'guest_1', name: 'Guest' }] } });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '20', title: 'Ops', latest_log_id: '21', history_log_id: '20', members: [{ user_id: 'dana' }, { user_id: 'guest_1' }] }], memberships: [{ log_id: '21', room_id: 'ops', members: [{ user: { user_id: 'guest_1', name: 'Guest' }, joined: true }] }], users: [{ user_id: 'dana', name: 'Dana' }, { user_id: 'guest_1', name: 'Guest' }] } });
 		expect(ids()).toEqual(['general', 'ops']);
 		await socket.reply('room_join', {});
 		await expect(joined.promise).resolves.toEqual({});
 		// Creating: the room with its members and the creator's membership at its head, then the result.
 		const created = client.createRoom({ parentRoomId: 'general', title: 'Deploy' });
-		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '30', log_id: '30', parent_room_id: 'general', title: 'Deploy', latest_log_id: '31', history_log_id: '30', members: [{ user_id: 'guest_1' }] }], membership: [{ log_id: '31', room_id: '30', members: [{ user: { user_id: 'guest_1', name: 'Guest' }, joined: true }] }] } });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '30', log_id: '30', parent_room_id: 'general', title: 'Deploy', latest_log_id: '31', history_log_id: '30', members: [{ user_id: 'guest_1' }] }], memberships: [{ log_id: '31', room_id: '30', members: [{ user: { user_id: 'guest_1', name: 'Guest' }, joined: true }] }] } });
 		expect(room('30')?.members).toEqual([{ user_id: 'guest_1' }]);
 		expect(room('30')?.latestLogId).toBe('31');
 		await socket.reply('room_set', { room_id: '30' });
 		await expect(created.promise).resolves.toEqual({ room_id: '30' });
 		// Someone else leaves: the other members get the membership alone, and the lists follow.
-		socket.receive({ method: 'room_update', params: { membership: [{ log_id: '32', room_id: 'ops', members: [{ user: { user_id: 'dana', name: 'Dana' }, joined: false }] }] } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '32', room_id: 'ops', members: [{ user: { user_id: 'dana', name: 'Dana' }, joined: false }] }] } });
 		expect(room('ops')?.members?.map((member) => member.user_id)).toEqual(['guest_1']);
 		expect(room('ops')?.latestLogId).toBe('32');
-		// Earlier protocol 7 drafts sent a `membership` notification; it still applies.
-		socket.receive({ method: 'membership', params: { log_id: '33', room_id: 'ops', members: [{ user: { user_id: 'erin' }, joined: true }] } });
-		expect(room('ops')?.members?.map((member) => member.user_id)).toEqual(['guest_1', 'erin']);
+		// Memberships come in the plural key (§4.3.3); the singular one, and the old notification, aren't read.
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '33', room_id: 'ops', members: [{ user: { user_id: 'erin' }, joined: true }, { user: { user_id: 'finn' }, joined: true }] }] } });
+		socket.receive({ method: 'room_update', params: { membership: [{ log_id: '35', room_id: 'ops', members: [{ user: { user_id: 'gus' }, joined: true }] }] } });
+		socket.receive({ method: 'membership', params: { log_id: '36', room_id: 'ops', members: [{ user: { user_id: 'gus' }, joined: true }] } });
+		expect(room('ops')?.members?.map((member) => member.user_id)).toEqual(['guest_1', 'erin', 'finn']);
 		// Your own leave: the room goes, with the membership in the same room_update.
-		socket.receive({ method: 'room_update', params: { left: [{ room_id: 'ops' }], membership: [{ log_id: '34', room_id: 'ops', members: [{ user: { user_id: 'guest_1' }, joined: false }] }] } });
+		socket.receive({ method: 'room_update', params: { left: [{ room_id: 'ops' }], memberships: [{ log_id: '34', room_id: 'ops', members: [{ user: { user_id: 'guest_1' }, joined: false }] }] } });
 		expect(ids()).toEqual(['general', '30']);
 		await settle();
 	});
@@ -262,11 +264,11 @@ describe('rooms by request (cap rooms)', () => {
 		expect(room('20')?.timeline.order).toEqual(['21', '26']);
 		// Joining makes it live; what it missed since its last load is caught up on the next load.
 		quiet(client.joinRoom('20'));
-		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Deploy', latest_log_id: '28', history_log_id: '20', members: [{ user_id: 'bob' }, { user_id: 'guest_1' }] }], membership: [{ log_id: '28', room_id: '20', members: [{ user: { user_id: 'guest_1' }, joined: true }] }], users: [] } });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Deploy', latest_log_id: '28', history_log_id: '20', members: [{ user_id: 'bob' }, { user_id: 'guest_1' }] }], memberships: [{ log_id: '28', room_id: '20', members: [{ user: { user_id: 'guest_1' }, joined: true }] }], users: [] } });
 		expect(room('20')).toMatchObject({ joined: true, loaded: false });
 		const caught = client.loadRoom('20');
 		expect(socket.request('history').params).toEqual({ room_id: '20', after: '27', before: '28', limit: 200 });
-		await socket.reply('history', { messages: [{ message_id: '27', log_id: '27', room_id: '20', from: { user_id: 'bob' }, body: { text: 'third' } }], membership: [{ log_id: '28', room_id: '20', members: [{ user: { user_id: 'guest_1' }, joined: true }] }], first_log_id: '27', last_log_id: '28', more: false, latest_log_id: '28', history_log_id: '20' });
+		await socket.reply('history', { messages: [{ message_id: '27', log_id: '27', room_id: '20', from: { user_id: 'bob' }, body: { text: 'third' } }], memberships: [{ log_id: '28', room_id: '20', members: [{ user: { user_id: 'guest_1' }, joined: true }] }], first_log_id: '27', last_log_id: '28', more: false, latest_log_id: '28', history_log_id: '20' });
 		await caught;
 		expect(room('20')).toMatchObject({ joined: true, loaded: true });
 		expect(room('20')?.timeline.order).toEqual(['21', '26', '27']);

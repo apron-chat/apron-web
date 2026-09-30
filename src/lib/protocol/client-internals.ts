@@ -279,7 +279,7 @@ export function historyParams(roomId: string, after: string | undefined, before:
 }
 
 /** Record arrays that a history page may omit when empty (§4.1). */
-const HISTORY_ARRAYS = ['rooms', 'messages', 'reactions', 'membership'];
+const HISTORY_ARRAYS = ['rooms', 'messages', 'reactions', 'memberships'];
 
 export function validHistoryMetadata(result: JsonObject): result is ValidHistoryResponse {
 	if (HISTORY_ARRAYS.some((key) => result[key] !== undefined && !Array.isArray(result[key]))) return false;

@@ -307,7 +307,7 @@ export class MemoryProtocolServer {
 		if (!user || !Object.hasOwn(people, userId)) return fail('Unknown user');
 		if (joined) room.members.add(userId);
 		const record = { log_id: this.nextLog(room), room_id: room.room_id, members: [{ user: { ...user }, joined }] };
-		this.broadcast({ method: 'room_update', params: { membership: [record] } }, room);
+		this.broadcast({ method: 'room_update', params: { memberships: [record] } }, room);
 		if (!joined) room.members.delete(userId);
 		reply();
 	}

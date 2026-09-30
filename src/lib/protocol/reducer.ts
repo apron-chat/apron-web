@@ -476,7 +476,7 @@ export function decodeHistoryRecords(result: unknown): DecodedRecords {
 	for (const value of Array.isArray(result.reactions) ? result.reactions : []) {
 		decoded.reactions.push(...decodeReactions(value));
 	}
-	for (const value of Array.isArray(result.membership) ? result.membership : []) {
+	for (const value of Array.isArray(result.memberships) ? result.memberships : []) {
 		decoded.memberships.push(...decodeMembership(value));
 	}
 	return decoded;

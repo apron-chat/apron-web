@@ -90,7 +90,7 @@ notice where you are. `~server`, `~room`, and `~private` are sender scopes, not 
 room ID starting with `@` or `~` is an ordinary room.
 
 Joins and leaves show in a room's timeline as the quietest system line, at
-each `membership` record's `log_id` among the messages: "Ada joined", with the
+each membership record's `log_id` among the messages: "Ada joined", with the
 time on hover. Records with nothing else between them (a message, a card, a
 notice, or a date divider) make one line, netted out per user, so someone who
 joins and leaves again (or leaves and comes back) in between shows on neither
@@ -126,7 +126,7 @@ typing or connection status.
 
 Mentions follow the `@user_id` convention ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-mention-text)). Typing `@` in the
 composer opens the mention picker over the room's members (from the room's
-listing, kept current by the `membership` records of joins and leaves), or the
+listing, kept current by the membership records of joins and leaves), or the
 room's recent senders on a server without `room_list`, filtered by name or ID.
 A thread you read without joining lists its members with `room_list` and its
 `room_id`. Arrows move, Tab or Enter picks,
@@ -200,8 +200,8 @@ the rooms you have joined with `room_list` (`filter: "joined"`, `members:
 true`), which is the complete set, threads included (if that `auth` fails, the
 listing ran as the connection was, signed in as no one, and is dropped), and keeps it current from
 `room_update` (`joined`, `left`, `updated`) and each room's members from the
-membership records in its `membership` ([PROTOCOL.md §4.3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#432-membership)); a `membership`
-notification from an earlier protocol 7 draft still applies. Only joined rooms deliver live. Without the capability there is the server's default room, posted to
+membership records in its `memberships` ([PROTOCOL.md §4.3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#432-membership)), as in a
+`history` page's `memberships`. Only joined rooms deliver live. Without the capability there is the server's default room, posted to
 without a `room_id` until a message names it, plus any room a message arrives
 in, titled by its `room_id`.
 

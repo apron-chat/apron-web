@@ -366,11 +366,11 @@ describe('join and leave lines', () => {
 		store.putMembership({ log_id: String(base + 5000), room_id: 'general', user: { user_id: 'dave', name: 'dave' }, joined: true });
 		applyRecords(store, decodeHistoryRecords({
 			messages: [message(2000, 'alice'), message(4000, 'alice')],
-			membership: [membership(5000, 'dave', true), membership(3000, 'carol', true)]
+			memberships: [membership(5000, 'dave', true), membership(3000, 'carol', true)]
 		}));
 		applyRecords(store, decodeHistoryRecords({
 			messages: [message(0, 'alice')],
-			membership: [membership(1000, 'bob', true), { log_id: String(base + 500), room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: false }, { user: { user_id: 'erin' }, joined: true }] }]
+			memberships: [membership(1000, 'bob', true), { log_id: String(base + 500), room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: false }, { user: { user_id: 'erin' }, joined: true }] }]
 		}));
 		const state = store.timeline('general');
 		expect(state.memberships.map((record) => [record.log_id, record.entries.length])).toEqual([
