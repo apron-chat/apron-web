@@ -70,17 +70,18 @@ as a role; they grant nothing here. Senders whose `user_id` starts with `~`
 the three that state a scope (`~private`, `~room`, `~server`), which render as
 the design system's notice card: left-aligned, and titled by the sender as the
 server names it, `Name (~user_id)`, such as "System message to you (~private)"
-from the Apron example servers. A v6 server's `@private`, `@room` and `@server`
-still read as those three; no other `@` ID is special. A `~private` notice
-reached only this connection. `~private` ones, and
-every `message` without a `message_id` (such as a command's reply), are
-transient notices: a dashed card for the session, never stored, and gone on
+from the Apron example servers. From a server before protocol v7, `@private`,
+`@room` and `@server` senders are read as those three (the client renames them
+to `~` as they arrive); on a v7 server they are ordinary users, and no `@` ID
+is ever special. A `~private` message reaches only the connection it was sent
+on. Every `~private` message, whatever it carries, and every `message` without
+a `message_id` (such as a command's reply), are transient notices: a dashed card for the session, never stored, and gone on
 reload. A notice sent before authentication, such as a server's welcome
 (PROTOCOL.md Appendix B), shows in the first room once one is listed; the next
 connection's welcome replaces it, and signing in with a passkey or a stored
 session drops it, since it speaks to whoever connected. A code block in a
 notice wraps and has a Copy button, such as for the token `/invite-bot` gives
-on the demo worker. A server-wide `@server` notice names
+on the demo worker. A server-wide `~server` notice names
 a room like any message; one for a room you haven't joined also shows as a
 notice where you are. `~server`, `~room`, and `~private` are sender scopes, not rooms (Appendix A.1); a
 room ID starting with `@` or `~` is an ordinary room.
@@ -106,9 +107,13 @@ then says so, and the count in its header is the total. In a room you have
 joined, with the `rooms` cap, **Add by @user_id** adds someone (`room_join`
 with their `user_id`, suggesting people the client knows) and each other
 member's remove button removes them (`room_leave` with their `user_id`, after
-a confirm): how members bring people into a private room. Who may is the
-server's policy; its error shows in the panel, and a server that answers
-`unsupported` gets no such controls until its next `server` frame. On wide screens it is a column that resizes like the rooms list:
+a confirm): how members bring people into a private room. Only a `user_id` is
+accepted there, since display names aren't unique. Who may is the server's
+policy; its error shows in the panel. A server before protocol v7, which would
+ignore `user_id` and act on you, gets neither these controls nor such
+requests, and one that answers `unsupported` gets no controls until its next
+`server` frame. A count kept from a truncated listing stays while later records
+of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
 drag its left border, or click the border to collapse it (the header button
 brings it back, and takes focus when the border collapsed it from the keyboard), and its width and whether it is collapsed are remembered.
 Dragging either list shut restores its earlier width when it reopens. On
@@ -171,8 +176,9 @@ monospace, and **Run** replaces **Send**. `/nick` (a `me` request), `/join`,
 new `description`), and `/kick @user` and `/invite @user` (`room_leave` and
 `room_join` with that `user_id`), with the `rooms` cap, are handled by the
 client. `/kick` with a reason goes to the server, which alone can carry one,
-and so do `/kick` and `/invite` once the server has answered them
-`unsupported` (the one that got that answer is sent on as a command); anything else goes out
+and so do `/kick` and `/invite` on a server before protocol v7 and once the
+server has answered them `unsupported` (the one that got that answer is sent on
+as a command); anything else goes out
 as a `command` request with the params a message would have — `room_id`, the
 text as typed, `mentions`, `reply_to`, and attached files as `upload` embeds —
 and is never posted. `/help` lists what the server offers. The server's replies
@@ -341,12 +347,20 @@ also sets your avatar: a `/avatar` command carrying one `upload` embed
 server applies it with a `user` notification. **Remove** sends `me` with
 `avatar: ""`.
 
-The profile editor's Sign-in row offers **Add passkey**, **Sign in with passkey**,
-and **Sign out** when the server advertises WebAuthn. With the Go example, open
+The profile editor's Sign-in row offers, where the server's `auth` lists them,
+**Add passkey** and **Add email** to whoever is signed in, a guest too,
+**Sign in with a passkey** and **Sign in with email** to a guest, and
+**Sign out** to a registered account. With the Go example, open
 `http://localhost:5173` (or `http://localhost:8080` for a static build); other
-deployments need HTTPS and configured RP/frontend origins. Adding a passkey
-keeps your guest identity and message ownership. Signing in restores the
-identity attached to your chosen passkey.
+deployments need HTTPS and configured RP/frontend origins. A passkey registered
+on a signed-in connection is added to that account
+([PROTOCOL.md §4.9](https://github.com/shazow/apron/blob/main/PROTOCOL.md#49-webauthn-authentication)),
+so adding one keeps your guest identity and message ownership; signing in
+restores the identity attached to your chosen passkey. **Add email** asks for
+an address, requests a code for it on this connection, and presents the code on
+this same connection, which adds the address to the account (§4.10). When a
+kept token is the only way this browser gets back into the account (a pasted
+or invite token), the Sign-in row suggests adding a passkey or an email.
 
 A server may keep guests read-only; the demo worker does, and says so with
 `ext.demo.guest_posting: false`. Signed in as a guest there, the composer gives
@@ -362,16 +376,33 @@ Browser cancellation and verification errors appear in the profile editor. A
 connection change cancels the active ceremony. Chat requests pause while a
 ceremony is active, preventing edits from crossing an identity change.
 
-With `email` in the server's `auth`
+With `email` in the server's `auth` or `signup`
 ([PROTOCOL.md §4.10](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-email-authentication)),
 the connect screen's **Email** asks for an address and sends `auth` with
 `scheme: "email"` and no token, which authenticates nothing and answers the same
 whether or not the address has an account; then a code field signs in with
-the emailed code, and the profile offers **Sign in with email**. Opening the
-email's link (`#email=…&token=…` in the URL fragment) signs in on page load:
-the fragment is read and scrubbed from the address bar before anything else,
-and used once the server has answered; if it fails (expired, used), the
-connect screen opens on Email with the address filled in and the reason.
+the emailed code. The code belongs to the server that sent it: changing the
+Server field drops it. The code is presented on a fresh connection, as its
+first `auth` in place of resuming a kept session, never on a connection that
+is already someone (there it would add the address to that account). If it is
+refused, that connection signs in as it otherwise would.
+
+With `server.signup`, `auth` lists the schemes that sign in and `signup` those
+that create an account (§3.1): the connect screen offers both, and its hint says
+which each does (a passkey that only signs in is never registered from there).
+
+The email's link is `#email=…&token=…`, with an optional `&server=` naming the
+server's `ws:`/`wss:` URL, all `application/x-www-form-urlencoded` in the URL
+fragment. The fragment is read and scrubbed from the address bar before
+anything else. A link is a credential someone else may have crafted or
+forwarded, so it is never used silently: a dialog asks "Sign in to *server*
+as *address*?", says whom it signs out when you are signed in there, and warns
+that a link someone sent you can sign you in to their account. On confirmation
+the page switches to the link's server if it names another one, and presents
+the token on a fresh connection as above (§4.10). If it fails (expired, used),
+the connect screen opens on Email with the address filled in and the reason.
+An email sign-in that can't be resumed (no token to resume with) shows as
+signed out after a reconnect, never as a guest.
 
 When the server advertises token authentication, the session token it returns
 (after a passkey or email sign-in, or a replacement in reply to a token resume)

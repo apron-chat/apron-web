@@ -27,7 +27,7 @@ state and behavior — `ConnectScreen`,
 `Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` and `RoomEditor`, `ThreadCard` and
 `ThreadSummary`, `Message` with its `ReactionBar` and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`), `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
-`PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`,
+`PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
 design system with the next `npm run design:bundle`.
 
@@ -49,7 +49,8 @@ places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
 picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previews.ts` builds GitHub link previews, `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
 `commands.ts` maps the composer's `/` commands to requests,
-`email-link.ts` reads and scrubs an emailed sign-in link from the URL, and
+`email-link.ts` reads and scrubs an emailed sign-in link from the URL and words the question asked before using it,
+`members.ts` reads the `user_id` typed to add a member, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences included (on this device only; nothing is synced), and
 `notifications.ts` shows notifications, through `service-worker.ts` where the
@@ -72,8 +73,8 @@ dropped like any unknown key. Room records keep `description` and `private`
 (fixed at creation); a room's `members` from a listing come with its
 `member_count` when the server truncated them, kept until a complete list
 replaces it. `types.ts` also knows the system identities (`~server`, `~room`,
-`~private`, plus a small, commented fallback for v6's `@server`, `@room` and
-`@private`). Reactions aggregate
+`~private`); `ChatClient` renames v6's `@server`, `@room` and `@private`
+senders to those, from servers before protocol v7 only. Reactions aggregate
 per message (counts per emoji, who reacted, whether you did) and are hidden on
 tombstones.
 
@@ -117,13 +118,19 @@ updates resubmit `title`, `description`, and `ext` (never `parent_room_id` or
 client does not depend on the notifications a request causes arriving before
 its result, as servers send them.
 `room_join` and `room_leave` take the `room_id`, and a `user_id` to add or
-remove someone else; an `unsupported` reply to that sets the snapshot's
-`memberChangesUnsupported` until the next `server` frame. Reactions use the
+remove someone else, sent only to servers of protocol 7 and later (an older
+one would act on the caller): the snapshot's `memberChangesUnsupported` is set
+by a `server` frame before v7, and by an `unsupported` reply until the next
+`server` frame. Reactions use the
 `reactions` request (cap `reactions`) with your complete emoji set.
 
 Every successful `auth` result is handled alike: its `you` becomes the
 connection's identity and a `token` in it replaces the saved one, whether it
 answers a guest sign-in, a token resume (rotation), a passkey or an email code.
-Email sign-in (`requestEmailCode`, then `signInWithEmail`) and passkeys share
-one guard: other requests wait while a sign-in may change the identity. The
-`server` frame's `welcome` is kept on the snapshot's `server`.
+`signInWithEmail` presents an email code (or a link's token) as the first
+`auth` of a fresh connection, in place of resuming the kept session, and falls
+back to the connection's usual sign-in if it is refused; `addEmail` presents
+one on the signed-in connection, adding the address (§4.10). How the kept
+session signed in (`webauthn`, `email`, `token`) is remembered beside its token
+as `signedInWith`. The `server` frame's `welcome` and `signup` are kept on the
+snapshot's `server`.
