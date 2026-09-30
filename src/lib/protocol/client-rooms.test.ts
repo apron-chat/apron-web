@@ -452,6 +452,10 @@ describe('room records and membership (v7)', () => {
 		// Any other @ ID is an ordinary sender.
 		socket.receive({ method: 'message', params: { message_id: '41', log_id: '41', room_id: 'elsewhere', from: { user_id: '@sfu' }, body: { text: 'x' } } });
 		expect(room('general')?.notices).toHaveLength(1);
+		// An embedded reply_to snapshot's sender is renamed too.
+		socket.receive({ method: 'message', params: { message_id: '43', log_id: '43', room_id: 'general', from: { user_id: 'bob' }, body: { text: 'ok' },
+			reply_to: { message_id: '42', log_id: '42', room_id: 'general', from: { user_id: '@room' }, body: { text: 'Poll' } } } });
+		expect(client.message('42')?.from.user_id).toBe('~room');
 		// A v6 `@private` notice is transient, as `~private`.
 		socket.receive({ method: 'message', params: { room_id: 'general', from: { user_id: '@private' }, body: { text: 'Only you' } } });
 		expect(room('general')?.notices.at(-1)?.from.user_id).toBe('~private');
@@ -461,6 +465,19 @@ describe('room records and membership (v7)', () => {
 		socket.receive({ method: 'message', params: { message_id: '50', log_id: '50', room_id: 'general', from: { user_id: '~private' }, body: { text: 'Just you' } } });
 		expect(client.message('50')).toBeUndefined();
 		expect(room('general')?.notices.map((notice) => notice.body?.text)).toEqual(['Just you']);
+	});
+
+	it('never installs a ~private message from a history page', async () => {
+		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms', 'history'] } });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '80', title: 'Ops', latest_log_id: '82', history_log_id: '80' }] } });
+		const request = socket.request('history');
+		socket.receive({ id: request.id, result: { messages: [
+			{ message_id: '81', log_id: '81', room_id: 'ops', from: { user_id: '~private' }, body: { text: 'secret' } },
+			{ message_id: '82', log_id: '82', room_id: 'ops', from: { user_id: 'bob' }, body: { text: 'hi' } }
+		], first_log_id: '81', last_log_id: '82', more: false, latest_log_id: '82', history_log_id: '80' } });
+		await settle();
+		expect(client.message('81')).toBeUndefined();
+		expect(client.message('82')?.body).toEqual({ text: 'hi' });
 	});
 
 	it('never sends user_id in room_join or room_leave to a server before v7, which would act on you', async () => {
@@ -486,5 +503,5 @@ describe('room records and membership (v7)', () => {
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'opaque', log_id: '70', parent_room_id: 'general', title: 'T' }] } });
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'opaque', log_id: '75', parent_room_id: 'general', title: 'T', description: 'Now summarized' }] } });
 		expect(room('opaque')).toMatchObject({ firstRecordLogId: '70', description: 'Now summarized' });
-	});;
+	});
 });

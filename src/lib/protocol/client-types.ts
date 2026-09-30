@@ -196,6 +196,15 @@ export interface ClientSnapshot {
 	 * is its only way back in here, worth adding a passkey or email to (§3.2).
 	 */
 	signedInWith?: 'webauthn' | 'email' | 'token';
+	/** How this browser can get back into the account: how it signed in, then what it added (§4.9, §4.10). */
+	signInMethods?: Array<'webauthn' | 'email' | 'token'>;
+	/**
+	 * A registered session is kept for this server (a token to resume with),
+	 * whether or not this connection has resumed it yet.
+	 */
+	keptSession?: boolean;
+	/** The sign-in guard is held by a passkey ceremony (true) or an email step (false). */
+	passkeyBusy?: boolean;
 	/**
 	 * Signed in as a guest on a server whose guests only read (the demo
 	 * worker's `ext.demo.guest_posting: false`): posting, reacting, and room

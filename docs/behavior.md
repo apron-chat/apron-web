@@ -348,9 +348,8 @@ server applies it with a `user` notification. **Remove** sends `me` with
 `avatar: ""`.
 
 The profile editor's Sign-in row offers, where the server's `auth` lists them,
-**Add passkey** and **Add email** to whoever is signed in, a guest too,
 **Sign in with a passkey** and **Sign in with email** to a guest, and
-**Sign out** to a registered account. With the Go example, open
+**Add passkey**, **Add email** and **Sign out** to a registered account. With the Go example, open
 `http://localhost:5173` (or `http://localhost:8080` for a static build); other
 deployments need HTTPS and configured RP/frontend origins. A passkey registered
 on a signed-in connection is added to that account
@@ -358,9 +357,13 @@ on a signed-in connection is added to that account
 so adding one keeps your guest identity and message ownership; signing in
 restores the identity attached to your chosen passkey. **Add email** asks for
 an address, requests a code for it on this connection, and presents the code on
-this same connection, which adds the address to the account (§4.10). When a
-kept token is the only way this browser gets back into the account (a pasted
-or invite token), the Sign-in row suggests adding a passkey or an email.
+this same connection, which adds the address to the account (§4.10); a refused
+code says the address may belong to another account. Adding doesn't change how
+the session signed in: it is remembered beside it, as another way back in.
+When, as far as this browser knows, the account has no way back in that the
+server signs in with (only a kept token, pasted or an invite, or an account
+made with a scheme the server lists only in `signup`), the profile bar says
+"add a sign-in" and the Sign-in row suggests a passkey or an email.
 
 A server may keep guests read-only; the demo worker does, and says so with
 `ext.demo.guest_posting: false`. Signed in as a guest there, the composer gives
@@ -385,22 +388,30 @@ the emailed code. The code belongs to the server that sent it: changing the
 Server field drops it. The code is presented on a fresh connection, as its
 first `auth` in place of resuming a kept session, never on a connection that
 is already someone (there it would add the address to that account). If it is
-refused, that connection signs in as it otherwise would.
+refused, that connection signs in as it otherwise would. If the sign-in gives
+no token of its own, the previous account's kept token is forgotten, so a
+reconnect never silently brings that account back.
 
 With `server.signup`, `auth` lists the schemes that sign in and `signup` those
 that create an account (§3.1): the connect screen offers both, and its hint says
-which each does (a passkey that only signs in is never registered from there).
+which each does. A scheme listed only in `signup` works end to end for joining
+(an email code, or registering a passkey); one listed only in `auth` only signs
+in (a passkey that only signs in is never registered from there).
 
 The email's link is `#email=…&token=…`, with an optional `&server=` naming the
 server's `ws:`/`wss:` URL, all `application/x-www-form-urlencoded` in the URL
 fragment. The fragment is read and scrubbed from the address bar before
 anything else. A link is a credential someone else may have crafted or
 forwarded, so it is never used silently: a dialog asks "Sign in to *server*
-as *address*?", says whom it signs out when you are signed in there, and warns
-that a link someone sent you can sign you in to their account. On confirmation
-the page switches to the link's server if it names another one, and presents
-the token on a fresh connection as above (§4.10). If it fails (expired, used),
-the connect screen opens on Email with the address filled in and the reason.
+as *address*?", says whom it signs out when you are signed in there (or that a
+saved session is kept there, before it has resumed), and warns that a link
+someone sent you can sign you in to their account. A link pasted into an open
+tab is taken the same way. On confirmation the page switches to the link's
+server if it names another one, and presents the token on a fresh connection
+as above (§4.10); the switch is remembered, and the server listed under
+Recent, only once the sign-in has worked. If it fails (expired, used), the
+connect screen opens on Email with the address filled in and the reason, and
+the next visit is back on the server the page used before.
 An email sign-in that can't be resumed (no token to resume with) shows as
 signed out after a reconnect, never as a guest.
 

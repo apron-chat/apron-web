@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ProtocolStore, applyRecords, createTimeline, decodeHistoryRecords, timelineEvents, type MembershipRecord, type TimelineState } from '$lib/protocol/reducer';
 import type { RoomSnapshot } from '$lib/protocol/client';
+import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { buildRoomTimeline, buildThreadTimeline, homeRoomOf, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadPreview, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, homeRoomOf, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadPreview, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
 
@@ -83,6 +84,9 @@ describe('thread grouping', () => {
 		const started = room('t9', [message(1000, 'bob', { room_id: 't9', reply_to: { message_id: String(base) } })], { parentRoomId: 'general' });
 		expect(threadStartedFrom([parent, started], 'general', String(base))).toBe('t9');
 		expect(threadStartedFrom([parent, started], 'general', String(base + 1))).toBeUndefined();
+		// Only its newest page loaded: the first loaded reply may just quote the message.
+		expect(threadStartedFrom([parent, { ...started, olderAvailable: true }], 'general', String(base))).toBeUndefined();
+		expect(threadStartedFrom([parent, { ...started, loaded: false }], 'general', String(base))).toBeUndefined();
 	});
 
 	it('anchors a card at the thread’s creation', () => {
@@ -122,6 +126,11 @@ describe('thread grouping', () => {
 		expect(cut.split('\n').filter((row) => row.startsWith('```'))).toHaveLength(2);
 		expect(cut.endsWith('…')).toBe(true);
 		expect(cut.split('\n').filter((row) => row.startsWith('const')).every((row) => row === 'const x = 1;')).toBe(true);
+		// Setext underlines, entities, and indents stay text too.
+		expect(markdownText(escapeMarkdown('Title\n===\na &lt; b\n    not code'))).toBe('Title\n===\na &lt; b\n    not code'.replace('\n    ', '\n\u0020\u0020\u0020\u0020'));
+		// A four-backtick fence closes with four.
+		const long = threadDescriptionFor(message(0, 'alice', { body: { text: `Code:\n\`\`\`\`\n${'x = 1\n'.repeat(120)}\`\`\`\``, format: 'markdown' } }))!;
+		expect(long).toMatch(/\n````\n\n…$/);
 		// A short one-liner is all title.
 		expect(threadDescriptionFor(message(0, 'alice', { body: { text: 'Deploy?' } }))).toBeUndefined();
 	});

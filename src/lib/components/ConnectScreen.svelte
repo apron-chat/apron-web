@@ -8,6 +8,7 @@
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { codeStillFor, type SentCode } from '$lib/ui/email-link';
 	import { initials } from '$lib/ui/messages';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { saveDisplayName, saveServerUrl, type RecentServer } from '$lib/ui/storage';
@@ -65,7 +66,7 @@
 	 * the code field shows while it is set, and the code only ever goes back to
 	 * that server. Changing the Server field drops it.
 	 */
-	let codeSent = $state<{ email: string; url: string } | undefined>();
+	let codeSent = $state<SentCode | undefined>();
 	let codeSentTo = $derived(codeSent?.email);
 	let emailBusy = $state(false);
 	/** The pasted token for the Token scheme; cleared once handed to the client. */
@@ -147,7 +148,7 @@
 
 	// A code belongs to the server that sent it: editing the Server field away from it drops the code.
 	$effect(() => {
-		if (codeSent && normalizedInput !== codeSent.url) untrack(() => {
+		if (codeSent && codeSent.url !== normalizedInput) untrack(() => {
 			codeSent = undefined;
 			code = '';
 		});
@@ -292,9 +293,9 @@
 
 	/** Signs in with the emailed code; the bearer token in the result is kept to resume with (§3.2). */
 	async function signInWithEmail(): Promise<void> {
-		const sent = codeSent;
-		if (!sent) return;
-		if (sent.url !== client.url || normalizedInput !== sent.url) {
+		if (!codeSent) return;
+		const sent = codeStillFor(codeSent, normalizedInput, client.url);
+		if (!sent) {
 			// Never another server's code: ask this one for its own.
 			codeSent = undefined;
 			code = '';

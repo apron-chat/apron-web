@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { capabilitiesOf, type ClientSnapshot } from '$lib/protocol/client';
-import { connectionStateOf, demoRetentionNotice, offeredSchemes, schemeUse, statusLabel } from './connection';
+import { addEmailError, connectionStateOf, demoRetentionNotice, offeredSchemes, schemeUse, statusLabel, wayBackNudge } from './connection';
 import { retryAfterLabel } from './time';
 
 const snapshot = (fields: Partial<ClientSnapshot>): ClientSnapshot => ({
@@ -54,5 +54,22 @@ describe('sign-in and sign-up schemes (server.signup)', () => {
 		expect(schemeUse(server, 'email')).toEqual({ signIn: false, signUp: true });
 		expect(offeredSchemes(server)).toEqual(['webauthn', 'email']);
 		expect(offeredSchemes(undefined)).toEqual([]);
+	});
+});
+
+describe('ways back into an account', () => {
+	it('nudges a token-only account, and one made with a scheme that only signs up', () => {
+		expect(wayBackNudge({ auth: ['webauthn', 'email', 'token'] }, ['token'])).toEqual(['webauthn', 'email']);
+		expect(wayBackNudge({ auth: ['webauthn'] }, ['email'])).toEqual(['webauthn']);
+		expect(wayBackNudge({ auth: ['webauthn', 'token'] }, ['token', 'webauthn'])).toBeUndefined();
+		expect(wayBackNudge({ auth: ['email'] }, ['email'])).toBeUndefined();
+		// Nothing to suggest, or nothing known.
+		expect(wayBackNudge({ auth: ['token'] }, ['token'])).toBeUndefined();
+		expect(wayBackNudge({ auth: ['webauthn'] }, undefined)).toBeUndefined();
+	});
+
+	it('words a refused code on Add email', () => {
+		expect(addEmailError(Object.assign(new Error('denied'), { code: -32001 }))).toMatch(/another account/);
+		expect(addEmailError(new Error('Rate limited'))).toBe('Rate limited');
 	});
 });

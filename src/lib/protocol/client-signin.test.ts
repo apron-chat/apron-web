@@ -156,19 +156,84 @@ describe('sign-in', () => {
 		expect(snapshot.error).toMatch(/email/);
 	});
 
-	it('adds an email to the signed-in account on the same connection', async () => {
+	it('adds an email to the signed-in account on the same connection, without changing how it signed in', async () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'], token: 'st_guest' });
 		expect(snapshot.signedInWith).toBe('token');
 		const socket = latest();
 		const added = client.addEmail('ada@example.com', '418092');
 		await vi.advanceTimersByTimeAsync(0);
 		expect(latest()).toBe(socket);
+		expect(snapshot.passkeyBusy).toBe(false);
 		const exchange = socket.request('auth');
 		expect(exchange.params).toEqual({ scheme: 'email', email: 'ada@example.com', token: '418092' });
 		socket.receive({ id: exchange.id, result: { you: { user_id: 'guest_1', name: 'Guest' } } });
 		expect((await added).user_id).toBe('guest_1');
-		expect(snapshot.signedInWith).toBe('email');
+		// Added, not signed in with: the session still resumes with its token, and the token is kept.
+		expect(snapshot.signedInWith).toBe('token');
+		expect(snapshot.signInMethods).toEqual(['token', 'email']);
 		expect(storage.get(TOKEN_KEY)).toBe('st_guest');
+		expect(storage.get('apron.signin-added:ws://fake.test/')).toBe('email');
+	});
+
+	it('keeps a passkey session a passkey session after an email is added', async () => {
+		storage.set(TOKEN_KEY, 'st_ada');
+		storage.set('apron.signin:ws://fake.test/', 'webauthn');
+		client.stop();
+		client = new ChatClient('ws://fake.test/');
+		client.subscribe((next) => (snapshot = next));
+		client.start();
+		await latest().greet([], { auth: ['webauthn', 'email', 'token', 'guest'], you: { user_id: 'ada' } });
+		expect(snapshot.signedInWith).toBe('webauthn');
+		const added = client.addEmail('ada@example.com', '1');
+		await vi.advanceTimersByTimeAsync(0);
+		latest().receive({ id: latest().request('auth').id, result: { you: { user_id: 'ada' } } });
+		await added;
+		expect(snapshot.signedInWith).toBe('webauthn');
+		expect(storage.get('apron.signin:ws://fake.test/')).toBe('webauthn');
+		expect(storage.get(TOKEN_KEY)).toBe('st_ada');
+	});
+
+	it('forgets the previous account’s token when an email sign-in gives none', async () => {
+		storage.set(TOKEN_KEY, 'bob-session');
+		client.stop();
+		client = new ChatClient('ws://fake.test/');
+		client.subscribe((next) => (snapshot = next));
+		client.start();
+		await latest().greet([], { auth: ['email', 'token', 'guest'], you: { user_id: 'bob' } });
+		const signedIn = client.signInWithEmail('ada@example.com', '418092');
+		const socket = freshConnection(['email', 'token', 'guest']);
+		socket.receive({ id: socket.request('auth').id, result: { you: { user_id: 'ada' } } });
+		await signedIn;
+		expect(storage.has(TOKEN_KEY)).toBe(false);
+		// The next connection is never Bob again behind Ada's back.
+		socket.drop();
+		vi.advanceTimersByTime(5_000);
+		const next = freshConnection(['email', 'token', 'guest']);
+		expect(next.sent.filter((frame) => (frame.params as { token?: string } | undefined)?.token === 'bob-session')).toEqual([]);
+	});
+
+	it('signs up with a scheme listed only in signup', async () => {
+		const server = { auth: ['webauthn'], signup: ['email'] };
+		latest().open();
+		latest().receive({ method: 'server', params: { protocol: 7, caps: ['rooms'], ...server } });
+		expect(snapshot.server?.signup).toEqual(['email']);
+		expect(snapshot.error).toMatch(/email/);
+		const requested = client.requestEmailCode('new@example.com');
+		const ask = latest().request('auth');
+		expect(ask.params).toEqual({ scheme: 'email', email: 'new@example.com' });
+		latest().receive({ id: ask.id, result: {} });
+		await requested;
+		const signedIn = client.signInWithEmail('new@example.com', '111111');
+		vi.advanceTimersByTime(0);
+		const socket = latest();
+		socket.open();
+		socket.receive({ method: 'server', params: { protocol: 7, caps: ['rooms'], ...server } });
+		socket.receive({ id: socket.request('auth').id, result: { you: { user_id: 'newbie' } } });
+		await signedIn;
+		expect(snapshot.authenticated).toBe(true);
+		expect(snapshot.signedInWith).toBe('email');
+		// Email only signs up here: adding it as a way back in is refused, and a passkey is what signs in.
+		await expect(client.addEmail('new@example.com', '1')).rejects.toThrow('does not sign in with email');
 	});
 
 	it('saves a token rotated in reply to a token resume, and presents the latest next time', async () => {

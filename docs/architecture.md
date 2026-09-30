@@ -132,5 +132,8 @@ answers a guest sign-in, a token resume (rotation), a passkey or an email code.
 back to the connection's usual sign-in if it is refused; `addEmail` presents
 one on the signed-in connection, adding the address (§4.10). How the kept
 session signed in (`webauthn`, `email`, `token`) is remembered beside its token
-as `signedInWith`. The `server` frame's `welcome` and `signup` are kept on the
+as `signedInWith`, and ways added to the account since beside it
+(`signInMethods`). `requestEmailCode`, `signInWithEmail` and registering a
+passkey accept a scheme listed in `auth` or `signup`; a passkey login and a
+token resume need it in `auth`. The `server` frame's `welcome` and `signup` are kept on the
 snapshot's `server`.

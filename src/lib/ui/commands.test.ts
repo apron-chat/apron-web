@@ -29,6 +29,14 @@ describe('composer commands', () => {
 		expect(composerAction('/kick', both)).toEqual({ kind: 'command', text: '/kick' });
 	});
 
+	it('reads a user argument per Appendix A.3, and exactly as a mention chip names it', () => {
+		// In text a trailing `-` is not part of the ID…
+		expect(composerAction('/kick @al-', both)).toEqual({ kind: 'kick', user: 'al' });
+		// …but a chip sent as `@al-` with `al-` in its mentions is that user.
+		expect(composerAction('/kick @al-', both, ['al-'])).toEqual({ kind: 'kick', user: 'al-' });
+		expect(composerAction('/kick @al', both, ['al'])).toEqual({ kind: 'kick', user: 'al' });
+	});
+
 	it('treats every text as a message without cap command', () => {
 		const none = { command: false, rooms: true };
 		expect(composerAction('/help', none)).toEqual({ kind: 'message', text: '/help' });

@@ -5,8 +5,11 @@
 	interface Props {
 		/** The emailed link the page was opened with (§4.10). */
 		link: EmailLink;
-		/** The server the page is using, and who is signed in there (a registered session), if anyone. */
-		current: { url: string; label?: string; signedInAs?: string };
+		/**
+		 * The server the page is using, who is signed in there (a registered
+		 * session), and whether a session is kept there even before it resumes.
+		 */
+		current: { url: string; label?: string; signedInAs?: string; keptSession?: boolean };
 		onconfirm: () => void;
 		oncancel: () => void;
 	}

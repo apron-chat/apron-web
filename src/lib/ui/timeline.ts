@@ -166,9 +166,16 @@ export function threadDescriptionFor(event: MessageRecord | undefined): string |
 	return shortenMarkdown(markdown ? text : escapeMarkdown(text), THREAD_DESCRIPTION_MAX);
 }
 
-/** Plain text as Markdown that renders as the same text: every character Markdown could read as syntax is escaped. */
+/**
+ * Plain text as Markdown that renders as the same text: every character
+ * Markdown could read as syntax is backslash-escaped (setext `=` underlines
+ * and `&` entities included), and a line's leading spaces and tabs become
+ * entities, so an indent is never a code block.
+ */
 export function escapeMarkdown(text: string): string {
-	return text.replace(/[\\`*_{}[\]()#+\-.!|>~<]/g, (character) => `\\${character}`);
+	return text.split('\n').map((line) => line
+		.replace(/[\\`*_{}[\]()#+\-.!|>~<=&]/g, (character) => `\\${character}`)
+		.replace(/^[ \t]+/, (indent) => indent.replace(/ /g, '&#32;').replace(/\t/g, '&#9;'))).join('\n');
 }
 
 /**
@@ -185,16 +192,25 @@ function shortenMarkdown(text: string, max: number): string {
 	if (line > max / 2) cut = cut.slice(0, line);
 	else if (space > max / 2) cut = cut.slice(0, space);
 	cut = cut.trimEnd();
-	const fences = cut.split('\n').map((row) => /^\s*(```|~~~)/.exec(row)?.[1]).filter((fence) => fence !== undefined);
-	return fences.length % 2 === 1 ? `${cut}\n${fences[fences.length - 1]}\n\n…` : `${cut}…`;
+	// A fence closes with a run of its own character at least as long as the one that opened it.
+	let open: string | undefined;
+	for (const row of cut.split('\n')) {
+		const run = /^ {0,3}(`{3,}|~{3,})/.exec(row)?.[1];
+		if (!run) continue;
+		if (open === undefined) open = run;
+		else if (run[0] === open[0] && run.length >= open.length && /^ {0,3}(`+|~+)\s*$/.test(row)) open = undefined;
+	}
+	return open !== undefined ? `${cut}\n${open}\n\n…` : `${cut}…`;
 }
 
 /**
  * A thread of the room already started from a message, by the convention
- * this client follows: its first loaded message replies to it.
+ * this client follows: its first message replies to it. Only a thread loaded
+ * from its start counts, since a later reply may quote the message too.
  */
 export function threadStartedFrom(rooms: readonly RoomSnapshot[], parentRoomId: string, messageId: string): string | undefined {
-	return childRooms(rooms, parentRoomId).find((room) => timelineMessages(room)[0]?.reply_to?.message_id === messageId)?.id;
+	return childRooms(rooms, parentRoomId)
+		.find((room) => room.loaded && !room.olderAvailable && timelineMessages(room)[0]?.reply_to?.message_id === messageId)?.id;
 }
 
 /** At most `max` characters (code points), ending with "…" when cut. */

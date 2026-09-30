@@ -39,7 +39,7 @@
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, type RecentServer } from '$lib/ui/storage';
 	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
-	import { takeEmailLink, type EmailLink } from '$lib/ui/email-link';
+	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
@@ -315,7 +315,7 @@
 	$effect(() => {
 		const server = snapshot.server;
 		if (previewMode || promptedSignIn || connectOpen || emailLink || emailLinkBusy || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
-		if (server.auth.includes('guest') || !snapshot.error) return;
+		if (server.auth.includes('guest') || server.signup?.includes('guest') || !snapshot.error) return;
 		promptedSignIn = true;
 		untrack(() => openConnect({ signIn: true }));
 	});
@@ -448,6 +448,12 @@
 		memberListMedia.addEventListener('change', memberListMediaChange);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
 		emailLink = previewMode ? undefined : takeEmailLink(window.location, scrubUrl);
+		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.
+		const hashChanged = () => {
+			const link = takeEmailLink(window.location, scrubUrl);
+			if (link) emailLink = link;
+		};
+		if (!previewMode) window.addEventListener('hashchange', hashChanged);
 		serverInput = previewMode ? 'ws://apron-preview.invalid' : loadServerUrl() ?? defaultWebSocketUrl(window.location);
 		displayName = previewMode ? 'Preview User' : loadDisplayName();
 		recentServers = previewMode ? [] : loadRecentServers();
@@ -474,6 +480,7 @@
 		client = chat;
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
+			window.removeEventListener('hashchange', hashChanged);
 			if (typingTimer) clearTimeout(typingTimer);
 			if (highlightTimer) clearTimeout(highlightTimer);
 			reveal.stop();
@@ -505,29 +512,34 @@
 		const chat = client;
 		emailLink = undefined;
 		if (!link || !chat) return;
-		if (link.server && link.server !== chat.url) {
-			leaveBackend();
-			serverInput = link.server;
-			saveServerUrl(link.server);
-			chat.setUrl(link.server);
-		} else {
-			session.forget();
-		}
+		// Another account from here on: the view held for the current one goes.
+		if (!link.server || link.server === chat.url) session.forget();
 		emailLinkBusy = true;
 		feedback.pending('Signing in…');
-		chat.signInWithEmail(link.email, link.token).then(() => {
-			feedback.clear();
-			connectOpen = false;
-			emailLinkFailure = undefined;
-		}, (cause: unknown) => {
-			feedback.clear();
-			const error = cause instanceof Error ? cause.message : 'unknown error';
-			// The link may have expired or been used: the connect screen can send a new code.
-			emailLinkFailure = { email: link.email, error: `The sign-in link didn’t work (${error}). Send a new code to try again.` };
-			connectScheme = 'email';
-			connectOpen = true;
+		void runEmailLink(link, chat, {
+			beforeSwitch: () => leaveBackend(),
+			onSignedIn: (server, switched) => {
+				feedback.clear();
+				emailLinkFailure = undefined;
+				// Only now is a switch to the link's server remembered, and the server listed as recent.
+				if (switched) {
+					serverInput = server;
+					saveServerUrl(server);
+				}
+				connected();
+			},
+			onFailed: (error, server) => {
+				feedback.clear();
+				// The link may have expired or been used: the connect screen can send a new code. A server it
+				// switched to is not remembered, so the next visit is back where the page was.
+				serverInput = server;
+				emailLinkFailure = { email: link.email, error: `The sign-in link didn’t work (${error}). Send a new code to try again, or pick another server.` };
+				connectScheme = 'email';
+				connectOpen = true;
+			}
 		}).finally(() => (emailLinkBusy = false));
 	}
+
 
 	/** Replaces the page's URL without adding a history entry: through the router once it runs, else the browser. */
 	function scrubUrl(url: string): void {
@@ -546,7 +558,9 @@
 	function openConnect(options: { scheme?: Scheme; signIn?: boolean; name?: string } = {}): void {
 		if (previewMode) return;
 		const offered = session.server?.auth ?? [];
-		const passkeyFirst = offered.includes('webauthn') && (offered.includes('guest') || !offered.includes('email'));
+		// Every scheme that signs in or signs up (`server.signup`, §3.1).
+		const any = [...offered, ...(session.server?.signup ?? [])];
+		const passkeyFirst = any.includes('webauthn') && (offered.includes('guest') || !any.includes('email'));
 		connectScheme = options.scheme ?? (options.signIn ? (passkeyFirst ? 'webauthn' : 'email') : undefined);
 		emailLinkFailure = undefined;
 		if (options.name) displayName = options.name;
@@ -802,7 +816,7 @@
 		const originKey = draftKey(roomId);
 		const mentions = composerMentions;
 		const dismissed = composerDismissed;
-		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported });
+		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported }, mentions);
 		// A draft given back keeps the link previews that were removed from it.
 		const restore = () => {
 			if (!drafts.restore(originKey, draft, reply)) return;
@@ -1287,7 +1301,10 @@
 {#if client && emailLink}
 	<EmailLinkDialog
 		link={emailLink}
-		current={{ url: client.url, label: session.server?.name, ...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}) }}
+		current={{
+			url: client.url, label: session.server?.name, keptSession: Boolean(snapshot.keptSession),
+			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {})
+		}}
 		onconfirm={useEmailLink} oncancel={() => (emailLink = undefined)}
 	/>
 {/if}

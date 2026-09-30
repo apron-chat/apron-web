@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emailLinkPrompt, parseEmailLink, takeEmailLink } from './email-link';
+import { codeStillFor, emailLinkPrompt, parseEmailLink, runEmailLink, takeEmailLink, type EmailLinkClient } from './email-link';
 
 describe('emailed sign-in links (§4.10)', () => {
 	it('reads the address, token, and optional server from the fragment', () => {
@@ -45,5 +45,52 @@ describe('emailed sign-in links (§4.10)', () => {
 		expect(elsewhere.title).toBe('Sign in to other.example as ada@example.com?');
 		expect(elsewhere.switchesServer).toBe(true);
 		expect(elsewhere.lines[0]).toMatch(/not Chat/);
+		// A kept session that hasn't resumed yet is still named.
+		expect(emailLinkPrompt(link, { url: 'wss://chat.example/', keptSession: true }).lines[0]).toMatch(/saved session here/);
+	});
+
+	function fakeClient(url: string, outcome: 'ok' | 'refused'): EmailLinkClient & { calls: string[] } {
+		const calls: string[] = [];
+		let current = url;
+		return {
+			get url() { return current; },
+			calls,
+			setUrl(next: string) { calls.push(`setUrl ${next}`); current = next; },
+			async signInWithEmail(email: string, token: string) {
+				calls.push(`signIn ${email} ${token} on ${current}`);
+				if (outcome === 'refused') throw new Error('Invalid or expired code');
+			}
+		};
+	}
+
+	it('uses a confirmed link on its own server, and remembers the switch only once signed in', async () => {
+		const chat = fakeClient('wss://home.example/', 'ok');
+		const events: string[] = [];
+		await runEmailLink({ email: 'a@b', token: '9', server: 'wss://other.example/' }, chat, {
+			beforeSwitch: () => events.push('leave'),
+			onSignedIn: (server, switched) => events.push(`signed in ${server} ${switched}`),
+			onFailed: () => events.push('failed')
+		});
+		expect(chat.calls).toEqual(['setUrl wss://other.example/', 'signIn a@b 9 on wss://other.example/']);
+		expect(events).toEqual(['leave', 'signed in wss://other.example/ true']);
+	});
+
+	it('reports a refused link without remembering its server', async () => {
+		const chat = fakeClient('wss://home.example/', 'refused');
+		const events: string[] = [];
+		await runEmailLink({ email: 'a@b', token: '9' }, chat, {
+			onSignedIn: () => events.push('signed in'),
+			onFailed: (error, server, switched) => events.push(`${error} ${server} ${switched}`)
+		});
+		expect(chat.calls).toEqual(['signIn a@b 9 on wss://home.example/']);
+		expect(events).toEqual(['Invalid or expired code wss://home.example/ false']);
+	});
+
+	it('keeps a connect-screen code only for the server that sent it', () => {
+		const sent = { email: 'a@b', url: 'wss://a.example/' };
+		expect(codeStillFor(sent, 'wss://a.example/', 'wss://a.example/')).toBe(sent);
+		expect(codeStillFor(sent, 'wss://b.example/', 'wss://a.example/')).toBeUndefined();
+		expect(codeStillFor(sent, 'wss://a.example/', 'wss://b.example/')).toBeUndefined();
+		expect(codeStillFor(undefined, 'wss://a.example/', 'wss://a.example/')).toBeUndefined();
 	});
 });

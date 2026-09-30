@@ -234,6 +234,8 @@ export class ChatClient {
 	private pendingEmail?: PendingEmail;
 	/** That `auth` has been sent and not answered. */
 	private emailInFlight = false;
+	/** `addEmail` holds the sign-in guard: busy, but not with a passkey. */
+	private addingEmail = false;
 	/**
 	 * How this browser signed in to the kept session, remembered with its
 	 * token: `email` resumes with the token or else reports the session signed
@@ -242,6 +244,8 @@ export class ChatClient {
 	 * passkey or an email to (§3.2).
 	 */
 	private signedInWith?: SignInMethod;
+	/** Ways back into the account this browser added to it since (§4.9, §4.10), kept beside the token. */
+	private addedMethods = new Set<SignInMethod>();
 	/** A pending autofill (conditional) login; `done` settles once it lets go of the browser. */
 	private autofill?: { controller: AbortController; done: Promise<void> };
 	private passkeyHint = false;
@@ -293,6 +297,7 @@ export class ChatClient {
 		this.passkeyRequired = false;
 		this.registeredSession = false;
 		this.signedInWith = undefined;
+		this.addedMethods = new Set();
 		this.retryAfterUntil = 0;
 		this.reconnectHeld = false;
 		this.resetSession('Server URL changed; pending requests were cancelled');
@@ -445,7 +450,9 @@ export class ChatClient {
 			authenticated: this.authenticated,
 			authBusy: Boolean(this.passkeyAbort || this.pendingEmail || this.emailInFlight),
 			passkeySession: Boolean(this.registeredSession && this.authenticated),
-			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith } : {}),
+			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith, signInMethods: [this.signedInWith, ...[...this.addedMethods].filter((method) => method !== this.signedInWith)] } : {}),
+			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
+			...(this.passkeyAbort ? { passkeyBusy: !this.addingEmail } : {}),
 			readOnly: this.authenticated && !this.registeredSession && this.server?.ext?.demo?.guest_posting === false,
 			passkeyHint: this.passkeyHint,
 			error: this.error,
@@ -551,7 +558,8 @@ export class ChatClient {
 	async usePasskey(
 		action: 'register' | 'login', name?: string, mediation: PasskeyMediation = 'modal'
 	): Promise<OperationHandle | undefined> {
-		if (!this.server?.auth.includes('webauthn')) throw new Error('This server does not support passkeys');
+		// Registering creates an account or adds to one (`signup`, §3.1); logging in signs in (`auth`).
+		if (action === 'login' ? !this.server?.auth.includes('webauthn') : !this.offers('webauthn')) throw new Error('This server does not support passkeys');
 		await this.readyToSignIn();
 		const controller = new AbortController();
 		this.passkeyAbort = controller;
@@ -591,7 +599,7 @@ export class ChatClient {
 	 */
 	async requestEmailCode(email: string): Promise<void> {
 		const address = email.trim();
-		if (!this.server?.auth.includes('email')) throw new Error('This server does not support email sign-in');
+		if (!this.offers('email')) throw new Error('This server does not support email sign-in');
 		if (!address) throw new Error('Enter your email address');
 		if (this.status !== 'connected') throw new Error('Connect to the server first');
 		await this.enqueueRequest('auth', { scheme: 'email', email: address }, { visible: false, allowBeforeAuth: true }).promise;
@@ -607,21 +615,23 @@ export class ChatClient {
 	async addEmail(email: string, code: string): Promise<Identity> {
 		const address = email.trim();
 		const token = code.trim();
-		if (!this.server?.auth.includes('email')) throw new Error('This server does not support email sign-in');
+		if (!this.server?.auth.includes('email')) throw new Error('This server does not sign in with email, so an address can’t be added');
 		if (!this.authenticated) throw new Error('Sign in first');
 		if (!address || !token) throw new Error('Enter your email address and the code you were sent');
 		await this.readyToSignIn();
 		const controller = new AbortController();
 		this.passkeyAbort = controller;
+		this.addingEmail = true;
 		const connection = this.connectionId;
 		this.emit();
 		try {
 			const result = await this.passkeyRequest({ scheme: 'email', email: address, token });
 			if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 			this.cancelPasskey();
-			if (!this.handleAuth(result, 'email')) throw new Error('Server authentication response did not include an identity');
+			if (!this.handleAuth(result, 'email', true)) throw new Error('Server authentication response did not include an identity');
 			return this.you!;
 		} finally {
+			this.addingEmail = false;
 			if (this.passkeyAbort === controller) this.cancelPasskey();
 			this.emit();
 		}
@@ -643,7 +653,7 @@ export class ChatClient {
 		const token = code.trim();
 		if (!address || !token) return Promise.reject(new Error('Enter your email address and the code you were sent'));
 		if (!this.running) return Promise.reject(new Error('Connect to the server first'));
-		if (this.server && !this.server.auth.includes('email')) return Promise.reject(new Error('This server does not support email sign-in'));
+		if (this.server && !this.offers('email')) return Promise.reject(new Error('This server does not support email sign-in'));
 		this.pendingEmail?.reject(new Error('Superseded by another sign-in'));
 		return new Promise((resolve, reject) => {
 			this.pendingEmail = { email: address, token, ...(name?.trim() ? { name: name.trim() } : {}), resolve, reject };
@@ -790,7 +800,9 @@ export class ChatClient {
 		if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 		this.cancelPasskey();
 		if (name?.trim()) this.displayName = name.trim();
-		if (!this.handleAuth(result, 'webauthn')) throw new Error('Server authentication response did not include an identity');
+		// A passkey registered on a registered session is added to it (§4.9), not a new way it signed in.
+		const adding = action === 'register' && this.registeredSession && this.authenticated;
+		if (!this.handleAuth(result, 'webauthn', adding)) throw new Error('Server authentication response did not include an identity');
 		return this.authNameRequest;
 	}
 
@@ -1821,7 +1833,7 @@ export class ChatClient {
 		const email = this.pendingEmail;
 		if (email) {
 			this.pendingEmail = undefined;
-			if (auth.includes('email')) {
+			if (this.offers('email')) {
 				this.authenticateWithEmail(email);
 				return;
 			}
@@ -1864,9 +1876,9 @@ export class ChatClient {
 			this.emit();
 			return;
 		}
-		if (!resume && (this.passkeyRequired || !auth.includes('guest'))) {
-			this.error = auth.includes('email') ? 'Sign in with your email from the connect screen.'
-				: auth.includes('webauthn') ? 'Sign in with a passkey from your profile.' : 'No supported authentication scheme';
+		if (!resume && (this.passkeyRequired || !this.offers('guest'))) {
+			this.error = this.offers('email') ? 'Sign in with your email from the connect screen.'
+				: this.offers('webauthn') ? 'Sign in with a passkey from the connect screen.' : 'No supported authentication scheme';
 			this.emit();
 			return;
 		}
@@ -1955,7 +1967,7 @@ export class ChatClient {
 	 * replaces any saved one. `signedIn` names a sign-in ceremony that made
 	 * this a registered session.
 	 */
-	private handleAuth(result: JsonObject, signedIn?: 'webauthn' | 'email'): boolean {
+	private handleAuth(result: JsonObject, signedIn?: 'webauthn' | 'email', added = false): boolean {
 		const identity = result.you;
 		if (!isJsonObject(identity) || typeof identity.user_id !== 'string') {
 			this.error = 'Server authentication response did not include an identity';
@@ -1963,10 +1975,19 @@ export class ChatClient {
 			return false;
 		}
 		this.setYou(identity as Identity);
-		if (signedIn) {
+		if (signedIn && added && this.signedInWith !== undefined) {
+			// Added to the account (§4.9, §4.10): another way back in, not how this session signed in.
+			this.noteAdded(signedIn);
+		} else if (signedIn) {
 			this.registeredSession = true;
 			this.passkeyRequired = true;
 			this.noteSignIn(signedIn);
+			// A sign-in that gives no token of its own leaves nothing of the previous
+			// account's to resume: its token would silently bring that account back.
+			if (typeof result.token !== 'string' && this.sessionToken !== undefined) {
+				this.sessionToken = undefined;
+				this.storeSession(undefined);
+			}
 		} else if (typeof result.token === 'string' && this.signedInWith === undefined) {
 			// A token without a ceremony: a guest's, or an invite's (Appendix B).
 			this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
@@ -2193,6 +2214,15 @@ export class ChatClient {
 		if (current !== undefined && compareLogIds(messageId, current) <= 0) return false;
 		room.set(userId, messageId);
 		return true;
+	}
+
+	/**
+	 * The server offers `scheme` at all: to sign in (`auth`) or to create an
+	 * account (`signup`, §3.1). Where it matters that a scheme signs back in
+	 * (a resume, a passkey login), `auth` alone is checked.
+	 */
+	private offers(scheme: string): boolean {
+		return this.server?.auth.includes(scheme) === true || this.server?.signup?.includes(scheme) === true;
 	}
 
 	private hasCap(cap: Capability): boolean {
@@ -2422,9 +2452,16 @@ export class ChatClient {
 	 * is left as it is.
 	 */
 	private fromLegacySender(value: unknown): unknown {
-		if (!this.server || this.server.protocol >= 7 || !isJsonObject(value) || !isIdentity(value.from)) return value;
-		const renamed = legacySystemId(value.from.user_id);
-		return renamed === undefined ? value : { ...value, from: { ...value.from, user_id: renamed } };
+		if (!this.server || this.server.protocol >= 7 || !isJsonObject(value)) return value;
+		let next: JsonObject = value;
+		const renamed = isIdentity(value.from) ? legacySystemId(value.from.user_id) : undefined;
+		if (renamed !== undefined) next = { ...next, from: { ...(value.from as Identity), user_id: renamed } };
+		// An embedded `reply_to` snapshot is a message too.
+		if (isJsonObject(value.reply_to)) {
+			const reply = this.fromLegacySender(value.reply_to);
+			if (reply !== value.reply_to) next = { ...next, reply_to: reply as JsonObject };
+		}
+		return next;
 	}
 
 	private handleSnapshot(raw: JsonObject | undefined): void {
@@ -2609,7 +2646,10 @@ export class ChatClient {
 	 * listing's members already cover the ones at or below its head.
 	 */
 	private applyPage(room: RoomState, result: JsonObject): void {
-		const page = Array.isArray(result.messages) ? { ...result, messages: result.messages.map((message) => this.fromLegacySender(message) as JsonValue) } : result;
+		// `~private` messages are never installed (Appendix A.1), from history either.
+		const page = Array.isArray(result.messages)
+			? { ...result, messages: result.messages.map((message) => this.fromLegacySender(message) as JsonValue).filter((message) => !(isJsonObject(message) && isIdentity(message.from) && message.from.user_id === '~private')) }
+			: result;
 		const records: DecodedRecords = decodeHistoryRecords(page);
 		for (const record of [...records.rooms, ...records.messages, ...records.embedded, ...records.reactions, ...records.memberships]) this.observeLogId(record.log_id);
 		for (const record of [...records.messages, ...records.embedded, ...records.reactions]) this.noteRecorded(record.from, record.log_id);
@@ -2948,6 +2988,7 @@ export class ChatClient {
 		this.registeredSession = false;
 		this.passkeyRequired = false;
 		this.signedInWith = undefined;
+		this.addedMethods = new Set();
 		this.error = undefined;
 		this.disconnectedAt = undefined;
 		this.clearTyping();
@@ -3052,9 +3093,11 @@ export class ChatClient {
 	private loadStoredSession(): void {
 		let stored: string | null = null;
 		let method: string | null = null;
+		let added: string | null = null;
 		try {
 			stored = globalThis.localStorage?.getItem(this.sessionStorageKey()) ?? null;
 			method = globalThis.localStorage?.getItem(this.signInMethodKey()) ?? null;
+			added = globalThis.localStorage?.getItem(this.addedMethodsKey()) ?? null;
 		} catch {
 			// Storage can be unavailable (private mode, blocked site data).
 		}
@@ -3064,6 +3107,21 @@ export class ChatClient {
 		this.registeredSession = true;
 		// A session kept before this was remembered: a passkey's, if this browser has used one here.
 		this.signedInWith = method === 'webauthn' || method === 'email' || method === 'token' ? method : undefined;
+		this.addedMethods = new Set(readMethods(added));
+	}
+
+	private addedMethodsKey(): string {
+		return `apron.signin-added:${this.serverUrl}`;
+	}
+
+	/** Remembers a way back in that was added to the account. */
+	private noteAdded(method: SignInMethod): void {
+		this.addedMethods.add(method);
+		try {
+			globalThis.localStorage?.setItem(this.addedMethodsKey(), [...this.addedMethods].join(','));
+		} catch {
+			// Best effort, like the token.
+		}
 	}
 
 	private signInMethodKey(): string {
@@ -3073,9 +3131,12 @@ export class ChatClient {
 	/** Remembers how the kept session signed in, beside its token; `undefined` forgets it. */
 	private noteSignIn(method: SignInMethod | undefined): void {
 		this.signedInWith = method;
+		// A new sign-in is a new account, or at least a new story: what was added before is forgotten.
+		this.addedMethods.clear();
 		try {
 			const storage = globalThis.localStorage;
 			if (!storage) return;
+			storage.removeItem(this.addedMethodsKey());
 			if (method) storage.setItem(this.signInMethodKey(), method);
 			else storage.removeItem(this.signInMethodKey());
 		} catch {
@@ -3108,4 +3169,9 @@ export class ChatClient {
 		const snapshot = this.snapshot();
 		for (const listener of this.listeners) listener(snapshot);
 	}
+}
+
+/** The sign-in methods kept in storage as a comma-separated list. */
+function readMethods(value: string | null): SignInMethod[] {
+	return (value ?? '').split(',').filter((method): method is SignInMethod => method === 'webauthn' || method === 'email' || method === 'token');
 }
