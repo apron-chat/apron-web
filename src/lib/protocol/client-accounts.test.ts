@@ -238,6 +238,120 @@ describe('accounts and their ways back in', () => {
 		expect(FakeSocket.instances.slice(-2).map((socket) => socket.readyState)).toEqual([FakeSocket.CLOSED, FakeSocket.CLOSED]);
 	});
 
+	/** Opens a sign-in proposal on a connection of its own, answered; returns that connection. */
+	async function proposeSignIn(auth: string[]): Promise<FakeSocket> {
+		const requested = client.requestEmailCode('ada@example.com');
+		const side = latest();
+		side.open();
+		side.receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'] } });
+		await vi.advanceTimersByTimeAsync(0);
+		await side.reply('auth', {});
+		await requested;
+		return side;
+	}
+
+	/** A passkey login on the main connection, as `ada`. */
+	async function passkeyLogin(main: FakeSocket): Promise<void> {
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
+		const login = client.usePasskey('login');
+		await vi.advanceTimersByTimeAsync(0);
+		await main.reply('auth', { challenge_id: 'c1', public_key: { challenge: 'x' } });
+		await vi.advanceTimersByTimeAsync(0);
+		await main.reply('auth', { you: { user_id: 'ada' } });
+		await login;
+	}
+
+	it('opens no link connection it can’t use, and closes one it can’t use by the time it is ready', async () => {
+		const auth = ['email', 'guest'];
+		start();
+		await latest().greet([], { auth });
+		const side = await proposeSignIn(auth);
+		const inFlight = client.signInWithEmail('1');
+		await vi.advanceTimersByTimeAsync(0);
+		const sockets = FakeSocket.instances.length;
+		await expect(client.signInWithEmailLink('Hk41x9')).rejects.toThrow('Already signing in');
+		expect(FakeSocket.instances).toHaveLength(sockets);
+		side.receive({ id: side.request('auth').id, error: { code: -32001, message: 'Invalid or expired code' } });
+		await expect(inFlight).rejects.toThrow('Invalid or expired code');
+
+		// The link's connection opens first, and an approval starts while it waits for its server frame.
+		const link = client.signInWithEmailLink('Hk41x9');
+		const linkSocket = latest();
+		const again = client.signInWithEmail('2');
+		await vi.advanceTimersByTimeAsync(0);
+		linkSocket.open();
+		linkSocket.receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'] } });
+		await expect(link).rejects.toThrow('Already signing in');
+		expect(linkSocket.sent).toEqual([]);
+		expect(linkSocket.readyState).toBe(FakeSocket.CLOSED);
+		// The proposal itself stays for its code.
+		expect(side.readyState).toBe(FakeSocket.OPEN);
+		side.receive({ id: side.request('auth').id, error: { code: -32001, message: 'Invalid or expired code' } });
+		await expect(again).rejects.toThrow('Invalid or expired code');
+		expect(snapshot.emailCode).toBeDefined();
+	});
+
+	it('gives up a sign-in code once the main connection signs in another way', async () => {
+		const auth = ['webauthn', 'email', 'token', 'guest'];
+		start();
+		await latest().greet([], { auth });
+		const main = latest();
+		// A passkey.
+		let side = await proposeSignIn(auth);
+		await passkeyLogin(main);
+		expect(side.readyState).toBe(FakeSocket.CLOSED);
+		expect(snapshot.emailCode).toBeUndefined();
+		// A pasted token.
+		side = await proposeSignIn(auth);
+		client.useToken('st_pasted');
+		expect(side.readyState).toBe(FakeSocket.CLOSED);
+		expect(snapshot.emailCode).toBeUndefined();
+		await vi.advanceTimersByTimeAsync(0);
+		await latest().greet([], { auth, you: { user_id: 'bot' } });
+		// An emailed link.
+		side = await proposeSignIn(auth);
+		const link = client.signInWithEmailLink('Hk41x9');
+		const linkSocket = latest();
+		linkSocket.open();
+		linkSocket.receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'] } });
+		await vi.advanceTimersByTimeAsync(0);
+		linkSocket.receive({ id: linkSocket.request('auth').id, result: { you: { user_id: 'linky' }, token: 'st_link' } });
+		await link;
+		expect(snapshot.you?.user_id).toBe('linky');
+		expect(side.readyState).toBe(FakeSocket.CLOSED);
+		expect(snapshot.emailCode).toBeUndefined();
+	});
+
+	it('drops an address proposed for one account once the connection signs in as another', async () => {
+		const auth = ['webauthn', 'email', 'guest'];
+		start();
+		await latest().greet([], { auth });
+		const main = latest();
+		expect(snapshot.you?.user_id).toBe('guest_1');
+		const asked = client.requestEmailCodeToAdd('guest@example.com');
+		await main.reply('auth', {});
+		await asked;
+		// The guest's connection logs in with a passkey: the proposal was the guest's, not Ada's.
+		await passkeyLogin(main);
+		expect(snapshot.you?.user_id).toBe('ada');
+		// Another identity lists its own rooms.
+		await main.reply('room_list', { joined: [] });
+		const approvals = () => main.sent.filter((frame) => frame.method === 'auth' && (frame.params as { token?: string }).token !== undefined);
+		await expect(client.addEmail('418092')).rejects.toThrow('Send a new code');
+		expect(approvals()).toEqual([]);
+		expect(snapshot.signInMethods ?? []).not.toContain('email');
+		// Proposed again as Ada, it adds to Ada.
+		const again = client.requestEmailCodeToAdd('ada@example.com');
+		await main.reply('auth', {});
+		await again;
+		const added = client.addEmail('418092');
+		await vi.advanceTimersByTimeAsync(0);
+		await main.reply('auth', {});
+		await added;
+		expect(approvals()).toHaveLength(1);
+		expect(snapshot.signInMethods).toContain('email');
+	});
+
 	it('closes a proposal left open past its expiry, and gives up on an approval that isn’t answered', async () => {
 		start();
 		await latest().greet([], { auth: ['email', 'guest'] });

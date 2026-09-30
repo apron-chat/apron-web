@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { normalizeWebSocketUrl, type ChatClient } from '$lib/protocol/client';
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
@@ -153,6 +153,9 @@
 			client.cancelEmailCode();
 		});
 	});
+
+	// Closing the screen, however it closes, gives up a code still waiting: nothing here could take it any more.
+	onDestroy(() => client.cancelEmailCode());
 
 	// A code works only on the connection that asked for it: once that closes (expired, dropped), ask again.
 	$effect(() => {

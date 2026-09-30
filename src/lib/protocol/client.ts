@@ -239,7 +239,12 @@ export class ChatClient {
 	private readonly emailConnections = new Set<EmailConnection>();
 	/** An email approval has been sent and not answered. */
 	private emailInFlight = false;
-	/** The connection (`connectionId`) that proposed adding an address, which alone can approve it. */
+	/**
+	 * The connection (`connectionId`) that proposed adding an address, which
+	 * alone can approve it; cleared when that connection signs in again or
+	 * becomes another identity, so an address is never recorded as added to
+	 * an account other than the one that proposed it.
+	 */
 	private addProposalConnection?: number;
 	/** `addEmail` holds the sign-in guard: busy, but not with a passkey. */
 	private addingEmail = false;
@@ -682,7 +687,8 @@ export class ChatClient {
 	async signInWithEmailLink(token: string, url = this.serverUrl, beforeSwitch?: () => void): Promise<OperationHandle | undefined> {
 		const secret = token.trim();
 		if (!secret) throw new Error('The link has no token');
-		if (!this.running) throw new Error('Connect to the server first');
+		// Checked before a connection opens, and again (by approveEmail) once it is ready.
+		this.checkEmailApproval();
 		const connection = this.openEmailConnection(url);
 		try {
 			await connection.ready;
@@ -694,12 +700,23 @@ export class ChatClient {
 		return this.approveEmail(connection, secret, undefined, beforeSwitch, false);
 	}
 
+	/** Throws unless an email approval may start now: the client runs, and none is in flight. */
+	private checkEmailApproval(): void {
+		if (!this.running) throw new Error('Connect to the server first');
+		if (this.emailInFlight) throw new Error('Already signing in; wait for it to finish');
+	}
+
 	/** Approves an email sign-in on `connection` and carries on with it (see `signInWithEmail`). */
 	private async approveEmail(
 		connection: EmailConnection, token: string, name: string | undefined, beforeSwitch: (() => void) | undefined, retryable: boolean
 	): Promise<OperationHandle | undefined> {
-		if (!this.running) throw new Error('Connect to the server first');
-		if (this.emailInFlight) throw new Error('Already signing in; wait for it to finish');
+		try {
+			this.checkEmailApproval();
+		} catch (cause) {
+			// A link's connection is used once: nothing else would close it. A proposal stays open for the code.
+			if (!retryable) this.closeEmailConnection(connection);
+			throw cause;
+		}
 		this.emailInFlight = true;
 		this.emit();
 		try {
@@ -811,7 +828,7 @@ export class ChatClient {
 		if (!this.server?.auth.includes('email')) throw new Error('This server does not sign in with email, so an address can’t be added');
 		if (!this.authenticated) throw new Error('Sign in first');
 		if (!token) throw new Error('Enter the code you were sent');
-		if (this.addProposalConnection !== this.connectionId) throw new Error('The connection dropped since the code was sent. Send a new code.');
+		if (this.addProposalConnection !== this.connectionId) throw new Error('The connection or account changed since the code was sent. Send a new code.');
 		await this.readyToSignIn();
 		const controller = new AbortController();
 		this.passkeyAbort = controller;
@@ -985,6 +1002,8 @@ export class ChatClient {
 		const result = await this.passkeyRequest(finish);
 		if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 		this.cancelPasskey();
+		// Signing in again on this connection: an address proposed for the account it was is not approved for this one.
+		if (action === 'login') this.addProposalConnection = undefined;
 		if (name?.trim()) this.displayName = name.trim();
 		// A passkey registered on a registered session is added to it (§4.9), not a new way it signed in.
 		const adding = action === 'register' && this.registeredSession && this.authenticated;
@@ -1001,6 +1020,7 @@ export class ChatClient {
 	useToken(token: string): void {
 		const trimmed = token.trim();
 		if (!trimmed) throw new Error('Paste a token to sign in with');
+		this.cancelEmailCode();
 		this.sessionToken = trimmed;
 		this.storeSession(trimmed);
 		this.passkeyRequired = true;
@@ -2130,6 +2150,8 @@ export class ChatClient {
 			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
 			this.noteAdded(signedIn);
 		} else if (signedIn) {
+			// Signed in another way (a passkey, a link): a sign-in code proposed meanwhile is for nothing now.
+			this.cancelEmailCode();
 			this.registeredSession = true;
 			this.passkeyRequired = true;
 			this.noteSignIn(signedIn);
@@ -2273,6 +2295,8 @@ export class ChatClient {
 
 	private setYou(identity: Identity): void {
 		const changed = this.you?.user_id !== identity.user_id;
+		// A pending address addition belongs to the account that proposed it (§4.10): another identity needs a new code.
+		if (changed) this.addProposalConnection = undefined;
 		this.you = this.noteUser(identity);
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
