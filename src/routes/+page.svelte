@@ -209,7 +209,8 @@
 		}
 		return undefined;
 	});
-	let backendLabel = $derived(session.server?.name || backendHost(serverInput) || 'Apron');
+	// `server.agent` names the implementation, for debugging, not the server: the host is the label.
+	let backendLabel = $derived(backendHost(serverInput) || 'Apron');
 	let threadReplyCount = $derived(threadRoom?.loaded ? messages.length : undefined);
 	let unseenCount = $derived(stickToBottom ? 0 : Math.max(0, messages.length - seenCount));
 	let demoNotice = $derived(demoRetentionNotice(session.server));
@@ -218,7 +219,7 @@
 	let selectThreads = $derived(joinedThreads.filter((entry) => entry.id !== activeThread));
 	/** New threads hang off a top-level room; this client keeps threads one level deep. */
 	let canStartThreads = $derived(session.canManageRooms && !session.readOnly && Boolean(activeRoom) && activeRoom?.parentRoomId === undefined);
-	/** Editing the open room's or thread's title and description (cap `rooms`); the server decides who may. */
+	/** Editing the open room's or thread's title and description (capability `rooms`); the server decides who may. */
 	let canEditPane = $derived(session.canManageRooms && !session.readOnly && Boolean(activeThread ? activeThreadEntry : activeRoom));
 	/** What the Edit form edits: the open thread, else the room. */
 	let editTarget = $derived(activeThread
@@ -273,7 +274,7 @@
 		else if (!newDivider.fixed && room.loaded) newDivider = { room: room.id, after: room.readMessageId, fixed: true };
 	});
 
-	// Reading the latest message advances your read cursor (cap `activity`); the server syncs it to your other devices.
+	// Reading the latest message advances your read cursor (capability `activity`); the server syncs it to your other devices.
 	$effect(() => {
 		const room = paneRoom;
 		const last = messages[messages.length - 1];
@@ -284,7 +285,7 @@
 
 	// Members for the mention picker come with each joined room's listing and stay current by
 	// memberships (§4.3.2); a pane without them (a thread read without joining) lists its room
-	// with `room_list` and `room_id` (cap `rooms`).
+	// with `room_list` and `room_id` (capability `rooms`).
 	$effect(() => {
 		const room = paneRoom;
 		if (!client || !room || !session.ready || !session.canManageRooms || room.members !== undefined) return;
@@ -322,7 +323,7 @@
 		untrack(() => openConnect({ signIn: true }));
 	});
 
-	// Leaving a pane ends its selection in setDestination; losing the cap ends it here.
+	// Leaving a pane ends its selection in setDestination; losing the capability ends it here.
 	$effect(() => {
 		if (!session.canEdit) selection.cancel();
 	});
@@ -661,7 +662,7 @@
 
 	function connected(): void {
 		if (previewMode) return;
-		if (client) recentServers = rememberServer(recentServers, client.url, session.server?.name || backendHost(client.url) || undefined);
+		if (client) recentServers = rememberServer(recentServers, client.url, backendHost(client.url) || undefined);
 		connectOpen = false;
 	}
 
@@ -804,7 +805,7 @@
 	/**
 	 * Sends the composer's text: a message with the draft's mentions (§3.5) and
 	 * previews of its GitHub links as `link` embeds (§4.6.1), or
-	 * with cap `command` a command (§4.8), which `/nick`, `/join`, `/leave`,
+	 * with capability `command` a command (§4.8), which `/nick`, `/join`, `/leave`,
 	 * `/topic`, `/kick` and `/invite` turn into the requests they spell. A
 	 * command's failure shows as a local notice in the pane, where its replies
 	 * land too.
@@ -891,7 +892,7 @@
 	}
 
 	/**
-	 * Sends picked files (cap `embed:upload`) as upload embeds, with whatever
+	 * Sends picked files (capability `embed:upload`) as upload embeds, with whatever
 	 * is in the composer as the text; each file is written to the URL the
 	 * server hands back, and the message shows it pending until then. A command
 	 * takes them as arguments instead (§4.8). Images are shrunk and stripped
@@ -971,7 +972,7 @@
 		else if (room) chooseRoom(room);
 	}
 
-	/** Leaves the open room or thread (cap `rooms`); the server removes it from the list. */
+	/** Leaves the open room or thread (capability `rooms`); the server removes it from the list. */
 	function leavePane(): void {
 		if (!client || !paneRoom) return;
 		const leaving = paneRoom;
@@ -980,7 +981,7 @@
 		feedback.track(client.leaveRoom(leaving.id), 'Leaving…');
 	}
 
-	/** Joins the thread open without joining (cap `rooms`): from then on it delivers live. */
+	/** Joins the thread open without joining (capability `rooms`): from then on it delivers live. */
 	function joinPane(): void {
 		if (!client || !paneRoom || paneRoom.joined) return;
 		feedback.track(client.joinRoom(paneRoom.id), 'Joining…');
@@ -1168,7 +1169,7 @@
 	// --- Editing ---
 
 	/**
-	 * Any message in the open pane can be picked for a move (cap `edit`), anyone's:
+	 * Any message in the open pane can be picked for a move (capability `edit`), anyone's:
 	 * the server decides whose it lets you move.
 	 */
 	function canSelect(event: MessageRecord): boolean {
@@ -1213,7 +1214,7 @@
 	}
 
 	/**
-	 * Starts a thread on a message (cap `rooms`): a room under this one, titled
+	 * Starts a thread on a message (capability `rooms`): a room under this one, titled
 	 * after the message's first line, whose `description` carries its gist
 	 * (§3.4). Threads no longer point at a message, so the link back is the
 	 * thread's first reply: the thread opens once its `room_update` has arrived
@@ -1265,8 +1266,8 @@
 	}
 
 	/**
-	 * Moves the selection to a thread or back to the room (cap `edit`), or into
-	 * a new thread (cap `rooms`), which opens once it exists. An existing
+	 * Moves the selection to a thread or back to the room (capability `edit`), or into
+	 * a new thread (capability `rooms`), which opens once it exists. An existing
 	 * destination leaves the pane as it is.
 	 */
 	async function moveSelection(target: string | 'new'): Promise<void> {
@@ -1311,7 +1312,7 @@
 	<EmailLinkDialog
 		link={emailLink}
 		current={{
-			url: client.url, label: session.server?.name, keptSession: Boolean(snapshot.keptSession),
+			url: client.url, keptSession: Boolean(snapshot.keptSession),
 			...(emailLink.server && emailLink.server !== client.url ? { targetKeptSession: client.keptSessionFor(emailLink.server) } : {}),
 			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {})
 		}}

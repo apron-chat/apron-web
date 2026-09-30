@@ -1,4 +1,4 @@
-import { CLIENT_NAME, PING_FRAME, REQUEST_TIMEOUT_MS, makeRequestId, userFacingRpcError } from './client-internals';
+import { AGENT, PING_FRAME, REQUEST_TIMEOUT_MS, makeRequestId, userFacingRpcError } from './client-internals';
 import type { WebSocketFactory } from './client-types';
 import { isJsonObject, type JsonObject, type RpcError, type WireFrame } from './types';
 
@@ -94,7 +94,7 @@ export class EmailConnection {
 				reject(new Error('The server didn’t answer; try again'));
 			}, REQUEST_TIMEOUT_MS);
 			this.pending.set(id, { resolve, reject, timer });
-			this.socket.send(JSON.stringify({ method: 'auth', id, params: { ...params, client: CLIENT_NAME } }));
+			this.socket.send(JSON.stringify({ method: 'auth', id, params: { ...params, agent: AGENT } }));
 		});
 	}
 

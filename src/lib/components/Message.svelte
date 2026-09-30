@@ -19,7 +19,7 @@
 
 	const LONG_PRESS_MS = 500;
 
-	/** What the viewer may do to this message: built from the server's caps and ownership, so only real actions show. */
+	/** What the viewer may do to this message: built from the server's capabilities and ownership, so only real actions show. */
 	export interface MessageCaps {
 		reply: boolean;
 		edit: boolean;

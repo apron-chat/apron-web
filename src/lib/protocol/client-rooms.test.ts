@@ -33,13 +33,13 @@ describe('rooms by request (cap rooms)', () => {
 
 	async function authenticate(caps: string[]): Promise<void> {
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: caps } });
 		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
 	}
 
 	it('lists the joined rooms with their members right behind auth, threads included, then follows room_update', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms'] } });
 		// Auth is a barrier (§3.2): the listing goes out before its result.
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list']);
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
@@ -114,7 +114,7 @@ describe('rooms by request (cap rooms)', () => {
 	it('shows a welcome sent before auth in the first room, and lets the next connection\'s welcome replace it', async () => {
 		const welcome = (text: string) => ({ method: 'message', params: { from: { user_id: '~private', name: 'Only you' }, body: { text } } });
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms'] } });
 		// Notifications may come before auth (§3.2); with no room yet, it waits for one (Appendix B).
 		socket.receive(welcome('Guests can read along.'));
 		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
@@ -127,7 +127,7 @@ describe('rooms by request (cap rooms)', () => {
 		vi.advanceTimersByTime(5_000);
 		socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms'] } });
 		socket.receive(welcome('Guests can read along, again.'));
 		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
@@ -207,7 +207,7 @@ describe('rooms by request (cap rooms)', () => {
 
 	it('does not report a listing denied behind a failed auth', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms'] } });
 		const auth = socket.request('auth');
 		const listing = socket.request('room_list');
 		socket.receive({ id: auth.id, error: { code: -32001, message: 'Guests are not accepted right now' } });
@@ -221,7 +221,7 @@ describe('rooms by request (cap rooms)', () => {
 
 	it('drops a listing a server answered behind a failed auth, as the connection was: signed in as no one', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms'] } });
 		const auth = socket.request('auth');
 		const listing = socket.request('room_list');
 		socket.receive({ id: auth.id, error: { code: -32001, message: 'Guests are not accepted right now' } });
@@ -455,7 +455,7 @@ describe('room records and membership (v7)', () => {
 		// Your own join and leave are unaffected, and a new server frame tries again.
 		quiet(client.leaveRoom('general'));
 		expect(socket.request('room_leave').params).toEqual({ room_id: 'general' });
-		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms'] } });
 		expect(snapshot.memberChangesUnsupported).toBeUndefined();
 	});
 
@@ -487,7 +487,7 @@ describe('room records and membership (v7)', () => {
 	});
 
 	it('never installs a ~private message from a history page', async () => {
-		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms', 'history'] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms', 'history'] } });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '80', title: 'Ops', latest_log_id: '82', history_log_id: '80' }] } });
 		const request = socket.request('history');
 		socket.receive({ id: request.id, result: { messages: [
@@ -505,7 +505,7 @@ describe('room records and membership (v7)', () => {
 		await expect(client.leaveRoom('general', 'bob').promise).rejects.toThrow('can’t remove');
 		await expect(client.joinRoom('general', 'bob').promise).rejects.toThrow('can’t add');
 		expect(socket.sent.filter((frame) => frame.method === 'room_leave' || frame.method === 'room_join')).toEqual([]);
-		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms'] } });
 		expect(snapshot.memberChangesUnsupported).toBeUndefined();
 	});
 

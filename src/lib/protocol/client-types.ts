@@ -42,7 +42,7 @@ export interface Notice {
 }
 
 /**
- * One visible room: a room the user has joined on this connection (cap
+ * One visible room: a room the user has joined on this connection (capability
  * `rooms`), else one a message arrived in, or a room opened without joining
  * it (`viewRoom`, `joined: false`). Threads are rooms with `parentRoomId`
  * (PROTOCOL.md §3.4, §4.3).
@@ -52,7 +52,7 @@ export interface RoomSnapshot {
 	/** Display title: the record's `title`, falling back to the `room_id`. */
 	title: string;
 	/**
-	 * The user has joined it (or, without cap `rooms`, it is a room messages
+	 * The user has joined it (or, without capability `rooms`, it is a room messages
 	 * arrive in): it delivers live. A room opened with `viewRoom` is not joined
 	 * and changes only when it loads.
 	 */
@@ -93,7 +93,7 @@ export interface RoomSnapshot {
 	recoveryError?: string;
 	/**
 	 * History for this room has been loaded on this connection: always true
-	 * without cap `history`; for top-level rooms after the first recovery; for
+	 * without capability `history`; for top-level rooms after the first recovery; for
 	 * threads after `loadRoom` completed.
 	 */
 	loaded: boolean;

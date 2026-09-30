@@ -41,7 +41,7 @@
 		dismissed?: string[];
 		placeholder: string;
 		disabled: boolean;
-		/** Attachments and voice clips (cap `embed:upload`, §4.6.4): each file goes out as an `upload` embed. */
+		/** Attachments and voice clips (capability `embed:upload`, §4.6.4): each file goes out as an `upload` embed. */
 		canUpload: boolean;
 		/** False once the server showed it takes images only: voice clips are hidden. */
 		canUploadAudio?: boolean;
@@ -508,7 +508,7 @@
 		lastSelection = caret === undefined ? undefined : { start: Math.min(caret, anchor ?? caret), end: Math.max(caret, anchor ?? caret) };
 	}
 
-	/** The emoji button: the full picker, whose pick lands where the caret was. Emoji are text, so no cap gates it. */
+	/** The emoji button: the full picker, whose pick lands where the caret was. Emoji are text, so no capability gates it. */
 	function openEmoji(): void {
 		if (emojiButton) emojiPicker.toggle({ anchor: emojiButton, onpick: insertEmoji });
 	}

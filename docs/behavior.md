@@ -36,13 +36,13 @@ with jitter. An explicit server retry window takes precedence, including a
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.
-With the `activity` cap, typing is reported as `activity` notifications that ask
+With the `activity` capability, typing is reported as `activity` notifications that ask
 for a 15-second indicator (`typing: 15`) and refresh it at most once every 12
 seconds per room, with one `typing: 0` when typing pauses, to avoid charging a
 frame per keystroke. Sending a message sends no `typing: 0`: the message itself
 ends the indicator. Other people's indicators last as long as their `typing`
 asks, or until their next message arrives in that room.
-With the `activity` cap the client also sends `activity` `{away: true}` while
+With the `activity` capability the client also sends `activity` `{away: true}` while
 the tab is hidden or unfocused and `{away: false}` when it is back, so the
 server can push to your other devices instead; it is never shown to anyone.
 Explicit server URLs keep their path: a bare hostname connects at `/`, while
@@ -107,7 +107,7 @@ sidebar listing the open room's or thread's members from its `room_list`
 snapshot, with their role badges. A server may list only the most recently
 active members of a large room, with `member_count`, the number of users who have joined; the list
 then says so, and the count in its header is the total. In a room you have
-joined, with the `rooms` cap, **Add by @user_id** adds someone (`room_join`
+joined, with the `rooms` capability, **Add by @user_id** adds someone (`room_join`
 with their `user_id`, suggesting people the client knows) and each other
 member's remove button removes them (`room_leave` with their `user_id`, after
 a confirm): how members bring people into a private room. Only a `user_id` is
@@ -172,12 +172,12 @@ over the system's, and an installed font for the interface, messages and code
 font choice is marked experimental, to be replaced by a choice of themes. All
 of these stay on this device; settings aren't synced.
 
-With the `command` cap, composer text that starts with one `/` is a command
+With the `command` capability, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.8](https://github.com/shazow/apron/blob/main/PROTOCOL.md#48-command)): the composer shows a **Command** tag, sets the line in
 monospace, and **Run** replaces **Send**. `/nick` (a `me` request), `/join`,
 `/leave`, `/topic` (`room_join`, `room_leave`, and `room_set` with the room's
 new `description`), and `/kick @user` and `/invite @user` (`room_leave` and
-`room_join` with that `user_id`), with the `rooms` cap, are handled by the
+`room_join` with that `user_id`), with the `rooms` capability, are handled by the
 client. `/kick` with a reason goes to the server, which alone can carry one,
 and so do `/kick` and `/invite` on a server before protocol v7 and once the
 server has answered them `unsupported` (the one that got that answer is sent on
@@ -187,21 +187,21 @@ text as typed, `mentions`, `reply_to`, and attached files as `upload` embeds —
 and is never posted. `/help` lists what the server offers. The server's replies
 arrive as notices, and a failed command shows its error as a local "System
 message to you" notice and gives the draft back. `//` posts a message starting with one `/`.
-Without the cap, `/` text is an ordinary message.
+Without the capability, `/` text is an ordinary message.
 
-With the `activity` cap, reading the latest message of a room advances your
+With the `activity` capability, reading the latest message of a room advances your
 read cursor (`read_message_id`), which the server syncs across your
 connections. Opening a room places a **New** divider above the first message
 after the cursor as it was when you arrived; it stays put while you read.
 
-With the `rooms` cap, rooms come by request ([PROTOCOL.md §4.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#43-rooms)): right behind
+With the `rooms` capability, rooms come by request ([PROTOCOL.md §4.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#43-rooms)): right behind
 `auth`, without waiting for its result ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), the client lists
 the rooms you have joined with `room_list` (`filter: "joined"`, `members:
 true`), which is the complete set, threads included (if that `auth` fails, the
 listing ran as the connection was, signed in as no one, and is dropped), and keeps it current from
 `room_update` (`joined`, `left`, `updated`) and each room's members from the
 membership records in its `membership` ([PROTOCOL.md §4.3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#432-membership)); a `membership`
-notification from an earlier protocol 7 draft still applies. Only joined rooms deliver live. Without the cap there is the server's default room, posted to
+notification from an earlier protocol 7 draft still applies. Only joined rooms deliver live. Without the capability there is the server's default room, posted to
 without a `room_id` until a message names it, plus any room a message arrives
 in, titled by its `room_id`.
 
@@ -213,7 +213,7 @@ room's `parent_room_id` finds whenever the room is opened or its threads are
 listed; that listing is also what refreshes their cards, since they deliver
 nothing live. Opening one of those reads it through `history` without joining
 it: its header offers **Join**, and replying joins it first.
-With the `rooms` cap, the **+** beside Rooms in the sidebar creates a room
+With the `rooms` capability, the **+** beside Rooms in the sidebar creates a room
 from a name and an optional Markdown description (`room_set` with `title` and
 `description`); it opens once its `room_update` arrives, and the dialog stays
 open, with the server's error, if creating fails. **Private** asks for
@@ -229,12 +229,12 @@ composer opens on it nor do selected messages move into it. Private rooms and
 threads show a lock beside their name.
 
 A room's `description` (Markdown by convention) shows as one line of text
-under its title in the header. With the `rooms` cap the header's **Edit** opens
+under its title in the header. With the `rooms` capability the header's **Edit** opens
 a form for the open room's or thread's title and description ("Summary" for a
 thread), saved with one `room_set`; the `room_update` that follows is what
 shows, since the server may alter or decline it.
 
-With the `rooms` cap, **Start thread** on a message creates a thread under the
+With the `rooms` capability, **Start thread** on a message creates a thread under the
 room titled after the message's first line, with the message's text as its
 `description` (unless the title already says it all), and opens it with the
 composer replying to that message. Threads don't point at a message in v7, so
@@ -253,7 +253,7 @@ so Back returns to the previous room or thread, and Forward the other way, until
 Back leaves the page from the first room opened. A room left since stays put
 for that step, and a thread left since is read without joining.
 
-With the `rooms` cap the header also offers **Leave**, which leaves the room or
+With the `rooms` capability the header also offers **Leave**, which leaves the room or
 the thread; a thread is a room of its own, so leaving its parent keeps it.
 **Browse rooms** in the sidebar lists, via `room_list` with
 `filter: "not_joined"`, the most active visible rooms you haven't joined, and
@@ -261,11 +261,11 @@ the thread; a thread is a room of its own, so leaving its parent keeps it.
 open room lists its threads you haven't joined; picking one joins it and opens
 it once its `room_update` arrives.
 
-With the `edit` cap, several of your messages move at a time: shift-click a
+With the `edit` capability, several of your messages move at a time: shift-click a
 message (or press `x` on it, long-press it on touch, or pick **Select** from its
 More menu) to enter select mode, shift-click another to fill the range, and the
 selection bar replaces the composer with the count, **Move to thread** (or, in a
-thread, back to the room), **New thread** (with the `rooms` cap) and Cancel. A
+thread, back to the room), **New thread** (with the `rooms` capability) and Cancel. A
 move is a save of the message with the destination's `room_id`, one request per
 message; a new thread is created first and the moves follow once the server has
 named it. Denied ones stay selected and the bar says how many didn't move.
@@ -274,7 +274,7 @@ Escape leaves select mode.
 A reply's quote may point into another room: clicking it opens that room or
 thread, loading the thread's history if needed, and highlights the message.
 
-With the `reactions` cap, a message's **React** action opens the full emoji
+With the `reactions` capability, a message's **React** action opens the full emoji
 picker right away, its frequently used row starting from emoji-mart's own
 defaults; a pick toggles your reaction with that emoji. Reactions show as chips under the message: emoji and count,
 highlighted when one is yours, with a tooltip naming who reacted. Clicking a
@@ -297,12 +297,12 @@ fetches from a CDN.
 
 Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#46-embeds-and-avatars)):
 
-- **Uploads** (cap `embed:upload`): the composer's paperclip and microphone send
+- **Uploads** (capability `embed:upload`): the composer's paperclip and microphone send
   files and voice clips as `upload` embeds with whatever is in the field, then
   write each file to the `write_url` in the result. The message shows a pending
   card with progress until the server publishes the finished file: an image, a
   video or audio player from its `og`, or else a file card.
-- **Streams** (cap `embed:stream`): while the embed has a `url` the client reads
+- **Streams** (capability `embed:stream`): while the embed has a `url` the client reads
   it with a streaming `GET` and shows the text growing under a Live badge;
   when a snapshot carries `text` instead it shows the kept text as Finished.
   `terminal` output is monospace with ANSI colors and emphasis, carriage
@@ -326,7 +326,7 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](ht
   it. A failed send restores the draft with those previews still removed;
   otherwise the draft forgets them once it is sent or cleared.
 
-With the `edit` cap, each embed on your own messages shows an **(x)** on its
+With the `edit` capability, each embed on your own messages shows an **(x)** on its
 corner while hovered (always on touch screens), which saves the message without
 that embed ([PROTOCOL.md §4.6.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#462-embed-identity)): it is identified by `embed_id`, or by
 value on servers that store embeds as given. Removing an upload or stream asks
@@ -350,7 +350,7 @@ nothing works before signing in. The server and name
 are stored in local storage, and the last few backends are listed under the
 form. The profile bar at the foot of the sidebar edits your handle, which is
 sent with the protocol `me` request after authentication; the editor shows
-what the server actually kept. With the `command` and `embed:upload` caps it
+what the server actually kept. With the `command` and `embed:upload` capabilities it
 also sets your avatar: a `/avatar` command carrying one `upload` embed
 ([PROTOCOL.md §4.6.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#466-avatars)), whose result names the `write_url` the image is written to; the
 server applies it with a `user` notification. **Remove** sends `me` with

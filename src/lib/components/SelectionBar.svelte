@@ -9,7 +9,7 @@
 		threads: ThreadEntry[];
 		/** In a thread, messages can also go back to the room: its ID. */
 		parentRoom?: string;
-		/** Creating threads needs cap `rooms`. */
+		/** Creating threads needs capability `rooms`. */
 		canCreateThread: boolean;
 		onmove: (room: string) => void;
 		onnewthread: () => void;

@@ -32,7 +32,7 @@
 		onconnect: () => void;
 		onroom: (room: RoomSnapshot) => void;
 		onthread: (thread: string) => void;
-		/** Join a visible room or thread from `room_list` (cap `rooms`); it opens once its `room_update` arrives. */
+		/** Join a visible room or thread from `room_list` (capability `rooms`); it opens once its `room_update` arrives. */
 		onjoin: (roomId: string) => void;
 		/** A room created here, asked for as private or not; it opens once its `room_update` arrives. */
 		oncreateroom: (roomId: string, options: { private: boolean }) => void;

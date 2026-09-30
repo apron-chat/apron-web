@@ -15,7 +15,7 @@
 		open: boolean;
 		/**
 		 * Offer adding and removing other members (`room_join` and `room_leave`
-		 * with `user_id`, §4.3.2): cap `rooms`, signed in with writes allowed, and
+		 * with `user_id`, §4.3.2): capability `rooms`, signed in with writes allowed, and
 		 * the room joined. Who may is server policy; a server that doesn't support
 		 * it at all answers `unsupported`, and the offer goes.
 		 */

@@ -271,7 +271,7 @@ describe('ChatClient reference features', () => {
 		client.retryNow();
 		socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['history', 'rooms', 'activity'] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['history', 'rooms', 'activity'] } });
 		// auth, the listing, and the kept room's recovery go out together, before any reply (§3.2).
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list', 'history']);
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });

@@ -113,7 +113,7 @@ Edits, moves, and deletion use the same `message` request as creation, with an
 existing `message_id`, and resubmit every client field of the latest snapshot
 (`room_id`, `body`, a bare `reply_to`, and `ext` unchanged). A move is a save
 with another `room_id`. Rooms and threads are created and updated with the
-`room_set` request (cap `rooms`); a creation may ask for `private: true`, and
+`room_set` request (capability `rooms`); a creation may ask for `private: true`, and
 updates resubmit `title`, `description`, and `ext` (never `parent_room_id` or
 `private`), and the change arrives as a `room_update`. The
 client does not depend on the notifications a request causes arriving before
@@ -123,7 +123,7 @@ remove someone else, sent only to servers of protocol 7 and later (an older
 one would act on the caller): the snapshot's `memberChangesUnsupported` is set
 by a `server` frame before v7, and by an `unsupported` reply until the next
 `server` frame. Reactions use the
-`reactions` request (cap `reactions`) with your complete emoji set.
+`reactions` request (capability `reactions`) with your complete emoji set.
 
 Every successful `auth` result is handled alike: its `you` becomes the
 connection's identity and a `token` in it replaces the saved one, whether it
@@ -152,5 +152,11 @@ session signed in (`webauthn`, `email`, `token`) is remembered beside its token
 as `signedInWith`, and ways added to the account since beside it
 (`signInMethods`). `requestEmailCode`, `signInWithEmail` and registering a
 passkey accept a scheme listed in `auth` or `signup`, and adding an email needs it in `auth`; a passkey login and a
-token resume need it in `auth`. The `server` frame's `welcome` and `signup` are kept on the
-snapshot's `server`.
+token resume need it in `auth`. The `server` frame ([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame))
+is kept on the snapshot's `server` as sent: `apron` (the version), `capabilities`,
+`agent` (the implementation, for debugging; the UI labels a server by its host,
+never by `agent`), `welcome`, `signup`, `ping` and `ext`. A server before v7 says
+`protocol` and `caps` instead; the client reads those as `apron` and
+`capabilities`, and everything it does differently for such a server is gated
+on that version. Every `auth` the client sends carries `agent: "apron-web/0.4"`
+(§3.2).

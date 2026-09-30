@@ -1,9 +1,9 @@
 /**
- * What the composer does with its text (PROTOCOL.md §4.8). With cap `command`,
+ * What the composer does with its text (PROTOCOL.md §4.8). With capability `command`,
  * text that starts with one `/` is a command: `/nick`, `/join`, `/leave`,
  * `/topic`, `/kick` and `/invite` map to the requests they spell (all but the
- * first need cap `rooms`), and anything else goes to the server as a
- * `command`. `//` posts a message starting with `/`. Without cap `command`,
+ * first need capability `rooms`), and anything else goes to the server as a
+ * `command`. `//` posts a message starting with `/`. Without capability `command`,
  * every text is a message.
  */
 export type ComposerAction =

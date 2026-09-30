@@ -15,7 +15,7 @@ import {
 import { DEFAULT_ROOM_ID, type Notice, type OperationHandle } from './client-types';
 
 /**
- * How a room is in the client's rooms: `joined` (visible and live; without cap
+ * How a room is in the client's rooms: `joined` (visible and live; without capability
  * `rooms`, any room messages arrive in), `viewed` (opened without joining,
  * loaded through history only), or `pending` (kept from the last connection
  * and resuming its recovery while the new connection's `room_list` decides
@@ -127,8 +127,8 @@ export type ValidHistoryResponse = JsonObject & {
 };
 
 export const REQUEST_TIMEOUT_MS = 20_000;
-/** The implementation string sent as `client` with `auth` (§3.2). */
-export const CLIENT_NAME = 'apron-web/0.4';
+/** This implementation and its version, sent as `agent` with `auth` (§3.2), for the server's debugging. */
+export const AGENT = 'apron-web/0.4';
 /** The `unsupported` error code (§1.1): a method or an optional parameter the server does not implement. */
 export const UNSUPPORTED = -32601;
 const HISTORY_PAGE_SIZE = 200;

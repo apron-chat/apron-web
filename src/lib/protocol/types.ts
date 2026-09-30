@@ -12,7 +12,7 @@ export interface JsonObject {
 }
 
 /**
- * Optional features of `server.params.caps` (§4) that this client uses;
+ * Optional features of `server.capabilities` (§4) that this client uses;
  * it ignores the rest.
  */
 export type Capability = 'history' | 'edit' | 'rooms' | 'reactions' | 'activity' | 'embed:upload' | 'embed:stream' | 'command';
@@ -107,7 +107,7 @@ export interface MessageRecord extends JsonObject {
  */
 export interface RoomRecord extends JsonObject {
 	room_id: string;
-	/** Absent only from servers without cap `history`. */
+	/** Absent only from servers without capability `history`. */
 	log_id?: string;
 	/** Marks a thread; fixed at creation. */
 	parent_room_id?: string;
@@ -129,10 +129,13 @@ export interface ReactionSet {
 	emojis: string[];
 }
 
+/** The `server` frame (§3.1). */
 export interface ServerParams {
-	protocol: number;
-	name?: string;
-	caps?: string[];
+	/** The protocol version. */
+	apron: number;
+	/** The implementation and its version, for debugging; not a name to show. */
+	agent?: string;
+	capabilities?: string[];
 	auth: string[];
 	/**
 	 * The schemes that create an account (§3.1, §3.2); `auth` then lists

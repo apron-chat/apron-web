@@ -47,15 +47,15 @@ export class SessionView {
 		}
 		return live;
 	});
-	/** Edit, move, and delete (cap `edit`). */
+	/** Edit, move, and delete (capability `edit`). */
 	readonly canEdit = $derived(canEdit(this.server));
-	/** Create and update rooms and threads (cap `rooms`). */
+	/** Create and update rooms and threads (capability `rooms`). */
 	readonly canManageRooms = $derived(canManageRooms(this.server));
-	/** Leaving needs cap `rooms`, and not a demo worker that says rooms are joined for good. */
+	/** Leaving needs capability `rooms`, and not a demo worker that says rooms are joined for good. */
 	readonly canLeaveRooms = $derived(this.canManageRooms && this.server?.ext?.demo?.room_leave !== false);
 	/** A guest on a server whose guests only read: no composer, reactions, or new threads until sign-in. */
 	readonly readOnly = $derived(Boolean(this.snapshot.readOnly));
-	/** Reaction chips and the React action (cap `reactions`). */
+	/** Reaction chips and the React action (capability `reactions`). */
 	readonly canReact = $derived(canReact(this.server));
 
 	/** Takes the client's next snapshot and keeps the held view in step with it. */

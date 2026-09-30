@@ -34,7 +34,7 @@ describe('accounts and their ways back in', () => {
 		await vi.advanceTimersByTimeAsync(10_000);
 		const socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'], ...extra } });
+		socket.receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'], ...extra } });
 		await vi.advanceTimersByTimeAsync(0);
 		return socket;
 	}
@@ -48,7 +48,7 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode(`${you}@example.com`);
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'], ...extra } });
+		side.receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'], ...extra } });
 		await vi.advanceTimersByTimeAsync(0);
 		await side.reply('auth', {});
 		await requested;
@@ -128,7 +128,7 @@ describe('accounts and their ways back in', () => {
 		client.stop();
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'] } });
 		expect(frames(latest())[0]).toBe('auth token');
 	});
 
@@ -136,7 +136,7 @@ describe('accounts and their ways back in', () => {
 		const auth = ['email', 'webauthn'];
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'] } });
 		const socket = await signInByEmail(auth, 'ada');
 		await socket.reply('room_list', { joined: [] });
 		expect(snapshot.signedInWith).toBe('email');
@@ -155,7 +155,7 @@ describe('accounts and their ways back in', () => {
 		const extra = { signup: ['email'] };
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'], ...extra } });
+		latest().receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'], ...extra } });
 		expect(snapshot.error).toBe('Sign in with a passkey, or join with your email, from the connect screen.');
 		await signInByEmail(auth, 'newbie', extra);
 		const next = await reconnect(auth, extra);
@@ -167,7 +167,7 @@ describe('accounts and their ways back in', () => {
 	it('never signs in as a guest listed only in signup', async () => {
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { protocol: 7, auth: ['email'], signup: ['guest'], caps: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 7, auth: ['email'], signup: ['guest'], capabilities: ['rooms'] } });
 		expect(frames(latest())).toEqual([]);
 		expect(snapshot.error).toMatch(/email/);
 	});
@@ -176,7 +176,7 @@ describe('accounts and their ways back in', () => {
 		const auth = ['webauthn', 'email'];
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'] } });
 		const main = latest();
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
 		const login = client.usePasskey('login');
@@ -191,7 +191,7 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode('bob@example.com');
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'] } });
+		side.receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'] } });
 		await vi.advanceTimersByTimeAsync(0);
 		side.receive({ id: side.request('auth').id, result: {} });
 		await requested;
@@ -211,7 +211,7 @@ describe('accounts and their ways back in', () => {
 		const side = latest();
 		expect(side.url).toBe('ws://other.test/');
 		side.open();
-		side.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: [] } });
+		side.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [] } });
 		await expect(requested).rejects.toThrow('does not support email');
 		expect(side.sent).toEqual([]);
 		expect(side.readyState).toBe(FakeSocket.CLOSED);
@@ -243,7 +243,7 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode('ada@example.com');
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'] } });
+		side.receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'] } });
 		await vi.advanceTimersByTimeAsync(0);
 		await side.reply('auth', {});
 		await requested;
@@ -280,7 +280,7 @@ describe('accounts and their ways back in', () => {
 		const again = client.signInWithEmail('2');
 		await vi.advanceTimersByTimeAsync(0);
 		linkSocket.open();
-		linkSocket.receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'] } });
+		linkSocket.receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'] } });
 		await expect(link).rejects.toThrow('Already signing in');
 		expect(linkSocket.sent).toEqual([]);
 		expect(linkSocket.readyState).toBe(FakeSocket.CLOSED);
@@ -313,7 +313,7 @@ describe('accounts and their ways back in', () => {
 		const link = client.signInWithEmailLink('Hk41x9');
 		const linkSocket = latest();
 		linkSocket.open();
-		linkSocket.receive({ method: 'server', params: { protocol: 7, auth, caps: ['rooms'] } });
+		linkSocket.receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'] } });
 		await vi.advanceTimersByTimeAsync(0);
 		linkSocket.receive({ id: linkSocket.request('auth').id, result: { you: { user_id: 'linky' }, token: 'st_link' } });
 		await link;
@@ -358,7 +358,7 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode('ada@example.com');
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { protocol: 7, auth: ['email', 'guest'], caps: [], ping: 30 } });
+		side.receive({ method: 'server', params: { apron: 7, auth: ['email', 'guest'], capabilities: [], ping: 30 } });
 		await vi.advanceTimersByTimeAsync(0);
 		await side.reply('auth', {});
 		await requested;
@@ -377,7 +377,7 @@ describe('accounts and their ways back in', () => {
 		const again = client.requestEmailCode('ada@example.com');
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { protocol: 7, auth: ['email', 'guest'], caps: [] } });
+		next.receive({ method: 'server', params: { apron: 7, auth: ['email', 'guest'], capabilities: [] } });
 		await vi.advanceTimersByTimeAsync(0);
 		await next.reply('auth', {});
 		await again;

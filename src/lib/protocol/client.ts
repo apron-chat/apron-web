@@ -74,7 +74,7 @@ import {
 	THREAD_PAGE_SIZE,
 	TYPING_REFRESH_MS,
 	TYPING_TIMEOUT_S,
-	CLIENT_NAME,
+	AGENT,
 	UNSUPPORTED,
 	absent,
 	canonicalJson,
@@ -131,10 +131,10 @@ export {
  *
  * State model: one store of room records, message snapshots, reaction sets,
  * and memberships shared by every room (PROTOCOL.md §2), projected per visible
- * room in `snapshot().rooms`. With cap `rooms` the visible rooms are the
+ * room in `snapshot().rooms`. With capability `rooms` the visible rooms are the
  * joined set, listed with `room_list` right behind `auth` (§3.2) and kept
  * current by `room_update`; without it they are the rooms messages arrive in.
- * Top-level rooms recover history automatically when they become visible (cap
+ * Top-level rooms recover history automatically when they become visible (capability
  * `history`); threads are rooms with a parent and load their history with
  * `loadRoom` when opened, joined or not (`viewRoom`). Mutations return an
  * `OperationHandle` that settles on the server's reply; the authoritative state
@@ -178,7 +178,7 @@ export class ChatClient {
 	/** Nobody is attending this connection (§4.4); `awaySent` is what the server was last told on it. */
 	private away = false;
 	private awaySent = false;
-	/** The `room_id` of the server's default room once known (without cap `rooms`). */
+	/** The `room_id` of the server's default room once known (without capability `rooms`). */
 	private defaultRoom?: string;
 	/** Messages this client posted without `room_id`: their broadcast names the default room. */
 	private readonly defaultPosts = new Set<string>();
@@ -206,7 +206,7 @@ export class ChatClient {
 	 */
 	private readonly listings = new Map<string, { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string> }>();
 	/**
-	 * The `room_list` of joined rooms on this connection (cap `rooms`), until
+	 * The `room_list` of joined rooms on this connection (capability `rooms`), until
 	 * its result arrives; `since` and `userId` when it lists only changes since
 	 * a position, for that identity.
 	 */
@@ -1101,7 +1101,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Sends a `command` (cap `command`, §4.8): `text` is the command line as
+	 * Sends a `command` (capability `command`, §4.8): `text` is the command line as
 	 * typed, slash included, with the params a message would have; mentions,
 	 * `replyTo`, and embeds are arguments. Nothing is posted: the result is
 	 * `{}` (or `embeds` with write URLs), replies come as notices, and effects
@@ -1122,7 +1122,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Saves a message (cap `edit`, §4.2) from its latest stored snapshot:
+	 * Saves a message (capability `edit`, §4.2) from its latest stored snapshot:
 	 * every client field (`room_id`, `body`, bare `reply_to`, `ext`) is
 	 * resubmitted unless the patch changes it. `deleted: true` omits `body`.
 	 */
@@ -1238,7 +1238,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Sets your complete emoji set on a message (cap `reactions`,
+	 * Sets your complete emoji set on a message (capability `reactions`,
 	 * §4.5); `[]` clears it. The result is `{}`; the broadcast carries the state.
 	 */
 	react(messageId: string, emojis: string[]): OperationHandle {
@@ -1269,7 +1269,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Creates a room with `room_set` (cap `rooms`, §4.3.4), which joins the
+	 * Creates a room with `room_set` (capability `rooms`, §4.3.4), which joins the
 	 * creator; with `parentRoomId` it is a thread. Resolves with the new
 	 * `room_id`; the room record arrives in a `room_update`. A server that
 	 * keeps no private rooms rejects `private: true` as `unsupported`; one that
@@ -1344,9 +1344,9 @@ export class ChatClient {
 	}
 
 	/**
-	 * Reports typing in a room as an `activity` notification (cap `activity`,
+	 * Reports typing in a room as an `activity` notification (capability `activity`,
 	 * §4.4): `typing` seconds while active, `0` to stop. Sends nothing
-	 * to a server without the cap.
+	 * to a server without the capability.
 	 */
 	sendTyping(room: string, active: boolean): void {
 		if (room === DEFAULT_ROOM_ID || !this.authenticated || !this.hasCap('activity') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
@@ -1367,7 +1367,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Tells the server whether anyone is attending this connection (cap
+	 * Tells the server whether anyone is attending this connection (capability
 	 * `activity`, §4.4): `true` while the tab is hidden or unfocused, `false`
 	 * once it is back. Sent only when it changes, and again on each connection
 	 * that starts while away.
@@ -1385,7 +1385,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Advances your read cursor in a room (cap `activity`, §4.4) to a
+	 * Advances your read cursor in a room (capability `activity`, §4.4) to a
 	 * message, if that is further than the cursor already is. The server
 	 * syncs it to your other connections.
 	 */
@@ -1410,7 +1410,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Lists visible rooms the user has not joined (cap `rooms`, §4.3.1):
+	 * Lists visible rooms the user has not joined (capability `rooms`, §4.3.1):
 	 * top-level rooms with their members, or with `parentRoomId` that room's
 	 * threads, whose heads refresh the cards of threads not joined (they
 	 * deliver nothing live). The result also lands in the snapshot's
@@ -1611,7 +1611,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Posts a message with files attached as `upload` embeds (cap
+	 * Posts a message with files attached as `upload` embeds (capability
 	 * `embed:upload`, §4.6.4): the message goes out with one pending embed
 	 * per file, then each file is written to the `write_url` the result lists.
 	 * `sent` settles with the message result; `uploaded` when every write has
@@ -1630,7 +1630,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Uploads an image as your avatar (§4.6.6, caps `command` and
+	 * Uploads an image as your avatar (§4.6.6, capabilities `command` and
 	 * `embed:upload`): a `/avatar` command with one upload embed, then the file
 	 * written to the result's `write_url`. The server sets `avatar` and sends a
 	 * `user` notification once the image is written.
@@ -1680,7 +1680,7 @@ export class ChatClient {
 	 * newest page the first time, and afterwards pages from the previous load's
 	 * checkpoint up to the head known at the call, resolving after the last
 	 * page. For a joined top-level room, which recovers automatically, it waits
-	 * for the running recovery, or retries one that failed. Without cap
+	 * for the running recovery, or retries one that failed. Without capability
 	 * `history` it resolves at once.
 	 */
 	loadRoom(roomId: string): Promise<void> {
@@ -2023,14 +2023,18 @@ export class ChatClient {
 	}
 
 	private handleServer(params: JsonObject | undefined): void {
-		if (!params || typeof params.protocol !== 'number' || !Array.isArray(params.auth)) return;
+		// v6 servers name the version `protocol` and the capabilities `caps`; everything the
+		// client does differently for them is gated on the version read here.
+		const version = typeof params?.apron === 'number' ? params.apron : params?.protocol;
+		const capabilities = Array.isArray(params?.capabilities) ? params.capabilities : params?.caps;
+		if (!params || typeof version !== 'number' || !Array.isArray(params.auth)) return;
 		const auth = params.auth.filter(isString);
 		if (!auth.length) return;
 		const previousPing = this.server?.ping;
 		this.server = {
-			protocol: params.protocol,
-			...(typeof params.name === 'string' ? { name: params.name } : {}),
-			caps: Array.isArray(params.caps) ? params.caps.filter(isString) : [],
+			apron: version,
+			...(typeof params.agent === 'string' ? { agent: params.agent } : {}),
+			capabilities: Array.isArray(capabilities) ? capabilities.filter(isString) : [],
 			auth,
 			...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
 			...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
@@ -2041,7 +2045,7 @@ export class ChatClient {
 		if (!this.pingTimer || previousPing !== this.server.ping) this.startPing();
 		// Each frame fully replaces the last (§3.1): features are worth trying again. A server
 		// before v7 would ignore `user_id` in `room_join`/`room_leave` and act on the caller.
-		this.memberChangesUnsupported = params.protocol < 7;
+		this.memberChangesUnsupported = version < 7;
 		if (this.authenticated || this.authRequested) {
 			this.emit();
 			return;
@@ -2095,7 +2099,7 @@ export class ChatClient {
 		const socket = this.socket;
 		const request = this.enqueueRequest('auth', {
 			...(resume ? { scheme: 'token', token: this.sessionToken } : { scheme: 'guest' }),
-			client: CLIENT_NAME
+			agent: AGENT
 		}, { visible: false, allowBeforeAuth: true });
 		// `auth` is a barrier (§3.2): the server finishes it before reading on, so
 		// the rooms and their recovery go right behind it instead of waiting a
@@ -2187,7 +2191,7 @@ export class ChatClient {
 			if (this.socket === stableSocket && this.authenticated) this.reconnectAttempt = 0;
 		}, STABLE_CONNECTION_MS);
 		this.disconnectedAt = undefined;
-		// A reconnect keeps each room's records, and a server with cap `history`
+		// A reconnect keeps each room's records, and a server with capability `history`
 		// fills the gap through recovery; only a session-only scrollback (§4
 		// fallback) has a real gap to mark.
 		this.showReconnectDivider = (this.showReconnectDivider || this.rooms.size > 0) && !this.hasCap('history');
@@ -2204,7 +2208,7 @@ export class ChatClient {
 		const wanted = Boolean(name) && name !== this.you?.name && (registered || this.declinedName !== name);
 		this.authNameRequest = wanted ? this.sendName() : undefined;
 		// Rooms come by request (§4.3.1), usually already sent behind `auth`;
-		// without cap `rooms` there is the default room.
+		// without capability `rooms` there is the default room.
 		if (this.hasCap('rooms')) {
 			if (!this.joinedListing) this.requestRooms(false);
 		} else if (!this.rooms.size) {
@@ -2217,10 +2221,10 @@ export class ChatClient {
 	}
 
 	/**
-	 * Asks for the joined rooms (cap `rooms`) and resumes the rooms kept from
+	 * Asks for the joined rooms (capability `rooms`) and resumes the rooms kept from
 	 * the last connection: those opened without joining come back as they
 	 * were, and joined ones wait, hidden, for the listing to say whether they
-	 * still are, while their recovery (cap `history`) already pages forward
+	 * still are, while their recovery (capability `history`) already pages forward
 	 * from their checkpoints (§4.1). `sameIdentity`: this sign-in resumes the
 	 * kept rooms' identity, so the listing may ask only for what changed since
 	 * the rooms' checkpoints (§4.3.1).
@@ -2410,7 +2414,7 @@ export class ChatClient {
 	}
 
 	private hasCap(cap: Capability): boolean {
-		return this.server?.caps?.includes(cap) === true;
+		return this.server?.capabilities?.includes(cap) === true;
 	}
 
 	private isThread(roomId: string): boolean {
@@ -2545,7 +2549,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Without cap `rooms` there is one default room (§3.4): shown under
+	 * Without capability `rooms` there is one default room (§3.4): shown under
 	 * `DEFAULT_ROOM_ID` and posted to without `room_id` until a message reveals
 	 * its `room_id`.
 	 */
@@ -2571,7 +2575,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * A room a message or notice arrived in. Without cap `rooms` every such
+	 * A room a message or notice arrived in. Without capability `rooms` every such
 	 * room is shown, titled by its `room_id` (§3.4), and the first one takes the
 	 * default room's place.
 	 */
@@ -2638,7 +2642,7 @@ export class ChatClient {
 	 * is left as it is.
 	 */
 	private fromLegacySender(value: unknown): unknown {
-		if (!this.server || this.server.protocol >= 7 || !isJsonObject(value)) return value;
+		if (!this.server || this.server.apron >= 7 || !isJsonObject(value)) return value;
 		let next: JsonObject = value;
 		const renamed = isIdentity(value.from) ? legacySystemId(value.from.user_id) : undefined;
 		if (renamed !== undefined) next = { ...next, from: { ...(value.from as Identity), user_id: renamed } };

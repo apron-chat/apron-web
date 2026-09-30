@@ -5,7 +5,7 @@
 	interface Props {
 		client: ChatClient;
 		open?: boolean;
-		/** Creating is allowed (cap `rooms`, signed in, not read-only); losing that closes the dialog. */
+		/** Creating is allowed (capability `rooms`, signed in, not read-only); losing that closes the dialog. */
 		enabled: boolean;
 		/**
 		 * The server named the new room; its record follows in a `room_update`.

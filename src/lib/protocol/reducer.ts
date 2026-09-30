@@ -125,7 +125,7 @@ interface MembershipLog {
  * `(message_id, user_id)`, one membership per `(room_id, user_id)`. Every
  * record replaces the stored one only when its `log_id` is numerically
  * greater, regardless of source or arrival order; a room record without
- * `log_id` (a server without cap `history`) always replaces. Messages are
+ * `log_id` (a server without capability `history`) always replaces. Messages are
  * indexed by their current `room_id`, so a move snapshot re-homes a message
  * instead of duplicating it.
  *

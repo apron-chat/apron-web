@@ -17,13 +17,13 @@
 		replyCount?: number;
 		/** Older replies are not loaded yet, so `replyCount` is a lower bound. */
 		moreReplies?: boolean;
-		/** Show Edit for the room, or the open thread (cap `rooms`): its title and description. */
+		/** Show Edit for the room, or the open thread (capability `rooms`): its title and description. */
 		canEdit: boolean;
 		editorOpen: boolean;
 		editDisabled: boolean;
-		/** Offer Leave for the pane's room or thread (cap `rooms`). */
+		/** Offer Leave for the pane's room or thread (capability `rooms`). */
 		canLeave: boolean;
-		/** Offer Join for a thread open without joining it (cap `rooms`). */
+		/** Offer Join for a thread open without joining it (capability `rooms`). */
 		canJoin?: boolean;
 		/** Whether the room member list is visible. */
 		memberListOpen: boolean;

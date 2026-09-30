@@ -58,20 +58,20 @@ export function childRooms(rooms: readonly RoomSnapshot[], parentRoomId: string)
 
 /** Whether a `server` frame advertises a capability (§4). Capabilities gate UI, not authorization. */
 function hasCapability(server: ServerParams | undefined, cap: Capability): boolean {
-	return server?.caps?.includes(cap) === true;
+	return server?.capabilities?.includes(cap) === true;
 }
 
 export function capabilitiesOf(server: ServerParams | undefined): Capabilities {
 	return Object.fromEntries(CAPABILITIES.map((cap) => [cap, hasCapability(server, cap)])) as Capabilities;
 }
 
-/** Edit, move, and delete controls (cap `edit`). */
+/** Edit, move, and delete controls (capability `edit`). */
 export const canEdit = (server: ServerParams | undefined) => hasCapability(server, 'edit');
-/** Room and thread creation and room updates (cap `rooms`). */
+/** Room and thread creation and room updates (capability `rooms`). */
 export const canManageRooms = (server: ServerParams | undefined) => hasCapability(server, 'rooms');
-/** Reaction controls (cap `reactions`). */
+/** Reaction controls (capability `reactions`). */
 export const canReact = (server: ServerParams | undefined) => hasCapability(server, 'reactions');
-/** History recovery and paging (cap `history`). */
+/** History recovery and paging (capability `history`). */
 export const hasHistory = (server: ServerParams | undefined) => hasCapability(server, 'history');
 
 export function defaultWebSocketUrl(locationLike?: Location): string {
