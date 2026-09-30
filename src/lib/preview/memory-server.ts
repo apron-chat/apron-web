@@ -300,13 +300,13 @@ export class MemoryProtocolServer {
 		socket.deliver({ method: 'room_update', params: { left: [{ room_id: String(p.room_id) }] } });
 		reply();
 	}
-	/** Adds or removes another user (§4.3.2): a membership record to the room's members, before and after. */
+	/** Adds or removes another user (§4.3.2): a membership record in `room_update` to the room's members, before and after. */
 	private changeMember(room: PreviewRoom, userId: string, joined: boolean, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const user = people[userId];
 		if (!user || !Object.hasOwn(people, userId)) return fail('Unknown user');
 		if (joined) room.members.add(userId);
 		const record = { log_id: this.nextLog(room), room_id: room.room_id, members: [{ user: { ...user }, joined }] };
-		this.broadcast({ method: 'membership', params: record }, room);
+		this.broadcast({ method: 'room_update', params: { membership: [record] } }, room);
 		if (!joined) room.members.delete(userId);
 		reply();
 	}

@@ -195,8 +195,9 @@ With the `rooms` cap, rooms come by request ([PROTOCOL.md §4.3](https://github.
 `auth`, without waiting for its result ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), the client lists
 the rooms you have joined with `room_list` (`filter: "joined"`, `members:
 true`), which is the complete set, threads included, and keeps it current from
-`room_update` (`joined`, `left`, `updated`) and each room's members from
-`membership` records. Only joined rooms deliver live. Without the cap there is the server's default room, posted to
+`room_update` (`joined`, `left`, `updated`) and each room's members from the
+membership records in its `membership` ([PROTOCOL.md §4.3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#432-membership)); a `membership`
+notification from an earlier protocol 7 draft still applies. Only joined rooms deliver live. Without the cap there is the server's default room, posted to
 without a `room_id` until a message names it, plus any room a message arrives
 in, titled by its `room_id`.
 

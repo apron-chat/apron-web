@@ -95,7 +95,7 @@ describe('ChatClient reference features', () => {
 		expect(snapshot.rooms[0].timeline.memberships).toEqual([
 			{ log_id: '12', entries: [{ user: { user_id: 'bob', name: 'Bob then' }, joined: true }, { user: { user_id: 'carol' }, joined: false }] }
 		]);
-		socket.receive({ method: 'membership', params: { log_id: '14', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: false }] } });
+		socket.receive({ method: 'room_update', params: { membership: [{ log_id: '14', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: false }] }] } });
 		expect(snapshot.rooms[0].timeline.memberships.map((record) => record.log_id)).toEqual(['12', '14']);
 		expect(snapshot.rooms[0].members).toEqual([]);
 	});
@@ -160,14 +160,14 @@ describe('ChatClient reference features', () => {
 		expect(general().members?.map((member) => member.user_id)).toEqual(['bob', 'guest_1']);
 		expect(snapshot.users.bob.avatar).toBe('https://example.com/b.png');
 		// Memberships keep the members current (§4.3.2), and draw nothing.
-		socket.receive({ method: 'membership', params: { log_id: '13', room_id: 'general', members: [{ user: { user_id: 'carol', name: 'Carol' }, joined: true }] } });
+		socket.receive({ method: 'room_update', params: { membership: [{ log_id: '13', room_id: 'general', members: [{ user: { user_id: 'carol', name: 'Carol' }, joined: true }] }] } });
 		expect(general().members?.map((member) => member.user_id)).toEqual(['bob', 'guest_1', 'carol']);
 		expect(general().latestLogId).toBe('13');
-		socket.receive({ method: 'membership', params: { log_id: '14', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: false }] } });
+		socket.receive({ method: 'room_update', params: { membership: [{ log_id: '14', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: false }] }] } });
 		expect(general().members?.map((member) => member.user_id)).toEqual(['guest_1', 'carol']);
 		// A membership at or below the listing's head is already in it; an older one for a user loses to a newer one.
-		socket.receive({ method: 'membership', params: { log_id: '12', room_id: 'general', members: [{ user: { user_id: 'guest_1' }, joined: false }] } });
-		socket.receive({ method: 'membership', params: { log_id: '13', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: true }] } });
+		socket.receive({ method: 'room_update', params: { membership: [{ log_id: '12', room_id: 'general', members: [{ user: { user_id: 'guest_1' }, joined: false }] }] } });
+		socket.receive({ method: 'room_update', params: { membership: [{ log_id: '13', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: true }] }] } });
 		expect(general().members?.map((member) => member.user_id)).toEqual(['guest_1', 'carol']);
 		// Recorded users never merge into the kept ones.
 		expect(snapshot.users.bob.name).toBe('Bob');

@@ -2252,12 +2252,22 @@ export class ChatClient {
 	}
 
 	/**
-	 * A `membership` record (§4.3.2): one entry per user, each replacing that
+	 * A `membership` notification: how earlier protocol 7 drafts delivered a
+	 * membership record, before it moved into `room_update` `membership`.
+	 * Kept because it costs one case; current servers never send it.
+	 */
+	private handleMembership(params: JsonObject | undefined): void {
+		this.applyMembership(params);
+		this.emit();
+	}
+
+	/**
+	 * A membership record (§4.3.2): one entry per user, each replacing that
 	 * user's membership of the room when newer. It advances the room's head.
 	 * Its `user` is a recorded object: never merged into the kept one.
 	 */
-	private handleMembership(params: JsonObject | undefined): void {
-		const entries = decodeMembership(params);
+	private applyMembership(value: unknown): void {
+		const entries = decodeMembership(value);
 		if (!entries.length) return;
 		const { log_id: logId, room_id: roomId } = entries[0];
 		this.observeLogId(logId);
@@ -2267,7 +2277,6 @@ export class ChatClient {
 			this.noteRecorded(entry.user, logId);
 			this.store.putMembership(entry);
 		}
-		this.emit();
 	}
 
 	/**
@@ -2342,8 +2351,9 @@ export class ChatClient {
 	/**
 	 * A `room_update` (§4.3.3): `joined` rooms become visible with their
 	 * members and recover, `updated` records replace a visible room's (or
-	 * describe a new or edited thread of one) and carry no members, and `left`
-	 * rooms go. `users` merges last.
+	 * describe a new or edited thread of one) and carry no members,
+	 * `membership` records apply once any room they belong to is visible, and
+	 * `left` rooms go. `users` merges last.
 	 */
 	private handleRoomUpdate(params: JsonObject | undefined): void {
 		if (!params) return;
@@ -2365,6 +2375,7 @@ export class ChatClient {
 				this.noteUnjoinedRoom(decoded.record, decoded.delivery);
 			}
 		}
+		for (const value of Array.isArray(params.membership) ? params.membership : []) this.applyMembership(value);
 		for (const value of Array.isArray(params.left) ? params.left : []) {
 			if (isJsonObject(value) && typeof value.room_id === 'string') this.hideRoom(value.room_id);
 		}

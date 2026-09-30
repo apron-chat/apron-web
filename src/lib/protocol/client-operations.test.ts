@@ -220,7 +220,7 @@ describe('ChatClient operations', () => {
 		// A new room is there by the time its result names it.
 		const created = client.createRoom({ title: 'Ops' });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '104', title: 'Ops', members: [{ user_id: 'guest_1' }] }] } });
-		socket.receive({ method: 'membership', params: { log_id: '104', room_id: 'ops', members: [{ user: { user_id: 'guest_1' }, joined: true }] } });
+		socket.receive({ method: 'room_update', params: { membership: [{ log_id: '104', room_id: 'ops', members: [{ user: { user_id: 'guest_1' }, joined: true }] }] } });
 		let visible = false;
 		const opened = created.promise.then((result) => (visible = snapshot.rooms.some((entry) => entry.id === result.room_id)));
 		await socket.reply('room_set', { room_id: 'ops' });

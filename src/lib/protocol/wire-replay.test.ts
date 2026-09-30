@@ -95,18 +95,19 @@ function applyFrame(store: ProtocolStore, frame: WireRecord): void {
 	if (frame.method === 'room_update') {
 		const params = (frame.params ?? {}) as WireRecord;
 		applyRooms(store, [...array(params.joined), ...array(params.updated)]);
+		// Memberships arrive in `room_update` `membership` (§4.3.2).
+		const memberships = array(params.membership).flatMap((record) => {
+			const decoded = decodeMembership(record);
+			if (!decoded.length) throw new Error(`Invalid membership record: ${JSON.stringify(record)}`);
+			return decoded;
+		});
+		if (memberships.length) applyRecords(store, { ...emptyRecords(), memberships });
 		return;
 	}
 	if (frame.method === 'reactions') {
 		const sets = decodeReactions(frame.params);
 		if (!sets.length) throw new Error(`Invalid reactions record: ${JSON.stringify(frame)}`);
 		applyRecords(store, { ...emptyRecords(), reactions: sets });
-		return;
-	}
-	if (frame.method === 'membership') {
-		const memberships = decodeMembership(frame.params);
-		if (!memberships.length) throw new Error(`Invalid membership record: ${JSON.stringify(frame)}`);
-		applyRecords(store, { ...emptyRecords(), memberships });
 		return;
 	}
 	if (frame.method === undefined && Object.hasOwn(frame, 'result')) {
