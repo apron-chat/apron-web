@@ -1462,6 +1462,12 @@ export class ChatClient {
 		request.promise.then((result) => {
 			if (socket !== this.socket || this.joinedListing !== listing) return;
 			this.joinedListing = undefined;
+			// Behind an `auth` that failed, the listing ran with the connection's authentication as
+			// that left it (§3.2), none here: whatever it says is no one's rooms, so it is dropped.
+			if (!this.authenticated) {
+				this.emit();
+				return;
+			}
 			if (listing.since !== undefined && this.you?.user_id !== listing.userId) {
 				// Another identity than the kept rooms': what changed since is someone else's story.
 				this.listJoinedRooms();
@@ -1474,7 +1480,7 @@ export class ChatClient {
 		}, (cause: Error) => {
 			if (socket !== this.socket || this.joinedListing !== listing) return;
 			this.joinedListing = undefined;
-			// Behind a failed `auth` every request is denied; that failure speaks for itself.
+			// Behind a failed `auth` the listing likely failed too; that failure speaks for itself.
 			if (this.authenticated) this.error = `Unable to list your rooms: ${cause.message}`;
 			this.emit();
 		});
@@ -2073,7 +2079,8 @@ export class ChatClient {
 		}, { visible: false, allowBeforeAuth: true });
 		// `auth` is a barrier (§3.2): the server finishes it before reading on, so
 		// the rooms and their recovery go right behind it instead of waiting a
-		// round trip. If it fails they are denied, and that is all.
+		// round trip, and run as whoever it signed in. If it fails they run as the
+		// connection was, signed in as no one, and the listing is dropped.
 		this.requestRooms(resume);
 		request.promise.then((result) => {
 			if (socket !== this.socket) return;

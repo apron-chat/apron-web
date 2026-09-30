@@ -219,6 +219,20 @@ describe('rooms by request (cap rooms)', () => {
 		expect(snapshot.rooms).toEqual([]);
 	});
 
+	it('drops a listing a server answered behind a failed auth, as the connection was: signed in as no one', async () => {
+		socket.open();
+		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms'] } });
+		const auth = socket.request('auth');
+		const listing = socket.request('room_list');
+		socket.receive({ id: auth.id, error: { code: -32001, message: 'Guests are not accepted right now' } });
+		await settle();
+		// A failed auth leaves the connection's authentication as it was (§3.2); later requests aren't denied wholesale.
+		socket.receive({ id: listing.id, result: { joined: [{ room_id: 'general', title: 'General' }] } });
+		await settle();
+		expect(snapshot.error).toBe('Guests are not accepted right now');
+		expect(snapshot.rooms).toEqual([]);
+	});
+
 	it('opens a thread without joining it: history only, until joined', async () => {
 		await authenticate(['rooms', 'history']);
 		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10', members: [{ user_id: 'guest_1' }] }], users: [] });
