@@ -24,10 +24,10 @@ tokens stay in the artifact's `tokens.json`; keep them in step with
 The Svelte components under `src/lib/components` wrap the `ap-*`
 classes one to one with the design system's components, adding the app's
 state and behavior — `ConnectScreen`,
-`Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` and `ThreadEditor`, `ThreadCard`,
-`Message` with its `ReactionBar`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`), `SelectionBar`, `JumpBar`,
+`Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` and `RoomEditor`, `ThreadCard` and
+`ThreadSummary`, `Message` with its `ReactionBar` and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`), `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
-`PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`,
+`PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
 design system with the next `npm run design:bundle`.
 
@@ -48,24 +48,34 @@ lines, `reactions.ts` turns reaction summaries into chips, `emoji.ts`
 places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
 picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previews.ts` builds GitHub link previews, `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
+`commands.ts` maps the composer's `/` commands to requests,
+`email-link.ts` reads and scrubs an emailed sign-in link from the URL and words the question asked before using it,
+`members.ts` reads the `user_id` typed to add a member, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences included (on this device only; nothing is synced), and
 `notifications.ts` shows notifications, through `service-worker.ts` where the
 page can't.
 
 Protocol types, replay reduction, and the WebSocket session live under
-`src/lib/protocol` and speak Apron protocol v6. `client.ts` holds the session,
+`src/lib/protocol` and speak Apron protocol v7. `client.ts` holds the session,
 `ChatClient`, and re-exports the rest of its API: `client-types.ts` has the
 snapshot and option types, `client-views.ts` the pure helpers over snapshots,
 capabilities and server URLs, and `client-internals.ts` the per-room state,
-tuning constants and helpers only `ChatClient` uses. `reducer.ts` keeps one store
+tuning constants and helpers only `ChatClient` uses, and `email-connection.ts`
+the connection an email sign-in proposes and approves on. `reducer.ts` keeps one store
 of room records, message snapshots, per-user reaction sets, and memberships
 for every room, and beside the latest membership per user, each room's
 membership records in `log_id` order for the timeline's join and leave lines;
 each record replaces the stored one only when its `log_id` is greater, so
 overlapping history and live delivery cannot revert newer state, and a move
-snapshot re-homes a message into its new room. Embedded `reply_to` and
-`intro_message` snapshots install like any other record. Reactions aggregate
+snapshot re-homes a message into its new room. Embedded `reply_to`
+snapshots install like any other record; a v6 server's `intro_message` is
+dropped like any unknown key. Room records keep `description` and `private`
+(fixed at creation); a room's `members` from a listing come with its
+`member_count` when the server truncated them, kept until a complete list
+replaces it. `types.ts` also knows the system identities (`~server`, `~room`,
+`~private`); `ChatClient` renames v6's `@server`, `@room` and `@private`
+senders to those, from servers before protocol v7 only. Reactions aggregate
 per message (counts per emoji, who reacted, whether you did) and are hidden on
 tombstones.
 
@@ -103,9 +113,50 @@ Edits, moves, and deletion use the same `message` request as creation, with an
 existing `message_id`, and resubmit every client field of the latest snapshot
 (`room_id`, `body`, a bare `reply_to`, and `ext` unchanged). A move is a save
 with another `room_id`. Rooms and threads are created and updated with the
-`room_set` request (cap `rooms`); updates resubmit `title`, a bare
-`intro_message`, and `ext`, and the change arrives as a `room_update`. The
+`room_set` request (capability `rooms`); a creation may ask for `private: true`, and
+updates resubmit `title`, `description`, and `ext` (never `parent_room_id` or
+`private`), and the change arrives as a `room_update`. The
 client does not depend on the notifications a request causes arriving before
 its result, as servers send them.
-`room_join` and `room_leave` take only the `room_id`. Reactions use the
-`reactions` request (cap `reactions`) with your complete emoji set.
+`room_join` and `room_leave` take the `room_id`, and a `user_id` to add or
+remove someone else, sent only to servers of protocol 7 and later (an older
+one would act on the caller): the snapshot's `memberChangesUnsupported` is set
+by a `server` frame before v7, and by an `unsupported` reply until the next
+`server` frame. Reactions use the
+`reactions` request (capability `reactions`) with your complete emoji set.
+
+Every successful `auth` result is handled alike: its `you` becomes the
+connection's identity and a `token` in it replaces the saved one, whether it
+answers a guest sign-in, a token resume (rotation), a passkey or an email code.
+Email sign-in (§4.10) proposes and approves on one connection, since a short
+code works only on the connection that proposed it: `requestEmailCode(email,
+url?)` opens an `EmailConnection` (`email-connection.ts`) to that server that
+never signs in until approved, waits for its `server` frame, proposes (`auth`
+with `email`), and keeps it open (pinging, and closed after
+`EMAIL_PROPOSAL_MS`) as the snapshot's `emailCode`, leaving this connection and
+its view untouched; a newer proposal, `cancelEmailCode()` and `stop()` close
+it. `signInWithEmail(code, name?, beforeSwitch?)` approves on it (`auth` with
+`token`); a `denied` code leaves it open to try again. On success the client
+adopts that connection as its own: `beforeSwitch` runs, it moves to that
+server if another (`switchServer`, as `setUrl` without connecting), closes its
+connection as `restart` would, attaches the socket (`attachSocket`, shared
+with `connectNow`), takes the `server` frame in without answering it, handles
+the result as a sign-in, and then processes the frames that arrived after the
+result. `signInWithEmailLink(token, url?, beforeSwitch?)` does the same with a
+link's token on a fresh connection; a refused link changes nothing.
+`requestEmailCodeToAdd` proposes on the signed-in connection and `addEmail(code)`
+approves on that same connection (refused if it has reconnected since), whose
+`{}` result adds the address: another way back in for a registered session,
+or, for a guest without a token, what makes it an email account. How the kept
+session signed in (`webauthn`, `email`, `token`) is remembered beside its token
+as `signedInWith`, and ways added to the account since beside it
+(`signInMethods`). `requestEmailCode`, `signInWithEmail` and registering a
+passkey accept a scheme listed in `auth` or `signup`, and adding an email needs it in `auth`; a passkey login and a
+token resume need it in `auth`. The `server` frame ([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame))
+is kept on the snapshot's `server` as sent: `apron` (the version), `capabilities`,
+`agent` (the implementation, for debugging; the UI labels a server by its host,
+never by `agent`), `welcome`, `signup`, `ping` and `ext`. A server before v7 says
+`protocol` and `caps` instead; the client reads those as `apron` and
+`capabilities`, and everything it does differently for such a server is gated
+on that version. Every `auth` the client sends carries `agent: "apron-web/0.4"`
+(§3.2).

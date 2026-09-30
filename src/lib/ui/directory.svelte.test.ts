@@ -82,6 +82,17 @@ describe('directory', () => {
 		expect(directory.name({ user_id: 'guest_7' })).toBe('guest_7');
 	});
 
+	it('keeps a cleared field cleared, whatever a stale record says (§3.3)', () => {
+		const cleared: Identity = { user_id: 'cy', name: '', avatar: '' };
+		const stale = { user_id: 'cy', name: 'Cy', avatar: 'https://example.com/cy.png' };
+		directory.apply(snapshot([ada, cleared], { recordedUsers: { cy: stale } }), undefined);
+		// An empty name shows as the user_id, and the recorded one doesn't come back, nor its avatar.
+		expect(directory.name(stale)).toBe('cy');
+		expect(directory.avatar(stale)).toBeUndefined();
+		expect(directory.sharesName({ user_id: 'cy' })).toBe(false);
+		expect(directory.resolve('cy')).toEqual({ kind: 'user', id: 'cy', name: 'cy', me: false });
+	});
+
 	it('resolves a mention of someone known only from a record by the recorded name', () => {
 		directory.apply(snapshot([ada], { recordedUsers: { guest_7: { user_id: 'guest_7', name: 'Seven' } } }), undefined);
 		expect(directory.resolve('guest_7')).toEqual({ kind: 'user', id: 'guest_7', name: 'Seven', me: false });

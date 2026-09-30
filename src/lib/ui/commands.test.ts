@@ -18,10 +18,23 @@ describe('composer commands', () => {
 		expect(composerAction('/join #ops', both)).toEqual({ kind: 'join', room: 'ops' });
 		expect(composerAction('/leave', both)).toEqual({ kind: 'leave' });
 		expect(composerAction('/leave ops', both)).toEqual({ kind: 'leave', room: 'ops' });
-		expect(composerAction('/TOPIC Deploys only ', both)).toEqual({ kind: 'topic', title: 'Deploys only' });
-		// Without an argument, or without cap rooms, the server gets them.
+		expect(composerAction('/TOPIC Deploys *only* ', both)).toEqual({ kind: 'topic', description: 'Deploys *only*' });
+		expect(composerAction('/kick @guest_2', both)).toEqual({ kind: 'kick', user: 'guest_2' });
+		expect(composerAction('/invite bob.', both)).toEqual({ kind: 'invite', user: 'bob' });
+		// Without an argument, or without capability rooms, the server gets them.
 		expect(composerAction('/nick', both)).toEqual({ kind: 'command', text: '/nick' });
 		expect(composerAction('/join ops', { command: true, rooms: false })).toEqual({ kind: 'command', text: '/join ops' });
+		// A reason, or a server that doesn't let members remove others, leaves /kick to the server.
+		expect(composerAction('/kick @guest_2', { ...both, members: false })).toEqual({ kind: 'command', text: '/kick @guest_2' });
+		expect(composerAction('/kick', both)).toEqual({ kind: 'command', text: '/kick' });
+	});
+
+	it('reads a user argument per Appendix A.3, and exactly as a mention chip names it', () => {
+		// In text a trailing `-` is not part of the ID…
+		expect(composerAction('/kick @al-', both)).toEqual({ kind: 'kick', user: 'al' });
+		// …but a chip sent as `@al-` with `al-` in its mentions is that user.
+		expect(composerAction('/kick @al-', both, ['al-'])).toEqual({ kind: 'kick', user: 'al-' });
+		expect(composerAction('/kick @al', both, ['al'])).toEqual({ kind: 'kick', user: 'al' });
 	});
 
 	it('treats every text as a message without cap command', () => {

@@ -8,7 +8,7 @@ type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
 /**
  * Who and where names refer to on the active backend: the kept user object
  * per `user_id` (§3.3), followed through renames, the latest recorded object
- * as a fallback, room titles for `#room_id` and legacy `@room_id` mentions, and the
+ * as a fallback, room titles for `#room_id` references, and the
  * chat server's origin, the only one embed media and streams load from.
  * Every message renders its sender from here, field by field: the kept
  * object, then the `from` the message carries, then the `user_id`. So a
@@ -21,15 +21,17 @@ class Directory {
 	private rooms = $state.raw<Record<string, string>>({});
 	/**
 	 * Every known `user_id` by the display name it shows under: its kept name,
-	 * else the name it was last recorded with, else its `user_id`. Retired IDs
-	 * count as the identity that replaced them.
+	 * else (only when nothing is kept for it, not when it was cleared) the name
+	 * it was last recorded with, else its `user_id`. Retired IDs count as the
+	 * identity that replaced them.
 	 */
 	private readonly byName = $derived.by(() => {
 		const { users, recordedUsers, userAliases } = this.users;
 		const names = new Map<string, Set<string>>();
 		for (const id of new Set([...Object.keys(users), ...Object.keys(recordedUsers)])) {
 			if (userAliases[id] !== undefined) continue;
-			const name = users[id]?.name || recordedUsers[id]?.name || id;
+			const kept = users[id];
+			const name = (kept && Object.hasOwn(kept, 'name') ? kept.name : recordedUsers[id]?.name) || id;
 			let ids = names.get(name);
 			if (!ids) names.set(name, (ids = new Set()));
 			ids.add(id);
@@ -68,7 +70,7 @@ class Directory {
 		return from ? userIn(this.users, from) : undefined;
 	}
 
-	/** A display name: the kept `name`, else the recorded one, falling back to the `user_id`. */
+	/** A display name: the kept `name`, else the recorded one where none is kept; empty or unknown shows the `user_id`. */
 	name(from: Identity | undefined): string {
 		const person = this.person(from);
 		return person?.name || person?.user_id || 'Unknown sender';
@@ -97,19 +99,18 @@ class Directory {
 		return this.you !== undefined && userIn(this.users, { user_id: userId }).user_id === this.you.user_id;
 	}
 
-	/** Resolves `#room_id` independently of users with the same ID. */
+	/** Resolves `#room_id` (Appendix A.3), whatever users share the ID. */
 	readonly resolveRoom: RoomMentionResolver = (id) => {
 		const title = this.rooms[id];
 		return title === undefined ? undefined : { kind: 'room', id, title };
 	};
 
-	/** Resolves `@id` (Appendix A.3): a known user wins over a room with the same ID; unknown IDs stay text. */
+	/** Resolves `@user_id` (Appendix A.3): a known user; unknown IDs stay text. */
 	readonly resolve: MentionResolver = (id) => {
 		const { users, recordedUsers, userAliases } = this.users;
 		const recorded = recordedUsers[id];
 		const known = users[id] || userAliases[id] !== undefined || recorded ? this.person(recorded ?? { user_id: id }) : undefined;
-		if (known) return { kind: 'user', id, name: known.name || known.user_id, me: this.isMe(id) };
-		return this.resolveRoom(id);
+		return known ? { kind: 'user', id, name: known.name || known.user_id, me: this.isMe(id) } : undefined;
 	};
 }
 

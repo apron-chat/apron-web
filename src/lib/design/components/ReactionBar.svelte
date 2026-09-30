@@ -8,7 +8,7 @@
 		/** The palette is open under the message. */
 		open?: boolean;
 		palette?: string[];
-		/** No cap `reactions`, or the session can't send now: chips render but don't toggle. */
+		/** No capability `reactions`, or the session can't send now: chips render but don't toggle. */
 		disabled?: boolean;
 		/** Toggle your own emoji; send your complete set with `reactions`. */
 		ontoggle?: (emoji: string) => void;

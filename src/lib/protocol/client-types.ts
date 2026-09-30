@@ -6,7 +6,6 @@ import type {
 	Identity,
 	MessageBody,
 	Embed,
-	MessageRecord,
 	RoomRecord,
 	ServerParams
 } from './types';
@@ -16,7 +15,7 @@ export type MessageFormat = 'plain' | 'markdown';
 
 /**
  * A transient notice (PROTOCOL.md §3.5, Appendix A.1): a `message` without
- * `message_id`, such as a `@private` command reply, or a local one such as a
+ * `message_id`, such as a `~private` command reply, or a local one such as a
  * command's error. It shows in its room for the session and is never stored
  * as a snapshot, so it never takes part in replay.
  */
@@ -43,7 +42,7 @@ export interface Notice {
 }
 
 /**
- * One visible room: a room the user has joined on this connection (cap
+ * One visible room: a room the user has joined on this connection (capability
  * `rooms`), else one a message arrived in, or a room opened without joining
  * it (`viewRoom`, `joined: false`). Threads are rooms with `parentRoomId`
  * (PROTOCOL.md §3.4, §4.3).
@@ -53,7 +52,7 @@ export interface RoomSnapshot {
 	/** Display title: the record's `title`, falling back to the `room_id`. */
 	title: string;
 	/**
-	 * The user has joined it (or, without cap `rooms`, it is a room messages
+	 * The user has joined it (or, without capability `rooms`, it is a room messages
 	 * arrive in): it delivers live. A room opened with `viewRoom` is not joined
 	 * and changes only when it loads.
 	 */
@@ -62,13 +61,18 @@ export interface RoomSnapshot {
 	record?: RoomRecord;
 	/** Set for threads; fixed at creation. */
 	parentRoomId?: string;
-	/** The room's description or thread starter, as a message ID. */
-	introMessageId?: string;
 	/**
-	 * The latest stored snapshot of the intro message (it may live in another
-	 * room, usually the parent for a thread), when known.
+	 * The server keeps the room private (§4.3.4): only its members see it.
+	 * Fixed at creation; absent means an ordinary room.
 	 */
-	introMessage?: MessageRecord;
+	private?: boolean;
+	/** What the room is about (§3.4), Markdown by convention; absent when empty. */
+	description?: string;
+	/**
+	 * The least `log_id` of this room's records seen: where a thread's card
+	 * stays put in its parent's feed while edits give the record new `log_id`s.
+	 */
+	firstRecordLogId?: string;
 	/** Opaque extension data from the room record. */
 	ext?: JsonObject;
 	/** Title changes seen in the room's log, ascending (absent when none). */
@@ -89,7 +93,7 @@ export interface RoomSnapshot {
 	recoveryError?: string;
 	/**
 	 * History for this room has been loaded on this connection: always true
-	 * without cap `history`; for top-level rooms after the first recovery; for
+	 * without capability `history`; for top-level rooms after the first recovery; for
 	 * threads after `loadRoom` completed.
 	 */
 	loaded: boolean;
@@ -112,6 +116,11 @@ export interface RoomSnapshot {
 	 * anything is known.
 	 */
 	members?: Identity[];
+	/**
+	 * How many users have joined, when the server listed only the most
+	 * recently active in `members` (§4.3.1), as of that listing.
+	 */
+	memberCount?: number;
 	/** Transient notices shown in this room this session, in arrival order. */
 	notices: readonly Notice[];
 }
@@ -124,11 +133,15 @@ export interface RoomListing {
 	id: string;
 	title: string;
 	record: RoomRecord;
+	/** As in `RoomSnapshot`. */
+	firstRecordLogId?: string;
 	parentRoomId?: string;
 	latestLogId?: string;
 	historyLogId?: string | null;
 	/** The room's members when the listing asked for them (`members: true`), else empty. */
 	members: Identity[];
+	/** The total when the server truncated `members` (§4.3.1). */
+	memberCount?: number;
 	/** The user has joined it: it is in the joined set on this connection. */
 	joined: boolean;
 }
@@ -176,7 +189,28 @@ export interface ClientSnapshot {
 	/** True once the server has accepted this connection's auth request. */
 	authenticated: boolean;
 	authBusy?: boolean;
+	/** Signed in to a registered account (a passkey, an email, or a kept token), not as a guest. */
 	passkeySession?: boolean;
+	/**
+	 * How this browser signed in to that account: `token` means a kept token
+	 * is its only way back in here, worth adding a passkey or email to (§3.2).
+	 */
+	signedInWith?: 'webauthn' | 'email' | 'token';
+	/** How this browser can get back into the account: how it signed in, then what it added (§4.9, §4.10). */
+	signInMethods?: Array<'webauthn' | 'email' | 'token'>;
+	/**
+	 * A registered session is kept for this server (a token to resume with),
+	 * whether or not this connection has resumed it yet.
+	 */
+	keptSession?: boolean;
+	/** The sign-in guard is held by a passkey ceremony (true) or an email step (false). */
+	passkeyBusy?: boolean;
+	/**
+	 * An email sign-in proposal waiting for its code (§4.10): the address,
+	 * and the server whose connection proposed it and alone takes the code.
+	 * Gone once used, replaced, or closed (by the server, or on expiry).
+	 */
+	emailCode?: { email: string; url: string };
 	/**
 	 * Signed in as a guest on a server whose guests only read (the demo
 	 * worker's `ext.demo.guest_posting: false`): posting, reacting, and room
@@ -222,6 +256,11 @@ export interface ClientSnapshot {
 	 * it takes images only, so voice clips have nowhere to go.
 	 */
 	imageOnlyUploads?: boolean;
+	/**
+	 * The server answered adding or removing another member (`room_join` or
+	 * `room_leave` with `user_id`) `unsupported` (§4.3.2): don't offer it.
+	 */
+	memberChangesUnsupported?: boolean;
 	/** Top-level rooms from the latest `room_list`, joined or not; undefined until listed. */
 	directory?: RoomListing[];
 	/** Threads per parent room from the latest `room_list` with `parent_room_id`. */
@@ -278,19 +317,21 @@ export interface MessagePatch {
 export interface CreateRoomOptions {
 	/** Creates a thread under this room. */
 	parentRoomId?: string;
+	/** Visible only to its members (§4.3.4); fixed at creation. */
+	private?: boolean;
 	title?: string;
-	/** A bare reference to the room's description or the thread's starting message. */
-	introMessageId?: string;
+	/** What the room is about, Markdown by convention (§3.4). */
+	description?: string;
 	ext?: JsonObject;
 }
 
 /**
  * Changes to a room's client fields. Absent keys keep the latest record's
- * value; `null` clears. `parent_room_id` is fixed at creation.
+ * value; `null` clears. `parent_room_id` and `private` are fixed at creation.
  */
 export interface RoomPatch {
 	title?: string | null;
-	introMessageId?: string | null;
+	description?: string | null;
 	ext?: JsonObject | null;
 }
 

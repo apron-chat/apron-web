@@ -1,4 +1,4 @@
-<!-- @dsCard group="Navigation" height=240 subtitle="Rooms with threads nested · hover a row for Exit" -->
+<!-- @dsCard group="Navigation" height=290 subtitle="Rooms with threads nested, a private room · hover a row for Exit" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>RoomItem</title></head>
@@ -10,6 +10,7 @@
   var leave = function () {};
   add(A.RoomItem, { room: 'general', name: 'General', topic: 'Anything goes', onleave: leave });
   add(A.RoomItem, { room: 'ops', name: 'Ops', topic: 'Deploys and incidents', unread: 12, mentions: 2, onleave: leave });
+  add(A.RoomItem, { room: '1724803950000', name: 'Hiring', topic: 'Members only', private: true, onleave: leave });
   add(A.RoomItem, { room: 'deploy', name: 'Deploy', nested: true, unread: 2, onleave: leave });
   add(A.RoomItem, { room: 'mig-0042', name: 'Migration 0042', nested: true, active: true, onleave: leave });
   add(A.RoomItem, { room: 'oncall', name: 'On-call rotation', nested: true, mentions: 1, onleave: leave });

@@ -1,11 +1,14 @@
 <script lang="ts" module>
-	export type Scheme = 'guest' | 'webauthn' | 'token';
+	export type Scheme = 'guest' | 'webauthn' | 'email' | 'token';
 </script>
 
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { normalizeWebSocketUrl, type ChatClient } from '$lib/protocol/client';
-	import { passkeyMessage } from '$lib/ui/connection';
+	import { renderMarkdown } from '$lib/protocol/markdown';
+	import { offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
+	import { directory } from '$lib/ui/directory.svelte';
+	import { codeStillFor, type SentCode } from '$lib/ui/email-link';
 	import { initials } from '$lib/ui/messages';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { saveDisplayName, saveServerUrl, type RecentServer } from '$lib/ui/storage';
@@ -14,6 +17,7 @@
 	const SCHEMES: Record<Scheme, { label: string; hint: string }> = {
 		guest: { label: 'Guest', hint: 'No token needed; the server picks a guest identity.' },
 		webauthn: { label: 'Passkey', hint: 'Signs in with a passkey on this device, or creates one. Your display name comes along.' },
+		email: { label: 'Email', hint: 'We email you a code to sign in with; the link in the email signs you in too.' },
 		token: { label: 'Token', hint: 'Signs in with a token the server gave you, such as a bot token from /invite-bot.' }
 	};
 	/** Every scheme this client can drive, in the order shown when the server's list isn't known yet. */
@@ -30,6 +34,10 @@
 		canCancel: boolean;
 		/** Preselects a scheme, e.g. when the profile asks to sign in with a passkey. */
 		initialScheme?: Scheme;
+		/** Prefills the email field, e.g. after an emailed sign-in link failed. */
+		initialEmail?: string;
+		/** Shows an error to start with, e.g. why an emailed sign-in link failed. */
+		initialError?: string;
 		/** The form was submitted for another backend: the page drops whatever belonged to the previous one. */
 		onconnect: () => void;
 		/** The socket is up and signed in. */
@@ -40,7 +48,7 @@
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), passkeyUnavailable, recentServers, canCancel,
-		initialScheme, onconnect, onconnected, oncancel, onsignout
+		initialScheme, initialEmail, initialError, onconnect, onconnected, oncancel, onsignout
 	}: Props = $props();
 
 	// The initial choice follows the request or the current session; the segmented control owns it from then on.
@@ -49,7 +57,19 @@
 	let pending = $state(false);
 	/** Connected to a new backend as a guest; the passkey waits for a tap, since browsers may refuse a prompt the user didn't start. */
 	let passkeyStep = $state(false);
-	let error = $state('');
+	let error = $state(untrack(() => initialError ?? ''));
+	/** Email sign-in (§4.10): the address, and the code once the server was asked to send one. */
+	let email = $state(untrack(() => initialEmail ?? ''));
+	let code = $state('');
+	/**
+	 * The address a code was requested for, and the server that will send it:
+	 * the code field shows while it is set, and the code only ever goes back to
+	 * the connection that proposed it, on that server (§4.10). Changing the
+	 * Server field drops it, and so does that connection closing.
+	 */
+	let codeSent = $state<SentCode | undefined>();
+	let codeSentTo = $derived(codeSent?.email);
+	let emailBusy = $state(false);
 	/** The pasted token for the Token scheme; cleared once handed to the client. */
 	let token = $state('');
 	let plan = $state<'immediate' | 'login' | 'register'>('register');
@@ -65,24 +85,45 @@
 	let here = $derived(normalizedInput === client.url && snapshot.status === 'connected' && snapshot.authenticated);
 	let passkeySession = $derived(!!snapshot.passkeySession);
 	let passkeyHint = $derived(!!snapshot.passkeyHint);
+	/** `server.welcome` (§3.2), for the server in the field once it has answered: Markdown, sanitized as a message is. */
+	let welcome = $derived.by(() => {
+		const text = normalizedInput === client.url ? session.server?.welcome : undefined;
+		return text ? renderMarkdown(text, directory.resolve, directory.resolveRoom) : '';
+	});
 	/**
 	 * The sign-in schemes the server in the field advertises, in its order,
 	 * that this client can drive (passkeys only where the browser has them).
 	 * Until that server has answered, every scheme the client knows.
 	 */
 	let schemes = $derived.by((): Scheme[] => {
-		const offered = normalizedInput === client.url ? session.server?.auth : undefined;
+		const offered = normalizedInput === client.url && session.server ? offeredSchemes(session.server) : undefined;
 		const listed = offered ? offered.filter((candidate): candidate is Scheme => Object.hasOwn(SCHEMES, candidate)) : KNOWN_SCHEMES;
 		const usable = listed.filter((candidate) => candidate !== 'webauthn' || !passkeyUnavailable);
 		return usable.length ? usable : ['guest'];
 	});
 	let chosen = $derived(schemes.includes(scheme) ? scheme : schemes[0]);
+	/** The server in the field, once it has answered. */
+	let known = $derived(normalizedInput === client.url ? session.server : undefined);
+	/**
+	 * Whether the chosen scheme signs in, creates an account, or both
+	 * (`server.signup`, §3.1); unknown servers get both.
+	 */
+	let use = $derived(known ? schemeUse(known, chosen) : { signIn: true, signUp: true });
+	let hint = $derived.by(() => {
+		if (chosen === 'webauthn' && !(use.signIn && use.signUp)) {
+			return use.signIn ? 'Signs in with a passkey already on your account. New here? Create an account another way first.' : 'Creates an account with a new passkey on this device.';
+		}
+		if (chosen === 'email' && !(use.signIn && use.signUp)) {
+			return use.signIn ? 'Signs in with a code sent to an address already on your account.' : 'Creates an account with a code sent to your email address.';
+		}
+		return SCHEMES[chosen].hint;
+	});
 	/** The server in the field is the connected one, and its guests only read. */
 	let guestReadOnly = $derived(normalizedInput === client.url && session.server?.ext?.demo?.guest_posting === false);
 	/** A passkey ceremony can start from this tap: signed in here as a guest. */
 	let passkeyNow = $derived(chosen === 'webauthn' && !passkeySession && here);
 	let status = $derived.by((): 'idle' | 'connecting' | 'authing' => {
-		if (snapshot.authBusy) return 'authing';
+		if (snapshot.authBusy || emailBusy) return 'authing';
 		if (!pending) return 'idle';
 		if (snapshot.error) return 'idle';
 		if (snapshot.status === 'connected') return session.ready ? 'idle' : 'authing';
@@ -99,13 +140,37 @@
 		status === 'connecting' ? 'Connecting…' : status === 'authing' ? 'Signing in…'
 			: passkeyNow ? 'Continue with passkey'
 			: chosen === 'token' ? 'Sign in'
+			: chosen === 'email' ? (codeSentTo ? 'Sign in' : 'Email me a code')
 			: here && chosen === 'guest' && passkeySession ? 'Sign out'
 			: here ? 'Done' : 'Connect'
 	);
 
+	// A code belongs to the server that sent it: editing the Server field away from it drops the code.
+	$effect(() => {
+		if (codeSent && codeSent.url !== normalizedInput) untrack(() => {
+			codeSent = undefined;
+			code = '';
+			client.cancelEmailCode();
+		});
+	});
+
+	// Closing the screen, however it closes, gives up a code still waiting: nothing here could take it any more.
+	onDestroy(() => client.cancelEmailCode());
+
+	// A code works only on the connection that asked for it: once that closes (expired, dropped), ask again.
+	$effect(() => {
+		if (!codeSent || emailBusy || snapshot.emailCode) return;
+		untrack(() => {
+			codeSent = undefined;
+			code = '';
+			error = 'The request for that code has closed (it expired, or the connection dropped). Send a new code.';
+		});
+	});
+
+
 	// A new backend signs in as a guest first; a passkey choice then waits for a tap.
 	$effect(() => {
-		if (!pending || snapshot.authBusy || !session.ready) return;
+		if (!pending || snapshot.authBusy || !session.ready || chosen === 'email') return;
 		pending = false;
 		if (chosen === 'webauthn' && !snapshot.passkeySession) {
 			passkeyStep = true;
@@ -158,6 +223,14 @@
 			signInWithToken(normalized);
 			return;
 		}
+		if (chosen === 'email') {
+			displayName = displayName.trim();
+			saveDisplayName(displayName);
+			if (!email.trim()) error = 'Enter your email address.';
+			else if (!codeSentTo) void sendCode(normalized);
+			else void signInWithEmail();
+			return;
+		}
 		displayName = displayName.trim();
 		saveDisplayName(displayName);
 		if (passkeyNow) {
@@ -203,12 +276,72 @@
 		pending = true;
 	}
 
+	/**
+	 * Asks the server in the field for a code (§4.10). The client proposes
+	 * the sign-in on a connection of its own that isn't signed in and keeps it
+	 * open for the code, so neither a session here nor a new server's
+	 * throwaway guest is involved. The server answers the same whether or not
+	 * the address has an account, so this never says which.
+	 */
+	async function sendCode(url: string): Promise<void> {
+		error = '';
+		emailBusy = true;
+		try {
+			const address = email.trim();
+			await client.requestEmailCode(address, url);
+			codeSent = { email: address, url };
+			code = '';
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : 'Unable to send a code';
+		} finally {
+			emailBusy = false;
+		}
+	}
+
+	/**
+	 * Signs in with the emailed code, approved on the connection that asked
+	 * for it, which the client then carries on with; the bearer token in the
+	 * result is kept to resume with (§3.2). The page lets go of the view it
+	 * held only once the code has worked.
+	 */
+	async function signInWithEmail(): Promise<void> {
+		if (!codeSent) return;
+		const sent = codeStillFor(codeSent, normalizedInput);
+		if (!sent) {
+			// Never another server's code: ask this one for its own.
+			codeSent = undefined;
+			code = '';
+			error = 'The server changed since the code was sent. Ask for a new code.';
+			return;
+		}
+		if (!code.trim()) {
+			error = 'Enter the code from the email.';
+			return;
+		}
+		error = '';
+		emailBusy = true;
+		try {
+			const switching = sent.url !== client.url;
+			await client.signInWithEmail(code, displayName.trim() || undefined, () => (switching ? onconnect() : onsignout()));
+			codeSent = undefined;
+			code = '';
+			finish();
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : 'Unable to sign in';
+		} finally {
+			emailBusy = false;
+		}
+	}
+
 	/** Runs straight from the tap, so the browser sees the user asked for it. */
 	async function passkey(action: 'continue' | 'register' | 'login'): Promise<void> {
 		error = '';
 		const name = displayName.trim() || undefined;
 		try {
-			if (action === 'continue') await client.continueWithPasskey(name);
+			// Where passkeys only sign in, or only sign up (`server.signup`), there is one thing to do.
+			if (action === 'continue' && !use.signUp) await client.usePasskey('login', name);
+			else if (action === 'continue' && !use.signIn) await client.usePasskey('register', name);
+			else if (action === 'continue') await client.continueWithPasskey(name);
 			else await client.usePasskey(action, name);
 			finish();
 		} catch (cause) {
@@ -237,6 +370,7 @@
 	<form class="ap-connect-card" aria-label="Connect to a backend" onsubmit={submit}>
 		<h1 class="ap-connect-title">Apron</h1>
 		<p class="ap-connect-tag">Connect to a backend</p>
+		{#if welcome}<div class="ap-welcome ap-msg-text" data-testid="server-welcome">{@html welcome}</div>{/if}
 		<label class="ap-fieldlabel">Server
 			<input class="ap-field ap-field-mono" data-testid="server-url-input" type="text" inputmode="url" bind:value={serverInput} placeholder="wss://server.apron.chat/" disabled={busy} autocomplete="url" spellcheck="false" />
 		</label>
@@ -245,6 +379,17 @@
 				<input class="ap-field ap-field-mono" data-testid="connect-token-input" type="password" bind:value={token} placeholder="apron_bot_…" disabled={busy} autocomplete="off" spellcheck="false" />
 			</label>
 		{:else}
+			{#if chosen === 'email'}
+				<label class="ap-fieldlabel">Email
+					<input class="ap-field" data-testid="connect-email-input" type="email" bind:value={email} placeholder="you@example.com" disabled={busy || Boolean(codeSentTo)} autocomplete="email" spellcheck="false" />
+				</label>
+				{#if codeSentTo}
+					<label class="ap-fieldlabel">Code
+						<!-- svelte-ignore a11y_autofocus -->
+						<input class="ap-field ap-field-mono" data-testid="connect-code-input" bind:value={code} placeholder="From the email" disabled={busy} inputmode="numeric" autocomplete="one-time-code" spellcheck="false" autofocus />
+					</label>
+				{/if}
+			{/if}
 			<label class="ap-fieldlabel">Display name
 				<input class="ap-field" data-testid="connect-name-input" bind:value={displayName} placeholder="How others see you" disabled={busy} maxlength="64" autocomplete={chosen === 'webauthn' ? 'username webauthn' : 'nickname'} spellcheck="false" />
 			</label>
@@ -258,12 +403,17 @@
 		</div>
 		{#if passkeyStep && passkeyNow}
 			<p class="ap-profedit-hint" role="status">Connected as a guest. Continue with a passkey to sign in, or stay a guest.</p>
+		{:else if chosen === 'email' && codeSentTo}
+			<p class="ap-profedit-hint" role="status">If {codeSentTo} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
 		{:else if here && chosen === 'webauthn' && passkeySession}
 			<p class="ap-profedit-hint">Signed in with a passkey. Choose Guest to sign out.</p>
 		{:else}
-			<p class="ap-profedit-hint">{guestReadOnly && chosen === 'guest' ? 'No token needed, but guests only read here: sign in with a passkey to post.' : SCHEMES[chosen].hint}</p>
+			<p class="ap-profedit-hint">{guestReadOnly && chosen === 'guest' ? 'No token needed, but guests only read here: sign in with a passkey to post.' : hint}</p>
 		{/if}
-		{#if passkeyNow}
+		{#if chosen === 'email' && codeSentTo}
+			<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={() => { codeSent = undefined; code = ''; error = ''; client.cancelEmailCode(); }}>Use another address, or send a new code</button>
+		{/if}
+		{#if passkeyNow && use.signIn && use.signUp}
 			<button class="ap-link ap-connect-other" type="button" data-testid="other-passkey" disabled={busy} onclick={() => passkey(plan === 'login' ? 'register' : 'login')}>
 				{plan === 'immediate' ? 'Use a passkey from another device' : plan === 'login' ? 'Create a new passkey' : 'Sign in with an existing passkey'}
 			</button>

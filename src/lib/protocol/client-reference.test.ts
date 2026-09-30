@@ -45,11 +45,13 @@ describe('ChatClient reference features', () => {
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' } } });
 		socket.receive({ method: 'message', params: { message_id: '21', log_id: '21', room_id: 'general', from: { user_id: 'bob', name: 'Robert' }, body: { text: 'hi' } } });
 		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' });
-		// A bare object changes nothing; an empty value removes the field.
+		// A bare object changes nothing; an empty value clears the field, and stays as the cleared value.
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob' } } });
 		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' });
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', avatar: '', ext: {} } } });
-		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby' });
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '', ext: {} });
+		// A stale from with an avatar doesn't bring the cleared one back (§3.3).
+		expect(userIn(snapshot, { user_id: 'bob', name: 'Bob', avatar: 'https://example.com/old.png' })).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '', ext: {} });
 		// The latest recorded object is kept apart, by log_id: an edit of an older message does not replace it.
 		socket.receive({ method: 'message', params: { message_id: '20', log_id: '22', room_id: 'general', from: { user_id: 'bob', name: 'Bob' }, body: { text: 'edited' } } });
 		expect(snapshot.recordedUsers.bob).toEqual({ user_id: 'bob', name: 'Bob' });
@@ -60,7 +62,7 @@ describe('ChatClient reference features', () => {
 		// `old` alone, or `user` with a room_id, is not an identity change (§3.3).
 		socket.receive({ method: 'user', params: { old: { user_id: 'bob' } } });
 		socket.receive({ method: 'user', params: { room_id: 'general', old: { user_id: 'bob' } } });
-		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby' });
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '', ext: {} });
 		// `you` merges into this connection's identity.
 		socket.receive({ method: 'user', params: { you: { user_id: 'guest_1', avatar: 'https://example.com/me.png' } } });
 		expect(snapshot.you).toEqual({ user_id: 'guest_1', name: 'Guest', avatar: 'https://example.com/me.png' });
@@ -84,7 +86,7 @@ describe('ChatClient reference features', () => {
 		await socket.greet(['history', 'rooms'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '13', history_log_id: '10' } });
 		await socket.reply('history', {
 			messages: [{ message_id: '11', log_id: '11', room_id: 'general', from: { user_id: 'bob', name: 'Bob then' }, body: { text: 'a' } }],
-			membership: [{ log_id: '12', room_id: 'general', members: [{ user: { user_id: 'bob', name: 'Bob then' }, joined: true }, { user: { user_id: 'carol' }, joined: false }] }],
+			memberships: [{ log_id: '12', room_id: 'general', members: [{ user: { user_id: 'bob', name: 'Bob then' }, joined: true }, { user: { user_id: 'carol' }, joined: false }] }],
 			users: [{ user_id: 'bob', name: 'Bob now' }],
 			first_log_id: '11', last_log_id: '13', more: false, latest_log_id: '13', history_log_id: '10'
 		});
@@ -95,7 +97,7 @@ describe('ChatClient reference features', () => {
 		expect(snapshot.rooms[0].timeline.memberships).toEqual([
 			{ log_id: '12', entries: [{ user: { user_id: 'bob', name: 'Bob then' }, joined: true }, { user: { user_id: 'carol' }, joined: false }] }
 		]);
-		socket.receive({ method: 'membership', params: { log_id: '14', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: false }] } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '14', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: false }] }] } });
 		expect(snapshot.rooms[0].timeline.memberships.map((record) => record.log_id)).toEqual(['12', '14']);
 		expect(snapshot.rooms[0].members).toEqual([]);
 	});
@@ -160,14 +162,14 @@ describe('ChatClient reference features', () => {
 		expect(general().members?.map((member) => member.user_id)).toEqual(['bob', 'guest_1']);
 		expect(snapshot.users.bob.avatar).toBe('https://example.com/b.png');
 		// Memberships keep the members current (§4.3.2), and draw nothing.
-		socket.receive({ method: 'membership', params: { log_id: '13', room_id: 'general', members: [{ user: { user_id: 'carol', name: 'Carol' }, joined: true }] } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '13', room_id: 'general', members: [{ user: { user_id: 'carol', name: 'Carol' }, joined: true }] }] } });
 		expect(general().members?.map((member) => member.user_id)).toEqual(['bob', 'guest_1', 'carol']);
 		expect(general().latestLogId).toBe('13');
-		socket.receive({ method: 'membership', params: { log_id: '14', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: false }] } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '14', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: false }] }] } });
 		expect(general().members?.map((member) => member.user_id)).toEqual(['guest_1', 'carol']);
 		// A membership at or below the listing's head is already in it; an older one for a user loses to a newer one.
-		socket.receive({ method: 'membership', params: { log_id: '12', room_id: 'general', members: [{ user: { user_id: 'guest_1' }, joined: false }] } });
-		socket.receive({ method: 'membership', params: { log_id: '13', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: true }] } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '12', room_id: 'general', members: [{ user: { user_id: 'guest_1' }, joined: false }] }] } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '13', room_id: 'general', members: [{ user: { user_id: 'bob' }, joined: true }] }] } });
 		expect(general().members?.map((member) => member.user_id)).toEqual(['guest_1', 'carol']);
 		// Recorded users never merge into the kept ones.
 		expect(snapshot.users.bob.name).toBe('Bob');
@@ -259,17 +261,17 @@ describe('ChatClient reference features', () => {
 		expect(snapshot.imageOnlyUploads).toBe(true);
 	});
 
-	it('shows a logged @server notice and resumes the room right behind auth after a reconnect', async () => {
+	it('shows a logged ~server notice and resumes the room right behind auth after a reconnect', async () => {
 		await connect();
 		// A notice takes a log_id past the room's logged head.
-		socket.receive({ method: 'message', params: { message_id: '15', log_id: '15', room_id: 'general', from: { user_id: '@server', name: 'Server' }, body: { text: 'Typing updates are limited', format: 'plain' } } });
+		socket.receive({ method: 'message', params: { message_id: '15', log_id: '15', room_id: 'general', from: { user_id: '~server', name: 'Server' }, body: { text: 'Typing updates are limited', format: 'plain' } } });
 		const general = () => snapshot.rooms.find((room) => room.id === 'general')!;
 		expect(general().timeline.order).toContain('15');
 		socket.drop();
 		client.retryNow();
 		socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 6, auth: ['guest'], caps: ['history', 'rooms', 'activity'] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['history', 'rooms', 'activity'] } });
 		// auth, the listing, and the kept room's recovery go out together, before any reply (§3.2).
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list', 'history']);
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
@@ -287,7 +289,7 @@ describe('ChatClient reference features', () => {
 
 	it('shows a server-wide notice for a room not joined where you are', async () => {
 		await connect();
-		socket.receive({ method: 'message', params: { message_id: '16', log_id: '16', room_id: 'elsewhere', from: { user_id: '@server', name: 'Server' }, body: { text: 'Maintenance at 17:00' } } });
+		socket.receive({ method: 'message', params: { message_id: '16', log_id: '16', room_id: 'elsewhere', from: { user_id: '~server', name: 'Server' }, body: { text: 'Maintenance at 17:00' } } });
 		expect(snapshot.rooms.map((room) => room.id)).toEqual(['general']);
 		expect(snapshot.rooms[0].notices.map((notice) => notice.body?.text)).toEqual(['Maintenance at 17:00']);
 		expect(client.message('16')?.room_id).toBe('elsewhere');

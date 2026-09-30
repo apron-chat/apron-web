@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Lock from '@lucide/svelte/icons/lock';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { untrack } from 'svelte';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
@@ -31,13 +32,13 @@
 		onconnect: () => void;
 		onroom: (room: RoomSnapshot) => void;
 		onthread: (thread: string) => void;
-		/** Join a visible room or thread from `room_list` (cap `rooms`); it opens once its `room_update` arrives. */
+		/** Join a visible room or thread from `room_list` (capability `rooms`); it opens once its `room_update` arrives. */
 		onjoin: (roomId: string) => void;
-		/** A room created here; it opens once its `room_update` arrives. */
-		oncreateroom: (roomId: string) => void;
+		/** A room created here, asked for as private or not; it opens once its `room_update` arrives. */
+		oncreateroom: (roomId: string, options: { private: boolean }) => void;
 		onsignout: () => void;
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
-		onsignin: (name?: string) => void;
+		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
 	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, onconnect, onroom, onthread, onjoin, oncreateroom, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own. */
@@ -111,7 +112,7 @@
 						{@const current = active && !activeThread}
 						<button class="ap-room" class:ap-room-active={current} type="button" data-room={room.id} aria-current={current ? 'page' : undefined} onclick={() => onroom(room)}>
 							<span class="ap-room-text">
-								<span class="ap-room-name">{room.title}</span>
+								<span class="ap-room-name">{room.title}{#if room.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
 							</span>
 							{#if mentions[room.id]}
 								{@const count = mentions[room.id]}
@@ -125,7 +126,7 @@
 									{@const open = activeThread === entry.id}
 									{@const replies = open ? 0 : (unread[entry.id] ?? 0)}
 									<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
-										<span class="ap-room-text"><span class="ap-room-name">{entry.title}</span></span>
+										<span class="ap-room-text"><span class="ap-room-name">{entry.title}{#if entry.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span></span>
 										{#if mentions[entry.id] && !open}
 											{@const count = mentions[entry.id]}
 											<span class="ap-count ap-count-at" data-testid="thread-mentions" aria-label={`${count} ${count === 1 ? 'mention' : 'mentions'}`}>@{count > 1 ? count : ''}</span>
@@ -165,7 +166,8 @@
 						<!-- Servers may list only the most active rooms (§4.3.1), so this never claims to be all of them. -->
 						<p class="muted">Most active rooms</p>
 						{#each unjoined as listing (listing.id)}
-							{@const members = listing.members.length}
+							<!-- A server may list only the most active members of a large room, with the total (§4.3.1). -->
+							{@const members = listing.memberCount ?? listing.members.length}
 							<button class="ap-room" type="button" data-join={listing.id} onclick={() => onjoin(listing.id)}>
 								<span class="ap-room-text">
 									<span class="ap-room-name">{listing.title}</span>

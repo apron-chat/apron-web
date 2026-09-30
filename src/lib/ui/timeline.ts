@@ -1,12 +1,15 @@
 import { childRooms, timelineMessages, type Notice, type RoomListing, type RoomRename, type RoomSnapshot } from '$lib/protocol/client';
 import { compareLogIds, type MembershipRecord } from '$lib/protocol/reducer';
 import { isLogId, type Identity, type MessageRecord } from '$lib/protocol/types';
+import { markdownText } from '$lib/protocol/markdown';
 import { isBaseline, MembershipRun } from './membership';
 import { embedsOf, senderName, textOf } from './messages';
 import { dayKey, dayKeyOf, dayLabel, dayLabelOf, eventTime, idTime, isGrouped } from './time';
 
 /** Longest title a thread started from a message gets, in characters. */
 const THREAD_TITLE_MAX = 60;
+/** Longest description a thread started from a message gets, in characters. */
+const THREAD_DESCRIPTION_MAX = 500;
 
 /**
  * A thread as the sidebar and the room feed see it: a room with a
@@ -17,9 +20,10 @@ export interface ThreadEntry {
 	id: string;
 	parentRoomId: string;
 	title: string;
-	introMessageId?: string;
-	/** The latest known snapshot of the intro message, wherever it lives. */
-	introMessage?: MessageRecord;
+	/** The thread's `description` (§3.4): Markdown, its summary or what started it. */
+	description?: string;
+	/** Visible only to its members (§4.3.4). */
+	private?: boolean;
 	/** Messages in the thread; only known once its history has loaded. */
 	count?: number;
 	loaded: boolean;
@@ -27,9 +31,10 @@ export interface ThreadEntry {
 	lastReply: string;
 	latestMessage?: MessageRecord;
 	/**
-	 * Where the card sits in the parent room's feed: the intro message's ID
-	 * when there is one, else the thread's creation (its `room_id` when that is
-	 * a log ID, as both example servers mint it, or its record's `log_id`).
+	 * Where the card sits in the parent room's feed: the thread's creation,
+	 * its `room_id` when that is a log ID, as both example servers mint it,
+	 * else the earliest of its records seen, which edits (a bot keeping the
+	 * description current) don't move.
 	 */
 	anchor?: string;
 	/**
@@ -42,9 +47,8 @@ export interface ThreadEntry {
 
 export type TimelineItem =
 	| { kind: 'date'; key: string; label: string }
-	| { kind: 'message'; key: string; event: MessageRecord; grouped: boolean; intro?: boolean }
+	| { kind: 'message'; key: string; event: MessageRecord; grouped: boolean }
 	| { kind: 'thread'; key: string; entry: ThreadEntry }
-	| { kind: 'replies'; key: string; count: number; more?: boolean }
 	| { kind: 'renamed'; key: string; logId: string; title: string }
 	| { kind: 'notice'; key: string; notice: Notice }
 	/** Consecutive memberships netted out (see `MembershipRun`); `logId` is the last one's. */
@@ -76,13 +80,13 @@ export function threadEntry(room: RoomSnapshot): ThreadEntry {
 		participants = [event.from, ...participants.filter((sender) => sender.user_id !== event.from.user_id)].slice(0, 4);
 	}
 	const latest = messages[messages.length - 1];
-	const anchor = room.introMessageId ?? (isLogId(room.id) ? room.id : room.record?.log_id);
+	const anchor = isLogId(room.id) ? room.id : room.firstRecordLogId ?? room.record?.log_id;
 	return {
 		id: room.id,
 		parentRoomId: room.parentRoomId ?? '',
 		title: room.title,
-		...(room.introMessageId !== undefined ? { introMessageId: room.introMessageId } : {}),
-		...(room.introMessage ? { introMessage: room.introMessage } : {}),
+		...(room.description ? { description: room.description } : {}),
+		...(room.private ? { private: true } : {}),
 		...(room.loaded ? { count: messages.length } : {}),
 		loaded: room.loaded,
 		participants,
@@ -94,16 +98,15 @@ export function threadEntry(room: RoomSnapshot): ThreadEntry {
 }
 
 /** A thread the viewer has not joined, from a listing: a card without a count, since its history isn't loaded. */
-function unjoinedThreadEntry(listing: RoomListing, message?: (messageId: string) => MessageRecord | undefined): ThreadEntry {
-	const introId = listing.record.intro_message?.message_id;
-	const intro = introId !== undefined ? message?.(introId) : undefined;
-	const anchor = introId ?? (isLogId(listing.id) ? listing.id : listing.record.log_id);
+function unjoinedThreadEntry(listing: RoomListing): ThreadEntry {
+	const anchor = isLogId(listing.id) ? listing.id : listing.firstRecordLogId ?? listing.record.log_id;
+	const description = listing.record.description;
 	return {
 		id: listing.id,
 		parentRoomId: listing.parentRoomId ?? '',
 		title: listing.title,
-		...(introId !== undefined ? { introMessageId: introId } : {}),
-		...(intro ? { introMessage: intro } : {}),
+		...(typeof description === 'string' && description ? { description } : {}),
+		...(listing.record.private === true ? { private: true } : {}),
 		loaded: false,
 		participants: [],
 		lastReply: listing.latestLogId !== undefined ? idTime(listing.latestLogId) : '',
@@ -118,37 +121,115 @@ function unjoinedThreadEntry(listing: RoomListing, message?: (messageId: string)
  * (`unjoined`, from `room_list` with `parent_room_id`).
  */
 export function threadEntries(
-	rooms: readonly RoomSnapshot[], parentRoomId: string | undefined, unjoined: readonly RoomListing[] = [],
-	message?: (messageId: string) => MessageRecord | undefined
+	rooms: readonly RoomSnapshot[], parentRoomId: string | undefined, unjoined: readonly RoomListing[] = []
 ): ThreadEntry[] {
 	if (parentRoomId === undefined) return [];
 	const joined = childRooms(rooms, parentRoomId).map(threadEntry);
 	const known = new Set(joined.map((entry) => entry.id));
-	return [...joined, ...unjoined.filter((listing) => !known.has(listing.id)).map((listing) => unjoinedThreadEntry(listing, message))];
+	return [...joined, ...unjoined.filter((listing) => !known.has(listing.id)).map(unjoinedThreadEntry)];
 }
 
 /**
- * The preview under a thread's title: its intro message's author and up to
- * three lines of its body when it is available (in the room feed the card
- * stands in for that message), else the newest loaded message as "Dana: text"
- * on one line.
+ * The preview under a thread's title: up to three lines of its description,
+ * as text, when it has one (every card can show it, joined or not), else the
+ * newest loaded message as "Dana: text" on one line.
  */
-export function threadPreview(entry: ThreadEntry): { label: string; text: string; intro: boolean } | undefined {
-	const intro = entry.introMessage;
-	if (intro && !intro.deleted && textOf(intro).trim()) return { label: senderName(intro), text: textOf(intro).trim(), intro: true };
+export function threadPreview(entry: ThreadEntry): { label: string; text: string; summary: boolean } | undefined {
+	const summary = entry.description ? markdownText(entry.description).trim() : '';
+	if (summary) return { label: '', text: summary, summary: true };
 	const event = entry.latestMessage;
 	if (!event) return undefined;
-	if (event.deleted) return { label: '', text: 'Message deleted', intro: false };
+	if (event.deleted) return { label: '', text: 'Message deleted', summary: false };
 	const text = textOf(event).replace(/\s+/g, ' ').trim();
-	return { label: senderName(event), text: text || (embedsOf(event).length ? 'Attachment' : 'Empty message'), intro: false };
+	return { label: senderName(event), text: text || (embedsOf(event).length ? 'Attachment' : 'Empty message'), summary: false };
 }
 
 /** A title for a thread started from a message: its first non-empty line, shortened, else "Thread". */
 export function threadTitleFor(event: MessageRecord | undefined): string {
 	const line = (event && !event.deleted ? textOf(event) : '').split('\n').find((part) => part.trim())?.replace(/\s+/g, ' ').trim() ?? '';
-	const chars = [...line];
-	if (chars.length > THREAD_TITLE_MAX) return `${chars.slice(0, THREAD_TITLE_MAX - 1).join('').trimEnd()}…`;
-	return line || 'Thread';
+	return shorten(line, THREAD_TITLE_MAX) || 'Thread';
+}
+
+/**
+ * The `description` of a thread started from a message (§3.4): the gist, the
+ * message's text, shortened on a line or word boundary with any code fence
+ * it leaves open closed. A Markdown message is kept as written; a plain one
+ * (§3.5: `format` absent or `plain`) is escaped, since a description is
+ * Markdown. The message stays in the parent room; the thread's first reply
+ * points back at it with `reply_to`. Undefined when the message has no text,
+ * or when its title already says it all.
+ */
+export function threadDescriptionFor(event: MessageRecord | undefined): string | undefined {
+	const text = event && !event.deleted ? textOf(event).trim() : '';
+	if (!text || text === threadTitleFor(event)) return undefined;
+	const markdown = event?.body?.format === 'markdown';
+	return shortenMarkdown(markdown ? text : escapeMarkdown(text), THREAD_DESCRIPTION_MAX);
+}
+
+/**
+ * Plain text as Markdown that renders as the same text: every character
+ * Markdown could read as syntax is backslash-escaped (setext `=` underlines
+ * and `&` entities included), and a line's leading spaces and tabs become
+ * entities, so an indent is never a code block.
+ */
+export function escapeMarkdown(text: string): string {
+	return text.split('\n').map((line) => line
+		.replace(/[\\`*_{}[\]()#+\-.!|>~<=&]/g, (character) => `\\${character}`)
+		.replace(/^[ \t]+/, (indent) => indent.replace(/ /g, '&#32;').replace(/\t/g, '&#9;'))).join('\n');
+}
+
+/**
+ * Markdown cut to at most about `max` characters: at the last line break (or
+ * else space) before the limit, never mid-word, with a code fence the cut
+ * leaves open closed, and an ellipsis after it.
+ */
+function shortenMarkdown(text: string, max: number): string {
+	const chars = [...text];
+	if (chars.length <= max) return text;
+	let cut = chars.slice(0, max - 1).join('');
+	const line = cut.lastIndexOf('\n');
+	const space = cut.lastIndexOf(' ');
+	if (line > max / 2) cut = cut.slice(0, line);
+	else if (space > max / 2) cut = cut.slice(0, space);
+	cut = cut.trimEnd();
+	// A fence closes with a run of its own character at least as long as the one that opened it.
+	let open: string | undefined;
+	for (const row of cut.split('\n')) {
+		const run = /^ {0,3}(`{3,}|~{3,})/.exec(row)?.[1];
+		if (!run) continue;
+		if (open === undefined) open = run;
+		else if (run[0] === open[0] && run.length >= open.length && /^ {0,3}(`+|~+)\s*$/.test(row)) open = undefined;
+	}
+	return open !== undefined ? `${cut}\n${open}\n\n…` : `${cut}…`;
+}
+
+/**
+ * Whether a thread just created in a private room came out visible to
+ * others: a thread created without `private` takes its parent's (§4.3.4),
+ * so this client never sends it, and a thread of a private room without
+ * `private: true` means the server didn't keep it private. False while
+ * either record is unknown.
+ */
+export function threadLostPrivacy(rooms: readonly Pick<RoomSnapshot, 'id' | 'private'>[], parentRoomId: string, threadId: string): boolean {
+	const parent = rooms.find((room) => room.id === parentRoomId);
+	const thread = rooms.find((room) => room.id === threadId);
+	return parent?.private === true && thread !== undefined && thread.private !== true;
+}
+
+/**
+ * A thread of the room already started from a message, by the convention
+ * this client follows: its first message replies to it. Only a thread loaded
+ * from its start counts, since a later reply may quote the message too.
+ */
+export function threadStartedFrom(rooms: readonly RoomSnapshot[], parentRoomId: string, messageId: string): string | undefined {
+	return childRooms(rooms, parentRoomId)
+		.find((room) => room.loaded && !room.olderAvailable && timelineMessages(room)[0]?.reply_to?.message_id === messageId)?.id;
+}
+
+/** At most `max` characters (code points), ending with "…" when cut. */
+function shorten(text: string, max: number): string {
+	const chars = [...text];
+	return chars.length > max ? `${chars.slice(0, max - 1).join('').trimEnd()}…` : text;
 }
 
 export interface RoomTimelineInput {
@@ -179,10 +260,8 @@ function noticeQueue(notices: readonly Notice[]): (before?: string) => Notice[] 
 }
 
 /**
- * The room view: its messages in order, with each thread's card. A message
- * that is the intro of one of the room's threads is shown as that thread's
- * card; other threads' cards sit where they were started (their anchor).
- * Date dividers split days.
+ * The room view: its messages in order, with each thread's card where the
+ * thread was started (its anchor). Date dividers split days.
  *
  * Join and leave lines sit at their records' `log_id`s among the messages
  * and cards. Records with nothing else between them (a date divider counts)
@@ -190,17 +269,8 @@ function noticeQueue(notices: readonly Notice[]): (before?: string) => Notice[] 
  * does not break a sender's group. Baseline records are skipped (`isBaseline`).
  */
 export function buildRoomTimeline({ messages, threads, notices = [], memberships = [], now = new Date() }: RoomTimelineInput): TimelineItem[] {
-	const here = new Set(messages.map((event) => event.message_id));
-	const byIntro = new Map<string, ThreadEntry[]>();
-	const floating: ThreadEntry[] = [];
-	for (const entry of threads) {
-		if (entry.introMessageId !== undefined && here.has(entry.introMessageId)) {
-			byIntro.set(entry.introMessageId, [...(byIntro.get(entry.introMessageId) ?? []), entry]);
-		} else {
-			floating.push(entry);
-		}
-	}
-	// Floating cards merge in by anchor; one without an anchor goes last.
+	// Cards merge in by anchor; one without an anchor goes last.
+	const floating = [...threads];
 	floating.sort((a, b) => (a.anchor === undefined ? 1 : b.anchor === undefined ? -1 : compareLogIds(a.anchor, b.anchor)));
 
 	const items: TimelineItem[] = [];
@@ -280,11 +350,6 @@ export function buildRoomTimeline({ messages, threads, notices = [], memberships
 	};
 	for (const event of messages) {
 		pushGap(event.message_id);
-		const cards = byIntro.get(event.message_id);
-		if (cards) {
-			for (const entry of cards) pushCard(entry);
-			continue;
-		}
 		closeRun();
 		pushDate(dayKey(event), () => dayLabel(event, now));
 		items.push({ kind: 'message', key: event.message_id, event, grouped: isGrouped(previous, event) });
@@ -298,33 +363,22 @@ export function buildRoomTimeline({ messages, threads, notices = [], memberships
 export interface ThreadTimelineInput {
 	/** The thread room's own messages, in timeline order. */
 	messages: MessageRecord[];
-	/** The thread's intro message, wherever it lives, when known. */
-	intro?: MessageRecord;
 	/** The thread room's title changes, ascending. */
 	renames?: readonly RoomRename[];
 	now?: Date;
-	/** Older replies are not loaded yet: the count is a lower bound. */
-	moreReplies?: boolean;
 	/** Transient notices shown in the thread (§3.5), in arrival order. */
 	notices?: readonly Notice[];
 }
 
 /**
- * The thread view: the intro message leads, then an "N replies" divider and
- * the thread's other messages, with a "Thread renamed" line where each title
- * change was logged. Without an intro it is just the messages, with date
- * dividers.
+ * The thread view: the thread's messages with date dividers, and a "Thread
+ * renamed" line where each title change was logged. Its description shows
+ * above them, pinned under the header, not as an item.
  */
-export function buildThreadTimeline({ messages, intro, renames = [], now = new Date(), moreReplies = false, notices = [] }: ThreadTimelineInput): TimelineItem[] {
+export function buildThreadTimeline({ messages, renames = [], now = new Date(), notices = [] }: ThreadTimelineInput): TimelineItem[] {
 	const items: TimelineItem[] = [];
 	let lastDay = '';
 	let previous: MessageRecord | undefined;
-	const rest = intro ? messages.filter((event) => event.message_id !== intro.message_id) : messages;
-	if (intro) {
-		items.push({ kind: 'message', key: intro.message_id, event: intro, grouped: false, intro: true });
-		lastDay = dayKey(intro);
-		if (rest.length > 0) items.push({ kind: 'replies', key: 'replies', count: rest.length, ...(moreReplies ? { more: true } : {}) });
-	}
 	const pushDay = (id: string) => {
 		const day = dayKeyOf(id);
 		if (!day || day === lastDay) return;
@@ -348,7 +402,7 @@ export function buildThreadTimeline({ messages, intro, renames = [], now = new D
 			previous = undefined;
 		}
 	};
-	for (const event of rest) {
+	for (const event of messages) {
 		pushRenames(event.message_id);
 		pushNotices(event.message_id);
 		pushDay(event.message_id);

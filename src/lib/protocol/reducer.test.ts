@@ -105,15 +105,17 @@ describe('wire decoding', () => {
 		expect(isLogId('9007199254740991')).toBe(true);
 	});
 
-	it('separates room delivery fields and embedded intro snapshots from the record', () => {
+	it('separates room delivery fields from the record', () => {
 		const decoded = decodeRoom({
-			room_id: 't', log_id: '5', parent_room_id: 'general', title: 'Deploy', future: 1,
+			room_id: 't', log_id: '5', parent_room_id: 'general', private: true, title: 'Deploy', description: 'Why the *4pm* deploy failed', future: 1,
 			intro_message: { message_id: '3', log_id: '4', room_id: 'general', from: { user_id: 'bob' }, body: { text: 'Deploy?' } },
-			latest_log_id: '9', history_log_id: null
+			latest_log_id: '9', history_log_id: null, members: [{ user_id: 'bob' }], member_count: 40
 		})!;
-		expect(JSON.parse(JSON.stringify(decoded.record))).toEqual({ room_id: 't', log_id: '5', parent_room_id: 'general', title: 'Deploy', intro_message: { message_id: '3' } });
-		expect(decoded.delivery).toEqual({ latest_log_id: '9', history_log_id: null });
-		expect(decoded.embedded[0].log_id).toBe('4');
+		expect(JSON.parse(JSON.stringify(decoded.record))).toEqual({ room_id: 't', log_id: '5', parent_room_id: 'general', private: true, title: 'Deploy', description: 'Why the *4pm* deploy failed' });
+		expect(decoded.delivery).toEqual({ latest_log_id: '9', history_log_id: null, members: [{ user_id: 'bob' }], member_count: 40 });
+		// Only a boolean is a `private` flag; a bad count is dropped.
+		expect(decodeRoom({ room_id: 'x', private: 'yes', member_count: -1 })!.record).not.toHaveProperty('private');
+		expect(decodeRoom({ room_id: 'x', member_count: 1.5 })!.delivery).toEqual({});
 	});
 
 	it('replaces room records in full and lets a record without log_id always replace', () => {

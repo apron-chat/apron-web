@@ -1,5 +1,6 @@
 import { conditionalPasskeysAvailable, immediatePasskeysAvailable, requestPasskey, type PasskeyMediation } from './webauthn';
 import { WriteError, writeEmbed } from './embeds';
+import { EmailConnection, type RpcFailure } from './email-connection';
 import {
 	ProtocolStore,
 	compareLogIds,
@@ -19,7 +20,11 @@ import {
 	decodeNotice,
 	decodeReactions,
 	decodeMembership,
+	legacySystemId,
+	privateSender,
+	systemScope,
 	type JsonObject,
+	type JsonValue,
 	type Capability,
 	type Identity,
 	type MessageBody,
@@ -69,6 +74,8 @@ import {
 	THREAD_PAGE_SIZE,
 	TYPING_REFRESH_MS,
 	TYPING_TIMEOUT_S,
+	AGENT,
+	UNSUPPORTED,
 	absent,
 	canonicalJson,
 	decrement,
@@ -93,6 +100,7 @@ import {
 	validHistoryMetadata,
 	type LiveRecord,
 	type PendingRequest,
+	type SignInMethod,
 	type PendingSave,
 	type RoomState,
 	type TypingState,
@@ -102,7 +110,7 @@ import { capabilitiesOf } from './client-views';
 
 export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
-export { recoveryBufferFits, reconnectDelay } from './client-internals';
+export { recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
 export {
 	canEdit,
 	canManageRooms,
@@ -119,14 +127,14 @@ export {
 } from './client-views';
 
 /**
- * A browser-only Apron protocol v6 session; instantiate one per mounted UI.
+ * A browser-only Apron protocol v7 session; instantiate one per mounted UI.
  *
  * State model: one store of room records, message snapshots, reaction sets,
  * and memberships shared by every room (PROTOCOL.md §2), projected per visible
- * room in `snapshot().rooms`. With cap `rooms` the visible rooms are the
+ * room in `snapshot().rooms`. With capability `rooms` the visible rooms are the
  * joined set, listed with `room_list` right behind `auth` (§3.2) and kept
  * current by `room_update`; without it they are the rooms messages arrive in.
- * Top-level rooms recover history automatically when they become visible (cap
+ * Top-level rooms recover history automatically when they become visible (capability
  * `history`); threads are rooms with a parent and load their history with
  * `loadRoom` when opened, joined or not (`viewRoom`). Mutations return an
  * `OperationHandle` that settles on the server's reply; the authoritative state
@@ -158,6 +166,10 @@ export class ChatClient {
 	private readonly uploads = new Map<string, UploadState>();
 	/** A 415 on a file that isn't an image: this server takes images only. */
 	private imageOnlyUploads = false;
+	/** Rooms whose `members` the server truncated (§4.3.1): the total it gave with them. */
+	private readonly memberCounts = new Map<string, number>();
+	/** This server answered adding or removing another user `unsupported` (§4.3.2). */
+	private memberChangesUnsupported = false;
 	/** Transient notices per room, for the session (§3.5). */
 	private readonly notices = new Map<string, Notice[]>();
 	/** Notices that arrived before there was a room to show them in; the first room shown takes them. */
@@ -166,7 +178,7 @@ export class ChatClient {
 	/** Nobody is attending this connection (§4.4); `awaySent` is what the server was last told on it. */
 	private away = false;
 	private awaySent = false;
-	/** The `room_id` of the server's default room once known (without cap `rooms`). */
+	/** The `room_id` of the server's default room once known (without capability `rooms`). */
 	private defaultRoom?: string;
 	/** Messages this client posted without `room_id`: their broadcast names the default room. */
 	private readonly defaultPosts = new Set<string>();
@@ -194,7 +206,7 @@ export class ChatClient {
 	 */
 	private readonly listings = new Map<string, { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string> }>();
 	/**
-	 * The `room_list` of joined rooms on this connection (cap `rooms`), until
+	 * The `room_list` of joined rooms on this connection (capability `rooms`), until
 	 * its result arrives; `since` and `userId` when it lists only changes since
 	 * a position, for that identity.
 	 */
@@ -216,7 +228,36 @@ export class ChatClient {
 	private running = false;
 	private authenticated = false;
 	private authRequested = false;
+	/** A passkey ceremony is under way: other requests wait. */
 	private passkeyAbort?: AbortController;
+	/**
+	 * An email sign-in proposal (§4.10) waiting for its code, on a connection
+	 * of its own that is not signed in (see `requestEmailCode`).
+	 */
+	private emailProposal?: { connection: EmailConnection; email: string; proposed: boolean };
+	/** Every email connection still open (a proposal's, a link's), to close on `stop()`. */
+	private readonly emailConnections = new Set<EmailConnection>();
+	/** An email approval has been sent and not answered. */
+	private emailInFlight = false;
+	/**
+	 * The connection (`connectionId`) that proposed adding an address, which
+	 * alone can approve it; cleared when that connection signs in again or
+	 * becomes another identity, so an address is never recorded as added to
+	 * an account other than the one that proposed it.
+	 */
+	private addProposalConnection?: number;
+	/** `addEmail` holds the sign-in guard: busy, but not with a passkey. */
+	private addingEmail = false;
+	/**
+	 * How this browser signed in to the kept session, remembered with its
+	 * token: `email` resumes with the token or else reports the session signed
+	 * out (never a passkey prompt or a guest); `token` alone (pasted, an
+	 * invite, or a guest token) is the one way back in, worth adding a
+	 * passkey or an email to (§3.2).
+	 */
+	private signedInWith?: SignInMethod;
+	/** Ways back into the account this browser added to it since (§4.9, §4.10), kept beside the token. */
+	private addedMethods = new Set<SignInMethod>();
 	/** A pending autofill (conditional) login; `done` settles once it lets go of the browser. */
 	private autofill?: { controller: AbortController; done: Promise<void> };
 	private passkeyHint = false;
@@ -263,15 +304,23 @@ export class ChatClient {
 	setUrl(serverUrl: string): void {
 		const nextUrl = serverUrl.trim();
 		if (!nextUrl || nextUrl === this.serverUrl) return;
+		this.switchServer(nextUrl);
+		if (this.running) this.restart();
+	}
+
+	/** Points the client at another server, with that server's kept session, without connecting. */
+	private switchServer(nextUrl: string): void {
 		this.serverUrl = nextUrl;
 		this.sessionToken = undefined;
 		this.passkeyRequired = false;
 		this.registeredSession = false;
+		this.signedInWith = undefined;
+		this.addedMethods = new Set();
 		this.retryAfterUntil = 0;
 		this.reconnectHeld = false;
-		this.loadStoredSession();
 		this.resetSession('Server URL changed; pending requests were cancelled');
-		if (this.running) this.restart();
+		// After the reset, which forgets the old server's session: this server's own comes back.
+		this.loadStoredSession();
 	}
 
 	/**
@@ -334,6 +383,8 @@ export class ChatClient {
 			request.reject(new Error('Connection stopped'));
 		}
 		this.requests.clear();
+		this.emailProposal = undefined;
+		for (const connection of [...this.emailConnections]) connection.close(new Error('Connection stopped'));
 		if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'client stopped');
 		this.status = 'offline';
 		this.emit();
@@ -416,8 +467,12 @@ export class ChatClient {
 		return {
 			status: this.status,
 			authenticated: this.authenticated,
-			authBusy: Boolean(this.passkeyAbort),
+			authBusy: Boolean(this.passkeyAbort || this.emailInFlight),
+			...(this.emailProposal?.proposed ? { emailCode: { email: this.emailProposal.email, url: this.emailProposal.connection.url } } : {}),
 			passkeySession: Boolean(this.registeredSession && this.authenticated),
+			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith, signInMethods: [this.signedInWith, ...[...this.addedMethods].filter((method) => method !== this.signedInWith)] } : {}),
+			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
+			...(this.passkeyAbort ? { passkeyBusy: !this.addingEmail } : {}),
 			readOnly: this.authenticated && !this.registeredSession && this.server?.ext?.demo?.guest_posting === false,
 			passkeyHint: this.passkeyHint,
 			error: this.error,
@@ -431,7 +486,6 @@ export class ChatClient {
 				}
 				const record = this.store.room(room.id);
 				const thread = typeof record?.parent_room_id === 'string';
-				const intro = record?.intro_message ? this.store.message(record.intro_message.message_id) : undefined;
 				const renames = this.store.roomRenames(room.id);
 				const members = this.store.members(room.id);
 				return {
@@ -440,8 +494,9 @@ export class ChatClient {
 					joined: room.kind === 'joined',
 					...(record ? { record } : {}),
 					...(thread ? { parentRoomId: record!.parent_room_id } : {}),
-					...(record?.intro_message ? { introMessageId: record.intro_message.message_id } : {}),
-					...(intro ? { introMessage: intro } : {}),
+					...(record?.private === true ? { private: true } : {}),
+					...(this.store.firstRoomLogId(room.id) !== undefined ? { firstRecordLogId: this.store.firstRoomLogId(room.id) } : {}),
+					...(typeof record?.description === 'string' && record.description ? { description: record.description } : {}),
 					...(record && isJsonObject(record.ext) ? { ext: record.ext } : {}),
 					...(renames.length ? { renames } : {}),
 					...(room.latestLogId !== undefined ? { latestLogId: room.latestLogId } : {}),
@@ -455,6 +510,7 @@ export class ChatClient {
 					...(room.loadingOlder ? { loadingOlder: true } : {}),
 					...(this.readCursor(room.id) !== undefined ? { readMessageId: this.readCursor(room.id) } : {}),
 					...(members ? { members } : {}),
+					...(this.memberCounts.has(room.id) ? { memberCount: this.memberCounts.get(room.id) } : {}),
 					notices: this.notices.get(room.id) ?? NO_NOTICES
 				};
 			}),
@@ -474,6 +530,7 @@ export class ChatClient {
 			userAliases: Object.fromEntries(this.userAliases),
 			uploads: Object.fromEntries(this.uploads),
 			...(this.imageOnlyUploads ? { imageOnlyUploads: true } : {}),
+			...(this.memberChangesUnsupported ? { memberChangesUnsupported: true } : {}),
 			...(this.directory ? { directory: this.directory.map((listing) => this.withJoined(listing)) } : {}),
 			threadDirectory: Object.fromEntries([...this.threadDirectory].map(([parent, listings]) => [parent, listings.map((listing) => this.withJoined(listing))])),
 			showReconnectDivider: this.showReconnectDivider,
@@ -485,9 +542,9 @@ export class ChatClient {
 
 	/**
 	 * The latest stored snapshot of any message, in any room (including rooms
-	 * that are not visible, such as a cross-room reply target or an embedded
-	 * `intro_message`). Reflects live records immediately, even while the
-	 * room's published timeline is held during a recovery.
+	 * that are not visible, such as a cross-room reply target). Reflects live
+	 * records immediately, even while the room's published timeline is held
+	 * during a recovery.
 	 */
 	message(messageId: string): MessageRecord | undefined {
 		return this.store.message(messageId);
@@ -521,16 +578,9 @@ export class ChatClient {
 	async usePasskey(
 		action: 'register' | 'login', name?: string, mediation: PasskeyMediation = 'modal'
 	): Promise<OperationHandle | undefined> {
-		if (!this.server?.auth.includes('webauthn')) throw new Error('This server does not support passkeys');
-		// A pending autofill holds the browser's credential request; release it first.
-		await this.stopAutofill();
-		// Requests sent as the old identity settle first; right after connecting
-		// that is usually history and the `me` for the display name.
-		for (let waited = 0; (this.authRequested || this.requests.size) && waited < PASSKEY_IDLE_WAIT_MS; waited += PASSKEY_IDLE_POLL_MS) {
-			await new Promise((resolve) => setTimeout(resolve, PASSKEY_IDLE_POLL_MS));
-		}
-		if (this.passkeyAbort || this.authRequested || this.requests.size) throw new Error('Wait for pending requests to finish, then try again');
-		if (this.status !== 'connected') throw new Error('Connect to the server first');
+		// Registering creates an account or adds to one (`signup`, §3.1); logging in signs in (`auth`).
+		if (action === 'login' ? !this.server?.auth.includes('webauthn') : !this.offers('webauthn')) throw new Error('This server does not support passkeys');
+		await this.readyToSignIn();
 		const controller = new AbortController();
 		this.passkeyAbort = controller;
 		const connection = this.connectionId;
@@ -544,6 +594,274 @@ export class ChatClient {
 			if (this.passkeyAbort === controller) this.cancelPasskey();
 			this.emit();
 		}
+	}
+
+	/**
+	 * Waits until a sign-in may change this connection's identity: a pending
+	 * autofill has let go of the browser's credential request, and requests
+	 * sent as the old identity have settled (right after connecting, usually
+	 * history and the `me` for the display name). Throws when that takes too
+	 * long or there is no connection.
+	 */
+	private async readyToSignIn(): Promise<void> {
+		await this.stopAutofill();
+		for (let waited = 0; (this.authRequested || this.requests.size) && waited < PASSKEY_IDLE_WAIT_MS; waited += PASSKEY_IDLE_POLL_MS) {
+			await new Promise((resolve) => setTimeout(resolve, PASSKEY_IDLE_POLL_MS));
+		}
+		if (this.passkeyAbort || this.authRequested || this.requests.size) throw new Error('Wait for pending requests to finish, then try again');
+		if (this.status !== 'connected') throw new Error('Connect to the server first');
+	}
+
+	/**
+	 * Proposes signing in with `email` on the server at `url` (this client's
+	 * by default), which then emails a code (§4.10). The proposal goes on a
+	 * connection of its own that is not signed in, since one on a signed-in
+	 * connection (a guest's too) proposes adding the address instead, and
+	 * that connection stays open for `signInWithEmail`: a short code works
+	 * only on the connection that proposed it. This connection, its rooms,
+	 * identity and pending requests are left as they are meanwhile. It
+	 * resolves alike whether or not the address has an account. A newer
+	 * proposal replaces the last, which closes.
+	 */
+	async requestEmailCode(email: string, url = this.serverUrl): Promise<void> {
+		const address = email.trim();
+		if (!address) throw new Error('Enter your email address');
+		if (url === this.serverUrl && this.server && !this.offers('email')) throw new Error('This server does not support email sign-in');
+		this.emailProposal?.connection.close(new Error('Superseded by another request'));
+		const connection = this.openEmailConnection(url);
+		const proposal = { connection, email: address, proposed: false };
+		this.emailProposal = proposal;
+		connection.onClose = () => {
+			this.emailConnections.delete(connection);
+			if (this.emailProposal !== proposal) return;
+			this.emailProposal = undefined;
+			this.emit();
+		};
+		try {
+			await connection.ready;
+			if (!connection.offers('email')) throw new Error('This server does not support email sign-in');
+			await connection.auth({ scheme: 'email', email: address });
+		} catch (cause) {
+			connection.close();
+			throw cause;
+		}
+		if (connection.closed) throw connection.closed;
+		proposal.proposed = true;
+		this.emit();
+	}
+
+	/** A connection of its own for an email sign-in, closed on `stop()` if still open. */
+	private openEmailConnection(url: string): EmailConnection {
+		const connection = EmailConnection.open(this.webSocketFactory, url);
+		this.emailConnections.add(connection);
+		connection.onClose = () => this.emailConnections.delete(connection);
+		return connection;
+	}
+
+	/**
+	 * Signs in with the code emailed for the open proposal (`requestEmailCode`,
+	 * §4.10), approving it on the connection that proposed it. That
+	 * connection, now signed in, becomes this client's connection, on the
+	 * proposal's server; the identity the result names replaces any before,
+	 * and the bearer `token` in it resumes the session on later connections
+	 * (§3.2). `beforeSwitch` runs just before, so a view held for the previous
+	 * session can go first. A `name` becomes the display name, and the `me`
+	 * request sent for it is returned, as with `usePasskey`. A wrong code
+	 * leaves the proposal open to try again, until the server gives up on it.
+	 */
+	async signInWithEmail(code: string, name?: string, beforeSwitch?: () => void): Promise<OperationHandle | undefined> {
+		const token = code.trim();
+		if (!token) throw new Error('Enter the code from the email');
+		const proposal = this.emailProposal;
+		if (!proposal?.proposed || proposal.connection.closed) throw new Error('The request for this code is no longer open. Send a new code.');
+		return this.approveEmail(proposal.connection, token, name, beforeSwitch, true);
+	}
+
+	/**
+	 * Signs in with the token from an emailed link (§4.10), which the viewer
+	 * has confirmed: it is presented on a fresh connection to `url` (this
+	 * client's server by default) that is not signed in, which then becomes
+	 * this client's connection as with `signInWithEmail`. A refused link
+	 * changes nothing here.
+	 */
+	async signInWithEmailLink(token: string, url = this.serverUrl, beforeSwitch?: () => void): Promise<OperationHandle | undefined> {
+		const secret = token.trim();
+		if (!secret) throw new Error('The link has no token');
+		// Checked before a connection opens, and again (by approveEmail) once it is ready.
+		this.checkEmailApproval();
+		const connection = this.openEmailConnection(url);
+		try {
+			await connection.ready;
+			if (!connection.offers('email')) throw new Error('This server does not support email sign-in');
+		} catch (cause) {
+			connection.close();
+			throw cause;
+		}
+		return this.approveEmail(connection, secret, undefined, beforeSwitch, false);
+	}
+
+	/** Throws unless an email approval may start now: the client runs, and none is in flight. */
+	private checkEmailApproval(): void {
+		if (!this.running) throw new Error('Connect to the server first');
+		if (this.emailInFlight) throw new Error('Already signing in; wait for it to finish');
+	}
+
+	/** Approves an email sign-in on `connection` and carries on with it (see `signInWithEmail`). */
+	private async approveEmail(
+		connection: EmailConnection, token: string, name: string | undefined, beforeSwitch: (() => void) | undefined, retryable: boolean
+	): Promise<OperationHandle | undefined> {
+		try {
+			this.checkEmailApproval();
+		} catch (cause) {
+			// A link's connection is used once: nothing else would close it. A proposal stays open for the code.
+			if (!retryable) this.closeEmailConnection(connection);
+			throw cause;
+		}
+		this.emailInFlight = true;
+		this.emit();
+		try {
+			let result: JsonObject;
+			try {
+				result = await connection.auth({ scheme: 'email', token });
+			} catch (cause) {
+				// A wrong code may be retyped on the same proposal; anything else ends it.
+				if (!retryable || (cause as RpcFailure).code !== -32001 || connection.closed) this.closeEmailConnection(connection);
+				throw cause;
+			}
+			if (!isIdentity(result.you)) {
+				this.closeEmailConnection(connection);
+				throw new Error('Server authentication response did not include an identity');
+			}
+			if (!this.running) {
+				this.closeEmailConnection(connection);
+				throw new Error('Connection stopped');
+			}
+			if (this.emailProposal?.connection === connection) this.emailProposal = undefined;
+			beforeSwitch?.();
+			if (name?.trim()) this.displayName = name.trim();
+			this.adoptSignedIn(connection, result);
+			return this.authNameRequest;
+		} finally {
+			this.emailInFlight = false;
+			this.emit();
+		}
+	}
+
+	/**
+	 * Carries on with a connection signed in elsewhere as this client's own:
+	 * the current connection closes as for a new sign-in (its rooms and
+	 * requests go, as with `restart`), the client moves to that connection's
+	 * server if another, and the connection's `server` frame, the sign-in's
+	 * result, and the frames since are taken as if they had arrived here.
+	 */
+	private adoptSignedIn(connection: EmailConnection, result: JsonObject): void {
+		const { socket, server, frames } = connection.detach();
+		this.emailConnections.delete(connection);
+		if (connection.url !== this.serverUrl) this.switchServer(connection.url);
+		this.connectionProbe?.abort();
+		this.reconnectHeld = false;
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = undefined;
+		this.cancelPasskey();
+		const previous = this.socket;
+		this.socket = undefined;
+		this.authenticated = false;
+		this.authRequested = false;
+		this.clearTransientRequests();
+		this.discardProtocolView('Signed in');
+		this.stopPing();
+		this.clearStableTimer();
+		if (previous && previous.readyState !== WebSocket.CLOSED) previous.close(1000, 'signed in on another connection');
+		this.disconnectedAt = undefined;
+		this.reconnectAttempt = 0;
+		this.status = 'connected';
+		this.error = undefined;
+		const id = ++this.connectionId;
+		this.attachSocket(socket, id, true);
+		// Already signed in: the `server` frame is only taken in, not answered with an `auth`.
+		this.authRequested = true;
+		this.handleServer(server);
+		if (!this.handleAuth(result, 'email')) this.authRequested = false;
+		for (const frame of frames) {
+			if (this.isCurrentSocket(id, socket)) this.handleMessage(frame);
+		}
+	}
+
+	/** Drops the open email sign-in proposal, if any, closing its connection: its code can no longer be used. */
+	cancelEmailCode(): void {
+		const proposal = this.emailProposal;
+		this.emailProposal = undefined;
+		proposal?.connection.close();
+		if (proposal) this.emit();
+	}
+
+	/** Closes `connection`, and forgets the open proposal if it was that one's. */
+	private closeEmailConnection(connection: EmailConnection): void {
+		if (this.emailProposal?.connection === connection) this.emailProposal = undefined;
+		connection.close();
+	}
+
+	/**
+	 * Proposes adding `email` to the signed-in account (§4.10), guests
+	 * included: on this connection, which is signed in, a proposal adds
+	 * rather than signs in. `addEmail` approves it, on this same connection.
+	 */
+	async requestEmailCodeToAdd(email: string): Promise<void> {
+		const address = email.trim();
+		if (!this.server?.auth.includes('email')) throw new Error('This server does not sign in with email, so an address can’t be added');
+		if (!this.authenticated) throw new Error('Sign in first');
+		if (!address) throw new Error('Enter your email address');
+		const connection = this.connectionId;
+		await this.enqueueRequest('auth', { scheme: 'email', email: address }, { visible: false, allowBeforeAuth: false }).promise;
+		this.addProposalConnection = connection;
+	}
+
+	/**
+	 * Adds the address proposed with `requestEmailCodeToAdd` to the signed-in
+	 * account (§4.10), approving the proposal with the emailed code on the
+	 * connection that made it. The result is `{}`: the identity is unchanged,
+	 * and the address is one more way back into the account. Only an explicit
+	 * action does this; an emailed link always signs in.
+	 */
+	async addEmail(code: string): Promise<void> {
+		const token = code.trim();
+		if (!this.server?.auth.includes('email')) throw new Error('This server does not sign in with email, so an address can’t be added');
+		if (!this.authenticated) throw new Error('Sign in first');
+		if (!token) throw new Error('Enter the code you were sent');
+		if (this.addProposalConnection !== this.connectionId) throw new Error('The connection or account changed since the code was sent. Send a new code.');
+		await this.readyToSignIn();
+		const controller = new AbortController();
+		this.passkeyAbort = controller;
+		this.addingEmail = true;
+		const connection = this.connectionId;
+		this.emit();
+		try {
+			await this.passkeyRequest({ scheme: 'email', token });
+			if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
+			this.addProposalConnection = undefined;
+			this.cancelPasskey();
+			this.noteEmailAdded();
+		} finally {
+			this.addingEmail = false;
+			if (this.passkeyAbort === controller) this.cancelPasskey();
+			this.emit();
+		}
+	}
+
+	/**
+	 * An address added to the signed-in account: another way back into a
+	 * registered session, or, for a guest, the way back into an account that
+	 * is now a registered one (its guest token, if any, still resumes it).
+	 */
+	private noteEmailAdded(): void {
+		if (this.registeredSession) {
+			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
+			this.noteAdded('email');
+			return;
+		}
+		this.registeredSession = true;
+		this.passkeyRequired = true;
+		this.noteSignIn('email');
 	}
 
 	/**
@@ -684,8 +1002,12 @@ export class ChatClient {
 		const result = await this.passkeyRequest(finish);
 		if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 		this.cancelPasskey();
+		// Signing in again on this connection: an address proposed for the account it was is not approved for this one.
+		if (action === 'login') this.addProposalConnection = undefined;
 		if (name?.trim()) this.displayName = name.trim();
-		if (!this.handleAuth(result, true)) throw new Error('Server authentication response did not include an identity');
+		// A passkey registered on a registered session is added to it (§4.9), not a new way it signed in.
+		const adding = action === 'register' && this.registeredSession && this.authenticated;
+		if (!this.handleAuth(result, 'webauthn', adding)) throw new Error('Server authentication response did not include an identity');
 		return this.authNameRequest;
 	}
 
@@ -698,10 +1020,12 @@ export class ChatClient {
 	useToken(token: string): void {
 		const trimmed = token.trim();
 		if (!trimmed) throw new Error('Paste a token to sign in with');
+		this.cancelEmailCode();
 		this.sessionToken = trimmed;
 		this.storeSession(trimmed);
 		this.passkeyRequired = true;
 		this.registeredSession = true;
+		this.noteSignIn('token');
 		this.error = undefined;
 		this.restart();
 	}
@@ -710,6 +1034,7 @@ export class ChatClient {
 		if (this.passkeyAbort || this.requests.size) throw new Error('Wait for pending requests to finish, then try again');
 		this.sessionToken = undefined;
 		this.storeSession(undefined);
+		this.noteSignIn(undefined);
 		this.passkeyRequired = false;
 		this.registeredSession = false;
 		this.resetSession('Signed out');
@@ -776,7 +1101,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Sends a `command` (cap `command`, §4.8): `text` is the command line as
+	 * Sends a `command` (capability `command`, §4.8): `text` is the command line as
 	 * typed, slash included, with the params a message would have; mentions,
 	 * `replyTo`, and embeds are arguments. Nothing is posted: the result is
 	 * `{}` (or `embeds` with write URLs), replies come as notices, and effects
@@ -789,15 +1114,15 @@ export class ChatClient {
 
 	/**
 	 * Shows a transient notice in a room for this session (§3.5), such as a
-	 * command's error: from `@private`, never sent or stored.
+	 * command's error: from `~private`, never sent or stored.
 	 */
 	notify(room: string, text: string): void {
-		this.addNotice(room, { user_id: '@private', name: 'System message to you' }, { text });
+		this.addNotice(room, privateSender(), { text });
 		this.emit();
 	}
 
 	/**
-	 * Saves a message (cap `edit`, §4.2) from its latest stored snapshot:
+	 * Saves a message (capability `edit`, §4.2) from its latest stored snapshot:
 	 * every client field (`room_id`, `body`, bare `reply_to`, `ext`) is
 	 * resubmitted unless the patch changes it. `deleted: true` omits `body`.
 	 */
@@ -913,7 +1238,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Sets your complete emoji set on a message (cap `reactions`,
+	 * Sets your complete emoji set on a message (capability `reactions`,
 	 * §4.5); `[]` clears it. The result is `{}`; the broadcast carries the state.
 	 */
 	react(messageId: string, emojis: string[]): OperationHandle {
@@ -944,58 +1269,84 @@ export class ChatClient {
 	}
 
 	/**
-	 * Creates a room with `room_set` (cap `rooms`, §4.3.4), which joins the
-	 * creator; with `parentRoomId` it is a thread, usually with the parent
-	 * message that started it as `introMessageId`. Resolves with the new
-	 * `room_id`; the room record arrives in a `room_update`.
+	 * Creates a room with `room_set` (capability `rooms`, §4.3.4), which joins the
+	 * creator; with `parentRoomId` it is a thread. Resolves with the new
+	 * `room_id`; the room record arrives in a `room_update`. A server that
+	 * keeps no private rooms rejects `private: true` as `unsupported`; one that
+	 * ignores it anyway leaves `private` off the record, so check
+	 * `RoomSnapshot.private` before posting there.
 	 */
 	createRoom(options: CreateRoomOptions = {}): OperationHandle<RoomResult> {
 		const params: JsonObject = {};
 		if (options.parentRoomId !== undefined) params.parent_room_id = options.parentRoomId;
+		if (options.private === true) params.private = true;
 		if (options.title !== undefined) params.title = options.title;
-		if (options.introMessageId !== undefined) params.intro_message = { message_id: options.introMessageId };
+		if (options.description !== undefined) params.description = options.description;
 		if (options.ext !== undefined) params.ext = options.ext;
 		return this.enqueueRequest<RoomResult>('room_set', params, { visible: true, allowBeforeAuth: false });
 	}
 
 	/**
 	 * Updates a room's client fields with `room_set` (§4.3.4) from its latest
-	 * record with the patch applied, resubmitting `title`, a bare
-	 * `intro_message`, and `ext`: omitted fields are cleared.
+	 * record with the patch applied, resubmitting `title`, `description`, and
+	 * `ext`: omitted fields are cleared. `parent_room_id` and `private` are
+	 * fixed at creation and never sent.
 	 */
 	updateRoom(roomId: string, patch: RoomPatch): OperationHandle<RoomResult> {
 		// Build on the latest submitted update while one is unconfirmed.
 		const stored = this.store.room(roomId);
 		const current = this.pendingRoomSaves.get(roomId)?.state ?? (stored ? roomClientFields(stored) : {});
 		const params: JsonObject = { room_id: roomId };
-		const title = patch.title === undefined ? current.title : patch.title;
-		if (title !== undefined && title !== null) params.title = title;
-		const currentIntro = isJsonObject(current.intro_message) && typeof current.intro_message.message_id === 'string'
-			? current.intro_message.message_id : undefined;
-		const intro = patch.introMessageId === undefined ? currentIntro : patch.introMessageId;
-		if (intro !== undefined && intro !== null) params.intro_message = { message_id: intro };
-		const ext = patch.ext === undefined ? current.ext : patch.ext;
-		if (ext !== undefined && ext !== null) params.ext = ext;
+		for (const key of ['title', 'description', 'ext'] as const) {
+			const value = patch[key] === undefined ? current[key] : patch[key];
+			if (value !== undefined && value !== null) params[key] = value;
+		}
 		const handle = this.enqueueRequest<RoomResult>('room_set', params, { visible: true, allowBeforeAuth: false });
 		const { room_id: _id, ...state } = params;
 		this.trackSave(this.pendingRoomSaves, roomId, handle, state, () => this.store.room(roomId)?.log_id);
 		return handle;
 	}
 
-	/** `room_join` (§4.3.2): the room arrives in a `room_update` `joined` and becomes visible. */
-	joinRoom(roomId: string): OperationHandle {
-		return this.enqueueRequest('room_join', { room_id: roomId }, { visible: true, allowBeforeAuth: false });
-	}
-
-	/** `room_leave` (§4.3.2): the room goes when a `room_update` lists it in `left`. */
-	leaveRoom(roomId: string): OperationHandle {
-		return this.enqueueRequest('room_leave', { room_id: roomId }, { visible: true, allowBeforeAuth: false });
+	/**
+	 * `room_join` (§4.3.2): the room arrives in a `room_update` `joined` and
+	 * becomes visible. With `userId`, adds that user instead, such as to a
+	 * private room; who may is server policy.
+	 */
+	joinRoom(roomId: string, userId?: string): OperationHandle {
+		if (userId !== undefined && this.memberChangesUnsupported) return rejectedHandle('room_join', new Error('This server can’t add other people to rooms'));
+		const handle = this.enqueueRequest('room_join', { room_id: roomId, ...(userId !== undefined ? { user_id: userId } : {}) }, { visible: true, allowBeforeAuth: false });
+		return userId === undefined ? handle : this.noteMemberChange(handle);
 	}
 
 	/**
-	 * Reports typing in a room as an `activity` notification (cap `activity`,
+	 * `room_leave` (§4.3.2): the room goes when a `room_update` lists it in
+	 * `left`. With `userId`, removes that user instead, as `/kick` does.
+	 */
+	leaveRoom(roomId: string, userId?: string): OperationHandle {
+		// Before v7 a server ignores `user_id` and would remove the caller instead.
+		if (userId !== undefined && this.memberChangesUnsupported) return rejectedHandle('room_leave', new Error('This server can’t remove other people from rooms'));
+		const handle = this.enqueueRequest('room_leave', { room_id: roomId, ...(userId !== undefined ? { user_id: userId } : {}) }, { visible: true, allowBeforeAuth: false });
+		return userId === undefined ? handle : this.noteMemberChange(handle);
+	}
+
+	/**
+	 * A server that doesn't let members add or remove others replies
+	 * `unsupported` (§4.3.2): the snapshot says so, so the UI stops offering
+	 * it until the next `server` frame.
+	 */
+	private noteMemberChange(handle: OperationHandle): OperationHandle {
+		handle.promise.catch((cause: Error & { code?: number }) => {
+			if (cause.code !== UNSUPPORTED || this.memberChangesUnsupported) return;
+			this.memberChangesUnsupported = true;
+			this.emit();
+		});
+		return handle;
+	}
+
+	/**
+	 * Reports typing in a room as an `activity` notification (capability `activity`,
 	 * §4.4): `typing` seconds while active, `0` to stop. Sends nothing
-	 * to a server without the cap.
+	 * to a server without the capability.
 	 */
 	sendTyping(room: string, active: boolean): void {
 		if (room === DEFAULT_ROOM_ID || !this.authenticated || !this.hasCap('activity') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
@@ -1016,7 +1367,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Tells the server whether anyone is attending this connection (cap
+	 * Tells the server whether anyone is attending this connection (capability
 	 * `activity`, §4.4): `true` while the tab is hidden or unfocused, `false`
 	 * once it is back. Sent only when it changes, and again on each connection
 	 * that starts while away.
@@ -1034,7 +1385,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Advances your read cursor in a room (cap `activity`, §4.4) to a
+	 * Advances your read cursor in a room (capability `activity`, §4.4) to a
 	 * message, if that is further than the cursor already is. The server
 	 * syncs it to your other connections.
 	 */
@@ -1059,7 +1410,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Lists visible rooms the user has not joined (cap `rooms`, §4.3.1):
+	 * Lists visible rooms the user has not joined (capability `rooms`, §4.3.1):
 	 * top-level rooms with their members, or with `parentRoomId` that room's
 	 * threads, whose heads refresh the cards of threads not joined (they
 	 * deliver nothing live). The result also lands in the snapshot's
@@ -1131,6 +1482,12 @@ export class ChatClient {
 		request.promise.then((result) => {
 			if (socket !== this.socket || this.joinedListing !== listing) return;
 			this.joinedListing = undefined;
+			// Behind an `auth` that failed, the listing ran with the connection's authentication as
+			// that left it (§3.2), none here: whatever it says is no one's rooms, so it is dropped.
+			if (!this.authenticated) {
+				this.emit();
+				return;
+			}
 			if (listing.since !== undefined && this.you?.user_id !== listing.userId) {
 				// Another identity than the kept rooms': what changed since is someone else's story.
 				this.listJoinedRooms();
@@ -1143,15 +1500,15 @@ export class ChatClient {
 		}, (cause: Error) => {
 			if (socket !== this.socket || this.joinedListing !== listing) return;
 			this.joinedListing = undefined;
-			// Behind a failed `auth` every request is denied; that failure speaks for itself.
+			// Behind a failed `auth` the listing likely failed too; that failure speaks for itself.
 			if (this.authenticated) this.error = `Unable to list your rooms: ${cause.message}`;
 			this.emit();
 		});
 	}
 
 	/**
-	 * Applies a `room_list` result (§4.3.1): its rooms' records, members and
-	 * embedded snapshots, and the result's `users`. For the listing of joined
+	 * Applies a `room_list` result (§4.3.1): its rooms' records and members,
+	 * and the result's `users`. For the listing of joined
 	 * rooms (`joinedSet`) its `joined` becomes the visible set: with `left`,
 	 * a listing of changes, the rooms in it go and every other kept room stays;
 	 * without, a full listing, every other joined room goes.
@@ -1176,16 +1533,18 @@ export class ChatClient {
 					this.showRoom(decoded);
 				} else {
 					this.installRoom(record);
-					for (const message of decoded.embedded) this.installEmbedded(message);
 				}
+				const first = this.store.firstRoomLogId(record.room_id);
 				listed[key].push({
 					id: record.room_id,
 					title: roomTitle(record.room_id, record),
 					record,
+					...(first !== undefined ? { firstRecordLogId: first } : {}),
 					...(record.parent_room_id !== undefined ? { parentRoomId: record.parent_room_id } : {}),
 					...(decoded.delivery.latest_log_id !== undefined ? { latestLogId: decoded.delivery.latest_log_id } : {}),
 					...(Object.hasOwn(decoded.delivery, 'history_log_id') ? { historyLogId: decoded.delivery.history_log_id } : {}),
 					members: decoded.delivery.members ?? [],
+					...(decoded.delivery.member_count !== undefined ? { memberCount: decoded.delivery.member_count } : {}),
 					joined
 				});
 			}
@@ -1215,6 +1574,9 @@ export class ChatClient {
 	 */
 	private noteMembers(roomId: string, delivery: RoomDelivery): void {
 		if (delivery.members === undefined) return;
+		// A list that is not truncated carries no count (§4.3.1).
+		if (delivery.member_count !== undefined) this.memberCounts.set(roomId, delivery.member_count);
+		else this.memberCounts.delete(roomId);
 		for (const member of delivery.members) this.noteUser(member);
 		this.store.seedMembers(roomId, delivery.members, delivery.latest_log_id);
 	}
@@ -1249,7 +1611,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Posts a message with files attached as `upload` embeds (cap
+	 * Posts a message with files attached as `upload` embeds (capability
 	 * `embed:upload`, §4.6.4): the message goes out with one pending embed
 	 * per file, then each file is written to the `write_url` the result lists.
 	 * `sent` settles with the message result; `uploaded` when every write has
@@ -1268,7 +1630,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Uploads an image as your avatar (§4.6.6, caps `command` and
+	 * Uploads an image as your avatar (§4.6.6, capabilities `command` and
 	 * `embed:upload`): a `/avatar` command with one upload embed, then the file
 	 * written to the result's `write_url`. The server sets `avatar` and sends a
 	 * `user` notification once the image is written.
@@ -1318,7 +1680,7 @@ export class ChatClient {
 	 * newest page the first time, and afterwards pages from the previous load's
 	 * checkpoint up to the head known at the call, resolving after the last
 	 * page. For a joined top-level room, which recovers automatically, it waits
-	 * for the running recovery, or retries one that failed. Without cap
+	 * for the running recovery, or retries one that failed. Without capability
 	 * `history` it resolves at once.
 	 */
 	loadRoom(roomId: string): Promise<void> {
@@ -1493,7 +1855,6 @@ export class ChatClient {
 		this.stopWaitingForPresence();
 		this.connectionProbe?.abort();
 		const id = ++this.connectionId;
-		let opened = false;
 		this.status = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
 		this.error = undefined;
 		this.connectionErrored = false;
@@ -1505,6 +1866,11 @@ export class ChatClient {
 			this.handleConnectionFailure(id, cause instanceof Error ? cause.message : 'Unable to open WebSocket');
 			return;
 		}
+		this.attachSocket(socket, id, false);
+	}
+
+	/** Makes `socket` this client's connection number `id`; `opened`: it is open already. */
+	private attachSocket(socket: WebSocket, id: number, opened: boolean): void {
 		this.socket = socket;
 		socket.onopen = () => {
 			if (!this.isCurrentSocket(id, socket)) return;
@@ -1618,9 +1984,6 @@ export class ChatClient {
 			case 'reactions':
 				this.handleReactions(frame.params);
 				return;
-			case 'membership':
-				this.handleMembership(frame.params);
-				return;
 			case 'activity':
 				this.handleActivity(frame.params);
 				return;
@@ -1657,26 +2020,46 @@ export class ChatClient {
 	}
 
 	private handleServer(params: JsonObject | undefined): void {
-		if (!params || typeof params.protocol !== 'number' || !Array.isArray(params.auth)) return;
+		// v6 servers name the version `protocol` and the capabilities `caps`; everything the
+		// client does differently for them is gated on the version read here.
+		const version = typeof params?.apron === 'number' ? params.apron : params?.protocol;
+		const capabilities = Array.isArray(params?.capabilities) ? params.capabilities : params?.caps;
+		if (!params || typeof version !== 'number' || !Array.isArray(params.auth)) return;
 		const auth = params.auth.filter(isString);
 		if (!auth.length) return;
 		const previousPing = this.server?.ping;
 		this.server = {
-			protocol: params.protocol,
-			...(typeof params.name === 'string' ? { name: params.name } : {}),
-			caps: Array.isArray(params.caps) ? params.caps.filter(isString) : [],
+			apron: version,
+			...(typeof params.agent === 'string' ? { agent: params.agent } : {}),
+			capabilities: Array.isArray(capabilities) ? capabilities.filter(isString) : [],
 			auth,
+			...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
+			...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
 			...(isJsonObject(params.ext) ? { ext: params.ext as ServerExt } : {}),
 			...(typeof params.ping === 'number' && Number.isFinite(params.ping) && params.ping > 0 ? { ping: params.ping } : {})
 		};
 		// Liveness starts before authentication (§1); a replacing frame may change the interval.
 		if (!this.pingTimer || previousPing !== this.server.ping) this.startPing();
+		// Each frame fully replaces the last (§3.1): features are worth trying again. A server
+		// before v7 would ignore `user_id` in `room_join`/`room_leave` and act on the caller.
+		this.memberChangesUnsupported = version < 7;
 		if (this.authenticated || this.authRequested) {
 			this.emit();
 			return;
 		}
+		this.authenticate(auth);
+	}
+
+	/**
+	 * The connection's own sign-in: resume the kept session with its token,
+	 * else a passkey login for a registered user on a server without token
+	 * resume, else as a guest. A registered user never silently becomes a
+	 * guest: without a way to resume, the client says so and waits.
+	 */
+	private authenticate(auth: string[]): void {
 		const resume = Boolean(this.sessionToken && auth.includes('token'));
-		if (!resume && this.passkeyRequired && auth.includes('webauthn')) {
+		const passkeyWayBack = this.signedInWith !== 'email' || this.addedMethods.has('webauthn');
+		if (!resume && this.passkeyRequired && auth.includes('webauthn') && passkeyWayBack) {
 			// Servers without bearer-token resume still need discoverable login after
 			// a transport reconnect so a registered user keeps the server identity.
 			this.authRequested = true;
@@ -1695,8 +2078,17 @@ export class ChatClient {
 			this.emit();
 			return;
 		}
+		if (!resume && this.signedInWith === 'email') {
+			// An email sign-in with nothing to resume it by: signed out, not a guest.
+			this.reconnectHeld = true;
+			this.error = auth.includes('email') ? 'Sign in with your email again from the connect screen.'
+				: 'This server doesn’t sign back in with email. Sign in another way from the connect screen.';
+			this.emit();
+			return;
+		}
+		// A guest listed only in `signup` isn't a way to sign in (§3.2: `auth` lists those).
 		if (!resume && (this.passkeyRequired || !auth.includes('guest'))) {
-			this.error = auth.includes('webauthn') ? 'Sign in with a passkey from your profile.' : 'No supported authentication scheme';
+			this.error = signInAdvice(auth, this.server?.signup ?? []);
 			this.emit();
 			return;
 		}
@@ -1704,14 +2096,18 @@ export class ChatClient {
 		const socket = this.socket;
 		const request = this.enqueueRequest('auth', {
 			...(resume ? { scheme: 'token', token: this.sessionToken } : { scheme: 'guest' }),
-			client: 'apron-web/0.3'
+			agent: AGENT
 		}, { visible: false, allowBeforeAuth: true });
 		// `auth` is a barrier (§3.2): the server finishes it before reading on, so
 		// the rooms and their recovery go right behind it instead of waiting a
-		// round trip. If it fails they are denied, and that is all.
+		// round trip, and run as whoever it signed in. If it fails they run as the
+		// connection was, signed in as no one, and the listing is dropped.
 		this.requestRooms(resume);
 		request.promise.then((result) => {
-			if (socket === this.socket) this.handleAuth(result);
+			if (socket !== this.socket) return;
+			// A guest sign-in without a token to resume by is not a registered session.
+			if (!resume && typeof result.token !== 'string') this.registeredSession = false;
+			this.handleAuth(result);
 		}).catch((cause: Error) => {
 			if (socket !== this.socket) return;
 			this.authRequested = false;
@@ -1733,7 +2129,14 @@ export class ChatClient {
 		});
 	}
 
-	private handleAuth(result: JsonObject, passkey = false): boolean {
+	/**
+	 * A successful `auth` result (§3.2), whatever the scheme: the connection
+	 * acts as `you` from now on, and a `token` in it, the latest the server
+	 * offered (a rotation of the one presented, or one issued at sign-in),
+	 * replaces any saved one. `signedIn` names a sign-in ceremony that made
+	 * this a registered session.
+	 */
+	private handleAuth(result: JsonObject, signedIn?: 'webauthn' | 'email', added = false): boolean {
 		const identity = result.you;
 		if (!isJsonObject(identity) || typeof identity.user_id !== 'string') {
 			this.error = 'Server authentication response did not include an identity';
@@ -1741,11 +2144,29 @@ export class ChatClient {
 			return false;
 		}
 		this.setYou(identity as Identity);
-		if (passkey) {
-			this.passkeyRequired = true;
+		if (signedIn && added && this.registeredSession) {
+			// Added to the account (§4.9, §4.10): another way back in, not how this session signed in,
+			// and never a reason to drop its token. A session kept before sign-in methods were
+			// remembered gets the same guess as a resume.
+			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
+			this.noteAdded(signedIn);
+		} else if (signedIn) {
+			// Signed in another way (a passkey, a link): a sign-in code proposed meanwhile is for nothing now.
+			this.cancelEmailCode();
 			this.registeredSession = true;
-			this.rememberPasskey();
+			this.passkeyRequired = true;
+			this.noteSignIn(signedIn);
+			// A sign-in that gives no token of its own leaves nothing of the previous
+			// account's to resume: its token would silently bring that account back.
+			if (typeof result.token !== 'string' && this.sessionToken !== undefined) {
+				this.sessionToken = undefined;
+				this.storeSession(undefined);
+			}
+		} else if (typeof result.token === 'string' && this.signedInWith === undefined) {
+			// A token without a ceremony: a guest's, or an invite's (Appendix B).
+			this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
 		}
+		if (signedIn === 'webauthn') this.rememberPasskey();
 		if (typeof result.token === 'string') {
 			this.sessionToken = result.token;
 			this.passkeyRequired = true;
@@ -1767,7 +2188,7 @@ export class ChatClient {
 			if (this.socket === stableSocket && this.authenticated) this.reconnectAttempt = 0;
 		}, STABLE_CONNECTION_MS);
 		this.disconnectedAt = undefined;
-		// A reconnect keeps each room's records, and a server with cap `history`
+		// A reconnect keeps each room's records, and a server with capability `history`
 		// fills the gap through recovery; only a session-only scrollback (§4
 		// fallback) has a real gap to mark.
 		this.showReconnectDivider = (this.showReconnectDivider || this.rooms.size > 0) && !this.hasCap('history');
@@ -1776,7 +2197,7 @@ export class ChatClient {
 		// Renaming is a logged mutation on some servers: send the saved name only
 		// when the server doesn't already have it, and not again after it was
 		// denied, unless this sign-in is a registered one that may now be allowed.
-		const registered = passkey || typeof result.token === 'string';
+		const registered = signedIn !== undefined || typeof result.token === 'string';
 		// A welcome sent before auth speaks to whoever connected, typically about
 		// signing in; once signed in with a passkey or token, it no longer applies.
 		if (registered) this.dropWelcomes();
@@ -1784,7 +2205,7 @@ export class ChatClient {
 		const wanted = Boolean(name) && name !== this.you?.name && (registered || this.declinedName !== name);
 		this.authNameRequest = wanted ? this.sendName() : undefined;
 		// Rooms come by request (§4.3.1), usually already sent behind `auth`;
-		// without cap `rooms` there is the default room.
+		// without capability `rooms` there is the default room.
 		if (this.hasCap('rooms')) {
 			if (!this.joinedListing) this.requestRooms(false);
 		} else if (!this.rooms.size) {
@@ -1797,10 +2218,10 @@ export class ChatClient {
 	}
 
 	/**
-	 * Asks for the joined rooms (cap `rooms`) and resumes the rooms kept from
+	 * Asks for the joined rooms (capability `rooms`) and resumes the rooms kept from
 	 * the last connection: those opened without joining come back as they
 	 * were, and joined ones wait, hidden, for the listing to say whether they
-	 * still are, while their recovery (cap `history`) already pages forward
+	 * still are, while their recovery (capability `history`) already pages forward
 	 * from their checkpoints (§4.1). `sameIdentity`: this sign-in resumes the
 	 * kept rooms' identity, so the listing may ask only for what changed since
 	 * the rooms' checkpoints (§4.3.1).
@@ -1875,6 +2296,8 @@ export class ChatClient {
 
 	private setYou(identity: Identity): void {
 		const changed = this.you?.user_id !== identity.user_id;
+		// A pending address addition belongs to the account that proposed it (§4.10): another identity needs a new code.
+		if (changed) this.addProposalConnection = undefined;
 		this.you = this.noteUser(identity);
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
@@ -1904,12 +2327,12 @@ export class ChatClient {
 	}
 
 	/**
-	 * A `membership` record (§4.3.2): one entry per user, each replacing that
+	 * A membership record (§4.3.2): one entry per user, each replacing that
 	 * user's membership of the room when newer. It advances the room's head.
 	 * Its `user` is a recorded object: never merged into the kept one.
 	 */
-	private handleMembership(params: JsonObject | undefined): void {
-		const entries = decodeMembership(params);
+	private applyMembership(value: unknown): void {
+		const entries = decodeMembership(value);
 		if (!entries.length) return;
 		const { log_id: logId, room_id: roomId } = entries[0];
 		this.observeLogId(logId);
@@ -1919,7 +2342,6 @@ export class ChatClient {
 			this.noteRecorded(entry.user, logId);
 			this.store.putMembership(entry);
 		}
-		this.emit();
 	}
 
 	/**
@@ -1969,8 +2391,17 @@ export class ChatClient {
 		return true;
 	}
 
+	/**
+	 * The server offers `scheme` at all: to sign in (`auth`) or to create an
+	 * account (`signup`, §3.1). Where it matters that a scheme signs back in
+	 * (a resume, a passkey login), `auth` alone is checked.
+	 */
+	private offers(scheme: string): boolean {
+		return this.server?.auth.includes(scheme) === true || this.server?.signup?.includes(scheme) === true;
+	}
+
 	private hasCap(cap: Capability): boolean {
-		return this.server?.caps?.includes(cap) === true;
+		return this.server?.capabilities?.includes(cap) === true;
 	}
 
 	private isThread(roomId: string): boolean {
@@ -1985,8 +2416,9 @@ export class ChatClient {
 	/**
 	 * A `room_update` (§4.3.3): `joined` rooms become visible with their
 	 * members and recover, `updated` records replace a visible room's (or
-	 * describe a new or edited thread of one) and carry no members, and `left`
-	 * rooms go. `users` merges last.
+	 * describe a new or edited thread of one) and carry no members,
+	 * `memberships` records apply once any room they belong to is visible, and
+	 * `left` rooms go. `users` merges last.
 	 */
 	private handleRoomUpdate(params: JsonObject | undefined): void {
 		if (!params) return;
@@ -2005,10 +2437,10 @@ export class ChatClient {
 				this.showRoom(decoded);
 			} else {
 				this.installRoom(decoded.record);
-				for (const message of decoded.embedded) this.installEmbedded(message);
 				this.noteUnjoinedRoom(decoded.record, decoded.delivery);
 			}
 		}
+		for (const value of Array.isArray(params.memberships) ? params.memberships : []) this.applyMembership(value);
 		for (const value of Array.isArray(params.left) ? params.left : []) {
 			if (isJsonObject(value) && typeof value.room_id === 'string') this.hideRoom(value.room_id);
 		}
@@ -2023,7 +2455,7 @@ export class ChatClient {
 	 * the record, takes its delivery fields, and starts or resumes its
 	 * automatic recovery (§4.1).
 	 */
-	private showRoom(decoded: { record: RoomRecord; embedded: MessageRecord[]; delivery: RoomDelivery }, kind?: 'joined'): void {
+	private showRoom(decoded: { record: RoomRecord; delivery: RoomDelivery }, kind?: 'joined'): void {
 		const roomId = decoded.record.room_id;
 		this.installRoom(decoded.record);
 		const existing = this.rooms.get(roomId) ?? this.adoptRetainedRoom(roomId);
@@ -2039,8 +2471,6 @@ export class ChatClient {
 			this.observeBoundary(room, decoded.delivery.history_log_id, listedHead ?? room.latestLogId);
 		}
 		this.recoverIfBehind(room, !existing);
-		// Embedded snapshots install after the bound and any rebuild, so neither drops them.
-		for (const message of decoded.embedded) this.installEmbedded(message);
 	}
 
 	/**
@@ -2065,13 +2495,6 @@ export class ChatClient {
 		if (rebuild || compareLogIds(head, room.checkpoint!) > 0) this.startRecovery(room, head, rebuild);
 	}
 
-	/** An embedded `reply_to` or `intro_message` snapshot: its author is a recorded object. */
-	private installEmbedded(message: MessageRecord): void {
-		this.observeLogId(message.log_id);
-		this.noteRecorded(message.from, message.log_id);
-		this.acceptLiveMessage(message, false);
-	}
-
 	/**
 	 * A room left, removed, no longer visible, or deleted (§4.3.3). A room
 	 * kept from the last connection and not joined on this one goes back to
@@ -2089,17 +2512,20 @@ export class ChatClient {
 
 	/** A record of a room not joined, such as a new thread in a joined room: listings that show it take it. */
 	private noteUnjoinedRoom(record: RoomRecord, delivery: RoomDelivery): void {
+		const first = this.store.firstRoomLogId(record.room_id);
 		const listing = (members: Identity[]): RoomListing => ({
 			id: record.room_id,
 			title: roomTitle(record.room_id, record),
 			record,
+			...(first !== undefined ? { firstRecordLogId: first } : {}),
 			...(record.parent_room_id !== undefined ? { parentRoomId: record.parent_room_id } : {}),
 			...(delivery.latest_log_id !== undefined ? { latestLogId: delivery.latest_log_id } : {}),
 			...(Object.hasOwn(delivery, 'history_log_id') ? { historyLogId: delivery.history_log_id } : {}),
 			members,
 			joined: false
 		});
-		const replace = (listings: RoomListing[]) => listings.map((known) => known.id === record.room_id ? listing(known.members) : known);
+		// A record without `members` leaves the listed members, and a truncated list's total, as they were (§4.3.1).
+		const replace = (listings: RoomListing[]) => listings.map((known) => known.id === record.room_id ? { ...listing(known.members), ...(known.memberCount !== undefined ? { memberCount: known.memberCount } : {}) } : known);
 		if (this.directory) this.directory = replace(this.directory);
 		const parent = record.parent_room_id;
 		if (parent === undefined) return;
@@ -2110,7 +2536,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Without cap `rooms` there is one default room (§3.4): shown under
+	 * Without capability `rooms` there is one default room (§3.4): shown under
 	 * `DEFAULT_ROOM_ID` and posted to without `room_id` until a message reveals
 	 * its `room_id`.
 	 */
@@ -2136,7 +2562,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * A room a message or notice arrived in. Without cap `rooms` every such
+	 * A room a message or notice arrived in. Without capability `rooms` every such
 	 * room is shown, titled by its `room_id` (§3.4), and the first one takes the
 	 * default room's place.
 	 */
@@ -2196,7 +2622,31 @@ export class ChatClient {
 		for (const { from, body, welcome } of this.orphanNotices.splice(0)) this.addNotice(roomId, from, body, welcome);
 	}
 
-	private handleSnapshot(params: JsonObject | undefined): void {
+	/**
+	 * A message from a server before v7 whose sender is `@server`, `@room` or
+	 * `@private` gets that identity's `~` name (the legacy fallback; see
+	 * `legacySystemId`). Everything else, and every message from a v7 server,
+	 * is left as it is.
+	 */
+	private fromLegacySender(value: unknown): unknown {
+		if (!this.server || this.server.apron >= 7 || !isJsonObject(value)) return value;
+		let next: JsonObject = value;
+		const renamed = isIdentity(value.from) ? legacySystemId(value.from.user_id) : undefined;
+		if (renamed !== undefined) next = { ...next, from: { ...(value.from as Identity), user_id: renamed } };
+		// An embedded `reply_to` snapshot is a message too.
+		if (isJsonObject(value.reply_to)) {
+			const reply = this.fromLegacySender(value.reply_to);
+			if (reply !== value.reply_to) next = { ...next, reply_to: reply as JsonObject };
+		}
+		return next;
+	}
+
+	private handleSnapshot(raw: JsonObject | undefined): void {
+		let params = this.fromLegacySender(raw) as JsonObject | undefined;
+		// `~private` messages are never logged or installed (Appendix A.1), whatever they carry.
+		if (isJsonObject(params) && isIdentity(params.from) && params.from.user_id === '~private' && params.message_id !== undefined) {
+			params = { ...params, message_id: undefined, log_id: undefined };
+		}
 		const decoded = decodeMessage(params);
 		if (!decoded) {
 			// A message without `message_id` is a transient notice, never a snapshot (§3.5).
@@ -2232,7 +2682,7 @@ export class ChatClient {
 			this.removeTyping(record.room_id, record.from.user_id);
 			// A server-wide notice reaches every user, joined to its room or not
 			// (Appendix A.1): one for a room that is not shown shows where you are.
-			if (record.from.user_id === '@server' && room?.kind !== 'joined' && this.hasCap('rooms')) {
+			if (systemScope(record.from.user_id) === 'server' && room?.kind !== 'joined' && this.hasCap('rooms')) {
 				this.addNotice(this.noticeRoom(), record.from, record.body);
 			}
 		}
@@ -2373,7 +2823,11 @@ export class ChatClient {
 	 * listing's members already cover the ones at or below its head.
 	 */
 	private applyPage(room: RoomState, result: JsonObject): void {
-		const records: DecodedRecords = decodeHistoryRecords(result);
+		// `~private` messages are never installed (Appendix A.1), from history either.
+		const page = Array.isArray(result.messages)
+			? { ...result, messages: result.messages.map((message) => this.fromLegacySender(message) as JsonValue).filter((message) => !(isJsonObject(message) && isIdentity(message.from) && message.from.user_id === '~private')) }
+			: result;
+		const records: DecodedRecords = decodeHistoryRecords(page);
 		for (const record of [...records.rooms, ...records.messages, ...records.embedded, ...records.reactions, ...records.memberships]) this.observeLogId(record.log_id);
 		for (const record of [...records.messages, ...records.embedded, ...records.reactions]) this.noteRecorded(record.from, record.log_id);
 		for (const record of records.memberships) this.noteRecorded(record.user, record.log_id);
@@ -2527,6 +2981,7 @@ export class ChatClient {
 		this.retainedRooms.clear();
 		this.store.clear();
 		this.store.takeTouched();
+		this.memberCounts.clear();
 		this.users.clear();
 		this.recordedUsers.clear();
 		this.userAliases.clear();
@@ -2553,6 +3008,7 @@ export class ChatClient {
 		this.directory = undefined;
 		this.threadDirectory.clear();
 		this.awaySent = false;
+		this.memberChangesUnsupported = false;
 	}
 
 	/** The room to show when none is chosen: the first joined top-level room, else the first joined one. */
@@ -2705,6 +3161,8 @@ export class ChatClient {
 		this.authRequested = false;
 		this.registeredSession = false;
 		this.passkeyRequired = false;
+		this.signedInWith = undefined;
+		this.addedMethods = new Set();
 		this.error = undefined;
 		this.disconnectedAt = undefined;
 		this.clearTyping();
@@ -2808,8 +3266,12 @@ export class ChatClient {
 
 	private loadStoredSession(): void {
 		let stored: string | null = null;
+		let method: string | null = null;
+		let added: string | null = null;
 		try {
 			stored = globalThis.localStorage?.getItem(this.sessionStorageKey()) ?? null;
+			method = globalThis.localStorage?.getItem(this.signInMethodKey()) ?? null;
+			added = globalThis.localStorage?.getItem(this.addedMethodsKey()) ?? null;
 		} catch {
 			// Storage can be unavailable (private mode, blocked site data).
 		}
@@ -2817,6 +3279,55 @@ export class ChatClient {
 		this.sessionToken = stored;
 		this.passkeyRequired = true;
 		this.registeredSession = true;
+		// A session kept before this was remembered: a passkey's, if this browser has used one here.
+		this.signedInWith = method === 'webauthn' || method === 'email' || method === 'token' ? method : undefined;
+		this.addedMethods = new Set(readMethods(added));
+	}
+
+	private addedMethodsKey(): string {
+		return `apron.signin-added:${this.serverUrl}`;
+	}
+
+	/**
+	 * Whether a session is kept in this browser for the server at `url`, such
+	 * as the one an emailed link would switch to.
+	 */
+	keptSessionFor(url: string): boolean {
+		try {
+			return Boolean(globalThis.localStorage?.getItem(`apron.session:${url}`));
+		} catch {
+			return false;
+		}
+	}
+
+	/** Remembers a way back in that was added to the account. */
+	private noteAdded(method: SignInMethod): void {
+		this.addedMethods.add(method);
+		try {
+			globalThis.localStorage?.setItem(this.addedMethodsKey(), [...this.addedMethods].join(','));
+		} catch {
+			// Best effort, like the token.
+		}
+	}
+
+	private signInMethodKey(): string {
+		return `apron.signin:${this.serverUrl}`;
+	}
+
+	/** Remembers how the kept session signed in, beside its token; `undefined` forgets it. */
+	private noteSignIn(method: SignInMethod | undefined): void {
+		this.signedInWith = method;
+		// A new sign-in is a new account, or at least a new story: what was added before is forgotten.
+		this.addedMethods.clear();
+		try {
+			const storage = globalThis.localStorage;
+			if (!storage) return;
+			storage.removeItem(this.addedMethodsKey());
+			if (method) storage.setItem(this.signInMethodKey(), method);
+			else storage.removeItem(this.signInMethodKey());
+		} catch {
+			// Best effort, like the token.
+		}
 	}
 
 	private storeSession(token: string | undefined): void {
@@ -2844,4 +3355,18 @@ export class ChatClient {
 		const snapshot = this.snapshot();
 		for (const listener of this.listeners) listener(snapshot);
 	}
+}
+
+/** The sign-in methods kept in storage as a comma-separated list. */
+function readMethods(value: string | null): SignInMethod[] {
+	return (value ?? '').split(',').filter((method): method is SignInMethod => method === 'webauthn' || method === 'email' || method === 'token');
+}
+
+/** What to tell someone who has to sign in first, from what the server signs in with (`auth`) and joins with (`signup`). */
+function signInAdvice(auth: string[], signup: string[]): string {
+	const joinByEmail = !auth.includes('email') && signup.includes('email');
+	if (auth.includes('email')) return 'Sign in with your email from the connect screen.';
+	if (auth.includes('webauthn')) return joinByEmail ? 'Sign in with a passkey, or join with your email, from the connect screen.' : 'Sign in with a passkey from the connect screen.';
+	if (joinByEmail) return 'Join with your email from the connect screen.';
+	return 'No supported authentication scheme';
 }

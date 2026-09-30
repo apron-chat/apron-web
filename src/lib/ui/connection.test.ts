@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { capabilitiesOf, type ClientSnapshot } from '$lib/protocol/client';
-import { connectionStateOf, demoRetentionNotice, statusLabel } from './connection';
+import { addEmailError, connectionStateOf, demoRetentionNotice, offeredSchemes, schemeUse, statusLabel, wayBackNudge } from './connection';
 import { retryAfterLabel } from './time';
 
 const snapshot = (fields: Partial<ClientSnapshot>): ClientSnapshot => ({
@@ -34,8 +34,42 @@ describe('connection state', () => {
 
 	it('describes demo retention in hours, or a day', () => {
 		expect(demoRetentionNotice(undefined)).toBe('');
-		expect(demoRetentionNotice({ protocol: 6, auth: ['guest'], ext: { demo: { retention_seconds: 86_400 } } })).toMatch(/last day/);
-		expect(demoRetentionNotice({ protocol: 6, auth: ['guest'], ext: { demo: { retention_seconds: 7_200 } } })).toMatch(/last 2 hours/);
-		expect(demoRetentionNotice({ protocol: 6, auth: ['guest'], ext: {} })).toBe('');
+		expect(demoRetentionNotice({ apron: 7, auth: ['guest'], ext: { demo: { retention_seconds: 86_400 } } })).toMatch(/last day/);
+		expect(demoRetentionNotice({ apron: 7, auth: ['guest'], ext: { demo: { retention_seconds: 7_200 } } })).toMatch(/last 2 hours/);
+		expect(demoRetentionNotice({ apron: 7, auth: ['guest'], ext: {} })).toBe('');
+	});
+});
+
+describe('sign-in and sign-up schemes (server.signup)', () => {
+	it('lets auth do both without signup', () => {
+		const server = { auth: ['webauthn', 'email'] };
+		expect(schemeUse(server, 'email')).toEqual({ signIn: true, signUp: true });
+		expect(schemeUse(server, 'guest')).toEqual({ signIn: false, signUp: false });
+		expect(offeredSchemes(server)).toEqual(['webauthn', 'email']);
+	});
+
+	it('splits signing in from creating an account with signup', () => {
+		const server = { auth: ['webauthn'], signup: ['email'] };
+		expect(schemeUse(server, 'webauthn')).toEqual({ signIn: true, signUp: false });
+		expect(schemeUse(server, 'email')).toEqual({ signIn: false, signUp: true });
+		expect(offeredSchemes(server)).toEqual(['webauthn', 'email']);
+		expect(offeredSchemes(undefined)).toEqual([]);
+	});
+});
+
+describe('ways back into an account', () => {
+	it('nudges a token-only account, and one made with a scheme that only signs up', () => {
+		expect(wayBackNudge({ auth: ['webauthn', 'email', 'token'] }, ['token'])).toEqual(['webauthn', 'email']);
+		expect(wayBackNudge({ auth: ['webauthn'] }, ['email'])).toEqual(['webauthn']);
+		expect(wayBackNudge({ auth: ['webauthn', 'token'] }, ['token', 'webauthn'])).toBeUndefined();
+		expect(wayBackNudge({ auth: ['email'] }, ['email'])).toBeUndefined();
+		// Nothing to suggest, or nothing known.
+		expect(wayBackNudge({ auth: ['token'] }, ['token'])).toBeUndefined();
+		expect(wayBackNudge({ auth: ['webauthn'] }, undefined)).toBeUndefined();
+	});
+
+	it('words a refused code on Add email', () => {
+		expect(addEmailError(Object.assign(new Error('denied'), { code: -32001 }))).toMatch(/another account/);
+		expect(addEmailError(new Error('Rate limited'))).toBe('Rate limited');
 	});
 });

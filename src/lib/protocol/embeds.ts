@@ -59,9 +59,11 @@ export function parseOrigins(value: string | undefined): string[] {
 
 /**
  * Hosts the build trusts to serve embed media besides the chat server itself,
- * such as a server's storage bucket (`VITE_TRUSTED_MEDIA_ORIGINS`).
+ * such as a server's storage bucket (`VITE_TRUSTED_MEDIA_ORIGINS`). Outside
+ * Vite (the protocol modules also load under plain Node, as apron-server-go's
+ * wire tests do) there is no `import.meta.env`, and no extra hosts.
  */
-export const TRUSTED_MEDIA_ORIGINS = parseOrigins(import.meta.env.VITE_TRUSTED_MEDIA_ORIGINS);
+export const TRUSTED_MEDIA_ORIGINS = parseOrigins(import.meta.env?.VITE_TRUSTED_MEDIA_ORIGINS);
 
 /**
  * `og` media the client may load (§4.6.1): what `sameOriginMedia` allows,

@@ -125,7 +125,7 @@ interface MembershipLog {
  * `(message_id, user_id)`, one membership per `(room_id, user_id)`. Every
  * record replaces the stored one only when its `log_id` is numerically
  * greater, regardless of source or arrival order; a room record without
- * `log_id` (a server without cap `history`) always replaces. Messages are
+ * `log_id` (a server without capability `history`) always replaces. Messages are
  * indexed by their current `room_id`, so a move snapshot re-homes a message
  * instead of duplicating it.
  *
@@ -226,6 +226,16 @@ export class ProtocolStore {
 		this.roomRecords.set(record.room_id, record);
 		this.touched.add(record.room_id);
 		return true;
+	}
+
+	/**
+	 * The least `log_id` of the room's records seen: its creation when that
+	 * record was seen, and in any case a position that edits don't move.
+	 */
+	firstRoomLogId(roomId: string): string | undefined {
+		let first: string | undefined;
+		for (const logId of this.roomTitles.get(roomId)?.keys() ?? []) if (first === undefined || compareLogIds(logId, first) < 0) first = logId;
+		return first;
 	}
 
 	/**
@@ -435,7 +445,7 @@ export interface DecodedRecords {
 	rooms: RoomRecord[];
 	messages: MessageRecord[];
 	reactions: ReactionSet[];
-	/** Embedded snapshots (`reply_to`, `intro_message`), each belonging to its own `room_id`. */
+	/** Embedded `reply_to` snapshots, each belonging to its own `room_id`. */
 	embedded: MessageRecord[];
 	memberships: MembershipEntry[];
 }
@@ -455,9 +465,7 @@ export function decodeHistoryRecords(result: unknown): DecodedRecords {
 	if (!isJsonObject(result)) return decoded;
 	for (const value of Array.isArray(result.rooms) ? result.rooms : []) {
 		const room = decodeRoom(value);
-		if (!room) continue;
-		decoded.rooms.push(room.record);
-		decoded.embedded.push(...room.embedded);
+		if (room) decoded.rooms.push(room.record);
 	}
 	for (const value of Array.isArray(result.messages) ? result.messages : []) {
 		const message = decodeMessage(value);
@@ -468,7 +476,7 @@ export function decodeHistoryRecords(result: unknown): DecodedRecords {
 	for (const value of Array.isArray(result.reactions) ? result.reactions : []) {
 		decoded.reactions.push(...decodeReactions(value));
 	}
-	for (const value of Array.isArray(result.membership) ? result.membership : []) {
+	for (const value of Array.isArray(result.memberships) ? result.memberships : []) {
 		decoded.memberships.push(...decodeMembership(value));
 	}
 	return decoded;

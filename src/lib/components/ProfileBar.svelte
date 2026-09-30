@@ -2,7 +2,7 @@
 	import Settings from '@lucide/svelte/icons/settings';
 	import { isJsonObject } from '$lib/protocol/types';
 	import type { ChatClient, OperationHandle } from '$lib/protocol/client';
-	import { passkeyMessage } from '$lib/ui/connection';
+	import { addEmailError, passkeyMessage, wayBackNudge } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { prepareAvatar } from '$lib/ui/images';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -30,7 +30,8 @@
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: () => void;
 		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
-		onsignin: (name?: string) => void;
+		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
+		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
 	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, onsignout, onsignin }: Props = $props();
 
@@ -50,11 +51,26 @@
 	let avatarInput = $state<HTMLInputElement | undefined>();
 	let you = $derived(session.you);
 	let avatar = $derived(directory.avatar(you));
-	/** Avatars are uploaded with a `/avatar` command (§4.6.6), which needs caps `command` and `embed:upload`. */
+	/** Avatars are uploaded with a `/avatar` command (§4.6.6), which needs capabilities `command` and `embed:upload`. */
 	let canUploadAvatar = $derived(session.snapshot.capabilities.command && session.snapshot.capabilities['embed:upload']);
 	let snapshot = $derived(session.snapshot);
 	let connected = $derived(snapshot.status === 'connected');
 	let canUsePasskey = $derived(!!session.server?.auth.includes('webauthn'));
+	/** Email sign-in (§4.10), where the server offers it. */
+	let canUseEmail = $derived(!!session.server?.auth.includes('email'));
+	/**
+	 * No way back into the account that the server signs in with, as far as
+	 * this browser knows: only a kept token (pasted, or an invite, §3.2), or an
+	 * account made with a scheme only in `signup` (§3.1). A gentle nudge to add
+	 * a passkey or an email.
+	 */
+	let wayBack = $derived(snapshot.passkeySession ? wayBackNudge(session.server, snapshot.signInMethods) : undefined);
+	/**
+	 * Adding an email to this account (§4.10): an explicit action, the code
+	 * requested and presented on this signed-in connection. An emailed link
+	 * never does this; it signs in.
+	 */
+	let addEmail = $state<{ step: 'address' | 'code'; email: string; code: string; busy: boolean; error: string } | undefined>();
 	function toggle(): void {
 		if (open) {
 			close();
@@ -68,6 +84,7 @@
 		passkeyError = '';
 		passkeyNotice = '';
 		avatarError = '';
+		addEmail = undefined;
 		open = true;
 	}
 
@@ -120,12 +137,12 @@
 
 	/**
 	 * Signing in happens on the connect screen, which carries a handle typed
-	 * here along so it is applied once the passkey signs in.
+	 * here along so it is applied once the passkey or email signs in.
 	 */
-	function signIn(): void {
+	function signIn(scheme: 'webauthn' | 'email' = 'webauthn'): void {
 		const chosen = chosenName();
 		close();
-		onsignin(chosen);
+		onsignin(chosen, scheme);
 	}
 
 	/** Account actions for a passkey session: another passkey for this identity, or signing out. */
@@ -145,6 +162,38 @@
 		} catch (cause) {
 			passkeyError = passkeyMessage(cause);
 		}
+	}
+
+	/**
+	 * The Add email form's next step: propose adding the address on this
+	 * signed-in connection, then approve it with the code on the same one (§4.10).
+	 */
+	async function continueAddEmail(): Promise<void> {
+		const form = addEmail;
+		if (!form || form.busy) return;
+		form.error = '';
+		form.busy = true;
+		try {
+			if (form.step === 'address') {
+				await client.requestEmailCodeToAdd(form.email);
+				form.step = 'code';
+			} else {
+				await client.addEmail(form.code);
+				addEmail = undefined;
+				passkeyNotice = `Added ${form.email} · sign in with it anywhere`;
+				return;
+			}
+		} catch (cause) {
+			form.error = addEmailError(cause);
+		}
+		form.busy = false;
+	}
+
+	/** Enter in the Add email fields continues that form, not the profile's. */
+	function addEmailKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		void continueAddEmail();
 	}
 
 	function resetDraft(): void {
@@ -228,38 +277,70 @@
 				{:else if status === 'declined'}
 					<p class="ap-profedit-note ap-profedit-err" role="alert">
 						The server declined this handle{declinedReason ? ` (${declinedReason})` : ''}.
-						{#if canUsePasskey && !snapshot.passkeySession}
-							Sign in with a passkey and it’s applied once you’re signed in.
+						{#if (canUsePasskey || canUseEmail) && !snapshot.passkeySession}
+							Sign in and it’s applied once you’re signed in.
 						{:else}
 							Your old one is still in use.
 						{/if}
 					</p>
 				{/if}
-				{#if canUsePasskey}
+				{#if canUsePasskey || canUseEmail}
 					<div class="ap-profedit-signin" role="group" aria-label="Sign-in">
 						<span class="ap-fieldlabel">Sign-in</span>
-						{#if snapshot.authBusy}
-							<span class="ap-profedit-hint" role="status"><TypingDots /> Confirm on your device…</span>
+						{#if snapshot.authBusy && !addEmail?.busy}
+							<span class="ap-profedit-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
 						{:else}
 							<span class="ap-profedit-row">
 								<span class="signin-actions">
 									{#if snapshot.passkeySession}
-										<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !you || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
+										<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.9, §4.10). -->
+										{#if canUsePasskey && you}
+											<button class="ap-btn ap-btn-sm" type="button" data-testid="add-passkey" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
+										{/if}
+										{#if canUseEmail && you && !addEmail}
+											<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+										{/if}
 										<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
 									{:else}
-										<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin" disabled={!!passkeyUnavailable || status === 'saving'} onclick={signIn}>Sign in with a passkey</button>
+										{#if canUsePasskey}
+											<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin" disabled={!!passkeyUnavailable || status === 'saving'} onclick={() => signIn('webauthn')}>Sign in with a passkey</button>
+										{/if}
+										{#if canUseEmail}
+											<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-email" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
+											<!-- Adding an address to a guest asks and answers on this connection; whether that keeps the
+											     guest identity as an account is the server's call (§4.10). -->
+											{#if you && !addEmail}
+												<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+											{/if}
+										{/if}
 									{/if}
 								</span>
 								{#if passkeyError}
 									<span class="ap-profedit-hint ap-profedit-err" role="alert">{passkeyError}</span>
 								{:else if passkeyNotice}
 									<span class="ap-profedit-hint ap-profedit-ok" role="status">{passkeyNotice}</span>
-								{:else if passkeyUnavailable}
+								{:else if passkeyUnavailable && canUsePasskey && !canUseEmail}
 									<span class="ap-profedit-hint">{passkeyUnavailable}</span>
+								{:else if wayBack}
+									<span class="ap-profedit-hint" data-testid="way-back-nudge">{snapshot.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBack.length === 2 ? 'a passkey or an email' : wayBack[0] === 'webauthn' ? 'a passkey' : 'an email'} to sign in anywhere.</span>
 								{:else}
-									<span class="ap-profedit-hint">{snapshot.passkeySession ? 'Signed in with a passkey' : 'Signed in as a guest'}</span>
+									<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
 								{/if}
 							</span>
+							{#if addEmail}
+								<span class="add-email" role="group" aria-label="Add email">
+									{#if addEmail.step === 'address'}
+										<input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com" autocomplete="email" bind:value={addEmail.email} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+										<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.email.trim()} onclick={continueAddEmail}>Send code</button>
+									{:else}
+										<input class="ap-field ap-field-mono" aria-label="Code from the email" placeholder="Code" inputmode="numeric" autocomplete="one-time-code" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+										<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.code.trim()} onclick={continueAddEmail}>Add</button>
+									{/if}
+									<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>
+								</span>
+								{#if addEmail.error}<span class="ap-profedit-hint ap-profedit-err" role="alert">{addEmail.error}</span>
+								{:else if addEmail.step === 'code'}<span class="ap-profedit-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
+							{/if}
 						{/if}
 					</div>
 				{/if}
@@ -280,7 +361,7 @@
 		<Avatar name={you?.name || you?.user_id || '?'} id={you?.user_id} src={avatar} />
 		<span class="ap-profile-text">
 			<span class="ap-profile-name">{you?.name || you?.user_id || 'Not signed in'}</span>
-			<span class="ap-profile-sub">on {backendLabel}</span>
+			<span class="ap-profile-sub">on {backendLabel}{#if wayBack} · add a sign-in{/if}</span>
 		</span>
 		<span class="ap-profile-edit" aria-hidden="true">Edit</span>
 	</button>
@@ -291,6 +372,8 @@
 
 <style>
 	.ap-profile { display: flex; align-items: center; gap: var(--space-1); }
+	.add-email { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
+	.add-email .ap-field { flex: 1; min-width: 0; height: 28px; font-size: 13px; }
 	.ap-profile-me { flex: 1; min-width: 0; width: auto; }
 	.ap-profile-settings { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; color: var(--ink-muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; }
 	.ap-profile-settings:hover { color: var(--ink); background: var(--bg-300); }

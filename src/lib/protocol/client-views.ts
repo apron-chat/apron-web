@@ -13,10 +13,12 @@ const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'ac
 
 /**
  * How to render a user (§3.3): field by field, the kept object for its
- * `user_id` (following a retired ID to the identity that replaced it), else
- * the recorded object the frame carries (`from`, a membership's `user`), and
- * the display name falls back to the `user_id` last. Returns the kept object
- * itself when it has every field the recorded one has.
+ * `user_id` (following a retired ID to the identity that replaced it), and
+ * the recorded object the frame carries (`from`, a membership's `user`) only
+ * for fields the kept object lacks, so a field cleared there (kept as its
+ * empty value) stays cleared. Renderers treat an empty field as none, and an
+ * empty or unknown name as the `user_id`. Returns the kept object itself
+ * when it has every field the recorded one has.
  */
 export function userIn(snapshot: Pick<ClientSnapshot, 'users' | 'userAliases'>, recorded: Identity): Identity {
 	let id = recorded.user_id;
@@ -56,24 +58,25 @@ export function childRooms(rooms: readonly RoomSnapshot[], parentRoomId: string)
 
 /** Whether a `server` frame advertises a capability (§4). Capabilities gate UI, not authorization. */
 function hasCapability(server: ServerParams | undefined, cap: Capability): boolean {
-	return server?.caps?.includes(cap) === true;
+	return server?.capabilities?.includes(cap) === true;
 }
 
 export function capabilitiesOf(server: ServerParams | undefined): Capabilities {
 	return Object.fromEntries(CAPABILITIES.map((cap) => [cap, hasCapability(server, cap)])) as Capabilities;
 }
 
-/** Edit, move, and delete controls (cap `edit`). */
+/** Edit, move, and delete controls (capability `edit`). */
 export const canEdit = (server: ServerParams | undefined) => hasCapability(server, 'edit');
-/** Room and thread creation and room updates (cap `rooms`). */
+/** Room and thread creation and room updates (capability `rooms`). */
 export const canManageRooms = (server: ServerParams | undefined) => hasCapability(server, 'rooms');
-/** Reaction controls (cap `reactions`). */
+/** Reaction controls (capability `reactions`). */
 export const canReact = (server: ServerParams | undefined) => hasCapability(server, 'reactions');
-/** History recovery and paging (cap `history`). */
+/** History recovery and paging (capability `history`). */
 export const hasHistory = (server: ServerParams | undefined) => hasCapability(server, 'history');
 
 export function defaultWebSocketUrl(locationLike?: Location): string {
-	const configured = import.meta.env.VITE_DEFAULT_SERVER_URL;
+	// `?.`: outside Vite (plain Node) there is no `import.meta.env`.
+	const configured = import.meta.env?.VITE_DEFAULT_SERVER_URL;
 	if (configured) return configured;
 	if (!locationLike) return 'ws://localhost:8080/ws';
 	const protocol = locationLike.protocol === 'https:' ? 'wss:' : 'ws:';

@@ -31,4 +31,5 @@ export { default as ConnectScreen } from './ConnectScreen.svelte';
 export { default as SelectionBar } from './SelectionBar.svelte';
 export { default as Mention } from './Mention.svelte';
 export { default as MentionPicker } from './MentionPicker.svelte';
+export { default as RoleBadges } from './RoleBadges.svelte';
 export type * from './types';

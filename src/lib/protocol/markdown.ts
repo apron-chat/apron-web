@@ -37,16 +37,17 @@ function sanitize(html: string): string {
 }
 
 /**
- * What an `@id` mention names (Appendix A.3): a known user, rendered with
- * their latest name, or a room, rendered as a link to it. Unknown IDs render
- * as written.
+ * What a prefixed ID in text names (Appendix A.3): `@id` a known user,
+ * rendered with their latest name, and `#id` a known room, rendered as a link
+ * showing its title. Unknown IDs render as written. System identities (`~`)
+ * appear only as senders, never in text.
  */
 export type RoomMentionTarget = { kind: 'room'; id: string; title: string };
 export type MentionTarget = { kind: 'user'; id: string; name: string; me?: boolean } | RoomMentionTarget;
 
-/** Looks an `@id` up; when it names both a user and a room, answer with the user. */
+/** Looks an `@id` up; only a user answers it. A resolver may also answer rooms, for `#id` without a `RoomMentionResolver`. */
 export type MentionResolver = (id: string) => MentionTarget | undefined;
-/** Resolves a `#room_id` without user-ID precedence. */
+/** Resolves a `#room_id`. */
 export type RoomMentionResolver = (id: string) => RoomMentionTarget | undefined;
 
 /** Someone a composer can mention: a room member or a recent sender. */
@@ -59,7 +60,7 @@ export interface MentionPerson {
 }
 
 /** `@user_id` or `#room_id`; trailing `.` and `-` are kept outside the ID. */
-const MENTION = /@(@?[A-Za-z0-9_.-]+)|#([A-Za-z0-9_.-]+)/g;
+const MENTION = /@([A-Za-z0-9_.-]+)|#([A-Za-z0-9_.-]+)/g;
 
 /**
  * A bare `http(s)://` link in escaped text: it runs to whitespace or an escaped
@@ -114,6 +115,20 @@ export function renderMarkdown(source: string, resolve?: MentionResolver, resolv
 export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver): string {
 	const html = linkifyText(escapeHtml(source), resolve, resolveRoom);
 	return DOMPurify.isSupported ? sanitize(html) : html;
+}
+
+/**
+ * Markdown as plain text, for a one-line or clamped preview such as a thread
+ * card's summary: rendered, then its tags dropped (block ends become line
+ * breaks) and entities decoded. The result is text, never markup.
+ */
+export function markdownText(source: string): string {
+	return markdown(source)
+		.replace(/<br\s*\/?>|<\/(?:p|li|h[1-6]|pre|blockquote|tr)>/gi, '\n')
+		.replace(/<[^>]*>/g, '')
+		.replace(/&(lt|gt|quot|#39|amp);/g, (_, entity: string) => ({ lt: '<', gt: '>', quot: '"', '#39': "'", amp: '&' })[entity] ?? '')
+		.replace(/\n{2,}/g, '\n')
+		.trim();
 }
 
 function escapeHtml(value: string): string {
@@ -226,9 +241,9 @@ function chipText(text: string, resolve?: MentionResolver, resolveRoom?: RoomMen
 }
 
 /**
- * Splits text around its mentions of known users (`@user_id`) and rooms
- * (`#room_id`, or `@room_id` when no user has that ID). Unknown IDs, and
- * an `@` or `#` right after a letter or digit, stay text.
+ * Splits text around its mentions of known users (`@user_id`) and references
+ * to known rooms (`#room_id`). Unknown IDs, and an `@` or `#` right after a
+ * letter or digit, stay text.
  */
 export function mentionSegments(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver): MentionSegment[] {
 	if (!resolve && !resolveRoom) return [text];
@@ -239,11 +254,11 @@ export function mentionSegments(text: string, resolve?: MentionResolver, resolve
 		const offset = match.index;
 		const before = text[offset - 1];
 		const raw = rawUser ?? rawRoom;
-		if (before !== undefined && (rawUser !== undefined ? /[A-Za-z0-9]/ : /[A-Za-z0-9_]/).test(before)) continue;
+		if (before !== undefined && (rawUser !== undefined ? /[A-Za-z0-9@]/ : /[A-Za-z0-9_]/).test(before)) continue;
 		const id = raw.replace(/[.-]+$/, '');
-		if (!id || id === '@') continue;
+		if (!id) continue;
 		const target = rawUser !== undefined ? resolve?.(id) : resolveRoom?.(id) ?? resolve?.(id);
-		if (!target || (rawRoom !== undefined && target.kind !== 'room')) continue;
+		if (!target || target.kind !== (rawUser !== undefined ? 'user' : 'room')) continue;
 		if (offset > last) segments.push(text.slice(last, offset));
 		segments.push({ target, hash: rawRoom !== undefined });
 		last = offset + whole.length - (raw.length - id.length);
