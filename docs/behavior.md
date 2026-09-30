@@ -61,12 +61,18 @@ identity. Message headers show the name with the muted `@user_id` beside it,
 always when another user the client knows of shows under the same name, so no
 one can pass as someone else. Without an avatar, a
 person's initials sit on a muted tint whose hue is hashed from their `user_id`,
-so the same person has the same color on every client. Senders whose `user_id`
-starts with `@` render as quiet centered system lines, except the three that
-state a scope (`@private`, `@room`, `@server`), which render as the design
-system's notice card: left-aligned, and titled by the sender as the server
-names it, `Name (@user_id)`, such as "System message to you (@private)" from
-the Apron example servers. `@private` ones, and
+so the same person has the same color on every client. A user's `roles`
+([PROTOCOL.md §3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)),
+such as "admin" or "bot", show as small outlined badges beside the name in
+message headers and the member list, never as part of it, so no name can pass
+as a role; they grant nothing here. Senders whose `user_id` starts with `~`
+(system identities, Appendix A.1) render as quiet centered system lines, except
+the three that state a scope (`~private`, `~room`, `~server`), which render as
+the design system's notice card: left-aligned, and titled by the sender as the
+server names it, `Name (~user_id)`, such as "System message to you (~private)"
+from the Apron example servers. A v6 server's `@private`, `@room` and `@server`
+still read as those three; no other `@` ID is special. A `~private` notice
+reached only this connection. `~private` ones, and
 every `message` without a `message_id` (such as a command's reply), are
 transient notices: a dashed card for the session, never stored, and gone on
 reload. A notice sent before authentication, such as a server's welcome
@@ -76,8 +82,8 @@ session drops it, since it speaks to whoever connected. A code block in a
 notice wraps and has a Copy button, such as for the token `/invite-bot` gives
 on the demo worker. A server-wide `@server` notice names
 a room like any message; one for a room you haven't joined also shows as a
-notice where you are. `@server`, `@room`, and `@private` are sender scopes, not rooms (Appendix A.1); a
-room ID starting with `@` is an ordinary room.
+notice where you are. `~server`, `~room`, and `~private` are sender scopes, not rooms (Appendix A.1); a
+room ID starting with `@` or `~` is an ordinary room.
 
 Joins and leaves show in a room's timeline as the quietest system line, at
 each `membership` record's `log_id` among the messages: "Ada joined", with the
@@ -94,7 +100,15 @@ sender group.
 
 The Member list button at the end of the room title bar toggles a right-hand
 sidebar listing the open room's or thread's members from its `room_list`
-snapshot. On wide screens it is a column that resizes like the rooms list:
+snapshot, with their role badges. A server may list only the most recently
+active members of a large room, with `member_count` for the total; the list
+then says so, and the count in its header is the total. In a room you have
+joined, with the `rooms` cap, **Add by @user_id** adds someone (`room_join`
+with their `user_id`, suggesting people the client knows) and each other
+member's remove button removes them (`room_leave` with their `user_id`, after
+a confirm): how members bring people into a private room. Who may is the
+server's policy; its error shows in the panel, and a server that answers
+`unsupported` gets no such controls until its next `server` frame. On wide screens it is a column that resizes like the rooms list:
 drag its left border, or click the border to collapse it (the header button
 brings it back, and takes focus when the border collapsed it from the keyboard), and its width and whether it is collapsed are remembered.
 Dragging either list shut restores its earlier width when it reopens. On
@@ -115,9 +129,9 @@ one ending the draft collapses on send. Chips are always sent as `@user_id`, so
 the field reads by name while the wire stays ID-based, and each chip's `user_id`
 goes in `body.mentions` ([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)): a chip deleted before sending mentions no one,
 and an edit resubmits the message's mentions. A rendered body (plain or Markdown, never inside
-code) shows a known user's mention as a chip with their current name, a `#room_id`
-(or the protocol's `@room_id`) as a link that opens the room (or joins it), and unknown
-IDs as written. Typing `#` in the composer opens room autocomplete over known
+code) shows a known user's `@user_id` as a chip with their current name, a known room's
+`#room_id` as a link showing its title that opens the room (or joins it), and unknown
+IDs as written ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)): `@` names only users. Typing `#` in the composer opens room autocomplete over known
 rooms and threads, searchable by title or ID (a bare `#` lists them to browse, and
 Enter there still sends; Tab picks); choosing one inserts a chip
 showing `#title` that is sent as `#room_id`, and a typed `#room_id` naming a
@@ -153,8 +167,12 @@ of these stay on this device; settings aren't synced.
 With the `command` cap, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.8](https://github.com/shazow/apron/blob/main/PROTOCOL.md#48-command)): the composer shows a **Command** tag, sets the line in
 monospace, and **Run** replaces **Send**. `/nick` (a `me` request), `/join`,
-`/leave` and `/topic` (`room_join`, `room_leave`, and `room_set` with a new
-title, with the `rooms` cap) are handled by the client; anything else goes out
+`/leave`, `/topic` (`room_join`, `room_leave`, and `room_set` with the room's
+new `description`), and `/kick @user` and `/invite @user` (`room_leave` and
+`room_join` with that `user_id`), with the `rooms` cap, are handled by the
+client. `/kick` with a reason goes to the server, which alone can carry one,
+and so do `/kick` and `/invite` once the server has answered them
+`unsupported` (the one that got that answer is sent on as a command); anything else goes out
 as a `command` request with the params a message would have — `room_id`, the
 text as typed, `mentions`, `reply_to`, and attached files as `upload` embeds —
 and is never posted. `/help` lists what the server offers. The server's replies
@@ -178,20 +196,38 @@ in, titled by its `room_id`.
 
 Threads are rooms with a `parent_room_id`. The sidebar lists top-level rooms
 and the open room's joined threads under it; the room feed shows each thread as
-a card that previews its intro message (or, without one, its latest loaded
-message), including threads you haven't joined, which `room_list` with the
+a card where it was started that previews its description as text (or, without
+one, its latest loaded message), including threads you haven't joined, which `room_list` with the
 room's `parent_room_id` finds whenever the room is opened or its threads are
 listed; that listing is also what refreshes their cards, since they deliver
 nothing live. Opening one of those reads it through `history` without joining
 it: its header offers **Join**, and replying joins it first.
 With the `rooms` cap, the **+** beside Rooms in the sidebar creates a room
-from a name (`room_set` with just a `title`); it opens once its `room_update`
-arrives, and the dialog stays open, with the server's error, if creating fails.
+from a name and an optional Markdown description (`room_set` with `title` and
+`description`); it opens once its `room_update` arrives, and the dialog stays
+open, with the server's error, if creating fails. **Private** asks for
+`private: true` ([PROTOCOL.md §4.3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#434-creating-and-editing)):
+a server that keeps no private rooms answers `unsupported`, which the dialog
+says in words; one that creates the room without `private: true` in its record
+gets an error toast instead of an opened room, so nothing meant to be private
+is posted there (the room stays joined, to leave or use knowingly). Private
+rooms and threads show a lock beside their name.
+
+A room's `description` (Markdown by convention) shows as one line of text
+under its title in the header. With the `rooms` cap the header's **Edit** opens
+a form for the open room's or thread's title and description ("Summary" for a
+thread), saved with one `room_set`; the `room_update` that follows is what
+shows, since the server may alter or decline it.
 
 With the `rooms` cap, **Start thread** on a message creates a thread under the
-room with that message as its intro; the message stays in the room, where its
-card stands in for it, and leads the thread's timeline, pinned under the header.
-A thread's header offers **Edit** for its title. Threads load their newest page of
+room titled after the message's first line, with the message's text as its
+`description` (unless the title already says it all), and opens it with the
+composer replying to that message. Threads don't point at a message in v7, so
+the thread's first reply carries the link back as its `reply_to` (the
+convention of the protocol's fixtures): its quote shows the message and jumps
+to it. The message stays in the room, with the thread's card after it. A
+thread's description shows as a **Summary** pinned at the top of the thread,
+rendered as Markdown. Threads load their newest page of
 history when opened (50 records); one with older replies opens at its latest
 reply, shows "N+ replies", and loads the page before whenever the reader nears
 the top, keeping what is on screen in place. Drafts are kept per room, threads
@@ -288,8 +324,14 @@ links may point anywhere `http(s)`.
 
 **Connect** in the
 sidebar header opens the connect screen: a WebSocket URL or an HTTP(S) server
-base URL, a display name, and a sign-in choice (Guest by default; Passkey signs
-in with an existing passkey once the guest session is up). The server and name
+base URL, a display name, and a sign-in choice among the schemes the server
+advertises (Guest by default; Passkey signs in with an existing passkey once
+the guest session is up; Email and Token, below). Once the server in the field
+has answered, its `server.welcome`
+([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication))
+shows at the top of the form, rendered as Markdown and sanitized like a message.
+A server without the `guest` scheme opens this screen by itself once, since
+nothing works before signing in. The server and name
 are stored in local storage, and the last few backends are listed under the
 form. The profile bar at the foot of the sidebar edits your handle, which is
 sent with the protocol `me` request after authentication; the editor shows
@@ -309,8 +351,8 @@ identity attached to your chosen passkey.
 A server may keep guests read-only; the demo worker does, and says so with
 `ext.demo.guest_posting: false`. Signed in as a guest there, the composer gives
 way to a bar saying so with a **Sign in** button (it opens the connect screen
-on Passkey). Replying, reacting, starting or editing threads, and Join and
-Leave are hidden; Browse rooms and More threads… offer **Open** instead of
+on Passkey). Replying, reacting, starting threads, editing rooms and threads,
+adding or removing members, and Join and Leave are hidden; Browse rooms and More threads… offer **Open** instead of
 **Join**, which reads the room through its history without joining it. Other
 servers' denials show as errors as usual.
 
@@ -320,8 +362,20 @@ Browser cancellation and verification errors appear in the profile editor. A
 connection change cancels the active ceremony. Chat requests pause while a
 ceremony is active, preventing edits from crossing an identity change.
 
+With `email` in the server's `auth`
+([PROTOCOL.md §4.10](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-email-authentication)),
+the connect screen's **Email** asks for an address and sends `auth` with
+`scheme: "email"` and no token, which authenticates nothing and answers the same
+whether or not the address has an account; then a code field signs in with
+the emailed code, and the profile offers **Sign in with email**. Opening the
+email's link (`#email=…&token=…` in the URL fragment) signs in on page load:
+the fragment is read and scrubbed from the address bar before anything else,
+and used once the server has answered; if it fails (expired, used), the
+connect screen opens on Email with the address filled in and the reason.
+
 When the server advertises token authentication, the session token it returns
-is kept in `localStorage`, keyed by server URL, and automatically resumes the
+(after a passkey or email sign-in, or a replacement in reply to a token resume)
+is kept in `localStorage`, keyed by server URL, the latest replacing any earlier, and automatically resumes the
 same identity after a transport disconnect, a page reload, or in a new tab, for
 as long as the server keeps the session alive (the example servers renew it on
 every resume). Servers that offer passkeys without token resume get no stored

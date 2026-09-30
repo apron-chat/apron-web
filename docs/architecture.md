@@ -24,8 +24,8 @@ tokens stay in the artifact's `tokens.json`; keep them in step with
 The Svelte components under `src/lib/components` wrap the `ap-*`
 classes one to one with the design system's components, adding the app's
 state and behavior — `ConnectScreen`,
-`Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` and `ThreadEditor`, `ThreadCard`,
-`Message` with its `ReactionBar`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`), `SelectionBar`, `JumpBar`,
+`Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` and `RoomEditor`, `ThreadCard` and
+`ThreadSummary`, `Message` with its `ReactionBar` and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`), `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
@@ -48,13 +48,15 @@ lines, `reactions.ts` turns reaction summaries into chips, `emoji.ts`
 places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
 picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previews.ts` builds GitHub link previews, `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
+`commands.ts` maps the composer's `/` commands to requests,
+`email-link.ts` reads and scrubs an emailed sign-in link from the URL, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences included (on this device only; nothing is synced), and
 `notifications.ts` shows notifications, through `service-worker.ts` where the
 page can't.
 
 Protocol types, replay reduction, and the WebSocket session live under
-`src/lib/protocol` and speak Apron protocol v6. `client.ts` holds the session,
+`src/lib/protocol` and speak Apron protocol v7. `client.ts` holds the session,
 `ChatClient`, and re-exports the rest of its API: `client-types.ts` has the
 snapshot and option types, `client-views.ts` the pure helpers over snapshots,
 capabilities and server URLs, and `client-internals.ts` the per-room state,
@@ -64,8 +66,14 @@ for every room, and beside the latest membership per user, each room's
 membership records in `log_id` order for the timeline's join and leave lines;
 each record replaces the stored one only when its `log_id` is greater, so
 overlapping history and live delivery cannot revert newer state, and a move
-snapshot re-homes a message into its new room. Embedded `reply_to` and
-`intro_message` snapshots install like any other record. Reactions aggregate
+snapshot re-homes a message into its new room. Embedded `reply_to`
+snapshots install like any other record; a v6 server's `intro_message` is
+dropped like any unknown key. Room records keep `description` and `private`
+(fixed at creation); a room's `members` from a listing come with its
+`member_count` when the server truncated them, kept until a complete list
+replaces it. `types.ts` also knows the system identities (`~server`, `~room`,
+`~private`, plus a small, commented fallback for v6's `@server`, `@room` and
+`@private`). Reactions aggregate
 per message (counts per emoji, who reacted, whether you did) and are hidden on
 tombstones.
 
@@ -103,9 +111,19 @@ Edits, moves, and deletion use the same `message` request as creation, with an
 existing `message_id`, and resubmit every client field of the latest snapshot
 (`room_id`, `body`, a bare `reply_to`, and `ext` unchanged). A move is a save
 with another `room_id`. Rooms and threads are created and updated with the
-`room_set` request (cap `rooms`); updates resubmit `title`, a bare
-`intro_message`, and `ext`, and the change arrives as a `room_update`. The
+`room_set` request (cap `rooms`); a creation may ask for `private: true`, and
+updates resubmit `title`, `description`, and `ext` (never `parent_room_id` or
+`private`), and the change arrives as a `room_update`. The
 client does not depend on the notifications a request causes arriving before
 its result, as servers send them.
-`room_join` and `room_leave` take only the `room_id`. Reactions use the
+`room_join` and `room_leave` take the `room_id`, and a `user_id` to add or
+remove someone else; an `unsupported` reply to that sets the snapshot's
+`memberChangesUnsupported` until the next `server` frame. Reactions use the
 `reactions` request (cap `reactions`) with your complete emoji set.
+
+Every successful `auth` result is handled alike: its `you` becomes the
+connection's identity and a `token` in it replaces the saved one, whether it
+answers a guest sign-in, a token resume (rotation), a passkey or an email code.
+Email sign-in (`requestEmailCode`, then `signInWithEmail`) and passkeys share
+one guard: other requests wait while a sign-in may change the identity. The
+`server` frame's `welcome` is kept on the snapshot's `server`.
