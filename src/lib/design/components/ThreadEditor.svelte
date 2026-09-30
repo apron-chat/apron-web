@@ -2,9 +2,9 @@
 	import Button from './Button.svelte';
 
 	interface Props {
-		/** Title: a `room_set` (cap `rooms`, §4.3.4). `bind:name`. */
+		/** Title: `room_set` (cap `rooms`, §4.3.4) resubmits it with the summary. `bind:name`. */
 		name?: string;
-		/** Summary: a `message` save of the intro (cap `edit`, §4.2). `bind:summary`. */
+		/** Summary: the thread's `description`, Markdown, saved by the same `room_set`. `bind:summary`. */
 		summary?: string;
 		status?: 'idle' | 'saving' | 'declined';
 		onsave?: () => void;

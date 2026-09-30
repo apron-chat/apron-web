@@ -17,17 +17,18 @@
   add(A.Message, { sender: bob, time: '14:04', text: 'Ship it.', replyTo: { messageId: '1724803380000', sender: alice, snippet: 'The fix, for the record: @@ worker/queue.go @@ …' },
     reactions: [{ emoji: '👍', count: 2, mine: true, who: 'Sam, Alice' }, { emoji: '🎉', count: 1, who: 'Dana' }] });
   add(A.Message, { system: true, timestamp: at(14, 4), text: 'Dana joined' });
-  add(A.Message, { sender: { user_id: '@room', name: 'Ops' }, timestamp: at(14, 4), text: 'Poll closed: Tuesday wins, 7 votes to 4.' });
+  add(A.Message, { sender: { user_id: '~room', name: 'Ops' }, timestamp: at(14, 4), text: 'Poll closed: Tuesday wins, 7 votes to 4.' });
+  add(A.Message, { sender: { user_id: 'deploy', name: 'Deploy', roles: ['bot'] }, time: '14:04', text: 'Rolled out 1.4.2 to 3 of 3 regions.' });
   add(A.Message, { system: true, timestamp: at(14, 4), children: A.html('Thread renamed to <span class="ap-msg-text">“Deploy”</span>') });
   add(A.Message, { sender: bob, time: '14:05', mention: true, pinged: true, children: A.html('<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> can you check the migration logs? <span class="ap-mention" data-user-id="dana" title="@dana">@Dana</span> already looked.</p>') });
   add(A.Message, { sender: bob, time: '14:05', grouped: true, deleted: true });
   add(A.Message, { sender: me, time: '14:06', status: 'pending', text: 'On it, pulling them up.' });
   add(A.Message, { sender: me, time: '14:06', grouped: true, status: 'failed', text: 'Looks like the lock timed out.' });
-  add(A.Message, { sender: { user_id: '@private', name: 'System message to you' }, time: '14:07',
+  add(A.Message, { sender: { user_id: '~private', name: 'System message to you' }, time: '14:07',
     children: A.html('<p>Your bot signs in as <strong>Bot of Sam</strong> (<code>bot_sam</code>) with this token. It replaces any earlier one, so keep it secret.</p><pre><code>apron_bot_h58Ecmun2BeA4ZG2PTgpsfyzknAGbt8Mn8seiWtiT3E</code><button type="button" class="ap-btn ap-btn-sm ap-notice-copy">Copy</button></pre>') });
   add(A.TimelineDivider, { kind: 'date', label: 'Compact density', sticky: false });
   add(A.Message, { density: 'compact', sender: alice, time: '14:10', text: 'Retrying with a longer lock timeout.' });
-  add(A.Message, { density: 'compact', sender: bob, time: '14:11', edited: true, text: 'Worked. Closing the incident.' });
+  add(A.Message, { density: 'compact', sender: { user_id: 'bob', name: 'Bob', roles: ['admin'] }, time: '14:11', edited: true, text: 'Worked. Closing the incident.' });
   add(A.Message, { density: 'compact', sender: me, time: '14:11', status: 'pending', text: 'Thanks both.' });
   add(A.Message, { density: 'compact', sender: { user_id: 'alex.r', name: 'Alex' }, handle: true, time: '14:12', text: 'Two of us are called Alex here,' });
   add(A.Message, { density: 'compact', sender: { user_id: 'guest_7', name: 'Alex' }, handle: true, time: '14:12', text: 'so both names carry their @user_id.' });

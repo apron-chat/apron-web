@@ -8,7 +8,7 @@
 		thread: string;
 		name?: string;
 		count?: number;
-		/** The thread's `intro_message` text, when it's a written summary rather than the message that started it. */
+		/** The thread's `description` (§3.4) as text: its summary, or the gist of the message that started it. */
 		summary?: string;
 		/** The thread's members or recent senders, most recent first; up to 4 are shown. */
 		participants?: Sender[];

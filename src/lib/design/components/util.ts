@@ -5,6 +5,8 @@ export interface Sender {
 	user_id: string;
 	name?: string;
 	avatar?: string;
+	/** Server-assigned labels such as "admin" or "bot" (§3.3), shown as badges beside the name. */
+	roles?: string[];
 	ext?: Record<string, unknown>;
 	/** @deprecated alias of user_id */
 	id?: string;

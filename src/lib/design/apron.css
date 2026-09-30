@@ -58,6 +58,13 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-msg-head { display: flex; align-items: baseline; gap: var(--space-2); }
 .ap-msg-sender { font-weight: 600; }
 .ap-msg-handle { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--ink-muted); overflow-wrap: anywhere; }
+/* Roles (§3.3): server-assigned labels as small outlined badges in the UI face, set apart from the name so no name can
+   pass as one. "admin" takes the accent, "bot" the denim; other roles show as written, muted. */
+.ap-roles { display: inline-flex; flex-wrap: wrap; gap: 4px; align-self: center; }
+.ap-role { display: inline-block; max-width: 12em; height: 16px; padding: 0 5px; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: 10px; line-height: 14px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.ap-role-admin { border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); }
+.ap-role-bot { border-color: color-mix(in srgb, var(--denim) 55%, transparent); color: var(--denim); }
+.ap-msg-compact .ap-roles { margin-right: var(--space-2); }
 .ap-msg-compact .ap-msg-handle { margin-right: var(--space-2); }
 .ap-msg-meta { display: inline-flex; gap: var(--space-2); font-size: 12px; line-height: 16px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-msg-text { overflow-wrap: anywhere; font-family: var(--font-chat); }
@@ -182,6 +189,8 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-room-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .ap-room-name, .ap-room-topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-room-topic { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
+/* A private room (§4.3.4): a small lock beside its name, wherever the name shows. */
+.ap-lock { flex: none; display: inline-block; width: 12px; height: 12px; margin-left: 4px; vertical-align: -1px; color: var(--ink-muted); }
 .ap-count { flex: none; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: 12px; line-height: 20px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* StatusBanner */
@@ -348,6 +357,11 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-connect-title { margin: 0; font-size: 28px; line-height: 32px; font-weight: 600; letter-spacing: -.02em; }
 .ap-connect-tag { margin: -6px 0 var(--space-1); font-size: 14px; line-height: 20px; color: var(--ink-muted); }
 .ap-field-mono { font-family: var(--font-mono); font-size: 13px; }
+/* The server's welcome (§3.2): its Markdown, rendered and sanitized like a message, above the sign-in fields. */
+.ap-welcome { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--bg-200); font-size: 13px; line-height: 18px; color: var(--ink); }
+.ap-welcome p { margin: 0; }
+.ap-welcome p + p, .ap-welcome ul, .ap-welcome ol { margin-top: var(--space-1); }
+.ap-welcome ul, .ap-welcome ol { margin-bottom: 0; padding-left: 20px; }
 .ap-connect-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-1); }
 .ap-connect-actions .ap-btn { border-radius: calc(var(--radius-lg) - var(--space-2)); }
 .ap-seg { display: flex; gap: 2px; padding: 2px; margin-top: 2px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); }
@@ -392,14 +406,14 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-count-quiet { background: var(--bg-300); color: var(--ink); }
 .ap-jumpbar-at { border-color: var(--accent); }
 
-/* System messages — from @-prefixed user_ids (Appendix A.1): a quiet centered line, no avatar */
+/* System messages — from ~-prefixed user_ids (Appendix A.1): a quiet centered line, no avatar */
 .ap-msg-system { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) var(--space-6) 0; padding: var(--space-1) var(--space-3); font-size: 13px; line-height: 18px; color: var(--ink-muted); text-align: center; }
 .ap-msg-system:hover { background: transparent; }
 .ap-msg-system-who { font-weight: 600; color: var(--ink-muted); }
 .ap-msg-system-body .ap-msg-text { color: var(--ink); }
 .ap-msg-system-time { font-size: 11px; font-variant-numeric: tabular-nums; }
-/* Scoped system messages (Appendix A.1): @private, @room, @server. A left-aligned card titled by its sender as the
-   server names it, "Name (@user_id)"; never centered, since they run to paragraphs and code.
+/* Scoped system messages (Appendix A.1): ~private, ~room, ~server. A left-aligned card titled by its sender as the
+   server names it, "Name (~user_id)"; never centered, since they run to paragraphs and code.
    Private ones are dashed: never stored, gone on reload. A code block in one wraps, with a Copy button clear of the text. */
 .ap-notice { margin: var(--space-3) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-200); font-size: 14px; line-height: 20px; color: var(--ink); text-align: left; }
 .ap-notice-private { border: 1px dashed var(--line-strong); background: transparent; }

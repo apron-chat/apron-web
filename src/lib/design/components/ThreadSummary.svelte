@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	/** The thread room's `intro_message`, pinned under the header: rendered + sanitized Markdown as `children`, or plain `summary`. */
+	/** The thread room's `description` (§3.4), pinned under the header: rendered + sanitized Markdown as `children`, or plain `summary`. */
 	interface Props {
 		summary?: string;
 		children?: Snippet;
