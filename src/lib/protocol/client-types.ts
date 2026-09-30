@@ -206,6 +206,12 @@ export interface ClientSnapshot {
 	/** The sign-in guard is held by a passkey ceremony (true) or an email step (false). */
 	passkeyBusy?: boolean;
 	/**
+	 * An email sign-in proposal waiting for its code (§4.10): the address,
+	 * and the server whose connection proposed it and alone takes the code.
+	 * Gone once used, replaced, or closed (by the server, or on expiry).
+	 */
+	emailCode?: { email: string; url: string };
+	/**
 	 * Signed in as a guest on a server whose guests only read (the demo
 	 * worker's `ext.demo.guest_posting: false`): posting, reacting, and room
 	 * changes are denied until the user signs in.

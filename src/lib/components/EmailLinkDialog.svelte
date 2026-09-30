@@ -25,7 +25,8 @@
 
 <!--
 	An emailed link is a credential that someone else may have crafted or forwarded, so it is never used
-	without asking: the question names the server and the address, and says what continuing replaces.
+	without asking: the question names the server, and says what continuing replaces. The link carries no
+	address (§4.10), so it can't say which account it signs in to.
 -->
 <dialog class="email-link" bind:this={dialog} aria-labelledby="email-link-title" data-testid="email-link-dialog" oncancel={(event) => { event.preventDefault(); oncancel(); }}>
 	<form method="dialog" onsubmit={(event) => { event.preventDefault(); onconfirm(); }}>

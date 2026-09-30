@@ -71,16 +71,6 @@ export type LiveRecord = { kind: 'message'; record: MessageRecord; embedded?: bo
 /** How a kept session signed in (see `ChatClient.signedInWith`). */
 export type SignInMethod = 'webauthn' | 'email' | 'token';
 
-/** An email code (or a link's token) to present as the next connection's first `auth` (§4.10). */
-export interface PendingEmail {
-	email: string;
-	token: string;
-	/** The display name to apply once signed in. */
-	name?: string;
-	resolve: (named: OperationHandle | undefined) => void;
-	reject: (cause: Error) => void;
-}
-
 export interface PendingSave {
 	requestId: string;
 	/** The submitted client fields (params without `message_id`/`room_id` key for rooms). */

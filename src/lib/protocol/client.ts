@@ -1,5 +1,6 @@
 import { conditionalPasskeysAvailable, immediatePasskeysAvailable, requestPasskey, type PasskeyMediation } from './webauthn';
 import { WriteError, writeEmbed } from './embeds';
+import { EmailConnection, type RpcFailure } from './email-connection';
 import {
 	ProtocolStore,
 	compareLogIds,
@@ -99,7 +100,6 @@ import {
 	validHistoryMetadata,
 	type LiveRecord,
 	type PendingRequest,
-	type PendingEmail,
 	type SignInMethod,
 	type PendingSave,
 	type RoomState,
@@ -230,12 +230,17 @@ export class ChatClient {
 	private authRequested = false;
 	/** A passkey ceremony is under way: other requests wait. */
 	private passkeyAbort?: AbortController;
-	/** An email code waiting for the next connection, where it is the first `auth` (§4.10). */
-	private pendingEmail?: PendingEmail;
-	/** That `auth` has been sent and not answered. */
+	/**
+	 * An email sign-in proposal (§4.10) waiting for its code, on a connection
+	 * of its own that is not signed in (see `requestEmailCode`).
+	 */
+	private emailProposal?: { connection: EmailConnection; email: string; proposed: boolean };
+	/** Every email connection still open (a proposal's, a link's), to close on `stop()`. */
+	private readonly emailConnections = new Set<EmailConnection>();
+	/** An email approval has been sent and not answered. */
 	private emailInFlight = false;
-	/** Code requests on connections of their own (see `requestEmailCode`): each finisher, to reject on `stop()`. */
-	private readonly sideRequests = new Set<(error?: Error) => void>();
+	/** The connection (`connectionId`) that proposed adding an address, which alone can approve it. */
+	private addProposalConnection?: number;
 	/** `addEmail` holds the sign-in guard: busy, but not with a passkey. */
 	private addingEmail = false;
 	/**
@@ -294,6 +299,12 @@ export class ChatClient {
 	setUrl(serverUrl: string): void {
 		const nextUrl = serverUrl.trim();
 		if (!nextUrl || nextUrl === this.serverUrl) return;
+		this.switchServer(nextUrl);
+		if (this.running) this.restart();
+	}
+
+	/** Points the client at another server, with that server's kept session, without connecting. */
+	private switchServer(nextUrl: string): void {
 		this.serverUrl = nextUrl;
 		this.sessionToken = undefined;
 		this.passkeyRequired = false;
@@ -305,7 +316,6 @@ export class ChatClient {
 		this.resetSession('Server URL changed; pending requests were cancelled');
 		// After the reset, which forgets the old server's session: this server's own comes back.
 		this.loadStoredSession();
-		if (this.running) this.restart();
 	}
 
 	/**
@@ -368,10 +378,8 @@ export class ChatClient {
 			request.reject(new Error('Connection stopped'));
 		}
 		this.requests.clear();
-		this.pendingEmail?.reject(new Error('Connection stopped'));
-		this.pendingEmail = undefined;
-		this.emailInFlight = false;
-		for (const finish of [...this.sideRequests]) finish(new Error('Connection stopped'));
+		this.emailProposal = undefined;
+		for (const connection of [...this.emailConnections]) connection.close(new Error('Connection stopped'));
 		if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'client stopped');
 		this.status = 'offline';
 		this.emit();
@@ -454,7 +462,8 @@ export class ChatClient {
 		return {
 			status: this.status,
 			authenticated: this.authenticated,
-			authBusy: Boolean(this.passkeyAbort || this.pendingEmail || this.emailInFlight),
+			authBusy: Boolean(this.passkeyAbort || this.emailInFlight),
+			...(this.emailProposal?.proposed ? { emailCode: { email: this.emailProposal.email, url: this.emailProposal.connection.url } } : {}),
 			passkeySession: Boolean(this.registeredSession && this.authenticated),
 			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith, signInMethods: [this.signedInWith, ...[...this.addedMethods].filter((method) => method !== this.signedInWith)] } : {}),
 			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
@@ -599,113 +608,210 @@ export class ChatClient {
 	}
 
 	/**
-	 * Asks the server at `url` (this client's by default) to email a sign-in
-	 * code to `email` (§4.10): an `auth` with `scheme: "email"` and no
-	 * `token`, which authenticates nothing and resolves alike whether or not
-	 * the address has an account. A code asked for while signed in (a guest
-	 * too) would only add the address to that account, so unless this
-	 * connection is up and not signed in, the request goes on a separate,
-	 * short-lived connection that never signs in: it waits for the `server`
-	 * frame, asks, and closes. This connection, its rooms, identity and
-	 * pending requests are left as they are.
+	 * Proposes signing in with `email` on the server at `url` (this client's
+	 * by default), which then emails a code (§4.10). The proposal goes on a
+	 * connection of its own that is not signed in, since one on a signed-in
+	 * connection (a guest's too) proposes adding the address instead, and
+	 * that connection stays open for `signInWithEmail`: a short code works
+	 * only on the connection that proposed it. This connection, its rooms,
+	 * identity and pending requests are left as they are meanwhile. It
+	 * resolves alike whether or not the address has an account. A newer
+	 * proposal replaces the last, which closes.
 	 */
 	async requestEmailCode(email: string, url = this.serverUrl): Promise<void> {
 		const address = email.trim();
 		if (!address) throw new Error('Enter your email address');
-		const here = url === this.serverUrl;
-		if (here && this.server && !this.offers('email')) throw new Error('This server does not support email sign-in');
-		if (here && this.socket && this.status === 'connected' && this.server && !this.authenticated && !this.authRequested && !this.passkeyAbort && !this.pendingEmail) {
-			await this.enqueueRequest('auth', { scheme: 'email', email: address }, { visible: false, allowBeforeAuth: true }).promise;
-			return;
+		if (url === this.serverUrl && this.server && !this.offers('email')) throw new Error('This server does not support email sign-in');
+		this.emailProposal?.connection.close(new Error('Superseded by another request'));
+		const connection = this.openEmailConnection(url);
+		const proposal = { connection, email: address, proposed: false };
+		this.emailProposal = proposal;
+		connection.onClose = () => {
+			this.emailConnections.delete(connection);
+			if (this.emailProposal !== proposal) return;
+			this.emailProposal = undefined;
+			this.emit();
+		};
+		try {
+			await connection.ready;
+			if (!connection.offers('email')) throw new Error('This server does not support email sign-in');
+			await connection.auth({ scheme: 'email', email: address });
+		} catch (cause) {
+			connection.close();
+			throw cause;
 		}
-		await this.requestOnSideConnection(url, { scheme: 'email', email: address });
+		if (connection.closed) throw connection.closed;
+		proposal.proposed = true;
+		this.emit();
+	}
+
+	/** A connection of its own for an email sign-in, closed on `stop()` if still open. */
+	private openEmailConnection(url: string): EmailConnection {
+		const connection = EmailConnection.open(this.webSocketFactory, url);
+		this.emailConnections.add(connection);
+		connection.onClose = () => this.emailConnections.delete(connection);
+		return connection;
 	}
 
 	/**
-	 * Sends one `auth` request on a connection of its own to `url` that
-	 * never signs in, and closes it once answered, refused, or out of time.
-	 * `stop()` rejects any still open.
+	 * Signs in with the code emailed for the open proposal (`requestEmailCode`,
+	 * §4.10), approving it on the connection that proposed it. That
+	 * connection, now signed in, becomes this client's connection, on the
+	 * proposal's server; the identity the result names replaces any before,
+	 * and the bearer `token` in it resumes the session on later connections
+	 * (§3.2). `beforeSwitch` runs just before, so a view held for the previous
+	 * session can go first. A `name` becomes the display name, and the `me`
+	 * request sent for it is returned, as with `usePasskey`. A wrong code
+	 * leaves the proposal open to try again, until the server gives up on it.
 	 */
-	private requestOnSideConnection(url: string, params: JsonObject): Promise<void> {
-		return new Promise<void>((resolve, reject) => {
-			let socket: WebSocket;
-			try {
-				socket = this.webSocketFactory(url);
-			} catch (cause) {
-				reject(cause instanceof Error ? cause : new Error('Unable to reach the server'));
-				return;
-			}
-			const id = makeRequestId('auth');
-			let done = false;
-			const finish = (error?: Error): void => {
-				if (done) return;
-				done = true;
-				clearTimeout(timer);
-				this.sideRequests.delete(finish);
-				socket.onmessage = null;
-				socket.onclose = null;
-				socket.onerror = null;
-				if (socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'done');
-				if (error) reject(error);
-				else resolve();
-			};
-			const timer = setTimeout(() => finish(new Error('The server didn’t answer; try again')), REQUEST_TIMEOUT_MS);
-			this.sideRequests.add(finish);
-			socket.onmessage = (event: MessageEvent) => {
-				let frame: WireFrame;
-				try {
-					frame = JSON.parse(String(event.data)) as WireFrame;
-				} catch {
-					return;
-				}
-				if (frame.method === 'server' && isJsonObject(frame.params) && Array.isArray(frame.params.auth)) {
-					const schemes = [...frame.params.auth, ...(Array.isArray(frame.params.signup) ? frame.params.signup : [])];
-					if (!schemes.includes(params.scheme as string)) {
-						finish(new Error('This server does not support email sign-in'));
-						return;
-					}
-					socket.send(JSON.stringify({ method: 'auth', id, params: { ...params, client: CLIENT_NAME } }));
-				} else if (frame.id === id) {
-					if (isJsonObject(frame.error)) {
-						const failure = new Error(userFacingRpcError(frame.error as RpcError));
-						(failure as Error & { code?: number }).code = (frame.error as RpcError).code;
-						finish(failure);
-					} else {
-						finish();
-					}
-				}
-			};
-			socket.onclose = () => finish(new Error('The connection closed before the server answered; try again'));
-			socket.onerror = () => finish(new Error('Unable to reach the server'));
-		});
+	async signInWithEmail(code: string, name?: string, beforeSwitch?: () => void): Promise<OperationHandle | undefined> {
+		const token = code.trim();
+		if (!token) throw new Error('Enter the code from the email');
+		const proposal = this.emailProposal;
+		if (!proposal?.proposed || proposal.connection.closed) throw new Error('The request for this code is no longer open. Send a new code.');
+		return this.approveEmail(proposal.connection, token, name, beforeSwitch, true);
 	}
 
 	/**
-	 * Asks for a code to add `email` to the signed-in account (§4.10): the
-	 * request is made on this connection, signed in as the account, so the
-	 * code can only add; `addEmail` presents it.
+	 * Signs in with the token from an emailed link (§4.10), which the viewer
+	 * has confirmed: it is presented on a fresh connection to `url` (this
+	 * client's server by default) that is not signed in, which then becomes
+	 * this client's connection as with `signInWithEmail`. A refused link
+	 * changes nothing here.
+	 */
+	async signInWithEmailLink(token: string, url = this.serverUrl, beforeSwitch?: () => void): Promise<OperationHandle | undefined> {
+		const secret = token.trim();
+		if (!secret) throw new Error('The link has no token');
+		if (!this.running) throw new Error('Connect to the server first');
+		const connection = this.openEmailConnection(url);
+		try {
+			await connection.ready;
+			if (!connection.offers('email')) throw new Error('This server does not support email sign-in');
+		} catch (cause) {
+			connection.close();
+			throw cause;
+		}
+		return this.approveEmail(connection, secret, undefined, beforeSwitch, false);
+	}
+
+	/** Approves an email sign-in on `connection` and carries on with it (see `signInWithEmail`). */
+	private async approveEmail(
+		connection: EmailConnection, token: string, name: string | undefined, beforeSwitch: (() => void) | undefined, retryable: boolean
+	): Promise<OperationHandle | undefined> {
+		if (!this.running) throw new Error('Connect to the server first');
+		if (this.emailInFlight) throw new Error('Already signing in; wait for it to finish');
+		this.emailInFlight = true;
+		this.emit();
+		try {
+			let result: JsonObject;
+			try {
+				result = await connection.auth({ scheme: 'email', token });
+			} catch (cause) {
+				// A wrong code may be retyped on the same proposal; anything else ends it.
+				if (!retryable || (cause as RpcFailure).code !== -32001 || connection.closed) this.closeEmailConnection(connection);
+				throw cause;
+			}
+			if (!isIdentity(result.you)) {
+				this.closeEmailConnection(connection);
+				throw new Error('Server authentication response did not include an identity');
+			}
+			if (!this.running) {
+				this.closeEmailConnection(connection);
+				throw new Error('Connection stopped');
+			}
+			if (this.emailProposal?.connection === connection) this.emailProposal = undefined;
+			beforeSwitch?.();
+			if (name?.trim()) this.displayName = name.trim();
+			this.adoptSignedIn(connection, result);
+			return this.authNameRequest;
+		} finally {
+			this.emailInFlight = false;
+			this.emit();
+		}
+	}
+
+	/**
+	 * Carries on with a connection signed in elsewhere as this client's own:
+	 * the current connection closes as for a new sign-in (its rooms and
+	 * requests go, as with `restart`), the client moves to that connection's
+	 * server if another, and the connection's `server` frame, the sign-in's
+	 * result, and the frames since are taken as if they had arrived here.
+	 */
+	private adoptSignedIn(connection: EmailConnection, result: JsonObject): void {
+		const { socket, server, frames } = connection.detach();
+		this.emailConnections.delete(connection);
+		if (connection.url !== this.serverUrl) this.switchServer(connection.url);
+		this.connectionProbe?.abort();
+		this.reconnectHeld = false;
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = undefined;
+		this.cancelPasskey();
+		const previous = this.socket;
+		this.socket = undefined;
+		this.authenticated = false;
+		this.authRequested = false;
+		this.clearTransientRequests();
+		this.discardProtocolView('Signed in');
+		this.stopPing();
+		this.clearStableTimer();
+		if (previous && previous.readyState !== WebSocket.CLOSED) previous.close(1000, 'signed in on another connection');
+		this.disconnectedAt = undefined;
+		this.reconnectAttempt = 0;
+		this.status = 'connected';
+		this.error = undefined;
+		const id = ++this.connectionId;
+		this.attachSocket(socket, id, true);
+		// Already signed in: the `server` frame is only taken in, not answered with an `auth`.
+		this.authRequested = true;
+		this.handleServer(server);
+		if (!this.handleAuth(result, 'email')) this.authRequested = false;
+		for (const frame of frames) {
+			if (this.isCurrentSocket(id, socket)) this.handleMessage(frame);
+		}
+	}
+
+	/** Drops the open email sign-in proposal, if any, closing its connection: its code can no longer be used. */
+	cancelEmailCode(): void {
+		const proposal = this.emailProposal;
+		this.emailProposal = undefined;
+		proposal?.connection.close();
+		if (proposal) this.emit();
+	}
+
+	/** Closes `connection`, and forgets the open proposal if it was that one's. */
+	private closeEmailConnection(connection: EmailConnection): void {
+		if (this.emailProposal?.connection === connection) this.emailProposal = undefined;
+		connection.close();
+	}
+
+	/**
+	 * Proposes adding `email` to the signed-in account (§4.10), guests
+	 * included: on this connection, which is signed in, a proposal adds
+	 * rather than signs in. `addEmail` approves it, on this same connection.
 	 */
 	async requestEmailCodeToAdd(email: string): Promise<void> {
 		const address = email.trim();
 		if (!this.server?.auth.includes('email')) throw new Error('This server does not sign in with email, so an address can’t be added');
 		if (!this.authenticated) throw new Error('Sign in first');
 		if (!address) throw new Error('Enter your email address');
+		const connection = this.connectionId;
 		await this.enqueueRequest('auth', { scheme: 'email', email: address }, { visible: false, allowBeforeAuth: false }).promise;
+		this.addProposalConnection = connection;
 	}
 
 	/**
-	 * Adds an email address to the signed-in account (§4.10): the code,
-	 * requested with `requestEmailCode` while signed in as this account, is
-	 * presented on this same connection, which adds the address instead of
-	 * signing in. Resolves with `you` as the server answered. Only an explicit
-	 * action does this; an emailed link always signs in (`signInWithEmail`).
+	 * Adds the address proposed with `requestEmailCodeToAdd` to the signed-in
+	 * account (§4.10), approving the proposal with the emailed code on the
+	 * connection that made it. The result is `{}`: the identity is unchanged,
+	 * and the address is one more way back into the account. Only an explicit
+	 * action does this; an emailed link always signs in.
 	 */
-	async addEmail(email: string, code: string): Promise<Identity> {
-		const address = email.trim();
+	async addEmail(code: string): Promise<void> {
 		const token = code.trim();
 		if (!this.server?.auth.includes('email')) throw new Error('This server does not sign in with email, so an address can’t be added');
 		if (!this.authenticated) throw new Error('Sign in first');
-		if (!address || !token) throw new Error('Enter your email address and the code you were sent');
+		if (!token) throw new Error('Enter the code you were sent');
+		if (this.addProposalConnection !== this.connectionId) throw new Error('The connection dropped since the code was sent. Send a new code.');
 		await this.readyToSignIn();
 		const controller = new AbortController();
 		this.passkeyAbort = controller;
@@ -713,11 +819,11 @@ export class ChatClient {
 		const connection = this.connectionId;
 		this.emit();
 		try {
-			const result = await this.passkeyRequest({ scheme: 'email', email: address, token });
+			await this.passkeyRequest({ scheme: 'email', token });
 			if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
+			this.addProposalConnection = undefined;
 			this.cancelPasskey();
-			if (!this.handleAuth(result, 'email', true)) throw new Error('Server authentication response did not include an identity');
-			return this.you!;
+			this.noteEmailAdded();
 		} finally {
 			this.addingEmail = false;
 			if (this.passkeyAbort === controller) this.cancelPasskey();
@@ -726,35 +832,19 @@ export class ChatClient {
 	}
 
 	/**
-	 * Signs in with the code from the email, or the token its link carries
-	 * (§4.10). The code is presented on a fresh connection, as its first
-	 * `auth` in place of resuming the kept session, never on one that is
-	 * already signed in as someone. On success that connection acts as the
-	 * identity the result names, and the bearer `token` in the result resumes
-	 * it on later connections (§3.2); a `name` becomes the display name, and
-	 * the `me` request sent for it is returned, as with `usePasskey`. On
-	 * failure the connection signs in as it otherwise would. A server that
-	 * doesn't offer `email` rejects it once its `server` frame arrives.
+	 * An address added to the signed-in account: another way back into a
+	 * registered session, or, for a guest, the way back into an account that
+	 * is now a registered one (its guest token, if any, still resumes it).
 	 */
-	signInWithEmail(email: string, code: string, name?: string): Promise<OperationHandle | undefined> {
-		const address = email.trim();
-		const token = code.trim();
-		if (!address || !token) return Promise.reject(new Error('Enter your email address and the code you were sent'));
-		if (!this.running) return Promise.reject(new Error('Connect to the server first'));
-		if (this.server && !this.offers('email')) return Promise.reject(new Error('This server does not support email sign-in'));
-		this.pendingEmail?.reject(new Error('Superseded by another sign-in'));
-		return new Promise((resolve, reject) => {
-			const pending: PendingEmail = { email: address, token, ...(name?.trim() ? { name: name.trim() } : {}), resolve, reject };
-			this.pendingEmail = pending;
-			// A connection that never comes back must not leave the sign-in hanging.
-			setTimeout(() => {
-				if (this.pendingEmail !== pending) return;
-				this.pendingEmail = undefined;
-				pending.reject(new Error('The server didn’t answer; try again'));
-				this.emit();
-			}, REQUEST_TIMEOUT_MS);
-			this.restart();
-		});
+	private noteEmailAdded(): void {
+		if (this.registeredSession) {
+			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
+			this.noteAdded('email');
+			return;
+		}
+		this.registeredSession = true;
+		this.passkeyRequired = true;
+		this.noteSignIn('email');
 	}
 
 	/**
@@ -1739,7 +1829,6 @@ export class ChatClient {
 		this.stopWaitingForPresence();
 		this.connectionProbe?.abort();
 		const id = ++this.connectionId;
-		let opened = false;
 		this.status = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
 		this.error = undefined;
 		this.connectionErrored = false;
@@ -1751,6 +1840,11 @@ export class ChatClient {
 			this.handleConnectionFailure(id, cause instanceof Error ? cause.message : 'Unable to open WebSocket');
 			return;
 		}
+		this.attachSocket(socket, id, false);
+	}
+
+	/** Makes `socket` this client's connection number `id`; `opened`: it is open already. */
+	private attachSocket(socket: WebSocket, id: number, opened: boolean): void {
 		this.socket = socket;
 		socket.onopen = () => {
 			if (!this.isCurrentSocket(id, socket)) return;
@@ -1926,15 +2020,6 @@ export class ChatClient {
 			this.emit();
 			return;
 		}
-		const email = this.pendingEmail;
-		if (email) {
-			this.pendingEmail = undefined;
-			if (this.offers('email')) {
-				this.authenticateWithEmail(email);
-				return;
-			}
-			email.reject(new Error('This server does not support email sign-in'));
-		}
 		this.authenticate(auth);
 	}
 
@@ -2014,48 +2099,6 @@ export class ChatClient {
 			}
 			this.emit();
 		});
-	}
-
-	/**
-	 * Presents an email code as this fresh connection's first `auth` (§4.10),
-	 * in place of resuming the kept session, so it never lands on a connection
-	 * that is already someone. If it fails, the connection signs in as it
-	 * otherwise would.
-	 */
-	private authenticateWithEmail(email: PendingEmail): void {
-		this.authRequested = true;
-		this.emailInFlight = true;
-		const socket = this.socket;
-		const request = this.enqueueRequest('auth', {
-			scheme: 'email', email: email.email, token: email.token, client: CLIENT_NAME
-		}, { visible: false, allowBeforeAuth: true });
-		this.requestRooms(false);
-		const done = () => {
-			this.emailInFlight = false;
-		};
-		request.promise.then((result) => {
-			done();
-			if (socket !== this.socket) {
-				email.reject(new Error('Connection changed; try again'));
-				return;
-			}
-			if (email.name) this.displayName = email.name;
-			if (!this.handleAuth(result, 'email')) {
-				this.authRequested = false;
-				email.reject(new Error('Server authentication response did not include an identity'));
-				if (this.server) this.authenticate(this.server.auth);
-				return;
-			}
-			email.resolve(this.authNameRequest);
-		}, (cause: Error) => {
-			done();
-			email.reject(cause);
-			if (socket !== this.socket) return;
-			this.authRequested = false;
-			if (this.server) this.authenticate(this.server.auth);
-			this.emit();
-		});
-		this.emit();
 	}
 
 	/**
@@ -3091,9 +3134,6 @@ export class ChatClient {
 			request.reject(new Error(reason));
 		}
 		this.requests.clear();
-		this.pendingEmail?.reject(new Error(reason));
-		this.pendingEmail = undefined;
-		this.emailInFlight = false;
 		this.discardProtocolView(reason);
 		this.authenticated = false;
 		this.authRequested = false;

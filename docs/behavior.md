@@ -351,9 +351,9 @@ server applies it with a `user` notification. **Remove** sends `me` with
 The profile editor's Sign-in row offers, where the server's `auth` lists them,
 **Sign in with a passkey**, **Sign in with email** and **Add email** to a
 guest, and **Add passkey**, **Add email** and **Sign out** to a registered
-account. A guest's Add email asks and answers on the guest's connection, and
-the server decides whether that keeps the guest identity as an account; Sign
-in with email is a sign-in to the address's own account. Adding needs the
+account. A guest's Add email proposes and approves on the guest's connection,
+which adds the address to the guest's account (§4.10); Sign in with email is a
+sign-in to the address's own account. Adding needs the
 scheme in `auth`, since adding is a way back in and a scheme listed only in
 `signup` doesn't sign in (the spec doesn't say whether servers may allow
 adding such a scheme; this client doesn't offer it). With the Go example, open
@@ -363,9 +363,12 @@ on a signed-in connection is added to that account
 ([PROTOCOL.md §4.9](https://github.com/shazow/apron/blob/main/PROTOCOL.md#49-webauthn-authentication)),
 so adding one keeps your guest identity and message ownership; signing in
 restores the identity attached to your chosen passkey. **Add email** asks for
-an address, requests a code for it on this connection, and presents the code on
-this same connection, which adds the address to the account (§4.10); a refused
-code says the address may belong to another account. Adding doesn't change how
+an address, proposes adding it on this signed-in connection (`auth` with
+`scheme: "email"` and `email`), and approves the proposal with the emailed code
+on this same connection (`scheme: "email"` and `token`, no address), which
+adds the address to the account and answers `{}` (§4.10); a refused code says
+the address may belong to another account. If this connection dropped in
+between, the proposal went with it and the form asks for a new code. Adding doesn't change how
 the session signed in: it is remembered beside it, as another way back in.
 When, as far as this browser knows, the account has no way back in that the
 server signs in with (only a kept token, pasted or an invite, or an account
@@ -388,21 +391,28 @@ ceremony is active, preventing edits from crossing an identity change.
 
 With `email` in the server's `auth` or `signup`
 ([PROTOCOL.md §4.10](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-email-authentication)),
-the connect screen's **Email** asks for an address and sends `auth` with
-`scheme: "email"` and no token, which authenticates nothing and answers the same
-whether or not the address has an account; then a code field signs in with
-the emailed code. A code asked for while signed in (a guest too) would only
-add the address to that account (§4.10), so when this connection is signed in
-the client asks on a short-lived connection of its own that never signs in,
-and nothing on screen changes; on a server the connect screen isn't connected
-to yet, it asks there the same way, without first signing in as a guest. The
-profile's **Add email** is what asks on the signed-in connection. The code belongs to the server that sent it: changing the
-Server field drops it. The code is presented on a fresh connection, as its
-first `auth` in place of resuming a kept session, never on a connection that
-is already someone (there it would add the address to that account). If it is
-refused, that connection signs in as it otherwise would. If the sign-in gives
-no token of its own, the previous account's kept token is forgotten, so a
-reconnect never silently brings that account back.
+the connect screen's **Email** asks for an address and proposes signing in
+with it: `auth` with `scheme: "email"` and `email`, which authenticates nothing
+and answers `{}` whether or not the address has an account. A proposal on a
+signed-in connection (a guest's too) would propose adding the address to that
+account, and a short code works only on the connection that proposed it, so
+the client proposes on a connection of its own that is not signed in and keeps
+it open while you type the code (pinging it at `server.ping`, and closing it
+after 15 minutes, by when the proposal has expired). Nothing on screen changes
+meanwhile: this connection, its identity and its rooms carry on. On a server
+the connect screen isn't connected to yet, it proposes there the same way,
+without first signing in as a guest. The code field then approves the proposal
+on that same connection (`scheme: "email"` and `token`, no address). A wrong
+code can be typed again on the same proposal; if that connection closes (the
+proposal expired, the server went away), the code field goes and the form asks
+for a new code. The code belongs to the server that proposed it: changing the
+Server field drops it and closes that connection, as does "Use another
+address". Once the code works, that connection, now signed in, becomes the
+client's connection (on its server, if another): the previous one closes, the
+page lets go of the view it held, and the rooms are listed on the new one. If
+the sign-in gives no token of its own, the previous account's kept token is
+forgotten, so a reconnect never silently brings that account back. The
+profile's **Add email** is what proposes on the signed-in connection.
 
 With `server.signup`, `auth` lists the schemes that sign in and `signup` those
 that create an account (§3.1): the connect screen offers both, and its hint says
@@ -410,20 +420,25 @@ which each does. A scheme listed only in `signup` works end to end for joining
 (an email code, or registering a passkey); one listed only in `auth` only signs
 in (a passkey that only signs in is never registered from there).
 
-The email's link is `#email=…&token=…`, with an optional `&server=` naming the
-server's `ws:`/`wss:` URL, all `application/x-www-form-urlencoded` in the URL
-fragment. The fragment is read and scrubbed from the address bar before
-anything else. A link is a credential someone else may have crafted or
-forwarded, so it is never used silently: a dialog asks "Sign in to *server*
-as *address*?", says whom it signs out when you are signed in there (or that a
+The email's link is `#token=…`, with an optional `&server=` naming the
+server's `ws:`/`wss:` URL (the suggested convention of §4.10), all
+`application/x-www-form-urlencoded` in the URL fragment; it carries no address.
+The fragment is read and scrubbed from the address bar before anything else
+(an earlier draft's `#email=…&token=…` is scrubbed too, and its address
+ignored). A link is a credential someone else may have crafted or forwarded,
+so it is never used silently: a dialog asks "Sign in to *server* with this
+email link?", says whom it signs out when you are signed in there (or that a
 saved session is kept there, before it has resumed), and warns that a link
-someone sent you can sign you in to their account. A link pasted into an open
-tab is taken the same way. On confirmation the page switches to the link's
-server if it names another one, and presents the token on a fresh connection
-as above (§4.10); the switch is remembered, and the server listed under
-Recent, only once the sign-in has worked. If it fails (expired, used), the
-connect screen opens on Email with the address filled in and the reason, and
-the next visit is back on the server the page used before.
+someone sent you can sign you in to their account, which matters all the more
+as the link can't say which account it is for. A link pasted into an open tab
+is taken the same way. On confirmation the client opens a fresh connection to
+the link's server (this one unless it names another) that is not signed in,
+presents the token there (`scheme: "email"` and `token`), and carries on with
+that connection once it has worked, as above; only then is a switch to another
+server remembered, and the server listed under Recent. A link never adds an
+address to an account. If it fails (expired, used), nothing changes: the page
+stays on its server, and the connect screen opens on Email, set to the link's
+server, with the reason.
 An email sign-in that can't be resumed (no token to resume with) shows as
 signed out after a reconnect, never as a guest, unless a passkey was added to
 the account, which then signs it back in; where email only signs up, the

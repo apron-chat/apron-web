@@ -61,7 +61,8 @@ Protocol types, replay reduction, and the WebSocket session live under
 `ChatClient`, and re-exports the rest of its API: `client-types.ts` has the
 snapshot and option types, `client-views.ts` the pure helpers over snapshots,
 capabilities and server URLs, and `client-internals.ts` the per-room state,
-tuning constants and helpers only `ChatClient` uses. `reducer.ts` keeps one store
+tuning constants and helpers only `ChatClient` uses, and `email-connection.ts`
+the connection an email sign-in proposes and approves on. `reducer.ts` keeps one store
 of room records, message snapshots, per-user reaction sets, and memberships
 for every room, and beside the latest membership per user, each room's
 membership records in `log_id` order for the timeline's join and leave lines;
@@ -127,18 +128,29 @@ by a `server` frame before v7, and by an `unsupported` reply until the next
 Every successful `auth` result is handled alike: its `you` becomes the
 connection's identity and a `token` in it replaces the saved one, whether it
 answers a guest sign-in, a token resume (rotation), a passkey or an email code.
-`requestEmailCode` asks for a sign-in code on a connection that isn't signed
-in: this one while it isn't, else a short-lived connection of its own that
-waits for the `server` frame, asks, and closes (it can target another server,
-for the connect screen), leaving this connection and its view untouched; it
-gives up after the request timeout and on `stop()`, as does a pending
-`signInWithEmail`. `requestEmailCodeToAdd` asks on the signed-in connection. `signInWithEmail` presents an email code (or a link's token) as
-the first `auth` of a fresh connection, in place of resuming the kept session, and falls
-back to the connection's usual sign-in if it is refused; `addEmail` presents
-one on the signed-in connection, adding the address (§4.10). How the kept
+Email sign-in (§4.10) proposes and approves on one connection, since a short
+code works only on the connection that proposed it: `requestEmailCode(email,
+url?)` opens an `EmailConnection` (`email-connection.ts`) to that server that
+never signs in until approved, waits for its `server` frame, proposes (`auth`
+with `email`), and keeps it open (pinging, and closed after
+`EMAIL_PROPOSAL_MS`) as the snapshot's `emailCode`, leaving this connection and
+its view untouched; a newer proposal, `cancelEmailCode()` and `stop()` close
+it. `signInWithEmail(code, name?, beforeSwitch?)` approves on it (`auth` with
+`token`); a `denied` code leaves it open to try again. On success the client
+adopts that connection as its own: `beforeSwitch` runs, it moves to that
+server if another (`switchServer`, as `setUrl` without connecting), closes its
+connection as `restart` would, attaches the socket (`attachSocket`, shared
+with `connectNow`), takes the `server` frame in without answering it, handles
+the result as a sign-in, and then processes the frames that arrived after the
+result. `signInWithEmailLink(token, url?, beforeSwitch?)` does the same with a
+link's token on a fresh connection; a refused link changes nothing.
+`requestEmailCodeToAdd` proposes on the signed-in connection and `addEmail(code)`
+approves on that same connection (refused if it has reconnected since), whose
+`{}` result adds the address: another way back in for a registered session,
+or, for a guest without a token, what makes it an email account. How the kept
 session signed in (`webauthn`, `email`, `token`) is remembered beside its token
 as `signedInWith`, and ways added to the account since beside it
 (`signInMethods`). `requestEmailCode`, `signInWithEmail` and registering a
-passkey accept a scheme listed in `auth` or `signup`; a passkey login and a
+passkey accept a scheme listed in `auth` or `signup`, and adding an email needs it in `auth`; a passkey login and a
 token resume need it in `auth`. The `server` frame's `welcome` and `signup` are kept on the
 snapshot's `server`.

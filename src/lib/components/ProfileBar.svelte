@@ -164,7 +164,10 @@
 		}
 	}
 
-	/** The Add email form's next step: ask for a code for the address, then present it here. */
+	/**
+	 * The Add email form's next step: propose adding the address on this
+	 * signed-in connection, then approve it with the code on the same one (§4.10).
+	 */
 	async function continueAddEmail(): Promise<void> {
 		const form = addEmail;
 		if (!form || form.busy) return;
@@ -175,7 +178,7 @@
 				await client.requestEmailCodeToAdd(form.email);
 				form.step = 'code';
 			} else {
-				await client.addEmail(form.email, form.code);
+				await client.addEmail(form.code);
 				addEmail = undefined;
 				passkeyNotice = `Added ${form.email} · sign in with it anywhere`;
 				return;

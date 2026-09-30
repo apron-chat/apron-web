@@ -64,7 +64,8 @@
 	/**
 	 * The address a code was requested for, and the server that will send it:
 	 * the code field shows while it is set, and the code only ever goes back to
-	 * that server. Changing the Server field drops it.
+	 * the connection that proposed it, on that server (§4.10). Changing the
+	 * Server field drops it, and so does that connection closing.
 	 */
 	let codeSent = $state<SentCode | undefined>();
 	let codeSentTo = $derived(codeSent?.email);
@@ -149,6 +150,17 @@
 		if (codeSent && codeSent.url !== normalizedInput) untrack(() => {
 			codeSent = undefined;
 			code = '';
+			client.cancelEmailCode();
+		});
+	});
+
+	// A code works only on the connection that asked for it: once that closes (expired, dropped), ask again.
+	$effect(() => {
+		if (!codeSent || emailBusy || snapshot.emailCode) return;
+		untrack(() => {
+			codeSent = undefined;
+			code = '';
+			error = 'The request for that code has closed (it expired, or the connection dropped). Send a new code.';
 		});
 	});
 
@@ -262,13 +274,11 @@
 	}
 
 	/**
-	 * Asks the server to email a code (§4.10). It answers the same whether or
-	 * not the address has an account, so this never says which.
-	 */
-	/**
-	 * Asks the server in the field for a code (§4.10). The client asks on a
-	 * connection that isn't signed in, of its own when need be, so neither a
-	 * session here nor a new server's throwaway guest is involved.
+	 * Asks the server in the field for a code (§4.10). The client proposes
+	 * the sign-in on a connection of its own that isn't signed in and keeps it
+	 * open for the code, so neither a session here nor a new server's
+	 * throwaway guest is involved. The server answers the same whether or not
+	 * the address has an account, so this never says which.
 	 */
 	async function sendCode(url: string): Promise<void> {
 		error = '';
@@ -285,7 +295,12 @@
 		}
 	}
 
-	/** Signs in with the emailed code; the bearer token in the result is kept to resume with (§3.2). */
+	/**
+	 * Signs in with the emailed code, approved on the connection that asked
+	 * for it, which the client then carries on with; the bearer token in the
+	 * result is kept to resume with (§3.2). The page lets go of the view it
+	 * held only once the code has worked.
+	 */
 	async function signInWithEmail(): Promise<void> {
 		if (!codeSent) return;
 		const sent = codeStillFor(codeSent, normalizedInput);
@@ -303,14 +318,8 @@
 		error = '';
 		emailBusy = true;
 		try {
-			// Another server: switch to it first; the sign-in is then its first connection's first `auth`.
-			if (sent.url !== client.url) {
-				onconnect();
-				client.setUrl(sent.url);
-			} else {
-				onsignout();
-			}
-			await client.signInWithEmail(sent.email, code, displayName.trim() || undefined);
+			const switching = sent.url !== client.url;
+			await client.signInWithEmail(code, displayName.trim() || undefined, () => (switching ? onconnect() : onsignout()));
 			codeSent = undefined;
 			code = '';
 			finish();
@@ -399,7 +408,7 @@
 			<p class="ap-profedit-hint">{guestReadOnly && chosen === 'guest' ? 'No token needed, but guests only read here: sign in with a passkey to post.' : hint}</p>
 		{/if}
 		{#if chosen === 'email' && codeSentTo}
-			<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={() => { codeSent = undefined; code = ''; error = ''; }}>Use another address, or send a new code</button>
+			<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={() => { codeSent = undefined; code = ''; error = ''; client.cancelEmailCode(); }}>Use another address, or send a new code</button>
 		{/if}
 		{#if passkeyNow && use.signIn && use.signUp}
 			<button class="ap-link ap-connect-other" type="button" data-testid="other-passkey" disabled={busy} onclick={() => passkey(plan === 'login' ? 'register' : 'login')}>

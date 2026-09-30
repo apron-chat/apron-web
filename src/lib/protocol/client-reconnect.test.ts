@@ -699,6 +699,24 @@ describe('liveness pings', () => {
 		expect(FakeSocket.instances.every((socket) => socket === first || pings(socket) === 0)).toBe(true);
 	});
 
+	it('pings on the connection a restart opens, at the same interval', () => {
+		const client = new ChatClient('ws://fake.test/');
+		client.start();
+		const first = latest();
+		first.open();
+		first.receive({ method: 'server', params: { protocol: 7, auth: ['token'], caps: [], ping: 30 } });
+		client.restart();
+		vi.advanceTimersByTime(0);
+		const second = latest();
+		expect(second).not.toBe(first);
+		second.open();
+		second.receive({ method: 'server', params: { protocol: 7, auth: ['token'], caps: [], ping: 30 } });
+		vi.advanceTimersByTime(30_000);
+		expect(pings(second)).toBe(1);
+		expect(pings(first)).toBe(0);
+		client.stop();
+	});
+
 	it('replaces a socket whose ping goes a whole interval without a pong, and keeps one that answers', async () => {
 		const client = new ChatClient('ws://fake.test/');
 		let snapshot: ClientSnapshot | undefined;

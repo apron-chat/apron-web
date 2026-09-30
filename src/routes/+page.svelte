@@ -124,7 +124,7 @@
 	/** The link is being used: its code goes out as a fresh connection's first `auth`. */
 	let emailLinkBusy = $state(false);
 	/** Why the emailed link didn't sign in, for the connect screen, with its address prefilled. */
-	let emailLinkFailure = $state<{ email: string; error: string } | undefined>();
+	let emailLinkFailure = $state<{ error: string } | undefined>();
 	/** The open thread's `room_id`; undefined in the room view. */
 	let activeThread = $state<string | undefined>();
 	let selectedRoomId = $state<string | undefined>();
@@ -499,25 +499,25 @@
 	// --- Connecting ---
 
 	/**
-	 * The viewer confirmed an emailed link, having been shown its address and
-	 * server (§4.10: a link's token is presented on a connection that is not
-	 * signed in, once the user has confirmed both): switch to the server it
-	 * names, if another, then present its token as a fresh connection's first
-	 * `auth`, in place of resuming the kept session. A link never adds an
-	 * address to an account; that is the profile's Add email. A failure opens
-	 * the connect screen on Email with the address and the reason.
+	 * The viewer confirmed an emailed link, having been shown its server
+	 * (§4.10: a link's token is presented on a connection that is not signed
+	 * in, once the user has confirmed): the client presents its token on a
+	 * fresh connection to the server it names, and carries on with that
+	 * connection once it has worked, when the page lets go of the view it held.
+	 * A link never adds an address to an account; that is the profile's Add
+	 * email. A failure changes nothing and opens the connect screen on Email,
+	 * set to the link's server, with the reason.
 	 */
 	function useEmailLink(): void {
 		const link = emailLink;
 		const chat = client;
 		emailLink = undefined;
 		if (!link || !chat) return;
-		// Another account from here on: the view held for the current one goes.
-		if (!link.server || link.server === chat.url) session.forget();
 		emailLinkBusy = true;
 		feedback.pending('Signing in…');
 		void runEmailLink(link, chat, {
-			beforeSwitch: () => leaveBackend(),
+			// Another account from here on: the view held for the current one goes.
+			beforeSwitch: (switched) => (switched ? leaveBackend() : session.forget()),
 			onSignedIn: (server, switched) => {
 				feedback.clear();
 				emailLinkFailure = undefined;
@@ -530,10 +530,10 @@
 			},
 			onFailed: (error, server) => {
 				feedback.clear();
-				// The link may have expired or been used: the connect screen can send a new code. A server it
-				// switched to is not remembered, so the next visit is back where the page was.
+				// The link may have expired or been used: the connect screen can send a new code, to the
+				// link's server, which is not remembered unless that works.
 				serverInput = server;
-				emailLinkFailure = { email: link.email, error: `The sign-in link didn’t work (${error}). Send a new code to try again, or pick another server.` };
+				emailLinkFailure = { error: `The sign-in link didn’t work (${error}). Send a new code to try again, or pick another server.` };
 				connectScheme = 'email';
 				connectOpen = true;
 			}
@@ -1315,7 +1315,7 @@
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
 		canCancel={session.rooms.length > 0 || session.ready} initialScheme={connectScheme}
-		initialEmail={emailLinkFailure?.email} initialError={emailLinkFailure?.error}
+		initialError={emailLinkFailure?.error}
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => (connectOpen = false)} onsignout={() => session.forget()}
 	/>
 {:else}
