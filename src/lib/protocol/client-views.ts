@@ -73,7 +73,8 @@ export const canReact = (server: ServerParams | undefined) => hasCapability(serv
 export const hasHistory = (server: ServerParams | undefined) => hasCapability(server, 'history');
 
 export function defaultWebSocketUrl(locationLike?: Location): string {
-	const configured = import.meta.env.VITE_DEFAULT_SERVER_URL;
+	// `?.`: outside Vite (plain Node) there is no `import.meta.env`.
+	const configured = import.meta.env?.VITE_DEFAULT_SERVER_URL;
 	if (configured) return configured;
 	if (!locationLike) return 'ws://localhost:8080/ws';
 	const protocol = locationLike.protocol === 'https:' ? 'wss:' : 'ws:';
