@@ -127,8 +127,10 @@ by a `server` frame before v7, and by an `unsupported` reply until the next
 Every successful `auth` result is handled alike: its `you` becomes the
 connection's identity and a `token` in it replaces the saved one, whether it
 answers a guest sign-in, a token resume (rotation), a passkey or an email code.
-`signInWithEmail` presents an email code (or a link's token) as the first
-`auth` of a fresh connection, in place of resuming the kept session, and falls
+`requestEmailCode` asks for a sign-in code on a connection that isn't signed
+in (reconnecting first when it is), and `requestEmailCodeToAdd` on the
+signed-in one. `signInWithEmail` presents an email code (or a link's token) as
+the first `auth` of a fresh connection, in place of resuming the kept session, and falls
 back to the connection's usual sign-in if it is refused; `addEmail` presents
 one on the signed-in connection, adding the address (§4.10). How the kept
 session signed in (`webauthn`, `email`, `token`) is remembered beside its token

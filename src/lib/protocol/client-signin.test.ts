@@ -50,12 +50,16 @@ describe('sign-in', () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
 		expect(snapshot.you?.user_id).toBe('guest_1');
 
+		// Asked for while signed in (as a guest too), a code would only add (§4.10): it is asked for
+		// first on a fresh connection, which then signs in again as it otherwise would.
 		const requested = client.requestEmailCode(' ada@example.com ');
-		const ask = latest().request('auth');
+		const asking = freshConnection(['email', 'token', 'guest']);
+		expect(asking.sent.map((frame) => [frame.method, (frame.params as { scheme?: string }).scheme])).toEqual([['auth', 'email'], ['auth', 'guest'], ['room_list', undefined]]);
+		const ask = asking.sent[0] as { id: string; params: unknown };
 		expect(ask.params).toEqual({ scheme: 'email', email: 'ada@example.com' });
-		// Nothing is authenticated yet: the result is `{}`, and the connection stays the guest.
-		latest().receive({ id: ask.id, result: {} });
+		asking.receive({ id: ask.id, result: {} });
 		await requested;
+		await asking.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
 		expect(snapshot.you?.user_id).toBe('guest_1');
 		expect(snapshot.passkeySession).toBe(false);
 
@@ -160,6 +164,10 @@ describe('sign-in', () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'], token: 'st_guest' });
 		expect(snapshot.signedInWith).toBe('token');
 		const socket = latest();
+		const asked = client.requestEmailCodeToAdd('ada@example.com');
+		expect(socket.request('auth').params).toEqual({ scheme: 'email', email: 'ada@example.com' });
+		await socket.reply('auth', {});
+		await asked;
 		const added = client.addEmail('ada@example.com', '418092');
 		await vi.advanceTimersByTimeAsync(0);
 		expect(latest()).toBe(socket);

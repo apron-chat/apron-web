@@ -234,6 +234,8 @@ export class ChatClient {
 	private pendingEmail?: PendingEmail;
 	/** That `auth` has been sent and not answered. */
 	private emailInFlight = false;
+	/** A sign-in code to ask for on the next connection, before it signs in (see `requestEmailCode`). */
+	private pendingEmailRequest?: { email: string; resolve: () => void; reject: (cause: Error) => void };
 	/** `addEmail` holds the sign-in guard: busy, but not with a passkey. */
 	private addingEmail = false;
 	/**
@@ -594,16 +596,41 @@ export class ChatClient {
 
 	/**
 	 * Asks the server to email a sign-in code to `email` (§4.10): an `auth`
-	 * with `scheme: "email"` and no `token`, which authenticates nothing. It
-	 * resolves alike whether or not the address has an account.
+	 * with `scheme: "email"` and no `token`, which authenticates nothing and
+	 * resolves alike whether or not the address has an account. A code asked
+	 * for while signed in (a guest too) would only add the address to that
+	 * account, so on a signed-in connection this reconnects and asks first on
+	 * the fresh connection, before it signs in again as it otherwise would.
 	 */
 	async requestEmailCode(email: string): Promise<void> {
 		const address = email.trim();
 		if (!this.offers('email')) throw new Error('This server does not support email sign-in');
 		if (!address) throw new Error('Enter your email address');
 		if (this.status !== 'connected') throw new Error('Connect to the server first');
-		await this.enqueueRequest('auth', { scheme: 'email', email: address }, { visible: false, allowBeforeAuth: true }).promise;
+		if (!this.authenticated && !this.authRequested) {
+			await this.enqueueRequest('auth', { scheme: 'email', email: address }, { visible: false, allowBeforeAuth: true }).promise;
+			return;
+		}
+		this.pendingEmailRequest?.reject(new Error('Superseded by another request'));
+		await new Promise<void>((resolve, reject) => {
+			this.pendingEmailRequest = { email: address, resolve, reject };
+			this.restart();
+		});
 	}
+
+	/**
+	 * Asks for a code to add `email` to the signed-in account (§4.10): the
+	 * request is made on this connection, signed in as the account, so the
+	 * code can only add; `addEmail` presents it.
+	 */
+	async requestEmailCodeToAdd(email: string): Promise<void> {
+		const address = email.trim();
+		if (!this.server?.auth.includes('email')) throw new Error('This server does not sign in with email, so an address can’t be added');
+		if (!this.authenticated) throw new Error('Sign in first');
+		if (!address) throw new Error('Enter your email address');
+		await this.enqueueRequest('auth', { scheme: 'email', email: address }, { visible: false, allowBeforeAuth: false }).promise;
+	}
+
 
 	/**
 	 * Adds an email address to the signed-in account (§4.10): the code,
@@ -1830,6 +1857,17 @@ export class ChatClient {
 			this.emit();
 			return;
 		}
+		const request = this.pendingEmailRequest;
+		if (request) {
+			// A sign-in code is asked for before this connection is anyone; its own sign-in follows.
+			this.pendingEmailRequest = undefined;
+			if (this.offers('email')) {
+				this.enqueueRequest('auth', { scheme: 'email', email: request.email }, { visible: false, allowBeforeAuth: true }).promise
+					.then(() => request.resolve(), (cause: Error) => request.reject(cause));
+			} else {
+				request.reject(new Error('This server does not support email sign-in'));
+			}
+		}
 		const email = this.pendingEmail;
 		if (email) {
 			this.pendingEmail = undefined;
@@ -2981,6 +3019,8 @@ export class ChatClient {
 		this.requests.clear();
 		this.pendingEmail?.reject(new Error(reason));
 		this.pendingEmail = undefined;
+		this.pendingEmailRequest?.reject(new Error(reason));
+		this.pendingEmailRequest = undefined;
 		this.emailInFlight = false;
 		this.discardProtocolView(reason);
 		this.authenticated = false;

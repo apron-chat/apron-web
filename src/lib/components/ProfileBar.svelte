@@ -172,7 +172,7 @@
 		form.busy = true;
 		try {
 			if (form.step === 'address') {
-				await client.requestEmailCode(form.email);
+				await client.requestEmailCodeToAdd(form.email);
 				form.step = 'code';
 			} else {
 				await client.addEmail(form.email, form.code);

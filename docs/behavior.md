@@ -384,7 +384,10 @@ With `email` in the server's `auth` or `signup`
 the connect screen's **Email** asks for an address and sends `auth` with
 `scheme: "email"` and no token, which authenticates nothing and answers the same
 whether or not the address has an account; then a code field signs in with
-the emailed code. The code belongs to the server that sent it: changing the
+the emailed code. A code asked for while signed in (a guest too) would only
+add the address to that account (§4.10), so on a signed-in connection the
+client reconnects and asks on the fresh connection before it signs in again;
+the profile's **Add email** is what asks on the signed-in connection. The code belongs to the server that sent it: changing the
 Server field drops it. The code is presented on a fresh connection, as its
 first `auth` in place of resuming a kept session, never on a connection that
 is already someone (there it would add the address to that account). If it is
