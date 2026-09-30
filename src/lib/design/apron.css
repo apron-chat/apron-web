@@ -61,7 +61,13 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 /* Roles (§3.3): server-assigned labels as small outlined badges in the UI face, set apart from the name so no name can
    pass as one. "admin" takes the accent, "bot" the denim; other roles show as written, muted. */
 .ap-roles { display: inline-flex; flex-wrap: wrap; gap: 4px; align-self: center; }
-.ap-role { display: inline-block; max-width: 12em; height: 16px; padding: 0 5px; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: 10px; line-height: 14px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.ap-role { display: inline-block; max-width: 12em; height: 16px; padding: 0 5px; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: 10px; line-height: 17px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+/* Caps-only text sits high in its line box, so trim the box to the cap height and pad it evenly to the 16px badge
+   (2 × (14px − 1cap) / 2 + 1cap + the 2px border), whatever the system face; without text-box, the taller line box
+   above lowers the caps to about center. */
+@supports (text-box: trim-both cap alphabetic) {
+	.ap-role { height: auto; padding-block: calc((14px - 1cap) / 2); line-height: 14px; text-box: trim-both cap alphabetic; }
+}
 .ap-role-admin { border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); }
 .ap-role-bot { border-color: color-mix(in srgb, var(--denim) 55%, transparent); color: var(--denim); }
 .ap-msg-compact .ap-roles { margin-right: var(--space-2); }
