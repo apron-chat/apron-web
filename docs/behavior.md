@@ -105,7 +105,7 @@ sender group.
 The Member list button at the end of the room title bar toggles a right-hand
 sidebar listing the open room's or thread's members from its `room_list`
 snapshot, with their role badges. A server may list only the most recently
-active members of a large room, with `member_count` for the total; the list
+active members of a large room, with `member_count`, the number of users who have joined; the list
 then says so, and the count in its header is the total. In a room you have
 joined, with the `rooms` cap, **Add by @user_id** adds someone (`room_join`
 with their `user_id`, suggesting people the client knows) and each other
