@@ -11,7 +11,9 @@
 	import Avatar from './Avatar.svelte';
 	import MentionText from './MentionText.svelte';
 	import ReactionBar from './ReactionBar.svelte';
-	import SystemNotice, { noticeScope } from './SystemNotice.svelte';
+	import RoleBadges from './RoleBadges.svelte';
+	import SystemNotice from './SystemNotice.svelte';
+	import { systemScope } from '$lib/protocol/types';
 	import Embed from './embeds/Embed.svelte';
 	import EmbedRemove from './embeds/EmbedRemove.svelte';
 
@@ -92,7 +94,7 @@
 	let handle = $derived(directory.person(event.from)?.user_id ?? event.from.user_id);
 	let showHandle = $derived(Boolean(handle) && (handle !== name || directory.sharesName(event.from)));
 	/** Who else got a system message (Appendix A.1): everyone on the server, the room, or only you. */
-	let scope = $derived(noticeScope(event.from.user_id));
+	let scope = $derived(systemScope(event.from.user_id));
 	let time = $derived(eventTime(event));
 	let fullTime = $derived(idDateTime(event.message_id));
 	let isoTime = $derived(idIso(event.message_id));
@@ -238,6 +240,7 @@
 			<header class="ap-msg-head">
 				<span class="ap-msg-sender">{name}</span>
 				{#if showHandle}<span class="ap-msg-handle" data-testid="sender-handle">@{handle}</span>{/if}
+				<RoleBadges user={event.from} />
 				<span class="ap-msg-meta">{#if time}<time datetime={isoTime} title={fullTime}>{time}</time>{/if}</span>
 			</header>
 		{/if}

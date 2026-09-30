@@ -36,7 +36,7 @@ describe('ChatClient operations', () => {
 
 	async function connect(caps = ['edit', 'rooms', 'reactions']): Promise<void> {
 		await socket.greet(caps, { room: { room_id: 'general', log_id: '10', title: 'General' } });
-		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'thread', log_id: '20', parent_room_id: 'general', title: 'Side', intro_message: { message_id: '100' } }] } });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'thread', log_id: '20', parent_room_id: 'general', title: 'Side', description: 'Why *side*' }] } });
 	}
 
 	const room = (id: string) => snapshot.rooms.find((entry) => entry.id === id)!;
@@ -54,11 +54,10 @@ describe('ChatClient operations', () => {
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops' }] } });
 		expect(snapshot.activeRoom).toBe('general');
 		expect(topLevelRooms(snapshot.rooms).map((entry) => entry.id)).toEqual(['general', 'ops']);
-		expect(childRooms(snapshot.rooms, 'general').map((entry) => [entry.id, entry.title, entry.introMessageId])).toEqual([['thread', 'Side', '100']]);
+		expect(childRooms(snapshot.rooms, 'general').map((entry) => [entry.id, entry.title, entry.description])).toEqual([['thread', 'Side', 'Why *side*']]);
 		expect(room('ops').title).toBe('ops');
-		expect(room('thread').introMessage).toBeUndefined();
-		socket.receive({ method: 'message', params: message('100') });
-		expect(room('thread').introMessage?.body).toEqual({ text: 'm100' });
+		expect(room('ops').description).toBeUndefined();
+		expect(room('ops').private).toBeUndefined();
 		socket.receive({ method: 'room_update', params: { left: [{ room_id: 'general' }] } });
 		expect(snapshot.activeRoom).toBe('ops');
 	});
@@ -150,13 +149,13 @@ describe('ChatClient operations', () => {
 
 	it('creates threads and updates rooms from the latest record', async () => {
 		await connect();
-		quiet(client.createRoom({ parentRoomId: 'general', title: 'Deploy', introMessageId: '100' }));
-		expect(socket.request('room_set').params).toEqual({ parent_room_id: 'general', title: 'Deploy', intro_message: { message_id: '100' } });
-		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'thread', log_id: '21', parent_room_id: 'general', title: 'Side', intro_message: { message_id: '100' }, ext: { x: { y: 1 } } }] } });
+		quiet(client.createRoom({ parentRoomId: 'general', title: 'Deploy', description: 'Deploy?' }));
+		expect(socket.request('room_set').params).toEqual({ parent_room_id: 'general', title: 'Deploy', description: 'Deploy?' });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'thread', log_id: '21', parent_room_id: 'general', title: 'Side', description: 'Deploy?', ext: { x: { y: 1 } } }] } });
 		quiet(client.updateRoom('thread', { title: 'Renamed' }));
-		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed', intro_message: { message_id: '100' }, ext: { x: { y: 1 } } });
+		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed', description: 'Deploy?', ext: { x: { y: 1 } } });
 		// A second update before the first is confirmed builds on it.
-		quiet(client.updateRoom('thread', { introMessageId: null, ext: null }));
+		quiet(client.updateRoom('thread', { description: null, ext: null }));
 		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed' });
 		// The matching record confirms it; later updates build on the store again.
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'thread', log_id: '22', parent_room_id: 'general', title: 'Renamed' }] } });
@@ -378,13 +377,13 @@ describe('ChatClient history per room', () => {
 		expect(socket.sent.filter((frame) => frame.method === 'history' && (frame.params as { room_id: string }).room_id === '20')).toHaveLength(1);
 	});
 
-	it('keeps an embedded intro snapshot below a null bound', async () => {
+	it('drops a v6 intro_message and installs nothing from it', async () => {
 		socket.receive({ method: 'room_update', params: { joined: [{
 			room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '500', history_log_id: null,
 			intro_message: { message_id: '400', log_id: '400', room_id: 'ops', from: alice, body: { text: 'intro' } }
 		}] } });
-		expect(client.message('400')?.body).toEqual({ text: 'intro' });
-		expect(room('ops').introMessage?.message_id).toBe('400');
+		expect(client.message('400')).toBeUndefined();
+		expect(client.roomRecord('ops')).not.toHaveProperty('intro_message');
 	});
 
 	it('installs an embedded reply_to snapshot below its room bound', async () => {
@@ -419,7 +418,7 @@ describe('ChatClient history per room', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = FakeSocket.latest();
 		next.open();
-		next.receive({ method: 'server', params: { protocol: 6, auth: ['guest'], caps: [] } });
+		next.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: [] } });
 		quiet(client.send('general', 'queued'));
 		expect(next.sent.some((frame) => frame.method === 'message')).toBe(false);
 		next.receive({ id: next.request('auth').id, result: { you: { user_id: 'guest_2' } } });

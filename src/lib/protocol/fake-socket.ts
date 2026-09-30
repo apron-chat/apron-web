@@ -77,7 +77,7 @@ export class FakeSocket {
 		this.receive({
 			method: 'server',
 			params: {
-				protocol: 6, name: 'fake', auth: options.auth ?? ['guest'], caps: advertised,
+				protocol: 7, name: 'fake', auth: options.auth ?? ['guest'], caps: advertised,
 				...(options.ext ? { ext: options.ext } : {}), ...(options.ping ? { ping: options.ping } : {})
 			}
 		});

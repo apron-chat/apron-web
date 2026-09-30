@@ -91,7 +91,7 @@ describe('transport reconnects', () => {
 
 	/** Replaces the server frame, advertising cap `activity`. */
 	function advertiseActivity(socket = latest()): void {
-		socket.receive({ method: 'server', params: { protocol: 6, name: 'fake', auth: ['guest'], caps: ['activity'] } });
+		socket.receive({ method: 'server', params: { protocol: 7, name: 'fake', auth: ['guest'], caps: ['activity'] } });
 	}
 
 	it('bounds typing traffic while refreshing it before expiry', () => {
@@ -294,7 +294,7 @@ describe('persisted session tokens', () => {
 		const elsewhere = new ChatClient('ws://other.test/');
 		elsewhere.start();
 		latest().open();
-		latest().receive({ method: 'server', params: { protocol: 6, auth: ['webauthn', 'token', 'guest'], caps: [] } });
+		latest().receive({ method: 'server', params: { protocol: 7, auth: ['webauthn', 'token', 'guest'], caps: [] } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'guest' }));
 		elsewhere.stop();
 	});
@@ -320,7 +320,7 @@ describe('persisted session tokens', () => {
 		vi.advanceTimersByTime(0);
 		const socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 6, auth: ['token', 'guest'], caps: [] } });
+		socket.receive({ method: 'server', params: { protocol: 7, auth: ['token', 'guest'], caps: [] } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'apron_bot_revoked' }));
 		const auth = socket.sent.find((frame) => frame.method === 'auth')!;
 		socket.receive({ id: auth.id, error: { code: -32001, message: 'Invalid bot token' } });
@@ -364,8 +364,8 @@ describe('persisted session tokens', () => {
 		client.subscribe((next) => (snapshot = next));
 		client.start();
 		latest().open();
-		latest().receive({ method: 'server', params: { protocol: 6, auth: ['webauthn', 'token', 'guest'], caps: ['rooms'] } });
-		latest().receive({ method: 'message', params: { from: { user_id: '@private' }, body: { text: 'Guests can read along.' } } });
+		latest().receive({ method: 'server', params: { protocol: 7, auth: ['webauthn', 'token', 'guest'], caps: ['rooms'] } });
+		latest().receive({ method: 'message', params: { from: { user_id: '~private' }, body: { text: 'Guests can read along.' } } });
 		const auth = latest().sent.find((frame) => frame.method === 'auth')!;
 		latest().receive({ id: auth.id, result: { you: { user_id: 'u_1', name: 'Ada' }, token: 'session-4' } });
 		await Promise.resolve();
@@ -391,7 +391,7 @@ describe('persisted session tokens', () => {
 		client.subscribe((next) => (snapshot = next));
 		client.start();
 		latest().open();
-		latest().receive({ method: 'server', params: { protocol: 6, auth: ['webauthn', 'token', 'guest'], caps: [] } });
+		latest().receive({ method: 'server', params: { protocol: 7, auth: ['webauthn', 'token', 'guest'], caps: [] } });
 		const auth = latest().sent.find((frame) => frame.method === 'auth')!;
 		expect(auth.params).toEqual(expect.objectContaining({ scheme: 'token', token: 'stale' }));
 		latest().receive({ id: auth.id, error: { code: -32001, message: 'Session expired; sign in with your passkey' } });
@@ -582,7 +582,7 @@ describe('reconnect divider', () => {
 		const joinedRooms = () => snapshot.rooms.map((candidate) => candidate.id);
 		// A registered session: the server hands a token, so the next connection resumes the identity.
 		latest().open();
-		latest().receive({ method: 'server', params: { protocol: 6, auth: ['guest', 'token'], caps: ['history', 'rooms'] } });
+		latest().receive({ method: 'server', params: { protocol: 7, auth: ['guest', 'token'], caps: ['history', 'rooms'] } });
 		await latest().reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'secret' });
 		await latest().reply('room_list', { joined: [room, ops], users: [] });
 		await latest().reply('history', { more: false, latest_log_id: '32', history_log_id: '30' });
@@ -595,7 +595,7 @@ describe('reconnect divider', () => {
 		vi.advanceTimersByTime(5_000);
 		const socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 6, auth: ['guest', 'token'], caps: ['history', 'rooms'] } });
+		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest', 'token'], caps: ['history', 'rooms'] } });
 		expect(socket.request('auth').params).toMatchObject({ scheme: 'token', token: 'secret' });
 		// The least checkpoint of the kept rooms: everything up to it is here.
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true, latest_log_id: '12' });
@@ -613,7 +613,7 @@ describe('reconnect divider', () => {
 
 	it('keeps every kept room the changes since leave out, and relists a new identity in full', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { protocol: 6, auth: ['guest', 'token'], caps: ['history', 'rooms'] } });
+		latest().receive({ method: 'server', params: { protocol: 7, auth: ['guest', 'token'], caps: ['history', 'rooms'] } });
 		await latest().reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'secret' });
 		await latest().reply('room_list', { joined: [room], users: [] });
 		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
@@ -621,7 +621,7 @@ describe('reconnect divider', () => {
 		vi.advanceTimersByTime(5_000);
 		let socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 6, auth: ['guest', 'token'], caps: ['history', 'rooms'] } });
+		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest', 'token'], caps: ['history', 'rooms'] } });
 		await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
 		// Nothing changed: an empty listing with left keeps general as it was.
 		await socket.reply('room_list', { joined: [], left: [], users: [] });
@@ -634,7 +634,7 @@ describe('reconnect divider', () => {
 		vi.advanceTimersByTime(5_000);
 		socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 6, auth: ['guest', 'token'], caps: ['history', 'rooms'] } });
+		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest', 'token'], caps: ['history', 'rooms'] } });
 		expect(socket.request('room_list').params).toMatchObject({ latest_log_id: '12' });
 		await socket.reply('auth', { you: { user_id: 'bob', name: 'Bob' } });
 		const delta = socket.request('room_list');
@@ -681,7 +681,7 @@ describe('liveness pings', () => {
 		const send = first.send.bind(first);
 		first.send = (data: string) => { raw.push(data); send(data); };
 		first.open();
-		first.receive({ method: 'server', params: { protocol: 6, auth: ['token'], caps: [], ping: 30 } });
+		first.receive({ method: 'server', params: { protocol: 7, auth: ['token'], caps: [], ping: 30 } });
 		// No guest scheme and no token: the client never authenticates, and still pings (§1).
 		expect(pings(first)).toBe(0);
 		vi.advanceTimersByTime(30_000);
@@ -746,10 +746,10 @@ describe('liveness pings', () => {
 		const client = new ChatClient('ws://fake.test/');
 		client.start();
 		await latest().greet([], { ping: 30 });
-		latest().receive({ method: 'server', params: { protocol: 6, auth: ['guest'], caps: ['rooms'], ping: 10 } });
+		latest().receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms'], ping: 10 } });
 		vi.advanceTimersByTime(10_000);
 		expect(pings(latest())).toBe(1);
-		latest().receive({ method: 'server', params: { protocol: 6, auth: ['guest'], caps: ['rooms'] } });
+		latest().receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['rooms'] } });
 		vi.advanceTimersByTime(300_000);
 		expect(pings(latest())).toBe(1);
 		client.stop();

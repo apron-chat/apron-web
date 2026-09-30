@@ -17,7 +17,7 @@ export type MoveResult = { moved: true; room: string } | { moved: false; error: 
 /** What a new thread from a selection is created with: its parent room and title (from the earliest message). */
 export interface NewThreadOptions {
 	parentRoomId: string;
-	title: (introMessageId: string) => string;
+	title: (firstMessageId: string) => string;
 }
 
 /**
@@ -91,18 +91,19 @@ export class MessageSelection {
 	}
 
 	/**
-	 * "New thread": one fresh thread for the whole selection, introduced by its
+	 * "New thread": one fresh thread for the whole selection, titled after its
 	 * earliest message in `order`. The thread is created first; the moves go
-	 * out once the server has named it.
+	 * out once the server has named it. The messages themselves say what it is
+	 * about, so it gets no `description`.
 	 */
 	async moveToNewThread(client: ChatClient, order: string[], options: NewThreadOptions): Promise<MoveResult> {
 		const current = this.current;
 		if (!current || current.saving || current.ids.length === 0) return { moved: false, error: undefined };
-		const intro = [...current.ids].sort((a, b) => order.indexOf(a) - order.indexOf(b))[0];
+		const first = [...current.ids].sort((a, b) => order.indexOf(a) - order.indexOf(b))[0];
 		this.current = { ...current, saving: true, denied: undefined };
 		this.menuOpen = false;
 		try {
-			const result = await client.createRoom({ parentRoomId: options.parentRoomId, title: options.title(intro), introMessageId: intro }).promise;
+			const result = await client.createRoom({ parentRoomId: options.parentRoomId, title: options.title(first) }).promise;
 			if (typeof result.room_id !== 'string') throw new Error('Invalid room response');
 			this.current = { ...current, saving: false };
 			return await this.move(client, result.room_id);

@@ -65,7 +65,7 @@ export function newRoomState(id: string, kind: RoomKind = 'joined'): RoomState {
 	return { id, kind, recoveryGeneration: 0, waiters: [], loadGeneration: 0, loading: false, timeline: createTimeline(id), dirty: true };
 }
 
-/** `embedded` marks a `reply_to`/`intro_message` snapshot, which installs regardless of its room's bound. */
+/** `embedded` marks a `reply_to` snapshot, which installs regardless of its room's bound. */
 export type LiveRecord = { kind: 'message'; record: MessageRecord; embedded?: boolean } | { kind: 'reaction'; record: ReactionSet };
 
 export interface PendingSave {
@@ -124,6 +124,8 @@ export type ValidHistoryResponse = JsonObject & {
 };
 
 export const REQUEST_TIMEOUT_MS = 20_000;
+/** The `unsupported` error code (§1.1): a method or an optional parameter the server does not implement. */
+export const UNSUPPORTED = -32601;
 const HISTORY_PAGE_SIZE = 200;
 /** A thread opens on its newest page this size; older pages load as the reader scrolls back. */
 export const THREAD_PAGE_SIZE = 50;
@@ -200,11 +202,14 @@ export function messageClientFields(record: MessageRecord): JsonObject {
 	return fields;
 }
 
-/** A room's client fields other than `parent_room_id`, as an update would submit them. */
+/**
+ * A room's client fields as an update would submit them (§4.3.4): all but
+ * `parent_room_id` and `private`, which are fixed at creation.
+ */
 export function roomClientFields(record: RoomRecord): JsonObject {
 	const fields: JsonObject = {};
 	if (record.title !== undefined) fields.title = record.title;
-	if (record.intro_message) fields.intro_message = { message_id: record.intro_message.message_id };
+	if (record.description !== undefined) fields.description = record.description;
 	if (record.ext !== undefined) fields.ext = record.ext;
 	return fields;
 }
@@ -231,8 +236,9 @@ export function roomTitle(roomId: string, record: RoomRecord | undefined): strin
 
 /**
  * One user object merged into the kept one (§3.3): a present field replaces
- * the kept value, an empty value (`""`, `{}`) removes it, and a missing (or
- * `null`) field leaves it. Returns `current` itself when nothing changes.
+ * the kept value, an empty value (`""`, `{}`, or `[]` for `roles`) removes
+ * it, and a missing (or `null`) field leaves it. Returns `current` itself
+ * when nothing changes.
  */
 export function mergeIdentity(current: Identity | undefined, incoming: Identity): Identity {
 	const next: JsonObject = Object.create(null);
@@ -243,7 +249,7 @@ export function mergeIdentity(current: Identity | undefined, incoming: Identity)
 		if (key === 'user_id') continue;
 		const value = incoming[key];
 		if (value === undefined || value === null) continue;
-		if (value === '' || (isJsonObject(value) && Object.keys(value).length === 0)) {
+		if (value === '' || (isJsonObject(value) && Object.keys(value).length === 0) || (Array.isArray(value) && value.length === 0)) {
 			if (Object.hasOwn(next, key)) {
 				delete next[key];
 				changed = true;

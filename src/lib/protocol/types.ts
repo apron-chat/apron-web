@@ -1,5 +1,5 @@
 /**
- * Wire types and decoders for Apron protocol v6 (PROTOCOL.md at the repository
+ * Wire types and decoders for Apron protocol v7 (PROTOCOL.md at the repository
  * root). Decoders normalize server records to the fields the protocol defines
  * and drop unknown top-level keys (§1: unknown keys MAY be dropped), while
  * copying known values exactly, including `ext`, literal `null`s, unknown embed
@@ -27,6 +27,11 @@ export interface Identity extends JsonObject {
 	user_id: string;
 	name?: string;
 	avatar?: string;
+	/**
+	 * Server-assigned labels such as `"admin"` or `"bot"` (§3.3): for display
+	 * only, beside the name and never as part of it; they grant nothing here.
+	 */
+	roles?: string[];
 	ext?: JsonObject;
 }
 
@@ -75,7 +80,7 @@ export interface Embed extends JsonObject {
 	og?: OpenGraph;
 }
 
-/** A bare message reference (`reply_to`, `intro_message`) as clients send and store it. */
+/** A bare message reference (`reply_to`) as clients send and store it. */
 export interface MessageRef extends JsonObject {
 	message_id: string;
 }
@@ -97,8 +102,8 @@ export interface MessageRecord extends JsonObject {
 }
 
 /**
- * A room record (§3.4) without delivery fields. `intro_message` is stored bare;
- * its embedded snapshot, when a server sent one, is installed as a message.
+ * A room record (§3.4) without delivery fields. A v6 server's
+ * `intro_message` is not a field of v7 and is dropped like any unknown key.
  */
 export interface RoomRecord extends JsonObject {
 	room_id: string;
@@ -106,8 +111,11 @@ export interface RoomRecord extends JsonObject {
 	log_id?: string;
 	/** Marks a thread; fixed at creation. */
 	parent_room_id?: string;
+	/** Visible only to its members (§4.3.4); fixed at creation. Only `true` means private. */
+	private?: boolean;
 	title?: string;
-	intro_message?: MessageRef;
+	/** What the room is about, Markdown by convention; set with `room_set`. */
+	description?: string;
 	ext?: JsonObject;
 }
 
@@ -126,6 +134,8 @@ export interface ServerParams {
 	name?: string;
 	caps?: string[];
 	auth: string[];
+	/** Markdown for the sign-in screen (§3.2): how this server's schemes fit together. */
+	welcome?: string;
 	/** Extension metadata (§3.1). */
 	ext?: ServerExt;
 	/** Seconds between client pings (§1, §3.1). */
@@ -166,6 +176,11 @@ export interface RoomDelivery {
 	 * `room_update` `joined` (§4.3.1, §4.3.3).
 	 */
 	members?: Identity[];
+	/**
+	 * How many users have joined, when the server truncated `members` to the
+	 * most recently active (§4.3.1).
+	 */
+	member_count?: number;
 }
 
 /**
@@ -282,35 +297,27 @@ export function decodeMessage(value: unknown): { record: MessageRecord; embedded
  * Decode a room record (a `room_list` or `room_update` element, or a history
  * `rooms` element). Delivery fields are returned separately.
  */
-export function decodeRoom(value: unknown): { record: RoomRecord; embedded: MessageRecord[]; delivery: RoomDelivery } | null {
+export function decodeRoom(value: unknown): { record: RoomRecord; delivery: RoomDelivery } | null {
 	if (!isJsonObject(value) || typeof value.room_id !== 'string') return null;
 	const record = Object.create(null) as RoomRecord;
 	record.room_id = value.room_id;
 	if (isLogId(value.log_id)) record.log_id = value.log_id;
 	if (Object.hasOwn(value, 'parent_room_id') && typeof value.parent_room_id === 'string') record.parent_room_id = value.parent_room_id;
+	if (Object.hasOwn(value, 'private') && typeof value.private === 'boolean') record.private = value.private;
 	if (Object.hasOwn(value, 'title')) record.title = cloneJson(value.title) as string;
-	const embedded: MessageRecord[] = [];
-	if (Object.hasOwn(value, 'intro_message')) {
-		const reference = toMessageRef(value.intro_message);
-		if (reference) {
-			record.intro_message = reference;
-			if (isJsonObject(value.intro_message) && Object.hasOwn(value.intro_message, 'log_id')) {
-				const snapshot = decodeMessage(value.intro_message);
-				if (snapshot) embedded.push(snapshot.record, ...snapshot.embedded);
-			}
-		}
-	}
+	if (Object.hasOwn(value, 'description')) record.description = cloneJson(value.description) as string;
 	if (Object.hasOwn(value, 'ext')) record.ext = cloneJson(value.ext) as JsonObject;
 	const delivery: RoomDelivery = {};
 	if (value.latest_log_id !== undefined && isLogId(value.latest_log_id)) delivery.latest_log_id = value.latest_log_id;
 	if (value.history_log_id === null || isLogId(value.history_log_id)) delivery.history_log_id = value.history_log_id;
 	if (Array.isArray(value.members)) delivery.members = value.members.filter(isIdentity).map((member) => cloneJson(member));
-	return { record, embedded, delivery };
+	if (typeof value.member_count === 'number' && Number.isSafeInteger(value.member_count) && value.member_count >= 0) delivery.member_count = value.member_count;
+	return { record, delivery };
 }
 
 /**
  * The fields of a transient notice (§3.5, Appendix A.1): a `message`
- * notification without `message_id`, such as a `@private` command reply. It is
+ * notification without `message_id`, such as a `~private` command reply. It is
  * rendered for the session but never installed as a snapshot. Null when the
  * value has a `message_id` (a snapshot) or no valid `from`.
  */
@@ -350,4 +357,32 @@ export function decodeMembership(value: unknown): MembershipEntry[] {
 		entries.push({ log_id: value.log_id, room_id: value.room_id, user: cloneJson(element.user), joined: element.joined });
 	}
 	return entries;
+}
+
+/** Who else a system notice reached, as its sender states (Appendix A.1). */
+export type SystemScope = 'server' | 'room' | 'private';
+
+const SYSTEM_SCOPES = new Map<string, SystemScope>([['~server', 'server'], ['~room', 'room'], ['~private', 'private']]);
+
+/**
+ * Legacy fallback: protocol v6 named the three scoped system identities with
+ * `@` (`@server`, `@room`, `@private`), and v7 moved them to `~`. Senders from
+ * a v6 server still read as system notices (best-effort interop, §3.1); no
+ * other `@` ID does, since `@` marks nothing in v7. Drop with v6 servers.
+ */
+const LEGACY_SYSTEM_SCOPES = new Map<string, SystemScope>([['@server', 'server'], ['@room', 'room'], ['@private', 'private']]);
+
+/** A server-controlled sender (Appendix A.1, A.3): a `user_id` starting with `~`. */
+export function isSystemId(userId: string | undefined): boolean {
+	return typeof userId === 'string' && (userId.startsWith('~') || LEGACY_SYSTEM_SCOPES.has(userId));
+}
+
+/** The scope a system identity states (`~server`, `~room`, `~private`), if it is one of those. */
+export function systemScope(userId: string | undefined): SystemScope | undefined {
+	return userId === undefined ? undefined : SYSTEM_SCOPES.get(userId) ?? LEGACY_SYSTEM_SCOPES.get(userId);
+}
+
+/** The sender of notices this client shows only to you, such as a failed command's error (Appendix A.1). */
+export function privateSender(): Identity {
+	return { user_id: '~private', name: 'System message to you' };
 }

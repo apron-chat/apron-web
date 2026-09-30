@@ -435,7 +435,7 @@ export interface DecodedRecords {
 	rooms: RoomRecord[];
 	messages: MessageRecord[];
 	reactions: ReactionSet[];
-	/** Embedded snapshots (`reply_to`, `intro_message`), each belonging to its own `room_id`. */
+	/** Embedded `reply_to` snapshots, each belonging to its own `room_id`. */
 	embedded: MessageRecord[];
 	memberships: MembershipEntry[];
 }
@@ -455,9 +455,7 @@ export function decodeHistoryRecords(result: unknown): DecodedRecords {
 	if (!isJsonObject(result)) return decoded;
 	for (const value of Array.isArray(result.rooms) ? result.rooms : []) {
 		const room = decodeRoom(value);
-		if (!room) continue;
-		decoded.rooms.push(room.record);
-		decoded.embedded.push(...room.embedded);
+		if (room) decoded.rooms.push(room.record);
 	}
 	for (const value of Array.isArray(result.messages) ? result.messages : []) {
 		const message = decodeMessage(value);

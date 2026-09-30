@@ -3,7 +3,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, childRooms, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, type RoomSnapshot, type UploadFile, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, type RoomSnapshot, type UploadFile, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
@@ -19,7 +19,8 @@
 	import MemberListSidebar from '$lib/components/MemberListSidebar.svelte';
 	import StatusBanner from '$lib/components/StatusBanner.svelte';
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
-	import ThreadEditor from '$lib/components/ThreadEditor.svelte';
+	import ThreadSummary from '$lib/components/ThreadSummary.svelte';
+	import RoomEditor from '$lib/components/RoomEditor.svelte';
 	import TypingDots from '$lib/components/TypingDots.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
@@ -37,7 +38,8 @@
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, type RecentServer } from '$lib/ui/storage';
-	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadTitleFor } from '$lib/ui/timeline';
+	import { takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
@@ -48,8 +50,12 @@
 	import { notificationClickTarget, notificationPermission, requestNotificationPermission, showNotification, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 
-	/** A thread this viewer created, opened once its `room_update` has arrived. */
-	type PendingOpen = { room: string; thread: string };
+	/**
+	 * A thread this viewer created, opened once its `room_update` has arrived;
+	 * `replyTo`, the message it was started from, which its composer then
+	 * replies to (the thread-from-message convention: see `startThread`).
+	 */
+	type PendingOpen = { room: string; thread: string; replyTo?: string };
 
 	/** A thread just chosen: where it lands waits until its first load shows whether older replies remain. */
 	let openingThread = $state<string | undefined>();
@@ -110,13 +116,20 @@
 	let passkeyUnavailable = $state<string | undefined>();
 	let highlightedId = $state<string | undefined>();
 	let editingId = $state<string | undefined>();
-	let threadEditorOpen = $state(false);
+	/** The Edit form for the open room or thread (its title and description). */
+	let roomEditorOpen = $state(false);
+	/** An emailed sign-in link this page was opened with (§4.10), until it has been used. */
+	let emailLink = $state<EmailLink | undefined>();
+	/** Why the emailed link didn't sign in, for the connect screen, with its address prefilled. */
+	let emailLinkFailure = $state<{ email: string; error: string } | undefined>();
 	/** The open thread's `room_id`; undefined in the room view. */
 	let activeThread = $state<string | undefined>();
 	let selectedRoomId = $state<string | undefined>();
 	let pendingOpen = $state<PendingOpen | undefined>();
 	/** A room or thread joined from the directory or just created, opened once its `room_update` has arrived. */
 	let pendingJoin = $state<string | undefined>();
+	/** `pendingJoin` was created as a private room: its record must say `private: true` before it is used (§4.3.4). */
+	let pendingPrivate = $state(false);
 	/**
 	 * Where the New divider sits in the open pane: after your read cursor as it
 	 * was when the pane opened (§4.4). It stays put while you read.
@@ -149,7 +162,7 @@
 	/** The top-level room open in the pane (or behind the open thread). */
 	let activeRoom = $derived(session.activeRoom);
 	/** The active room's threads: the joined ones, then those listed as not joined, which get cards too. */
-	let threads = $derived(threadEntries(session.rooms, activeRoom?.id, activeRoom ? snapshot.threadDirectory[activeRoom.id] : undefined, resolveMessage));
+	let threads = $derived(threadEntries(session.rooms, activeRoom?.id, activeRoom ? snapshot.threadDirectory[activeRoom.id] : undefined));
 	let joinedThreads = $derived(threads.filter((entry) => entry.joined));
 	/** The sidebar lists joined threads, and a thread open without joining while it is open. */
 	let listedThreads = $derived(threads.filter((entry) => entry.joined || entry.id === activeThread));
@@ -159,16 +172,15 @@
 	/** The room the pane shows and the composer posts to: the open thread (itself a room), else the room. */
 	let paneRoom = $derived(activeThread ? threadRoom : activeRoom);
 	let messages = $derived(timelineMessages(paneRoom));
-	let intro = $derived(activeThread ? activeThreadEntry?.introMessage : undefined);
 	let timeline = $derived(activeThread
-		? buildThreadTimeline({ messages, intro, renames: paneRoom?.renames, moreReplies: Boolean(threadRoom?.olderAvailable), notices: paneRoom?.notices })
+		? buildThreadTimeline({ messages, renames: paneRoom?.renames, notices: paneRoom?.notices })
 		: buildRoomTimeline({ messages, threads, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships }));
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
 	let canCompose = $derived(paneReady && !session.readOnly);
-	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...(intro ? [intro] : []), ...messages], session.you, paneRoom?.members));
+	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...messages], session.you, paneRoom?.members));
 	let roomSuggestions = $derived.by(() => {
 		const rooms = new Map<string, { id: string; title: string }>();
 		for (const room of [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat(), ...session.rooms]) {
@@ -183,7 +195,7 @@
 	let newDividerBefore = $derived.by(() => {
 		if (newDivider.room !== paneRoom?.id || newDivider.after === undefined) return undefined;
 		const after = newDivider.after;
-		// The first message row after the cursor; thread intros show as cards and carry no row.
+		// The first message row after the cursor.
 		for (const item of timeline) {
 			if (item.kind !== 'message' || compareLogIds(item.event.message_id, after) <= 0) continue;
 			return isOwn(item.event, session.you) ? undefined : item.event.message_id;
@@ -191,7 +203,7 @@
 		return undefined;
 	});
 	let backendLabel = $derived(session.server?.name || backendHost(serverInput) || 'Apron');
-	let threadReplyCount = $derived(threadRoom?.loaded ? messages.filter((event) => event.message_id !== intro?.message_id).length : undefined);
+	let threadReplyCount = $derived(threadRoom?.loaded ? messages.length : undefined);
 	let unseenCount = $derived(stickToBottom ? 0 : Math.max(0, messages.length - seenCount));
 	let demoNotice = $derived(demoRetentionNotice(session.server));
 	/** The pane's messages this viewer may pick, in order: what shift-click ranges run along. */
@@ -199,6 +211,14 @@
 	let selectThreads = $derived(joinedThreads.filter((entry) => entry.id !== activeThread));
 	/** New threads hang off a top-level room; this client keeps threads one level deep. */
 	let canStartThreads = $derived(session.canManageRooms && !session.readOnly && Boolean(activeRoom) && activeRoom?.parentRoomId === undefined);
+	/** Editing the open room's or thread's title and description (cap `rooms`); the server decides who may. */
+	let canEditPane = $derived(session.canManageRooms && !session.readOnly && Boolean(activeThread ? activeThreadEntry : activeRoom));
+	/** What the Edit form edits: the open thread, else the room. */
+	let editTarget = $derived(activeThread
+		? (activeThreadEntry ? { id: activeThreadEntry.id, title: activeThreadEntry.title, description: activeThreadEntry.description } : undefined)
+		: (activeRoom ? { id: activeRoom.id, title: activeRoom.title, description: activeRoom.description } : undefined));
+	/** Adding and removing other members of the open pane's room (§4.3.2), until the server says it can't. */
+	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneReady);
 
 	$effect(() => {
 		const roomId = activeRoom?.id;
@@ -270,10 +290,57 @@
 		const room = joined ? session.rooms.find((candidate) => candidate.id === joined) : undefined;
 		if (!room) return;
 		pendingJoin = undefined;
+		// A server that doesn't keep private rooms may create an ordinary one anyway: say so, and don't open it to post in.
+		if (untrack(() => pendingPrivate) && !room.private) {
+			pendingPrivate = false;
+			untrack(() => feedback.error(`The server made “${room.title}” an ordinary room that others can see and join, not a private one. Leave it, or use it knowing that.`));
+			return;
+		}
+		pendingPrivate = false;
 		untrack(() => {
 			if (room.parentRoomId !== undefined && session.rooms.some((candidate) => candidate.id === room.parentRoomId)) openDestination(room.parentRoomId, room.id);
 			else chooseRoom(room);
 		});
+	});
+
+	// An emailed sign-in link (§4.10) signs in once the server has answered and the connection's own
+	// sign-in has settled: as a guest or a kept session, or refused because this server has no guests.
+	$effect(() => {
+		const link = emailLink;
+		const chat = client;
+		if (!link || !chat || snapshot.status !== 'connected' || !snapshot.server || snapshot.authBusy) return;
+		if (!snapshot.authenticated && !snapshot.error) return;
+		emailLink = undefined;
+		const offered = snapshot.server.auth.includes('email');
+		untrack(() => {
+			feedback.pending('Signing in…');
+			chat.signInWithEmail(link.email, link.token).then(() => {
+				feedback.clear();
+				session.forget();
+			}, (cause: unknown) => {
+				const error = cause instanceof Error ? cause.message : 'The sign-in link didn’t work';
+				if (!offered) {
+					feedback.error(`This server doesn’t offer email sign-in: ${error}`);
+					return;
+				}
+				// The link may have expired or been used: the connect screen can send a new code.
+				feedback.clear();
+				emailLinkFailure = { email: link.email, error: `The sign-in link didn’t work: ${error}. Send a new code to try again.` };
+				connectScheme = 'email';
+				connectOpen = true;
+			});
+		});
+	});
+
+	// A server without guests (and no kept session to resume) can only be used signed in: the connect screen,
+	// with the server's welcome (§3.2), opens once by itself, rather than leaving an empty app and an error.
+	let promptedSignIn = false;
+	$effect(() => {
+		const server = snapshot.server;
+		if (previewMode || promptedSignIn || connectOpen || emailLink || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
+		if (server.auth.includes('guest') || !snapshot.error) return;
+		promptedSignIn = true;
+		untrack(() => openConnect({ signIn: true }));
 	});
 
 	// Leaving a pane ends its selection in setDestination; losing the cap ends it here.
@@ -286,7 +353,10 @@
 		const pending = pendingOpen;
 		if (!pending || !session.rooms.some((room) => room.id === pending.thread)) return;
 		pendingOpen = undefined;
-		untrack(() => openDestination(pending.room, pending.thread));
+		untrack(() => {
+			openDestination(pending.room, pending.thread);
+			if (pending.replyTo !== undefined && !drafts.reply) drafts.setReply(pending.replyTo);
+		});
 	});
 
 	// A thread's first page may not fill the pane, leaving nothing to scroll back
@@ -399,6 +469,8 @@
 		};
 		memberListMediaChange(memberListMedia);
 		memberListMedia.addEventListener('change', memberListMediaChange);
+		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
+		emailLink = previewMode ? undefined : takeEmailLink(window.location, scrubUrl);
 		serverInput = previewMode ? 'ws://apron-preview.invalid' : loadServerUrl() ?? defaultWebSocketUrl(window.location);
 		displayName = previewMode ? 'Preview User' : loadDisplayName();
 		recentServers = previewMode ? [] : loadRecentServers();
@@ -442,10 +514,26 @@
 
 	// --- Connecting ---
 
-	/** The profile's "Sign in with a passkey" opens here too, carrying the handle typed there. */
-	function openConnect(options: { passkey?: boolean; name?: string } = {}): void {
+	/** Replaces the page's URL without adding a history entry: through the router once it runs, else the browser. */
+	function scrubUrl(url: string): void {
+		try {
+			replaceState(url, page.state);
+		} catch {
+			history.replaceState(history.state, '', url);
+		}
+	}
+
+	/**
+	 * The profile's "Sign in with a passkey" (or "with email") opens here too,
+	 * carrying the handle typed there. `signIn` asks for whichever sign-in the
+	 * server offers: a passkey, which starts from a guest session, else email.
+	 */
+	function openConnect(options: { scheme?: Scheme; signIn?: boolean; name?: string } = {}): void {
 		if (previewMode) return;
-		connectScheme = options.passkey ? 'webauthn' : undefined;
+		const offered = session.server?.auth ?? [];
+		const passkeyFirst = offered.includes('webauthn') && (offered.includes('guest') || !offered.includes('email'));
+		connectScheme = options.scheme ?? (options.signIn ? (passkeyFirst ? 'webauthn' : 'email') : undefined);
+		emailLinkFailure = undefined;
 		if (options.name) displayName = options.name;
 		connectOpen = true;
 	}
@@ -464,8 +552,9 @@
 		activeThread = undefined;
 		pendingOpen = undefined;
 		pendingJoin = undefined;
+		pendingPrivate = false;
 		startingThreads = {};
-		threadEditorOpen = false;
+		roomEditorOpen = false;
 		selection.cancel();
 		mentions.reset();
 		incomingMessages.reset();
@@ -573,14 +662,14 @@
 		activeThread = thread;
 		drafts.open(draftKey(thread ?? roomId));
 		editingId = undefined;
-		threadEditorOpen = false;
+		roomEditorOpen = false;
 		selection.cancel();
 		composer?.reset();
 		mentions.clearUnseen();
 		mentions.clearRoom(roomId);
 		if (thread) mentions.clearRoom(thread);
 		stickToBottom = true;
-		// A thread opens at its intro, at the top, so it renders whole.
+		// A thread opens at its summary, at the top, so it renders whole.
 		reveal.from(thread ? 0 : timeline.length - FIRST_PAINT_ITEMS);
 	}
 
@@ -628,7 +717,7 @@
 		composer?.focus();
 	}
 
-	/** Shows a thread from its intro at the top, loading it again if its last load failed. */
+	/** Shows a thread from its summary at the top, loading it again if its last load failed. */
 	function showThread(roomId: string, thread: string, history: 'push' | 'replace' = 'push'): void {
 		setDestination(roomId, thread, history);
 		stickToBottom = false;
@@ -684,9 +773,10 @@
 	/**
 	 * Sends the composer's text: a message with the draft's mentions (§3.5) and
 	 * previews of its GitHub links as `link` embeds (§4.6.1), or
-	 * with cap `command` a command (§4.8), which `/nick`, `/join`, `/leave` and
-	 * `/topic` turn into the requests they spell. A command's failure shows as
-	 * a local notice in the pane, where its replies land too.
+	 * with cap `command` a command (§4.8), which `/nick`, `/join`, `/leave`,
+	 * `/topic`, `/kick` and `/invite` turn into the requests they spell. A
+	 * command's failure shows as a local notice in the pane, where its replies
+	 * land too.
 	 */
 	function sendMessage(): void {
 		if (!client || !paneRoom || !canCompose || !drafts.text.trim()) return;
@@ -697,7 +787,7 @@
 		const originKey = draftKey(roomId);
 		const mentions = composerMentions;
 		const dismissed = composerDismissed;
-		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms });
+		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported });
 		// A draft given back keeps the link previews that were removed from it.
 		const restore = () => {
 			if (!drafts.restore(originKey, draft, reply)) return;
@@ -736,8 +826,16 @@
 				const leaving = action.room ?? roomId;
 				if (leaving === roomId && activeThread && activeRoom) backToRoom();
 				chat.leaveRoom(leaving).promise.catch(failed);
+			} else if (action.kind === 'topic') {
+				chat.updateRoom(roomId, { description: action.description }).promise.catch(failed);
 			} else {
-				chat.updateRoom(roomId, { title: action.title }).promise.catch(failed);
+				// `/kick @user` and `/invite @user` as `room_leave`/`room_join` with `user_id` (§4.3.2). A server
+				// that answers `unsupported` may still have the command itself (§4.8): it gets the text as typed.
+				const change = action.kind === 'kick' ? chat.leaveRoom(roomId, action.user) : chat.joinRoom(roomId, action.user);
+				change.promise.catch((cause: Error & { code?: number }) => {
+					if (cause.code === UNSUPPORTED) chat.command(roomId, draft, options).promise.catch(failed);
+					else failed(cause);
+				});
 			}
 		}
 		clearComposer(roomId);
@@ -894,9 +992,10 @@
 	}
 
 	/**
-	 * A message by ID in any room: a reply target (`reply_to` may cross rooms)
-	 * or a thread's intro. Visible rooms' timelines first, so this follows
-	 * every snapshot; then anything else the client has stored.
+	 * A message by ID in any room: a reply target (`reply_to` may cross rooms,
+	 * such as a thread's first reply to the message it was started from).
+	 * Visible rooms' timelines first, so this follows every snapshot; then
+	 * anything else the client has stored.
 	 */
 	function resolveMessage(id: string): MessageRecord | undefined {
 		return findMessage(session.rooms, id) ?? client?.message(id);
@@ -909,7 +1008,7 @@
 		return { name: senderName(target), text: replySnippet(target) };
 	}
 
-	/** A message's reaction chips, from the timeline of the room it lives in (an intro may live in the parent). */
+	/** A message's reaction chips, from the timeline of the room it lives in. */
 	function reactionsFor(event: MessageRecord): ReactionChip[] {
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
 		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user));
@@ -922,19 +1021,13 @@
 
 	// --- Reading ---
 
-	/**
-	 * Where a message shows: a thread's messages in the thread; a room's own
-	 * message in the room, unless it introduces one of the room's threads,
-	 * which is pinned at the top of that thread instead.
-	 */
+	/** Where a message shows: a thread's messages in the thread, a room's own in the room. */
 	function destinationOf(target: MessageRecord): { room: string; thread?: string } | undefined {
 		const rooms = session.rooms;
 		const home = rooms.find((room) => room.id === target.room_id);
 		if (!home) return undefined;
 		if (home.parentRoomId !== undefined && rooms.some((room) => room.id === home.parentRoomId)) return { room: home.parentRoomId, thread: home.id };
-		if (activeThread && activeRoom?.id === home.id && activeThreadEntry?.introMessageId === target.message_id) return { room: home.id, thread: activeThread };
-		const introduced = childRooms(rooms, home.id).find((room) => room.introMessageId === target.message_id);
-		return introduced ? { room: home.id, thread: introduced.id } : { room: home.id };
+		return { room: home.id };
 	}
 
 	async function renderedMessage(id: string): Promise<HTMLElement | undefined> {
@@ -1045,7 +1138,7 @@
 
 	/**
 	 * Any message in the open pane can be picked for a move (cap `edit`), anyone's:
-	 * the server decides whose it lets you move. A thread's intro from another room can't.
+	 * the server decides whose it lets you move.
 	 */
 	function canSelect(event: MessageRecord): boolean {
 		return session.canEdit && !event.deleted && event.room_id === paneRoom?.id;
@@ -1089,9 +1182,12 @@
 	}
 
 	/**
-	 * Starts a thread on a message (cap `rooms`): a room under this one whose
-	 * intro is the message, which stays where it is. The thread opens once the
-	 * `room_update` has arrived.
+	 * Starts a thread on a message (cap `rooms`): a room under this one, titled
+	 * after the message's first line, whose `description` carries its gist
+	 * (§3.4). Threads no longer point at a message, so the link back is the
+	 * thread's first reply: the thread opens once its `room_update` has arrived
+	 * with its composer replying to the message (`reply_to` crosses rooms,
+	 * §3.5), which stays in the room where it was.
 	 */
 	async function startThread(event: MessageRecord): Promise<void> {
 		if (!client || !activeRoom || !canStartThreads || event.deleted || startingThreads[event.message_id]) return;
@@ -1101,9 +1197,10 @@
 		startingThreads = { ...startingThreads, [id]: true };
 		feedback.pending('Starting thread…');
 		try {
-			const result = await chat.createRoom({ parentRoomId: roomId, title: threadTitleFor(event), introMessageId: id }).promise;
+			const description = threadDescriptionFor(event);
+			const result = await chat.createRoom({ parentRoomId: roomId, title: threadTitleFor(event), ...(description ? { description } : {}) }).promise;
 			if (typeof result.room_id !== 'string') throw new Error('Invalid room response');
-			pendingOpen = { room: roomId, thread: result.room_id };
+			pendingOpen = { room: roomId, thread: result.room_id, replyTo: id };
 			feedback.clear();
 		} catch (cause) {
 			feedback.error(cause, 'Unable to start thread');
@@ -1134,7 +1231,7 @@
 		const result = target === 'new'
 			? await selection.moveToNewThread(client, messages.map((event) => event.message_id), {
 				parentRoomId: roomId,
-				title: (introId) => threadTitleFor(resolveMessage(introId))
+				title: (firstId) => threadTitleFor(resolveMessage(firstId))
 			})
 			: await selection.move(client, target);
 		if (!result.moved) {
@@ -1170,6 +1267,7 @@
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
 		canCancel={session.rooms.length > 0 || session.ready} initialScheme={connectScheme}
+		initialEmail={emailLinkFailure?.email} initialError={emailLinkFailure?.error}
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => (connectOpen = false)} onsignout={() => session.forget()}
 	/>
 {:else}
@@ -1185,8 +1283,8 @@
 	<Sidebar
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notificationScope={notificationScope} onnotifications={toggleNotifications} onnotificationscope={updateNotificationScope} ontestnotifications={testNotifications}
-		onconnect={() => openConnect()} onsignin={(name) => openConnect({ passkey: true, name })}
-		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId) => (pendingJoin = roomId)} onsignout={() => session.forget()}
+		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
+		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={() => session.forget()}
 	/>
 	<SidebarHandle layout={sidebar} />
 
@@ -1200,17 +1298,17 @@
 				typing={typingNames}
 				replyCount={activeThread ? threadReplyCount : undefined}
 				moreReplies={Boolean(activeThread && threadRoom?.olderAvailable)}
-				canEditThread={Boolean(activeThread && session.canManageRooms && !session.readOnly && activeThreadEntry)}
-				editorOpen={threadEditorOpen}
+				canEdit={canEditPane}
+				editorOpen={roomEditorOpen}
 				editDisabled={!paneReady}
 				canLeave={session.canLeaveRooms && !session.readOnly && Boolean(paneRoom?.joined)}
 				canJoin={session.canManageRooms && !session.readOnly && Boolean(paneRoom) && !paneRoom?.joined}
 				{memberListOpen}
-				onback={() => (mobilePane = 'rooms')} onroom={backToRoom} onedit={() => (threadEditorOpen = !threadEditorOpen)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
+				onback={() => (mobilePane = 'rooms')} onroom={backToRoom} onedit={() => (roomEditorOpen = !roomEditorOpen)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
 			/>
-			{#if threadEditorOpen && activeThreadEntry}
-				{#key activeThreadEntry.id}
-					<ThreadEditor {client} thread={activeThreadEntry} enabled={canCompose && session.canManageRooms} onclose={() => (threadEditorOpen = false)} />
+			{#if roomEditorOpen && editTarget}
+				{#key editTarget.id}
+					<RoomEditor {client} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} onclose={() => (roomEditorOpen = false)} />
 				{/key}
 			{/if}
 
@@ -1253,6 +1351,9 @@
 				{#if snapshot.showReconnectDivider}
 					<div class="ap-divider ap-divider-gap" role="separator" data-testid="reconnect-divider"><span>Reconnected · earlier messages aren’t available</span></div>
 				{/if}
+				{#if activeThread && activeThreadEntry?.description}
+					<ThreadSummary description={activeThreadEntry.description} onopenroom={openMentionedRoom} />
+				{/if}
 				{#if timeline.length === 0 && !(paneRoom?.recovering || paneRoom?.loading)}
 					<div class="empty">
 						<h2>{activeThread ? 'No replies yet' : 'Nothing here yet'}</h2>
@@ -1262,8 +1363,6 @@
 					{#each shownTimeline as item (item.key)}
 						{#if item.kind === 'date'}
 							<div class="ap-divider ap-divider-date" role="separator"><span>{item.label}</span></div>
-						{:else if item.kind === 'replies'}
-							<div class="ap-divider ap-divider-date" role="separator"><span>{item.count}{item.more ? '+' : ''} {item.count === 1 && !item.more ? 'reply' : 'replies'}</span></div>
 						{:else if item.kind === 'thread'}
 							<ThreadCard entry={item.entry} onopen={() => openThreadCard(item.entry.id)} />
 						{:else if item.kind === 'notice'}
@@ -1331,7 +1430,7 @@
 					oncancel={() => { selection.cancel(); composer?.focus(); }}
 				/>
 			{:else if session.readOnly}
-				<ReadOnlyBar {passkeyUnavailable} onsignin={() => openConnect({ passkey: true })} />
+				<ReadOnlyBar {passkeyUnavailable} onsignin={() => openConnect({ signIn: true })} />
 			{:else}
 				<Composer
 					bind:this={composer}
@@ -1363,7 +1462,7 @@
 			</div>
 		{/if}
 	</main>
-	<MemberListSidebar {session} room={paneRoom} open={memberListOpen} />
+	<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
 	<!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
 	{#if memberListWide && (memberListOpen || memberList.resizing)}<SidebarHandle layout={memberList} name="member list" oncollapse={() => roomHeader?.focusMemberListToggle()} />{/if}
 

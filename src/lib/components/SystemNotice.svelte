@@ -1,27 +1,18 @@
-<script lang="ts" module>
-	/** Who else got a system message (PROTOCOL.md Appendix A.1). */
-	export type NoticeScope = 'private' | 'room' | 'server';
-
-	/** The scope a system identity states: `@private`, `@room`, or `@server`. */
-	export function noticeScope(userId: string): NoticeScope | undefined {
-		return userId === '@private' ? 'private' : userId === '@room' ? 'room' : userId === '@server' ? 'server' : undefined;
-	}
-</script>
-
 <script lang="ts">
-	import type { Identity } from '$lib/protocol/types';
+	import type { Identity, SystemScope } from '$lib/protocol/types';
 	import { copyCode } from '$lib/ui/copy-code';
 	import { highlightCode } from '$lib/ui/highlight';
 
 	/**
 	 * A scoped system message as the design system draws it: a left-aligned
-	 * card titled by its sender, `Name (@user_id)` as the server names it
+	 * card titled by its sender, `Name (~user_id)` as the server names it
 	 * (§3.3), dashed when it was only for you (never stored, gone on reload).
-	 * Transient notices and logged `@room`/`@server` messages both render
+	 * Transient notices and logged `~room`/`~server` messages both render
 	 * through it; code blocks in it get a Copy button.
 	 */
 	interface Props {
-		scope: NoticeScope;
+		/** Who else got it (Appendix A.1). */
+		scope: SystemScope;
 		/** The sender, as the frame carries it: servers name their system identities. */
 		from: Identity;
 		/** Rendered, sanitized body HTML. */

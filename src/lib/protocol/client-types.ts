@@ -6,7 +6,6 @@ import type {
 	Identity,
 	MessageBody,
 	Embed,
-	MessageRecord,
 	RoomRecord,
 	ServerParams
 } from './types';
@@ -16,7 +15,7 @@ export type MessageFormat = 'plain' | 'markdown';
 
 /**
  * A transient notice (PROTOCOL.md §3.5, Appendix A.1): a `message` without
- * `message_id`, such as a `@private` command reply, or a local one such as a
+ * `message_id`, such as a `~private` command reply, or a local one such as a
  * command's error. It shows in its room for the session and is never stored
  * as a snapshot, so it never takes part in replay.
  */
@@ -62,13 +61,13 @@ export interface RoomSnapshot {
 	record?: RoomRecord;
 	/** Set for threads; fixed at creation. */
 	parentRoomId?: string;
-	/** The room's description or thread starter, as a message ID. */
-	introMessageId?: string;
 	/**
-	 * The latest stored snapshot of the intro message (it may live in another
-	 * room, usually the parent for a thread), when known.
+	 * The server keeps the room private (§4.3.4): only its members see it.
+	 * Fixed at creation; absent means an ordinary room.
 	 */
-	introMessage?: MessageRecord;
+	private?: boolean;
+	/** What the room is about (§3.4), Markdown by convention; absent when empty. */
+	description?: string;
 	/** Opaque extension data from the room record. */
 	ext?: JsonObject;
 	/** Title changes seen in the room's log, ascending (absent when none). */
@@ -112,6 +111,11 @@ export interface RoomSnapshot {
 	 * anything is known.
 	 */
 	members?: Identity[];
+	/**
+	 * How many users have joined, when the server listed only the most
+	 * recently active in `members` (§4.3.1), as of that listing.
+	 */
+	memberCount?: number;
 	/** Transient notices shown in this room this session, in arrival order. */
 	notices: readonly Notice[];
 }
@@ -129,6 +133,8 @@ export interface RoomListing {
 	historyLogId?: string | null;
 	/** The room's members when the listing asked for them (`members: true`), else empty. */
 	members: Identity[];
+	/** The total when the server truncated `members` (§4.3.1). */
+	memberCount?: number;
 	/** The user has joined it: it is in the joined set on this connection. */
 	joined: boolean;
 }
@@ -222,6 +228,11 @@ export interface ClientSnapshot {
 	 * it takes images only, so voice clips have nowhere to go.
 	 */
 	imageOnlyUploads?: boolean;
+	/**
+	 * The server answered adding or removing another member (`room_join` or
+	 * `room_leave` with `user_id`) `unsupported` (§4.3.2): don't offer it.
+	 */
+	memberChangesUnsupported?: boolean;
 	/** Top-level rooms from the latest `room_list`, joined or not; undefined until listed. */
 	directory?: RoomListing[];
 	/** Threads per parent room from the latest `room_list` with `parent_room_id`. */
@@ -278,19 +289,21 @@ export interface MessagePatch {
 export interface CreateRoomOptions {
 	/** Creates a thread under this room. */
 	parentRoomId?: string;
+	/** Visible only to its members (§4.3.4); fixed at creation. */
+	private?: boolean;
 	title?: string;
-	/** A bare reference to the room's description or the thread's starting message. */
-	introMessageId?: string;
+	/** What the room is about, Markdown by convention (§3.4). */
+	description?: string;
 	ext?: JsonObject;
 }
 
 /**
  * Changes to a room's client fields. Absent keys keep the latest record's
- * value; `null` clears. `parent_room_id` is fixed at creation.
+ * value; `null` clears. `parent_room_id` and `private` are fixed at creation.
  */
 export interface RoomPatch {
 	title?: string | null;
-	introMessageId?: string | null;
+	description?: string | null;
 	ext?: JsonObject | null;
 }
 

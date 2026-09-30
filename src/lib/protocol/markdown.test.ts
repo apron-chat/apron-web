@@ -5,7 +5,6 @@ import { renderMarkdown, renderPlain, type MentionResolver, mentionSegments } fr
 const resolve: MentionResolver = (id) => {
 	if (id === 'alice') return { kind: 'user', id, name: 'Alice Chen' };
 	if (id === 'guest_1') return { kind: 'user', id, name: 'Sam', me: true };
-	if (id === '@server') return { kind: 'user', id, name: 'Server' };
 	if (id === 'ops') return { kind: 'room', id, title: 'Ops & Co' };
 	return undefined;
 };
@@ -19,8 +18,8 @@ describe('mentions (Appendix A.3)', () => {
 		expect(renderMarkdown('@guest_1 can you look?', resolve)).toContain('class="ap-mention ap-mention-me" data-user-id="guest_1"');
 	});
 
-	it('links a room mention and escapes its title', () => {
-		expect(renderMarkdown('see @ops', resolve)).toContain('<button type="button" class="ap-mention ap-mention-room" data-room-id="ops" title="Open Ops &amp; Co">Ops &amp; Co</button>');
+	it('reads @ as a user only, so a room ID after @ stays text (Appendix A.3)', () => {
+		expect(renderMarkdown('see @ops', resolve)).toBe('<p>see @ops</p>\n');
 	});
 
 	it('links #room IDs with a hash label, but leaves unknown or embedded hashtags alone', () => {
@@ -45,17 +44,19 @@ describe('mentions (Appendix A.3)', () => {
 
 	it('splits text around known mentions, for reply snippets', () => {
 		const roomResolver = (id: string) => (id === 'ops' ? { kind: 'room' as const, id, title: 'Ops Room' } : undefined);
-		expect(mentionSegments('ask @ops in #ops, not #nope.', resolve, roomResolver)).toEqual([
+		expect(mentionSegments('ask @alice in #ops, not #nope.', resolve, roomResolver)).toEqual([
 			'ask ',
-			{ target: { kind: 'room', id: 'ops', title: 'Ops & Co' }, hash: false },
+			{ target: { kind: 'user', id: 'alice', name: 'Alice Chen' }, hash: false },
 			' in ',
 			{ target: { kind: 'room', id: 'ops', title: 'Ops Room' }, hash: true },
 			', not #nope.'
 		]);
 	});
 
-	it('takes a second @ for system identities and drops trailing dots and dashes', () => {
-		expect(renderPlain('ask @@server-- now', resolve)).toBe('ask <span class="ap-mention" data-user-id="@server" title="@@server">@Server</span>-- now');
+	it('drops trailing dots and dashes, and never reads a system identity as a mention', () => {
+		expect(renderPlain('ask @alice-- now', resolve)).toBe('ask <span class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</span>-- now');
+		const any: MentionResolver = (id) => ({ kind: 'user', id, name: id });
+		expect(renderPlain('ask ~server or @@server', any)).toBe('ask ~server or @@server');
 	});
 
 	it('leaves unknown IDs, emails, and mentions inside code or links as written', () => {

@@ -132,9 +132,9 @@ function array(value: unknown): unknown[] {
 }
 
 /**
- * Room records from `room_list` or `room_update`, with their embedded
- * snapshots; delivery fields are not records, but a room's `members` start its
- * member list as of its `latest_log_id` (README "Decoding").
+ * Room records from `room_list` or `room_update`; delivery fields are not
+ * records, but a room's `members` start its member list as of its
+ * `latest_log_id` (README "Decoding").
  */
 function applyRooms(store: ProtocolStore, values: unknown[]): void {
 	const decoded: DecodedRecords = emptyRecords();
@@ -142,7 +142,6 @@ function applyRooms(store: ProtocolStore, values: unknown[]): void {
 		const room = decodeRoom(value);
 		if (!room) throw new Error(`Invalid room record: ${JSON.stringify(value)}`);
 		decoded.rooms.push(room.record);
-		decoded.embedded.push(...room.embedded);
 		if (room.delivery.members) store.seedMembers(room.record.room_id, room.delivery.members, room.delivery.latest_log_id);
 	}
 	applyRecords(store, decoded);
@@ -158,7 +157,7 @@ function project(store: ProtocolStore): Projection {
 			...(record && Object.hasOwn(record, 'log_id') ? { log_id: record.log_id } : {}),
 			...(record && Object.hasOwn(record, 'parent_room_id') ? { parent_room_id: record.parent_room_id } : {}),
 			...(record && Object.hasOwn(record, 'title') ? { title: record.title } : {}),
-			...(record?.intro_message ? { intro_message: { message_id: record.intro_message.message_id } } : {}),
+			...(record && Object.hasOwn(record, 'description') ? { description: record.description } : {}),
 			...(record && Object.hasOwn(record, 'ext') ? { ext: record.ext } : {}),
 			...(members ? { members: [...members].sort((left, right) => compareStrings(left.user_id, right.user_id)) } : {}),
 			messages: store.messagesIn(roomId).map((message) => projectMessage(message, store))

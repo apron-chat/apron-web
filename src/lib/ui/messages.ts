@@ -1,5 +1,5 @@
 import type { MentionPerson } from '$lib/protocol/markdown';
-import { isJsonObject, type Embed, type Identity, type MessageRecord } from '$lib/protocol/types';
+import { isJsonObject, isSystemId, type Embed, type Identity, type MessageRecord } from '$lib/protocol/types';
 import { directory } from './directory.svelte';
 
 /** The sender's display name (§3.3): the kept one, else the one the message was posted under. */
@@ -7,9 +7,9 @@ export function senderName(event: MessageRecord): string {
 	return directory.name(event.from);
 }
 
-/** Senders whose `user_id` starts with `@` are system identities (Appendix A.1), shown as quiet centered lines. */
+/** Senders whose `user_id` starts with `~` are system identities (Appendix A.1), shown as system lines. */
 export function isSystem(event: MessageRecord): boolean {
-	return event.from?.user_id?.startsWith('@') === true;
+	return isSystemId(event.from?.user_id);
 }
 
 export function textOf(event: MessageRecord): string {
@@ -86,7 +86,7 @@ export function peopleIn(messages: MessageRecord[], me: Identity | undefined, me
 	const seen = new Set<string>();
 	const listed = members && new Set(members.map((member) => member.user_id));
 	const add = (from: Identity): void => {
-		if (!from?.user_id || seen.has(from.user_id) || from.user_id.startsWith('@')) return;
+		if (!from?.user_id || seen.has(from.user_id) || isSystemId(from.user_id)) return;
 		if (listed && !listed.has(from.user_id) && from.user_id !== me?.user_id) return;
 		seen.add(from.user_id);
 		const latest = directory.person(from) ?? from;

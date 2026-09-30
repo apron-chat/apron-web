@@ -259,17 +259,17 @@ describe('ChatClient reference features', () => {
 		expect(snapshot.imageOnlyUploads).toBe(true);
 	});
 
-	it('shows a logged @server notice and resumes the room right behind auth after a reconnect', async () => {
+	it('shows a logged ~server notice and resumes the room right behind auth after a reconnect', async () => {
 		await connect();
 		// A notice takes a log_id past the room's logged head.
-		socket.receive({ method: 'message', params: { message_id: '15', log_id: '15', room_id: 'general', from: { user_id: '@server', name: 'Server' }, body: { text: 'Typing updates are limited', format: 'plain' } } });
+		socket.receive({ method: 'message', params: { message_id: '15', log_id: '15', room_id: 'general', from: { user_id: '~server', name: 'Server' }, body: { text: 'Typing updates are limited', format: 'plain' } } });
 		const general = () => snapshot.rooms.find((room) => room.id === 'general')!;
 		expect(general().timeline.order).toContain('15');
 		socket.drop();
 		client.retryNow();
 		socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { protocol: 6, auth: ['guest'], caps: ['history', 'rooms', 'activity'] } });
+		socket.receive({ method: 'server', params: { protocol: 7, auth: ['guest'], caps: ['history', 'rooms', 'activity'] } });
 		// auth, the listing, and the kept room's recovery go out together, before any reply (§3.2).
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list', 'history']);
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
@@ -287,7 +287,7 @@ describe('ChatClient reference features', () => {
 
 	it('shows a server-wide notice for a room not joined where you are', async () => {
 		await connect();
-		socket.receive({ method: 'message', params: { message_id: '16', log_id: '16', room_id: 'elsewhere', from: { user_id: '@server', name: 'Server' }, body: { text: 'Maintenance at 17:00' } } });
+		socket.receive({ method: 'message', params: { message_id: '16', log_id: '16', room_id: 'elsewhere', from: { user_id: '~server', name: 'Server' }, body: { text: 'Maintenance at 17:00' } } });
 		expect(snapshot.rooms.map((room) => room.id)).toEqual(['general']);
 		expect(snapshot.rooms[0].notices.map((notice) => notice.body?.text)).toEqual(['Maintenance at 17:00']);
 		expect(client.message('16')?.room_id).toBe('elsewhere');

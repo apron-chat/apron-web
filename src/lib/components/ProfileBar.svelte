@@ -30,7 +30,8 @@
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: () => void;
 		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
-		onsignin: (name?: string) => void;
+		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
+		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
 	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, onsignout, onsignin }: Props = $props();
 
@@ -55,6 +56,8 @@
 	let snapshot = $derived(session.snapshot);
 	let connected = $derived(snapshot.status === 'connected');
 	let canUsePasskey = $derived(!!session.server?.auth.includes('webauthn'));
+	/** Email sign-in (§4.10), where the server offers it. */
+	let canUseEmail = $derived(!!session.server?.auth.includes('email'));
 	function toggle(): void {
 		if (open) {
 			close();
@@ -120,12 +123,12 @@
 
 	/**
 	 * Signing in happens on the connect screen, which carries a handle typed
-	 * here along so it is applied once the passkey signs in.
+	 * here along so it is applied once the passkey or email signs in.
 	 */
-	function signIn(): void {
+	function signIn(scheme: 'webauthn' | 'email' = 'webauthn'): void {
 		const chosen = chosenName();
 		close();
-		onsignin(chosen);
+		onsignin(chosen, scheme);
 	}
 
 	/** Account actions for a passkey session: another passkey for this identity, or signing out. */
@@ -228,14 +231,14 @@
 				{:else if status === 'declined'}
 					<p class="ap-profedit-note ap-profedit-err" role="alert">
 						The server declined this handle{declinedReason ? ` (${declinedReason})` : ''}.
-						{#if canUsePasskey && !snapshot.passkeySession}
-							Sign in with a passkey and it’s applied once you’re signed in.
+						{#if (canUsePasskey || canUseEmail) && !snapshot.passkeySession}
+							Sign in and it’s applied once you’re signed in.
 						{:else}
 							Your old one is still in use.
 						{/if}
 					</p>
 				{/if}
-				{#if canUsePasskey}
+				{#if canUsePasskey || canUseEmail}
 					<div class="ap-profedit-signin" role="group" aria-label="Sign-in">
 						<span class="ap-fieldlabel">Sign-in</span>
 						{#if snapshot.authBusy}
@@ -244,20 +247,27 @@
 							<span class="ap-profedit-row">
 								<span class="signin-actions">
 									{#if snapshot.passkeySession}
-										<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !you || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
+										{#if canUsePasskey}
+											<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !you || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
+										{/if}
 										<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
 									{:else}
-										<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin" disabled={!!passkeyUnavailable || status === 'saving'} onclick={signIn}>Sign in with a passkey</button>
+										{#if canUsePasskey}
+											<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin" disabled={!!passkeyUnavailable || status === 'saving'} onclick={() => signIn('webauthn')}>Sign in with a passkey</button>
+										{/if}
+										{#if canUseEmail}
+											<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-email" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
+										{/if}
 									{/if}
 								</span>
 								{#if passkeyError}
 									<span class="ap-profedit-hint ap-profedit-err" role="alert">{passkeyError}</span>
 								{:else if passkeyNotice}
 									<span class="ap-profedit-hint ap-profedit-ok" role="status">{passkeyNotice}</span>
-								{:else if passkeyUnavailable}
+								{:else if passkeyUnavailable && canUsePasskey && !canUseEmail}
 									<span class="ap-profedit-hint">{passkeyUnavailable}</span>
 								{:else}
-									<span class="ap-profedit-hint">{snapshot.passkeySession ? 'Signed in with a passkey' : 'Signed in as a guest'}</span>
+									<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
 								{/if}
 							</span>
 						{/if}
