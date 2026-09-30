@@ -220,8 +220,12 @@ open, with the server's error, if creating fails. **Private** asks for
 a server that keeps no private rooms answers `unsupported`, which the dialog
 says in words; one that creates the room without `private: true` in its record
 gets an error toast instead of an opened room, so nothing meant to be private
-is posted there (the room stays joined, to leave or use knowingly). Private
-rooms and threads show a lock beside their name.
+is posted there (the room stays joined, to leave or use knowingly). A thread
+is created without `private`, since it takes its parent's, and edits never send
+it, since an omitted `private` is kept: a new thread of a private room that
+comes back without `private: true` gets the same error, and neither the reply
+composer opens on it nor do selected messages move into it. Private rooms and
+threads show a lock beside their name.
 
 A room's `description` (Markdown by convention) shows as one line of text
 under its title in the header. With the `rooms` cap the header's **Edit** opens

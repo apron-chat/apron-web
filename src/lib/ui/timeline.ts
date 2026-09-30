@@ -204,6 +204,19 @@ function shortenMarkdown(text: string, max: number): string {
 }
 
 /**
+ * Whether a thread just created in a private room came out visible to
+ * others: a thread created without `private` takes its parent's (§4.3.4),
+ * so this client never sends it, and a thread of a private room without
+ * `private: true` means the server didn't keep it private. False while
+ * either record is unknown.
+ */
+export function threadLostPrivacy(rooms: readonly Pick<RoomSnapshot, 'id' | 'private'>[], parentRoomId: string, threadId: string): boolean {
+	const parent = rooms.find((room) => room.id === parentRoomId);
+	const thread = rooms.find((room) => room.id === threadId);
+	return parent?.private === true && thread !== undefined && thread.private !== true;
+}
+
+/**
  * A thread of the room already started from a message, by the convention
  * this client follows: its first message replies to it. Only a thread loaded
  * from its start counts, since a later reply may quote the message too.

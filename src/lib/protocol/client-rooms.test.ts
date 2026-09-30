@@ -405,9 +405,14 @@ describe('room records and membership (v7)', () => {
 		quiet(client.createRoom({ title: 'Oops', private: true }));
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 's2', log_id: '21', title: 'Oops' }] } });
 		expect(room('s2')?.private).toBeUndefined();
-		// Updates never resubmit `private`, which is fixed at creation.
+		// Updates never send `private`: omitted, it is kept (§4.3.4).
 		quiet(client.updateRoom('s1', { title: 'Secret 2' }));
 		expect(socket.request('room_set').params).toEqual({ room_id: 's1', title: 'Secret 2', description: 'Just us' });
+		// A thread is created without it, and takes its parent's.
+		quiet(client.createRoom({ parentRoomId: 's1', title: 'Plans' }));
+		expect(socket.request('room_set').params).toEqual({ parent_room_id: 's1', title: 'Plans' });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 's3', log_id: '22', parent_room_id: 's1', private: true, title: 'Plans' }] } });
+		expect(room('s3')?.private).toBe(true);
 	});
 
 	it('keeps member_count for a truncated member list until a complete one replaces it', async () => {

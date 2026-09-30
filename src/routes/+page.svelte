@@ -38,7 +38,7 @@
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, type RecentServer } from '$lib/ui/storage';
-	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadLostPrivacy, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
 	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
@@ -76,6 +76,8 @@
 	const MEMBERS_FRESH_MS = 15_000;
 	/** The shortest gap between listings made because the pane has no members. */
 	const MEMBERS_RETRY_MS = 10_000;
+	/** A new thread of a private room that the server made visible to others (§4.3.4). */
+	const PRIVACY_LOST = 'The server made the new thread visible to people outside this private room, so nothing was posted or moved into it. Leave it, or use it knowing that.';
 
 	const session = new SessionView();
 	const feedback = new FeedbackState();
@@ -1237,6 +1239,11 @@
 			const result = await chat.createRoom({ parentRoomId: roomId, title: threadTitleFor(event), ...(description ? { description } : {}) }).promise;
 			if (typeof result.room_id !== 'string') throw new Error('Invalid room response');
 			startedThreads.set(id, result.room_id);
+			// A thread of a private room is private too (§4.3.4); one the server made visible gets no reply from here.
+			if (threadLostPrivacy(session.rooms, roomId, result.room_id)) {
+				feedback.error(PRIVACY_LOST);
+				return;
+			}
 			pendingOpen = { room: roomId, thread: result.room_id, replyTo: id };
 			feedback.clear();
 		} catch (cause) {
@@ -1268,7 +1275,9 @@
 		const result = target === 'new'
 			? await selection.moveToNewThread(client, messages.map((event) => event.message_id), {
 				parentRoomId: roomId,
-				title: (firstId) => threadTitleFor(resolveMessage(firstId))
+				title: (firstId) => threadTitleFor(resolveMessage(firstId)),
+				// Nothing moves out of a private room into a thread others can see.
+				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined
 			})
 			: await selection.move(client, target);
 		if (!result.moved) {

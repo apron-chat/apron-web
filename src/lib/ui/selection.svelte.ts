@@ -18,6 +18,8 @@ export type MoveResult = { moved: true; room: string } | { moved: false; error: 
 export interface NewThreadOptions {
 	parentRoomId: string;
 	title: (firstMessageId: string) => string;
+	/** Checks the thread once it exists, before anything moves into it: an error stops the move. */
+	check?: (roomId: string) => Error | undefined;
 }
 
 /**
@@ -105,6 +107,8 @@ export class MessageSelection {
 		try {
 			const result = await client.createRoom({ parentRoomId: options.parentRoomId, title: options.title(first) }).promise;
 			if (typeof result.room_id !== 'string') throw new Error('Invalid room response');
+			const refused = options.check?.(result.room_id);
+			if (refused) throw refused;
 			this.current = { ...current, saving: false };
 			return await this.move(client, result.room_id);
 		} catch (error) {

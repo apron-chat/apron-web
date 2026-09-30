@@ -272,9 +272,10 @@ export class MemoryProtocolServer {
 			if (parent && !this.rooms.has(parent)) return fail('Unknown parent room');
 			const id = parent ? `thread_preview_${this.roomSerial++}` : `room_preview_${this.roomSerial++}`;
 			room = this.makeRoom(id, typeof p.title === 'string' ? p.title : id, ['preview_guest'], parent);
-			if (p.private === true) room.private = true;
+			// A thread created without `private` takes its parent's (§4.3.4).
+			if (p.private === true || (p.private === undefined && parent && this.rooms.get(parent)?.private)) room.private = true;
 		} else {
-			// An update resubmits every client field; one left out is cleared (§4.3.4). It is a new room record.
+			// An update resubmits every client field; one left out is cleared, except `private`, which is kept (§4.3.4). It is a new room record.
 			room.title = typeof p.title === 'string' ? p.title : room.room_id;
 			this.nextLog(room);
 		}
