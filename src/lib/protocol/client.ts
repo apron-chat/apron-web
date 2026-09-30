@@ -234,8 +234,8 @@ export class ChatClient {
 	private pendingEmail?: PendingEmail;
 	/** That `auth` has been sent and not answered. */
 	private emailInFlight = false;
-	/** A sign-in code to ask for on the next connection, before it signs in (see `requestEmailCode`). */
-	private pendingEmailRequest?: { email: string; resolve: () => void; reject: (cause: Error) => void };
+	/** Code requests on connections of their own (see `requestEmailCode`): each finisher, to reject on `stop()`. */
+	private readonly sideRequests = new Set<(error?: Error) => void>();
 	/** `addEmail` holds the sign-in guard: busy, but not with a passkey. */
 	private addingEmail = false;
 	/**
@@ -368,6 +368,10 @@ export class ChatClient {
 			request.reject(new Error('Connection stopped'));
 		}
 		this.requests.clear();
+		this.pendingEmail?.reject(new Error('Connection stopped'));
+		this.pendingEmail = undefined;
+		this.emailInFlight = false;
+		for (const finish of [...this.sideRequests]) finish(new Error('Connection stopped'));
 		if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'client stopped');
 		this.status = 'offline';
 		this.emit();
@@ -595,26 +599,84 @@ export class ChatClient {
 	}
 
 	/**
-	 * Asks the server to email a sign-in code to `email` (§4.10): an `auth`
-	 * with `scheme: "email"` and no `token`, which authenticates nothing and
-	 * resolves alike whether or not the address has an account. A code asked
-	 * for while signed in (a guest too) would only add the address to that
-	 * account, so on a signed-in connection this reconnects and asks first on
-	 * the fresh connection, before it signs in again as it otherwise would.
+	 * Asks the server at `url` (this client's by default) to email a sign-in
+	 * code to `email` (§4.10): an `auth` with `scheme: "email"` and no
+	 * `token`, which authenticates nothing and resolves alike whether or not
+	 * the address has an account. A code asked for while signed in (a guest
+	 * too) would only add the address to that account, so unless this
+	 * connection is up and not signed in, the request goes on a separate,
+	 * short-lived connection that never signs in: it waits for the `server`
+	 * frame, asks, and closes. This connection, its rooms, identity and
+	 * pending requests are left as they are.
 	 */
-	async requestEmailCode(email: string): Promise<void> {
+	async requestEmailCode(email: string, url = this.serverUrl): Promise<void> {
 		const address = email.trim();
-		if (!this.offers('email')) throw new Error('This server does not support email sign-in');
 		if (!address) throw new Error('Enter your email address');
-		if (this.status !== 'connected') throw new Error('Connect to the server first');
-		if (!this.authenticated && !this.authRequested) {
+		const here = url === this.serverUrl;
+		if (here && this.server && !this.offers('email')) throw new Error('This server does not support email sign-in');
+		if (here && this.socket && this.status === 'connected' && this.server && !this.authenticated && !this.authRequested && !this.passkeyAbort && !this.pendingEmail) {
 			await this.enqueueRequest('auth', { scheme: 'email', email: address }, { visible: false, allowBeforeAuth: true }).promise;
 			return;
 		}
-		this.pendingEmailRequest?.reject(new Error('Superseded by another request'));
-		await new Promise<void>((resolve, reject) => {
-			this.pendingEmailRequest = { email: address, resolve, reject };
-			this.restart();
+		await this.requestOnSideConnection(url, { scheme: 'email', email: address });
+	}
+
+	/**
+	 * Sends one `auth` request on a connection of its own to `url` that
+	 * never signs in, and closes it once answered, refused, or out of time.
+	 * `stop()` rejects any still open.
+	 */
+	private requestOnSideConnection(url: string, params: JsonObject): Promise<void> {
+		return new Promise<void>((resolve, reject) => {
+			let socket: WebSocket;
+			try {
+				socket = this.webSocketFactory(url);
+			} catch (cause) {
+				reject(cause instanceof Error ? cause : new Error('Unable to reach the server'));
+				return;
+			}
+			const id = makeRequestId('auth');
+			let done = false;
+			const finish = (error?: Error): void => {
+				if (done) return;
+				done = true;
+				clearTimeout(timer);
+				this.sideRequests.delete(finish);
+				socket.onmessage = null;
+				socket.onclose = null;
+				socket.onerror = null;
+				if (socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'done');
+				if (error) reject(error);
+				else resolve();
+			};
+			const timer = setTimeout(() => finish(new Error('The server didn’t answer; try again')), REQUEST_TIMEOUT_MS);
+			this.sideRequests.add(finish);
+			socket.onmessage = (event: MessageEvent) => {
+				let frame: WireFrame;
+				try {
+					frame = JSON.parse(String(event.data)) as WireFrame;
+				} catch {
+					return;
+				}
+				if (frame.method === 'server' && isJsonObject(frame.params) && Array.isArray(frame.params.auth)) {
+					const schemes = [...frame.params.auth, ...(Array.isArray(frame.params.signup) ? frame.params.signup : [])];
+					if (!schemes.includes(params.scheme as string)) {
+						finish(new Error('This server does not support email sign-in'));
+						return;
+					}
+					socket.send(JSON.stringify({ method: 'auth', id, params: { ...params, client: CLIENT_NAME } }));
+				} else if (frame.id === id) {
+					if (isJsonObject(frame.error)) {
+						const failure = new Error(userFacingRpcError(frame.error as RpcError));
+						(failure as Error & { code?: number }).code = (frame.error as RpcError).code;
+						finish(failure);
+					} else {
+						finish();
+					}
+				}
+			};
+			socket.onclose = () => finish(new Error('The connection closed before the server answered; try again'));
+			socket.onerror = () => finish(new Error('Unable to reach the server'));
 		});
 	}
 
@@ -630,7 +692,6 @@ export class ChatClient {
 		if (!address) throw new Error('Enter your email address');
 		await this.enqueueRequest('auth', { scheme: 'email', email: address }, { visible: false, allowBeforeAuth: false }).promise;
 	}
-
 
 	/**
 	 * Adds an email address to the signed-in account (§4.10): the code,
@@ -683,7 +744,15 @@ export class ChatClient {
 		if (this.server && !this.offers('email')) return Promise.reject(new Error('This server does not support email sign-in'));
 		this.pendingEmail?.reject(new Error('Superseded by another sign-in'));
 		return new Promise((resolve, reject) => {
-			this.pendingEmail = { email: address, token, ...(name?.trim() ? { name: name.trim() } : {}), resolve, reject };
+			const pending: PendingEmail = { email: address, token, ...(name?.trim() ? { name: name.trim() } : {}), resolve, reject };
+			this.pendingEmail = pending;
+			// A connection that never comes back must not leave the sign-in hanging.
+			setTimeout(() => {
+				if (this.pendingEmail !== pending) return;
+				this.pendingEmail = undefined;
+				pending.reject(new Error('The server didn’t answer; try again'));
+				this.emit();
+			}, REQUEST_TIMEOUT_MS);
 			this.restart();
 		});
 	}
@@ -1857,17 +1926,6 @@ export class ChatClient {
 			this.emit();
 			return;
 		}
-		const request = this.pendingEmailRequest;
-		if (request) {
-			// A sign-in code is asked for before this connection is anyone; its own sign-in follows.
-			this.pendingEmailRequest = undefined;
-			if (this.offers('email')) {
-				this.enqueueRequest('auth', { scheme: 'email', email: request.email }, { visible: false, allowBeforeAuth: true }).promise
-					.then(() => request.resolve(), (cause: Error) => request.reject(cause));
-			} else {
-				request.reject(new Error('This server does not support email sign-in'));
-			}
-		}
 		const email = this.pendingEmail;
 		if (email) {
 			this.pendingEmail = undefined;
@@ -1888,7 +1946,8 @@ export class ChatClient {
 	 */
 	private authenticate(auth: string[]): void {
 		const resume = Boolean(this.sessionToken && auth.includes('token'));
-		if (!resume && this.passkeyRequired && auth.includes('webauthn') && this.signedInWith !== 'email') {
+		const passkeyWayBack = this.signedInWith !== 'email' || this.addedMethods.has('webauthn');
+		if (!resume && this.passkeyRequired && auth.includes('webauthn') && passkeyWayBack) {
 			// Servers without bearer-token resume still need discoverable login after
 			// a transport reconnect so a registered user keeps the server identity.
 			this.authRequested = true;
@@ -1910,13 +1969,14 @@ export class ChatClient {
 		if (!resume && this.signedInWith === 'email') {
 			// An email sign-in with nothing to resume it by: signed out, not a guest.
 			this.reconnectHeld = true;
-			this.error = 'Sign in with your email again from the connect screen.';
+			this.error = auth.includes('email') ? 'Sign in with your email again from the connect screen.'
+				: 'This server doesn’t sign back in with email. Sign in another way from the connect screen.';
 			this.emit();
 			return;
 		}
-		if (!resume && (this.passkeyRequired || !this.offers('guest'))) {
-			this.error = this.offers('email') ? 'Sign in with your email from the connect screen.'
-				: this.offers('webauthn') ? 'Sign in with a passkey from the connect screen.' : 'No supported authentication scheme';
+		// A guest listed only in `signup` isn't a way to sign in (§3.2: `auth` lists those).
+		if (!resume && (this.passkeyRequired || !auth.includes('guest'))) {
+			this.error = signInAdvice(auth, this.server?.signup ?? []);
 			this.emit();
 			return;
 		}
@@ -2013,8 +2073,11 @@ export class ChatClient {
 			return false;
 		}
 		this.setYou(identity as Identity);
-		if (signedIn && added && this.signedInWith !== undefined) {
-			// Added to the account (§4.9, §4.10): another way back in, not how this session signed in.
+		if (signedIn && added && this.registeredSession) {
+			// Added to the account (§4.9, §4.10): another way back in, not how this session signed in,
+			// and never a reason to drop its token. A session kept before sign-in methods were
+			// remembered gets the same guess as a resume.
+			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
 			this.noteAdded(signedIn);
 		} else if (signedIn) {
 			this.registeredSession = true;
@@ -3019,8 +3082,6 @@ export class ChatClient {
 		this.requests.clear();
 		this.pendingEmail?.reject(new Error(reason));
 		this.pendingEmail = undefined;
-		this.pendingEmailRequest?.reject(new Error(reason));
-		this.pendingEmailRequest = undefined;
 		this.emailInFlight = false;
 		this.discardProtocolView(reason);
 		this.authenticated = false;
@@ -3154,6 +3215,18 @@ export class ChatClient {
 		return `apron.signin-added:${this.serverUrl}`;
 	}
 
+	/**
+	 * Whether a session is kept in this browser for the server at `url`, such
+	 * as the one an emailed link would switch to.
+	 */
+	keptSessionFor(url: string): boolean {
+		try {
+			return Boolean(globalThis.localStorage?.getItem(`apron.session:${url}`));
+		} catch {
+			return false;
+		}
+	}
+
 	/** Remembers a way back in that was added to the account. */
 	private noteAdded(method: SignInMethod): void {
 		this.addedMethods.add(method);
@@ -3214,4 +3287,13 @@ export class ChatClient {
 /** The sign-in methods kept in storage as a comma-separated list. */
 function readMethods(value: string | null): SignInMethod[] {
 	return (value ?? '').split(',').filter((method): method is SignInMethod => method === 'webauthn' || method === 'email' || method === 'token');
+}
+
+/** What to tell someone who has to sign in first, from what the server signs in with (`auth`) and joins with (`signup`). */
+function signInAdvice(auth: string[], signup: string[]): string {
+	const joinByEmail = !auth.includes('email') && signup.includes('email');
+	if (auth.includes('email')) return 'Sign in with your email from the connect screen.';
+	if (auth.includes('webauthn')) return joinByEmail ? 'Sign in with a passkey, or join with your email, from the connect screen.' : 'Sign in with a passkey from the connect screen.';
+	if (joinByEmail) return 'Join with your email from the connect screen.';
+	return 'No supported authentication scheme';
 }

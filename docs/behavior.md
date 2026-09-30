@@ -348,8 +348,14 @@ server applies it with a `user` notification. **Remove** sends `me` with
 `avatar: ""`.
 
 The profile editor's Sign-in row offers, where the server's `auth` lists them,
-**Sign in with a passkey** and **Sign in with email** to a guest, and
-**Add passkey**, **Add email** and **Sign out** to a registered account. With the Go example, open
+**Sign in with a passkey**, **Sign in with email** and **Add email** to a
+guest, and **Add passkey**, **Add email** and **Sign out** to a registered
+account. A guest's Add email asks and answers on the guest's connection, and
+the server decides whether that keeps the guest identity as an account; Sign
+in with email is a sign-in to the address's own account. Adding needs the
+scheme in `auth`, since adding is a way back in and a scheme listed only in
+`signup` doesn't sign in (the spec doesn't say whether servers may allow
+adding such a scheme; this client doesn't offer it). With the Go example, open
 `http://localhost:5173` (or `http://localhost:8080` for a static build); other
 deployments need HTTPS and configured RP/frontend origins. A passkey registered
 on a signed-in connection is added to that account
@@ -385,9 +391,11 @@ the connect screen's **Email** asks for an address and sends `auth` with
 `scheme: "email"` and no token, which authenticates nothing and answers the same
 whether or not the address has an account; then a code field signs in with
 the emailed code. A code asked for while signed in (a guest too) would only
-add the address to that account (§4.10), so on a signed-in connection the
-client reconnects and asks on the fresh connection before it signs in again;
-the profile's **Add email** is what asks on the signed-in connection. The code belongs to the server that sent it: changing the
+add the address to that account (§4.10), so when this connection is signed in
+the client asks on a short-lived connection of its own that never signs in,
+and nothing on screen changes; on a server the connect screen isn't connected
+to yet, it asks there the same way, without first signing in as a guest. The
+profile's **Add email** is what asks on the signed-in connection. The code belongs to the server that sent it: changing the
 Server field drops it. The code is presented on a fresh connection, as its
 first `auth` in place of resuming a kept session, never on a connection that
 is already someone (there it would add the address to that account). If it is
@@ -416,7 +424,10 @@ Recent, only once the sign-in has worked. If it fails (expired, used), the
 connect screen opens on Email with the address filled in and the reason, and
 the next visit is back on the server the page used before.
 An email sign-in that can't be resumed (no token to resume with) shows as
-signed out after a reconnect, never as a guest.
+signed out after a reconnect, never as a guest, unless a passkey was added to
+the account, which then signs it back in; where email only signs up, the
+message points to another way in rather than to email. The link dialog also
+warns when the server a link switches to has a saved session here.
 
 When the server advertises token authentication, the session token it returns
 (after a passkey or email sign-in, or a replacement in reply to a token resume)

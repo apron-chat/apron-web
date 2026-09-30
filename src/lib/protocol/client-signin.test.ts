@@ -50,16 +50,25 @@ describe('sign-in', () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
 		expect(snapshot.you?.user_id).toBe('guest_1');
 
-		// Asked for while signed in (as a guest too), a code would only add (§4.10): it is asked for
-		// first on a fresh connection, which then signs in again as it otherwise would.
+		// Asked for while signed in (as a guest too), a code would only add (§4.10): it is asked for on a
+		// connection of its own that never signs in, and this one is left alone.
+		const main = latest();
+		const sending = client.send('lobby', 'hello');
 		const requested = client.requestEmailCode(' ada@example.com ');
-		const asking = freshConnection(['email', 'token', 'guest']);
-		expect(asking.sent.map((frame) => [frame.method, (frame.params as { scheme?: string }).scheme])).toEqual([['auth', 'email'], ['auth', 'guest'], ['room_list', undefined]]);
-		const ask = asking.sent[0] as { id: string; params: unknown };
-		expect(ask.params).toEqual({ scheme: 'email', email: 'ada@example.com' });
-		asking.receive({ id: ask.id, result: {} });
+		const side = latest();
+		expect(side).not.toBe(main);
+		side.open();
+		side.receive({ method: 'server', params: { protocol: 7, auth: ['email', 'token', 'guest'], caps: ['rooms'] } });
+		expect(side.sent.map((frame) => frame.method)).toEqual(['auth']);
+		expect(side.request('auth').params).toMatchObject({ scheme: 'email', email: 'ada@example.com' });
+		side.receive({ id: side.request('auth').id, result: {} });
 		await requested;
-		await asking.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
+		expect(side.readyState).toBe(FakeSocket.CLOSED);
+		// The signed-in connection, its identity and its requests are untouched.
+		expect(latest()).toBe(side);
+		expect(main.readyState).toBe(FakeSocket.OPEN);
+		await main.reply('message', { message_id: '1' });
+		await expect(sending.promise).resolves.toEqual({ message_id: '1' });
 		expect(snapshot.you?.user_id).toBe('guest_1');
 		expect(snapshot.passkeySession).toBe(false);
 

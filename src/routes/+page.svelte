@@ -540,7 +540,6 @@
 		}).finally(() => (emailLinkBusy = false));
 	}
 
-
 	/** Replaces the page's URL without adding a history entry: through the router once it runs, else the browser. */
 	function scrubUrl(url: string): void {
 		try {
@@ -558,9 +557,10 @@
 	function openConnect(options: { scheme?: Scheme; signIn?: boolean; name?: string } = {}): void {
 		if (previewMode) return;
 		const offered = session.server?.auth ?? [];
-		// Every scheme that signs in or signs up (`server.signup`, §3.1).
+		// Signing in is what `auth` lists (§3.1): a passkey first where it signs in and there are guests to
+		// start the ceremony from, or email doesn't sign in; email otherwise (it may be the way to join).
 		const any = [...offered, ...(session.server?.signup ?? [])];
-		const passkeyFirst = any.includes('webauthn') && (offered.includes('guest') || !any.includes('email'));
+		const passkeyFirst = offered.includes('webauthn') ? offered.includes('guest') || !offered.includes('email') : !any.includes('email');
 		connectScheme = options.scheme ?? (options.signIn ? (passkeyFirst ? 'webauthn' : 'email') : undefined);
 		emailLinkFailure = undefined;
 		if (options.name) displayName = options.name;
@@ -1303,6 +1303,7 @@
 		link={emailLink}
 		current={{
 			url: client.url, label: session.server?.name, keptSession: Boolean(snapshot.keptSession),
+			...(emailLink.server && emailLink.server !== client.url ? { targetKeptSession: client.keptSessionFor(emailLink.server) } : {}),
 			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {})
 		}}
 		onconfirm={useEmailLink} oncancel={() => (emailLink = undefined)}

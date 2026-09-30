@@ -56,13 +56,16 @@ export function parseEmailLink(hash: string): EmailLink | undefined {
  * names it once it has).
  */
 export function emailLinkPrompt(
-	link: EmailLink, current: { url: string; label?: string; signedInAs?: string; keptSession?: boolean }
+	link: EmailLink, current: { url: string; label?: string; signedInAs?: string; keptSession?: boolean; targetKeptSession?: boolean }
 ): { title: string; lines: string[]; switchesServer: boolean } {
 	const target = link.server ?? current.url;
 	const switchesServer = target !== current.url;
 	const host = hostOf(target);
 	const lines: string[] = [];
-	if (switchesServer) lines.push(`This link is for ${host}, not ${current.label || hostOf(current.url)}, the server this page is using: continuing switches to it.`);
+	if (switchesServer) {
+		lines.push(`This link is for ${host}, not ${current.label || hostOf(current.url)}, the server this page is using: continuing switches to it.`);
+		if (current.targetKeptSession) lines.push(`You have a saved session on ${host}. Continuing signs you out of it.`);
+	}
 	else if (current.signedInAs) lines.push(`You’re signed in here as ${current.signedInAs}. Continuing signs you out of that account.`);
 	else if (current.keptSession) lines.push('You have a saved session here. Continuing signs you out of it.');
 	lines.push('Only continue if you asked for this email. A link someone sent you can sign you in to their account.');
@@ -131,9 +134,9 @@ export interface SentCode {
 
 /**
  * The pending code, while it can still be used: only on the server that sent
- * it, with the Server field and the connection both still naming it. A code
- * never follows the field to another server.
+ * it, with the Server field still naming it. A code never follows the field to
+ * another server.
  */
-export function codeStillFor(sent: SentCode | undefined, fieldUrl: string, clientUrl: string): SentCode | undefined {
-	return sent && sent.url === fieldUrl && sent.url === clientUrl ? sent : undefined;
+export function codeStillFor(sent: SentCode | undefined, fieldUrl: string): SentCode | undefined {
+	return sent && sent.url === fieldUrl ? sent : undefined;
 }

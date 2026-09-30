@@ -304,6 +304,11 @@
 										{/if}
 										{#if canUseEmail}
 											<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-email" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
+											<!-- Adding an address to a guest asks and answers on this connection; whether that keeps the
+											     guest identity as an account is the server's call (§4.10). -->
+											{#if you && !addEmail}
+												<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+											{/if}
 										{/if}
 									{/if}
 								</span>

@@ -127,7 +127,7 @@ describe('thread grouping', () => {
 		expect(cut.endsWith('…')).toBe(true);
 		expect(cut.split('\n').filter((row) => row.startsWith('const')).every((row) => row === 'const x = 1;')).toBe(true);
 		// Setext underlines, entities, and indents stay text too.
-		expect(markdownText(escapeMarkdown('Title\n===\na &lt; b\n    not code'))).toBe('Title\n===\na &lt; b\n    not code'.replace('\n    ', '\n\u0020\u0020\u0020\u0020'));
+		expect(markdownText(escapeMarkdown('Title\n===\na &lt; b\n    not code'))).toBe('Title\n===\na &lt; b\n    not code');
 		// A four-backtick fence closes with four.
 		const long = threadDescriptionFor(message(0, 'alice', { body: { text: `Code:\n\`\`\`\`\n${'x = 1\n'.repeat(120)}\`\`\`\``, format: 'markdown' } }))!;
 		expect(long).toMatch(/\n````\n\n…$/);

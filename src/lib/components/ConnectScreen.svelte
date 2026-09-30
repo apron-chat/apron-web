@@ -84,8 +84,6 @@
 	let here = $derived(normalizedInput === client.url && snapshot.status === 'connected' && snapshot.authenticated);
 	let passkeySession = $derived(!!snapshot.passkeySession);
 	let passkeyHint = $derived(!!snapshot.passkeyHint);
-	/** The server in the field has sent its `server` frame on an open socket: email sign-in needs no guest session first. */
-	let greeted = $derived(normalizedInput === client.url && snapshot.status === 'connected' && Boolean(snapshot.server));
 	/** `server.welcome` (§3.2), for the server in the field once it has answered: Markdown, sanitized as a message is. */
 	let welcome = $derived.by(() => {
 		const text = normalizedInput === client.url ? session.server?.welcome : undefined;
@@ -154,14 +152,6 @@
 		});
 	});
 
-	// Email sign-in needs only the server's greeting: once it arrives, ask for the code that was waiting on it.
-	$effect(() => {
-		if (!pending || chosen !== 'email' || !greeted || snapshot.authBusy) return;
-		untrack(() => {
-			pending = false;
-			if (email.trim() && !codeSentTo) void sendCode();
-		});
-	});
 
 	// A new backend signs in as a guest first; a passkey choice then waits for a tap.
 	$effect(() => {
@@ -222,8 +212,7 @@
 			displayName = displayName.trim();
 			saveDisplayName(displayName);
 			if (!email.trim()) error = 'Enter your email address.';
-			else if (!greeted) connect(normalized);
-			else if (!codeSentTo) void sendCode();
+			else if (!codeSentTo) void sendCode(normalized);
 			else void signInWithEmail();
 			return;
 		}
@@ -276,13 +265,18 @@
 	 * Asks the server to email a code (§4.10). It answers the same whether or
 	 * not the address has an account, so this never says which.
 	 */
-	async function sendCode(): Promise<void> {
+	/**
+	 * Asks the server in the field for a code (§4.10). The client asks on a
+	 * connection that isn't signed in, of its own when need be, so neither a
+	 * session here nor a new server's throwaway guest is involved.
+	 */
+	async function sendCode(url: string): Promise<void> {
 		error = '';
 		emailBusy = true;
 		try {
 			const address = email.trim();
-			await client.requestEmailCode(address);
-			codeSent = { email: address, url: client.url };
+			await client.requestEmailCode(address, url);
+			codeSent = { email: address, url };
 			code = '';
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Unable to send a code';
@@ -294,7 +288,7 @@
 	/** Signs in with the emailed code; the bearer token in the result is kept to resume with (§3.2). */
 	async function signInWithEmail(): Promise<void> {
 		if (!codeSent) return;
-		const sent = codeStillFor(codeSent, normalizedInput, client.url);
+		const sent = codeStillFor(codeSent, normalizedInput);
 		if (!sent) {
 			// Never another server's code: ask this one for its own.
 			codeSent = undefined;
@@ -309,7 +303,13 @@
 		error = '';
 		emailBusy = true;
 		try {
-			onsignout();
+			// Another server: switch to it first; the sign-in is then its first connection's first `auth`.
+			if (sent.url !== client.url) {
+				onconnect();
+				client.setUrl(sent.url);
+			} else {
+				onsignout();
+			}
 			await client.signInWithEmail(sent.email, code, displayName.trim() || undefined);
 			codeSent = undefined;
 			code = '';

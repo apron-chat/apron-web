@@ -88,9 +88,8 @@ describe('emailed sign-in links (§4.10)', () => {
 
 	it('keeps a connect-screen code only for the server that sent it', () => {
 		const sent = { email: 'a@b', url: 'wss://a.example/' };
-		expect(codeStillFor(sent, 'wss://a.example/', 'wss://a.example/')).toBe(sent);
-		expect(codeStillFor(sent, 'wss://b.example/', 'wss://a.example/')).toBeUndefined();
-		expect(codeStillFor(sent, 'wss://a.example/', 'wss://b.example/')).toBeUndefined();
-		expect(codeStillFor(undefined, 'wss://a.example/', 'wss://a.example/')).toBeUndefined();
+		expect(codeStillFor(sent, 'wss://a.example/')).toBe(sent);
+		expect(codeStillFor(sent, 'wss://b.example/')).toBeUndefined();
+		expect(codeStillFor(undefined, 'wss://a.example/')).toBeUndefined();
 	});
 });
