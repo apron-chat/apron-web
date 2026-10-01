@@ -4,6 +4,7 @@
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { userIdToAdd } from '$lib/ui/members';
+	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import Avatar from './Avatar.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 
@@ -113,10 +114,12 @@
 						{@const name = directory.name(person)}
 						{@const me = directory.isMe(person.user_id)}
 						<li class="member" data-user={person.user_id}>
-							<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" />
-							<span class="member-name" title={person.user_id}>
-								{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}
-							</span>
+							<button class="who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={`@${person.user_id}`} onclick={(event) => openProfileFrom(event.currentTarget)}>
+								<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" />
+								<span class="member-name">
+									{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}
+								</span>
+							</button>
 							<RoleBadges user={person} />
 							{#if changing && !me}
 								<button class="ap-iconbtn remove" type="button" aria-label={`Remove ${name}`} title="Remove from room" disabled={busy} onclick={() => remove(person.user_id)}><UserMinus size={14} aria-hidden="true" /></button>
@@ -142,6 +145,9 @@
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 	.member { display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: 13px; line-height: 18px; }
 	/* Role badges follow the name, as beside a message's sender; the remove button takes the far right. */
+	.who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+	.who:hover .member-name { text-decoration: underline; }
+	.who:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 	.member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.member :global(.ap-roles) { flex: none; flex-wrap: nowrap; }
 	.member-name small { margin-left: 4px; color: var(--ink-muted); font-size: 11px; }

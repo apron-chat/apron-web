@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
 
 	/**
@@ -14,6 +15,7 @@
 	function click(event: MouseEvent): void {
 		const roomLink = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-room-id]');
 		if (roomLink?.dataset.roomId) onopenroom(roomLink.dataset.roomId);
+		else openProfileFrom(event.target);
 	}
 </script>
 

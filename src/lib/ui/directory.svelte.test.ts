@@ -113,4 +113,16 @@ describe('directory', () => {
 		expect(directory.sharesName({ user_id: 'guest_2', name: 'Guest' })).toBe(false);
 		expect(directory.sharesName(ada)).toBe(false);
 	});
+
+	it('skips the handle for a name that is the user\'s own user_id', () => {
+		const hyfen = { user_id: 'hyfen', name: 'hyfen' };
+		const nameless = { user_id: 'mo' };
+		const impostors = { guest_3: { user_id: 'guest_3', name: 'hyfen' }, guest_4: { user_id: 'guest_4', name: 'mo' } };
+		directory.apply(snapshot([ada, hyfen, nameless], { recordedUsers: impostors }), undefined);
+		expect(directory.sharesName(hyfen)).toBe(false);
+		expect(directory.sharesName(nameless)).toBe(false);
+		// Whoever else shows under that name still shows their handle.
+		expect(directory.sharesName(impostors.guest_3)).toBe(true);
+		expect(directory.sharesName(impostors.guest_4)).toBe(true);
+	});
 });

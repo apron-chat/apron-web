@@ -62,7 +62,8 @@ empty or unknown name shows as the `user_id`. A
 `user` notification with `new` and `old` maps the retired ID to the new
 identity. Message headers show the name with the muted `@user_id` beside it,
 always when another user the client knows of shows under the same name, so no
-one can pass as someone else. Without an avatar, a
+one can pass as someone else; a name that is the user's own `user_id` needs no
+handle beside it. Without an avatar, a
 person's initials sit on a muted tint whose hue is hashed from their `user_id`,
 so the same person has the same color on every client. A user's `roles`
 ([PROTOCOL.md §3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)),
@@ -156,6 +157,16 @@ row with a rust rule, pulses once as it arrives or when an edit adds you (never
 on replayed history), raises an `@` badge on a room you aren't reading, and,
 when it lands above the fold, turns the jump bar rust with **Jump to mention**.
 Text that merely contains your `@user_id` does none of that.
+
+Clicking a user's mention chip in a message, a sender's name or avatar, or a
+member in the member list opens their profile card: a popover beside it (a
+bottom sheet on narrow screens) with their avatar, name, `@user_id` (always,
+here), role badges, "(you)", a warning when another known user shows under
+the same name, and whether they're in the open room. **Mention** puts their
+chip in the composer, **Copy @user_id** copies their handle, and **Add to
+room** appears where the member list would let you add them. Escape, a press
+outside, or tabbing out closes it. Mentions inside a reply's quote only read,
+since the quote is the button that jumps to its message.
 
 A mention that lands while the tab is hidden or unfocused flashes the tab title
 and plays a soft chime. **Preferences** (the gear beside your profile) can turn

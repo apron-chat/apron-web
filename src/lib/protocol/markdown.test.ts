@@ -11,7 +11,7 @@ const resolve: MentionResolver = (id) => {
 
 describe('mentions (Appendix A.3)', () => {
 	it('renders a known user_id with the latest name', () => {
-		expect(renderMarkdown('Handing this to @alice.', resolve)).toBe('<p>Handing this to <span class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</span>.</p>\n');
+		expect(renderMarkdown('Handing this to @alice.', resolve)).toBe('<p>Handing this to <button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>.</p>\n');
 	});
 
 	it('marks the viewer’s own chip', () => {
@@ -39,7 +39,7 @@ describe('mentions (Appendix A.3)', () => {
 		const roomResolver = (id: string) => id === 'ops' ? { kind: 'room' as const, id, title: 'Ops Room' } : undefined;
 		const html = renderMarkdown('#ops @ops', userResolver, roomResolver);
 		expect(html).toContain('data-room-id="ops" title="Open Ops Room">#Ops Room</button>');
-		expect(html).toContain('data-user-id="ops" title="@ops">@Ops User</span>');
+		expect(html).toContain('data-user-id="ops" title="@ops">@Ops User</button>');
 	});
 
 	it('splits text around known mentions, for reply snippets', () => {
@@ -54,7 +54,7 @@ describe('mentions (Appendix A.3)', () => {
 	});
 
 	it('drops trailing dots and dashes, and never reads a system identity as a mention', () => {
-		expect(renderPlain('ask @alice-- now', resolve)).toBe('ask <span class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</span>-- now');
+		expect(renderPlain('ask @alice-- now', resolve)).toBe('ask <button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>-- now');
 		const any: MentionResolver = (id) => ({ kind: 'user', id, name: id });
 		expect(renderPlain('ask ~server or @@server', any)).toBe('ask ~server or @@server');
 	});
@@ -69,7 +69,7 @@ describe('mentions (Appendix A.3)', () => {
 	});
 
 	it('escapes plain bodies and renders without a resolver as before', () => {
-		expect(renderPlain('<b>@alice</b>', resolve)).toBe('&lt;b&gt;<span class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</span>&lt;/b&gt;');
+		expect(renderPlain('<b>@alice</b>', resolve)).toBe('&lt;b&gt;<button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>&lt;/b&gt;');
 		expect(renderMarkdown('@alice is here')).toBe('<p>@alice is here</p>\n');
 	});
 });
@@ -261,6 +261,6 @@ describe('emoji', () => {
 	});
 
 	it('keeps mentions working beside emoji', () => {
-		expect(renderPlain('🎉@alice', resolve)).toBe(`${emoji('🎉')}<span class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</span>`);
+		expect(renderPlain('🎉@alice', resolve)).toBe(`${emoji('🎉')}<button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>`);
 	});
 });

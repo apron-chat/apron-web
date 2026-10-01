@@ -16,4 +16,5 @@
 
 {#if roomId}<button type="button" class="ap-mention ap-mention-room" data-room-id={id} onclick={onopen} title="Open {shown}">{shown}</button>
 {:else if unknown}<span class="ap-mention-unknown">@{id}</span>
+{:else if onopen}<button type="button" class={['ap-mention', me && 'ap-mention-me']} data-user-id={id} onclick={onopen} title={id !== shown ? '@' + id : undefined}>@{shown}</button>
 {:else}<span class={['ap-mention', me && 'ap-mention-me']} data-user-id={id} title={id !== shown ? '@' + id : undefined}>@{shown}</span>{/if}

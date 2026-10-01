@@ -171,6 +171,19 @@
 		if (!selection || !field.contains(selection.anchorNode)) placeCaret(field, draftLength(readDraft(field).parts));
 	}
 
+	/** Puts a mention chip for this user where the caret was (else at the end), as picking them would, and focuses the field. */
+	export function mention(userId: string): void {
+		if (!field || disabled) return;
+		const { parts } = readDraft(field);
+		const end = draftLength(parts);
+		const inserted = insertMention(parts, lastSelection?.start ?? end, lastSelection?.end ?? end, userId);
+		lastSelection = undefined;
+		closeCompletions();
+		field.focus();
+		draw(field, inserted.parts, inserted.caret);
+		commit(field, inserted.parts, true);
+	}
+
 	/** Closes the picker and stops any recording without sending: the pane is changing under it. */
 	export function reset(): void {
 		closeCompletions();
