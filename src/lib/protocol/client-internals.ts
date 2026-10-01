@@ -156,11 +156,6 @@ export const ROOM_LIST_REUSE_MS = 10_000;
 const MAX_HISTORY_BUFFER_ENTRIES = 1_000;
 const MAX_HISTORY_BUFFER_BYTES = 1_048_576;
 export const RETRY_AFTER_MAX_MS = 24 * 60 * 60 * 1000;
-/** Passkey autofill re-issues its login challenge this long before the server's `timeout`. */
-export const AUTOFILL_REFRESH_MARGIN_MS = 10_000;
-export const AUTOFILL_MIN_REFRESH_MS = 15_000;
-/** Assumed challenge lifetime when the server's options carry no `timeout`. */
-export const AUTOFILL_CHALLENGE_MS = 120_000;
 /** How long a passkey ceremony waits for in-flight requests (history, a rename) before giving up. */
 export const PASSKEY_IDLE_WAIT_MS = 5_000;
 export const PASSKEY_IDLE_POLL_MS = 50;
