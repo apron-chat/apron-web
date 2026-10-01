@@ -299,6 +299,27 @@ describe('persisted session tokens', () => {
 		elsewhere.stop();
 	});
 
+	it('names the account a sign-up invite creates, with that token only', async () => {
+		const client = new ChatClient('ws://fake.test/');
+		client.subscribe((next) => (snapshot = next));
+		client.start();
+		await latest().greet([], { auth: ['token', 'guest'] });
+
+		client.useToken('apron_join_secret', ' Ada ');
+		vi.advanceTimersByTime(0);
+		await latest().greet([], { auth: ['token', 'guest'], token: 'apron_invite_own', you: { user_id: 'ada_1234', name: 'Ada' } });
+		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'apron_join_secret', name: 'Ada' }));
+		expect(snapshot.you).toEqual({ user_id: 'ada_1234', name: 'Ada' });
+
+		// Resuming with the account's own token asks for no name.
+		latest().drop();
+		client.retryNow();
+		await latest().greet([], { auth: ['token', 'guest'], you: { user_id: 'ada_1234', name: 'Ada' } });
+		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'apron_invite_own' }));
+		expect(authParams()).not.toHaveProperty('name');
+		client.stop();
+	});
+
 	it('signs in with a pasted token, such as a bot token, and keeps it to resume with', async () => {
 		const client = new ChatClient('ws://fake.test/');
 		client.subscribe((next) => (snapshot = next));

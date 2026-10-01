@@ -62,7 +62,8 @@ describe('passkey ceremonies carry a chosen handle', () => {
 
 		const pending = client.usePasskey('register', ' shazow ');
 		await settle();
-		expect(socket.request('auth').params).toEqual(expect.objectContaining({ action: 'register', step: 'begin' }));
+		// Named at `begin`, so the server can pick the new account's user_id from it.
+		expect(socket.request('auth').params).toEqual(expect.objectContaining({ action: 'register', step: 'begin', name: 'shazow' }));
 		await ceremony(socket, { user_id: 'u_1', name: 'Guest' });
 		const named = await pending;
 		expect(named).toBeDefined();
@@ -93,6 +94,18 @@ describe('passkey ceremonies carry a chosen handle', () => {
 
 describe('passkey ceremonies and requests in flight', () => {
 	const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+	it('names only a new account at begin, not a sign-in', async () => {
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
+		const { client, socket } = await connected();
+		const pending = client.usePasskey('login', 'shazow');
+		await settle();
+		expect(socket.request('auth').params).toEqual(expect.objectContaining({ action: 'login', step: 'begin' }));
+		expect(socket.request('auth').params).not.toHaveProperty('name');
+		await ceremony(socket, { user_id: 'u_1', name: 'Existing' });
+		await pending;
+		client.stop();
+	});
 
 	it('waits for requests sent as the old identity before starting', async () => {
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });

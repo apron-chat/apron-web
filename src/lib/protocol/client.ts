@@ -264,6 +264,12 @@ export class ChatClient {
 	private sessionToken?: string;
 	private passkeyRequired = false;
 	private registeredSession = false;
+	/**
+	 * A name to sign up with, for the pasted token it goes with: a sign-up
+	 * invite's `auth` names the account it creates, and the server may pick its
+	 * `user_id` from the name. Sent only with that token, until it signs in.
+	 */
+	private tokenName: { token: string; name: string } | undefined;
 	private activeRoomId?: string;
 	private server?: ServerParams;
 	private you?: Identity;
@@ -949,11 +955,14 @@ export class ChatClient {
 	 * Signs in with a bearer token the user pasted, such as a bot token from
 	 * `/invite-bot`: reconnects and authenticates with `scheme: "token"` (§3.2),
 	 * keeping the token to resume with like a passkey session's. A refused
-	 * token is dropped and its error left in the snapshot.
+	 * token is dropped and its error left in the snapshot. A `name` goes with
+	 * the token's first `auth`, for a sign-up invite to name the account it
+	 * creates; a server ignores it for other tokens.
 	 */
-	useToken(token: string): void {
+	useToken(token: string, name?: string): void {
 		const trimmed = token.trim();
 		if (!trimmed) throw new Error('Paste a token to sign in with');
+		this.tokenName = name?.trim() ? { token: trimmed, name: name.trim() } : undefined;
 		this.cancelEmailCode();
 		this.sessionToken = trimmed;
 		this.storeSession(trimmed);
@@ -2028,6 +2037,7 @@ export class ChatClient {
 		const socket = this.socket;
 		const request = this.enqueueRequest('auth', {
 			...(resume ? { scheme: 'token', token: this.sessionToken } : { scheme: 'guest' }),
+			...(resume && this.tokenName && this.tokenName.token === this.sessionToken ? { name: this.tokenName.name } : {}),
 			agent: AGENT
 		}, { visible: false, allowBeforeAuth: true });
 		// `auth` is a barrier (§3.2): the server finishes it before reading on, so
@@ -2039,6 +2049,7 @@ export class ChatClient {
 			if (socket !== this.socket) return;
 			// A guest sign-in without a token to resume by is not a registered session.
 			if (!resume && typeof result.token !== 'string') this.registeredSession = false;
+			if (resume) this.tokenName = undefined;
 			this.handleAuth(result);
 		}).catch((cause: Error) => {
 			if (socket !== this.socket) return;

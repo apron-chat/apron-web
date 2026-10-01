@@ -26,7 +26,7 @@
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import { composerAction } from '$lib/ui/commands';
-	import { backendHost, demoRetentionNotice, statusLabel } from '$lib/ui/connection';
+	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState } from '$lib/ui/feedback.svelte';
 	import { prepareUpload } from '$lib/ui/images';
@@ -214,7 +214,6 @@
 	let backendLabel = $derived(backendHost(serverInput) || 'Apron');
 	let threadReplyCount = $derived(threadRoom?.loaded ? messages.length : undefined);
 	let unseenCount = $derived(stickToBottom ? 0 : Math.max(0, messages.length - seenCount));
-	let demoNotice = $derived(demoRetentionNotice(session.server));
 	/** The pane's messages this viewer may pick, in order: what shift-click ranges run along. */
 	let selectableOrder = $derived(messages.filter(canSelect).map((event) => event.message_id));
 	let selectThreads = $derived(joinedThreads.filter((entry) => entry.id !== activeThread));
@@ -1400,11 +1399,6 @@
 			{:else}
 				<span class="sr" data-testid="connection-status" role="status" aria-live="polite">Connected</span>
 			{/if}
-			{#if demoNotice}
-				<div class="banner demo-notice">
-					<StatusBanner tone="warn" role="note">{demoNotice}</StatusBanner>
-				</div>
-			{/if}
 			{#if activeThread && !activeThreadEntry}
 				<div class="banner">
 					<StatusBanner tone="danger">
@@ -1558,7 +1552,6 @@
 	.side-collapsed :global(.ap-shell-side) { border-right: 0; visibility: hidden; }
 	.side-resizing, .side-resizing :global(*) { user-select: none; }
 	.banner { padding: var(--space-2) var(--space-4) 0; }
-	.demo-notice :global(.ap-status) { color: var(--ink-muted); }
 	.reconnect-quiet { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-4) 0; font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 	.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; }

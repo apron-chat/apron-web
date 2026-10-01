@@ -130,7 +130,7 @@ function primaryAction(input: SignInInput): SignInAction {
 }
 
 /** What the panel says about the chosen scheme. */
-export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean }): string {
+export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean; invite?: boolean }): string {
 	if (input.scheme === 'webauthn') {
 		if (input.here && input.registered) return 'Signed in. Choose Guest to sign out.';
 		if (input.use.signIn && !input.use.signUp) return 'Signs in with a passkey already on your account. New here? Create an account another way first.';
@@ -143,6 +143,7 @@ export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'register
 		if (input.use.signUp && !input.use.signIn) return 'Creates an account with a code sent to your email address.';
 		return 'We email you a code to sign in with; the link in the email signs you in too.';
 	}
+	if (input.scheme === 'token' && input.invite) return 'Creates an account with this sign-up invite. Your user ID is picked from your display name.';
 	if (input.scheme === 'token') return 'Signs in with a token the server gave you, such as a bot token from /invite-bot.';
 	return input.guestReadOnly ? 'No token needed, but guests only read here: sign in with a passkey to post.' : 'No token needed; the server picks a guest identity.';
 }

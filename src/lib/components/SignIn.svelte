@@ -76,6 +76,8 @@
 	let emailBusy = $state(false);
 	/** The pasted token for the Token scheme; cleared once handed to the client. */
 	let token = $state('');
+	/** A sign-up invite from `/invite`: it creates an account, named as asked, the server picking its user_id from the name. */
+	let inviteToken = $derived(token.trim().startsWith('apron_join_'));
 	let snapshot = $derived(session.snapshot);
 	let normalizedInput = $derived.by(() => {
 		try {
@@ -123,7 +125,7 @@
 		busy: Boolean(snapshot.authBusy) || emailBusy,
 		codeSent: Boolean(codeSentTo)
 	}));
-	let hint = $derived(signInHint({ scheme: chosen, use, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly }));
+	let hint = $derived(signInHint({ scheme: chosen, use, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly, invite: inviteToken }));
 	$effect(() => {
 		busy = view.phase === 'busy' || view.phase === 'connecting';
 	});
@@ -274,7 +276,8 @@
 	/**
 	 * Reconnects to the server in the field and signs in with the pasted token.
 	 * The server names a token's identity (a bot is named after its owner), so
-	 * no display name goes along.
+	 * no display name follows as `me`; a sign-up invite takes the display name
+	 * with it, to name the account it creates.
 	 */
 	function signInWithToken(normalized: string): void {
 		if (!token.trim()) {
@@ -285,9 +288,14 @@
 		if (normalized === client.url) onsignout();
 		else onconnect();
 		joinedAsGuest = false;
+		const name = inviteToken ? displayName.trim() : '';
+		if (name) {
+			displayName = name;
+			saveDisplayName(name);
+		}
 		client.setDisplayName('');
 		if (normalized !== client.url) client.setUrl(normalized);
-		client.useToken(token);
+		client.useToken(token, name || undefined);
 		token = '';
 		pending = true;
 	}
@@ -393,6 +401,11 @@
 		<label class="ap-fieldlabel">Token
 			<input class="ap-field ap-field-mono" data-testid="connect-token-input" type="password" bind:value={token} placeholder="apron_bot_…" disabled={busy} autocomplete="off" spellcheck="false" />
 		</label>
+		{#if inviteToken}
+			<label class="ap-fieldlabel">Display name
+				<input class="ap-field" data-testid="connect-name-input" bind:value={displayName} placeholder="How others see you" disabled={busy} maxlength="64" autocomplete="nickname" spellcheck="false" />
+			</label>
+		{/if}
 	{:else}
 		{#if chosen === 'email'}
 			<label class="ap-fieldlabel">Email

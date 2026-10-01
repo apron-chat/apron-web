@@ -104,6 +104,11 @@ describe('hints', () => {
 		expect(hint({ registered: true })).toBe('Signed in. Choose Guest to sign out.');
 	});
 
+	it('says a sign-up invite names the account it creates', () => {
+		expect(hint({ scheme: 'token' })).toMatch(/^Signs in with a token/);
+		expect(hint({ scheme: 'token', invite: true })).toMatch(/user ID is picked from your display name/);
+	});
+
 	it('warns that guests only read where they do', () => {
 		expect(hint({ scheme: 'guest', guestReadOnly: true })).toMatch(/guests only read here/);
 	});

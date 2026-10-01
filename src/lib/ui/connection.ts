@@ -75,15 +75,6 @@ export function addEmailError(cause: unknown): string {
 	return cause instanceof Error && cause.message ? cause.message : 'Unable to add the address';
 }
 
-export function demoRetentionNotice(server: ServerParams | undefined): string {
-	const seconds = server?.ext?.demo?.retention_seconds;
-	if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return '';
-	const hours = Math.max(1, Math.round(seconds / 3600));
-	return hours >= 20 && hours <= 28
-		? 'This demo keeps roughly the last day of history; older messages may expire.'
-		: `This demo keeps roughly the last ${hours} hours of history; older messages may expire.`;
-}
-
 export function backendHost(value: string): string {
 	try {
 		return new URL(value).host;
