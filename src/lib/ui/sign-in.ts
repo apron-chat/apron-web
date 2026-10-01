@@ -4,11 +4,14 @@
  * few explicit actions, each started by a tap:
  *
  * - `connect`: open a connection to the server in the form (as a guest where
- *   the server has guests). A passkey ceremony needs one, and the browser
- *   only shows its sheet for a tap, so connecting is its own step.
- * - `passkey-login` / `passkey-register`: once connected, sign in with a
- *   passkey the browser offers, or create an account with a new one. Never
- *   guessed: where a server lets passkeys do both, both are offered.
+ *   the server has guests).
+ * - `passkey-login` / `passkey-register`: sign in with a passkey the browser
+ *   offers, or create an account with a new one. Never guessed: where a
+ *   server lets passkeys do both, or isn't known yet, both are offered. A
+ *   ceremony needs a connection to the server in the form: where there is
+ *   none yet, the tap opens one and the ceremony follows once it settles,
+ *   and where the browser won't show its sheet that long after the tap, the
+ *   panel is `ready` for a second one.
  * - `email-send` / `email-code`, `token`: the other schemes' steps.
  * - `done`, `sign-out`: leave the panel, or leave the registered session.
  */
@@ -80,19 +83,22 @@ function connectionSettled(input: Pick<SignInInput, 'sameServer' | 'status' | 's
 
 export function signInView(input: SignInInput): SignInView {
 	const settled = connectionSettled(input);
-	if (input.busy) return { phase: 'busy', primary: { action: primaryAction(input, settled), label: 'Signing in…' } };
+	const here = input.sameServer && input.status === 'connected' && input.authenticated;
+	if (input.busy) return { phase: 'busy', primary: { action: primaryAction(input), label: 'Signing in…' } };
 	// A connection that failed (unreachable, a refused token) leaves the form to edit and try again.
 	if (input.pending && !settled && !input.connectionError) {
 		const label = input.status === 'connected' ? 'Signing in…' : 'Connecting…';
 		return { phase: 'connecting', primary: { action: 'connect', label } };
 	}
-	if (input.scheme === 'webauthn' && settled && !input.registered) {
+	// The passkey actions show whether or not the server in the form is connected yet: a tap connects first.
+	if (input.scheme === 'webauthn' && !(here && input.registered)) {
+		const phase: SignInPhase = settled ? 'ready' : 'idle';
 		const login: SignInStep = { action: 'passkey-login', label: 'Sign in with passkey' };
 		const register: SignInStep = { action: 'passkey-register', label: input.use.signIn ? 'New here? Create an account with a passkey' : 'Create account with passkey' };
-		if (!input.use.signIn) return { phase: 'ready', primary: register };
-		return { phase: 'ready', primary: login, ...(input.use.signUp ? { secondary: register } : {}) };
+		if (!input.use.signIn) return { phase, primary: register };
+		return { phase, primary: login, ...(input.use.signUp ? { secondary: register } : {}) };
 	}
-	const action = primaryAction(input, settled);
+	const action = primaryAction(input);
 	return { phase: 'idle', primary: { action, label: LABELS[action] } };
 }
 
@@ -107,7 +113,7 @@ const LABELS: Record<SignInAction, string> = {
 	token: 'Sign in'
 };
 
-function primaryAction(input: SignInInput, settled: boolean): SignInAction {
+function primaryAction(input: SignInInput): SignInAction {
 	const here = input.sameServer && input.status === 'connected' && input.authenticated;
 	switch (input.scheme) {
 		case 'token':
@@ -115,8 +121,8 @@ function primaryAction(input: SignInInput, settled: boolean): SignInAction {
 		case 'email':
 			return input.codeSent ? 'email-code' : 'email-send';
 		case 'webauthn':
-			if (settled && !input.registered) return input.use.signIn ? 'passkey-login' : 'passkey-register';
-			return here ? 'done' : 'connect';
+			if (here && input.registered) return 'done';
+			return input.use.signIn ? 'passkey-login' : 'passkey-register';
 		case 'guest':
 			if (here && input.registered) return 'sign-out';
 			return here ? 'done' : 'connect';
@@ -130,8 +136,7 @@ export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'register
 		if (input.use.signIn && !input.use.signUp) return 'Signs in with a passkey already on your account. New here? Create an account another way first.';
 		if (input.use.signUp && !input.use.signIn) return 'Creates an account with a new passkey on this device. Your display name names it.';
 		if (input.phase === 'ready' && input.guest) return 'Connected as a guest. Sign in with a passkey, create an account with a new one, or stay a guest.';
-		if (input.phase === 'ready') return 'Sign in with a passkey you already have, or create an account with a new one.';
-		return 'Connects first; then sign in with a passkey you already have, or create an account with a new one.';
+		return 'Sign in with a passkey you already have, or create an account with a new one.';
 	}
 	if (input.scheme === 'email') {
 		if (input.use.signIn && !input.use.signUp) return 'Signs in with a code sent to an address already on your account.';

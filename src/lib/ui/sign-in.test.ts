@@ -34,8 +34,16 @@ describe('the passkey step', () => {
 		});
 	});
 
-	it('connects first when the form names another server, since the sheet needs a tap of its own', () => {
-		expect(signInView({ ...guestHere, sameServer: false })).toEqual({ phase: 'idle', primary: { action: 'connect', label: 'Connect' } });
+	it('offers the passkey actions before connecting: a tap connects, then runs the one it asked for', () => {
+		expect(signInView({ ...guestHere, sameServer: false, serverKnown: false })).toEqual({
+			phase: 'idle',
+			primary: { action: 'passkey-login', label: 'Sign in with passkey' },
+			secondary: { action: 'passkey-register', label: 'New here? Create an account with a passkey' }
+		});
+	});
+
+	it('offers them on another server while signed in to an account here', () => {
+		expect(signInView({ ...guestHere, sameServer: false, registered: true }).primary.action).toBe('passkey-login');
 	});
 
 	it('is ready on a connection held for a sign-in, or on a server without guests', () => {
@@ -52,7 +60,9 @@ describe('the passkey step', () => {
 
 	it('lets the form be edited again when that connection fails', () => {
 		const failed = { ...guestHere, pending: true, authenticated: false, status: 'reconnecting', connectionError: true };
-		expect(signInView(failed)).toEqual({ phase: 'idle', primary: { action: 'connect', label: 'Connect' } });
+		expect(signInView(failed).phase).toBe('idle');
+		expect(signInView(failed).primary.action).toBe('passkey-login');
+		expect(signInView({ ...failed, scheme: 'guest' })).toEqual({ phase: 'idle', primary: { action: 'connect', label: 'Connect' } });
 	});
 
 	it('is busy from the tap until the ceremony ends', () => {
@@ -88,7 +98,7 @@ describe('hints', () => {
 
 	it('says what a passkey does on this server', () => {
 		expect(hint({})).toMatch(/^Connected as a guest/);
-		expect(hint({ phase: 'idle', here: false, guest: false })).toMatch(/^Connects first/);
+		expect(hint({ phase: 'idle', here: false, guest: false })).toBe('Sign in with a passkey you already have, or create an account with a new one.');
 		expect(hint({ use: { signIn: false, signUp: true } })).toMatch(/^Creates an account with a new passkey/);
 		expect(hint({ use: { signIn: true, signUp: false } })).toMatch(/^Signs in with a passkey already on your account/);
 		expect(hint({ registered: true })).toBe('Signed in. Choose Guest to sign out.');
