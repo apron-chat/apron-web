@@ -1539,7 +1539,8 @@
 			<StatusBanner tone={feedback.current.kind === 'error' ? 'danger' : 'warn'} role={feedback.current.kind === 'error' ? 'alert' : 'status'}>{feedback.current.text}</StatusBanner>
 		</div>
 	{/if}
-	{#if snapshot.error && !(session.connection === 'reconnecting' && !session.reconnectError)}
+	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
+	{#if snapshot.error && session.connection !== 'reconnecting'}
 		<div class="toast toast-right">
 			<StatusBanner tone="danger" role="alert">{snapshot.error}</StatusBanner>
 		</div>
