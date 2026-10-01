@@ -3,14 +3,15 @@
 /// <reference lib="esnext" />
 /// <reference lib="webworker" />
 import { base, build, files, prerendered, version } from '$service-worker';
-import { NOTIFICATION_CLICK } from '$lib/ui/notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ROOM_PARAM, pushNotification, pushTarget } from '$lib/ui/notifications';
 
 /**
  * Keeps each deploy's app files cached so the app opens fast, still opens
  * offline, and a tab left open across a deploy can still load its lazy chunks.
  * Only the app's own files and page loads are handled: the WebSocket,
  * uploads, files, streams and every backend's URLs go straight to the network.
- * It also shows message notifications where a page can't show its own.
+ * It also shows message notifications where a page can't show its own, and
+ * the messages the server pushes (§4.7).
  */
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -56,17 +57,34 @@ sw.addEventListener('fetch', (event) => {
 	}
 });
 
-// A notification shown through here (see `showNotification`): bring a tab forward, and
-// tell the tabs, so the one that raised it opens the room.
+// A push from the server (§4.7) is a message object: show it. Browsers expect every push to
+// show a notification, so one that can't be read still says something arrived.
+sw.addEventListener('push', (event) => {
+	let payload: unknown;
+	try {
+		payload = event.data?.json();
+	} catch {
+		payload = undefined;
+	}
+	const shown = pushNotification(payload) ?? { title: 'Apron', options: { body: 'New message', tag: 'apron:push' } };
+	event.waitUntil(sw.registration.showNotification(shown.title, { icon: `${base}/icon-192.png`, ...shown.options }));
+});
+
+// A notification shown through here: bring a tab forward, and tell the tabs, so the one that
+// raised it (see `showNotification`), or any on the pushing server, opens the room. Without a tab,
+// a new one opens at the pushed room.
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
+	const data: unknown = event.notification.data;
+	const push = pushTarget(data);
 	event.waitUntil((async () => {
 		const tabs = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
 		if (tabs.length === 0) {
-			await sw.clients.openWindow(APP_PAGE);
+			await sw.clients.openWindow(push ? `${APP_PAGE}?${PUSH_ROOM_PARAM}=${encodeURIComponent(push.roomId)}` : APP_PAGE);
 			return;
 		}
-		for (const tab of tabs) tab.postMessage({ type: NOTIFICATION_CLICK, target: event.notification.data });
+		const message = push ? { type: PUSH_CLICK, target: push } : { type: NOTIFICATION_CLICK, target: data };
+		for (const tab of tabs) tab.postMessage(message);
 		await tabs[0].focus();
 	})());
 });

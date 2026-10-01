@@ -49,6 +49,7 @@ import {
 	type MessageResult,
 	type Notice,
 	type OperationHandle,
+	type PushRegistration,
 	type RoomListing,
 	type RoomPatch,
 	type RoomResult,
@@ -121,7 +122,8 @@ export {
 	normalizeWebSocketUrl,
 	timelineMessages,
 	topLevelRooms,
-	userIn
+	userIn,
+	webPushKey
 } from './client-views';
 
 /**
@@ -176,6 +178,9 @@ export class ChatClient {
 	/** Nobody is attending this connection (§4.4); `awaySent` is what the server was last told on it. */
 	private away = false;
 	private awaySent = false;
+	/** What `push_register` sends on each connection (§4.7); `pushSent` is whether this connection has. */
+	private pushRegistration: PushRegistration | undefined;
+	private pushSent = false;
 	/** The `room_id` of the server's default room once known (without capability `rooms`). */
 	private defaultRoom?: string;
 	/** Messages this client posted without `room_id`: their broadcast names the default room. */
@@ -330,6 +335,8 @@ export class ChatClient {
 		this.retryAfterUntil = 0;
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
+		// A registration belongs to the server it was made for.
+		this.pushRegistration = undefined;
 		this.resetSession('Server URL changed; pending requests were cancelled');
 		// After the reset, which forgets the old server's session: this server's own comes back.
 		this.loadStoredSession();
@@ -1333,6 +1340,42 @@ export class ChatClient {
 	}
 
 	/**
+	 * Registers this device for push (§4.7): `push_register` goes out once
+	 * signed in, and again on each connection, while the server advertises the
+	 * registration's `kind`. A registration that replaces another, or none,
+	 * unregisters the previous `url` with `push_unregister`. Switching servers
+	 * forgets it.
+	 */
+	setPushRegistration(registration: PushRegistration | undefined): void {
+		const previous = this.pushRegistration;
+		if (canonicalJson(previous) === canonicalJson(registration)) return;
+		this.pushRegistration = registration;
+		this.pushSent = false;
+		if (previous && previous.url !== registration?.url && this.offersPush(previous.kind)) {
+			this.pushRequest('push_unregister', { url: previous.url });
+		}
+		this.syncPush();
+	}
+
+	private syncPush(): void {
+		const registration = this.pushRegistration;
+		if (!registration || this.pushSent || !this.offersPush(registration.kind)) return;
+		this.pushSent = true;
+		this.pushRequest('push_register', registration);
+	}
+
+	/** Signed in to a server whose `server.push` has this kind (§4.7). */
+	private offersPush(kind: string): boolean {
+		const push = this.server?.push;
+		return this.authenticated && isJsonObject(push) && Object.hasOwn(push, kind);
+	}
+
+	private pushRequest(method: 'push_register' | 'push_unregister', params: JsonObject): void {
+		// Push is a convenience: a refusal leaves the session as it was.
+		this.enqueueRequest(method, params, { visible: false, allowBeforeAuth: false }).promise.catch(() => undefined);
+	}
+
+	/**
 	 * Advances your read cursor in a room (capability `activity`, §4.4) to a
 	 * message, if that is further than the cursor already is. The server
 	 * syncs it to your other connections.
@@ -1984,6 +2027,7 @@ export class ChatClient {
 			...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
 			...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
 			...(isJsonObject(params.ext) ? { ext: params.ext as ServerExt } : {}),
+			...(isJsonObject(params.push) ? { push: params.push } : {}),
 			...(typeof params.ping === 'number' && Number.isFinite(params.ping) && params.ping > 0 ? { ping: params.ping } : {})
 		};
 		// Liveness starts before authentication (§1); a replacing frame may change the interval.
@@ -1992,6 +2036,7 @@ export class ChatClient {
 		// before v7 would ignore `user_id` in `room_join`/`room_leave` and act on the caller.
 		this.memberChangesUnsupported = version < 7;
 		if (this.authenticated || this.authRequested) {
+			this.syncPush();
 			this.emit();
 			return;
 		}
@@ -2167,6 +2212,8 @@ export class ChatClient {
 		}
 		this.awaySent = false;
 		this.syncAway();
+		this.pushSent = false;
+		this.syncPush();
 		this.emit();
 		return true;
 	}

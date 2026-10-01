@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOTIFICATION_CLICK, notificationClickTarget, showNotification } from './notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, notificationBody, notificationClickTarget, pushClickTarget, pushNotification, pushTarget, showNotification } from './notifications';
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -41,5 +41,44 @@ describe('showing notifications', () => {
 		expect(notificationClickTarget({ type: NOTIFICATION_CLICK, target })).toEqual(target);
 		expect(notificationClickTarget({ type: 'other', target })).toBeUndefined();
 		expect(notificationClickTarget({ type: NOTIFICATION_CLICK, target: { tab: 't1', roomId: 'general' } })).toBeUndefined();
+	});
+});
+
+describe('push notifications', () => {
+	it('shows a pushed message from its sender, in its room, replacing the room\'s last one', () => {
+		expect(pushNotification({
+			message_id: '1724803200042', room_id: 'general',
+			from: { user_id: 'alice', name: 'Alice' },
+			body: { text: 'Deploy is done,\n  can someone check?' }
+		})).toEqual({
+			title: 'Alice · general',
+			options: { body: 'Deploy is done, can someone check?', tag: 'apron:push:general', renotify: true, data: { push: true, roomId: 'general' } }
+		});
+	});
+
+	it('falls back to the user_id, and says only that a message arrived when the body was left out', () => {
+		const shown = pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'bob', name: ' ' } });
+		expect(shown?.title).toBe('bob · ops');
+		expect(shown?.options.body).toBe('New message');
+		expect(pushNotification({ room_id: 'ops', body: { text: 'hi' } })?.title).toBe('Someone · ops');
+	});
+
+	it('shortens a long body', () => {
+		expect(notificationBody('x'.repeat(200))).toBe(`${'x'.repeat(179)}…`);
+		expect(pushNotification({ room_id: 'ops', from: { user_id: 'bob' }, body: { text: 'y'.repeat(181) } })?.options.body).toHaveLength(180);
+	});
+
+	it('shows nothing for a payload that isn\'t a message', () => {
+		expect(pushNotification(undefined)).toBeUndefined();
+		expect(pushNotification('hello')).toBeUndefined();
+		expect(pushNotification({ from: { user_id: 'bob' }, body: { text: 'no room' } })).toBeUndefined();
+	});
+
+	it('reads a push click target, and tells it apart from a page notification\'s', () => {
+		const data = pushNotification({ room_id: 'general' })!.options.data;
+		expect(pushTarget(data)).toEqual({ push: true, roomId: 'general' });
+		expect(pushTarget({ tab: 't1', server: 'wss://chat.example/', roomId: 'general' })).toBeUndefined();
+		expect(pushClickTarget({ type: PUSH_CLICK, target: data })).toEqual({ push: true, roomId: 'general' });
+		expect(pushClickTarget({ type: NOTIFICATION_CLICK, target: data })).toBeUndefined();
 	});
 });

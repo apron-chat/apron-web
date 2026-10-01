@@ -2,6 +2,7 @@
 	import X from '@lucide/svelte/icons/x';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
+	import type { WebPushPreference } from '$lib/ui/web-push';
 	import FontFamilyField from './FontFamilyField.svelte';
 
 	type LocalFontAccessWindow = Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> };
@@ -15,10 +16,13 @@
 		onnotifications: () => void;
 		onnotificationscope: (scope: NotificationScope) => void;
 		ontestnotifications: () => Promise<NotificationTestResult>;
+		/** Push notifications (§4.7), when the server offers web push. */
+		webPush?: WebPushPreference;
+		onwebpush: () => void;
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, onclosed }: Props = $props();
+	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onclosed }: Props = $props();
 
 	let preferencesSection = $state<'notifications' | 'appearance'>('notifications');
 	let interfaceFontDraft = $state('');
@@ -181,6 +185,26 @@
 					</div>
 					<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={testNotificationStatus === 'sending' || !notificationsSupported || notificationPermission === 'denied'} onclick={sendTestNotification}>{testNotificationStatus === 'sending' ? 'Sending…' : 'Send test'}</button>
 				</div>
+				{#if webPush}
+					<div class="ap-pref-setting ap-pref-push">
+						<div>
+							<strong>Push notifications</strong>
+							<p class="ap-profedit-hint">Enable notifications for mentions on this device, even while Apron is closed. This server decides which messages to send.</p>
+							{#if !webPush.supported}
+								<p class="ap-pref-note" role="status">{webPush.homeScreen ? 'On iPhone and iPad, add Apron to your Home Screen (Share, then Add to Home Screen) and turn this on from there.' : 'Push notifications aren’t available in this browser.'}</p>
+							{:else if notificationPermission === 'denied'}
+								<p class="ap-pref-note ap-profedit-err" role="status">Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.</p>
+							{:else if webPush.error}
+								<p class="ap-pref-note ap-profedit-err" role="status">{webPush.error}</p>
+							{:else if webPush.enabled}
+								<p class="ap-pref-note ap-profedit-ok" role="status">On · this server can notify this device.</p>
+							{:else if notificationPermission !== 'granted'}
+								<p class="ap-pref-note" role="status">Turning this on will ask your browser for permission.</p>
+							{/if}
+						</div>
+						<button class="ap-pref-switch" class:active={webPush.enabled} type="button" role="switch" aria-checked={webPush.enabled} aria-label="Push notifications" disabled={!webPush.enabled && (!webPush.supported || notificationPermission === 'denied')} onclick={onwebpush}><span></span></button>
+					</div>
+				{/if}
 			</section>
 		{:else}
 			<section class="ap-preferences-content" aria-labelledby="ap-pref-appearance">
@@ -256,6 +280,7 @@
 	.ap-pref-theme-setting select { flex: none; }
 	.ap-pref-font-setting { display: block; }
 	.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
+	.ap-pref-test + .ap-pref-push { border-top: 0; }
 	.ap-pref-switch { flex: none; width: 42px; height: 24px; padding: 3px; display: flex; align-items: center; border: 0; border-radius: 999px; background: var(--bg-300); cursor: pointer; transition: background .15s; }
 	.ap-pref-switch span { width: 18px; height: 18px; border-radius: 50%; background: var(--ink-muted); transition: transform .15s, background .15s; }
 	.ap-pref-switch.active { background: var(--accent-soft); }

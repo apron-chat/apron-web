@@ -8,6 +8,7 @@
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { saveDisplayName } from '$lib/ui/storage';
 	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
+	import type { WebPushPreference } from '$lib/ui/web-push';
 	import Avatar from './Avatar.svelte';
 	import PreferencesDialog from './PreferencesDialog.svelte';
 	import TypingDots from './TypingDots.svelte';
@@ -27,13 +28,16 @@
 		onnotifications: () => void;
 		onnotificationscope: (scope: NotificationScope) => void;
 		ontestnotifications: () => Promise<NotificationTestResult>;
+		/** Push notifications (§4.7), when the server offers web push. */
+		webPush?: WebPushPreference;
+		onwebpush: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: () => void;
 		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
 		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
-	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onsignout, onsignin }: Props = $props();
 
 	let open = $state(false);
 	let preferencesOpen = $state(false);
@@ -355,7 +359,7 @@
 	<PreferencesDialog
 		bind:open={preferencesOpen}
 		{notificationsEnabled} {notificationsSupported} {notificationPermission} {notificationScope}
-		{onnotifications} {onnotificationscope} {ontestnotifications}
+		{onnotifications} {onnotificationscope} {ontestnotifications} {webPush} {onwebpush}
 		onclosed={() => preferencesTrigger?.focus()}
 	/>
 	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || 'not signed in'}. Edit`} onclick={toggle}>

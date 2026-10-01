@@ -5,6 +5,7 @@
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
+	import type { WebPushPreference } from '$lib/ui/web-push';
 	import { sidebarRooms, type ThreadEntry } from '$lib/ui/timeline';
 	import CreateRoomDialog from './CreateRoomDialog.svelte';
 	import ProfileBar from './ProfileBar.svelte';
@@ -29,6 +30,9 @@
 		onnotifications: () => void;
 		onnotificationscope: (scope: NotificationScope) => void;
 		ontestnotifications: () => Promise<NotificationTestResult>;
+		/** Push notifications (§4.7), when the server offers web push. */
+		webPush?: WebPushPreference;
+		onwebpush: () => void;
 		onconnect: () => void;
 		onroom: (room: RoomSnapshot) => void;
 		onthread: (thread: string) => void;
@@ -40,7 +44,7 @@
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
-	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, onconnect, onroom, onthread, onjoin, oncreateroom, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onconnect, onroom, onthread, onjoin, oncreateroom, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own. */
 	let rooms = $derived(sidebarRooms(session.rooms));
 	let canBrowse = $derived(session.canManageRooms && session.ready);
@@ -181,7 +185,7 @@
 			</section>
 		{/if}
 	</div>
-	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notificationScope} {onnotifications} {onnotificationscope} {ontestnotifications} {onsignout} {onsignin} />
+	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notificationScope} {onnotifications} {onnotificationscope} {ontestnotifications} {webPush} {onwebpush} {onsignout} {onsignin} />
 </aside>
 
 <CreateRoomDialog {client} bind:open={createOpen} enabled={canCreateRoom} oncreated={oncreateroom} />

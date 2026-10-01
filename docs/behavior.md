@@ -177,7 +177,16 @@ still plays if one couldn't be shown), each room keeps one notification that
 the next message replaces (its newest mention, else its newest message), and
 clicking it opens that room or thread. Where the page can't show notifications
 itself (Android Chrome) the service worker shows them. Permission revoked in the
-browser's site settings reads as off. **Appearance** picks a light or dark theme
+browser's site settings reads as off. When the server offers web push
+(`server.push.webpush` with its VAPID `key`, §4.7), Preferences also offers
+**Push notifications** for mentions, per server and off until turned on. Turning
+it on asks the browser's permission, subscribes this browser with the server's
+key (replacing a subscription made with another key), and sends `push_register`
+`{kind: "webpush", url, keys: {p256dh, auth}}` from the subscription on each
+connection; turning it off sends `push_unregister` and drops the subscription.
+The service worker shows each pushed message as its sender and room, and a
+click opens that room, in a new tab if none is open. Browsers without push
+say so; iPhone and iPad Safari say to add Apron to the Home Screen first. **Appearance** picks a light or dark theme
 over the system's, and an installed font for the interface, messages and code
 (suggested from installed fonts where the browser allows listing them); the
 font choice is marked experimental, to be replaced by a choice of themes. All

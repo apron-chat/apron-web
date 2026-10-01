@@ -148,6 +148,8 @@ export interface ServerParams {
 	ext?: ServerExt;
 	/** Seconds between client pings (§1, §3.1). */
 	ping?: number;
+	/** Each push kind the server delivers, with its public configuration (§4.7). */
+	push?: JsonObject;
 }
 
 export interface ServerExt extends JsonObject {

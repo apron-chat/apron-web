@@ -283,6 +283,16 @@ export interface ClientSnapshot {
 	disconnectedAt?: number;
 }
 
+/**
+ * The params of `push_register` (§4.7): `kind` is a key of `server.push`,
+ * `url` identifies the registration, and the rest is specific to the kind,
+ * such as a web push subscription's `keys`.
+ */
+export interface PushRegistration extends JsonObject {
+	kind: string;
+	url: string;
+}
+
 export interface OperationHandle<T extends JsonObject = JsonObject> {
 	id: string;
 	promise: Promise<T>;

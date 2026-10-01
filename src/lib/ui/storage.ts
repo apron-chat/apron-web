@@ -10,6 +10,9 @@ const KEY = {
 	sidebar: 'apron.sidebar',
 	notificationsEnabled: 'apron.desktopNotifications',
 	notificationScope: 'apron.notificationScope',
+	/** The servers push is turned on for, and the one this browser's push subscription is registered with. */
+	webPush: 'apron.webPush',
+	webPushServer: 'apron.webPushServer',
 	memberList: 'apron.memberList',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
@@ -127,6 +130,38 @@ export function loadNotificationScope(): NotificationScope {
 
 export function saveNotificationScope(scope: NotificationScope): void {
 	write(KEY.notificationScope, scope);
+}
+
+/** The servers the user turned push notifications on for (§4.7), by URL. */
+export function loadWebPushServers(): string[] {
+	try {
+		const parsed: unknown = JSON.parse(read(KEY.webPush) ?? '[]');
+		return Array.isArray(parsed) ? parsed.filter((url): url is string => typeof url === 'string') : [];
+	} catch {
+		return [];
+	}
+}
+
+/** Turns push on or off for one server, and returns the servers it is on for. */
+export function saveWebPushEnabled(servers: string[], url: string, enabled: boolean): string[] {
+	const next = [...servers.filter((server) => server !== url), ...(enabled ? [url] : [])];
+	write(KEY.webPush, JSON.stringify(next));
+	return next;
+}
+
+/** The server this browser's one push subscription is registered with: its notifications open rooms there. */
+export function loadWebPushServer(): string | undefined {
+	return read(KEY.webPushServer) ?? undefined;
+}
+
+export function saveWebPushServer(url: string | undefined): void {
+	if (!persisting) return;
+	try {
+		if (url === undefined) globalThis.localStorage?.removeItem(KEY.webPushServer);
+		else globalThis.localStorage?.setItem(KEY.webPushServer, url);
+	} catch {
+		// As `write`.
+	}
 }
 
 /** The saved theme and fonts as stored; `decodeAppearance` checks them. */

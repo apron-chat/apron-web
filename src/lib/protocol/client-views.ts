@@ -1,5 +1,6 @@
 /** Pure helpers over client snapshots, capabilities, and server URLs. */
 import { timelineEvents } from './reducer';
+import { isJsonObject } from './types';
 import type {
 	JsonObject,
 	Capability,
@@ -73,6 +74,13 @@ export const canManageRooms = (server: ServerParams | undefined) => hasCapabilit
 export const canReact = (server: ServerParams | undefined) => hasCapability(server, 'reactions');
 /** History recovery and paging (capability `history`). */
 export const hasHistory = (server: ServerParams | undefined) => hasCapability(server, 'history');
+
+/** The VAPID public key (base64url) of the server's `webpush` push kind (§4.7), if it offers one. */
+export function webPushKey(server: ServerParams | undefined): string | undefined {
+	const webpush = server?.push?.webpush;
+	const key = isJsonObject(webpush) ? webpush.key : undefined;
+	return typeof key === 'string' && key ? key : undefined;
+}
 
 export function defaultWebSocketUrl(locationLike?: Location): string {
 	// `?.`: outside Vite (plain Node) there is no `import.meta.env`.

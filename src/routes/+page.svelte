@@ -3,7 +3,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, webPushKey, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
@@ -39,7 +39,7 @@
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, loadWebPushServer, loadWebPushServers, saveWebPushEnabled, saveWebPushServer, type RecentServer } from '$lib/ui/storage';
 	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadLostPrivacy, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
 	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
@@ -51,8 +51,9 @@
 	import { PaneDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { notificationClickTarget, notificationPermission, requestNotificationPermission, showNotification, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { notificationBody, notificationClickTarget, notificationPermission, pushClickTarget, PUSH_ROOM_PARAM, requestNotificationPermission, showNotification, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
+	import { needsHomeScreen, subscribeWebPush, unsubscribeWebPush, webPushSupported } from '$lib/ui/web-push';
 
 	/**
 	 * A thread this viewer created, opened once its `room_update` has arrived;
@@ -96,6 +97,18 @@
 	let notificationState = $state<NotificationPermissionState>(notificationPermission());
 	/** On, and still allowed: the browser's permission can be revoked or reset behind the setting. */
 	let notificationsActive = $derived(notificationsEnabled && notificationState === 'granted');
+	/** The server the client is on (`client.url`), kept as page state. */
+	let serverUrl = $state('');
+	/** The servers push notifications are on for (§4.7); this browser's one subscription follows the server in use. */
+	let webPushServers = $state<string[]>([]);
+	let webPushServerKey = $derived(webPushKey(session.server));
+	let webPushActive = $derived(webPushServers.includes(serverUrl) && notificationState === 'granted');
+	let webPushError = $state<string | undefined>();
+	let webPushAvailable = $state(false);
+	/** Counts subscription attempts, so a newer one or turning push off supersedes one in flight. */
+	let webPushRun = 0;
+	/** A pushed room to open once it is listed. */
+	let pushRoom = $state<string | undefined>();
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
 	const tabId = Math.random().toString(36).slice(2);
 	const selection = new MessageSelection();
@@ -259,6 +272,24 @@
 
 	$effect(() => {
 		unread.observe(session.rooms, session.you, paneRoom?.id, latestVisible && presence.visible);
+	});
+
+	// While push is on for this server (§4.7), keep this browser subscribed with the server's
+	// key, which the client registers on each connection.
+	$effect(() => {
+		const chat = client;
+		const key = webPushServerKey;
+		if (!chat || !key || !webPushActive || !session.ready) return;
+		untrack(() => void subscribePush(chat, key));
+	});
+
+	// A pushed room opens once it is listed: a thread under its room.
+	$effect(() => {
+		const roomId = pushRoom;
+		const room = roomId === undefined || !session.ready ? undefined : session.rooms.find((candidate) => candidate.id === roomId);
+		if (!room) return;
+		pushRoom = undefined;
+		untrack(() => openDestination(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined));
 	});
 
 	// Nobody is attending a hidden or unfocused tab (§4.4): the server may push instead.
@@ -480,6 +511,10 @@
 		notificationsEnabled = loadNotificationsEnabled();
 		notificationScope = loadNotificationScope();
 		notificationState = notificationPermission();
+		webPushServers = previewMode ? [] : loadWebPushServers();
+		webPushAvailable = webPushSupported();
+		// A push notification clicked with no tab open opens one at its room.
+		const pushed = previewMode ? undefined : takePushRoom();
 		const worker = navigator.serviceWorker;
 		worker?.addEventListener('message', notificationClicked);
 		let permission: PermissionStatus | undefined;
@@ -493,11 +528,13 @@
 			webSocketFactory
 		);
 		const unsubscribe = chat.subscribe((next) => {
+			serverUrl = chat.url;
 			session.apply(next, chat);
 			directory.apply(next, serverOrigin(chat.url));
 		});
 		chat.start();
 		client = chat;
+		if (pushed) openPushedRoom(pushed);
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
@@ -607,6 +644,7 @@
 		selection.cancel();
 		mentions.reset();
 		incomingMessages.reset();
+		pushRoom = undefined;
 		session.forget();
 		directory.forget();
 	}
@@ -653,8 +691,7 @@
 	async function notifyMessage(event: MessageRecord, mention: boolean): Promise<void> {
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
 		if (!room || !client) return;
-		const text = event.body?.text?.replace(/\s+/g, ' ').trim() ?? '';
-		const body = text.length > 180 ? `${text.slice(0, 179)}…` : text;
+		const body = notificationBody(event.body?.text);
 		const target: NotificationTarget = { tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}) };
 		const shown = await showNotification(`${senderName(event)} · ${room.title}`, {
 			body: body || 'New message',
@@ -675,6 +712,63 @@
 	function notificationClicked(event: MessageEvent): void {
 		const target = notificationClickTarget(event.data);
 		if (target) openNotificationTarget(target);
+		const pushed = pushClickTarget(event.data);
+		if (pushed) openPushedRoom(pushed.roomId);
+	}
+
+	/** A push notification's room opens on the server this browser's push subscription is registered with. */
+	function openPushedRoom(roomId: string): void {
+		window.focus();
+		if (client && client.url === loadWebPushServer()) pushRoom = roomId;
+	}
+
+	/** Takes, and scrubs from the address bar, the room of a push notification this tab was opened for. */
+	function takePushRoom(): string | undefined {
+		const url = new URL(window.location.href);
+		const roomId = url.searchParams.get(PUSH_ROOM_PARAM) ?? undefined;
+		if (roomId === undefined) return undefined;
+		url.searchParams.delete(PUSH_ROOM_PARAM);
+		scrubUrl(url.toString());
+		return roomId || undefined;
+	}
+
+	/** Subscribes this browser with the server's key, and has the client register it (§4.7). */
+	async function subscribePush(chat: ChatClient, key: string): Promise<void> {
+		const run = ++webPushRun;
+		const url = chat.url;
+		try {
+			const registration = await subscribeWebPush(key);
+			if (run !== webPushRun || chat.url !== url) return;
+			chat.setPushRegistration(registration);
+			saveWebPushServer(url);
+			webPushError = undefined;
+		} catch {
+			if (run === webPushRun) webPushError = 'This browser couldn’t subscribe to push notifications. Try again later.';
+		}
+	}
+
+	/**
+	 * Push is opt-in per server. Turning it on asks for notification permission
+	 * first, from this tap; turning it off unregisters this device and drops the
+	 * browser's subscription, if it is this server's.
+	 */
+	async function toggleWebPush(): Promise<void> {
+		const chat = client;
+		if (!chat) return;
+		const url = chat.url;
+		webPushError = undefined;
+		if (webPushActive) {
+			webPushRun += 1;
+			webPushServers = saveWebPushEnabled(webPushServers, url, false);
+			chat.setPushRegistration(undefined);
+			if (loadWebPushServer() === url) {
+				saveWebPushServer(undefined);
+				await unsubscribeWebPush().catch(() => undefined);
+			}
+			return;
+		}
+		if (notificationState !== 'granted') notificationState = await requestNotificationPermission();
+		if (notificationState === 'granted') webPushServers = saveWebPushEnabled(webPushServers, url, true);
 	}
 
 	function connected(): void {
@@ -1415,6 +1509,7 @@
 	<Sidebar
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notificationScope={notificationScope} onnotifications={toggleNotifications} onnotificationscope={updateNotificationScope} ontestnotifications={testNotifications}
+		webPush={webPushServerKey ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive, ...(webPushError ? { error: webPushError } : {}) } : undefined} onwebpush={toggleWebPush}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={() => session.forget()}
 	/>

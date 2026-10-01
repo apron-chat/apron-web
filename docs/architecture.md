@@ -54,7 +54,8 @@ and `time.ts` read messages, `connection.ts` words the connection state, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences included (on this device only; nothing is synced), and
 `notifications.ts` shows notifications, through `service-worker.ts` where the
-page can't.
+page can't, and words pushed messages for the service worker, and
+`web-push.ts` keeps this browser's push subscription for the server's key.
 
 Protocol types, replay reduction, and the WebSocket session live under
 `src/lib/protocol` and speak Apron protocol v7. `client.ts` holds the session,
@@ -108,6 +109,9 @@ authentication on; a ping that goes a whole interval without the
 `{"method":"pong"}` answer marks the socket dead, and it is replaced through
 the usual reconnect. With `room_leave: false` the client offers no Leave, and
 with `read_cursors: false` it moves your read cursor locally without sending it.
+`setPushRegistration` keeps the `push_register` params (§4.7) and sends them
+after each `auth` while `server.push` offers their `kind`; a replaced or
+cleared registration is unregistered, and switching servers forgets it.
 
 Edits, moves, and deletion use the same `message` request as creation, with an
 existing `message_id`, and resubmit every client field of the latest snapshot

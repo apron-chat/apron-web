@@ -300,6 +300,47 @@ describe('rooms by request (cap rooms)', () => {
 		await authenticate(['rooms', 'activity']);
 		expect(away()).toEqual([true]);
 	});
+
+	it('registers for push on each connection while the server offers the kind, and unregisters a replaced one', async () => {
+		const webpush = { kind: 'webpush', url: 'https://push.example/a', keys: { p256dh: 'BPk', auth: 'c2Vj' } };
+		const sent = (method: string) => socket.sent.filter((frame) => frame.method === method).map((frame) => frame.params);
+		async function greet(push?: Record<string, unknown>): Promise<void> {
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [], ...(push ? { push } : {}) } });
+			// Nothing is registered before auth.
+			expect(sent('push_register')).toEqual([]);
+			await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
+		}
+		client.setPushRegistration(webpush);
+		await greet({ webpush: { key: 'BNcR' } });
+		expect(sent('push_register')).toEqual([webpush]);
+		// The same registration again sends nothing.
+		client.setPushRegistration({ ...webpush, keys: { auth: 'c2Vj', p256dh: 'BPk' } });
+		expect(sent('push_register')).toHaveLength(1);
+		// A new subscription (another key) unregisters the old endpoint.
+		const renewed = { ...webpush, url: 'https://push.example/b' };
+		client.setPushRegistration(renewed);
+		expect(sent('push_unregister')).toEqual([{ url: webpush.url }]);
+		expect(sent('push_register')).toEqual([webpush, renewed]);
+		// Each connection registers again.
+		socket.drop();
+		vi.advanceTimersByTime(5_000);
+		socket = FakeSocket.latest();
+		await greet({ webpush: { key: 'BNcR' } });
+		expect(sent('push_register')).toEqual([renewed]);
+		// Turning push off unregisters.
+		client.setPushRegistration(undefined);
+		expect(sent('push_unregister')).toEqual([{ url: renewed.url }]);
+		// A server without the kind is never asked, until a replacing server frame offers it.
+		client.setPushRegistration(renewed);
+		socket.drop();
+		vi.advanceTimersByTime(5_000);
+		socket = FakeSocket.latest();
+		await greet({ relay: {} });
+		expect(sent('push_register')).toEqual([]);
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
+		expect(sent('push_register')).toEqual([renewed]);
+	});
 });
 
 describe('the default room (no cap rooms)', () => {
