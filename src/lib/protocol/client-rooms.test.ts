@@ -302,7 +302,7 @@ describe('rooms by request (cap rooms)', () => {
 	});
 
 	it('registers for push on each connection while the server offers the kind, and unregisters a replaced one', async () => {
-		const webpush = { kind: 'webpush', url: 'https://push.example/a', keys: { p256dh: 'BPk', auth: 'c2Vj' } };
+		const webpush = { kind: 'webpush', url: 'https://push.example/a', tag: 'a1', keys: { p256dh: 'BPk', auth: 'c2Vj' } };
 		const sent = (method: string) => socket.sent.filter((frame) => frame.method === method).map((frame) => frame.params);
 		async function greet(push?: Record<string, unknown>): Promise<void> {
 			socket.open();
@@ -322,7 +322,7 @@ describe('rooms by request (cap rooms)', () => {
 		await greet({ webpush: { key: 'BNcR' } });
 		expect(sent('push_register')).toEqual([webpush]);
 		// The same registration again sends nothing.
-		client.setPushRegistration({ ...webpush, keys: { auth: 'c2Vj', p256dh: 'BPk' } });
+		client.setPushRegistration({ ...webpush, keys: { auth: 'c2Vj', p256dh: 'BPk' }, tag: 'a1' });
 		expect(sent('push_register')).toHaveLength(1);
 		// A new subscription (another key) unregisters the old endpoint.
 		const renewed = { ...webpush, url: 'https://push.example/b' };

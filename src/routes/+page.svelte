@@ -51,9 +51,9 @@
 	import { PaneDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { notificationBody, notificationClickTarget, notificationPermission, pushClickTarget, PUSH_ROOM_PARAM, requestNotificationPermission, showNotification, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ROOM_PARAM, PUSH_TAG_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
-	import { needsHomeScreen, subscribeWebPush, unsubscribeWebPush, webPushSupported } from '$lib/ui/web-push';
+	import { needsHomeScreen, pushTag, subscribeWebPush, unsubscribeWebPush, webPushSupported } from '$lib/ui/web-push';
 
 	/**
 	 * A thread this viewer created, opened once its `room_update` has arrived;
@@ -108,8 +108,10 @@
 	let webPushAvailable = $state(false);
 	/** Counts subscription attempts, so a newer one or turning push off supersedes one in flight. */
 	let webPushRun = 0;
-	/** A pushed room to open once it is listed. */
-	let pushRoom = $state<string | undefined>();
+	/** This server's push `tag` (§4.7): it names the server in pushed payloads and in message notifications. */
+	let serverTag = $state<string | undefined>();
+	/** A pushed room to open once it is listed, if its push tag is this server's. */
+	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'tag'> | undefined>();
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
 	const tabId = Math.random().toString(36).slice(2);
 	const selection = new MessageSelection();
@@ -284,10 +286,23 @@
 		untrack(() => void subscribePush(chat, key));
 	});
 
-	// A pushed room opens once it is listed: a thread under its room.
 	$effect(() => {
-		const roomId = pushRoom;
-		const room = roomId === undefined || !session.ready ? undefined : session.rooms.find((candidate) => candidate.id === roomId);
+		const url = serverUrl;
+		serverTag = undefined;
+		if (url) void pushTag(url).then((tag) => { if (serverUrl === url) serverTag = tag; });
+	});
+
+	// A pushed room opens once it is listed, a thread under its room, if it was pushed by this server.
+	$effect(() => {
+		const pending = pushRoom;
+		if (!pending) return;
+		const route = pushRoute(pending, serverTag, untrack(() => client?.url === loadWebPushServer()));
+		if (route === 'wait') return;
+		if (route === 'ignore') {
+			pushRoom = undefined;
+			return;
+		}
+		const room = session.ready ? session.rooms.find((candidate) => candidate.id === pending.roomId) : undefined;
 		if (!room) return;
 		pushRoom = undefined;
 		untrack(() => openDestination(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined));
@@ -535,7 +550,7 @@
 		});
 		chat.start();
 		client = chat;
-		if (pushed) openPushedRoom(pushed);
+		if (pushed) void followPush(chat, pushed);
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
@@ -693,12 +708,16 @@
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
 		if (!room || !client) return;
 		const body = notificationBody(event.body?.text);
-		const target: NotificationTarget = { tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}) };
+		const tag = serverTag;
+		const target: NotificationTarget = {
+			tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}),
+			...(tag ? { tag, messageId: event.message_id, group: notificationGroup(tag, room.id) } : {})
+		};
 		const shown = await showNotification(`${senderName(event)} · ${room.title}`, {
 			body: body || 'New message',
-			// One per room: a newer message replaces it and alerts again.
-			tag: `apron:${client.url}:${room.id}`,
-			renotify: true,
+			// One per message, shared with the server's push of it (§4.7), which replaces it quietly;
+			// a newer message in the room closes it. Without a push tag, one per room.
+			...(tag ? { tag: messageNotificationTag(tag, event.message_id), renotify: false } : { tag: `apron:${client.url}:${room.id}`, renotify: true }),
 			data: target
 		}, () => openNotificationTarget(target));
 		if (!shown && mention) playPing();
@@ -714,23 +733,49 @@
 		const target = notificationClickTarget(event.data);
 		if (target) openNotificationTarget(target);
 		const pushed = pushClickTarget(event.data);
-		if (pushed) openPushedRoom(pushed.roomId);
+		if (pushed) openPushedRoom(pushed);
 	}
 
-	/** A push notification's room opens on the server this browser's push subscription is registered with. */
-	function openPushedRoom(roomId: string): void {
+	/**
+	 * A push notification's room opens in a tab on the server that pushed it:
+	 * the one its push tag names, or, from a server that sends no tag, the one
+	 * this browser's push subscription is registered with.
+	 */
+	function openPushedRoom(target: Pick<PushTarget, 'roomId' | 'tag'>): void {
 		window.focus();
-		if (client && client.url === loadWebPushServer()) pushRoom = roomId;
+		pushRoom = target;
 	}
 
-	/** Takes, and scrubs from the address bar, the room of a push notification this tab was opened for. */
-	function takePushRoom(): string | undefined {
+	/**
+	 * A tab opened for a push notification goes to the server that pushed it,
+	 * if push is on for it here and it isn't the remembered one, as the connect
+	 * screen would.
+	 */
+	async function followPush(chat: ChatClient, target: Pick<PushTarget, 'roomId' | 'tag'>): Promise<void> {
+		const tag = target.tag;
+		if (tag !== undefined && (await pushTag(chat.url)) !== tag) {
+			for (const server of webPushServers) {
+				if ((await pushTag(server)) !== tag) continue;
+				leaveBackend();
+				serverInput = server;
+				saveServerUrl(server);
+				chat.setUrl(server);
+				break;
+			}
+		}
+		openPushedRoom(target);
+	}
+
+	/** Takes, and scrubs from the address bar, the room and push tag of a push notification this tab was opened for. */
+	function takePushRoom(): Pick<PushTarget, 'roomId' | 'tag'> | undefined {
 		const url = new URL(window.location.href);
 		const roomId = url.searchParams.get(PUSH_ROOM_PARAM) ?? undefined;
+		const tag = url.searchParams.get(PUSH_TAG_PARAM) || undefined;
 		if (roomId === undefined) return undefined;
 		url.searchParams.delete(PUSH_ROOM_PARAM);
+		url.searchParams.delete(PUSH_TAG_PARAM);
 		scrubUrl(url.toString());
-		return roomId || undefined;
+		return roomId ? { roomId, ...(tag ? { tag } : {}) } : undefined;
 	}
 
 	/** Subscribes this browser with the server's key, and has the client register it (§4.7). */
@@ -738,7 +783,7 @@
 		const run = ++webPushRun;
 		const url = chat.url;
 		try {
-			const registration = await subscribeWebPush(key);
+			const registration = await subscribeWebPush(key, await pushTag(url));
 			if (run !== webPushRun || chat.url !== url) return;
 			chat.setPushRegistration(registration);
 			saveWebPushServer(url);

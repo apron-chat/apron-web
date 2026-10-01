@@ -183,11 +183,20 @@ browser's site settings reads as off. When the server offers web push
 server and off until turned on. Turning
 it on asks the browser's permission, subscribes this browser with the server's
 key (replacing a subscription made with another key), and sends `push_register`
-`{kind: "webpush", url, keys: {p256dh, auth}}` from the subscription on each
+`{kind: "webpush", url, tag, keys: {p256dh, auth}}` from the subscription on each
 connection; turning it off sends `push_unregister` and drops the subscription.
-The service worker shows each pushed message as its sender and room, and a
-click opens that room, in a new tab if none is open. Browsers without push
-say so; iPhone and iPad Safari say to add Apron to the Home Screen first. **Appearance** picks a light or dark theme
+`tag` names the server: the first 12 bytes of the SHA-256 of its URL, in
+base64url. The service worker shows each pushed message as its sender and room.
+A message notification, the page's or a pushed one, is tagged with the server's
+`tag` and the `message_id`, so a message shows once: whichever arrives second
+replaces the first without alerting again, and a newer message in the room
+closes the older one. A click on a pushed one opens the room in the tab on the
+server its `tag` names; with no tab open, a new one opens at it, on that server
+if push is on for it here. A payload without a `tag` (an older server) shows
+one notification per room and opens in the tab on the server holding the
+subscription. Without a tag of its own (no `crypto.subtle`), the page keeps one
+notification per room. Browsers without push say so; iPhone and iPad Safari say
+to add Apron to the Home Screen first. **Appearance** picks a light or dark theme
 over the system's, and an installed font for the interface, messages and code
 (suggested from installed fonts where the browser allows listing them); the
 font choice is marked experimental, to be replaced by a choice of themes. All

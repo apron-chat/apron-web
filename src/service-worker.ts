@@ -3,7 +3,7 @@
 /// <reference lib="esnext" />
 /// <reference lib="webworker" />
 import { base, build, files, prerendered, version } from '$service-worker';
-import { NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ROOM_PARAM, pushNotification, pushTarget } from '$lib/ui/notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ROOM_PARAM, PUSH_TAG_PARAM, closeOlderInGroup, pushNotification, pushTarget } from '$lib/ui/notifications';
 
 /**
  * Keeps each deploy's app files cached so the app opens fast, still opens
@@ -57,8 +57,9 @@ sw.addEventListener('fetch', (event) => {
 	}
 });
 
-// A push from the server (§4.7) is a message object: show it. Browsers expect every push to
-// show a notification, so one that can't be read still says something arrived.
+// A push from the server (§4.7) is a message object: show it, replacing the page's notification
+// of the same message and closing older ones of its room. Browsers expect every push to show a
+// notification, so one that can't be read still says something arrived.
 sw.addEventListener('push', (event) => {
 	let payload: unknown;
 	try {
@@ -67,12 +68,16 @@ sw.addEventListener('push', (event) => {
 		payload = undefined;
 	}
 	const shown = pushNotification(payload) ?? { title: 'Apron', options: { body: 'New message', tag: 'apron:push' } };
-	event.waitUntil(sw.registration.showNotification(shown.title, { icon: `${base}/icon-192.png`, ...shown.options }));
+	const group = pushTarget(shown.options.data)?.group;
+	event.waitUntil((async () => {
+		await sw.registration.showNotification(shown.title, { icon: `${base}/icon-192.png`, ...shown.options });
+		if (group !== undefined && shown.options.tag) closeOlderInGroup(await sw.registration.getNotifications(), group, shown.options.tag);
+	})());
 });
 
 // A notification shown through here: bring a tab forward, and tell the tabs, so the one that
-// raised it (see `showNotification`), or any on the pushing server, opens the room. Without a tab,
-// a new one opens at the pushed room.
+// raised it (see `showNotification`), or one on the pushing server (by its push tag), opens the
+// room. Without a tab, a new one opens at the pushed room.
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
 	const data: unknown = event.notification.data;
@@ -80,7 +85,8 @@ sw.addEventListener('notificationclick', (event) => {
 	event.waitUntil((async () => {
 		const tabs = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
 		if (tabs.length === 0) {
-			await sw.clients.openWindow(push ? `${APP_PAGE}?${PUSH_ROOM_PARAM}=${encodeURIComponent(push.roomId)}` : APP_PAGE);
+			const query = push ? new URLSearchParams({ [PUSH_ROOM_PARAM]: push.roomId, ...(push.tag ? { [PUSH_TAG_PARAM]: push.tag } : {}) }) : undefined;
+			await sw.clients.openWindow(query ? `${APP_PAGE}?${query}` : APP_PAGE);
 			return;
 		}
 		const message = push ? { type: PUSH_CLICK, target: push } : { type: NOTIFICATION_CLICK, target: data };

@@ -44,11 +44,26 @@ export function sameServerKey(current: ArrayBuffer | null | undefined, key: stri
 	}
 }
 
-/** The `push_register` params for a subscription (`PushSubscription.toJSON()`), if it is complete. */
-export function webPushRegistration(subscription: PushSubscriptionJSON): PushRegistration | undefined {
+/** The `push_register` params for a subscription (`PushSubscription.toJSON()`), if it is complete, with the push `tag`. */
+export function webPushRegistration(subscription: PushSubscriptionJSON, tag?: string): PushRegistration | undefined {
 	const { endpoint, keys } = subscription;
 	if (!endpoint || !keys?.p256dh || !keys.auth) return undefined;
-	return { kind: 'webpush', url: endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } };
+	return { kind: 'webpush', url: endpoint, ...(tag ? { tag } : {}), keys: { p256dh: keys.p256dh, auth: keys.auth } };
+}
+
+/**
+ * The push `tag` (§4.7) for a server: the first 12 bytes of the SHA-256 of
+ * its URL, in base64url (16 characters). The server copies it into every
+ * payload, so a pushed message can be matched to its server, and to the
+ * page's own notification of it. Undefined where the browser can't hash.
+ */
+export async function pushTag(serverUrl: string): Promise<string | undefined> {
+	try {
+		const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(serverUrl));
+		return bytesToBase64Url(new Uint8Array(digest).slice(0, 12));
+	} catch {
+		return undefined;
+	}
 }
 
 /** Whether this browser can subscribe to web push here. */
@@ -67,9 +82,9 @@ export function needsHomeScreen(): boolean {
 /**
  * Subscribes this browser with the server's key, keeping a subscription that
  * already uses it, and replacing one made with another key. Resolves the
- * `push_register` params. Needs notification permission granted.
+ * `push_register` params, with the push `tag`. Needs notification permission granted.
  */
-export async function subscribeWebPush(key: string): Promise<PushRegistration> {
+export async function subscribeWebPush(key: string, tag?: string): Promise<PushRegistration> {
 	const registration = await navigator.serviceWorker.ready;
 	let subscription = await registration.pushManager.getSubscription();
 	if (subscription && !sameServerKey(subscription.options.applicationServerKey, key)) {
@@ -77,7 +92,7 @@ export async function subscribeWebPush(key: string): Promise<PushRegistration> {
 		subscription = null;
 	}
 	subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(key) });
-	const params = webPushRegistration(subscription.toJSON());
+	const params = webPushRegistration(subscription.toJSON(), tag);
 	if (!params) throw new Error('The browser returned an incomplete push subscription');
 	return params;
 }

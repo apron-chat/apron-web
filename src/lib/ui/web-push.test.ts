@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { webPushKey } from '$lib/protocol/client';
-import { base64UrlToBytes, bytesToBase64Url, sameServerKey, webPushRegistration } from './web-push';
+import { base64UrlToBytes, bytesToBase64Url, pushTag, sameServerKey, webPushRegistration } from './web-push';
 
 describe('web push', () => {
 	it('decodes base64url keys, padded or not, and encodes them back unpadded', () => {
@@ -27,6 +27,8 @@ describe('web push', () => {
 	it('registers a subscription by its endpoint and keys', () => {
 		expect(webPushRegistration({ endpoint: 'https://push.example/send/abc', expirationTime: null, keys: { p256dh: 'BPk', auth: 'c2Vj' } }))
 			.toEqual({ kind: 'webpush', url: 'https://push.example/send/abc', keys: { p256dh: 'BPk', auth: 'c2Vj' } });
+		expect(webPushRegistration({ endpoint: 'https://push.example/send/abc', keys: { p256dh: 'BPk', auth: 'c2Vj' } }, 'a1'))
+			.toEqual({ kind: 'webpush', url: 'https://push.example/send/abc', tag: 'a1', keys: { p256dh: 'BPk', auth: 'c2Vj' } });
 		expect(webPushRegistration({ endpoint: 'https://push.example/send/abc', keys: { p256dh: 'BPk' } })).toBeUndefined();
 		expect(webPushRegistration({ keys: { p256dh: 'BPk', auth: 'c2Vj' } })).toBeUndefined();
 	});
@@ -38,5 +40,15 @@ describe('web push', () => {
 		expect(webPushKey({ ...server, push: { webpush: { key: '' } } })).toBeUndefined();
 		expect(webPushKey(server)).toBeUndefined();
 		expect(webPushKey(undefined)).toBeUndefined();
+	});
+
+	it('tags a server by a short hash of its URL', async () => {
+		const url = 'wss://server.apron.chat/';
+		const tag = await pushTag(url);
+		// The first 12 bytes of SHA-256(url), base64url.
+		expect(tag).toBe('t65S5XBst9bSDpjJ');
+		expect(tag).toMatch(/^[A-Za-z0-9_-]{16}$/);
+		expect(await pushTag(url)).toBe(tag);
+		expect(await pushTag('wss://chat.example/ws')).not.toBe(tag);
 	});
 });
