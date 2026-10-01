@@ -195,6 +195,49 @@ describe('one explicit ceremony per tap', () => {
 	});
 });
 
+describe('console diagnostics', () => {
+	it('warns with the stage and the server’s refusal when a passkey sign-up fails', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential', rawId: 'credential', type: 'public-key', response: {} });
+		const { client, socket } = await connected();
+		const pending = client.usePasskey('register', 'ericd');
+		await settle();
+		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x', rp: { id: 'apron.chat' } } });
+		await settle();
+		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Passkey verification failed' } });
+		await expect(pending).rejects.toThrow('Passkey verification failed');
+		await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+		const [line, details] = warn.mock.calls.at(-1) as [string, Record<string, unknown>];
+		expect(line).toBe('[apron] passkey register failed during finish: Passkey verification failed');
+		expect(details).toMatchObject({
+			stage: 'finish',
+			error: { message: 'Passkey verification failed', code: -32001 },
+			server: 'ws://fake.test/',
+			requestedName: 'ericd',
+			options: { rp: { id: 'apron.chat' } },
+			credential: { rawIdMatchesId: true, type: 'public-key' }
+		});
+		warn.mockRestore();
+		client.stop();
+	});
+
+	it('only notes a dismissed sheet', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Dismissed', 'NotAllowedError'));
+		const { client, socket } = await connected();
+		const pending = client.usePasskey('login');
+		await settle();
+		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
+		await expect(pending).rejects.toThrow('Dismissed');
+		await vi.waitFor(() => expect(info).toHaveBeenCalledWith('[apron] passkey login failed during browser: Dismissed', expect.objectContaining({ stage: 'browser' })));
+		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
+		info.mockRestore();
+		client.stop();
+	});
+});
+
 describe('a failed session resume never prompts on its own', () => {
 	const key = 'apron.session:ws://fake.test/';
 	const server = { method: 'server', params: { apron: 7, auth: ['webauthn', 'token', 'guest'], capabilities: [] } };

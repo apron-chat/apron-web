@@ -428,7 +428,24 @@ or `immediate` mediation and no capability probes, which password-manager
 extensions don't always settle. It reads the credential's fields as soon as
 the browser returns it and falls back to them when `toJSON` is missing or
 throws, as it can for a credential an extension proxies (1Password in
-Firefox).
+Firefox), or when it disagrees with them (an extension's own `toJSON`
+encoding a field otherwise).
+
+A failed ceremony leaves one console entry, `[apron] passkey <action> failed
+during <stage>: <message>` (a warning; only info for a sheet the user
+dismissed). The stage is `waiting` (for in-flight requests), `begin`,
+`browser` or `finish`. The entry holds the error (with the server's code),
+the server and page origin, the options that decide what an authenticator
+does (RP ID, user name, authenticator selection, algorithms, excluded
+credentials; not the challenge), and the credential decoded: whether
+`toJSON` or the fields were sent and why, the client data's type and
+whether its origin and challenge are the expected ones, and the
+authenticator data's flags (user present, user verified, backup), whether
+its RP ID hash matches, and its AAGUID with the provider it names
+(Bitwarden, 1Password, iCloud Keychain…). Servers answer every
+verification failure alike (§4.9 `denied`), so this is where the reason
+shows. The connection's own sign-in, as a guest or by a saved session,
+warns too when refused, without the token.
 
 A server may keep guests read-only; the demo worker does, and says so with
 `ext.demo.guest_posting: false`. Signed in as a guest there, the composer gives

@@ -1,3 +1,4 @@
+import { noteCredentialSource, type CredentialSource } from './passkey-diagnostics';
 import { isJsonObject, type JsonObject } from './types';
 
 export function passkeySupportError(): string | undefined {
@@ -66,19 +67,39 @@ type ResponseGetters = {
  * `toJSON`, throw from it, or hide fields that are still reachable through
  * the response's getters, and some deny access to the proxy after a while:
  * every field is read at once, `toJSON` is preferred, and the fields read
- * are the fallback.
+ * are the fallback. An extension's own `toJSON` may also encode them
+ * differently (padded or plain base64, another field's bytes): where it
+ * disagrees with the fields themselves, they are what is sent. Which way it
+ * went is noted for the console (`credentialSource`).
  */
 export function credentialJSON(credential: PublicKeyCredential): JsonObject {
 	const fields = readCredential(credential);
+	const use = (json: JsonObject, source: CredentialSource): JsonObject => {
+		noteCredentialSource(json, source);
+		return json;
+	};
+	let json: unknown;
 	try {
-		if (typeof credential.toJSON === 'function') {
-			const json = credential.toJSON() as unknown;
-			if (isJsonObject(json) && isJsonObject(json.response)) return json;
-		}
-	} catch {
-		// Fall back to the fields read above.
+		if (typeof credential.toJSON !== 'function') return use(fields, { source: 'fields', note: 'the credential has no toJSON' });
+		json = credential.toJSON() as unknown;
+	} catch (failure) {
+		return use(fields, { source: 'fields', note: `toJSON threw: ${failure instanceof Error ? `${failure.name}: ${failure.message}` : String(failure)}` });
 	}
-	return fields;
+	if (!isJsonObject(json) || !isJsonObject(json.response)) return use(fields, { source: 'fields', note: 'toJSON gave no response object' });
+	const differing = disagreements(json, fields);
+	if (differing.length) return use(fields, { source: 'fields', note: `toJSON disagrees with the credential's own fields: ${differing.join(', ')}` });
+	return use(json, { source: 'toJSON' });
+}
+
+/** Binary fields the credential's own reading has (canonical base64url) that `toJSON` leaves out or encodes otherwise. */
+function disagreements(json: JsonObject, fields: JsonObject): string[] {
+	const ours = fields.response as JsonObject;
+	const theirs = json.response as JsonObject;
+	const differing = ['clientDataJSON', 'attestationObject', 'authenticatorData', 'signature', 'userHandle']
+		.filter((key) => typeof ours[key] === 'string' && theirs[key] !== ours[key])
+		.map((key) => `response.${key}`);
+	if (typeof fields.rawId === 'string' && fields.rawId !== '' && json.rawId !== fields.rawId) differing.unshift('rawId');
+	return differing;
 }
 
 function readCredential(credential: PublicKeyCredential): JsonObject {

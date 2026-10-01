@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { credentialSource } from './passkey-diagnostics';
 import { base64url, credentialJSON, labelledCreationOptions, requestPasskey, signalPasskeyLabel } from './webauthn';
 
 const bytes = (...values: number[]) => new Uint8Array(values).buffer;
@@ -27,13 +28,36 @@ function proxiedAssertion(toJSON?: () => unknown): PublicKeyCredential {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('credential JSON', () => {
-	it('prefers the browser’s own toJSON', () => {
-		const json = { id: 'x', rawId: 'x', type: 'public-key', response: { clientDataJSON: 'Aw' }, clientExtensionResults: {} };
+	it('prefers the browser’s own toJSON where it agrees with the credential’s fields', () => {
+		const json = {
+			id: 'AQI', rawId: 'AQI', type: 'public-key',
+			response: { clientDataJSON: 'Aw', authenticatorData: 'BAU', signature: 'Bg', userHandle: 'Bw' },
+			clientExtensionResults: {}
+		};
 		expect(credentialJSON(proxiedAssertion(() => json))).toBe(json);
+		expect(credentialSource(json)).toEqual({ source: 'toJSON' });
+	});
+
+	it('sends the credential’s own fields where an extension’s toJSON encodes them otherwise', () => {
+		// Padded, plain base64 for the signature, and another credential's client data.
+		const json = {
+			id: 'AQI', rawId: 'AQI=', type: 'public-key',
+			response: { clientDataJSON: 'CQ', authenticatorData: 'BAU', signature: 'Bg==', userHandle: 'Bw' },
+			clientExtensionResults: {}
+		};
+		const sent = credentialJSON(proxiedAssertion(() => json));
+		expect(sent.response).toEqual({ clientDataJSON: 'Aw', authenticatorData: 'BAU', signature: 'Bg', userHandle: 'Bw' });
+		expect(sent.rawId).toBe('AQI');
+		expect(credentialSource(sent)).toEqual({
+			source: 'fields',
+			note: 'toJSON disagrees with the credential\'s own fields: rawId, response.clientDataJSON, response.signature'
+		});
 	});
 
 	it('reads the fields itself when toJSON is missing, reaching hidden ones through getters', () => {
-		expect(credentialJSON(proxiedAssertion())).toEqual({
+		const sent = credentialJSON(proxiedAssertion());
+		expect(credentialSource(sent)).toEqual({ source: 'fields', note: 'the credential has no toJSON' });
+		expect(sent).toEqual({
 			id: 'AQI',
 			rawId: 'AQI',
 			type: 'public-key',
