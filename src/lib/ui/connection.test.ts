@@ -32,10 +32,16 @@ describe('connection state', () => {
 		expect(retryAfterLabel(3_600_000)).toBe('1h');
 	});
 
-	it('describes demo retention in hours, or a day', () => {
+	it('describes demo retention in hours, days or weeks', () => {
+		const notice = (hours: number) => demoRetentionNotice({ apron: 7, auth: ['guest'], ext: { demo: { retention_seconds: hours * 3600 } } });
 		expect(demoRetentionNotice(undefined)).toBe('');
-		expect(demoRetentionNotice({ apron: 7, auth: ['guest'], ext: { demo: { retention_seconds: 86_400 } } })).toMatch(/last day/);
-		expect(demoRetentionNotice({ apron: 7, auth: ['guest'], ext: { demo: { retention_seconds: 7_200 } } })).toMatch(/last 2 hours/);
+		expect(notice(1)).toMatch(/last hour of/);
+		expect(notice(2)).toMatch(/last 2 hours/);
+		expect(notice(24)).toMatch(/last day/);
+		expect(notice(72)).toMatch(/last 3 days/);
+		expect(notice(168)).toBe('This demo keeps roughly the last week of history; older messages may expire.');
+		expect(notice(336)).toMatch(/last 2 weeks/);
+		expect(notice(720)).toMatch(/last 30 days/);
 		expect(demoRetentionNotice({ apron: 7, auth: ['guest'], ext: {} })).toBe('');
 	});
 });

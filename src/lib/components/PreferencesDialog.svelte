@@ -110,6 +110,15 @@
 		preferencesDialog?.close();
 	}
 
+	/** Whether the press started on the backdrop, so a selection dragged out of the panel doesn't close it. */
+	let pressedBackdrop = false;
+
+	/** A click on the backdrop closes, as the X does: the panel's content fills the dialog, so only the backdrop targets it. */
+	function backdropClick(event: MouseEvent): void {
+		if (event.target === preferencesDialog && pressedBackdrop) closePreferences();
+		pressedBackdrop = false;
+	}
+
 	function preferencesClosed(): void {
 		open = false;
 		localFontFamilies = [];
@@ -118,7 +127,7 @@
 	}
 </script>
 
-<dialog class="ap-preferences" bind:this={preferencesDialog} aria-labelledby="ap-pref-title" onclose={preferencesClosed}>
+<dialog class="ap-preferences" bind:this={preferencesDialog} aria-labelledby="ap-pref-title" onclose={preferencesClosed} onpointerdown={(event) => (pressedBackdrop = event.target === preferencesDialog)} onclick={backdropClick}>
 	<header class="ap-preferences-head">
 		<div><p>SETTINGS</p><h2 id="ap-pref-title">Preferences</h2></div>
 		<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" aria-label="Close preferences" onclick={closePreferences}><X size={16} aria-hidden="true" /></button>

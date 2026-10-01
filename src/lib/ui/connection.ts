@@ -78,10 +78,17 @@ export function addEmailError(cause: unknown): string {
 export function demoRetentionNotice(server: ServerParams | undefined): string {
 	const seconds = server?.ext?.demo?.retention_seconds;
 	if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return '';
+	return `This demo keeps roughly the last ${retentionSpan(seconds)} of history; older messages may expire.`;
+}
+
+/** A retention period in rough words: `2 hours`, `day`, `3 days`, `week`, `2 weeks`. */
+function retentionSpan(seconds: number): string {
 	const hours = Math.max(1, Math.round(seconds / 3600));
-	return hours >= 20 && hours <= 28
-		? 'This demo keeps roughly the last day of history; older messages may expire.'
-		: `This demo keeps roughly the last ${hours} hours of history; older messages may expire.`;
+	if (hours < 20) return hours === 1 ? 'hour' : `${hours} hours`;
+	const days = Math.max(1, Math.round(hours / 24));
+	if (days === 1) return 'day';
+	if (days % 7 === 0 && days <= 28) return days === 7 ? 'week' : `${days / 7} weeks`;
+	return `${days} days`;
 }
 
 export function backendHost(value: string): string {
