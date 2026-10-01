@@ -1,3 +1,4 @@
+import { describeError, logPasskeyFailure, type PasskeyStage } from './passkey-diagnostics';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
 import { WriteError, writeEmbed } from './embeds';
 import { EmailConnection, type RpcFailure } from './email-connection';
@@ -597,6 +598,10 @@ export class ChatClient {
 		const controller = new AbortController();
 		this.passkeyStarting = controller;
 		this.emit();
+		// Where it got to, for the console when it fails.
+		let stage: PasskeyStage = 'waiting';
+		let begun: PasskeyChallenge | undefined;
+		let credential: JsonObject | undefined;
 		try {
 			await this.readyToSignIn(controller.signal);
 			// Cancelled, or the connection changed, while it waited.
@@ -605,10 +610,16 @@ export class ChatClient {
 			this.passkeyStarting = undefined;
 			const connection = this.connectionId;
 			this.emit();
-			const begun = await this.passkeyBegin(action, requested);
-			const credential = await requestPasskey(action, begun.options, controller.signal, requested);
+			stage = 'begin';
+			begun = await this.passkeyBegin(action, requested);
+			stage = 'browser';
+			credential = await requestPasskey(action, begun.options, controller.signal, requested);
+			stage = 'finish';
 			if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 			return await this.passkeyFinish(action, begun, credential, controller, connection, requested);
+		} catch (cause) {
+			void logPasskeyFailure({ action, stage, cause, server: this.serverUrl, requestedName: requested, publicKey: begun?.publicKey, credential });
+			throw cause;
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;
 			if (this.passkeyAbort === controller) this.cancelPasskey();
@@ -2031,6 +2042,8 @@ export class ChatClient {
 			this.handleAuth(result);
 		}).catch((cause: Error) => {
 			if (socket !== this.socket) return;
+			// The token itself stays out of the console.
+			console.warn(`[apron] sign-in ${resume ? 'by saved session' : 'as a guest'} failed: ${cause.message}`, { server: this.serverUrl, error: describeError(cause) });
 			this.authRequested = false;
 			this.error = cause.message;
 			// Never silently downgrade a passkey session to a different guest identity.
