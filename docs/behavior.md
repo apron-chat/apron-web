@@ -179,7 +179,8 @@ clicking it opens that room or thread. Where the page can't show notifications
 itself (Android Chrome) the service worker shows them. Permission revoked in the
 browser's site settings reads as off. When the server offers web push
 (`server.push.webpush` with its VAPID `key`, §4.7), Preferences also offers
-**Push notifications** for mentions, per server and off until turned on. Turning
+**Push notifications** for mentions to a signed-in account (not a guest), per
+server and off until turned on. Turning
 it on asks the browser's permission, subscribes this browser with the server's
 key (replacing a subscription made with another key), and sends `push_register`
 `{kind: "webpush", url, keys: {p256dh, auth}}` from the subscription on each

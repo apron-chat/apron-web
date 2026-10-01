@@ -1364,10 +1364,10 @@ export class ChatClient {
 		this.pushRequest('push_register', registration);
 	}
 
-	/** Signed in to a server whose `server.push` has this kind (§4.7). */
+	/** Signed in to an account (not a guest) on a server whose `server.push` has this kind (§4.7). */
 	private offersPush(kind: string): boolean {
 		const push = this.server?.push;
-		return this.authenticated && isJsonObject(push) && Object.hasOwn(push, kind);
+		return this.authenticated && this.registeredSession && isJsonObject(push) && Object.hasOwn(push, kind);
 	}
 
 	private pushRequest(method: 'push_register' | 'push_unregister', params: JsonObject): void {

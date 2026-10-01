@@ -306,12 +306,19 @@ describe('rooms by request (cap rooms)', () => {
 		const sent = (method: string) => socket.sent.filter((frame) => frame.method === method).map((frame) => frame.params);
 		async function greet(push?: Record<string, unknown>): Promise<void> {
 			socket.open();
-			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [], ...(push ? { push } : {}) } });
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: [], ...(push ? { push } : {}) } });
 			// Nothing is registered before auth.
 			expect(sent('push_register')).toEqual([]);
-			await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
+			await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
 		}
 		client.setPushRegistration(webpush);
+		// A guest has no one to push to: nothing is registered.
+		await greet({ webpush: { key: 'BNcR' } });
+		expect(sent('push_register')).toEqual([]);
+		// Signed in to an account, it registers.
+		client.useToken('apron_token');
+		vi.advanceTimersByTime(0);
+		socket = FakeSocket.latest();
 		await greet({ webpush: { key: 'BNcR' } });
 		expect(sent('push_register')).toEqual([webpush]);
 		// The same registration again sends nothing.
@@ -338,7 +345,7 @@ describe('rooms by request (cap rooms)', () => {
 		socket = FakeSocket.latest();
 		await greet({ relay: {} });
 		expect(sent('push_register')).toEqual([]);
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
 		expect(sent('push_register')).toEqual([renewed]);
 	});
 });

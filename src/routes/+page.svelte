@@ -101,7 +101,8 @@
 	let serverUrl = $state('');
 	/** The servers push notifications are on for (§4.7); this browser's one subscription follows the server in use. */
 	let webPushServers = $state<string[]>([]);
-	let webPushServerKey = $derived(webPushKey(session.server));
+	/** The server's VAPID key, offered to signed-in accounts: a guest's identity ends with its connection, so there is no one to push to. */
+	let webPushServerKey = $derived(session.snapshot.passkeySession ? webPushKey(session.server) : undefined);
 	let webPushActive = $derived(webPushServers.includes(serverUrl) && notificationState === 'granted');
 	let webPushError = $state<string | undefined>();
 	let webPushAvailable = $state(false);
