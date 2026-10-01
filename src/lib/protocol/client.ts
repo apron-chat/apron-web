@@ -1342,7 +1342,7 @@ export class ChatClient {
 
 	/**
 	 * Tells the server whether anyone is attending this connection (capability
-	 * `activity`, §4.4): `true` while the tab is hidden or unfocused, `false`
+	 * `activity` or `server.push`, §4.4 and §4.7): `true` while the tab is hidden or unfocused, `false`
 	 * once it is back. Sent only when it changes, and again on each connection
 	 * that starts while away.
 	 */
@@ -1352,7 +1352,8 @@ export class ChatClient {
 	}
 
 	private syncAway(): void {
-		if (!this.authenticated || !this.hasCap('activity') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+		// A push server accepts `away` without capability `activity` (§4.7).
+		if (!this.authenticated || !(this.hasCap('activity') || isJsonObject(this.server?.push)) || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 		if (this.away === this.awaySent) return;
 		this.awaySent = this.away;
 		this.sendFrame({ method: 'activity', params: { away: this.away } });
@@ -2066,6 +2067,7 @@ export class ChatClient {
 		// before v7 would ignore `user_id` in `room_join`/`room_leave` and act on the caller.
 		this.memberChangesUnsupported = version < 7;
 		if (this.authenticated || this.authRequested) {
+			this.syncAway();
 			this.syncPush();
 			this.emit();
 			return;

@@ -301,6 +301,20 @@ describe('rooms by request (cap rooms)', () => {
 		expect(away()).toEqual([true]);
 	});
 
+	it('tells a push server when nobody is attending, even without activity', async () => {
+		const away = () => socket.sent.filter((frame) => frame.method === 'activity').map((frame) => frame.params);
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [] } });
+		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
+		client.setAway(true);
+		expect(away()).toEqual([]);
+		// A replacing server frame that offers push (§4.7) accepts `away`.
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
+		expect(away()).toEqual([{ away: true }]);
+		client.setAway(false);
+		expect(away()).toEqual([{ away: true }, { away: false }]);
+	});
+
 	describe('push', () => {
 		const webpush = { kind: 'webpush', url: 'https://push.example/a', push_id: 'a1', keys: { p256dh: 'BPk', auth: 'c2Vj' } };
 		const sent = (method: string) => socket.sent.filter((frame) => frame.method === method).map((frame) => frame.params);
