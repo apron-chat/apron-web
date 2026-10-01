@@ -84,12 +84,15 @@ class Directory {
 	/**
 	 * Whether another known `user_id` shows under the same display name, so
 	 * this one must show its `@user_id` beside it (§3.3): no one passes as
-	 * someone else.
+	 * someone else. A name that is the user's own `user_id` already says who
+	 * they are; whoever else shows under it gets the `@user_id` instead.
 	 */
 	sharesName(from: Identity | undefined): boolean {
 		const person = this.person(from);
 		if (!person) return false;
-		const ids = this.byName.get(this.name(from));
+		const name = this.name(from);
+		if (name === person.user_id) return false;
+		const ids = this.byName.get(name);
 		if (!ids) return false;
 		for (const id of ids) if (id !== person.user_id && id !== from!.user_id) return true;
 		return false;

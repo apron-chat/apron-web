@@ -62,7 +62,8 @@ empty or unknown name shows as the `user_id`. A
 `user` notification with `new` and `old` maps the retired ID to the new
 identity. Message headers show the name with the muted `@user_id` beside it,
 always when another user the client knows of shows under the same name, so no
-one can pass as someone else. Without an avatar, a
+one can pass as someone else; a name that is the user's own `user_id` needs no
+handle beside it. Without an avatar, a
 person's initials sit on a muted tint whose hue is hashed from their `user_id`,
 so the same person has the same color on every client. A user's `roles`
 ([PROTOCOL.md §3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)),
