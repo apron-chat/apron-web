@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { signInHint, signInView, type SignInInput } from './sign-in';
+import { passkeyChoice, passkeyMode, signInHint, signInView, type SignInInput } from './sign-in';
 
 /** Connected to the server in the form as a guest, with passkeys that both sign in and sign up. */
 const guestHere: SignInInput = {
 	scheme: 'webauthn',
 	use: { signIn: true, signUp: true },
+	passkey: 'login',
 	sameServer: true,
 	status: 'connected',
 	serverKnown: true,
@@ -17,16 +18,23 @@ const guestHere: SignInInput = {
 };
 
 describe('the passkey step', () => {
-	it('offers both explicit actions once connected, never a guess between them', () => {
-		expect(signInView(guestHere)).toEqual({
-			phase: 'ready',
-			primary: { action: 'passkey-login', label: 'Sign in with passkey' },
-			secondary: { action: 'passkey-register', label: 'New here? Create an account with a passkey' }
+	it('runs the one action chosen, never a guess between them', () => {
+		expect(signInView(guestHere)).toEqual({ phase: 'ready', primary: { action: 'passkey-login', label: 'Sign in with passkey' } });
+		expect(signInView({ ...guestHere, passkey: 'register' })).toEqual({
+			phase: 'ready', primary: { action: 'passkey-register', label: 'Create account with passkey' }
 		});
 	});
 
-	it('offers only what passkeys do on this server', () => {
-		expect(signInView({ ...guestHere, use: { signIn: true, signUp: false } })).toEqual({
+	it('asks Sign in or Create account only where passkeys do both', () => {
+		expect(passkeyChoice({ signIn: true, signUp: true })).toBe(true);
+		expect(passkeyChoice({ signIn: true, signUp: false })).toBe(false);
+		expect(passkeyChoice({ signIn: false, signUp: true })).toBe(false);
+	});
+
+	it('does only what passkeys do on this server, whatever was chosen', () => {
+		expect(passkeyMode({ signIn: true, signUp: false }, 'register')).toBe('login');
+		expect(passkeyMode({ signIn: false, signUp: true }, 'login')).toBe('register');
+		expect(signInView({ ...guestHere, use: { signIn: true, signUp: false }, passkey: 'register' })).toEqual({
 			phase: 'ready', primary: { action: 'passkey-login', label: 'Sign in with passkey' }
 		});
 		expect(signInView({ ...guestHere, use: { signIn: false, signUp: true } })).toEqual({
@@ -34,12 +42,10 @@ describe('the passkey step', () => {
 		});
 	});
 
-	it('offers the passkey actions before connecting: a tap connects, then runs the one it asked for', () => {
-		expect(signInView({ ...guestHere, sameServer: false, serverKnown: false })).toEqual({
-			phase: 'idle',
-			primary: { action: 'passkey-login', label: 'Sign in with passkey' },
-			secondary: { action: 'passkey-register', label: 'New here? Create an account with a passkey' }
-		});
+	it('offers the chosen action before connecting: a tap connects, then runs it', () => {
+		const elsewhere = { ...guestHere, sameServer: false, serverKnown: false };
+		expect(signInView(elsewhere)).toEqual({ phase: 'idle', primary: { action: 'passkey-login', label: 'Sign in with passkey' } });
+		expect(signInView({ ...elsewhere, passkey: 'register' }).primary.action).toBe('passkey-register');
 	});
 
 	it('offers them on another server while signed in to an account here', () => {
@@ -67,6 +73,7 @@ describe('the passkey step', () => {
 
 	it('is busy from the tap until the ceremony ends', () => {
 		expect(signInView({ ...guestHere, busy: true })).toEqual({ phase: 'busy', primary: { action: 'passkey-login', label: 'Signing in…' } });
+		expect(signInView({ ...guestHere, busy: true, passkey: 'register' }).primary.action).toBe('passkey-register');
 	});
 
 	it('is done where already signed in to an account', () => {
@@ -93,15 +100,21 @@ describe('the other schemes', () => {
 
 describe('hints', () => {
 	const hint = (overrides: Partial<Parameters<typeof signInHint>[0]>) => signInHint({
-		scheme: 'webauthn', use: { signIn: true, signUp: true }, registered: false, phase: 'ready', here: true, guest: true, guestReadOnly: false, ...overrides
+		scheme: 'webauthn', use: { signIn: true, signUp: true }, passkey: 'login', registered: false, phase: 'ready', here: true, guest: true, guestReadOnly: false, ...overrides
 	});
 
-	it('says what a passkey does on this server', () => {
-		expect(hint({})).toMatch(/^Connected as a guest/);
-		expect(hint({ phase: 'idle', here: false, guest: false })).toBe('Sign in with a passkey you already have, or create an account with a new one.');
-		expect(hint({ use: { signIn: false, signUp: true } })).toMatch(/^Creates an account with a new passkey/);
-		expect(hint({ use: { signIn: true, signUp: false } })).toMatch(/^Signs in with a passkey already on your account/);
+	it('says what the chosen passkey action does', () => {
+		const away = { phase: 'idle' as const, here: false, guest: false };
+		expect(hint(away)).toBe('Your device lists the passkeys saved for this server: pick one to sign in to its account.');
+		expect(hint({ ...away, passkey: 'register' })).toBe('Creates an account and saves a new passkey for it on this device. Your display name names both.');
+		expect(hint({})).toBe('Connected as a guest. Sign in with a passkey you saved, or stay a guest.');
+		expect(hint({ passkey: 'register' })).toMatch(/^Connected as a guest. Creating an account keeps this identity/);
 		expect(hint({ registered: true })).toBe('Signed in. Choose Guest to sign out.');
+	});
+
+	it('says so where passkeys only sign in, or only sign up', () => {
+		expect(hint({ phase: 'idle', here: false, guest: false, use: { signIn: true, signUp: false }, passkey: 'register' })).toMatch(/pick one to sign in to its account. New here\? Create an account another way first.$/);
+		expect(hint({ phase: 'idle', here: false, guest: false, use: { signIn: false, signUp: true } })).toMatch(/^Creates an account and saves a new passkey/);
 	});
 
 	it('says a sign-up invite names the account it creates', () => {

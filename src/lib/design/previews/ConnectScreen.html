@@ -1,9 +1,9 @@
-<!-- @dsCard group="Layout" height=640 width=1760 page subtitle="Guest by default; token revealed; email with the server's welcome; passkey's two actions" -->
+<!-- @dsCard group="Layout" height=640 width=2200 page subtitle="Guest by default; token revealed; email with the server's welcome; passkey: sign in, or create an account" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ConnectScreen</title><style>html,body{height:100%}</style></head>
 <body>
-<div id="root" style="height:640px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr"></div>
+<div id="root" style="height:640px;display:grid;grid-template-columns:repeat(5,1fr)"></div>
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
@@ -12,6 +12,7 @@
   add(A.ConnectScreen, { url: 'wss://chat.work.example/ws', schemes: ['email', 'webauthn', 'token'], scheme: 'email', email: 'ada@example.com', codeSent: true,
     welcome: A.html('<p>Create an account with <strong>email</strong>, then add a passkey to sign in with it.</p><p>Email codes expire after 5 minutes.</p>') });
   add(A.ConnectScreen, { url: 'wss://chat.work.example/ws', name: 'Ada', schemes: ['guest', 'webauthn', 'email'], scheme: 'webauthn' });
+  add(A.ConnectScreen, { url: 'wss://chat.work.example/ws', name: 'Ada', schemes: ['guest', 'webauthn', 'email'], scheme: 'webauthn', passkeyMode: 'register' });
 </script>
 </body>
 </html>

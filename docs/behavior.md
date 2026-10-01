@@ -390,13 +390,16 @@ with email**, the read-only bar's **Sign in**, and the status banner's **Sign
 in** for a held session. Each tap does one explicit thing, and a passkey
 sheet only ever opens for a tap:
 
-- **Sign in with passkey** runs a login: the browser's sheet offers this
-  server's passkeys (no `allowCredentials`), and the account is the one
-  attached to the passkey picked. **New here? Create an account with a
-  passkey** registers a new passkey instead; Enter does what the main button
-  says. The client never guesses between them: where the server's `signup`
-  lets passkeys only sign in or only sign up, only that one shows (on a
-  server that hasn't answered yet, both do).
+- On Passkey, the panel asks which of two paths it is, side by side:
+  **Sign in** ("I have a passkey", the default) or **Create account** ("I’m
+  new here"). The choice comes before any field it needs, and the main
+  button runs only that one; Enter does what it says. **Sign in with
+  passkey** runs a login: the browser's sheet offers this server's passkeys
+  (no `allowCredentials`), and the account is the one attached to the
+  passkey picked. **Create account with passkey** registers a new passkey.
+  The client never guesses between them: where the server's `signup` lets
+  passkeys only sign in or only sign up, the panel doesn't ask and offers
+  only that one (on a server that hasn't answered yet, it asks).
 - A ceremony needs a connection to the server in the form. Where there is
   none yet (another server, or a held session whose connection closed),
   the tap opens one (as a guest where the server has guests, else signed
@@ -406,12 +409,16 @@ sheet only ever opens for a tap:
   then says "Connected. Tap again to continue with your passkey.", ready
   on that connection. Connected as a guest, **Stay a guest** leaves the
   panel as it is. On Guest, **Connect** connects without a ceremony.
-- The display name is the requested `name` (§3.2): it goes with the
-  register `begin` so the server can name the account and its passkey, the
+- Signing in asks no display name: the account keeps the name it has, and
+  the guest's name the ceremony started from isn't sent to it with `me`.
+  The form, and the name remembered for the next visit, take the account's.
+- Creating an account asks for the display name, the requested `name`
+  (§3.2): it goes with the register `begin` so the server can name the
+  account and its passkey, the
   client labels the passkey with it too (password managers show the
   creation options' `user.name` and `user.displayName`, which a server fills
-  from the guest session the ceremony starts on), and after any sign-in it
-  is sent with `me` if the server kept another. **Add passkey** in the
+  from the guest session the ceremony starts on), and once the account is
+  made it is sent with `me` if the server kept another. **Add passkey** in the
   profile labels the new passkey with the account's name. After a passkey
   login, where the browser has the WebAuthn Signal API, the passkey's label
   is updated to the account's display name
