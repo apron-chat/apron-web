@@ -29,6 +29,15 @@
 		/** The server was asked to send a code (an `auth` with `email` and no `token`); the code field shows. */
 		codeSent?: boolean;
 		onconnect?: () => void;
+		/**
+		 * What passkeys do on this server (§3.1: `auth` signs in, `signup` creates an account); both until it
+		 * has answered. On Passkey the form offers each as its own action, never a guess between them.
+		 */
+		passkey?: { signIn?: boolean; signUp?: boolean };
+		/** A passkey action's tap: run the WebAuthn ceremony (§4.9), connecting first where needed. */
+		onpasskey?: (action: 'login' | 'register') => void;
+		/** Shown in place of the hint, e.g. "Connected. Tap again to continue with your passkey." */
+		notice?: string;
 		/** The server's error `message` when it gave one (§1.1). */
 		error?: string;
 		recent?: Array<{ url: string; label?: string }>;
@@ -36,14 +45,22 @@
 	}
 	let {
 		status = 'idle', url = $bindable(''), name = $bindable(''), schemes = ['guest', 'token', 'webauthn'], scheme = $bindable(), token = $bindable(''),
-		welcome, email = $bindable(''), code = $bindable(''), codeSent = false, onconnect, error, recent, onpickrecent
+		welcome, email = $bindable(''), code = $bindable(''), codeSent = false, onconnect, passkey = {}, onpasskey, notice, error, recent, onpickrecent
 	}: Props = $props();
 	const busy = $derived(status === 'connecting' || status === 'authing');
 	const current = $derived(scheme || schemes[0]);
+	const signIn = $derived(passkey.signIn !== false);
+	const signUp = $derived(passkey.signUp !== false);
+	/** On Passkey, the submit button signs in, or creates an account where passkeys only do that. */
+	const passkeyAction = $derived<'login' | 'register'>(signIn ? 'login' : 'register');
+	function submit(): void {
+		if (current === 'webauthn') onpasskey?.(passkeyAction);
+		else onconnect?.();
+	}
 </script>
 
 <div class="ap-connect">
-	<form class="ap-connect-card" onsubmit={(e) => { e.preventDefault(); onconnect?.(); }}>
+	<form class="ap-connect-card" onsubmit={(e) => { e.preventDefault(); submit(); }}>
 		<h1 class="ap-connect-title">Apron</h1>
 		<p class="ap-connect-tag">Connect to a backend</p>
 		{#if welcome}<div class="ap-welcome ap-msg-text">{@render welcome()}</div>{/if}
@@ -75,11 +92,16 @@
 				</label>
 			{/if}
 		{/if}
-		<p class="ap-profedit-hint">{(SCHEME[current] || ['', 'A sign-in Apron doesn’t know; it will try anyway.'])[1]}</p>
+		<p class="ap-profedit-hint" role={notice ? 'status' : undefined}>{notice || (current === 'webauthn' && !(signIn && signUp)
+			? (signIn ? 'Signs in with a passkey already on your account. New here? Create an account another way first.' : 'Creates an account with a new passkey on this device. Your display name names it.')
+			: (SCHEME[current] || ['', 'A sign-in Apron doesn’t know; it will try anyway.'])[1])}</p>
+		{#if current === 'webauthn' && signIn && signUp}
+			<button type="button" class="ap-link ap-connect-other" disabled={busy} onclick={() => onpasskey?.('register')}>New here? Create an account with a passkey</button>
+		{/if}
 		{#if error}<p class="ap-profedit-note ap-profedit-err" role="alert">{error}</p>{/if}
 		<div class="ap-connect-actions">
 			{#if busy}<TypingDots />{/if}
-			<Button type="submit" variant="primary" disabled={busy} label={status === 'connecting' ? 'Connecting…' : status === 'authing' ? 'Signing in…' : current === 'email' ? (codeSent ? 'Sign in' : 'Email me a code') : 'Connect'} />
+			<Button type="submit" variant="primary" disabled={busy} label={status === 'connecting' ? 'Connecting…' : status === 'authing' ? 'Signing in…' : current === 'email' ? (codeSent ? 'Sign in' : 'Email me a code') : current === 'webauthn' ? (passkeyAction === 'login' ? 'Sign in with passkey' : 'Create account with passkey') : 'Connect'} />
 		</div>
 	</form>
 	{#if recent && recent.length}
