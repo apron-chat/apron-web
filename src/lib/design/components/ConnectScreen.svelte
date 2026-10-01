@@ -7,7 +7,7 @@
 	const SCHEME: Record<string, [string, string]> = {
 		guest: ['Guest', 'No token needed; the server picks a guest identity.'],
 		token: ['Token', 'Paste the token this backend gave you.'],
-		webauthn: ['Passkey', 'Sign in with a passkey you already have, or create an account with a new one.'],
+		webauthn: ['Passkey', 'Sign in with a passkey you saved, or create an account with a new one.'],
 		email: ['Email', 'We email you a code to sign in with; the link in the email signs you in too.']
 	};
 
@@ -31,9 +31,11 @@
 		onconnect?: () => void;
 		/**
 		 * What passkeys do on this server (§3.1: `auth` signs in, `signup` creates an account); both until it
-		 * has answered. On Passkey the form offers each as its own action, never a guess between them.
+		 * has answered. Where they do both, Passkey asks Sign in or Create account (`bind:passkeyMode`), never a guess.
 		 */
 		passkey?: { signIn?: boolean; signUp?: boolean };
+		/** On Passkey, `login` (sign in with a saved passkey; no display name asked) or `register` (a new account, named by the display name). */
+		passkeyMode?: 'login' | 'register';
 		/** A passkey action's tap: run the WebAuthn ceremony (§4.9), connecting first where needed. */
 		onpasskey?: (action: 'login' | 'register') => void;
 		/** Shown in place of the hint, e.g. "Connected. Tap again to continue with your passkey." */
@@ -45,14 +47,22 @@
 	}
 	let {
 		status = 'idle', url = $bindable(''), name = $bindable(''), schemes = ['guest', 'token', 'webauthn'], scheme = $bindable(), token = $bindable(''),
-		welcome, email = $bindable(''), code = $bindable(''), codeSent = false, onconnect, passkey = {}, onpasskey, notice, error, recent, onpickrecent
+		welcome, email = $bindable(''), code = $bindable(''), codeSent = false, onconnect, passkey = {}, passkeyMode = $bindable('login'), onpasskey, notice, error, recent, onpickrecent
 	}: Props = $props();
 	const busy = $derived(status === 'connecting' || status === 'authing');
 	const current = $derived(scheme || schemes[0]);
 	const signIn = $derived(passkey.signIn !== false);
 	const signUp = $derived(passkey.signUp !== false);
-	/** On Passkey, the submit button signs in, or creates an account where passkeys only do that. */
-	const passkeyAction = $derived<'login' | 'register'>(signIn ? 'login' : 'register');
+	/** On Passkey, the action the submit runs: the one chosen, unless passkeys here only do the other. */
+	const passkeyAction = $derived<'login' | 'register'>(!signIn ? 'register' : !signUp ? 'login' : passkeyMode);
+	/** Signing in with a passkey restores an account, name and all: no display name to ask. */
+	const askName = $derived(!(current === 'webauthn' && passkeyAction === 'login'));
+	const hint = $derived.by(() => {
+		if (notice) return notice;
+		if (current !== 'webauthn') return (SCHEME[current] || ['', 'A sign-in Apron doesn’t know; it will try anyway.'])[1];
+		if (passkeyAction === 'register') return 'Creates an account and saves a new passkey for it on this device. Your display name names both.';
+		return 'Your device lists the passkeys saved for this server: pick one to sign in to its account.' + (signUp ? '' : ' New here? Create an account another way first.');
+	});
 	function submit(): void {
 		if (current === 'webauthn') onpasskey?.(passkeyAction);
 		else onconnect?.();
@@ -68,9 +78,6 @@
 			<!-- svelte-ignore a11y_autofocus -->
 			<input autofocus class="ap-field ap-field-mono" type="url" inputmode="url" placeholder="wss://chat.example/ws" bind:value={url} disabled={busy} spellcheck="false" autocomplete="url" />
 		</label>
-		<label class="ap-fieldlabel">Display name
-			<input class="ap-field" placeholder="How others see you" bind:value={name} disabled={busy} maxlength="64" autocomplete="nickname" />
-		</label>
 		<div class="ap-fieldlabel">Sign in with
 			<div class="ap-seg" role="radiogroup" aria-label="Sign in with">
 				{#each schemes as k (k)}
@@ -78,6 +85,16 @@
 				{/each}
 			</div>
 		</div>
+		{#if current === 'webauthn' && signIn && signUp}
+			<div class="ap-choice" role="radiogroup" aria-label="Passkey">
+				{#each [['login', 'Sign in', 'I have a passkey'], ['register', 'Create account', 'I’m new here']] as const as [k, title, text] (k)}
+					<button type="button" role="radio" aria-checked={passkeyMode === k} class={['ap-choice-item', passkeyMode === k && 'ap-choice-on']} onclick={() => (passkeyMode = k)} disabled={busy}>
+						<span class="ap-choice-title">{title}</span>
+						<span class="ap-choice-text">{text}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
 		{#if current === 'token'}
 			<label class="ap-fieldlabel">Token
 				<input class="ap-field ap-field-mono" type="password" bind:value={token} disabled={busy} autocomplete="off" spellcheck="false" />
@@ -92,12 +109,12 @@
 				</label>
 			{/if}
 		{/if}
-		<p class="ap-profedit-hint" role={notice ? 'status' : undefined}>{notice || (current === 'webauthn' && !(signIn && signUp)
-			? (signIn ? 'Signs in with a passkey already on your account. New here? Create an account another way first.' : 'Creates an account with a new passkey on this device. Your display name names it.')
-			: (SCHEME[current] || ['', 'A sign-in Apron doesn’t know; it will try anyway.'])[1])}</p>
-		{#if current === 'webauthn' && signIn && signUp}
-			<button type="button" class="ap-link ap-connect-other" disabled={busy} onclick={() => onpasskey?.('register')}>New here? Create an account with a passkey</button>
+		{#if askName}
+			<label class="ap-fieldlabel">Display name
+				<input class="ap-field" placeholder={current === 'webauthn' ? 'Names your account and its passkey' : 'How others see you'} bind:value={name} disabled={busy} maxlength="64" autocomplete="nickname" />
+			</label>
 		{/if}
+		<p class="ap-profedit-hint" role={notice ? 'status' : undefined}>{hint}</p>
 		{#if error}<p class="ap-profedit-note ap-profedit-err" role="alert">{error}</p>{/if}
 		<div class="ap-connect-actions">
 			{#if busy}<TypingDots />{/if}

@@ -7,7 +7,8 @@
  *   the server has guests).
  * - `passkey-login` / `passkey-register`: sign in with a passkey the browser
  *   offers, or create an account with a new one. Never guessed: where a
- *   server lets passkeys do both, or isn't known yet, both are offered. A
+ *   server lets passkeys do both, or isn't known yet, the panel asks which
+ *   (`PasskeyMode`, Sign in by default) and runs only that one. A
  *   ceremony needs a connection to the server in the form: where there is
  *   none yet, the tap opens one and the ceremony follows once it settles,
  *   and where the browser won't show its sheet that long after the tap, the
@@ -17,6 +18,9 @@
  */
 
 export type Scheme = 'guest' | 'webauthn' | 'email' | 'token';
+
+/** On Passkey: sign in to an account with a saved passkey, or create one with a new passkey. */
+export type PasskeyMode = 'login' | 'register';
 
 export type SignInAction =
 	| 'connect'
@@ -41,6 +45,8 @@ export interface SignInInput {
 	scheme: Scheme;
 	/** What the scheme does on this server (`schemeUse`). */
 	use: { signIn: boolean; signUp: boolean };
+	/** On Passkey, which of the two the viewer chose; what the server allows wins (`passkeyMode`). */
+	passkey: PasskeyMode;
 	/** The form names the server this client is connected (or connecting) to. */
 	sameServer: boolean;
 	status: string;
@@ -68,8 +74,18 @@ export interface SignInView {
 	phase: SignInPhase;
 	/** The form's submit button. */
 	primary: SignInStep;
-	/** The other passkey action, where the server lets passkeys both sign in and sign up. */
-	secondary?: SignInStep;
+}
+
+/** The passkey action that runs: the one chosen, unless the server lets passkeys do only the other. */
+export function passkeyMode(use: SignInInput['use'], chosen: PasskeyMode): PasskeyMode {
+	if (!use.signIn) return 'register';
+	if (!use.signUp) return 'login';
+	return chosen;
+}
+
+/** Whether the panel asks Sign in or Create account: only where passkeys do both here. */
+export function passkeyChoice(use: SignInInput['use']): boolean {
+	return use.signIn && use.signUp;
 }
 
 /**
@@ -92,11 +108,8 @@ export function signInView(input: SignInInput): SignInView {
 	}
 	// The passkey actions show whether or not the server in the form is connected yet: a tap connects first.
 	if (input.scheme === 'webauthn' && !(here && input.registered)) {
-		const phase: SignInPhase = settled ? 'ready' : 'idle';
-		const login: SignInStep = { action: 'passkey-login', label: 'Sign in with passkey' };
-		const register: SignInStep = { action: 'passkey-register', label: input.use.signIn ? 'New here? Create an account with a passkey' : 'Create account with passkey' };
-		if (!input.use.signIn) return { phase, primary: register };
-		return { phase, primary: login, ...(input.use.signUp ? { secondary: register } : {}) };
+		const action: SignInAction = passkeyMode(input.use, input.passkey) === 'login' ? 'passkey-login' : 'passkey-register';
+		return { phase: settled ? 'ready' : 'idle', primary: { action, label: LABELS[action] } };
 	}
 	const action = primaryAction(input);
 	return { phase: 'idle', primary: { action, label: LABELS[action] } };
@@ -122,7 +135,7 @@ function primaryAction(input: SignInInput): SignInAction {
 			return input.codeSent ? 'email-code' : 'email-send';
 		case 'webauthn':
 			if (here && input.registered) return 'done';
-			return input.use.signIn ? 'passkey-login' : 'passkey-register';
+			return passkeyMode(input.use, input.passkey) === 'login' ? 'passkey-login' : 'passkey-register';
 		case 'guest':
 			if (here && input.registered) return 'sign-out';
 			return here ? 'done' : 'connect';
@@ -130,13 +143,17 @@ function primaryAction(input: SignInInput): SignInAction {
 }
 
 /** What the panel says about the chosen scheme. */
-export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean; invite?: boolean }): string {
+export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered' | 'passkey'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean; invite?: boolean }): string {
 	if (input.scheme === 'webauthn') {
 		if (input.here && input.registered) return 'Signed in. Choose Guest to sign out.';
-		if (input.use.signIn && !input.use.signUp) return 'Signs in with a passkey already on your account. New here? Create an account another way first.';
-		if (input.use.signUp && !input.use.signIn) return 'Creates an account with a new passkey on this device. Your display name names it.';
-		if (input.phase === 'ready' && input.guest) return 'Connected as a guest. Sign in with a passkey, create an account with a new one, or stay a guest.';
-		return 'Sign in with a passkey you already have, or create an account with a new one.';
+		const asGuest = input.phase === 'ready' && input.guest;
+		if (passkeyMode(input.use, input.passkey) === 'register') {
+			if (asGuest) return 'Connected as a guest. Creating an account keeps this identity and saves a new passkey for it on this device.';
+			return 'Creates an account and saves a new passkey for it on this device. Your display name names both.';
+		}
+		const only = input.use.signUp ? '' : ' New here? Create an account another way first.';
+		if (asGuest) return `Connected as a guest. Sign in with a passkey you saved, or stay a guest.${only}`;
+		return `Your device lists the passkeys saved for this server: pick one to sign in to its account.${only}`;
 	}
 	if (input.scheme === 'email') {
 		if (input.use.signIn && !input.use.signUp) return 'Signs in with a code sent to an address already on your account.';

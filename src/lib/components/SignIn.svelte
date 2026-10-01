@@ -11,11 +11,16 @@
 	import { offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
 	import { codeStillFor, type SentCode } from '$lib/ui/email-link';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import { signInHint, signInView, type Scheme } from '$lib/ui/sign-in';
+	import { passkeyChoice, passkeyMode, signInHint, signInView, type PasskeyMode, type Scheme } from '$lib/ui/sign-in';
 	import { saveDisplayName, saveServerUrl } from '$lib/ui/storage';
 	import TypingDots from './TypingDots.svelte';
 
 	const LABELS: Record<Scheme, string> = { guest: 'Guest', webauthn: 'Passkey', email: 'Email', token: 'Token' };
+	/** On Passkey, the two paths: each a title and what it does. */
+	const PASSKEY_CHOICES: Array<[PasskeyMode, string, string]> = [
+		['login', 'Sign in', 'I have a passkey'],
+		['register', 'Create account', 'I’m new here']
+	];
 	/** Every scheme this client can drive, in the order shown when the server's list isn't known yet. */
 	const KNOWN_SCHEMES = Object.keys(LABELS) as Scheme[];
 
@@ -32,6 +37,8 @@
 		canCancel: boolean;
 		/** Preselects a scheme, e.g. when the profile asks to sign in with a passkey. */
 		initialScheme?: Scheme;
+		/** On Passkey, preselects Sign in (the default) or Create account. */
+		initialPasskey?: PasskeyMode;
 		/** Prefills the email field, e.g. after an emailed sign-in link failed. */
 		initialEmail?: string;
 		/** Shows an error to start with, e.g. why an emailed sign-in link failed. */
@@ -48,11 +55,13 @@
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), busy = $bindable(false), passkeyUnavailable, canCancel,
-		initialScheme, initialEmail, initialError, header, onconnect, onconnected, oncancel, onsignout
+		initialScheme, initialPasskey, initialEmail, initialError, header, onconnect, onconnected, oncancel, onsignout
 	}: Props = $props();
 
 	// The initial choice follows the request or the current session; the segmented control owns it from then on.
 	let scheme = $state<Scheme>(untrack(() => initialScheme ?? (session.snapshot.passkeySession ? 'webauthn' : 'guest')));
+	/** On Passkey, Sign in or Create account: the viewer picks, the panel never guesses. */
+	let passkeyChosen = $state<PasskeyMode>(untrack(() => initialPasskey ?? 'login'));
 	/** Waiting for the connection this panel opened to the server in the form. */
 	let pending = $state(false);
 	/** That connection signed in as a guest, which the passkey step can leave as it is. */
@@ -112,9 +121,12 @@
 	let use = $derived(known ? schemeUse(known, chosen) : { signIn: true, signUp: true });
 	/** The server in the field is the connected one, and its guests only read. */
 	let guestReadOnly = $derived(sameServer && session.server?.ext?.demo?.guest_posting === false);
+	/** The passkey action a tap runs: the one chosen, where the server lets passkeys do it. */
+	let mode = $derived(passkeyMode(use, passkeyChosen));
 	let view = $derived(signInView({
 		scheme: chosen,
 		use,
+		passkey: passkeyChosen,
 		sameServer,
 		status: snapshot.status,
 		serverKnown: Boolean(known),
@@ -125,7 +137,12 @@
 		busy: Boolean(snapshot.authBusy) || emailBusy,
 		codeSent: Boolean(codeSentTo)
 	}));
-	let hint = $derived(signInHint({ scheme: chosen, use, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly, invite: inviteToken }));
+	/**
+	 * Signing in with a passkey restores an account, name and all: the form
+	 * asks no display name for it, and none is applied to that account.
+	 */
+	let passkeyLogin = $derived(chosen === 'webauthn' && mode === 'login' && !(here && registered));
+	let hint = $derived(signInHint({ scheme: chosen, use, passkey: passkeyChosen, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly, invite: inviteToken }));
 	$effect(() => {
 		busy = view.phase === 'busy' || view.phase === 'connecting';
 	});
@@ -177,8 +194,7 @@
 			if (chosen === 'webauthn' && !registered) {
 				joinedAsGuest = here;
 				// Only what this server lets passkeys do: otherwise the panel shows what it does.
-				const offered = [view.primary.action, view.secondary?.action];
-				if (asked && offered.includes(asked === 'login' ? 'passkey-login' : 'passkey-register')) void passkey(asked, true);
+				if (asked && asked === mode) void passkey(asked, true);
 				return;
 			}
 			finish();
@@ -366,12 +382,21 @@
 	async function passkey(action: 'login' | 'register', followUp = false): Promise<void> {
 		error = '';
 		notice = '';
-		const name = displayName.trim() || undefined;
+		const name = action === 'register' ? displayName.trim() || undefined : undefined;
+		// The guest's name, which the connection carries, isn't the account's: it stays as the account has it.
+		if (action === 'login') client.setDisplayName('');
 		try {
 			await client.usePasskey(action, name);
-			if (name) saveDisplayName(name);
+			// What the account is called from here on, for the form and the next visit.
+			const kept = name ?? client.snapshot().you?.name;
+			if (kept) {
+				displayName = kept;
+				saveDisplayName(kept);
+			}
 			finish();
 		} catch (cause) {
+			// Still the guest it was: it keeps its name.
+			if (action === 'login' && displayName.trim()) client.setDisplayName(displayName);
 			const refused = cause instanceof DOMException && cause.name === 'NotAllowedError';
 			if (followUp && refused) notice = 'Connected. Tap again to continue with your passkey.';
 			else error = passkeyMessage(cause);
@@ -397,6 +422,23 @@
 
 <form class="ap-connect-card" aria-label="Sign in" data-testid="sign-in" data-phase={view.phase} onsubmit={submit}>
 	{@render header?.()}
+	<div class="ap-fieldlabel">Sign in with
+		<div class="ap-seg" role="radiogroup" aria-label="Sign in with">
+			{#each schemes as candidate (candidate)}
+				<button class="ap-seg-item" class:ap-seg-on={chosen === candidate} type="button" role="radio" aria-checked={chosen === candidate} disabled={busy} onclick={() => (scheme = candidate)}>{LABELS[candidate]}</button>
+			{/each}
+		</div>
+	</div>
+	{#if chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)}
+		<div class="ap-choice" role="radiogroup" aria-label="Passkey" data-testid="passkey-choice">
+			{#each PASSKEY_CHOICES as [value, title, text] (value)}
+				<button class="ap-choice-item" class:ap-choice-on={passkeyChosen === value} type="button" role="radio" aria-checked={passkeyChosen === value} data-testid="passkey-choice-{value}" disabled={busy} onclick={() => { passkeyChosen = value; error = ''; notice = ''; }}>
+					<span class="ap-choice-title">{title}</span>
+					<span class="ap-choice-text">{text}</span>
+				</button>
+			{/each}
+		</div>
+	{/if}
 	{#if chosen === 'token'}
 		<label class="ap-fieldlabel">Token
 			<input class="ap-field ap-field-mono" data-testid="connect-token-input" type="password" bind:value={token} placeholder="apron_bot_…" disabled={busy} autocomplete="off" spellcheck="false" />
@@ -418,25 +460,17 @@
 				</label>
 			{/if}
 		{/if}
-		<label class="ap-fieldlabel">Display name
-			<input class="ap-field" data-testid="connect-name-input" bind:value={displayName} placeholder="How others see you" disabled={busy} maxlength="64" autocomplete="nickname" spellcheck="false" />
-		</label>
+		{#if !passkeyLogin}
+			<label class="ap-fieldlabel">Display name
+				<input class="ap-field" data-testid="connect-name-input" bind:value={displayName} placeholder={chosen === 'webauthn' ? 'Names your account and its passkey' : 'How others see you'} disabled={busy} maxlength="64" autocomplete="nickname" spellcheck="false" />
+			</label>
+		{/if}
 	{/if}
-	<div class="ap-fieldlabel">Sign in with
-		<div class="ap-seg" role="radiogroup" aria-label="Sign in with">
-			{#each schemes as candidate (candidate)}
-				<button class="ap-seg-item" class:ap-seg-on={chosen === candidate} type="button" role="radio" aria-checked={chosen === candidate} disabled={busy} onclick={() => (scheme = candidate)}>{LABELS[candidate]}</button>
-			{/each}
-		</div>
-	</div>
 	{#if chosen === 'email' && codeSentTo}
 		<p class="ap-profedit-hint" role="status">If {codeSentTo} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
 		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={() => { codeSent = undefined; code = ''; error = ''; client.cancelEmailCode(); }}>Use another address, or send a new code</button>
 	{:else}
 		<p class="ap-profedit-hint" role={view.phase === 'ready' ? 'status' : undefined}>{view.phase === 'ready' && notice ? notice : hint}</p>
-	{/if}
-	{#if view.secondary}
-		<button class="ap-link ap-connect-other" type="button" data-testid={view.secondary.action} disabled={busy} onclick={() => startPasskey(view.secondary?.action === 'passkey-login' ? 'login' : 'register')}>{view.secondary.label}</button>
 	{/if}
 	{#if errorText}<p class="ap-profedit-note ap-profedit-err" role="alert">{errorText}</p>{/if}
 	<div class="ap-connect-actions">
