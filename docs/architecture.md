@@ -128,6 +128,19 @@ by a `server` frame before v7, and by an `unsupported` reply until the next
 Every successful `auth` result is handled alike: its `you` becomes the
 connection's identity and a `token` in it replaces the saved one, whether it
 answers a guest sign-in, a token resume (rotation), a passkey or an email code.
+A passkey ceremony is `usePasskey(action, name?)`, one per tap: `login` or
+`register` (§4.9), modal mediation only, on the connection to this server
+whether or not it is signed in. It is busy (`authBusy`, `passkeyBusy`) from
+the call on, waits for requests sent as the old identity to settle, sends
+`name` with a register `begin` and labels the new passkey with it
+(`labelledCreationOptions`), and after a login relabels the passkey through
+the Signal API where the browser has it (`signalPasskeyLabel`).
+`cancelPasskeyPrompt()` abandons it at any point. The connection's own
+sign-in never runs one: where only a passkey brings a registered session back
+(no token to resume with), or a resume was refused, `authenticate` holds the
+connection (`held`) and says how to sign in (`signInNeeded`), and the page's
+sign-in panel (`SignIn.svelte`, state machine in `$lib/ui/sign-in`) takes the
+user's tap from there.
 Email sign-in (§4.10) proposes and approves on one connection, since a short
 code works only on the connection that proposed it: `requestEmailCode(email,
 url?)` opens an `EmailConnection` (`email-connection.ts`) to that server that

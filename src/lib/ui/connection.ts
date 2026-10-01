@@ -86,6 +86,6 @@ export function backendHost(value: string): string {
 /** The user-facing reading of a WebAuthn failure. */
 export function passkeyMessage(cause: unknown): string {
 	return cause instanceof DOMException && cause.name === 'NotAllowedError'
-		? 'Cancelled. You’re still signed in as before.'
+		? 'Cancelled.'
 		: cause instanceof Error ? cause.message : 'Unable to use passkey';
 }

@@ -155,7 +155,8 @@
 				await client.signOut();
 				passkeyNotice = 'Signed out.';
 			} else {
-				await client.usePasskey('register');
+				// Labelled with the account's name, so the passkey manager shows whose it is.
+				await client.usePasskey('register', you?.name);
 				passkeyNotice = 'Passkey saved · this backend will ask your device next time';
 			}
 			resetDraft();

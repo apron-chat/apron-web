@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient } from './client';
 import { FakeSocket, settle } from './fake-socket';
-import { conditionalPasskeysAvailable, immediatePasskeysAvailable, requestPasskey } from './webauthn';
+import { requestPasskey, signalPasskeyLabel } from './webauthn';
 
 vi.mock('./webauthn', () => ({
 	requestPasskey: vi.fn(),
-	conditionalPasskeysAvailable: vi.fn(),
-	immediatePasskeysAvailable: vi.fn()
+	signalPasskeyLabel: vi.fn()
 }));
 
 const storage = new Map<string, string>();
@@ -21,8 +20,7 @@ beforeEach(() => {
 		removeItem: (key: string) => void storage.delete(key)
 	});
 	vi.mocked(requestPasskey).mockReset();
-	vi.mocked(conditionalPasskeysAvailable).mockResolvedValue(true);
-	vi.mocked(immediatePasskeysAvailable).mockResolvedValue(false);
+	vi.mocked(signalPasskeyLabel).mockReset();
 });
 
 afterEach(() => {
@@ -125,129 +123,130 @@ describe('passkey ceremonies and requests in flight', () => {
 	});
 });
 
-describe('continue with passkey', () => {
-	it('signs in when immediate mediation finds a passkey on this device', async () => {
-		vi.mocked(immediatePasskeysAvailable).mockResolvedValue(true);
+describe('one explicit ceremony per tap', () => {
+	it('asks the server to name a new passkey after the requested display name', async () => {
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
 		const { client, socket } = await connected();
-		expect(await client.passkeyPlan()).toBe('immediate');
-		const pending = client.continueWithPasskey();
+		const pending = client.usePasskey('register', ' shazow ');
+		await settle();
+		expect(socket.request('auth').params).toEqual({ scheme: 'webauthn', action: 'register', step: 'begin', name: 'shazow' });
+		await ceremony(socket, { user_id: 'u_1', name: 'shazow' });
+		await pending;
+		// The browser labels the passkey with it too, whatever the server put in the options.
+		expect(vi.mocked(requestPasskey).mock.calls[0]?.[3]).toBe('shazow');
+		client.stop();
+	});
+
+	it('sends no name with a login, which signs in to an account that has one', async () => {
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
+		const { client, socket } = await connected();
+		const pending = client.usePasskey('login', 'shazow');
+		await settle();
+		expect(socket.request('auth').params).toEqual({ scheme: 'webauthn', action: 'login', step: 'begin' });
 		await ceremony(socket, { user_id: 'u_1', name: 'Existing' });
-		await expect(pending).resolves.toEqual({ action: 'login', named: undefined });
-		expect(vi.mocked(requestPasskey).mock.calls[0]?.[3]).toBe('immediate');
-		expect(authRequests(socket).filter((params) => params.step === 'begin').map((params) => params.action)).toEqual(['login']);
+		await pending;
 		client.stop();
 	});
 
-	it('registers a new passkey when immediate mediation finds none', async () => {
-		vi.mocked(immediatePasskeysAvailable).mockResolvedValue(true);
-		vi.mocked(requestPasskey)
-			.mockRejectedValueOnce(new DOMException('none', 'NotAllowedError'))
-			.mockResolvedValueOnce({ id: 'credential' });
-		const { client, socket } = await connected();
-		const pending = client.continueWithPasskey('shazow');
-		await settle();
-		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
-		await ceremony(socket, { user_id: 'u_1', name: 'Guest' });
-		const result = await pending;
-		expect(result.action).toBe('register');
-		expect(authRequests(socket).filter((params) => params.step === 'begin').map((params) => params.action)).toEqual(['login', 'register']);
-		expect(socket.request('me').params).toEqual({ name: 'shazow' });
-		client.stop();
-	});
-
-	it('falls back to registering when the browser rejects immediate mediation as an option', async () => {
-		vi.mocked(immediatePasskeysAvailable).mockResolvedValue(true);
-		vi.mocked(requestPasskey)
-			.mockRejectedValueOnce(new TypeError("Failed to read the 'mediation' property"))
-			.mockResolvedValueOnce({ id: 'credential' });
-		const { client, socket } = await connected();
-		const pending = client.continueWithPasskey();
-		await settle();
-		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
-		await ceremony(socket, { user_id: 'u_1', name: 'Guest' });
-		await expect(pending).resolves.toEqual(expect.objectContaining({ action: 'register' }));
-		expect(vi.mocked(requestPasskey).mock.calls.map((call) => [call[0], call[3]])).toEqual([['login', 'immediate'], ['register', 'modal']]);
-		client.stop();
-	});
-
-	it('without immediate mediation, registers until this browser has used a passkey here, then signs in', async () => {
+	it('is busy from the tap on, before the server is asked for a challenge', async () => {
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
 		const { client, socket } = await connected();
-		expect(await client.passkeyPlan()).toBe('register');
-		const first = client.continueWithPasskey();
-		await ceremony(socket, { user_id: 'u_1', name: 'Guest' });
-		await expect(first).resolves.toEqual(expect.objectContaining({ action: 'register' }));
-		expect(storage.get('apron.passkey:ws://fake.test/')).toBe('1');
+		client.setDisplayName('Renamed');
+		const pending = client.usePasskey('login');
+		expect(client.snapshot().authBusy).toBe(true);
+		// No sheet is up yet: nothing to confirm on the device.
+		expect(client.snapshot().passkeyBusy).toBeUndefined();
+		await expect(client.usePasskey('register')).rejects.toThrow('Already signing in');
+		await socket.reply('me', { you: { user_id: 'guest_1', name: 'Renamed' } });
+		await new Promise((resolve) => setTimeout(resolve, 120));
+		await ceremony(socket, { user_id: 'u_1', name: 'Existing' });
+		await pending;
+		expect(client.snapshot().authBusy).toBe(false);
+		expect(authRequests(socket).filter((params) => params.step === 'begin')).toHaveLength(1);
 		client.stop();
+	});
 
-		// The hint survives sign-out and reloads: the passkey is still on the device.
-		const next = new ChatClient('ws://fake.test/');
-		expect(await next.passkeyPlan()).toBe('login');
+	it('stops at once when cancelled while it waits for its turn', async () => {
+		const { client, socket } = await connected();
+		client.setDisplayName('Renamed');
+		const pending = client.usePasskey('login');
+		client.cancelPasskeyPrompt();
+		await expect(pending).rejects.toThrow('Cancelled');
+		expect(client.snapshot().authBusy).toBe(false);
+		await socket.reply('me', { you: { user_id: 'guest_1', name: 'Renamed' } });
+		expect(authRequests(socket).some((params) => params.scheme === 'webauthn')).toBe(false);
+		expect(requestPasskey).not.toHaveBeenCalled();
+		client.stop();
+	});
+
+	it('relabels a saved passkey with the account’s name after a login', async () => {
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential', response: { userHandle: 'dXNlci0x' } });
+		const { client, socket } = await connected();
+		const pending = client.usePasskey('login');
+		await settle();
+		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x', rpId: 'demo.example' } });
+		await socket.reply('auth', { you: { user_id: 'u_1', name: 'Ada' } });
+		await pending;
+		expect(signalPasskeyLabel).toHaveBeenCalledWith('demo.example', 'dXNlci0x', 'Ada');
+		client.stop();
+	});
+
+	it('relabels with the display name chosen for the login once the server has it', async () => {
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential', response: { userHandle: 'dXNlci0x' } });
+		const { client, socket } = await connected();
+		const pending = client.usePasskey('login', 'Ada Lovelace');
+		await settle();
+		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x', rpId: 'demo.example' } });
+		await socket.reply('auth', { you: { user_id: 'u_1', name: 'Ada' } });
+		const named = await pending;
+		expect(signalPasskeyLabel).not.toHaveBeenCalled();
+		await socket.reply('me', { you: { user_id: 'u_1', name: 'Ada Lovelace' } });
+		await named!.promise;
+		await settle();
+		expect(signalPasskeyLabel).toHaveBeenCalledWith('demo.example', 'dXNlci0x', 'Ada Lovelace');
+		client.stop();
 	});
 });
 
-describe('passkey autofill', () => {
-	it('signs in when the user picks a passkey from autofill', async () => {
-		const picked = deferred<Record<string, unknown>>();
-		vi.mocked(requestPasskey).mockReturnValueOnce(picked.promise as never);
+describe('console diagnostics', () => {
+	it('warns with the stage and the server’s refusal when a passkey sign-up fails', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential', rawId: 'credential', type: 'public-key', response: {} });
 		const { client, socket } = await connected();
-		const controller = new AbortController();
-		const pending = client.passkeyAutofill(controller.signal, () => 'shazow');
+		const pending = client.usePasskey('register', 'ericd');
+		await settle();
+		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x', rp: { id: 'apron.chat' } } });
+		await settle();
+		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Passkey verification failed' } });
+		await expect(pending).rejects.toThrow('Passkey verification failed');
+		await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+		const [line, details] = warn.mock.calls.at(-1) as [string, Record<string, unknown>];
+		expect(line).toBe('[apron] passkey register failed during finish: Passkey verification failed');
+		expect(details).toMatchObject({
+			stage: 'finish',
+			error: { message: 'Passkey verification failed', code: -32001 },
+			server: 'ws://fake.test/',
+			requestedName: 'ericd',
+			options: { rp: { id: 'apron.chat' } },
+			credential: { rawIdMatchesId: true, type: 'public-key' }
+		});
+		warn.mockRestore();
+		client.stop();
+	});
+
+	it('only notes a dismissed sheet', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Dismissed', 'NotAllowedError'));
+		const { client, socket } = await connected();
+		const pending = client.usePasskey('login');
 		await settle();
 		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
-		expect(vi.mocked(requestPasskey).mock.calls[0]?.[3]).toBe('conditional');
-		picked.resolve({ id: 'credential' });
-		await settle();
-		await socket.reply('auth', { you: { user_id: 'u_1', name: 'Existing' } });
-		const result = await pending;
-		expect(result?.named).toBeDefined();
-		expect(socket.request('me').params).toEqual({ name: 'shazow' });
-		client.stop();
-	});
-
-	it('re-issues the challenge before it expires', async () => {
-		vi.useFakeTimers();
-		vi.mocked(requestPasskey).mockImplementation((_action, _options, signal) => new Promise((_resolve, reject) => {
-			signal.addEventListener('abort', () => reject(signal.reason));
-		}));
-		const { client, socket } = await connected();
-		const controller = new AbortController();
-		const pending = client.passkeyAutofill(controller.signal);
-		await settle();
-		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x', timeout: 60_000 } });
-		expect(authRequests(socket).filter((params) => params.step === 'begin')).toHaveLength(1);
-		await vi.advanceTimersByTimeAsync(50_000);
-		expect(authRequests(socket).filter((params) => params.step === 'begin')).toHaveLength(2);
-		controller.abort();
-		await socket.reply('auth', { challenge_id: 'challenge-2', public_key: { challenge: 'y' } });
-		await expect(pending).resolves.toBeUndefined();
-		client.stop();
-	});
-
-	it('steps aside for an explicit ceremony', async () => {
-		vi.mocked(requestPasskey).mockImplementationOnce((_action, _options, signal) => new Promise((_resolve, reject) => {
-			signal.addEventListener('abort', () => reject(signal.reason));
-		}));
-		const { client, socket } = await connected();
-		const autofill = client.passkeyAutofill(new AbortController().signal);
-		await settle();
-		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
-
-		vi.mocked(requestPasskey).mockResolvedValueOnce({ id: 'credential' });
-		const explicit = client.usePasskey('register');
-		await expect(autofill).resolves.toBeUndefined();
-		await ceremony(socket, { user_id: 'u_1', name: 'Guest' });
-		await expect(explicit).resolves.toBeUndefined();
-		expect(vi.mocked(requestPasskey).mock.calls.map((call) => call[3])).toEqual(['conditional', 'modal']);
-		client.stop();
-	});
-
-	it('does nothing where the browser has no passkey autofill', async () => {
-		vi.mocked(conditionalPasskeysAvailable).mockResolvedValue(false);
-		const { client, socket } = await connected();
-		await expect(client.passkeyAutofill(new AbortController().signal)).resolves.toBeUndefined();
-		expect(authRequests(socket).some((params) => params.scheme === 'webauthn')).toBe(false);
+		await expect(pending).rejects.toThrow('Dismissed');
+		await vi.waitFor(() => expect(info).toHaveBeenCalledWith('[apron] passkey login failed during browser: Dismissed', expect.objectContaining({ stage: 'browser' })));
+		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
+		info.mockRestore();
 		client.stop();
 	});
 });
@@ -301,33 +300,73 @@ describe('a failed session resume never prompts on its own', () => {
 		expect(FakeSocket.instances).toHaveLength(1);
 		expect(requestPasskey).not.toHaveBeenCalled();
 
-		// The user's tap reconnects and asks for the passkey.
-		vi.mocked(requestPasskey).mockReturnValue(new Promise(() => {}));
+		expect(snapshot.signInNeeded).toBe('webauthn');
+
+		// The tap on Sign in reconnects; the passkey waits for the sign-in screen's tap.
 		client.retryNow();
 		const next = FakeSocket.latest();
 		next.open();
 		next.receive(server);
 		await settle();
+		expect(authRequests(next)).toEqual([]);
+		expect(snapshot.held).toBe(true);
+		expect(snapshot.signInNeeded).toBe('webauthn');
+		expect(requestPasskey).not.toHaveBeenCalled();
+
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
+		const login = client.usePasskey('login');
+		await settle();
 		expect(next.request('auth').params).toEqual(expect.objectContaining({ scheme: 'webauthn', action: 'login', step: 'begin' }));
 		await next.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
+		await next.reply('auth', { you: { user_id: 'u_1', name: 'Ada' } });
+		await login;
 		expect(requestPasskey).toHaveBeenCalledTimes(1);
+		expect(snapshot.held).toBeUndefined();
+		expect(snapshot.signInNeeded).toBeUndefined();
+		expect(snapshot.authenticated).toBe(true);
 		client.stop();
 	});
 
-	it('does not prompt again on later reconnects when that sign-in is dismissed', async () => {
+	it('keeps the refused connection open, so one tap signs in again on it', async () => {
+		const { client, socket, auth } = await resuming();
+		socket.receive({ id: auth.id, error: { code: -32001, message: 'Session expired; sign in with your passkey' } });
+		await settle();
+		const snapshot = client.snapshot();
+		expect(snapshot.held).toBe(true);
+		expect(snapshot.signInNeeded).toBe('webauthn');
+		expect(snapshot.status).toBe('connected');
+		expect(socket.readyState).not.toBe(FakeSocket.CLOSED);
+		expect(requestPasskey).not.toHaveBeenCalled();
+
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
+		const login = client.usePasskey('login');
+		await settle();
+		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
+		await socket.reply('auth', { you: { user_id: 'u_1', name: 'Ada' }, token: 'session-2' });
+		await login;
+		expect(FakeSocket.instances).toHaveLength(1);
+		expect(client.snapshot().authenticated).toBe(true);
+		expect(client.snapshot().held).toBeUndefined();
+		expect(storage.get(key)).toBe('session-2');
+		client.stop();
+	});
+
+	it('stays held, without prompting again, when that sign-in is dismissed', async () => {
 		const { client, socket, auth } = await resuming();
 		socket.receive({ id: auth.id, error: { code: -32001, message: 'Session expired; sign in with your passkey' } });
 		await settle();
 		socket.drop();
-		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Dismissed', 'NotAllowedError'));
 		client.retryNow();
 		const next = FakeSocket.latest();
 		next.open();
 		next.receive(server);
 		await settle();
-		await next.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
+		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Dismissed', 'NotAllowedError'));
+		const login = client.usePasskey('login');
 		await settle();
-		expect(requestPasskey).toHaveBeenCalledTimes(1);
+		await next.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
+		await expect(login).rejects.toThrow('Dismissed');
+		expect(client.snapshot().signInNeeded).toBe('webauthn');
 		// The server closes the unauthenticated socket; nothing reconnects or prompts until the next tap.
 		next.drop();
 		await vi.advanceTimersByTimeAsync(10 * 60_000);

@@ -340,13 +340,13 @@ links may point anywhere `http(s)`.
 **Connect** in the
 sidebar header opens the connect screen: a WebSocket URL or an HTTP(S) server
 base URL, a display name, and a sign-in choice among the schemes the server
-advertises (Guest by default; Passkey signs in with an existing passkey once
-the guest session is up; Email and Token, below). Once the server in the field
+advertises (Guest by default; Passkey, below; Email and Token, further down). Once the server in the field
 has answered, its `server.welcome`
 ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication))
 shows at the top of the form, rendered as Markdown and sanitized like a message.
 A server without the `guest` scheme opens this screen by itself once, since
-nothing works before signing in. The server and name
+nothing works before signing in, and so does a session held for a sign-in
+(below) with nothing on screen yet. The server and name
 are stored in local storage, and the last few backends are listed under the
 form. The profile bar at the foot of the sidebar edits your handle, which is
 sent with the protocol `me` request after authentication; the editor shows
@@ -383,9 +383,73 @@ server signs in with (only a kept token, pasted or an invite, or an account
 made with a scheme the server lists only in `signup`), the profile bar says
 "add a sign-in" and the Sign-in row suggests a passkey or an email.
 
+The connect screen's form is the one sign-in panel (`SignIn.svelte`, its
+state machine in `$lib/ui/sign-in`), and every way into signing in lands on
+it: the connect screen, the profile's **Sign in with a passkey** and **Sign in
+with email**, the read-only bar's **Sign in**, and the status banner's **Sign
+in** for a held session. Each tap does one explicit thing, and a passkey
+sheet only ever opens for a tap:
+
+- **Sign in with passkey** runs a login: the browser's sheet offers this
+  server's passkeys (no `allowCredentials`), and the account is the one
+  attached to the passkey picked. **New here? Create an account with a
+  passkey** registers a new passkey instead; Enter does what the main button
+  says. The client never guesses between them: where the server's `signup`
+  lets passkeys only sign in or only sign up, only that one shows (on a
+  server that hasn't answered yet, both do).
+- A ceremony needs a connection to the server in the form. Where there is
+  none yet (another server, or a held session whose connection closed),
+  the tap opens one (as a guest where the server has guests, else signed
+  in as no one; a held session reconnects in place) and the ceremony
+  follows once it has settled, if the server lets passkeys do what was
+  asked. A browser may refuse a sheet that long after the tap: the panel
+  then says "Connected. Tap again to continue with your passkey.", ready
+  on that connection. Connected as a guest, **Stay a guest** leaves the
+  panel as it is. On Guest, **Connect** connects without a ceremony.
+- The display name is the requested `name` (§3.2): it goes with the
+  register `begin` so the server can name the account and its passkey, the
+  client labels the passkey with it too (password managers show the
+  creation options' `user.name` and `user.displayName`, which a server fills
+  from the guest session the ceremony starts on), and after any sign-in it
+  is sent with `me` if the server kept another. **Add passkey** in the
+  profile labels the new passkey with the account's name. After a passkey
+  login, where the browser has the WebAuthn Signal API, the passkey's label
+  is updated to the account's display name
+  (`PublicKeyCredential.signalCurrentUserDetails`), so a passkey saved under
+  a guest's name picks up the account's; this is best effort and never
+  waited on.
+- The panel is busy from the tap on (also while the client waits for
+  requests sent as the old identity to settle). Where the panel has a
+  **Cancel**, it stops the ceremony, whether it is still waiting or the
+  browser's sheet is up, and closes the panel.
+
+The client makes no WebAuthn request of its own: no conditional (autofill)
+or `immediate` mediation and no capability probes, which password-manager
+extensions don't always settle. It reads the credential's fields as soon as
+the browser returns it and falls back to them when `toJSON` is missing or
+throws, as it can for a credential an extension proxies (1Password in
+Firefox), or when it disagrees with them (an extension's own `toJSON`
+encoding a field otherwise).
+
+A failed ceremony leaves one console entry, `[apron] passkey <action> failed
+during <stage>: <message>` (a warning; only info for a sheet the user
+dismissed). The stage is `waiting` (for in-flight requests), `begin`,
+`browser` or `finish`. The entry holds the error (with the server's code),
+the server and page origin, the options that decide what an authenticator
+does (RP ID, user name, authenticator selection, algorithms, excluded
+credentials; not the challenge), and the credential decoded: whether
+`toJSON` or the fields were sent and why, the client data's type and
+whether its origin and challenge are the expected ones, and the
+authenticator data's flags (user present, user verified, backup), whether
+its RP ID hash matches, and its AAGUID with the provider it names
+(Bitwarden, 1Password, iCloud Keychain…). Servers answer every
+verification failure alike (§4.9 `denied`), so this is where the reason
+shows. The connection's own sign-in, as a guest or by a saved session,
+warns too when refused, without the token.
+
 A server may keep guests read-only; the demo worker does, and says so with
 `ext.demo.guest_posting: false`. Signed in as a guest there, the composer gives
-way to a bar saying so with a **Sign in** button (it opens the connect screen
+way to a bar saying so with a **Sign in** button (it opens the sign-in panel
 on Passkey). Replying, reacting, starting threads, editing rooms and threads,
 adding or removing members, and Join and Leave are hidden; Browse rooms and More threads… offer **Open** instead of
 **Join**, which reads the room through its history without joining it. Other
@@ -449,8 +513,8 @@ stays on its server, and the connect screen opens on Email, set to the link's
 server, with the reason.
 An email sign-in that can't be resumed (no token to resume with) shows as
 signed out after a reconnect, never as a guest, unless a passkey was added to
-the account, which then signs it back in; where email only signs up, the
-message points to another way in rather than to email. The link dialog also
+the account, which then signs it back in (with a tap, as below); where email
+only signs up, the message points to another way in rather than to email. The link dialog also
 warns when the server a link switches to has a saved session here.
 
 When the server advertises token authentication, the session token it returns
@@ -459,9 +523,16 @@ is kept in `localStorage`, keyed by server URL, the latest replacing any earlier
 same identity after a transport disconnect, a page reload, or in a new tab, for
 as long as the server keeps the session alive (the example servers renew it on
 every resume). Servers that offer passkeys without token resume get no stored
-credential; there a reconnect runs another ceremony and a reload starts as a
-guest. Expired sessions require another passkey login; the client does not
-automatically replace them with a guest identity. Signing out clears the stored
+credential, and a reload starts as a guest. There a reconnect needs another
+passkey login, and so does an expired session: the client holds the
+connection (open, signed in as no one, and not reconnecting meanwhile), the
+status banner says "Sign in with your passkey to continue", and its **Sign
+in** opens the sign-in panel ready for that tap. A refused resume (an
+expired or revoked token) of a passkey session does the same, on the
+connection that was refused. If the server has closed that connection
+meanwhile, the passkey tap reconnects in place first, keeping the rooms
+on screen. It never prompts on its own
+and never replaces the session with a guest identity. Signing out clears the stored
 credentials and reconnects as a guest. The Go example's sessions are in memory
 and are lost on backend restart.
 

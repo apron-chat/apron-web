@@ -9,7 +9,8 @@
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
 	import Composer from '$lib/components/Composer.svelte';
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
-	import ConnectScreen, { type Scheme } from '$lib/components/ConnectScreen.svelte';
+	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
+	import type { Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
 	import Message, { type MessageCaps } from '$lib/components/Message.svelte';
 	import RoomHeader from '$lib/components/RoomHeader.svelte';
@@ -310,17 +311,26 @@
 		});
 	});
 
-	// A server without guests (and no kept session to resume) can only be used signed in: the connect screen,
-	// with the server's welcome (§3.2), opens once by itself, rather than leaving an empty app and an error.
+	// A server without guests (and no kept session to resume) can only be used signed in, and so can a
+	// session held until its user signs in again with nothing on screen yet: the connect screen, with the
+	// server's welcome (§3.2), opens once by itself, rather than leaving an empty app and an error.
 	// Not while an emailed link waits for its answer or is being used: that is a sign-in already.
 	let promptedSignIn = false;
 	$effect(() => {
 		const server = snapshot.server;
 		if (previewMode || promptedSignIn || connectOpen || emailLink || emailLinkBusy || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
-		if (server.auth.includes('guest') || server.signup?.includes('guest') || !snapshot.error) return;
+		const needed = snapshot.signInNeeded && session.rooms.length === 0 ? snapshot.signInNeeded : undefined;
+		if (!needed && (server.auth.includes('guest') || server.signup?.includes('guest') || !snapshot.error)) return;
 		promptedSignIn = true;
-		untrack(() => openConnect({ signIn: true }));
+		untrack(() => openConnect(needed ? { scheme: needed } : { signIn: true }));
 	});
+
+	/** The banner's Sign in for a held session: the sign-in screen where it needs one, else a reconnect. */
+	function signInAgain(): void {
+		if (!client) return;
+		if (snapshot.signInNeeded) openConnect({ scheme: snapshot.signInNeeded });
+		else session.retryNow(client);
+	}
 
 	// Leaving a pane ends its selection in setDestination; losing the capability ends it here.
 	$effect(() => {
@@ -1381,7 +1391,7 @@
 						{statusLabel(snapshot, session.stalled)}
 						{#snippet action()}
 							{#if session.reconnectNeedsAttention}
-								<button class="ap-btn ap-btn-sm" type="button" data-testid="reconnect-retry" disabled={Boolean(snapshot.retryAfterMs)} onclick={() => client && session.retryNow(client)}>{snapshot.held ? 'Sign in' : 'Try Again'}</button>
+								<button class="ap-btn ap-btn-sm" type="button" data-testid="reconnect-retry" disabled={Boolean(snapshot.retryAfterMs)} onclick={signInAgain}>{snapshot.held ? 'Sign in' : 'Try Again'}</button>
 							{/if}
 						{/snippet}
 					</StatusBanner>
@@ -1523,7 +1533,8 @@
 			<StatusBanner tone={feedback.current.kind === 'error' ? 'danger' : 'warn'} role={feedback.current.kind === 'error' ? 'alert' : 'status'}>{feedback.current.text}</StatusBanner>
 		</div>
 	{/if}
-	{#if snapshot.error && !(session.connection === 'reconnecting' && !session.reconnectError)}
+	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
+	{#if snapshot.error && session.connection !== 'reconnecting'}
 		<div class="toast toast-right">
 			<StatusBanner tone="danger" role="alert">{snapshot.error}</StatusBanner>
 		</div>
