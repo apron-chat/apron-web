@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { capabilitiesOf, type ClientSnapshot } from '$lib/protocol/client';
-import { addEmailError, connectionStateOf, demoRetentionNotice, offeredSchemes, schemeUse, statusLabel, wayBackNudge } from './connection';
+import { addEmailError, connectionStateOf, offeredSchemes, schemeUse, statusLabel, wayBackNudge } from './connection';
 import { retryAfterLabel } from './time';
 
 const snapshot = (fields: Partial<ClientSnapshot>): ClientSnapshot => ({
@@ -30,19 +30,6 @@ describe('connection state', () => {
 		expect(retryAfterLabel(59_000)).toBe('59s');
 		expect(retryAfterLabel(61_000)).toBe('2m');
 		expect(retryAfterLabel(3_600_000)).toBe('1h');
-	});
-
-	it('describes demo retention in hours, days or weeks', () => {
-		const notice = (hours: number) => demoRetentionNotice({ apron: 7, auth: ['guest'], ext: { demo: { retention_seconds: hours * 3600 } } });
-		expect(demoRetentionNotice(undefined)).toBe('');
-		expect(notice(1)).toMatch(/last hour of/);
-		expect(notice(2)).toMatch(/last 2 hours/);
-		expect(notice(24)).toMatch(/last day/);
-		expect(notice(72)).toMatch(/last 3 days/);
-		expect(notice(168)).toBe('This demo keeps roughly the last week of history; older messages may expire.');
-		expect(notice(336)).toMatch(/last 2 weeks/);
-		expect(notice(720)).toMatch(/last 30 days/);
-		expect(demoRetentionNotice({ apron: 7, auth: ['guest'], ext: {} })).toBe('');
 	});
 });
 
