@@ -158,7 +158,7 @@ export function mentionClass({ target, hash }: Mention): string {
 	return `ap-mention ap-mention-room${hash ? ' ap-mention-hash-room' : ''}`;
 }
 
-/** A user as a span, with their ID on hover when their name differs; a room as a button that opens it. */
+/** A user as a button that opens their profile card, with their ID on hover when their name differs; a room as a button that opens it. */
 function mentionChip(mention: Mention): string {
 	const { target } = mention;
 	const label = escapeHtml(mentionLabel(mention));
@@ -167,7 +167,7 @@ function mentionChip(mention: Mention): string {
 		return `<button type="button" class="${className}" data-room-id="${escapeHtml(target.id)}" title="Open ${escapeHtml(target.title)}">${label}</button>`;
 	}
 	const title = target.name !== target.id ? ` title="@${escapeHtml(target.id)}"` : '';
-	return `<span class="${className}" data-user-id="${escapeHtml(target.id)}"${title}>${label}</span>`;
+	return `<button type="button" class="${className}" data-user-id="${escapeHtml(target.id)}"${title}>${label}</button>`;
 }
 
 /**

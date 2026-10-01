@@ -5,6 +5,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { emojiAnchor, emojiPicker } from '$lib/ui/emoji-picker.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
+	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { embedsOf, isSystem, replySnippet, senderName, textOf } from '$lib/ui/messages';
 	import type { ReactionChip } from '$lib/ui/reactions';
 	import { eventTime, idDateTime, idIso, idTimeCompact } from '$lib/ui/time';
@@ -153,7 +154,9 @@
 			onopenroom(roomLink.dataset.roomId);
 			return;
 		}
-		if ((mouse.target as HTMLElement | null)?.closest('a, button, input, textarea, select')) return;
+		// A user mention, or the sender's name or avatar, opens their profile card; in select mode it picks the message.
+		if (!selecting && openProfileFrom(mouse.target)) return;
+		if ((mouse.target as HTMLElement | null)?.closest('a, button:not([data-user-id]), input, textarea, select')) return;
 		if (selecting) {
 			if (caps.select) onselect(mouse.shiftKey);
 			return;
@@ -232,13 +235,14 @@
 		{#if grouped}
 			<time class="ap-msg-hovertime" datetime={isoTime} title={fullTime}>{idTimeCompact(event.message_id)}</time>
 		{:else}
-			<Avatar {name} id={directory.person(event.from)?.user_id} src={directory.avatar(event.from)} />
+			<!-- The name beside it is the keyboard's way in; the avatar is a second target for the pointer. -->
+			<button class="who-btn" type="button" tabindex="-1" aria-hidden="true" data-user-id={handle}><Avatar {name} id={directory.person(event.from)?.user_id} src={directory.avatar(event.from)} /></button>
 		{/if}
 	</div>
 	<div class="ap-msg-main">
 		{#if !grouped}
 			<header class="ap-msg-head">
-				<span class="ap-msg-sender">{name}</span>
+				<button class="ap-msg-sender who-btn" type="button" data-user-id={handle} aria-haspopup="dialog" title="Show profile">{name}</button>
 				{#if showHandle}<span class="ap-msg-handle" data-testid="sender-handle">@{handle}</span>{/if}
 				<RoleBadges user={event.from} />
 				<span class="ap-msg-meta">{#if time}<time datetime={isoTime} title={fullTime}>{time}</time>{/if}</span>
@@ -344,6 +348,11 @@
 
 <style>
 	.ap-actions { max-width: calc(100vw - 32px); flex-wrap: wrap; }
+	/* The sender's name and avatar open their profile card, and look as they did. */
+	.who-btn { margin: 0; padding: 0; border: 0; background: none; color: inherit; font-family: inherit; font-size: inherit; line-height: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
+	.ap-msg-sender.who-btn:hover { text-decoration: underline; }
+	.who-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+	.ap-msg-gutter .who-btn { display: inline-flex; border-radius: var(--radius-full); }
 	.reply-static { cursor: default; }
 	.reply-static:hover { background: var(--bg-200); }
 	.plain { white-space: pre-wrap; }

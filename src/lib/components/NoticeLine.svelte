@@ -2,6 +2,7 @@
 	import type { Notice } from '$lib/protocol/client';
 	import { renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
 	import { systemScope } from '$lib/protocol/types';
 	import SystemNotice from './SystemNotice.svelte';
@@ -23,6 +24,7 @@
 	function click(event: MouseEvent): void {
 		const roomLink = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-room-id]');
 		if (roomLink?.dataset.roomId) onopenroom(roomLink.dataset.roomId);
+		else openProfileFrom(event.target);
 	}
 </script>
 
