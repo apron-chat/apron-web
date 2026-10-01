@@ -175,28 +175,40 @@ someone else; turning them on asks the browser's permission, and **Send test**
 shows a sample. While they're on, a notification replaces the chime (the chime
 still plays if one couldn't be shown), each room keeps one notification that
 the next message replaces (its newest mention, else its newest message), and
-clicking it opens that room or thread. Where the page can't show notifications
-itself (Android Chrome) the service worker shows them. Permission revoked in the
-browser's site settings reads as off. When the server offers web push
-(`server.push.webpush` with its VAPID `key`, §4.7), Preferences also offers
-**Push notifications** for mentions to a signed-in account (not a guest), per
-server and off until turned on. Turning
-it on asks the browser's permission, subscribes this browser with the server's
-key (replacing a subscription made with another key), and sends `push_register`
-`{kind: "webpush", url, tag, keys: {p256dh, auth}}` from the subscription on each
-connection; turning it off sends `push_unregister` and drops the subscription.
-`tag` names the server: the first 12 bytes of the SHA-256 of its URL, in
-base64url. The service worker shows each pushed message as its sender and room.
-A message notification, the page's or a pushed one, is tagged with the server's
-`tag` and the `message_id`, so a message shows once: whichever arrives second
-replaces the first without alerting again, and a newer message in the room
-closes the older one. A click on a pushed one opens the room in the tab on the
-server its `tag` names; with no tab open, a new one opens at it, on that server
-if push is on for it here. A payload without a `tag` (an older server) shows
-one notification per room and opens in the tab on the server holding the
-subscription. Without a tag of its own (no `crypto.subtle`), the page keeps one
-notification per room. Browsers without push say so; iPhone and iPad Safari say
-to add Apron to the Home Screen first. **Appearance** picks a light or dark theme
+clicking it opens that room or thread. Notifications show through the service
+worker, or from the page where there is none yet. Permission revoked in the
+browser's site settings reads as off.
+
+When the server offers web push (`server.push.webpush` with its VAPID `key`,
+§4.7), Preferences also offers **Push notifications** for mentions to a
+signed-in account (not a guest), also while it reconnects. It is per account on
+each server, off until turned on, and turning it on or off in one tab applies
+in the others. Turning it on asks the browser's permission, subscribes this
+browser with the server's key (replacing a subscription made with another
+key), and sends `push_register` `{kind: "webpush", url, push_id, keys: {p256dh,
+auth}}` from the subscription after each `auth` as that account. Turning it off
+sends `push_unregister` and drops the subscription. Subscribing and
+unsubscribing run one at a time, and a step that finishes after push was turned
+off, or after the tab moved to another server or account, registers nothing. A
+replaced registration is unregistered, after the next `auth` if not at once.
+Signing out unregisters too.
+
+`push_id` names the account: the SHA-256 of the server URL, a newline and the
+`user_id`, in base64url, cut to 16 characters. The service worker shows each
+pushed message as its sender and room. A message notification, the page's or a
+pushed one, is tagged with the `push_id` and the `message_id`, so a message
+shows once: whichever arrives second replaces the first without alerting
+again. A newer message in the room closes the older one. A click on a pushed
+one asks the open tabs for their `push_id`, and the tab signed in to that
+account opens the room. With no such tab, a new one opens at it, on that
+account's server if push is on for it here. A pushed room that the listed
+rooms don't include is dropped. A payload without a `push_id` (an older
+server) shows one notification per room and opens in the tab on the account
+that holds the subscription. Without a `push_id` of its own (no
+`crypto.subtle`), the page keeps one notification per room. Browsers without
+push say so; iPhone and iPad Safari say to add Apron to the Home Screen first.
+
+**Appearance** picks a light or dark theme
 over the system's, and an installed font for the interface, messages and code
 (suggested from installed fonts where the browser allows listing them); the
 font choice is marked experimental, to be replaced by a choice of themes. All

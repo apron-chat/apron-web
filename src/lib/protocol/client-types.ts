@@ -217,6 +217,8 @@ export interface ClientSnapshot {
 	 * changes are denied until the user signs in.
 	 */
 	readOnly?: boolean;
+	/** This connection's rooms are listed: joined ones (capability `rooms`), else the default room. */
+	roomsListed?: boolean;
 	error?: string;
 	server?: ServerParams;
 	/** Which optional features the current `server` frame advertises (§4). */
@@ -285,8 +287,8 @@ export interface ClientSnapshot {
 
 /**
  * The params of `push_register` (§4.7): `kind` is a key of `server.push`,
- * `url` identifies the registration, and the rest is specific to the kind,
- * such as a web push subscription's `keys`.
+ * `url` identifies the registration, `push_id` names it in payloads, and the
+ * rest is specific to the kind, such as a web push subscription's `keys`.
  */
 export interface PushRegistration extends JsonObject {
 	kind: string;

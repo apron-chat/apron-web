@@ -301,53 +301,107 @@ describe('rooms by request (cap rooms)', () => {
 		expect(away()).toEqual([true]);
 	});
 
-	it('registers for push on each connection while the server offers the kind, and unregisters a replaced one', async () => {
-		const webpush = { kind: 'webpush', url: 'https://push.example/a', tag: 'a1', keys: { p256dh: 'BPk', auth: 'c2Vj' } };
+	describe('push', () => {
+		const webpush = { kind: 'webpush', url: 'https://push.example/a', push_id: 'a1', keys: { p256dh: 'BPk', auth: 'c2Vj' } };
 		const sent = (method: string) => socket.sent.filter((frame) => frame.method === method).map((frame) => frame.params);
-		async function greet(push?: Record<string, unknown>): Promise<void> {
+		async function greet(push?: Record<string, unknown>, you = 'ada'): Promise<void> {
 			socket.open();
 			socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: [], ...(push ? { push } : {}) } });
 			// Nothing is registered before auth.
 			expect(sent('push_register')).toEqual([]);
-			await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+			await socket.reply('auth', { you: { user_id: you, name: you } });
 		}
-		client.setPushRegistration(webpush);
-		// A guest has no one to push to: nothing is registered.
-		await greet({ webpush: { key: 'BNcR' } });
-		expect(sent('push_register')).toEqual([]);
-		// Signed in to an account, it registers.
-		client.useToken('apron_token');
-		vi.advanceTimersByTime(0);
-		socket = FakeSocket.latest();
-		await greet({ webpush: { key: 'BNcR' } });
-		expect(sent('push_register')).toEqual([webpush]);
-		// The same registration again sends nothing.
-		client.setPushRegistration({ ...webpush, keys: { auth: 'c2Vj', p256dh: 'BPk' }, tag: 'a1' });
-		expect(sent('push_register')).toHaveLength(1);
-		// A new subscription (another key) unregisters the old endpoint.
-		const renewed = { ...webpush, url: 'https://push.example/b' };
-		client.setPushRegistration(renewed);
-		expect(sent('push_unregister')).toEqual([{ url: webpush.url }]);
-		expect(sent('push_register')).toEqual([webpush, renewed]);
-		// Each connection registers again.
-		socket.drop();
-		vi.advanceTimersByTime(5_000);
-		socket = FakeSocket.latest();
-		await greet({ webpush: { key: 'BNcR' } });
-		expect(sent('push_register')).toEqual([renewed]);
-		// Turning push off unregisters.
-		client.setPushRegistration(undefined);
-		expect(sent('push_unregister')).toEqual([{ url: renewed.url }]);
-		// A server without the kind is never asked, until a replacing server frame offers it.
-		client.setPushRegistration(renewed);
-		socket.drop();
-		vi.advanceTimersByTime(5_000);
-		socket = FakeSocket.latest();
-		await greet({ relay: {} });
-		expect(sent('push_register')).toEqual([]);
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
-		expect(sent('push_register')).toEqual([renewed]);
+		function reconnect(): void {
+			socket.drop();
+			vi.advanceTimersByTime(5_000);
+			socket = FakeSocket.latest();
+		}
+		async function signIn(push: Record<string, unknown> = { webpush: { key: 'BNcR' } }, you = 'ada'): Promise<void> {
+			client.useToken('apron_token');
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await greet(push, you);
+		}
+
+		it('registers on each connection while the server offers the kind, and unregisters a replaced one', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			// A guest has no one to push to: nothing is registered.
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_register')).toEqual([]);
+			// Signed in to the account, it registers.
+			await signIn();
+			expect(sent('push_register')).toEqual([webpush]);
+			// The same registration again sends nothing.
+			client.setPushRegistration({ ...webpush, keys: { auth: 'c2Vj', p256dh: 'BPk' }, push_id: 'a1' }, 'ada');
+			expect(sent('push_register')).toHaveLength(1);
+			// A new subscription (another key) unregisters the old endpoint.
+			const renewed = { ...webpush, url: 'https://push.example/b' };
+			client.setPushRegistration(renewed, 'ada');
+			expect(sent('push_unregister')).toEqual([{ url: webpush.url }]);
+			expect(sent('push_register')).toEqual([webpush, renewed]);
+			await socket.reply('push_unregister', {});
+			// Each connection registers again.
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_register')).toEqual([renewed]);
+			// Turning push off unregisters.
+			client.setPushRegistration(undefined);
+			expect(sent('push_unregister')).toEqual([{ url: renewed.url }]);
+			// A server without the kind is never asked, until a replacing server frame offers it.
+			client.setPushRegistration(renewed, 'ada');
+			reconnect();
+			await greet({ relay: {} });
+			expect(sent('push_register')).toEqual([]);
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
+			expect(sent('push_register')).toEqual([renewed]);
+		});
+
+		it('registers only for the account it was made for', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn(undefined, 'bob');
+			expect(sent('push_register')).toEqual([]);
+			client.setPushRegistration({ ...webpush, push_id: 'b2' }, 'bob');
+			expect(sent('push_register')).toEqual([{ ...webpush, push_id: 'b2' }]);
+		});
+
+		it('unregisters a replaced registration after the next auth when it couldn\'t at once', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn();
+			socket.drop();
+			const renewed = { ...webpush, url: 'https://push.example/b' };
+			client.setPushRegistration(renewed, 'ada');
+			vi.advanceTimersByTime(5_000);
+			socket = FakeSocket.latest();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(socket.sent.filter((frame) => frame.method === 'push_unregister' || frame.method === 'push_register').map((frame) => [frame.method, frame.params]))
+				.toEqual([['push_unregister', { url: webpush.url }], ['push_register', renewed]]);
+			await socket.reply('push_unregister', {});
+			// One lost with its connection goes again; one the server answered doesn't.
+			client.setPushRegistration(undefined);
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_unregister')).toEqual([{ url: renewed.url }]);
+			await socket.reply('push_unregister', {});
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_unregister')).toEqual([]);
+		});
+
+		it('unregisters on sign-out, without waiting for a registration in flight', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn();
+			expect(sent('push_register')).toEqual([webpush]);
+			const signedOut = socket;
+			await client.signOut();
+			expect(signedOut.sent.filter((frame) => frame.method === 'push_unregister').map((frame) => frame.params)).toEqual([{ url: webpush.url }]);
+			// Forgotten: the next account isn't registered with it.
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await signIn();
+			expect(sent('push_register')).toEqual([]);
+		});
 	});
+
 });
 
 describe('the default room (no cap rooms)', () => {

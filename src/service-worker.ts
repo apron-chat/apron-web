@@ -3,7 +3,7 @@
 /// <reference lib="esnext" />
 /// <reference lib="webworker" />
 import { base, build, files, prerendered, version } from '$service-worker';
-import { NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ROOM_PARAM, PUSH_TAG_PARAM, closeOlderInGroup, pushNotification, pushTarget } from '$lib/ui/notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, closeOlderInGroup, pushNotification, pushTarget, tabWithPushId } from '$lib/ui/notifications';
 
 /**
  * Keeps each deploy's app files cached so the app opens fast, still opens
@@ -57,9 +57,9 @@ sw.addEventListener('fetch', (event) => {
 	}
 });
 
-// A push from the server (§4.7) is a message object: show it, replacing the page's notification
-// of the same message and closing older ones of its room. Browsers expect every push to show a
-// notification, so one that can't be read still says something arrived.
+// A push from the server (§4.7) is a message object: show it, quietly replacing the page's
+// notification of the same message (same tag), and close older ones of its room. Browsers expect
+// every push to show a notification, so one that can't be read still says something arrived.
 sw.addEventListener('push', (event) => {
 	let payload: unknown;
 	try {
@@ -75,18 +75,45 @@ sw.addEventListener('push', (event) => {
 	})());
 });
 
-// A notification shown through here: bring a tab forward, and tell the tabs, so the one that
-// raised it (see `showNotification`), or one on the pushing server (by its push tag), opens the
-// room. Without a tab, a new one opens at the pushed room.
+/** How long a tab has to say which account it is signed in to. */
+const PUSH_ID_ANSWER_MS = 500;
+
+/** Asks a tab for its account's `push_id`; undefined if it doesn't answer in time. */
+function askPushId(tab: WindowClient): Promise<string | undefined> {
+	return new Promise((resolve) => {
+		const channel = new MessageChannel();
+		const timer = setTimeout(() => resolve(undefined), PUSH_ID_ANSWER_MS);
+		channel.port1.onmessage = (event: MessageEvent) => {
+			clearTimeout(timer);
+			const pushId: unknown = event.data?.pushId;
+			resolve(typeof pushId === 'string' ? pushId : undefined);
+		};
+		tab.postMessage({ type: PUSH_ID_QUERY }, [channel.port2]);
+	});
+}
+
+// A notification shown through here. A pushed one with a `push_id` goes to the tab signed in to
+// that account, or a new tab opens at its room. Otherwise the tabs are told, so the one that raised
+// it (see `showNotification`), or, for a push without a `push_id`, the one on the subscribed
+// account, opens the room, and the first comes forward.
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
 	const data: unknown = event.notification.data;
 	const push = pushTarget(data);
 	event.waitUntil((async () => {
 		const tabs = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
+		if (push?.pushId !== undefined) {
+			const tab = await tabWithPushId(tabs, push.pushId, askPushId);
+			if (tab) {
+				tab.postMessage({ type: PUSH_CLICK, target: push });
+				await tab.focus();
+			} else {
+				await sw.clients.openWindow(`${APP_PAGE}?${new URLSearchParams({ [PUSH_ROOM_PARAM]: push.roomId, [PUSH_ID_PARAM]: push.pushId })}`);
+			}
+			return;
+		}
 		if (tabs.length === 0) {
-			const query = push ? new URLSearchParams({ [PUSH_ROOM_PARAM]: push.roomId, ...(push.tag ? { [PUSH_TAG_PARAM]: push.tag } : {}) }) : undefined;
-			await sw.clients.openWindow(query ? `${APP_PAGE}?${query}` : APP_PAGE);
+			await sw.clients.openWindow(push ? `${APP_PAGE}?${new URLSearchParams({ [PUSH_ROOM_PARAM]: push.roomId })}` : APP_PAGE);
 			return;
 		}
 		const message = push ? { type: PUSH_CLICK, target: push } : { type: NOTIFICATION_CLICK, target: data };

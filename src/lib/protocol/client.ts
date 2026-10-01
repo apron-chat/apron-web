@@ -178,9 +178,15 @@ export class ChatClient {
 	/** Nobody is attending this connection (§4.4); `awaySent` is what the server was last told on it. */
 	private away = false;
 	private awaySent = false;
-	/** What `push_register` sends on each connection (§4.7); `pushSent` is whether this connection has. */
+	/**
+	 * What `push_register` sends on each connection (§4.7), for the account
+	 * `pushUser`; `pushSent` is whether this connection has.
+	 */
 	private pushRegistration: PushRegistration | undefined;
+	private pushUser: string | undefined;
 	private pushSent = false;
+	/** Registration URLs replaced or turned off while they couldn't be unregistered: sent after the next `auth`. */
+	private pushUnregisters = new Set<string>();
 	/** The `room_id` of the server's default room once known (without capability `rooms`). */
 	private defaultRoom?: string;
 	/** Messages this client posted without `room_id`: their broadcast names the default room. */
@@ -337,6 +343,8 @@ export class ChatClient {
 		this.signInNeeded = undefined;
 		// A registration belongs to the server it was made for.
 		this.pushRegistration = undefined;
+		this.pushUser = undefined;
+		this.pushUnregisters.clear();
 		this.resetSession('Server URL changed; pending requests were cancelled');
 		// After the reset, which forgets the old server's session: this server's own comes back.
 		this.loadStoredSession();
@@ -496,6 +504,7 @@ export class ChatClient {
 			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
 			...(this.passkeyAbort ? { passkeyBusy: !this.addingEmail } : {}),
 			readOnly: this.authenticated && !this.registeredSession && this.server?.ext?.demo?.guest_posting === false,
+			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
 			error: this.error,
 			server: this.server,
 			capabilities: capabilitiesOf(this.server),
@@ -981,7 +990,17 @@ export class ChatClient {
 	}
 
 	async signOut(): Promise<void> {
-		if (this.passkeyAbort || this.passkeyStarting || this.requests.size) throw new Error('Wait for pending requests to finish, then try again');
+		// Push requests run in the background and never hold up signing out.
+		const pending = [...this.requests.values()].some((request) => request.method !== 'push_register' && request.method !== 'push_unregister');
+		if (this.passkeyAbort || this.passkeyStarting || pending) throw new Error('Wait for pending requests to finish, then try again');
+		// This device stops receiving the account's pushes (§4.7), as far as the server can still be told.
+		const registration = this.pushRegistration;
+		if (registration && this.pushReady()) {
+			this.sendFrame({ method: 'push_unregister', id: makeRequestId('push_unregister'), params: { url: registration.url } });
+		}
+		this.pushRegistration = undefined;
+		this.pushUser = undefined;
+		this.pushUnregisters.clear();
 		this.sessionToken = undefined;
 		this.storeSession(undefined);
 		this.noteSignIn(undefined);
@@ -1340,39 +1359,50 @@ export class ChatClient {
 	}
 
 	/**
-	 * Registers this device for push (§4.7): `push_register` goes out once
-	 * signed in, and again on each connection, while the server advertises the
-	 * registration's `kind`. A registration that replaces another, or none,
-	 * unregisters the previous `url` with `push_unregister`. Switching servers
-	 * forgets it.
+	 * Registers this device for push (§4.7) for the account `userId`:
+	 * `push_register` goes out once that account is signed in, and again on
+	 * each connection, while the server advertises the registration's `kind`.
+	 * A registration that replaces another with another `url`, or none,
+	 * unregisters the previous `url` with `push_unregister`, after the next
+	 * `auth` if it can't now. Switching servers and signing out forget it.
 	 */
-	setPushRegistration(registration: PushRegistration | undefined): void {
+	setPushRegistration(registration: PushRegistration | undefined, userId?: string): void {
 		const previous = this.pushRegistration;
-		if (canonicalJson(previous) === canonicalJson(registration)) return;
+		const user = registration ? userId : undefined;
+		if (canonicalJson(previous) === canonicalJson(registration) && this.pushUser === user) return;
 		this.pushRegistration = registration;
+		this.pushUser = user;
 		this.pushSent = false;
-		if (previous && previous.url !== registration?.url && this.offersPush(previous.kind)) {
-			this.pushRequest('push_unregister', { url: previous.url });
-		}
+		if (registration) this.pushUnregisters.delete(registration.url);
+		if (previous && previous.url !== registration?.url) this.pushUnregisters.add(previous.url);
 		this.syncPush();
 	}
 
 	private syncPush(): void {
+		if (!this.pushReady()) return;
+		for (const url of [...this.pushUnregisters]) {
+			this.pushUnregisters.delete(url);
+			this.pushRequest('push_unregister', { url }).catch((cause: Error & { code?: number }) => {
+				// Lost with the connection: try again after the next `auth`, unless it is registered again.
+				if (cause.code === undefined && this.pushRegistration?.url !== url) this.pushUnregisters.add(url);
+			});
+		}
 		const registration = this.pushRegistration;
-		if (!registration || this.pushSent || !this.offersPush(registration.kind)) return;
-		this.pushSent = true;
-		this.pushRequest('push_register', registration);
-	}
-
-	/** Signed in to an account (not a guest) on a server whose `server.push` has this kind (§4.7). */
-	private offersPush(kind: string): boolean {
 		const push = this.server?.push;
-		return this.authenticated && this.registeredSession && isJsonObject(push) && Object.hasOwn(push, kind);
+		if (!registration || this.pushSent || !isJsonObject(push) || !Object.hasOwn(push, registration.kind)) return;
+		if (this.you?.user_id !== this.pushUser) return;
+		this.pushSent = true;
+		this.pushRequest('push_register', registration).catch(() => undefined);
 	}
 
-	private pushRequest(method: 'push_register' | 'push_unregister', params: JsonObject): void {
-		// Push is a convenience: a refusal leaves the session as it was.
-		this.enqueueRequest(method, params, { visible: false, allowBeforeAuth: false }).promise.catch(() => undefined);
+	/** Signed in to an account (not a guest) on a server whose `server.push` enables push (§4.7). */
+	private pushReady(): boolean {
+		return this.authenticated && this.registeredSession && isJsonObject(this.server?.push);
+	}
+
+	/** Push is a convenience: a refusal leaves the session as it was. */
+	private pushRequest(method: 'push_register' | 'push_unregister', params: JsonObject): Promise<JsonObject> {
+		return this.enqueueRequest(method, params, { visible: false, allowBeforeAuth: false }).promise;
 	}
 
 	/**

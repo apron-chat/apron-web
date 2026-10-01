@@ -44,23 +44,28 @@ export function sameServerKey(current: ArrayBuffer | null | undefined, key: stri
 	}
 }
 
-/** The `push_register` params for a subscription (`PushSubscription.toJSON()`), if it is complete, with the push `tag`. */
-export function webPushRegistration(subscription: PushSubscriptionJSON, tag?: string): PushRegistration | undefined {
+/** The `push_register` params for a subscription (`PushSubscription.toJSON()`), if it is complete, with its `push_id`. */
+export function webPushRegistration(subscription: PushSubscriptionJSON, pushId?: string): PushRegistration | undefined {
 	const { endpoint, keys } = subscription;
 	if (!endpoint || !keys?.p256dh || !keys.auth) return undefined;
-	return { kind: 'webpush', url: endpoint, ...(tag ? { tag } : {}), keys: { p256dh: keys.p256dh, auth: keys.auth } };
+	return { kind: 'webpush', url: endpoint, ...(pushId ? { push_id: pushId } : {}), keys: { p256dh: keys.p256dh, auth: keys.auth } };
+}
+
+/** One account on one server, as push is turned on for it and as its `push_id` is made from. */
+export function webPushAccount(serverUrl: string, userId: string): string {
+	return `${serverUrl}\n${userId}`;
 }
 
 /**
- * The push `tag` (§4.7) for a server: the first 12 bytes of the SHA-256 of
- * its URL, in base64url (16 characters). The server copies it into every
- * payload, so a pushed message can be matched to its server, and to the
+ * The `push_id` (§4.7) of an account (`webPushAccount`): its SHA-256 in
+ * base64url, cut to 16 characters. The server copies it into every payload,
+ * so a pushed message can be matched to its server and account, and to the
  * page's own notification of it. Undefined where the browser can't hash.
  */
-export async function pushTag(serverUrl: string): Promise<string | undefined> {
+export async function pushId(account: string): Promise<string | undefined> {
 	try {
-		const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(serverUrl));
-		return bytesToBase64Url(new Uint8Array(digest).slice(0, 12));
+		const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(account));
+		return bytesToBase64Url(digest).slice(0, 16);
 	} catch {
 		return undefined;
 	}
@@ -79,27 +84,85 @@ export function needsHomeScreen(): boolean {
 	return ios && !globalThis.matchMedia?.('(display-mode: standalone)').matches;
 }
 
-/**
- * Subscribes this browser with the server's key, keeping a subscription that
- * already uses it, and replacing one made with another key. Resolves the
- * `push_register` params, with the push `tag`. Needs notification permission granted.
- */
-export async function subscribeWebPush(key: string, tag?: string): Promise<PushRegistration> {
-	const registration = await navigator.serviceWorker.ready;
-	let subscription = await registration.pushManager.getSubscription();
-	if (subscription && !sameServerKey(subscription.options.applicationServerKey, key)) {
-		await subscription.unsubscribe();
-		subscription = null;
-	}
-	subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(key) });
-	const params = webPushRegistration(subscription.toJSON(), tag);
-	if (!params) throw new Error('The browser returned an incomplete push subscription');
-	return params;
+/** This browser's push subscription; tests stand in for it. */
+export interface PushBrowser {
+	/** Subscribes with the server's key, keeping a subscription made with it and replacing one made with another. */
+	subscribe(key: string): Promise<PushSubscriptionJSON>;
+	/** Drops the subscription, if there is one. */
+	unsubscribe(): Promise<void>;
 }
 
-/** Drops this browser's push subscription, if it has one. */
-export async function unsubscribeWebPush(): Promise<void> {
-	const registration = await navigator.serviceWorker?.getRegistration();
-	const subscription = await registration?.pushManager.getSubscription();
-	await subscription?.unsubscribe();
+export const browserPush: PushBrowser = {
+	async subscribe(key) {
+		const registration = await navigator.serviceWorker.ready;
+		let subscription = await registration.pushManager.getSubscription();
+		if (subscription && !sameServerKey(subscription.options.applicationServerKey, key)) {
+			await subscription.unsubscribe();
+			subscription = null;
+		}
+		subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(key) });
+		return subscription.toJSON();
+	},
+	async unsubscribe() {
+		const registration = await navigator.serviceWorker?.getRegistration();
+		const subscription = await registration?.pushManager.getSubscription();
+		await subscription?.unsubscribe();
+	}
+};
+
+/** What push registers on: `ChatClient`. */
+export interface PushClient {
+	readonly url: string;
+	setPushRegistration(registration: PushRegistration | undefined, userId?: string): void;
+}
+
+/**
+ * Keeps this browser's one push subscription in step with what the page
+ * wants. Subscribing and unsubscribing run one at a time, in the order asked,
+ * and a newer call supersedes an older one still in flight: it registers
+ * nothing once turned off, or once its client has moved to another server
+ * or account.
+ */
+export class WebPushSync {
+	private run = 0;
+	private queue: Promise<unknown> = Promise.resolve();
+
+	constructor(private readonly browser: PushBrowser = browserPush) {}
+
+	private serially<T>(step: () => Promise<T>): Promise<T> {
+		const next = this.queue.then(step, step);
+		this.queue = next.catch(() => undefined);
+		return next;
+	}
+
+	/**
+	 * Subscribes with the server's key and registers the subscription for the
+	 * account `userId` on `client`'s server. `current` says whether that is
+	 * still the account signed in there. Resolves whether it registered;
+	 * rejects if the browser couldn't subscribe.
+	 */
+	async enable(client: PushClient, key: string, userId: string, current: () => boolean = () => true): Promise<boolean> {
+		const run = ++this.run;
+		const url = client.url;
+		const live = () => run === this.run && client.url === url && current();
+		const id = await pushId(webPushAccount(url, userId));
+		if (!live()) return false;
+		const subscription = await this.serially(async () => (live() ? this.browser.subscribe(key) : undefined));
+		if (!subscription || !live()) return false;
+		const registration = webPushRegistration(subscription, id);
+		if (!registration) throw new Error('The browser returned an incomplete push subscription');
+		client.setPushRegistration(registration, userId);
+		return true;
+	}
+
+	/**
+	 * Turns push off on `client`: supersedes a subscription in flight,
+	 * unregisters, and with `unsubscribe` drops the browser's subscription,
+	 * after whatever subscribing is under way.
+	 */
+	async disable(client: PushClient, unsubscribe: boolean): Promise<void> {
+		this.run += 1;
+		client.setPushRegistration(undefined);
+		if (unsubscribe) await this.serially(() => this.browser.unsubscribe());
+	}
 }

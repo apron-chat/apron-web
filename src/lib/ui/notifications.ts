@@ -29,28 +29,28 @@ export interface NotificationTarget extends MessageNotificationData {
 
 /**
  * What a message notification, the page's or a pushed one, says about its
- * message: the server's push `tag` (§4.7), the message, and its `group`, the
+ * message: the account's `push_id` (§4.7), the message, and its `group`, the
  * room whose newer notification closes this one.
  */
 export interface MessageNotificationData {
-	tag?: string;
+	pushId?: string;
 	messageId?: string;
 	group?: string;
 }
 
 /**
- * The notification tag of a message on the server with this push `tag`.
+ * The notification tag of a message for the account with this `push_id`.
  * The page and the service worker use the same one, so a message shows at
  * most once (§4.7): whichever comes second replaces the first, quietly
  * (`renotify: false`).
  */
-export function messageNotificationTag(tag: string, messageId: string): string {
-	return `apron:${tag}:${messageId}`;
+export function messageNotificationTag(pushId: string, messageId: string): string {
+	return `apron:${pushId}:${messageId}`;
 }
 
-/** The group of a message notification: one room on one server, which shows only its newest. */
-export function notificationGroup(tag: string, roomId: string): string {
-	return `${tag}:${roomId}`;
+/** The group of a message notification: one room for one account, which shows only its newest. */
+export function notificationGroup(pushId: string, roomId: string): string {
+	return `${pushId}:${roomId}`;
 }
 
 type ShownNotification = Pick<Notification, 'tag' | 'data' | 'close'>;
@@ -62,7 +62,7 @@ export function closeOlderInGroup(notifications: readonly ShownNotification[], g
 	}
 }
 
-/** The page's own notifications, by group (the service worker's are listed by its registration). */
+/** The page's own notifications, by group, where there is no service worker to list them. */
 const pageNotifications = new Map<string, Notification>();
 
 /** What the service worker posts to the app's tabs when one of its notifications is clicked. */
@@ -72,42 +72,39 @@ export const NOTIFICATION_CLICK = 'apron:notification-click';
 export type ShowNotificationOptions = NotificationOptions & { renotify?: boolean };
 
 /**
- * Shows a notification from the page, or through the service worker where the
- * page may not (Android Chrome's `Notification` constructor throws). Resolves
- * whether one was shown. `onclick` handles a click on the page's own
- * notification; a click on the service worker's posts `NOTIFICATION_CLICK`.
+ * Shows a notification through the service worker, so it shares tags with
+ * pushed ones (§4.7) and can be listed and closed, or from the page where
+ * there is no service worker. Resolves whether one was shown. `onclick`
+ * handles a click on the page's own notification; a click on the service
+ * worker's posts `NOTIFICATION_CLICK`.
  */
 export async function showNotification(title: string, options: ShowNotificationOptions, onclick: () => void): Promise<boolean> {
 	if (notificationPermission() !== 'granted') return false;
 	const group = isJsonObject(options.data) && typeof options.data.group === 'string' ? options.data.group : undefined;
 	const registration = await globalThis.navigator?.serviceWorker?.getRegistration().catch(() => undefined);
-	const closeOlder = async () => {
-		if (group === undefined || options.tag === undefined) return;
-		const older = pageNotifications.get(group);
-		if (older) closeOlderInGroup([older], group, options.tag);
-		closeOlderInGroup(await registration?.getNotifications().catch(() => []) ?? [], group, options.tag);
-	};
+	if (registration) {
+		try {
+			await registration.showNotification(title, options);
+			if (group !== undefined && options.tag) closeOlderInGroup(await registration.getNotifications(), group, options.tag);
+			return true;
+		} catch {
+			// Not active yet: the page shows its own.
+		}
+	}
 	try {
 		const notification = new Notification(title, options);
 		notification.onclick = () => {
 			onclick();
 			notification.close();
 		};
-		await closeOlder();
-		if (group !== undefined) {
+		if (group !== undefined && options.tag) {
+			const older = pageNotifications.get(group);
+			if (older) closeOlderInGroup([older], group, options.tag);
 			pageNotifications.set(group, notification);
 			notification.onclose = () => {
 				if (pageNotifications.get(group) === notification) pageNotifications.delete(group);
 			};
 		}
-		return true;
-	} catch {
-		// Only the service worker may show notifications here.
-	}
-	try {
-		if (!registration) return false;
-		await registration.showNotification(title, options);
-		await closeOlder();
 		return true;
 	} catch {
 		return false;
@@ -132,27 +129,30 @@ export function notificationBody(text: string | undefined): string {
 }
 
 /**
- * Where a click on a push notification leads: a room on the server this
- * device's push subscription is for. It is the notification's `data`.
+ * Where a click on a push notification leads: a room for the account its
+ * `push_id` names. It is the notification's `data`.
  */
 export interface PushTarget extends MessageNotificationData {
 	push: true;
 	roomId: string;
 }
 
-/** What the service worker posts to the app's tabs when one of its push notifications is clicked. */
+/** What the service worker posts to the tab it picks when one of its push notifications is clicked. */
 export const PUSH_CLICK = 'apron:push-click';
 
-/** The query parameters that carry a push notification's room, and its server's push `tag`, into a window opened for it. */
+/** What the service worker asks each tab, with a port to answer on: `{pushId}` of the account it is signed in to. */
+export const PUSH_ID_QUERY = 'apron:push-id';
+
+/** The query parameters that carry a push notification's room, and its `push_id`, into a window opened for it. */
 export const PUSH_ROOM_PARAM = 'push_room';
-export const PUSH_TAG_PARAM = 'push_tag';
+export const PUSH_ID_PARAM = 'push_id';
 
 /**
  * The notification for a push payload (§4.7): a message object, whose `body`
- * may be truncated or missing, with the registration's `tag`. Undefined for
- * anything else. With a `tag` it is the message's own notification, which
- * the page's for the same message replaces quietly, and the other way round;
- * without one (an older server), a newer push for the room replaces it.
+ * may be truncated or missing, with the registration's `push_id`. Undefined
+ * for anything else. With a `push_id` it is the message's own notification,
+ * which replaces the page's for the same message quietly, and the other way
+ * round; without one (an older server), a newer push for the room replaces it.
  */
 export function pushNotification(payload: unknown): { title: string; options: ShowNotificationOptions } | undefined {
 	if (!isJsonObject(payload) || typeof payload.room_id !== 'string' || !payload.room_id) return undefined;
@@ -161,36 +161,46 @@ export function pushNotification(payload: unknown): { title: string; options: Sh
 	const sender = [from.name, from.user_id].find((value): value is string => typeof value === 'string' && value.trim() !== '') ?? 'Someone';
 	const text = isJsonObject(payload.body) && typeof payload.body.text === 'string' ? payload.body.text : undefined;
 	const body = notificationBody(text) || 'New message';
-	const tag = typeof payload.tag === 'string' && payload.tag ? payload.tag : undefined;
+	const pushId = typeof payload.push_id === 'string' && payload.push_id ? payload.push_id : undefined;
 	const messageId = typeof payload.message_id === 'string' && payload.message_id ? payload.message_id : undefined;
-	if (tag === undefined || messageId === undefined) {
+	if (pushId === undefined || messageId === undefined) {
 		const target: PushTarget = { push: true, roomId };
 		return { title: `${sender} · ${roomId}`, options: { body, tag: `apron:push:${roomId}`, renotify: true, data: target } };
 	}
-	const target: PushTarget = { push: true, roomId, tag, messageId, group: notificationGroup(tag, roomId) };
-	return { title: `${sender} · ${roomId}`, options: { body, tag: messageNotificationTag(tag, messageId), renotify: false, data: target } };
+	const target: PushTarget = { push: true, roomId, pushId, messageId, group: notificationGroup(pushId, roomId) };
+	return { title: `${sender} · ${roomId}`, options: { body, tag: messageNotificationTag(pushId, messageId), renotify: false, data: target } };
 }
 
 /** A push notification's target, read from its `data`, if it is one. */
 export function pushTarget(data: unknown): PushTarget | undefined {
 	if (!isJsonObject(data) || data.push !== true || typeof data.roomId !== 'string' || !data.roomId) return undefined;
 	const text = (key: string) => (typeof data[key] === 'string' && data[key] ? { [key]: data[key] } : {});
-	return { push: true, roomId: data.roomId, ...text('tag'), ...text('messageId'), ...text('group') };
+	return { push: true, roomId: data.roomId, ...text('pushId'), ...text('messageId'), ...text('group') };
 }
 
 /**
- * What a tab does with a pushed room: open it when the push tag is its
- * server's, or, for a push without a tag (an older server), when its server
- * holds this browser's push subscription; wait while its own tag is still
- * being worked out; otherwise leave it to another tab.
+ * What a tab does with a pushed room: open it when the `push_id` is its
+ * account's, or, for a push without one (an older server), when its account
+ * holds this browser's push subscription; wait while its own `push_id` is
+ * still being worked out; otherwise leave it.
  */
-export function pushRoute(target: Pick<PushTarget, 'tag'>, serverTag: string | undefined, subscribed: boolean): 'open' | 'wait' | 'ignore' {
-	if (target.tag === undefined) return subscribed ? 'open' : 'ignore';
-	if (serverTag === undefined) return 'wait';
-	return target.tag === serverTag ? 'open' : 'ignore';
+export function pushRoute(target: Pick<PushTarget, 'pushId'>, pushId: string | undefined, subscribed: boolean): 'open' | 'wait' | 'ignore' {
+	if (target.pushId === undefined) return subscribed ? 'open' : 'ignore';
+	if (pushId === undefined) return 'wait';
+	return target.pushId === pushId ? 'open' : 'ignore';
 }
 
 /** A `PUSH_CLICK` message's target, if the message is one. */
 export function pushClickTarget(message: unknown): PushTarget | undefined {
 	return isJsonObject(message) && message.type === PUSH_CLICK ? pushTarget(message.target) : undefined;
+}
+
+/**
+ * The first of `tabs` (in order) whose account has this `push_id`, asking
+ * them all at once with `ask`, which resolves undefined for a tab that
+ * doesn't answer in time.
+ */
+export async function tabWithPushId<T>(tabs: readonly T[], pushId: string, ask: (tab: T) => Promise<string | undefined>): Promise<T | undefined> {
+	const answers = await Promise.all(tabs.map((tab) => ask(tab).catch(() => undefined)));
+	return tabs.find((_, index) => answers[index] === pushId);
 }

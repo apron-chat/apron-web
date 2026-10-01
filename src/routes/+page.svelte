@@ -7,6 +7,7 @@
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
+	import { isJsonObject } from '$lib/protocol/types';
 	import Composer from '$lib/components/Composer.svelte';
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
 	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
@@ -39,7 +40,7 @@
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, loadWebPushServer, loadWebPushServers, saveWebPushEnabled, saveWebPushServer, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, loadWebPushAccounts, loadWebPushOwner, saveWebPushEnabled, saveWebPushOwner, WEB_PUSH_ACCOUNTS_KEY, type RecentServer } from '$lib/ui/storage';
 	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadLostPrivacy, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
 	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
@@ -51,9 +52,9 @@
 	import { PaneDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ROOM_PARAM, PUSH_TAG_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
-	import { needsHomeScreen, pushTag, subscribeWebPush, unsubscribeWebPush, webPushSupported } from '$lib/ui/web-push';
+	import { needsHomeScreen, pushId, webPushAccount, webPushSupported, WebPushSync } from '$lib/ui/web-push';
 
 	/**
 	 * A thread this viewer created, opened once its `room_update` has arrived;
@@ -99,19 +100,23 @@
 	let notificationsActive = $derived(notificationsEnabled && notificationState === 'granted');
 	/** The server the client is on (`client.url`), kept as page state. */
 	let serverUrl = $state('');
-	/** The servers push notifications are on for (§4.7); this browser's one subscription follows the server in use. */
-	let webPushServers = $state<string[]>([]);
-	/** The server's VAPID key, offered to signed-in accounts: a guest's identity ends with its connection, so there is no one to push to. */
-	let webPushServerKey = $derived(session.snapshot.passkeySession ? webPushKey(session.server) : undefined);
-	let webPushActive = $derived(webPushServers.includes(serverUrl) && notificationState === 'granted');
+	/** The accounts push notifications are on for (§4.7); this browser's one subscription follows the account in use. */
+	let webPushAccounts = $state<string[]>([]);
+	/**
+	 * The signed-in account (`webPushAccount`), not a guest: a guest's identity ends with its
+	 * connection, so there is no one to push to. A reconnect keeps it.
+	 */
+	let pushAccount = $derived(session.you && (session.snapshot.passkeySession || session.snapshot.keptSession) ? webPushAccount(serverUrl, session.you.user_id) : undefined);
+	/** The server's VAPID key, offered to a signed-in account. */
+	let webPushServerKey = $derived(pushAccount ? webPushKey(session.server) : undefined);
+	let webPushActive = $derived(pushAccount !== undefined && webPushAccounts.includes(pushAccount) && notificationState === 'granted');
 	let webPushError = $state<string | undefined>();
 	let webPushAvailable = $state(false);
-	/** Counts subscription attempts, so a newer one or turning push off supersedes one in flight. */
-	let webPushRun = 0;
-	/** This server's push `tag` (§4.7): it names the server in pushed payloads and in message notifications. */
-	let serverTag = $state<string | undefined>();
-	/** A pushed room to open once it is listed, if its push tag is this server's. */
-	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'tag'> | undefined>();
+	const webPush = new WebPushSync();
+	/** The account's `push_id` (§4.7): it names the account in pushed payloads and in message notifications. */
+	let accountPushId = $state<string | undefined>();
+	/** A pushed room to open once it is listed, if its `push_id` is this account's. */
+	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
 	const tabId = Math.random().toString(36).slice(2);
 	const selection = new MessageSelection();
@@ -277,33 +282,46 @@
 		unread.observe(session.rooms, session.you, paneRoom?.id, latestVisible && presence.visible);
 	});
 
-	// While push is on for this server (§4.7), keep this browser subscribed with the server's
+	// While push is on for this account (§4.7), keep this browser subscribed with the server's
 	// key, which the client registers on each connection.
 	$effect(() => {
 		const chat = client;
 		const key = webPushServerKey;
-		if (!chat || !key || !webPushActive || !session.ready) return;
-		untrack(() => void subscribePush(chat, key));
+		const userId = session.you?.user_id;
+		if (!chat || !key || !userId || !webPushActive || !session.ready) return;
+		untrack(() => void enablePush(chat, key, userId));
+	});
+
+	// Turned off, here or in another tab, or for another account now: this one isn't registered.
+	$effect(() => {
+		const chat = client;
+		if (!chat || webPushActive) return;
+		untrack(() => void webPush.disable(chat, false));
 	});
 
 	$effect(() => {
-		const url = serverUrl;
-		serverTag = undefined;
-		if (url) void pushTag(url).then((tag) => { if (serverUrl === url) serverTag = tag; });
+		const account = pushAccount;
+		accountPushId = undefined;
+		if (account) void pushId(account).then((id) => { if (pushAccount === account) accountPushId = id; });
 	});
 
-	// A pushed room opens once it is listed, a thread under its room, if it was pushed by this server.
+	// A pushed room opens once it is listed, a thread under its room, if it was pushed for this
+	// account; once the rooms are listed without it, it goes.
 	$effect(() => {
 		const pending = pushRoom;
 		if (!pending) return;
-		const route = pushRoute(pending, serverTag, untrack(() => client?.url === loadWebPushServer()));
+		const route = pushRoute(pending, accountPushId, untrack(() => pushAccount !== undefined && pushAccount === loadWebPushOwner()));
 		if (route === 'wait') return;
 		if (route === 'ignore') {
 			pushRoom = undefined;
 			return;
 		}
-		const room = session.ready ? session.rooms.find((candidate) => candidate.id === pending.roomId) : undefined;
-		if (!room) return;
+		if (!session.ready) return;
+		const room = session.rooms.find((candidate) => candidate.id === pending.roomId);
+		if (!room) {
+			if (session.snapshot.roomsListed) pushRoom = undefined;
+			return;
+		}
 		pushRoom = undefined;
 		untrack(() => openDestination(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined));
 	});
@@ -527,8 +545,13 @@
 		notificationsEnabled = loadNotificationsEnabled();
 		notificationScope = loadNotificationScope();
 		notificationState = notificationPermission();
-		webPushServers = previewMode ? [] : loadWebPushServers();
+		webPushAccounts = previewMode ? [] : loadWebPushAccounts();
 		webPushAvailable = webPushSupported();
+		// Push turned on or off in another tab applies here too.
+		const storageChanged = (event: StorageEvent) => {
+			if (!previewMode && event.key === WEB_PUSH_ACCOUNTS_KEY) webPushAccounts = loadWebPushAccounts();
+		};
+		window.addEventListener('storage', storageChanged);
 		// A push notification clicked with no tab open opens one at its room.
 		const pushed = previewMode ? undefined : takePushRoom();
 		const worker = navigator.serviceWorker;
@@ -554,6 +577,7 @@
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
+			window.removeEventListener('storage', storageChanged);
 			if (typingTimer) clearTimeout(typingTimer);
 			if (highlightTimer) clearTimeout(highlightTimer);
 			reveal.stop();
@@ -708,15 +732,15 @@
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
 		if (!room || !client) return;
 		const body = notificationBody(event.body?.text);
-		const tag = serverTag;
+		const tag = accountPushId;
 		const target: NotificationTarget = {
 			tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}),
-			...(tag ? { tag, messageId: event.message_id, group: notificationGroup(tag, room.id) } : {})
+			...(tag ? { pushId: tag, messageId: event.message_id, group: notificationGroup(tag, room.id) } : {})
 		};
 		const shown = await showNotification(`${senderName(event)} · ${room.title}`, {
 			body: body || 'New message',
 			// One per message, shared with the server's push of it (§4.7), which replaces it quietly;
-			// a newer message in the room closes it. Without a push tag, one per room.
+			// a newer message in the room closes it. Without a `push_id`, one per room.
 			...(tag ? { tag: messageNotificationTag(tag, event.message_id), renotify: false } : { tag: `apron:${client.url}:${room.id}`, renotify: true }),
 			data: target
 		}, () => openNotificationTarget(target));
@@ -728,8 +752,15 @@
 		if (target.tab === tabId && target.server === client?.url) openDestination(target.roomId, target.threadId);
 	}
 
-	/** The service worker relays a click on a notification it showed to every tab. */
+	/**
+	 * The service worker relays a click on a notification it showed to the
+	 * tabs, and asks each which account it is signed in to.
+	 */
 	function notificationClicked(event: MessageEvent): void {
+		if (isJsonObject(event.data) && event.data.type === PUSH_ID_QUERY) {
+			event.ports[0]?.postMessage({ pushId: accountPushId });
+			return;
+		}
 		const target = notificationClickTarget(event.data);
 		if (target) openNotificationTarget(target);
 		const pushed = pushClickTarget(event.data);
@@ -737,84 +768,81 @@
 	}
 
 	/**
-	 * A push notification's room opens in a tab on the server that pushed it:
-	 * the one its push tag names, or, from a server that sends no tag, the one
-	 * this browser's push subscription is registered with.
+	 * A push notification's room opens in a tab signed in to the account it
+	 * was pushed for: the one its `push_id` names, or, from a server that sends
+	 * none, the one this browser's push subscription is registered for.
 	 */
-	function openPushedRoom(target: Pick<PushTarget, 'roomId' | 'tag'>): void {
+	function openPushedRoom(target: Pick<PushTarget, 'roomId' | 'pushId'>): void {
 		window.focus();
 		pushRoom = target;
 	}
 
 	/**
-	 * A tab opened for a push notification goes to the server that pushed it,
-	 * if push is on for it here and it isn't the remembered one, as the connect
-	 * screen would.
+	 * A tab opened for a push notification goes to the server of the account it
+	 * was pushed for, if push is on for that account here and it isn't the
+	 * remembered server, as the connect screen would.
 	 */
-	async function followPush(chat: ChatClient, target: Pick<PushTarget, 'roomId' | 'tag'>): Promise<void> {
-		const tag = target.tag;
-		if (tag !== undefined && (await pushTag(chat.url)) !== tag) {
-			for (const server of webPushServers) {
-				if ((await pushTag(server)) !== tag) continue;
-				leaveBackend();
-				serverInput = server;
-				saveServerUrl(server);
-				chat.setUrl(server);
+	async function followPush(chat: ChatClient, target: Pick<PushTarget, 'roomId' | 'pushId'>): Promise<void> {
+		const id = target.pushId;
+		if (id !== undefined) {
+			for (const account of webPushAccounts) {
+				if ((await pushId(account)) !== id) continue;
+				const server = account.slice(0, account.indexOf('\n'));
+				if (server && server !== chat.url) {
+					leaveBackend();
+					serverInput = server;
+					saveServerUrl(server);
+					chat.setUrl(server);
+				}
 				break;
 			}
 		}
 		openPushedRoom(target);
 	}
 
-	/** Takes, and scrubs from the address bar, the room and push tag of a push notification this tab was opened for. */
-	function takePushRoom(): Pick<PushTarget, 'roomId' | 'tag'> | undefined {
+	/** Takes, and scrubs from the address bar, the room and `push_id` of a push notification this tab was opened for. */
+	function takePushRoom(): Pick<PushTarget, 'roomId' | 'pushId'> | undefined {
 		const url = new URL(window.location.href);
 		const roomId = url.searchParams.get(PUSH_ROOM_PARAM) ?? undefined;
-		const tag = url.searchParams.get(PUSH_TAG_PARAM) || undefined;
+		const id = url.searchParams.get(PUSH_ID_PARAM) || undefined;
 		if (roomId === undefined) return undefined;
 		url.searchParams.delete(PUSH_ROOM_PARAM);
-		url.searchParams.delete(PUSH_TAG_PARAM);
+		url.searchParams.delete(PUSH_ID_PARAM);
 		scrubUrl(url.toString());
-		return roomId ? { roomId, ...(tag ? { tag } : {}) } : undefined;
+		return roomId ? { roomId, ...(id ? { pushId: id } : {}) } : undefined;
 	}
 
-	/** Subscribes this browser with the server's key, and has the client register it (§4.7). */
-	async function subscribePush(chat: ChatClient, key: string): Promise<void> {
-		const run = ++webPushRun;
-		const url = chat.url;
+	/** Subscribes this browser with the server's key, and has the client register it for this account (§4.7). */
+	async function enablePush(chat: ChatClient, key: string, userId: string): Promise<void> {
+		const account = webPushAccount(chat.url, userId);
 		try {
-			const registration = await subscribeWebPush(key, await pushTag(url));
-			if (run !== webPushRun || chat.url !== url) return;
-			chat.setPushRegistration(registration);
-			saveWebPushServer(url);
+			if (!await webPush.enable(chat, key, userId, () => session.you?.user_id === userId && webPushActive)) return;
+			saveWebPushOwner(account);
 			webPushError = undefined;
 		} catch {
-			if (run === webPushRun) webPushError = 'This browser couldn’t subscribe to push notifications. Try again later.';
+			if (pushAccount === account) webPushError = 'This browser couldn’t subscribe to push notifications. Try again later.';
 		}
 	}
 
 	/**
-	 * Push is opt-in per server. Turning it on asks for notification permission
-	 * first, from this tap; turning it off unregisters this device and drops the
-	 * browser's subscription, if it is this server's.
+	 * Push is opt-in per account. Turning it on asks for notification
+	 * permission first, from this tap; turning it off unregisters this device
+	 * and drops the browser's subscription, if it is this account's.
 	 */
 	async function toggleWebPush(): Promise<void> {
 		const chat = client;
-		if (!chat) return;
-		const url = chat.url;
+		const account = pushAccount;
+		if (!chat || !account) return;
 		webPushError = undefined;
 		if (webPushActive) {
-			webPushRun += 1;
-			webPushServers = saveWebPushEnabled(webPushServers, url, false);
-			chat.setPushRegistration(undefined);
-			if (loadWebPushServer() === url) {
-				saveWebPushServer(undefined);
-				await unsubscribeWebPush().catch(() => undefined);
-			}
+			webPushAccounts = saveWebPushEnabled(webPushAccounts, account, false);
+			const owned = loadWebPushOwner() === account;
+			if (owned) saveWebPushOwner(undefined);
+			await webPush.disable(chat, owned).catch(() => undefined);
 			return;
 		}
 		if (notificationState !== 'granted') notificationState = await requestNotificationPermission();
-		if (notificationState === 'granted') webPushServers = saveWebPushEnabled(webPushServers, url, true);
+		if (notificationState === 'granted') webPushAccounts = saveWebPushEnabled(webPushAccounts, account, true);
 	}
 
 	function connected(): void {

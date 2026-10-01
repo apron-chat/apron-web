@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadAppearance, loadNotificationScope, loadNotificationsEnabled, loadWebPushServer, loadWebPushServers, saveAppearance, saveNotificationScope, saveNotificationsEnabled, saveWebPushEnabled, saveWebPushServer } from './storage';
+import { loadAppearance, loadNotificationScope, loadNotificationsEnabled, loadWebPushAccounts, loadWebPushOwner, saveAppearance, saveNotificationScope, saveNotificationsEnabled, saveWebPushEnabled, saveWebPushOwner } from './storage';
 
 const values = new Map<string, string>();
 
@@ -26,20 +26,25 @@ describe('preference storage', () => {
 		expect(loadNotificationsEnabled()).toBe(false);
 	});
 
-	it('keeps push on per server, and which server the subscription is for', () => {
-		expect(loadWebPushServers()).toEqual([]);
-		let servers = saveWebPushEnabled([], 'wss://a.example/', true);
-		servers = saveWebPushEnabled(servers, 'wss://b.example/', true);
-		servers = saveWebPushEnabled(servers, 'wss://a.example/', true);
-		expect(servers).toEqual(['wss://b.example/', 'wss://a.example/']);
-		expect(saveWebPushEnabled(servers, 'wss://b.example/', false)).toEqual(['wss://a.example/']);
-		expect(loadWebPushServers()).toEqual(['wss://a.example/']);
-		values.set('apron.webPush', '{broken');
-		expect(loadWebPushServers()).toEqual([]);
-		saveWebPushServer('wss://a.example/');
-		expect(loadWebPushServer()).toBe('wss://a.example/');
-		saveWebPushServer(undefined);
-		expect(loadWebPushServer()).toBeUndefined();
+	it('keeps push on per account, and which account the subscription is for, dropping per-server opt-ins', () => {
+		values.set('apron.webPush', JSON.stringify(['wss://a.example/']));
+		values.set('apron.webPushServer', 'wss://a.example/');
+		expect(loadWebPushAccounts()).toEqual([]);
+		expect([values.has('apron.webPush'), values.has('apron.webPushServer')]).toEqual([false, false]);
+		const ada = 'wss://a.example/\nada';
+		const bob = 'wss://a.example/\nbob';
+		let accounts = saveWebPushEnabled([], ada, true);
+		accounts = saveWebPushEnabled(accounts, bob, true);
+		accounts = saveWebPushEnabled(accounts, ada, true);
+		expect(accounts).toEqual([bob, ada]);
+		expect(saveWebPushEnabled(accounts, bob, false)).toEqual([ada]);
+		expect(loadWebPushAccounts()).toEqual([ada]);
+		values.set('apron.webPushAccounts', '{broken');
+		expect(loadWebPushAccounts()).toEqual([]);
+		saveWebPushOwner(ada);
+		expect(loadWebPushOwner()).toBe(ada);
+		saveWebPushOwner(undefined);
+		expect(loadWebPushOwner()).toBeUndefined();
 	});
 
 	it('round-trips appearance, and reads nothing from a missing or broken entry', () => {

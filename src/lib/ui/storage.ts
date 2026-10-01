@@ -10,9 +10,9 @@ const KEY = {
 	sidebar: 'apron.sidebar',
 	notificationsEnabled: 'apron.desktopNotifications',
 	notificationScope: 'apron.notificationScope',
-	/** The servers push is turned on for, and the one this browser's push subscription is registered with. */
-	webPush: 'apron.webPush',
-	webPushServer: 'apron.webPushServer',
+	/** The accounts push is turned on for, and the one this browser's push subscription is registered for. */
+	webPush: 'apron.webPushAccounts',
+	webPushOwner: 'apron.webPushOwner',
 	memberList: 'apron.memberList',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
@@ -132,33 +132,49 @@ export function saveNotificationScope(scope: NotificationScope): void {
 	write(KEY.notificationScope, scope);
 }
 
-/** The servers the user turned push notifications on for (§4.7), by URL. */
-export function loadWebPushServers(): string[] {
+/** The storage key of the accounts push is on for: other tabs follow its `storage` events. */
+export const WEB_PUSH_ACCOUNTS_KEY = KEY.webPush;
+
+/** Push opt-ins from before they were per account: one can't tell whose they were, so they go. */
+const LEGACY_WEB_PUSH_KEYS = ['apron.webPush', 'apron.webPushServer'];
+
+/**
+ * The accounts the user turned push notifications on for (§4.7), each as
+ * `webPushAccount(server, userId)`: another account signing in here isn't on.
+ */
+export function loadWebPushAccounts(): string[] {
+	for (const key of LEGACY_WEB_PUSH_KEYS) {
+		try {
+			if (persisting) globalThis.localStorage?.removeItem(key);
+		} catch {
+			// As `write`.
+		}
+	}
 	try {
 		const parsed: unknown = JSON.parse(read(KEY.webPush) ?? '[]');
-		return Array.isArray(parsed) ? parsed.filter((url): url is string => typeof url === 'string') : [];
+		return Array.isArray(parsed) ? parsed.filter((account): account is string => typeof account === 'string') : [];
 	} catch {
 		return [];
 	}
 }
 
-/** Turns push on or off for one server, and returns the servers it is on for. */
-export function saveWebPushEnabled(servers: string[], url: string, enabled: boolean): string[] {
-	const next = [...servers.filter((server) => server !== url), ...(enabled ? [url] : [])];
+/** Turns push on or off for one account, and returns the accounts it is on for. */
+export function saveWebPushEnabled(accounts: string[], account: string, enabled: boolean): string[] {
+	const next = [...accounts.filter((entry) => entry !== account), ...(enabled ? [account] : [])];
 	write(KEY.webPush, JSON.stringify(next));
 	return next;
 }
 
-/** The server this browser's one push subscription is registered with: its notifications open rooms there. */
-export function loadWebPushServer(): string | undefined {
-	return read(KEY.webPushServer) ?? undefined;
+/** The account this browser's one push subscription is registered for. */
+export function loadWebPushOwner(): string | undefined {
+	return read(KEY.webPushOwner) ?? undefined;
 }
 
-export function saveWebPushServer(url: string | undefined): void {
+export function saveWebPushOwner(account: string | undefined): void {
 	if (!persisting) return;
 	try {
-		if (url === undefined) globalThis.localStorage?.removeItem(KEY.webPushServer);
-		else globalThis.localStorage?.setItem(KEY.webPushServer, url);
+		if (account === undefined) globalThis.localStorage?.removeItem(KEY.webPushOwner);
+		else globalThis.localStorage?.setItem(KEY.webPushOwner, account);
 	} catch {
 		// As `write`.
 	}
