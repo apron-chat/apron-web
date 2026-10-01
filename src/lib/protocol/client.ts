@@ -480,7 +480,7 @@ export class ChatClient {
 			passkeySession: Boolean(this.registeredSession && this.authenticated),
 			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith, signInMethods: [this.signedInWith, ...[...this.addedMethods].filter((method) => method !== this.signedInWith)] } : {}),
 			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
-			...(this.passkeyAbort || this.passkeyStarting ? { passkeyBusy: !this.addingEmail } : {}),
+			...(this.passkeyAbort ? { passkeyBusy: !this.addingEmail } : {}),
 			readOnly: this.authenticated && !this.registeredSession && this.server?.ext?.demo?.guest_posting === false,
 			error: this.error,
 			server: this.server,
@@ -598,7 +598,7 @@ export class ChatClient {
 		this.passkeyStarting = controller;
 		this.emit();
 		try {
-			await this.readyToSignIn();
+			await this.readyToSignIn(controller.signal);
 			// Cancelled, or the connection changed, while it waited.
 			controller.signal.throwIfAborted();
 			this.passkeyAbort = controller;
@@ -622,10 +622,11 @@ export class ChatClient {
 	 * history and the `me` for the display name). Throws when that takes too
 	 * long or there is no connection.
 	 */
-	private async readyToSignIn(): Promise<void> {
-		for (let waited = 0; (this.authRequested || this.requests.size) && waited < PASSKEY_IDLE_WAIT_MS; waited += PASSKEY_IDLE_POLL_MS) {
+	private async readyToSignIn(signal?: AbortSignal): Promise<void> {
+		for (let waited = 0; (this.authRequested || this.requests.size) && waited < PASSKEY_IDLE_WAIT_MS && !signal?.aborted; waited += PASSKEY_IDLE_POLL_MS) {
 			await new Promise((resolve) => setTimeout(resolve, PASSKEY_IDLE_POLL_MS));
 		}
+		signal?.throwIfAborted();
 		if (this.passkeyAbort || this.authRequested || this.requests.size) throw new Error('Wait for pending requests to finish, then try again');
 		if (this.status !== 'connected') throw new Error('Connect to the server first');
 	}
@@ -2042,6 +2043,11 @@ export class ChatClient {
 					this.storeSession(undefined);
 					this.reconnectHeld = true;
 					this.signInNeeded = this.signedInWith === 'email' || this.signedInWith === 'token' ? this.signedInWith : 'webauthn';
+					// A passkey signs in again on this connection: it stays open for that tap.
+					if (this.signInNeeded === 'webauthn' && this.server?.auth.includes('webauthn')) {
+						this.emit();
+						return;
+					}
 				}
 				// A limit or timeout keeps the token: reconnect, after any retry_after, and resume again.
 				socket?.close(1000, 'resume failed');
@@ -3286,7 +3292,6 @@ function readMethods(value: string | null): SignInMethod[] {
 	return (value ?? '').split(',').filter((method): method is SignInMethod => method === 'webauthn' || method === 'email' || method === 'token');
 }
 
-/** What to tell someone who has to sign in first, from what the server signs in with (`auth`) and joins with (`signup`). */
 /** A passkey challenge the server issued (`begin`, §4.9). */
 interface PasskeyChallenge {
 	challengeId: string;
@@ -3294,6 +3299,7 @@ interface PasskeyChallenge {
 	publicKey: JsonObject;
 }
 
+/** What to tell someone who has to sign in first, from what the server signs in with (`auth`) and joins with (`signup`). */
 function signInAdvice(auth: string[], signup: string[]): string {
 	const joinByEmail = !auth.includes('email') && signup.includes('email');
 	if (auth.includes('email')) return 'Sign in with your email from the connect screen.';

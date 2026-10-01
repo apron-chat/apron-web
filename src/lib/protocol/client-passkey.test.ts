@@ -141,7 +141,8 @@ describe('one explicit ceremony per tap', () => {
 		client.setDisplayName('Renamed');
 		const pending = client.usePasskey('login');
 		expect(client.snapshot().authBusy).toBe(true);
-		expect(client.snapshot().passkeyBusy).toBe(true);
+		// No sheet is up yet: nothing to confirm on the device.
+		expect(client.snapshot().passkeyBusy).toBeUndefined();
 		await expect(client.usePasskey('register')).rejects.toThrow('Already signing in');
 		await socket.reply('me', { you: { user_id: 'guest_1', name: 'Renamed' } });
 		await new Promise((resolve) => setTimeout(resolve, 120));
@@ -149,6 +150,19 @@ describe('one explicit ceremony per tap', () => {
 		await pending;
 		expect(client.snapshot().authBusy).toBe(false);
 		expect(authRequests(socket).filter((params) => params.step === 'begin')).toHaveLength(1);
+		client.stop();
+	});
+
+	it('stops at once when cancelled while it waits for its turn', async () => {
+		const { client, socket } = await connected();
+		client.setDisplayName('Renamed');
+		const pending = client.usePasskey('login');
+		client.cancelPasskeyPrompt();
+		await expect(pending).rejects.toThrow('Cancelled');
+		expect(client.snapshot().authBusy).toBe(false);
+		await socket.reply('me', { you: { user_id: 'guest_1', name: 'Renamed' } });
+		expect(authRequests(socket).some((params) => params.scheme === 'webauthn')).toBe(false);
+		expect(requestPasskey).not.toHaveBeenCalled();
 		client.stop();
 	});
 
@@ -254,6 +268,30 @@ describe('a failed session resume never prompts on its own', () => {
 		expect(snapshot.held).toBeUndefined();
 		expect(snapshot.signInNeeded).toBeUndefined();
 		expect(snapshot.authenticated).toBe(true);
+		client.stop();
+	});
+
+	it('keeps the refused connection open, so one tap signs in again on it', async () => {
+		const { client, socket, auth } = await resuming();
+		socket.receive({ id: auth.id, error: { code: -32001, message: 'Session expired; sign in with your passkey' } });
+		await settle();
+		const snapshot = client.snapshot();
+		expect(snapshot.held).toBe(true);
+		expect(snapshot.signInNeeded).toBe('webauthn');
+		expect(snapshot.status).toBe('connected');
+		expect(socket.readyState).not.toBe(FakeSocket.CLOSED);
+		expect(requestPasskey).not.toHaveBeenCalled();
+
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
+		const login = client.usePasskey('login');
+		await settle();
+		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
+		await socket.reply('auth', { you: { user_id: 'u_1', name: 'Ada' }, token: 'session-2' });
+		await login;
+		expect(FakeSocket.instances).toHaveLength(1);
+		expect(client.snapshot().authenticated).toBe(true);
+		expect(client.snapshot().held).toBeUndefined();
+		expect(storage.get(key)).toBe('session-2');
 		client.stop();
 	});
 

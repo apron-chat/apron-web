@@ -97,8 +97,8 @@ function readCredential(credential: PublicKeyCredential): JsonObject {
 		}
 	};
 	const encoded: JsonObject = {};
-	const put = (key: string, value: ArrayBuffer | ArrayBufferView | undefined): void => {
-		if (value !== undefined) encoded[key] = base64url(value);
+	const put = (key: string, value: unknown): void => {
+		if (isBinary(value)) encoded[key] = base64url(value);
 	};
 	put('clientDataJSON', read(() => response.clientDataJSON));
 	put('attestationObject', read(() => response.attestationObject));
@@ -111,12 +111,12 @@ function readCredential(credential: PublicKeyCredential): JsonObject {
 	const transports = read(() => undefined, () => response.getTransports?.());
 	if (Array.isArray(transports)) encoded.transports = [...transports];
 	const rawId = read(() => credential.rawId);
-	const id = read(() => credential.id) ?? (rawId ? base64url(rawId) : '');
+	const id = read(() => credential.id) ?? (isBinary(rawId) ? base64url(rawId) : '');
 	const attachment = read(() => credential.authenticatorAttachment ?? undefined);
 	const extensions = read(() => credential.getClientExtensionResults());
 	return {
 		id,
-		rawId: rawId ? base64url(rawId) : id,
+		rawId: isBinary(rawId) ? base64url(rawId) : id,
 		type: 'public-key',
 		response: encoded,
 		clientExtensionResults: isJsonObject(extensions) ? jsonExtensions(extensions) : {},
@@ -127,7 +127,7 @@ function readCredential(credential: PublicKeyCredential): JsonObject {
 /** Extension results may hold binary values (`prf`, `largeBlob`); JSON carries them as base64url. */
 function jsonExtensions(value: unknown): JsonObject {
 	const convert = (entry: unknown): unknown => {
-		if (entry instanceof ArrayBuffer || ArrayBuffer.isView(entry)) return base64url(entry);
+		if (isBinary(entry)) return base64url(entry);
 		if (Array.isArray(entry)) return entry.map(convert);
 		if (entry && typeof entry === 'object') return Object.fromEntries(Object.entries(entry).map(([key, inner]) => [key, convert(inner)]));
 		return entry;
@@ -135,8 +135,16 @@ function jsonExtensions(value: unknown): JsonObject {
 	return convert(value) as JsonObject;
 }
 
+/**
+ * Binary data, whichever realm made it: an extension's or another
+ * compartment's `ArrayBuffer` fails `instanceof ArrayBuffer` here.
+ */
+function isBinary(value: unknown): value is ArrayBuffer | ArrayBufferView {
+	return ArrayBuffer.isView(value) || Object.prototype.toString.call(value) === '[object ArrayBuffer]';
+}
+
 export function base64url(value: ArrayBuffer | ArrayBufferView): string {
-	const bytes = value instanceof ArrayBuffer ? new Uint8Array(value) : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+	const bytes = ArrayBuffer.isView(value) ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : new Uint8Array(value);
 	let binary = '';
 	for (const byte of bytes) binary += String.fromCharCode(byte);
 	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

@@ -222,21 +222,17 @@
 		}
 	}
 
-	/** Enter in the display name, which names a new account, creates it where a passkey step is showing. */
-	function nameKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Enter' || event.isComposing || view.phase !== 'ready') return;
-		const register = view.primary.action === 'passkey-register' || view.secondary?.action === 'passkey-register';
-		if (!register) return;
-		event.preventDefault();
-		error = '';
-		void passkey('register');
-	}
-
 	/** Opens the socket to the server in the form; the effect above carries on once it has settled. */
 	function connect(normalized: string): void {
 		client.setDisplayName(displayName);
-		onconnect();
 		joinedAsGuest = false;
+		// A session held for a sign-in reconnects in place, keeping what the page holds for it.
+		if (snapshot.held && normalized === client.url) {
+			pending = true;
+			client.retryNow();
+			return;
+		}
+		onconnect();
 		pending = true;
 		if (normalized !== client.url) client.setUrl(normalized);
 		else client.restart();
@@ -369,7 +365,7 @@
 			{/if}
 		{/if}
 		<label class="ap-fieldlabel">Display name
-			<input class="ap-field" data-testid="connect-name-input" bind:value={displayName} placeholder="How others see you" disabled={busy} maxlength="64" autocomplete="nickname" spellcheck="false" onkeydown={nameKeydown} />
+			<input class="ap-field" data-testid="connect-name-input" bind:value={displayName} placeholder="How others see you" disabled={busy} maxlength="64" autocomplete="nickname" spellcheck="false" />
 		</label>
 	{/if}
 	<div class="ap-fieldlabel">Sign in with

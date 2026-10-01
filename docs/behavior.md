@@ -398,8 +398,8 @@ sheet only ever opens for a tap:
 - Once connected, **Sign in with passkey** runs a login: the browser's sheet
   offers this server's passkeys (no `allowCredentials`), and the account is
   the one attached to the passkey picked. **New here? Create an account with
-  a passkey** registers a new passkey instead, and so does Enter in the
-  display name. The client never guesses between them: where the server's
+  a passkey** registers a new passkey instead; Enter does what the main
+  button says. The client never guesses between them: where the server's
   `signup` lets passkeys only sign in or only sign up, only that one shows.
   Connected as a guest, **Stay a guest** leaves the panel as it is.
 - The display name is the requested `name` (§3.2): it goes with the
@@ -415,8 +415,9 @@ sheet only ever opens for a tap:
   a guest's name picks up the account's; this is best effort and never
   waited on.
 - The panel is busy from the tap on (also while the client waits for
-  requests sent as the old identity to settle), and **Cancel** stops a
-  ceremony at any point.
+  requests sent as the old identity to settle). Where the panel has a
+  **Cancel**, it stops the ceremony, whether it is still waiting or the
+  browser's sheet is up, and closes the panel.
 
 The client makes no WebAuthn request of its own: no conditional (autofill)
 or `immediate` mediation and no capability probes, which password-manager
@@ -505,7 +506,11 @@ credential, and a reload starts as a guest. There a reconnect needs another
 passkey login, and so does an expired session: the client holds the
 connection (open, signed in as no one, and not reconnecting meanwhile), the
 status banner says "Sign in with your passkey to continue", and its **Sign
-in** opens the sign-in panel ready for that tap. It never prompts on its own
+in** opens the sign-in panel ready for that tap. A refused resume (an
+expired or revoked token) of a passkey session does the same, on the
+connection that was refused. If the server has closed that connection
+meanwhile, the panel's **Connect** reconnects in place, keeping the rooms
+on screen, and the passkey is the next tap. It never prompts on its own
 and never replaces the session with a guest identity. Signing out clears the stored
 credentials and reconnects as a guest. The Go example's sessions are in memory
 and are lost on backend restart.

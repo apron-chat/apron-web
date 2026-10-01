@@ -50,6 +50,55 @@ describe('credential JSON', () => {
 		expect(json.response).toEqual(expect.objectContaining({ clientDataJSON: 'Aw', signature: 'Bg' }));
 	});
 
+	it('reads a registration response, with the fields only its getters give', () => {
+		const credential = {
+			id: 'AQI',
+			rawId: bytes(1, 2),
+			type: 'public-key',
+			response: {
+				clientDataJSON: bytes(3),
+				attestationObject: bytes(8, 9),
+				getAuthenticatorData: () => bytes(4, 5),
+				getPublicKey: () => bytes(10),
+				getPublicKeyAlgorithm: () => -7,
+				getTransports: () => ['internal', 'hybrid']
+			},
+			getClientExtensionResults: () => ({})
+		} as unknown as PublicKeyCredential;
+		expect(credentialJSON(credential)).toEqual({
+			id: 'AQI',
+			rawId: 'AQI',
+			type: 'public-key',
+			response: {
+				clientDataJSON: 'Aw', attestationObject: 'CAk', authenticatorData: 'BAU',
+				publicKey: 'Cg', publicKeyAlgorithm: -7, transports: ['internal', 'hybrid']
+			},
+			clientExtensionResults: {}
+		});
+	});
+
+	it('reads binary data another realm made, as an extension’s proxy may hand back', () => {
+		// Another realm's buffer: a real ArrayBuffer whose prototype isn't this realm's.
+		const otherRealm = Object.create(Object.prototype, { [Symbol.toStringTag]: { value: 'ArrayBuffer' } });
+		const foreign = (...values: number[]) => Object.setPrototypeOf(bytes(...values), otherRealm) as ArrayBuffer;
+		expect(foreign(1) instanceof ArrayBuffer).toBe(false);
+		const credential = {
+			id: 'AQI',
+			rawId: foreign(1, 2),
+			type: 'public-key',
+			response: { clientDataJSON: foreign(3), authenticatorData: foreign(4, 5), signature: foreign(6), userHandle: foreign(7) },
+			getClientExtensionResults: () => ({ largeBlob: { blob: foreign(11) } })
+		} as unknown as PublicKeyCredential;
+		expect(credentialJSON(credential)).toEqual({
+			id: 'AQI',
+			rawId: 'AQI',
+			type: 'public-key',
+			response: { clientDataJSON: 'Aw', authenticatorData: 'BAU', signature: 'Bg', userHandle: 'Bw' },
+			clientExtensionResults: { largeBlob: { blob: 'Cw' } }
+		});
+		expect(base64url(foreign(251, 255))).toBe('-_8');
+	});
+
 	it('encodes base64url without padding', () => {
 		expect(base64url(new Uint8Array([251, 255]))).toBe('-_8');
 	});

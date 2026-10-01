@@ -74,7 +74,7 @@ export interface SignInView {
  * signed in (a guest, an account), or refused or held for a sign-in, which
  * a passkey can still do on that connection.
  */
-export function connectionSettled(input: Pick<SignInInput, 'sameServer' | 'status' | 'serverKnown' | 'authenticated' | 'connectionError'>): boolean {
+function connectionSettled(input: Pick<SignInInput, 'sameServer' | 'status' | 'serverKnown' | 'authenticated' | 'connectionError'>): boolean {
 	return input.sameServer && input.status === 'connected' && input.serverKnown && (input.authenticated || input.connectionError);
 }
 

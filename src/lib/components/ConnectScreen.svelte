@@ -1,7 +1,3 @@
-<script lang="ts" module>
-	export type { Scheme } from '$lib/ui/sign-in';
-</script>
-
 <script lang="ts">
 	/** The connect screen: which backend, its welcome, and the sign-in panel for it. */
 	import { normalizeWebSocketUrl, type ChatClient } from '$lib/protocol/client';
