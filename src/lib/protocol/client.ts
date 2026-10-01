@@ -586,7 +586,9 @@ export class ChatClient {
 		const connection = this.connectionId;
 		this.emit();
 		try {
-			const begun = await this.passkeyBegin(action);
+			// A new account is named at `begin`, so the server can pick its `user_id` from the name.
+			const naming = action === 'register' && !(this.registeredSession && this.authenticated) ? name?.trim() : undefined;
+			const begun = await this.passkeyBegin(action, naming);
 			const credential = await requestPasskey(action, begun.options, controller.signal, mediation);
 			if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 			return await this.passkeyFinish(action, begun.challengeId, credential, controller, connection, name);
@@ -985,8 +987,8 @@ export class ChatClient {
 		await run.done;
 	}
 
-	private async passkeyBegin(action: 'register' | 'login'): Promise<{ challengeId: string; options: JsonObject; publicKey: JsonObject }> {
-		const options = await this.passkeyRequest({ scheme: 'webauthn', action, step: 'begin' });
+	private async passkeyBegin(action: 'register' | 'login', name?: string): Promise<{ challengeId: string; options: JsonObject; publicKey: JsonObject }> {
+		const options = await this.passkeyRequest({ scheme: 'webauthn', action, step: 'begin', ...(name ? { name } : {}) });
 		const challengeId = typeof options.challenge_id === 'string' && options.challenge_id.length > 0
 			? options.challenge_id : undefined;
 		if (!challengeId) throw new Error('Passkey challenge was missing; try again');
