@@ -390,18 +390,22 @@ with email**, the read-only bar's **Sign in**, and the status banner's **Sign
 in** for a held session. Each tap does one explicit thing, and a passkey
 sheet only ever opens for a tap:
 
-- **Connect** (on Passkey: when the Server field names another server than
-  the connected one) opens a connection to it, as a guest where the server
-  has guests. A ceremony needs a connection, and browsers show their sheet
-  only for a tap, so connecting is a step of its own; on a server without
-  guests the connection stays open, signed in as no one, for the next tap.
-- Once connected, **Sign in with passkey** runs a login: the browser's sheet
-  offers this server's passkeys (no `allowCredentials`), and the account is
-  the one attached to the passkey picked. **New here? Create an account with
-  a passkey** registers a new passkey instead; Enter does what the main
-  button says. The client never guesses between them: where the server's
-  `signup` lets passkeys only sign in or only sign up, only that one shows.
-  Connected as a guest, **Stay a guest** leaves the panel as it is.
+- **Sign in with passkey** runs a login: the browser's sheet offers this
+  server's passkeys (no `allowCredentials`), and the account is the one
+  attached to the passkey picked. **New here? Create an account with a
+  passkey** registers a new passkey instead; Enter does what the main button
+  says. The client never guesses between them: where the server's `signup`
+  lets passkeys only sign in or only sign up, only that one shows (on a
+  server that hasn't answered yet, both do).
+- A ceremony needs a connection to the server in the form. Where there is
+  none yet (another server, or a held session whose connection closed),
+  the tap opens one (as a guest where the server has guests, else signed
+  in as no one; a held session reconnects in place) and the ceremony
+  follows once it has settled, if the server lets passkeys do what was
+  asked. A browser may refuse a sheet that long after the tap: the panel
+  then says "Connected. Tap again to continue with your passkey.", ready
+  on that connection. Connected as a guest, **Stay a guest** leaves the
+  panel as it is. On Guest, **Connect** connects without a ceremony.
 - The display name is the requested `name` (§3.2): it goes with the
   register `begin` so the server can name the account and its passkey, the
   client labels the passkey with it too (password managers show the
@@ -509,8 +513,8 @@ status banner says "Sign in with your passkey to continue", and its **Sign
 in** opens the sign-in panel ready for that tap. A refused resume (an
 expired or revoked token) of a passkey session does the same, on the
 connection that was refused. If the server has closed that connection
-meanwhile, the panel's **Connect** reconnects in place, keeping the rooms
-on screen, and the passkey is the next tap. It never prompts on its own
+meanwhile, the passkey tap reconnects in place first, keeping the rooms
+on screen. It never prompts on its own
 and never replaces the session with a guest identity. Signing out clears the stored
 credentials and reconnects as a guest. The Go example's sessions are in memory
 and are lost on backend restart.

@@ -57,7 +57,11 @@
 	let pending = $state(false);
 	/** That connection signed in as a guest, which the passkey step can leave as it is. */
 	let joinedAsGuest = $state(false);
+	/** The passkey action a tap asked for before there was a connection for it: it runs once there is. */
+	let intent = $state<'login' | 'register' | undefined>();
 	let error = $state(untrack(() => initialError ?? ''));
+	/** What to do next, in place of the hint: the browser refused a sheet that followed a connection. */
+	let notice = $state('');
 	/** Email sign-in (§4.10): the address, and the code once the server was asked to send one. */
 	let email = $state(untrack(() => initialEmail ?? ''));
 	let code = $state('');
@@ -159,15 +163,20 @@
 		});
 	});
 
-	// The connection this panel opened has settled. A passkey then waits for a tap, since the browser
-	// shows its sheet only for one; everything else is done once signed in.
+	// The connection this panel opened has settled. The passkey action that opened it runs now; without
+	// one, a passkey waits for a tap. Everything else is done once signed in.
 	$effect(() => {
 		if (!pending || chosen === 'email') return;
 		if (chosen === 'webauthn' ? view.phase !== 'ready' && !here : !session.ready || snapshot.authBusy) return;
 		untrack(() => {
 			pending = false;
+			const asked = intent;
+			intent = undefined;
 			if (chosen === 'webauthn' && !registered) {
 				joinedAsGuest = here;
+				// Only what this server lets passkeys do: otherwise the panel shows what it does.
+				const offered = [view.primary.action, view.secondary?.action];
+				if (asked && offered.includes(asked === 'login' ? 'passkey-login' : 'passkey-register')) void passkey(asked, true);
 				return;
 			}
 			finish();
@@ -178,22 +187,12 @@
 		event.preventDefault();
 		error = '';
 		const action = view.primary.action;
-		// Ceremonies on the connected server need no URL check: the form names it.
 		if (action === 'passkey-login' || action === 'passkey-register') {
-			void passkey(action === 'passkey-login' ? 'login' : 'register');
+			startPasskey(action === 'passkey-login' ? 'login' : 'register');
 			return;
 		}
-		let normalized: string;
-		try {
-			normalized = normalizeWebSocketUrl(serverInput, window.location);
-			const parsed = new URL(normalized);
-			if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') throw new Error('Use a ws:// or wss:// URL');
-		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'Invalid server URL';
-			return;
-		}
-		serverInput = normalized;
-		saveServerUrl(normalized);
+		const normalized = serverUrl();
+		if (!normalized) return;
 		if (action !== 'token') {
 			displayName = displayName.trim();
 			saveDisplayName(displayName);
@@ -222,10 +221,44 @@
 		}
 	}
 
-	/** Opens the socket to the server in the form; the effect above carries on once it has settled. */
-	function connect(normalized: string): void {
+	/** The Server field as a `ws:`/`wss:` URL, normalized and remembered; or the error says why it isn't one. */
+	function serverUrl(): string | undefined {
+		try {
+			const normalized = normalizeWebSocketUrl(serverInput, window.location);
+			const parsed = new URL(normalized);
+			if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') throw new Error('Use a ws:// or wss:// URL');
+			serverInput = normalized;
+			saveServerUrl(normalized);
+			return normalized;
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : 'Invalid server URL';
+			return undefined;
+		}
+	}
+
+	/**
+	 * A passkey action's tap: the ceremony at once on a connection to the server
+	 * in the form (which needs no URL check: the form names it), else a
+	 * connection first, and the ceremony once it has settled.
+	 */
+	function startPasskey(action: 'login' | 'register'): void {
+		error = '';
+		if (view.phase === 'ready') {
+			void passkey(action);
+			return;
+		}
+		const normalized = serverUrl();
+		if (!normalized) return;
+		displayName = displayName.trim();
+		saveDisplayName(displayName);
+		connect(normalized, action);
+	}
+
+	/** Opens the socket to the server in the form; the effect above carries on once it has settled, with `then` if given. */
+	function connect(normalized: string, then?: 'login' | 'register'): void {
 		client.setDisplayName(displayName);
 		joinedAsGuest = false;
+		intent = then;
 		// A session held for a sign-in reconnects in place, keeping what the page holds for it.
 		if (snapshot.held && normalized === client.url) {
 			pending = true;
@@ -316,16 +349,24 @@
 		}
 	}
 
-	/** Runs straight from the tap, so the browser sees the user asked for it. */
-	async function passkey(action: 'login' | 'register'): Promise<void> {
+	/**
+	 * Runs straight from the tap, so the browser sees the user asked for it;
+	 * or, `followUp`, right after the connection that tap opened. A browser may
+	 * refuse a sheet that long after the tap, as it does one that is dismissed
+	 * (`NotAllowedError`): the panel is ready, connected, for another tap.
+	 */
+	async function passkey(action: 'login' | 'register', followUp = false): Promise<void> {
 		error = '';
+		notice = '';
 		const name = displayName.trim() || undefined;
 		try {
 			await client.usePasskey(action, name);
 			if (name) saveDisplayName(name);
 			finish();
 		} catch (cause) {
-			error = passkeyMessage(cause);
+			const refused = cause instanceof DOMException && cause.name === 'NotAllowedError';
+			if (followUp && refused) notice = 'Connected. Tap again to continue with your passkey.';
+			else error = passkeyMessage(cause);
 		}
 	}
 
@@ -379,10 +420,10 @@
 		<p class="ap-profedit-hint" role="status">If {codeSentTo} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
 		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={() => { codeSent = undefined; code = ''; error = ''; client.cancelEmailCode(); }}>Use another address, or send a new code</button>
 	{:else}
-		<p class="ap-profedit-hint" role={view.phase === 'ready' ? 'status' : undefined}>{hint}</p>
+		<p class="ap-profedit-hint" role={view.phase === 'ready' ? 'status' : undefined}>{view.phase === 'ready' && notice ? notice : hint}</p>
 	{/if}
 	{#if view.secondary}
-		<button class="ap-link ap-connect-other" type="button" data-testid={view.secondary.action} disabled={busy} onclick={() => passkey(view.secondary?.action === 'passkey-login' ? 'login' : 'register')}>{view.secondary.label}</button>
+		<button class="ap-link ap-connect-other" type="button" data-testid={view.secondary.action} disabled={busy} onclick={() => startPasskey(view.secondary?.action === 'passkey-login' ? 'login' : 'register')}>{view.secondary.label}</button>
 	{/if}
 	{#if errorText}<p class="ap-profedit-note ap-profedit-err" role="alert">{errorText}</p>{/if}
 	<div class="ap-connect-actions">
