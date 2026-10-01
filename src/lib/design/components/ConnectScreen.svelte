@@ -7,7 +7,7 @@
 	const SCHEME: Record<string, [string, string]> = {
 		guest: ['Guest', 'No token needed; the server picks a guest identity.'],
 		token: ['Token', 'Paste the token this backend gave you.'],
-		webauthn: ['Passkey', 'Sign in with a passkey you saved on this backend. New here? Pick Guest, then add a passkey from your profile.'],
+		webauthn: ['Passkey', 'Sign in with a passkey you already have, or create an account with a new one.'],
 		email: ['Email', 'We email you a code to sign in with; the link in the email signs you in too.']
 	};
 

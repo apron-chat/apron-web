@@ -3,9 +3,9 @@ import { ChatClient, type ClientSnapshot } from './client';
 import { REQUEST_TIMEOUT_MS } from './client-internals';
 import { EMAIL_PROPOSAL_MS } from './email-connection';
 import { FakeSocket, settle } from './fake-socket';
-import { conditionalPasskeysAvailable, immediatePasskeysAvailable, requestPasskey } from './webauthn';
+import { requestPasskey } from './webauthn';
 
-vi.mock('./webauthn', () => ({ requestPasskey: vi.fn(), conditionalPasskeysAvailable: vi.fn(), immediatePasskeysAvailable: vi.fn() }));
+vi.mock('./webauthn', () => ({ requestPasskey: vi.fn(), signalPasskeyLabel: vi.fn() }));
 
 /**
  * How a session's ways back in (§3.2, §4.9, §4.10) survive adds, reconnects,
@@ -81,8 +81,6 @@ describe('accounts and their ways back in', () => {
 			removeItem: (key: string) => void storage.delete(key)
 		});
 		vi.mocked(requestPasskey).mockReset();
-		vi.mocked(conditionalPasskeysAvailable).mockResolvedValue(false);
-		vi.mocked(immediatePasskeysAvailable).mockResolvedValue(false);
 	});
 
 	afterEach(() => {
@@ -143,11 +141,14 @@ describe('accounts and their ways back in', () => {
 		await registerPasskey(socket, 'ada');
 		expect(snapshot.signedInWith).toBe('email');
 		expect(snapshot.signInMethods).toEqual(['email', 'webauthn']);
-		vi.mocked(requestPasskey).mockReturnValue(new Promise(() => undefined));
+		const prompts = vi.mocked(requestPasskey).mock.calls.length;
 		const next = await reconnect(auth);
-		// No token to resume with: the passkey it added is the way back, not "signed out".
-		expect(frames(next)).toContain('auth webauthn login');
-		expect(snapshot.held).toBeUndefined();
+		// No token to resume with: the passkey it added is the way back, not "signed out" by email.
+		// Its prompt waits for a tap on the sign-in screen.
+		expect(frames(next)).toEqual([]);
+		expect(snapshot.held).toBe(true);
+		expect(snapshot.signInNeeded).toBe('webauthn');
+		expect(vi.mocked(requestPasskey).mock.calls).toHaveLength(prompts);
 	});
 
 	it('doesn’t send someone who joined by email back to email where email only signs up', async () => {
@@ -161,6 +162,7 @@ describe('accounts and their ways back in', () => {
 		const next = await reconnect(auth, extra);
 		expect(frames(next)).toEqual([]);
 		expect(snapshot.held).toBe(true);
+		expect(snapshot.signInNeeded).toBe('webauthn');
 		expect(snapshot.error).toMatch(/doesn’t sign back in with email/);
 	});
 

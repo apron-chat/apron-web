@@ -217,8 +217,6 @@ export interface ClientSnapshot {
 	 * changes are denied until the user signs in.
 	 */
 	readOnly?: boolean;
-	/** This browser has signed in to this server with a passkey before. */
-	passkeyHint?: boolean;
 	error?: string;
 	server?: ServerParams;
 	/** Which optional features the current `server` frame advertises (§4). */
@@ -270,6 +268,12 @@ export interface ClientSnapshot {
 	retryAfterMs?: number;
 	/** The server denied the connection (§1.1): no reconnect until the user acts (`retryNow`). */
 	held?: boolean;
+	/**
+	 * Held because the session comes back only by signing in again, and the
+	 * way to: a passkey, an emailed code, or a new token, from the sign-in
+	 * screen. Nothing prompts on its own meanwhile.
+	 */
+	signInNeeded?: 'webauthn' | 'email' | 'token';
 	/**
 	 * When the transport dropped (or failed to open) while the client kept
 	 * running; cleared once a connection authenticates again. The protocol
