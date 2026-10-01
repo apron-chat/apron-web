@@ -436,7 +436,3 @@
 		<button class="ap-btn ap-btn-primary" type="submit" data-testid={view.primary.action} disabled={busy}>{view.primary.label}</button>
 	</div>
 </form>
-
-<style>
-	.ap-connect-other { align-self: flex-start; font-size: 13px; }
-</style>
