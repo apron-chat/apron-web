@@ -47,6 +47,7 @@
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
 	import { linkPreviews } from '$lib/ui/link-previews';
+	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
@@ -191,6 +192,10 @@
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
 	let canCompose = $derived(paneReady && !session.readOnly);
+	/** Files dropped on the conversation or pasted outside the field attach to the draft while the composer is showing. */
+	let canAttach = $derived(canCompose && snapshot.capabilities['embed:upload'] && !selection.active);
+	/** Files are being dragged over the conversation. */
+	let dropping = $state(false);
 	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...messages], session.you, paneRoom?.members));
 	let roomSuggestions = $derived.by(() => {
 		const rooms = new Map<string, { id: string; title: string }>();
@@ -1337,6 +1342,27 @@
 	}
 
 	/** Escape leaves select mode, as it leaves the thread menu. */
+	/**
+	 * Files pasted while focus is outside any field (on the timeline, say)
+	 * attach to the draft, as they would pasted into the composer.
+	 */
+	function windowPaste(event: ClipboardEvent): void {
+		if (event.defaultPrevented || !canAttach) return;
+		const target = event.target;
+		if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select'))) return;
+		const files = pastedFiles(event.clipboardData);
+		if (!files.length) return;
+		event.preventDefault();
+		stageFiles(files);
+	}
+
+	/** A file dropped anywhere else is refused, rather than opening in place of the app. */
+	function refuseDrop(event: DragEvent): void {
+		if (event.defaultPrevented || !carriesFiles(event.dataTransfer)) return;
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+	}
+
 	function windowKeydown(event: KeyboardEvent): void {
 		if (event.key !== 'Escape' || !selection.active) return;
 		if (selection.menuOpen) {
@@ -1348,7 +1374,7 @@
 	}
 </script>
 
-<svelte:window onkeydown={windowKeydown} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
+<svelte:window onkeydown={windowKeydown} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
 <svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); }} />
 
 <svelte:head>
@@ -1394,7 +1420,10 @@
 	/>
 	<SidebarHandle layout={sidebar} />
 
-	<main class="ap-shell-main" aria-label="Conversation">
+	<main class="ap-shell-main" aria-label="Conversation" use:fileDrop={{ enabled: canAttach, onfiles: stageFiles, onactive: (active) => (dropping = active) }}>
+		{#if dropping}
+			<div class="drop-zone" data-testid="drop-zone" aria-hidden="true"><span>Drop files to attach</span></div>
+		{/if}
 		{#if activeRoom}
 			<RoomHeader
 				bind:this={roomHeader}
@@ -1592,6 +1621,13 @@
 	.side-collapsed :global(.ap-shell-side) { border-right: 0; visibility: hidden; }
 	.side-resizing, .side-resizing :global(*) { user-select: none; }
 	.banner { padding: var(--space-2) var(--space-4) 0; }
+	/* Over the conversation while files are dragged onto it; drag events pass through to the pane. */
+	.drop-zone {
+		position: absolute; inset: var(--space-2); z-index: 20; display: grid; place-items: center;
+		border: 2px dashed var(--accent); border-radius: var(--radius-lg);
+		background: color-mix(in srgb, var(--bg-100) 85%, transparent); color: var(--ink);
+		font-weight: 600; pointer-events: none;
+	}
 	.reconnect-quiet { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-4) 0; font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 	.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; }

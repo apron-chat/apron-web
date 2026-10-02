@@ -308,9 +308,15 @@ fetches from a CDN.
 
 Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#46-embeds-and-avatars)):
 
-- **Uploads** (capability `embed:upload`): files picked with the paperclip or
-  pasted into the field, and voice clips from the microphone, are attached to
-  the draft rather than sent: they show above the composer (an image as a
+- **Uploads** (capability `embed:upload`): files picked with the paperclip,
+  dropped anywhere on the conversation (which shows a "Drop files to attach"
+  outline while they are dragged over it), or pasted, and voice clips from the
+  microphone, are attached to the draft rather than sent. A paste attaches
+  files whether or not the field has focus; pasted text wins over a picture of
+  it, as office apps copy both, unless the text only names the copied files,
+  as file managers add. Folders are left out of a drop, and a file dropped
+  outside the conversation is refused rather than opened in the tab. Attached
+  files show above the composer (an image as a
   thumbnail, audio with a player, anything else as a file card with its size),
   each with an **(x)** to take it off, and are kept per room or thread like the
   draft's text. Images start shrinking as soon as they are attached; one that

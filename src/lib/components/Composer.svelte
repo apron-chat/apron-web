@@ -14,6 +14,7 @@
 	import { isCommand } from '$lib/ui/commands';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { findGitHubLinks, linkPreviews } from '$lib/ui/link-previews';
+	import { pastedFiles } from '$lib/ui/file-transfer';
 	import { clockLabel } from '$lib/ui/time';
 	import type { StagedFile as Staged } from '$lib/ui/pane-drafts.svelte';
 	import AutocompletePicker from './AutocompletePicker.svelte';
@@ -551,19 +552,15 @@
 		focus();
 	}
 
-	/**
-	 * A pasted image (or file) is attached like a picked one. Pasted text wins
-	 * when there is some: office apps put a picture of the selection beside it.
-	 */
+	/** A pasted image (or file) is attached like a picked one, unless the paste is text (`pastedFiles`). */
 	function paste(event: ClipboardEvent): void {
-		const text = event.clipboardData?.getData('text/plain') ?? '';
-		const files = [...(event.clipboardData?.items ?? [])].flatMap((item) => (item.kind === 'file' ? [item.getAsFile()].filter((file): file is File => file !== null) : []));
-		if (canUpload && !disabled && !recording && files.length && !text.trim()) {
+		const files = pastedFiles(event.clipboardData);
+		if (canUpload && !disabled && !recording && files.length) {
 			event.preventDefault();
 			onfiles(files);
 			return;
 		}
-		void linkPreviews.prefetch(text);
+		void linkPreviews.prefetch(event.clipboardData?.getData('text/plain') ?? '');
 	}
 
 	function attach(input: HTMLInputElement): void {
