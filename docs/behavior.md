@@ -180,7 +180,8 @@ worker, or from the page where there is none yet. Permission revoked in the
 browser's site settings reads as off.
 
 When the server offers web push (`server.push.webpush` with its VAPID `key`,
-§4.7), Preferences also offers **Push notifications** for mentions to a
+§4.7), Preferences also offers **Push notifications** for the server's default wake scopes (`mentions` and
+`replies` where `server.push.wake` lists them; the client sends no `wake`) to a
 signed-in account (not a guest), also while it reconnects. It is per account on
 each server, off until turned on, and turning it on or off in one tab applies
 in the others. Turning it on asks the browser's permission, subscribes this

@@ -123,6 +123,7 @@ export {
 	timelineMessages,
 	topLevelRooms,
 	userIn,
+	webPushDefaultWake,
 	webPushKey
 } from './client-views';
 

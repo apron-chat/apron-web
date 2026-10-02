@@ -2,7 +2,7 @@
 	import X from '@lucide/svelte/icons/x';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
-	import type { WebPushPreference } from '$lib/ui/web-push';
+	import { wakeDescription, type WebPushPreference } from '$lib/ui/web-push';
 	import FontFamilyField from './FontFamilyField.svelte';
 
 	type LocalFontAccessWindow = Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> };
@@ -189,7 +189,7 @@
 					<div class="ap-pref-setting ap-pref-push">
 						<div>
 							<strong>Push notifications</strong>
-							<p class="ap-profedit-hint">Enable notifications for mentions on this device, even while Apron is closed. This server decides which messages to send.</p>
+							<p class="ap-profedit-hint">Enable notifications for {wakeDescription(webPush.wake) ?? 'messages this server chooses'} on this device, even while Apron is closed.</p>
 							{#if !webPush.supported}
 								<p class="ap-pref-note" role="status">{webPush.homeScreen ? 'On iPhone and iPad, add Apron to your Home Screen (Share, then Add to Home Screen) and turn this on from there.' : 'Push notifications aren’t available in this browser.'}</p>
 							{:else if notificationPermission === 'denied'}

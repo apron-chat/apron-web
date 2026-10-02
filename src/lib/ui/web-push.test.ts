@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { webPushKey } from '$lib/protocol/client';
+import { webPushDefaultWake, webPushKey } from '$lib/protocol/client';
 import type { PushRegistration } from '$lib/protocol/client';
-import { base64UrlToBytes, bytesToBase64Url, pushId, sameServerKey, webPushAccount, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
+import { base64UrlToBytes, bytesToBase64Url, pushId, sameServerKey, webPushAccount, wakeDescription, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
 
 describe('web push', () => {
 	it('decodes base64url keys, padded or not, and encodes them back unpadded', () => {
@@ -41,6 +41,16 @@ describe('web push', () => {
 		expect(webPushKey({ ...server, push: { webpush: { key: '' } } })).toBeUndefined();
 		expect(webPushKey(server)).toBeUndefined();
 		expect(webPushKey(undefined)).toBeUndefined();
+	});
+
+	it('describes the default wake scopes the server advertises', () => {
+		const server = { apron: 7, auth: ['guest'] };
+		expect(webPushDefaultWake({ ...server, push: { webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'joined'] } })).toEqual(['mentions', 'replies']);
+		expect(webPushDefaultWake({ ...server, push: { webpush: { key: 'BNcR' }, wake: ['mentions'] } })).toEqual(['mentions']);
+		expect(webPushDefaultWake({ ...server, push: { webpush: { key: 'BNcR' } } })).toEqual([]);
+		expect(wakeDescription(['mentions', 'replies'])).toBe('mentions and replies to your messages');
+		expect(wakeDescription(['mentions'])).toBe('mentions');
+		expect(wakeDescription([])).toBeUndefined();
 	});
 
 	it('names an account on a server by a short hash, its push_id', async () => {

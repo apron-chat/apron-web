@@ -14,7 +14,15 @@ export interface WebPushPreference {
 	homeScreen: boolean;
 	/** On for this server, and notifications are allowed. */
 	enabled: boolean;
+	/** The default wake scopes this server offers (§4.7), such as `mentions`; empty when it doesn't say. */
+	wake: string[];
 	error?: string;
+}
+
+/** What a push setting wakes for, in words: "mentions and replies", or undefined when the server doesn't say. */
+export function wakeDescription(wake: readonly string[]): string | undefined {
+	const words = wake.map((scope) => ({ mentions: 'mentions', replies: 'replies to your messages' })[scope]).filter((word): word is string => Boolean(word));
+	return words.length ? words.join(' and ') : undefined;
 }
 
 /** Decodes base64url (padded or not), such as a VAPID public key. Throws on anything else. */
