@@ -2,7 +2,10 @@
 	import X from '@lucide/svelte/icons/x';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
-	import { wakeDescription, type WebPushPreference } from '$lib/ui/web-push';
+	import Button from '$lib/design/components/Button.svelte';
+	import Callout from '$lib/design/components/Callout.svelte';
+	import CheckList from '$lib/design/components/CheckList.svelte';
+	import { WAKE_SCOPES, wakeDescription, type WebPushPreference } from '$lib/ui/web-push';
 	import FontFamilyField from './FontFamilyField.svelte';
 
 	type LocalFontAccessWindow = Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> };
@@ -19,10 +22,14 @@
 		/** Push notifications (§4.7), when the server offers web push. */
 		webPush?: WebPushPreference;
 		onwebpush: () => void;
+		/** The wake scopes chosen for push (§4.7). */
+		onwebpushwake: (scopes: string[]) => void;
+		/** Chromium's install prompt, from the push setting. */
+		oninstallapp: () => void;
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onclosed }: Props = $props();
+	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onwebpushwake, oninstallapp, onclosed }: Props = $props();
 
 	let preferencesSection = $state<'notifications' | 'appearance'>('notifications');
 	let interfaceFontDraft = $state('');
@@ -191,7 +198,7 @@
 							<strong>Push notifications</strong>
 							<p class="ap-profedit-hint">Enable notifications for {wakeDescription(webPush.wake) ?? 'messages this server chooses'} on this device, even while Apron is closed.</p>
 							{#if !webPush.supported}
-								<p class="ap-pref-note" role="status">{webPush.homeScreen ? 'On iPhone and iPad, add Apron to your Home Screen (Share, then Add to Home Screen) and turn this on from there.' : 'Push notifications aren’t available in this browser.'}</p>
+								{#if !webPush.homeScreen}<p class="ap-pref-note" role="status">Push notifications aren’t available in this browser.</p>{/if}
 							{:else if notificationPermission === 'denied'}
 								<p class="ap-pref-note ap-profedit-err" role="status">Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.</p>
 							{:else if webPush.error}
@@ -204,6 +211,36 @@
 						</div>
 						<button class="ap-pref-switch" class:active={webPush.enabled} type="button" role="switch" aria-checked={webPush.enabled} aria-label="Push notifications" disabled={!webPush.enabled && (!webPush.supported || notificationPermission === 'denied')} onclick={onwebpush}><span></span></button>
 					</div>
+					{#if webPush.homeScreen}
+						<div class="ap-pref-push-more">
+							<Callout title="Add Apron to your Home Screen for push notifications">
+								<ol>
+									<li>Tap Share in Safari.</li>
+									<li>Choose Add to Home Screen.</li>
+									<li>Open Apron from your Home Screen and turn this on there.</li>
+								</ol>
+							</Callout>
+						</div>
+					{:else if webPush.installable}
+						<div class="ap-pref-push-more">
+							<Callout title="Install Apron as an app">
+								<p>It opens in its own window, with its notifications.</p>
+								{#snippet action()}<Button size="sm" variant="primary" label="Install app" onclick={oninstallapp} />{/snippet}
+							</Callout>
+						</div>
+					{/if}
+					{#if webPush.enabled && webPush.offered.length}
+						<div class="ap-pref-push-more">
+							<CheckList
+								label="Notify me about"
+								options={WAKE_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, text: scope.text, disabled: !webPush.offered.includes(scope.value), note: 'Not offered by this server' }))}
+								value={webPush.wake}
+								min={1}
+								onchange={onwebpushwake}
+							/>
+							<p class="ap-pref-help">At least one stays on; turn push off with the switch above.</p>
+						</div>
+					{/if}
 				{/if}
 			</section>
 		{:else}
@@ -281,6 +318,8 @@
 	.ap-pref-font-setting { display: block; }
 	.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
 	.ap-pref-test + .ap-pref-push { border-top: 0; }
+	.ap-pref-push { border-bottom: 0; }
+	.ap-pref-push-more { max-width: 460px; padding-bottom: var(--space-4); }
 	.ap-pref-switch { flex: none; width: 42px; height: 24px; padding: 3px; display: flex; align-items: center; border: 0; border-radius: 999px; background: var(--bg-300); cursor: pointer; transition: background .15s; }
 	.ap-pref-switch span { width: 18px; height: 18px; border-radius: 50%; background: var(--ink-muted); transition: transform .15s, background .15s; }
 	.ap-pref-switch.active { background: var(--accent-soft); }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadAppearance, loadNotificationScope, loadNotificationsEnabled, loadWebPushAccounts, loadWebPushOwner, saveAppearance, saveNotificationScope, saveNotificationsEnabled, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { loadAppearance, loadNotificationScope, loadNotificationsEnabled, loadWebPushAccounts, loadWebPushOwner, loadWebPushWake, saveAppearance, saveNotificationScope, saveNotificationsEnabled, saveWebPushEnabled, saveWebPushOwner, saveWebPushWake } from './storage';
 
 const values = new Map<string, string>();
 
@@ -45,6 +45,19 @@ describe('preference storage', () => {
 		expect(loadWebPushOwner()).toBe(ada);
 		saveWebPushOwner(undefined);
 		expect(loadWebPushOwner()).toBeUndefined();
+	});
+
+	it('keeps the wake scopes per account, none until chosen', () => {
+		const ada = 'wss://a.example/\nada';
+		const bob = 'wss://a.example/\nbob';
+		expect(loadWebPushWake(ada)).toBeUndefined();
+		saveWebPushWake(ada, ['mentions', 'private']);
+		saveWebPushWake(bob, ['joined']);
+		expect(loadWebPushWake(ada)).toEqual(['mentions', 'private']);
+		expect(loadWebPushWake(bob)).toEqual(['joined']);
+		expect(loadWebPushWake('wss://b.example/\nada')).toBeUndefined();
+		values.set('apron.webPushWake', '{broken');
+		expect(loadWebPushWake(ada)).toBeUndefined();
 	});
 
 	it('round-trips appearance, and reads nothing from a missing or broken entry', () => {

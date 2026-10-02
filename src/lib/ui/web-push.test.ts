@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
-import { webPushDefaultWake, webPushKey } from '$lib/protocol/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { webPushKey } from '$lib/protocol/client';
 import type { PushRegistration } from '$lib/protocol/client';
-import { base64UrlToBytes, bytesToBase64Url, pushId, sameServerKey, webPushAccount, wakeDescription, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
+import { base64UrlToBytes, bytesToBase64Url, canOfferInstall, chosenWake, isStandalone, needsHomeScreen, offeredWake, pushId, sameServerKey, webPushAccount, wakeDescription, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
 
 describe('web push', () => {
 	it('decodes base64url keys, padded or not, and encodes them back unpadded', () => {
@@ -30,6 +30,8 @@ describe('web push', () => {
 			.toEqual({ kind: 'webpush', url: 'https://push.example/send/abc', keys: { p256dh: 'BPk', auth: 'c2Vj' } });
 		expect(webPushRegistration({ endpoint: 'https://push.example/send/abc', keys: { p256dh: 'BPk', auth: 'c2Vj' } }, 'a1'))
 			.toEqual({ kind: 'webpush', url: 'https://push.example/send/abc', push_id: 'a1', keys: { p256dh: 'BPk', auth: 'c2Vj' } });
+		expect(webPushRegistration({ endpoint: 'https://push.example/send/abc', keys: { p256dh: 'BPk', auth: 'c2Vj' } }, 'a1', ['mentions', 'private']))
+			.toEqual({ kind: 'webpush', url: 'https://push.example/send/abc', push_id: 'a1', keys: { p256dh: 'BPk', auth: 'c2Vj' }, wake: ['mentions', 'private'] });
 		expect(webPushRegistration({ endpoint: 'https://push.example/send/abc', keys: { p256dh: 'BPk' } })).toBeUndefined();
 		expect(webPushRegistration({ keys: { p256dh: 'BPk', auth: 'c2Vj' } })).toBeUndefined();
 	});
@@ -43,15 +45,28 @@ describe('web push', () => {
 		expect(webPushKey(undefined)).toBeUndefined();
 	});
 
-	it('describes the default wake scopes the server advertises', () => {
-		const server = { apron: 7, auth: ['guest'] };
-		expect(webPushDefaultWake({ ...server, push: { webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'joined'] } })).toEqual(['mentions', 'replies']);
-		expect(webPushDefaultWake({ ...server, push: { webpush: { key: 'BNcR' }, wake: ['mentions'] } })).toEqual(['mentions']);
-		expect(webPushDefaultWake({ ...server, push: { webpush: { key: 'BNcR' } } })).toEqual([]);
+	it('reads the offered wake scopes, and picks the account\'s choice of them, else the defaults', () => {
+		expect(offeredWake({ webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'ext:x', 3] })).toEqual(['mentions', 'replies', 'ext:x']);
+		expect(offeredWake({ webpush: { key: 'BNcR' } })).toEqual([]);
+		expect(offeredWake(undefined)).toEqual([]);
+		const offered = ['mentions', 'replies', 'private'];
+		// No choice yet: the protocol's defaults the server offers.
+		expect(chosenWake(undefined, offered)).toEqual(['mentions', 'replies']);
+		expect(chosenWake(undefined, ['mentions'])).toEqual(['mentions']);
+		expect(chosenWake(undefined, ['private', 'joined'])).toEqual(['private']);
+		// A choice keeps only what is offered, and falls back when nothing of it is.
+		expect(chosenWake(['private', 'joined'], offered)).toEqual(['private']);
+		expect(chosenWake(['joined'], offered)).toEqual(['mentions', 'replies']);
+		expect(chosenWake(['mentions'], [])).toEqual([]);
+	});
+
+	it('describes the wake scopes in words', () => {
 		expect(wakeDescription(['mentions', 'replies'])).toBe('mentions and replies to your messages');
 		expect(wakeDescription(['mentions'])).toBe('mentions');
+		expect(wakeDescription(['joined', 'mentions', 'private'])).toBe('mentions, every message in your private rooms and every message in rooms you’ve joined');
 		expect(wakeDescription([])).toBeUndefined();
 	});
+
 
 	it('names an account on a server by a short hash, its push_id', async () => {
 		const ada = webPushAccount('wss://server.apron.chat/', 'ada');
@@ -62,6 +77,38 @@ describe('web push', () => {
 		expect(await pushId(ada)).toBe(id);
 		expect(await pushId(webPushAccount('wss://server.apron.chat/', 'bob'))).not.toBe(id);
 		expect(await pushId(webPushAccount('wss://chat.example/ws', 'ada'))).not.toBe(id);
+	});
+});
+
+describe('installing', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	function stubBrowser(userAgent: string, options: { platform?: string; touch?: number; standalone?: boolean; displayMode?: boolean } = {}): void {
+		vi.stubGlobal('navigator', { userAgent, platform: options.platform ?? '', maxTouchPoints: options.touch ?? 0, ...(options.standalone !== undefined ? { standalone: options.standalone } : {}) });
+		vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(display-mode: standalone)' && options.displayMode === true }));
+	}
+
+	it('asks iPhone and iPad Safari to add Apron to the Home Screen, until it runs from there', () => {
+		stubBrowser('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)');
+		expect(needsHomeScreen()).toBe(true);
+		stubBrowser('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', { platform: 'MacIntel', touch: 5 });
+		expect(needsHomeScreen()).toBe(true);
+		stubBrowser('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', { standalone: true });
+		expect(needsHomeScreen()).toBe(false);
+		stubBrowser('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', { platform: 'MacIntel' });
+		expect(needsHomeScreen()).toBe(false);
+	});
+
+	it('offers Install app only when the browser offered it and Apron isn\'t installed', () => {
+		stubBrowser('Mozilla/5.0 (X11; Linux x86_64) Chrome/140');
+		expect(isStandalone()).toBe(false);
+		expect(canOfferInstall(new Event('beforeinstallprompt'))).toBe(true);
+		expect(canOfferInstall(undefined)).toBe(false);
+		stubBrowser('Mozilla/5.0 (X11; Linux x86_64) Chrome/140', { displayMode: true });
+		expect(isStandalone()).toBe(true);
+		expect(canOfferInstall(new Event('beforeinstallprompt'))).toBe(false);
 	});
 });
 
@@ -101,14 +148,20 @@ describe('keeping the push subscription in step', () => {
 		return { url, calls, setPushRegistration: (registration: PushRegistration | undefined, userId?: string) => { calls.push([registration, userId]); } };
 	}
 
-	it('registers the subscription with the account\'s push_id', async () => {
+	it('registers the subscription with the account\'s push_id and wake scopes', async () => {
 		const { browser, finish } = fakeBrowser();
 		const client = fakeClient();
 		const sync = new WebPushSync(browser);
-		const enabled = sync.enable(client, 'BNcR', 'ada');
+		const enabled = sync.enable(client, 'BNcR', 'ada', undefined, ['mentions', 'replies']);
 		await finish();
 		expect(await enabled).toBe(true);
-		expect(client.calls).toEqual([[{ kind: 'webpush', url: 'https://push.example/1', push_id: await pushId('wss://a.example/\nada'), keys: { p256dh: 'BPk', auth: 'c2Vj' } }, 'ada']]);
+		const registered = { kind: 'webpush', url: 'https://push.example/1', push_id: await pushId('wss://a.example/\nada'), keys: { p256dh: 'BPk', auth: 'c2Vj' } };
+		expect(client.calls).toEqual([[{ ...registered, wake: ['mentions', 'replies'] }, 'ada']]);
+		// Without scopes the server's defaults apply: no `wake`.
+		const defaults = sync.enable(client, 'BNcR', 'ada');
+		await finish();
+		expect(await defaults).toBe(true);
+		expect(client.calls[1][0]).not.toHaveProperty('wake');
 	});
 
 	it('registers nothing when turned off while subscribing, and unsubscribes after the subscribing ends', async () => {

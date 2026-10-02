@@ -3,7 +3,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, webPushDefaultWake, webPushKey, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, webPushKey, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
@@ -40,7 +40,7 @@
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, loadWebPushAccounts, loadWebPushOwner, saveWebPushEnabled, saveWebPushOwner, WEB_PUSH_ACCOUNTS_KEY, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, loadWebPushAccounts, loadWebPushOwner, loadWebPushWake, saveWebPushEnabled, saveWebPushOwner, saveWebPushWake, WEB_PUSH_ACCOUNTS_KEY, WEB_PUSH_WAKE_KEY, type RecentServer } from '$lib/ui/storage';
 	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadLostPrivacy, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
 	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
@@ -54,7 +54,7 @@
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
 	import { messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
-	import { needsHomeScreen, pushId, webPushAccount, webPushSupported, WebPushSync } from '$lib/ui/web-push';
+	import { canOfferInstall, chosenWake, needsHomeScreen, offeredWake, pushId, webPushAccount, webPushSupported, WebPushSync, type InstallPromptEvent } from '$lib/ui/web-push';
 
 	/**
 	 * A thread this viewer created, opened once its `room_update` has arrived;
@@ -110,8 +110,18 @@
 	/** The server's VAPID key, offered to a signed-in account. */
 	let webPushServerKey = $derived(pushAccount ? webPushKey(session.server) : undefined);
 	let webPushActive = $derived(pushAccount !== undefined && webPushAccounts.includes(pushAccount) && notificationState === 'granted');
+	/** Bumped when a wake choice is saved, here or in another tab, so it is read again. */
+	let webPushWakeSaved = $state(0);
+	/** The wake scopes the server offers (§4.7), and the ones this account's push wakes for. */
+	let webPushOffered = $derived(offeredWake(session.server?.push));
+	let webPushWake = $derived.by(() => {
+		void webPushWakeSaved;
+		return chosenWake(pushAccount ? loadWebPushWake(pushAccount) : undefined, webPushOffered);
+	});
 	let webPushError = $state<string | undefined>();
 	let webPushAvailable = $state(false);
+	/** Chromium's offer to install Apron, kept for the push setting's Install app button. */
+	let installPrompt = $state<InstallPromptEvent | undefined>();
 	const webPush = new WebPushSync();
 	/** The account's `push_id` (§4.7): it names the account in pushed payloads and in message notifications. */
 	let accountPushId = $state<string | undefined>();
@@ -288,8 +298,10 @@
 		const chat = client;
 		const key = webPushServerKey;
 		const userId = session.you?.user_id;
+		const wake = webPushWake;
 		if (!chat || !key || !userId || !webPushActive || !session.ready) return;
-		untrack(() => void enablePush(chat, key, userId));
+		// A new choice of scopes registers again at once: the same `url`, new params.
+		untrack(() => void enablePush(chat, key, userId, wake));
 	});
 
 	// Turned off, here or in another tab, or for another account now: this one isn't registered.
@@ -549,9 +561,19 @@
 		webPushAvailable = webPushSupported();
 		// Push turned on or off in another tab applies here too.
 		const storageChanged = (event: StorageEvent) => {
-			if (!previewMode && event.key === WEB_PUSH_ACCOUNTS_KEY) webPushAccounts = loadWebPushAccounts();
+			if (previewMode) return;
+			if (event.key === WEB_PUSH_ACCOUNTS_KEY) webPushAccounts = loadWebPushAccounts();
+			if (event.key === WEB_PUSH_WAKE_KEY) webPushWakeSaved += 1;
 		};
 		window.addEventListener('storage', storageChanged);
+		// Chromium offers to install Apron: kept quiet, for the push setting to offer.
+		const installOffered = (event: Event) => {
+			event.preventDefault();
+			installPrompt = event as InstallPromptEvent;
+		};
+		const installed = () => (installPrompt = undefined);
+		window.addEventListener('beforeinstallprompt', installOffered);
+		window.addEventListener('appinstalled', installed);
 		// A push notification clicked with no tab open opens one at its room.
 		const pushed = previewMode ? undefined : takePushRoom();
 		const worker = navigator.serviceWorker;
@@ -578,6 +600,8 @@
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
 			window.removeEventListener('storage', storageChanged);
+			window.removeEventListener('beforeinstallprompt', installOffered);
+			window.removeEventListener('appinstalled', installed);
 			if (typingTimer) clearTimeout(typingTimer);
 			if (highlightTimer) clearTimeout(highlightTimer);
 			reveal.stop();
@@ -813,15 +837,29 @@
 	}
 
 	/** Subscribes this browser with the server's key, and has the client register it for this account (§4.7). */
-	async function enablePush(chat: ChatClient, key: string, userId: string): Promise<void> {
+	async function enablePush(chat: ChatClient, key: string, userId: string, wake: string[]): Promise<void> {
 		const account = webPushAccount(chat.url, userId);
 		try {
-			if (!await webPush.enable(chat, key, userId, () => session.you?.user_id === userId && webPushActive)) return;
+			if (!await webPush.enable(chat, key, userId, () => session.you?.user_id === userId && webPushActive, wake)) return;
 			saveWebPushOwner(account);
 			webPushError = undefined;
 		} catch {
 			if (pushAccount === account) webPushError = 'This browser couldn’t subscribe to push notifications. Try again later.';
 		}
+	}
+
+	/** The wake scopes this account's push wakes for (§4.7), kept per account. */
+	function setWebPushWake(scopes: string[]): void {
+		if (!pushAccount || !scopes.length) return;
+		saveWebPushWake(pushAccount, scopes);
+		webPushWakeSaved += 1;
+	}
+
+	/** Chromium's install prompt, from the push setting's Install app button: offered once. */
+	async function installApp(): Promise<void> {
+		const prompt = installPrompt;
+		installPrompt = undefined;
+		await prompt?.prompt().catch(() => undefined);
 	}
 
 	/**
@@ -1583,7 +1621,7 @@
 	<Sidebar
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notificationScope={notificationScope} onnotifications={toggleNotifications} onnotificationscope={updateNotificationScope} ontestnotifications={testNotifications}
-		webPush={webPushServerKey ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive, wake: webPushDefaultWake(session.server), ...(webPushError ? { error: webPushError } : {}) } : undefined} onwebpush={toggleWebPush}
+		webPush={webPushServerKey ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive, offered: webPushOffered, wake: webPushWake, installable: canOfferInstall(installPrompt), ...(webPushError ? { error: webPushError } : {}) } : undefined} onwebpush={toggleWebPush} onwebpushwake={setWebPushWake} oninstallapp={installApp}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={() => session.forget()}
 	/>

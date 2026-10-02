@@ -33,6 +33,10 @@
 		/** Push notifications (§4.7), when the server offers web push. */
 		webPush?: WebPushPreference;
 		onwebpush: () => void;
+		/** The wake scopes chosen for push (§4.7). */
+		onwebpushwake: (scopes: string[]) => void;
+		/** Chromium's install prompt, from the push setting. */
+		oninstallapp: () => void;
 		onconnect: () => void;
 		onroom: (room: RoomSnapshot) => void;
 		onthread: (thread: string) => void;
@@ -44,7 +48,7 @@
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
-	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onconnect, onroom, onthread, onjoin, oncreateroom, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onwebpushwake, oninstallapp, onconnect, onroom, onthread, onjoin, oncreateroom, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own. */
 	let rooms = $derived(sidebarRooms(session.rooms));
 	let canBrowse = $derived(session.canManageRooms && session.ready);
@@ -185,7 +189,7 @@
 			</section>
 		{/if}
 	</div>
-	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notificationScope} {onnotifications} {onnotificationscope} {ontestnotifications} {webPush} {onwebpush} {onsignout} {onsignin} />
+	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notificationScope} {onnotifications} {onnotificationscope} {ontestnotifications} {webPush} {onwebpush} {onwebpushwake} {oninstallapp} {onsignout} {onsignin} />
 </aside>
 
 <CreateRoomDialog {client} bind:open={createOpen} enabled={canCreateRoom} oncreated={oncreateroom} />

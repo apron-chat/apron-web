@@ -12,17 +12,65 @@ export interface WebPushPreference {
 	supported: boolean;
 	/** iPhone or iPad Safari outside a Home Screen app, where push isn't offered. */
 	homeScreen: boolean;
-	/** On for this server, and notifications are allowed. */
+	/** On for this account, and notifications are allowed. */
 	enabled: boolean;
-	/** The default wake scopes this server offers (§4.7), such as `mentions`; empty when it doesn't say. */
+	/** The wake scopes the server advertises (§4.7); empty when it lists none. */
+	offered: string[];
+	/** The scopes this account's push wakes for: its choice, else the server's defaults. */
 	wake: string[];
+	/** The browser offers to install Apron (`beforeinstallprompt`), and it isn't installed. */
+	installable: boolean;
 	error?: string;
 }
 
-/** What a push setting wakes for, in words: "mentions and replies", or undefined when the server doesn't say. */
+/** The wake scopes of §4.7, in the order Preferences lists them. */
+export const WAKE_SCOPES = [
+	{ value: 'mentions', title: 'Mentions', text: 'When someone @-mentions you', words: 'mentions' },
+	{ value: 'replies', title: 'Replies', text: 'Replies to your messages', words: 'replies to your messages' },
+	{ value: 'private', title: 'Private rooms', text: 'Every message in private rooms you’re in', words: 'every message in your private rooms' },
+	{ value: 'joined', title: 'All joined rooms', text: 'Every message in rooms you’ve joined', words: 'every message in rooms you’ve joined' }
+] as const;
+
+/** The wake scopes a server advertises in `server.push.wake` (§4.7), ours or third-party (`ext:`). */
+export function offeredWake(push: unknown): string[] {
+	const wake = push && typeof push === 'object' ? (push as { wake?: unknown }).wake : undefined;
+	return Array.isArray(wake) ? wake.filter((scope): scope is string => typeof scope === 'string' && scope !== '') : [];
+}
+
+/**
+ * The scopes a registration wakes for: the account's choice of the offered
+ * ones, else the protocol's defaults (`mentions` and `replies`) that are
+ * offered, else the first offered. Empty when the server lists none.
+ */
+export function chosenWake(choice: readonly string[] | undefined, offered: readonly string[]): string[] {
+	const kept = choice?.filter((scope) => offered.includes(scope)) ?? [];
+	if (kept.length) return kept;
+	const defaults = ['mentions', 'replies'].filter((scope) => offered.includes(scope));
+	return defaults.length ? defaults : offered.slice(0, 1);
+}
+
+/** What a push setting wakes for, in words: "mentions and replies to your messages", or undefined when it doesn't say. */
 export function wakeDescription(wake: readonly string[]): string | undefined {
-	const words = wake.map((scope) => ({ mentions: 'mentions', replies: 'replies to your messages' })[scope]).filter((word): word is string => Boolean(word));
-	return words.length ? words.join(' and ') : undefined;
+	const words = WAKE_SCOPES.filter((scope) => wake.includes(scope.value)).map((scope) => scope.words as string);
+	if (words.length < 2) return words[0];
+	return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
+
+/** Apron runs as an installed app (a Home Screen or desktop app window). */
+export function isStandalone(): boolean {
+	const nav = globalThis.navigator as (Navigator & { standalone?: boolean }) | undefined;
+	return nav?.standalone === true || globalThis.matchMedia?.('(display-mode: standalone)').matches === true;
+}
+
+/** Whether to offer Install app: the browser offered it (`beforeinstallprompt`), and Apron isn't running installed. */
+export function canOfferInstall(prompt: unknown): boolean {
+	return Boolean(prompt) && !isStandalone();
+}
+
+/** Chromium's `beforeinstallprompt` event, which TypeScript's DOM types lack. */
+export interface InstallPromptEvent extends Event {
+	prompt(): Promise<void>;
+	userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
 /** Decodes base64url (padded or not), such as a VAPID public key. Throws on anything else. */
@@ -52,11 +100,15 @@ export function sameServerKey(current: ArrayBuffer | null | undefined, key: stri
 	}
 }
 
-/** The `push_register` params for a subscription (`PushSubscription.toJSON()`), if it is complete, with its `push_id`. */
-export function webPushRegistration(subscription: PushSubscriptionJSON, pushId?: string): PushRegistration | undefined {
+/**
+ * The `push_register` params for a subscription (`PushSubscription.toJSON()`),
+ * if it is complete, with its `push_id` and the `wake` scopes (none: the
+ * server's defaults).
+ */
+export function webPushRegistration(subscription: PushSubscriptionJSON, pushId?: string, wake?: readonly string[]): PushRegistration | undefined {
 	const { endpoint, keys } = subscription;
 	if (!endpoint || !keys?.p256dh || !keys.auth) return undefined;
-	return { kind: 'webpush', url: endpoint, ...(pushId ? { push_id: pushId } : {}), keys: { p256dh: keys.p256dh, auth: keys.auth } };
+	return { kind: 'webpush', url: endpoint, ...(pushId ? { push_id: pushId } : {}), keys: { p256dh: keys.p256dh, auth: keys.auth }, ...(wake?.length ? { wake: [...wake] } : {}) };
 }
 
 /** One account on one server, as push is turned on for it and as its `push_id` is made from. */
@@ -86,10 +138,9 @@ export function webPushSupported(): boolean {
 
 /** iPhone and iPad Safari offer web push only to a site added to the Home Screen. */
 export function needsHomeScreen(): boolean {
-	const nav = globalThis.navigator as (Navigator & { standalone?: boolean }) | undefined;
-	if (!nav || nav.standalone === true) return false;
-	const ios = /iPad|iPhone|iPod/.test(nav.userAgent) || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
-	return ios && !globalThis.matchMedia?.('(display-mode: standalone)').matches;
+	const nav = globalThis.navigator;
+	if (!nav || isStandalone()) return false;
+	return /iPad|iPhone|iPod/.test(nav.userAgent) || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
 }
 
 /** This browser's push subscription; tests stand in for it. */
@@ -145,11 +196,11 @@ export class WebPushSync {
 
 	/**
 	 * Subscribes with the server's key and registers the subscription for the
-	 * account `userId` on `client`'s server. `current` says whether that is
-	 * still the account signed in there. Resolves whether it registered;
-	 * rejects if the browser couldn't subscribe.
+	 * account `userId` on `client`'s server, waking for `wake` (§4.7). `current`
+	 * says whether that is still the account signed in there. Resolves whether
+	 * it registered; rejects if the browser couldn't subscribe.
 	 */
-	async enable(client: PushClient, key: string, userId: string, current: () => boolean = () => true): Promise<boolean> {
+	async enable(client: PushClient, key: string, userId: string, current: () => boolean = () => true, wake: readonly string[] = []): Promise<boolean> {
 		const run = ++this.run;
 		const url = client.url;
 		const live = () => run === this.run && client.url === url && current();
@@ -157,7 +208,7 @@ export class WebPushSync {
 		if (!live()) return false;
 		const subscription = await this.serially(async () => (live() ? this.browser.subscribe(key) : undefined));
 		if (!subscription || !live()) return false;
-		const registration = webPushRegistration(subscription, id);
+		const registration = webPushRegistration(subscription, id, wake);
 		if (!registration) throw new Error('The browser returned an incomplete push subscription');
 		client.setPushRegistration(registration, userId);
 		return true;

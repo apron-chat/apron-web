@@ -29,7 +29,9 @@ state and behavior — `ConnectScreen`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
-design system with the next `npm run design:bundle`.
+design system with the next `npm run design:bundle`. `PreferencesDialog` renders
+the design system's `CheckList` (push wake scopes) and `Callout` (installing for
+push) as they are.
 
 `src/routes/+page.svelte` owns the session and the navigation (which room or
 thread is open, per-room drafts) and composes the components. The

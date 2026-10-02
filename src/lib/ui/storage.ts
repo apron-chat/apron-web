@@ -13,6 +13,8 @@ const KEY = {
 	/** The accounts push is turned on for, and the one this browser's push subscription is registered for. */
 	webPush: 'apron.webPushAccounts',
 	webPushOwner: 'apron.webPushOwner',
+	/** The wake scopes each account chose for push, by `webPushAccount`. */
+	webPushWake: 'apron.webPushWake',
 	memberList: 'apron.memberList',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
@@ -132,8 +134,9 @@ export function saveNotificationScope(scope: NotificationScope): void {
 	write(KEY.notificationScope, scope);
 }
 
-/** The storage key of the accounts push is on for: other tabs follow its `storage` events. */
+/** The storage keys of the accounts push is on for, and their wake scopes: other tabs follow their `storage` events. */
 export const WEB_PUSH_ACCOUNTS_KEY = KEY.webPush;
+export const WEB_PUSH_WAKE_KEY = KEY.webPushWake;
 
 /** Push opt-ins from before they were per account: one can't tell whose they were, so they go. */
 const LEGACY_WEB_PUSH_KEYS = ['apron.webPush', 'apron.webPushServer'];
@@ -163,6 +166,30 @@ export function saveWebPushEnabled(accounts: string[], account: string, enabled:
 	const next = [...accounts.filter((entry) => entry !== account), ...(enabled ? [account] : [])];
 	write(KEY.webPush, JSON.stringify(next));
 	return next;
+}
+
+function loadWakeChoices(): Record<string, string[]> {
+	try {
+		const parsed: unknown = JSON.parse(read(KEY.webPushWake) ?? '{}');
+		if (!isJsonObject(parsed)) return {};
+		const choices: Record<string, string[]> = Object.create(null);
+		for (const [account, scopes] of Object.entries(parsed)) {
+			if (Array.isArray(scopes)) choices[account] = scopes.filter((scope): scope is string => typeof scope === 'string');
+		}
+		return choices;
+	} catch {
+		return {};
+	}
+}
+
+/** The wake scopes an account chose for push (§4.7); undefined until it chose. */
+export function loadWebPushWake(account: string): string[] | undefined {
+	const choices = loadWakeChoices();
+	return Object.hasOwn(choices, account) ? choices[account] : undefined;
+}
+
+export function saveWebPushWake(account: string, scopes: readonly string[]): void {
+	write(KEY.webPushWake, JSON.stringify({ ...loadWakeChoices(), [account]: [...scopes] }));
 }
 
 /** The account this browser's one push subscription is registered for. */

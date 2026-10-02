@@ -76,15 +76,6 @@ export const canReact = (server: ServerParams | undefined) => hasCapability(serv
 export const hasHistory = (server: ServerParams | undefined) => hasCapability(server, 'history');
 
 /** The VAPID public key (base64url) of the server's `webpush` push kind (§4.7), if it offers one. */
-/**
- * What a registration without `wake` is woken for (§4.7): the protocol's
- * default scopes, `mentions` and `replies`, that the server advertises.
- */
-export function webPushDefaultWake(server: ServerParams | undefined): string[] {
-	const wake = server?.push?.wake;
-	return Array.isArray(wake) ? ['mentions', 'replies'].filter((scope) => wake.includes(scope)) : [];
-}
-
 export function webPushKey(server: ServerParams | undefined): string | undefined {
 	const webpush = server?.push?.webpush;
 	const key = isJsonObject(webpush) ? webpush.key : undefined;

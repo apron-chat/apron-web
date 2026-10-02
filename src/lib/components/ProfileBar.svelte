@@ -31,13 +31,17 @@
 		/** Push notifications (§4.7), when the server offers web push. */
 		webPush?: WebPushPreference;
 		onwebpush: () => void;
+		/** The wake scopes chosen for push (§4.7). */
+		onwebpushwake: (scopes: string[]) => void;
+		/** Chromium's install prompt, from the push setting. */
+		oninstallapp: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: () => void;
 		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
 		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
-	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onwebpushwake, oninstallapp, onsignout, onsignin }: Props = $props();
 
 	let open = $state(false);
 	let preferencesOpen = $state(false);
@@ -359,7 +363,7 @@
 	<PreferencesDialog
 		bind:open={preferencesOpen}
 		{notificationsEnabled} {notificationsSupported} {notificationPermission} {notificationScope}
-		{onnotifications} {onnotificationscope} {ontestnotifications} {webPush} {onwebpush}
+		{onnotifications} {onnotificationscope} {ontestnotifications} {webPush} {onwebpush} {onwebpushwake} {oninstallapp}
 		onclosed={() => preferencesTrigger?.focus()}
 	/>
 	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || 'not signed in'}. Edit`} onclick={toggle}>

@@ -370,6 +370,15 @@ describe('rooms by request (cap rooms)', () => {
 			expect(sent('push_register')).toEqual([renewed]);
 		});
 
+		it('registers again at once, on the same url, when the wake scopes change', async () => {
+			client.setPushRegistration({ ...webpush, wake: ['mentions', 'replies'] }, 'ada');
+			await signIn({ webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'private'] });
+			client.setPushRegistration({ ...webpush, wake: ['private'] }, 'ada');
+			expect(sent('push_register')).toEqual([{ ...webpush, wake: ['mentions', 'replies'] }, { ...webpush, wake: ['private'] }]);
+			// The same url: nothing to unregister.
+			expect(sent('push_unregister')).toEqual([]);
+		});
+
 		it('registers only for the account it was made for', async () => {
 			client.setPushRegistration(webpush, 'ada');
 			await signIn(undefined, 'bob');

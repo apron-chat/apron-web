@@ -180,19 +180,38 @@ worker, or from the page where there is none yet. Permission revoked in the
 browser's site settings reads as off.
 
 When the server offers web push (`server.push.webpush` with its VAPID `key`,
-§4.7), Preferences also offers **Push notifications** for the server's default wake scopes (`mentions` and
-`replies` where `server.push.wake` lists them; the client sends no `wake`) to a
-signed-in account (not a guest), also while it reconnects. It is per account on
-each server, off until turned on, and turning it on or off in one tab applies
-in the others. Turning it on asks the browser's permission, subscribes this
-browser with the server's key (replacing a subscription made with another
-key), and sends `push_register` `{kind: "webpush", url, push_id, keys: {p256dh,
-auth}}` from the subscription after each `auth` as that account. Turning it off
-sends `push_unregister` and drops the subscription. Subscribing and
-unsubscribing run one at a time, and a step that finishes after push was turned
-off, or after the tab moved to another server or account, registers nothing. A
+§4.7), Preferences also offers **Push notifications** to a signed-in account
+(not a guest), also while it reconnects. It is per account on each server, off
+until turned on, and turning it on or off in one tab applies in the others.
+Turning it on asks the browser's permission, subscribes this browser with the
+server's key (replacing a subscription made with another key), and sends
+`push_register` `{kind: "webpush", url, push_id, keys: {p256dh, auth}, wake}`
+from the subscription after each `auth` as that account. Turning it off sends
+`push_unregister` and drops the subscription. Subscribing and unsubscribing
+run one at a time, and a step that finishes after push was turned off, or
+after the tab moved to another server or account, registers nothing. A
 replaced registration is unregistered, after the next `auth` if not at once.
 Signing out unregisters too.
+
+While push is on, **Notify me about** under the switch picks its wake scopes:
+Mentions, Replies, Private rooms and All joined rooms. Scopes missing from
+`server.push.wake` show disabled, marked "Not offered by this server", and the
+picker is hidden when the server lists none (the client then sends no `wake`,
+and the server's defaults apply). The choice is kept per account on each server
+and applies in other tabs. Until one is made, it is `mentions` and `replies`
+where offered (else the first offered scope), and a chosen scope the server
+stops offering falls back to those. `wake` carries only offered scopes. The
+last checked scope can't be unchecked: the switch turns push off. A change
+registers again at once, with the same `url`. The setting's description names
+the chosen scopes.
+
+On iPhone and iPad Safari outside a Home Screen app, push isn't offered: the
+push setting shows a callout with the steps to add Apron to the Home Screen.
+Where the browser offers to install Apron (Chromium's `beforeinstallprompt`),
+the client holds that offer back and shows **Install app** in the push setting
+only, never elsewhere, and not once Apron runs installed. The web manifest
+(`static/manifest.webmanifest`) names Apron, its icons, `start_url` and
+`display: standalone`.
 
 `push_id` names the account: the SHA-256 of the server URL, a newline and the
 `user_id`, in base64url, cut to 16 characters. The service worker shows each

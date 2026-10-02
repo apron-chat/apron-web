@@ -1,0 +1,20 @@
+<!-- @dsCard group="Input" height=420 subtitle="Push wake scopes: one not offered, the last checked one kept" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>CheckList</title></head>
+<body>
+<div class="ap-row" id="root" style="align-items:flex-start"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { var box = document.createElement('div'); box.style.width = '320px'; root.appendChild(box); return A.render(C, at || box, props || {}); }
+  var scopes = [
+    { value: 'mentions', title: 'Mentions', text: 'When someone @-mentions you' },
+    { value: 'replies', title: 'Replies', text: 'Replies to your messages' },
+    { value: 'private', title: 'Private rooms', text: 'Every message in private rooms you’re in', disabled: true, note: 'Not offered by this server' },
+    { value: 'joined', title: 'All joined rooms', text: 'Every message in rooms you’ve joined' }
+  ];
+  add(A.CheckList, { label: 'Notify me about', options: scopes, value: ['mentions', 'replies'], min: 1 });
+  add(A.CheckList, { label: 'Notify me about', options: scopes, value: ['mentions'], min: 1 });
+</script>
+</body>
+</html>
