@@ -34,6 +34,12 @@ describe('CheckList', () => {
 		expect(document.body.textContent?.match(/Not offered/g)).toHaveLength(1);
 	});
 
+	it('shows a note on an option that can still be changed', () => {
+		const boxes = render({ value: ['mentions'], options: [{ value: 'joined', title: 'All joined rooms', note: 'Only while Apron is open' }] });
+		expect(boxes[0].disabled).toBe(false);
+		expect(boxes[0].closest('label')?.textContent).toContain('Only while Apron is open');
+	});
+
 	it('keeps the last checked box with `min`, and reports changes in the options\' order', () => {
 		const onchange = vi.fn();
 		let boxes = render({ value: ['mentions'], min: 1, onchange });

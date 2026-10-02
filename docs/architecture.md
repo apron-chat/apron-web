@@ -30,8 +30,8 @@ state and behavior — `ConnectScreen`,
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
 design system with the next `npm run design:bundle`. `PreferencesDialog` renders
-the design system's `CheckList` (push wake scopes) and `Callout` (installing for
-push) as they are.
+the design system's `CheckList` (what to notify about) and `Callout` (installing
+for push) as they are.
 
 `src/routes/+page.svelte` owns the session and the navigation (which room or
 thread is open, per-room drafts) and composes the components. The
@@ -56,7 +56,9 @@ and `time.ts` read messages, `connection.ts` words the connection state, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences included (on this device only; nothing is synced), and
 `notifications.ts` shows notifications, through `service-worker.ts` where it
-is registered, and words pushed messages for the service worker, and
+is registered, and words pushed messages for the service worker,
+`notify-scopes.ts` decides which arriving messages the page notifies about from
+the checked scopes, and which of them push sends as `wake`, and
 `web-push.ts` keeps this browser's push subscription for the server's key
 (`WebPushSync` runs subscribing and unsubscribing one at a time).
 

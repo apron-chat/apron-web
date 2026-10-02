@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadAppearance, loadNotificationScope, loadNotificationsEnabled, loadWebPushAccounts, loadWebPushOwner, loadWebPushWake, saveAppearance, saveNotificationScope, saveNotificationsEnabled, saveWebPushEnabled, saveWebPushOwner, saveWebPushWake } from './storage';
+import { loadAppearance, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { notifyAccount } from './notify-scopes';
 
 const values = new Map<string, string>();
 
@@ -17,11 +18,10 @@ afterEach(() => {
 });
 
 describe('preference storage', () => {
-	it('keeps notifications off and scoped to mentions until chosen', () => {
-		expect([loadNotificationsEnabled(), loadNotificationScope()]).toEqual([false, 'mentions']);
+	it('keeps notifications off until chosen', () => {
+		expect(loadNotificationsEnabled()).toBe(false);
 		saveNotificationsEnabled(true);
-		saveNotificationScope('everything');
-		expect([loadNotificationsEnabled(), loadNotificationScope()]).toEqual([true, 'everything']);
+		expect(loadNotificationsEnabled()).toBe(true);
 		saveNotificationsEnabled(false);
 		expect(loadNotificationsEnabled()).toBe(false);
 	});
@@ -47,17 +47,40 @@ describe('preference storage', () => {
 		expect(loadWebPushOwner()).toBeUndefined();
 	});
 
-	it('keeps the wake scopes per account, none until chosen', () => {
-		const ada = 'wss://a.example/\nada';
-		const bob = 'wss://a.example/\nbob';
-		expect(loadWebPushWake(ada)).toBeUndefined();
-		saveWebPushWake(ada, ['mentions', 'private']);
-		saveWebPushWake(bob, ['joined']);
-		expect(loadWebPushWake(ada)).toEqual(['mentions', 'private']);
-		expect(loadWebPushWake(bob)).toEqual(['joined']);
-		expect(loadWebPushWake('wss://b.example/\nada')).toBeUndefined();
-		values.set('apron.webPushWake', '{broken');
-		expect(loadWebPushWake(ada)).toBeUndefined();
+	it('keeps what to notify about per account, and one choice for a server\'s guests', () => {
+		const ada = notifyAccount('wss://a.example/', 'ada');
+		const bob = notifyAccount('wss://a.example/', 'bob');
+		const guests = notifyAccount('wss://a.example/', undefined);
+		expect(guests).toBe('wss://a.example/\n~guest');
+		expect(loadNotifyScopes(ada)).toBeUndefined();
+		saveNotifyScopes(ada, ['mentions', 'private']);
+		saveNotifyScopes(bob, ['joined']);
+		saveNotifyScopes(guests, ['joined', 'mentions']);
+		expect(loadNotifyScopes(ada)).toEqual(['mentions', 'private']);
+		expect(loadNotifyScopes(bob)).toEqual(['joined']);
+		expect(loadNotifyScopes(guests)).toEqual(['joined', 'mentions']);
+		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'ada'))).toBeUndefined();
+		values.set('apron.notifyScopes', '{broken');
+		expect(loadNotifyScopes(ada)).toBeUndefined();
+	});
+
+	it('carries over push\'s wake scopes and the device-wide "Everything", then drops the old keys', () => {
+		const ada = notifyAccount('wss://a.example/', 'ada');
+		values.set('apron.webPushWake', JSON.stringify({ [ada]: ['private'] }));
+		values.set('apron.notificationScope', 'everything');
+		expect(loadNotifyScopes(ada)).toEqual(['private']);
+		// Accounts without a choice take what "Everything" meant: every scope.
+		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'bob'))).toEqual(['mentions', 'replies', 'private', 'joined']);
+		expect([values.has('apron.webPushWake'), values.has('apron.notificationScope')]).toEqual([false, false]);
+		// A choice made since wins over it.
+		saveNotifyScopes(notifyAccount('wss://b.example/', 'bob'), ['mentions']);
+		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'bob'))).toEqual(['mentions']);
+	});
+
+	it('takes the old "Mentions" setting as the default, mentions and replies', () => {
+		values.set('apron.notificationScope', 'mentions');
+		expect(loadNotifyScopes(notifyAccount('wss://a.example/', 'ada'))).toBeUndefined();
+		expect(values.has('apron.notificationScope')).toBe(false);
 	});
 
 	it('round-trips appearance, and reads nothing from a missing or broken entry', () => {

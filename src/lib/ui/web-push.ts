@@ -16,44 +16,15 @@ export interface WebPushPreference {
 	enabled: boolean;
 	/** The wake scopes the server advertises (§4.7); empty when it lists none. */
 	offered: string[];
-	/** The scopes this account's push wakes for: its choice, else the server's defaults. */
-	wake: string[];
 	/** The browser offers to install Apron (`beforeinstallprompt`), and it isn't installed. */
 	installable: boolean;
 	error?: string;
 }
 
-/** The wake scopes of §4.7, in the order Preferences lists them. */
-export const WAKE_SCOPES = [
-	{ value: 'mentions', title: 'Mentions', text: 'When someone @-mentions you', words: 'mentions' },
-	{ value: 'replies', title: 'Replies', text: 'Replies to your messages', words: 'replies to your messages' },
-	{ value: 'private', title: 'Private rooms', text: 'Every message in private rooms you’re in', words: 'every message in your private rooms' },
-	{ value: 'joined', title: 'All joined rooms', text: 'Every message in rooms you’ve joined', words: 'every message in rooms you’ve joined' }
-] as const;
-
 /** The wake scopes a server advertises in `server.push.wake` (§4.7), ours or third-party (`ext:`). */
 export function offeredWake(push: unknown): string[] {
 	const wake = push && typeof push === 'object' ? (push as { wake?: unknown }).wake : undefined;
 	return Array.isArray(wake) ? wake.filter((scope): scope is string => typeof scope === 'string' && scope !== '') : [];
-}
-
-/**
- * The scopes a registration wakes for: the account's choice of the offered
- * ones, else the protocol's defaults (`mentions` and `replies`) that are
- * offered, else the first offered. Empty when the server lists none.
- */
-export function chosenWake(choice: readonly string[] | undefined, offered: readonly string[]): string[] {
-	const kept = choice?.filter((scope) => offered.includes(scope)) ?? [];
-	if (kept.length) return kept;
-	const defaults = ['mentions', 'replies'].filter((scope) => offered.includes(scope));
-	return defaults.length ? defaults : offered.slice(0, 1);
-}
-
-/** What a push setting wakes for, in words: "mentions and replies to your messages", or undefined when it doesn't say. */
-export function wakeDescription(wake: readonly string[]): string | undefined {
-	const words = WAKE_SCOPES.filter((scope) => wake.includes(scope.value)).map((scope) => scope.words as string);
-	if (words.length < 2) return words[0];
-	return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
 }
 
 /** Apron runs as an installed app (a Home Screen or desktop app window). */
@@ -102,13 +73,13 @@ export function sameServerKey(current: ArrayBuffer | null | undefined, key: stri
 
 /**
  * The `push_register` params for a subscription (`PushSubscription.toJSON()`),
- * if it is complete, with its `push_id` and the `wake` scopes (none: the
- * server's defaults).
+ * if it is complete, with its `push_id` and the `wake` scopes (undefined: the
+ * server's defaults; empty: nothing).
  */
 export function webPushRegistration(subscription: PushSubscriptionJSON, pushId?: string, wake?: readonly string[]): PushRegistration | undefined {
 	const { endpoint, keys } = subscription;
 	if (!endpoint || !keys?.p256dh || !keys.auth) return undefined;
-	return { kind: 'webpush', url: endpoint, ...(pushId ? { push_id: pushId } : {}), keys: { p256dh: keys.p256dh, auth: keys.auth }, ...(wake?.length ? { wake: [...wake] } : {}) };
+	return { kind: 'webpush', url: endpoint, ...(pushId ? { push_id: pushId } : {}), keys: { p256dh: keys.p256dh, auth: keys.auth }, ...(wake ? { wake: [...wake] } : {}) };
 }
 
 /** One account on one server, as push is turned on for it and as its `push_id` is made from. */
@@ -196,11 +167,11 @@ export class WebPushSync {
 
 	/**
 	 * Subscribes with the server's key and registers the subscription for the
-	 * account `userId` on `client`'s server, waking for `wake` (§4.7). `current`
+	 * account `userId` on `client`'s server, waking for `wake` (§4.7; undefined: the server's defaults). `current`
 	 * says whether that is still the account signed in there. Resolves whether
 	 * it registered; rejects if the browser couldn't subscribe.
 	 */
-	async enable(client: PushClient, key: string, userId: string, current: () => boolean = () => true, wake: readonly string[] = []): Promise<boolean> {
+	async enable(client: PushClient, key: string, userId: string, current: () => boolean = () => true, wake?: readonly string[]): Promise<boolean> {
 		const run = ++this.run;
 		const url = client.url;
 		const live = () => run === this.run && client.url === url && current();

@@ -1,11 +1,12 @@
 <script lang="ts">
 	import X from '@lucide/svelte/icons/x';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
-	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
+	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import Button from '$lib/design/components/Button.svelte';
 	import Callout from '$lib/design/components/Callout.svelte';
 	import CheckList from '$lib/design/components/CheckList.svelte';
-	import { WAKE_SCOPES, wakeDescription, type WebPushPreference } from '$lib/ui/web-push';
+	import { NOTIFY_SCOPES, notifyScopeNotes, pushWake } from '$lib/ui/notify-scopes';
+	import type { WebPushPreference } from '$lib/ui/web-push';
 	import FontFamilyField from './FontFamilyField.svelte';
 
 	type LocalFontAccessWindow = Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> };
@@ -15,23 +16,26 @@
 		notificationsEnabled: boolean;
 		notificationsSupported: boolean;
 		notificationPermission: NotificationPermissionState;
-		notificationScope: NotificationScope;
+		/** What to notify about (`NOTIFY_SCOPES`), for desktop notifications and push alike. */
+		notifyScopes: string[];
 		onnotifications: () => void;
-		onnotificationscope: (scope: NotificationScope) => void;
+		onnotifyscopes: (scopes: string[]) => void;
 		ontestnotifications: () => Promise<NotificationTestResult>;
 		/** Push notifications (§4.7), when the server offers web push. */
 		webPush?: WebPushPreference;
 		onwebpush: () => void;
-		/** The wake scopes chosen for push (§4.7). */
-		onwebpushwake: (scopes: string[]) => void;
 		/** Chromium's install prompt, from the push setting. */
 		oninstallapp: () => void;
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onwebpushwake, oninstallapp, onclosed }: Props = $props();
+	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, onclosed }: Props = $props();
 
 	let preferencesSection = $state<'notifications' | 'appearance'>('notifications');
+	/** While push is on, checked scopes this server doesn't push say they work only while Apron is open. */
+	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
+	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: it wakes for nothing. */
+	let pushesNothing = $derived(pushWake(notifyScopes, webPush?.offered ?? [])?.length === 0);
 	let interfaceFontDraft = $state('');
 	let chatFontDraft = $state('');
 	let monoFontDraft = $state('');
@@ -152,10 +156,20 @@
 			<section class="ap-preferences-content" aria-labelledby="ap-pref-notifications">
 				<h3 id="ap-pref-notifications">Notifications</h3>
 				<p class="ap-profedit-hint">Choose when Apron can interrupt you.</p>
+				<div class="ap-pref-scopes">
+					<CheckList
+						label="Notify me about"
+						options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, text: scope.text, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
+						value={notifyScopes}
+						min={1}
+						onchange={onnotifyscopes}
+					/>
+					<p class="ap-pref-help">For desktop and push notifications alike. At least one stays on; the switches below turn notifications off.</p>
+				</div>
 				<div class="ap-pref-setting">
 					<div>
 						<strong>Desktop notifications</strong>
-						<p class="ap-profedit-hint">Send selected message alerts when Apron is hidden or unfocused.</p>
+						<p class="ap-profedit-hint">Alerts while Apron is open but hidden or unfocused.</p>
 						{#if notificationPermission === 'denied'}
 							<p class="ap-pref-note ap-profedit-err" role="status">Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.</p>
 						{:else if !notificationsSupported}
@@ -170,12 +184,6 @@
 					</div>
 					<button class="ap-pref-switch" class:active={notificationsEnabled} type="button" role="switch" aria-checked={notificationsEnabled} aria-label="Desktop notifications" disabled={!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied')} onclick={onnotifications}><span></span></button>
 				</div>
-				<label class="ap-pref-fieldlabel" for="ap-notification-scope">What to notify you about</label>
-				<select id="ap-notification-scope" class="ap-field ap-pref-select" value={notificationScope} onchange={(event) => onnotificationscope(event.currentTarget.value as NotificationScope)}>
-					<option value="everything">Everything</option>
-					<option value="mentions">Mentions</option>
-				</select>
-				<p class="ap-pref-help">Applies when Apron is hidden or unfocused.</p>
 				<div class="ap-pref-setting ap-pref-test">
 					<div>
 						<strong>Test notification</strong>
@@ -196,13 +204,15 @@
 					<div class="ap-pref-setting ap-pref-push">
 						<div>
 							<strong>Push notifications</strong>
-							<p class="ap-profedit-hint">Enable notifications for {wakeDescription(webPush.wake) ?? 'messages this server chooses'} on this device, even while Apron is closed.</p>
+							<p class="ap-profedit-hint">Alerts on this device even when Apron is closed.</p>
 							{#if !webPush.supported}
 								{#if !webPush.homeScreen}<p class="ap-pref-note" role="status">Push notifications aren’t available in this browser.</p>{/if}
 							{:else if notificationPermission === 'denied'}
 								<p class="ap-pref-note ap-profedit-err" role="status">Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.</p>
 							{:else if webPush.error}
 								<p class="ap-pref-note ap-profedit-err" role="status">{webPush.error}</p>
+							{:else if webPush.enabled && pushesNothing}
+								<p class="ap-pref-note" role="status">On, but this server pushes none of your choices above: push won’t send anything.</p>
 							{:else if webPush.enabled}
 								<p class="ap-pref-note ap-profedit-ok" role="status">On · this server can notify this device.</p>
 							{:else if notificationPermission !== 'granted'}
@@ -227,18 +237,6 @@
 								<p>It opens in its own window, with its notifications.</p>
 								{#snippet action()}<Button size="sm" variant="primary" label="Install app" onclick={oninstallapp} />{/snippet}
 							</Callout>
-						</div>
-					{/if}
-					{#if webPush.enabled && webPush.offered.length}
-						<div class="ap-pref-push-more">
-							<CheckList
-								label="Notify me about"
-								options={WAKE_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, text: scope.text, disabled: !webPush.offered.includes(scope.value), note: 'Not offered by this server' }))}
-								value={webPush.wake}
-								min={1}
-								onchange={onwebpushwake}
-							/>
-							<p class="ap-pref-help">At least one stays on; turn push off with the switch above.</p>
 						</div>
 					{/if}
 				{/if}
@@ -320,13 +318,13 @@
 	.ap-pref-test + .ap-pref-push { border-top: 0; }
 	.ap-pref-push { border-bottom: 0; }
 	.ap-pref-push-more { max-width: 460px; padding-bottom: var(--space-4); }
+	.ap-pref-scopes { max-width: 460px; padding-bottom: var(--space-4); }
 	.ap-pref-switch { flex: none; width: 42px; height: 24px; padding: 3px; display: flex; align-items: center; border: 0; border-radius: 999px; background: var(--bg-300); cursor: pointer; transition: background .15s; }
 	.ap-pref-switch span { width: 18px; height: 18px; border-radius: 50%; background: var(--ink-muted); transition: transform .15s, background .15s; }
 	.ap-pref-switch.active { background: var(--accent-soft); }
 	.ap-pref-switch.active span { background: var(--accent); transform: translateX(18px); }
 	.ap-pref-switch:disabled { opacity: .5; cursor: not-allowed; }
 	.ap-pref-note { margin: var(--space-3) 0; color: var(--ink-muted); font-size: 13px; line-height: 19px; }
-	.ap-pref-fieldlabel { display: block; margin: var(--space-4) 0 var(--space-1); color: var(--ink); font-size: 13px; font-weight: 600; }
 	.ap-pref-select { width: min(100%, 320px); }
 	.ap-pref-help { margin: var(--space-1) 0 0; color: var(--ink-muted); font-size: 12px; line-height: 17px; }
 	.ap-font-access-status { margin: var(--space-2) 0 var(--space-1); }

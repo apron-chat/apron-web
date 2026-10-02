@@ -1,6 +1,5 @@
 import { isJsonObject, type JsonObject } from '$lib/protocol/types';
 import type { AppearancePreferences } from './appearance.svelte';
-import type { NotificationScope } from './notifications';
 
 /** Everything this client remembers between visits lives under one prefix. */
 const KEY = {
@@ -9,12 +8,11 @@ const KEY = {
 	recentServers: 'apron.recentServers',
 	sidebar: 'apron.sidebar',
 	notificationsEnabled: 'apron.desktopNotifications',
-	notificationScope: 'apron.notificationScope',
 	/** The accounts push is turned on for, and the one this browser's push subscription is registered for. */
 	webPush: 'apron.webPushAccounts',
 	webPushOwner: 'apron.webPushOwner',
-	/** The wake scopes each account chose for push, by `webPushAccount`. */
-	webPushWake: 'apron.webPushWake',
+	/** What to notify about, per account (`notifyAccount`): desktop notifications and push alike. */
+	notifyScopes: 'apron.notifyScopes',
 	memberList: 'apron.memberList',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
@@ -126,17 +124,9 @@ export function saveNotificationsEnabled(enabled: boolean): void {
 	write(KEY.notificationsEnabled, String(enabled));
 }
 
-export function loadNotificationScope(): NotificationScope {
-	return read(KEY.notificationScope) === 'everything' ? 'everything' : 'mentions';
-}
-
-export function saveNotificationScope(scope: NotificationScope): void {
-	write(KEY.notificationScope, scope);
-}
-
-/** The storage keys of the accounts push is on for, and their wake scopes: other tabs follow their `storage` events. */
+/** The storage keys of the accounts push is on for, and of what to notify about: other tabs follow their `storage` events. */
 export const WEB_PUSH_ACCOUNTS_KEY = KEY.webPush;
-export const WEB_PUSH_WAKE_KEY = KEY.webPushWake;
+export const NOTIFY_SCOPES_KEY = KEY.notifyScopes;
 
 /** Push opt-ins from before they were per account: one can't tell whose they were, so they go. */
 const LEGACY_WEB_PUSH_KEYS = ['apron.webPush', 'apron.webPushServer'];
@@ -146,13 +136,7 @@ const LEGACY_WEB_PUSH_KEYS = ['apron.webPush', 'apron.webPushServer'];
  * `webPushAccount(server, userId)`: another account signing in here isn't on.
  */
 export function loadWebPushAccounts(): string[] {
-	for (const key of LEGACY_WEB_PUSH_KEYS) {
-		try {
-			if (persisting) globalThis.localStorage?.removeItem(key);
-		} catch {
-			// As `write`.
-		}
-	}
+	for (const key of LEGACY_WEB_PUSH_KEYS) remove(key);
 	try {
 		const parsed: unknown = JSON.parse(read(KEY.webPush) ?? '[]');
 		return Array.isArray(parsed) ? parsed.filter((account): account is string => typeof account === 'string') : [];
@@ -168,28 +152,60 @@ export function saveWebPushEnabled(accounts: string[], account: string, enabled:
 	return next;
 }
 
-function loadWakeChoices(): Record<string, string[]> {
+/** Stored for accounts that haven't chosen: the old device-wide "Everything" setting. */
+const NOTIFY_DEFAULT = '*';
+
+function readScopeChoices(key: string): Record<string, string[]> {
 	try {
-		const parsed: unknown = JSON.parse(read(KEY.webPushWake) ?? '{}');
-		if (!isJsonObject(parsed)) return {};
+		const parsed: unknown = JSON.parse(read(key) ?? '{}');
 		const choices: Record<string, string[]> = Object.create(null);
+		if (!isJsonObject(parsed)) return choices;
 		for (const [account, scopes] of Object.entries(parsed)) {
 			if (Array.isArray(scopes)) choices[account] = scopes.filter((scope): scope is string => typeof scope === 'string');
 		}
 		return choices;
 	} catch {
-		return {};
+		return Object.create(null);
 	}
 }
 
-/** The wake scopes an account chose for push (§4.7); undefined until it chose. */
-export function loadWebPushWake(account: string): string[] | undefined {
-	const choices = loadWakeChoices();
-	return Object.hasOwn(choices, account) ? choices[account] : undefined;
+function remove(key: string): void {
+	if (!persisting) return;
+	try {
+		globalThis.localStorage?.removeItem(key);
+	} catch {
+		// As `write`.
+	}
 }
 
-export function saveWebPushWake(account: string, scopes: readonly string[]): void {
-	write(KEY.webPushWake, JSON.stringify({ ...loadWakeChoices(), [account]: [...scopes] }));
+/**
+ * Moves the earlier settings into `apron.notifyScopes`: push's per-account
+ * wake scopes as they were, and the device-wide desktop setting as the
+ * choice of accounts that have none ("Everything" is every scope; "Mentions"
+ * was the default, now mentions and replies).
+ */
+function migrateNotifyScopes(): void {
+	const wake = read('apron.webPushWake');
+	const scope = read('apron.notificationScope');
+	if (wake === null && scope === null) return;
+	const choices = readScopeChoices(KEY.notifyScopes);
+	for (const [account, scopes] of Object.entries(readScopeChoices('apron.webPushWake'))) choices[account] ??= scopes;
+	if (scope === 'everything') choices[NOTIFY_DEFAULT] ??= ['mentions', 'replies', 'private', 'joined'];
+	write(KEY.notifyScopes, JSON.stringify(choices));
+	remove('apron.webPushWake');
+	remove('apron.notificationScope');
+}
+
+/** What an account chose to be notified about (`notifyAccount`); undefined until it chose. */
+export function loadNotifyScopes(account: string): string[] | undefined {
+	migrateNotifyScopes();
+	const choices = readScopeChoices(KEY.notifyScopes);
+	return choices[account] ?? choices[NOTIFY_DEFAULT];
+}
+
+export function saveNotifyScopes(account: string, scopes: readonly string[]): void {
+	migrateNotifyScopes();
+	write(KEY.notifyScopes, JSON.stringify({ ...readScopeChoices(KEY.notifyScopes), [account]: [...scopes] }));
 }
 
 /** The account this browser's one push subscription is registered for. */

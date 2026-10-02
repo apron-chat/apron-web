@@ -2,7 +2,6 @@ import { isJsonObject } from '$lib/protocol/types';
 
 export type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
 export type NotificationTestResult = 'sent' | 'denied' | 'unsupported' | 'error';
-export type NotificationScope = 'everything' | 'mentions';
 
 export function notificationPermission(): NotificationPermissionState {
 	if (typeof Notification === 'undefined' || !globalThis.isSecureContext) return 'unsupported';

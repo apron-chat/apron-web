@@ -7,7 +7,7 @@
 	import { prepareAvatar } from '$lib/ui/images';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { saveDisplayName } from '$lib/ui/storage';
-	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
+	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import Avatar from './Avatar.svelte';
 	import PreferencesDialog from './PreferencesDialog.svelte';
@@ -24,15 +24,14 @@
 		notificationsEnabled: boolean;
 		notificationsSupported: boolean;
 		notificationPermission: NotificationPermissionState;
-		notificationScope: NotificationScope;
+		/** What to notify about (`NOTIFY_SCOPES`), for desktop notifications and push alike. */
+		notifyScopes: string[];
 		onnotifications: () => void;
-		onnotificationscope: (scope: NotificationScope) => void;
+		onnotifyscopes: (scopes: string[]) => void;
 		ontestnotifications: () => Promise<NotificationTestResult>;
 		/** Push notifications (§4.7), when the server offers web push. */
 		webPush?: WebPushPreference;
 		onwebpush: () => void;
-		/** The wake scopes chosen for push (§4.7). */
-		onwebpushwake: (scopes: string[]) => void;
 		/** Chromium's install prompt, from the push setting. */
 		oninstallapp: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
@@ -41,7 +40,7 @@
 		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
-	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, webPush, onwebpush, onwebpushwake, oninstallapp, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, onsignout, onsignin }: Props = $props();
 
 	let open = $state(false);
 	let preferencesOpen = $state(false);
@@ -362,8 +361,8 @@
 	{/if}
 	<PreferencesDialog
 		bind:open={preferencesOpen}
-		{notificationsEnabled} {notificationsSupported} {notificationPermission} {notificationScope}
-		{onnotifications} {onnotificationscope} {ontestnotifications} {webPush} {onwebpush} {onwebpushwake} {oninstallapp}
+		{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
+		{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp}
 		onclosed={() => preferencesTrigger?.focus()}
 	/>
 	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || 'not signed in'}. Edit`} onclick={toggle}>

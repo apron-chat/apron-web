@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { webPushKey } from '$lib/protocol/client';
 import type { PushRegistration } from '$lib/protocol/client';
-import { base64UrlToBytes, bytesToBase64Url, canOfferInstall, chosenWake, isStandalone, needsHomeScreen, offeredWake, pushId, sameServerKey, webPushAccount, wakeDescription, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
+import { base64UrlToBytes, bytesToBase64Url, canOfferInstall, isStandalone, needsHomeScreen, offeredWake, pushId, sameServerKey, webPushAccount, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
 
 describe('web push', () => {
 	it('decodes base64url keys, padded or not, and encodes them back unpadded', () => {
@@ -45,28 +45,11 @@ describe('web push', () => {
 		expect(webPushKey(undefined)).toBeUndefined();
 	});
 
-	it('reads the offered wake scopes, and picks the account\'s choice of them, else the defaults', () => {
+	it('reads the wake scopes the server pushes', () => {
 		expect(offeredWake({ webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'ext:x', 3] })).toEqual(['mentions', 'replies', 'ext:x']);
 		expect(offeredWake({ webpush: { key: 'BNcR' } })).toEqual([]);
 		expect(offeredWake(undefined)).toEqual([]);
-		const offered = ['mentions', 'replies', 'private'];
-		// No choice yet: the protocol's defaults the server offers.
-		expect(chosenWake(undefined, offered)).toEqual(['mentions', 'replies']);
-		expect(chosenWake(undefined, ['mentions'])).toEqual(['mentions']);
-		expect(chosenWake(undefined, ['private', 'joined'])).toEqual(['private']);
-		// A choice keeps only what is offered, and falls back when nothing of it is.
-		expect(chosenWake(['private', 'joined'], offered)).toEqual(['private']);
-		expect(chosenWake(['joined'], offered)).toEqual(['mentions', 'replies']);
-		expect(chosenWake(['mentions'], [])).toEqual([]);
 	});
-
-	it('describes the wake scopes in words', () => {
-		expect(wakeDescription(['mentions', 'replies'])).toBe('mentions and replies to your messages');
-		expect(wakeDescription(['mentions'])).toBe('mentions');
-		expect(wakeDescription(['joined', 'mentions', 'private'])).toBe('mentions, every message in your private rooms and every message in rooms you’ve joined');
-		expect(wakeDescription([])).toBeUndefined();
-	});
-
 
 	it('names an account on a server by a short hash, its push_id', async () => {
 		const ada = webPushAccount('wss://server.apron.chat/', 'ada');
@@ -157,11 +140,16 @@ describe('keeping the push subscription in step', () => {
 		expect(await enabled).toBe(true);
 		const registered = { kind: 'webpush', url: 'https://push.example/1', push_id: await pushId('wss://a.example/\nada'), keys: { p256dh: 'BPk', auth: 'c2Vj' } };
 		expect(client.calls).toEqual([[{ ...registered, wake: ['mentions', 'replies'] }, 'ada']]);
+		// An empty `wake` wakes for nothing, and goes as is.
+		const nothing = sync.enable(client, 'BNcR', 'ada', undefined, []);
+		await finish();
+		expect(await nothing).toBe(true);
+		expect(client.calls[1][0]).toHaveProperty('wake', []);
 		// Without scopes the server's defaults apply: no `wake`.
 		const defaults = sync.enable(client, 'BNcR', 'ada');
 		await finish();
 		expect(await defaults).toBe(true);
-		expect(client.calls[1][0]).not.toHaveProperty('wake');
+		expect(client.calls[2][0]).not.toHaveProperty('wake');
 	});
 
 	it('registers nothing when turned off while subscribing, and unsubscribes after the subscribing ends', async () => {

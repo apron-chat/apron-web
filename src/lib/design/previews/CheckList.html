@@ -1,4 +1,4 @@
-<!-- @dsCard group="Input" height=420 subtitle="Push wake scopes: one not offered, the last checked one kept" -->
+<!-- @dsCard group="Input" height=420 subtitle="What to notify about: a note on a checked option, one disabled, the last checked one kept" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>CheckList</title></head>
@@ -13,7 +13,8 @@
     { value: 'private', title: 'Private rooms', text: 'Every message in private rooms you’re in', disabled: true, note: 'Not offered by this server' },
     { value: 'joined', title: 'All joined rooms', text: 'Every message in rooms you’ve joined' }
   ];
-  add(A.CheckList, { label: 'Notify me about', options: scopes, value: ['mentions', 'replies'], min: 1 });
+  var noted = scopes.map(function (s) { return s.value === 'private' ? { value: s.value, title: s.title, text: s.text, note: 'Only while Apron is open — this server doesn’t push it' } : s; });
+  add(A.CheckList, { label: 'Notify me about', options: noted, value: ['mentions', 'replies', 'private'], min: 1 });
   add(A.CheckList, { label: 'Notify me about', options: scopes, value: ['mentions'], min: 1 });
 </script>
 </body>

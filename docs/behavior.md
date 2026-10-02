@@ -169,9 +169,21 @@ outside, or tabbing out closes it. Mentions inside a reply's quote only read,
 since the quote is the button that jumps to its message.
 
 A mention that lands while the tab is hidden or unfocused flashes the tab title
-and plays a soft chime. **Preferences** (the gear beside your profile) can turn
-on desktop notifications instead, for mentions or for every message from
-someone else; turning them on asks the browser's permission, and **Send test**
+and plays a soft chime. **Preferences** (the gear beside your profile) starts
+its Notifications section with **Notify me about**, one choice for desktop
+notifications and push alike: Mentions (messages whose `body.mentions` list
+you, or an edit that adds you), Replies (replies to one of your messages that
+is loaded here; with the replied-to message not loaded, no notification),
+Private rooms (every message in a private room or its threads) and All joined
+rooms (every message in a joined room). Messages of your own never notify. At
+least one stays checked, mentions and replies until you choose; the switches
+below turn notifications off. The choice is kept per account on each server,
+and for a server's guests together (their `user_id`s change with each
+connection), and applies in other tabs. The earlier settings carry over: push's
+wake scopes as they were, and the device-wide "Everything" as every scope.
+
+Below it, **Desktop notifications** alerts while Apron is open but hidden or
+unfocused; turning them on asks the browser's permission, and **Send test**
 shows a sample. While they're on, a notification replaces the chime (the chime
 still plays if one couldn't be shown), each room keeps one notification that
 the next message replaces (its newest mention, else its newest message), and
@@ -193,17 +205,13 @@ after the tab moved to another server or account, registers nothing. A
 replaced registration is unregistered, after the next `auth` if not at once.
 Signing out unregisters too.
 
-While push is on, **Notify me about** under the switch picks its wake scopes:
-Mentions, Replies, Private rooms and All joined rooms. Scopes missing from
-`server.push.wake` show disabled, marked "Not offered by this server", and the
-picker is hidden when the server lists none (the client then sends no `wake`,
-and the server's defaults apply). The choice is kept per account on each server
-and applies in other tabs. Until one is made, it is `mentions` and `replies`
-where offered (else the first offered scope), and a chosen scope the server
-stops offering falls back to those. `wake` carries only offered scopes. The
-last checked scope can't be unchecked: the switch turns push off. A change
-registers again at once, with the same `url`. The setting's description names
-the chosen scopes.
+**Push notifications** alerts on this device even when Apron is closed. Its
+`wake` is the checked scopes that `server.push.wake` lists; when the server
+lists none, no `wake` goes and the server's defaults apply. While push is on, a
+checked scope the server doesn't push says "Only while Apron is open — this
+server doesn't push it". When none of the checked scopes is pushed, push still
+registers, with an empty `wake`, which wakes for nothing, and the setting says
+so. A change to the choice registers again at once, with the same `url`.
 
 On iPhone and iPad Safari outside a Home Screen app, push isn't offered: the
 push setting shows a callout with the steps to add Apron to the Home Screen.

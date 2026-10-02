@@ -4,8 +4,9 @@
 		value: string;
 		title: string;
 		text?: string;
-		/** Not offered here; `note` says why (such as "Not offered by this server"). */
+		/** Can't be changed here; `note` can say why. */
 		disabled?: boolean;
+		/** A short note under it, such as why it is disabled, or what it does here. */
 		note?: string;
 	}
 
@@ -41,7 +42,7 @@
 			<span class="ap-checklist-label">
 				<span class="ap-choice-title">{option.title}</span>
 				{#if option.text}<span class="ap-choice-text">{option.text}</span>{/if}
-				{#if option.disabled && option.note}<span class="ap-checklist-note">{option.note}</span>{/if}
+				{#if option.note}<span class="ap-checklist-note">{option.note}</span>{/if}
 			</span>
 		</label>
 	{/each}
