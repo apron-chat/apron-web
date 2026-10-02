@@ -420,6 +420,11 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-menu { position: absolute; right: 0; bottom: calc(100% + var(--space-1)); z-index: 5; min-width: 200px; margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
 .ap-menu-item { font: inherit; display: block; width: 100%; padding: 6px var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .ap-menu-item:hover { background: var(--bg-300); }
+/* MenuButton — a button that opens a menu of choices, each with an optional muted hint (Pause notifications) */
+.ap-menubtn { position: relative; display: inline-block; }
+.ap-menu-below { top: calc(100% + var(--space-1)); bottom: auto; }
+.ap-menubtn .ap-menu-item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); white-space: nowrap; }
+.ap-menu-hint { color: var(--ink-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
 /* Mention — the @name chip inside message text */
 .ap-mention { display: inline; padding: 1px 5px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }

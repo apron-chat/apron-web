@@ -30,8 +30,9 @@ state and behavior — `ConnectScreen`,
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
 design system with the next `npm run design:bundle`. `PreferencesDialog` renders
-the design system's `CheckList` (what to notify about) and `Callout` (installing
-for push) as they are.
+the design system's `CheckList` (what to notify about), `Callout` (installing
+for push) and `MenuButton` (Pause…) as they are, and `pause.ts` words and times
+the pause.
 
 `src/routes/+page.svelte` owns the session and the navigation (which room or
 thread is open, per-room drafts) and composes the components. The
@@ -114,6 +115,11 @@ authentication on; a ping that goes a whole interval without the
 `{"method":"pong"}` answer marks the socket dead, and it is replaced through
 the usual reconnect. With `room_leave: false` the client offers no Leave, and
 with `read_cursors: false` it moves your read cursor locally without sending it.
+`setAway(away)` reports attendance with `status` `{idle}` (§4.11, capability
+`status`): idle only after `IDLE_AFTER_MS`, attended at once, and the current
+state as each connection's server frame arrives. `setMute(mute)` sends
+`status` `{mute}` and applies it at once; `you.mute` from the server sets the
+snapshot's `mutedUntil`, which a timer clears when the pause ends.
 `setPushRegistration(params, userId)` keeps the `push_register` params (§4.7)
 and sends them after each `auth` as that account while `server.push` offers
 their `kind`. A replaced or cleared registration is unregistered, after the

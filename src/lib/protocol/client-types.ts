@@ -217,6 +217,11 @@ export interface ClientSnapshot {
 	 * changes are denied until the user signs in.
 	 */
 	readOnly?: boolean;
+	/**
+	 * Your notifications are paused (§4.11 `mute`, from `you.mute`) until
+	 * then, in epoch milliseconds, or `true` until resumed. Absent when not.
+	 */
+	mutedUntil?: number | true;
 	/** This connection's rooms are listed: joined ones (capability `rooms`), else the default room. */
 	roomsListed?: boolean;
 	error?: string;

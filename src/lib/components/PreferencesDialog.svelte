@@ -5,6 +5,9 @@
 	import Button from '$lib/design/components/Button.svelte';
 	import Callout from '$lib/design/components/Callout.svelte';
 	import CheckList from '$lib/design/components/CheckList.svelte';
+	import MenuButton from '$lib/design/components/MenuButton.svelte';
+	import BellOff from '@lucide/svelte/icons/bell-off';
+	import { pauseChoices, pausedUntilLabel, type PausedUntil } from '$lib/ui/pause';
 	import { NOTIFY_SCOPES, notifyScopeNotes, pushWake } from '$lib/ui/notify-scopes';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import FontFamilyField from './FontFamilyField.svelte';
@@ -24,14 +27,24 @@
 		/** Push notifications (§4.7), when the server offers web push. */
 		webPush?: WebPushPreference;
 		onwebpush: () => void;
+		/** Pausing notifications (§4.11 `mute`), on a server with capability `status`: `until` while paused. */
+		pause?: { until?: PausedUntil };
+		onpause: (until: PausedUntil) => void;
+		onresume: () => void;
 		/** Chromium's install prompt, from the push setting. */
 		oninstallapp: () => void;
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, onclosed }: Props = $props();
+	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onclosed }: Props = $props();
 
 	let preferencesSection = $state<'notifications' | 'appearance'>('notifications');
+	/** The Pause menu's choices, with when each would end, worked out as it opens. */
+	let pauseMenuOpen = $state(false);
+	let choices = $derived.by(() => {
+		void pauseMenuOpen;
+		return pauseChoices();
+	});
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
 	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: it wakes for nothing. */
@@ -156,6 +169,23 @@
 			<section class="ap-preferences-content" aria-labelledby="ap-pref-notifications">
 				<h3 id="ap-pref-notifications">Notifications</h3>
 				<p class="ap-profedit-hint">Choose when Apron can interrupt you.</p>
+				{#if pause}
+					<div class="ap-pref-setting ap-pref-pause">
+						<div>
+							<strong>Pause notifications</strong>
+							{#if pause.until !== undefined}
+								<p class="ap-pref-note ap-pref-paused" role="status"><BellOff size={14} strokeWidth={1.8} aria-hidden="true" /> Paused {pausedUntilLabel(pause.until)} · no desktop or push notifications on your devices.</p>
+							{:else}
+								<p class="ap-profedit-hint">Silence desktop and push notifications on all your devices for a while.</p>
+							{/if}
+						</div>
+						{#if pause.until !== undefined}
+							<Button size="sm" variant="primary" label="Resume" onclick={onresume} />
+						{:else}
+							<MenuButton label="Pause…" bind:open={pauseMenuOpen} {choices} onselect={(value) => { const choice = choices.find((entry) => entry.value === value); if (choice) onpause(choice.until); }} />
+						{/if}
+					</div>
+				{/if}
 				<div class="ap-pref-scopes">
 					<CheckList
 						label="Notify me about"
@@ -315,7 +345,9 @@
 	.ap-pref-setting .ap-pref-test { margin: var(--space-2) 0 0 calc(-1 * var(--space-3)); }
 	.ap-pref-push { border-bottom: 0; }
 	.ap-pref-push-more { max-width: 460px; padding-bottom: var(--space-4); }
-	.ap-pref-scopes { max-width: 460px; padding-bottom: var(--space-4); }
+	.ap-pref-scopes { max-width: 460px; padding: var(--space-4) 0; }
+	.ap-pref-pause { border-top: 0; }
+	.ap-pref-note.ap-pref-paused { display: flex; align-items: center; gap: var(--space-1); color: var(--warn); }
 	.ap-pref-switch { flex: none; width: 42px; height: 24px; padding: 3px; display: flex; align-items: center; border: 0; border-radius: 999px; background: var(--bg-300); cursor: pointer; transition: background .15s; }
 	.ap-pref-switch span { width: 18px; height: 18px; border-radius: 50%; background: var(--ink-muted); transition: transform .15s, background .15s; }
 	.ap-pref-switch.active { background: var(--accent-soft); }

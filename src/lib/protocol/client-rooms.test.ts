@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatClient, DEFAULT_ROOM_ID, type ClientSnapshot } from './client';
+import { ChatClient, DEFAULT_ROOM_ID, IDLE_AFTER_MS, type ClientSnapshot } from './client';
 import { FakeSocket, settle } from './fake-socket';
 
 /** Operations whose outcome a test does not await still settle when the client stops. */
@@ -277,54 +277,112 @@ describe('rooms by request (cap rooms)', () => {
 		expect(room('20')?.loaded).toBe(true);
 	});
 
-	it('tells a push server when nobody is attending with push_away, once per change and again on a new connection', async () => {
-		const greet = async () => {
+	describe('status', () => {
+		const statuses = () => socket.sent.filter((frame) => frame.method === 'status').map((frame) => frame.params as Record<string, unknown>);
+		async function greet(caps: string[] = ['rooms', 'status'], you: Record<string, unknown> = { user_id: 'guest_1', name: 'Guest' }, auth = ['guest']): Promise<void> {
 			socket.open();
-			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms', 'activity'], push: { webpush: { key: 'BNcR' } } } });
-			await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
-			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
-		};
-		await greet();
-		const away = () => socket.sent.filter((frame) => frame.method === 'push_away').map((frame) => (frame.params as { away: boolean }).away);
-		client.setAway(true);
-		client.setAway(true);
-		expect(away()).toEqual([true]);
-		expect(socket.sent.find((frame) => frame.method === 'push_away')).toEqual({ method: 'push_away', params: { away: true } });
-		client.setAway(false);
-		expect(away()).toEqual([true, false]);
-		// Typing and read cursors don't end it: going away again while typing needs no new frame.
-		client.setAway(true);
-		client.sendTyping('general', true);
-		client.markRead('general', '1724803200001');
-		client.setAway(true);
-		expect(away()).toEqual([true, false, true]);
-		// `activity` never carries it.
-		expect(socket.sent.filter((frame) => frame.method === 'activity' && 'away' in (frame.params as object))).toEqual([]);
-		// A message ends it on the server: going away again says so again.
-		client.send('general', 'hi').promise.catch(() => undefined);
-		client.setAway(false);
-		client.setAway(true);
-		expect(away()).toEqual([true, false, true, true]);
-		// A new connection starts attended: an away tab says so after auth.
-		socket.drop();
-		vi.advanceTimersByTime(5_000);
-		socket = FakeSocket.latest();
-		await greet();
-		expect(away()).toEqual([true]);
-	});
+			socket.receive({ method: 'server', params: { apron: 7, auth, capabilities: caps } });
+			await socket.reply('auth', { you });
+			if (caps.includes('rooms')) await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
+		}
+		function reconnect(): void {
+			socket.drop();
+			vi.advanceTimersByTime(5_000);
+			socket = FakeSocket.latest();
+		}
 
-	it('sends push_away only to a server that offers push, whatever its capabilities', async () => {
-		const away = () => socket.sent.filter((frame) => frame.method === 'push_away' || (frame.method === 'activity' && 'away' in (frame.params as object))).map((frame) => [frame.method, frame.params]);
-		socket.open();
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['activity'] } });
-		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
-		client.setAway(true);
-		expect(away()).toEqual([]);
-		// A replacing server frame that offers push (§4.7) takes it.
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
-		expect(away()).toEqual([['push_away', { away: true }]]);
-		client.setAway(false);
-		expect(away()).toEqual([['push_away', { away: true }], ['push_away', { away: false }]]);
+		it('reports attendance as soon as the server frame arrives, before auth, and again on each connection', async () => {
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['status'] } });
+			expect(socket.sent.map((frame) => frame.method)).toEqual(['status', 'auth']);
+			expect(statuses()).toEqual([{ idle: false }]);
+			await socket.reply('auth', { you: { user_id: 'guest_1' } });
+			// Auth doesn't repeat it.
+			expect(statuses()).toEqual([{ idle: false }]);
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }]);
+			// A new connection starts by saying the tab is still idle.
+			reconnect();
+			await greet(['status']);
+			expect(statuses()).toEqual([{ idle: true }]);
+		});
+
+		it('reports becoming idle only after the wait, and becoming attended at once', async () => {
+			await greet();
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS - 1);
+			expect(statuses()).toEqual([{ idle: false }]);
+			// Back before the wait is over: nothing to say.
+			client.setAway(false);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			expect(statuses()).toEqual([{ idle: false }]);
+			client.setAway(true);
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }]);
+			client.setAway(false);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }, { idle: false }]);
+		});
+
+		it('counts a message as ending idle, and becomes idle again after the wait while still away', async () => {
+			await greet();
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			// Typing and read cursors don't end it.
+			client.sendTyping('general', true);
+			client.markRead('general', '1724803200001');
+			client.send('general', 'hi').promise.catch(() => undefined);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }]);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }, { idle: true }]);
+			// `activity` never carries attendance, and nothing is sent as `push_away`.
+			expect(socket.sent.filter((frame) => frame.method === 'push_away' || (frame.method === 'activity' && ('away' in (frame.params as object) || 'idle' in (frame.params as object))))).toEqual([]);
+		});
+
+		it('sends no status to a server without the capability, push or not', async () => {
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['activity'], push: { webpush: { key: 'BNcR' } } } });
+			await socket.reply('auth', { you: { user_id: 'guest_1' } });
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			client.setMute(true);
+			expect(statuses()).toEqual([]);
+			// A replacing server frame with the capability hears the current state.
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['status'] } });
+			expect(statuses()).toEqual([{ idle: true }]);
+		});
+
+		it('pauses notifications with mute, and takes the server\'s you.mute as the word on it', async () => {
+			const now = Date.now();
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', mute: 120 }, ['token', 'guest']);
+			// A guest can't pause: this sign-in is a guest's.
+			client.setMute(true);
+			expect(statuses().filter((params) => 'mute' in params)).toEqual([]);
+			client.useToken('apron_token');
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', mute: 120 }, ['token', 'guest']);
+			// The server's `mute` is seconds left: the pause ends then.
+			expect(snapshot.mutedUntil).toBeGreaterThanOrEqual(now + 120_000);
+			client.setMute(3600);
+			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }]);
+			expect(snapshot.mutedUntil).toBe(Date.now() + 3_600_000);
+			client.setMute(0);
+			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }, { mute: 0 }]);
+			expect(snapshot.mutedUntil).toBeUndefined();
+			// Until resumed, from a `user` notification about you.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada', mute: true } } });
+			expect(snapshot.mutedUntil).toBe(true);
+			// Absent: not paused.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada' } } });
+			expect(snapshot.mutedUntil).toBeUndefined();
+			// A pause runs out here without a word from the server.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada', mute: 60 } } });
+			expect(snapshot.mutedUntil).toBe(Date.now() + 60_000);
+			vi.advanceTimersByTime(60_000);
+			expect(snapshot.mutedUntil).toBeUndefined();
+		});
 	});
 
 	describe('push', () => {

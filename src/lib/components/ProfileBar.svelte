@@ -1,5 +1,7 @@
 <script lang="ts">
 	import Settings from '@lucide/svelte/icons/settings';
+	import BellOff from '@lucide/svelte/icons/bell-off';
+	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
 	import type { ChatClient, OperationHandle } from '$lib/protocol/client';
 	import { addEmailError, passkeyMessage, wayBackNudge } from '$lib/ui/connection';
@@ -9,6 +11,7 @@
 	import { saveDisplayName } from '$lib/ui/storage';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
+	import type { PausedUntil } from '$lib/ui/pause';
 	import Avatar from './Avatar.svelte';
 	import PreferencesDialog from './PreferencesDialog.svelte';
 	import TypingDots from './TypingDots.svelte';
@@ -34,13 +37,17 @@
 		onwebpush: () => void;
 		/** Chromium's install prompt, from the push setting. */
 		oninstallapp: () => void;
+		/** Pausing notifications (§4.11 `mute`), on a server with capability `status`. */
+		pause?: { until?: PausedUntil };
+		onpause: (until: PausedUntil) => void;
+		onresume: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: () => void;
 		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
 		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
-	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin }: Props = $props();
 
 	let open = $state(false);
 	let preferencesOpen = $state(false);
@@ -57,6 +64,8 @@
 	let avatarError = $state('');
 	let avatarInput = $state<HTMLInputElement | undefined>();
 	let you = $derived(session.you);
+	/** While notifications are paused, when that ends in words ("until 14:30"). */
+	let paused = $derived(pause?.until !== undefined ? pausedUntilLabel(pause.until) : undefined);
 	let avatar = $derived(directory.avatar(you));
 	/** Avatars are uploaded with a `/avatar` command (§4.6.6), which needs capabilities `command` and `embed:upload`. */
 	let canUploadAvatar = $derived(session.snapshot.capabilities.command && session.snapshot.capabilities['embed:upload']);
@@ -362,7 +371,7 @@
 	<PreferencesDialog
 		bind:open={preferencesOpen}
 		{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
-		{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp}
+		{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 		onclosed={() => preferencesTrigger?.focus()}
 	/>
 	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || 'not signed in'}. Edit`} onclick={toggle}>
@@ -373,8 +382,9 @@
 		</span>
 		<span class="ap-profile-edit" aria-hidden="true">Edit</span>
 	</button>
-	<button class="ap-profile-settings" bind:this={preferencesTrigger} type="button" aria-label="Open preferences" aria-haspopup="dialog" title="Preferences" onclick={showPreferences}>
+	<button class="ap-profile-settings" bind:this={preferencesTrigger} type="button" aria-label={paused ? `Open preferences. Notifications paused ${paused}` : 'Open preferences'} aria-haspopup="dialog" title={paused ? `Preferences · notifications paused ${paused}` : 'Preferences'} onclick={showPreferences}>
 		<Settings size={18} strokeWidth={1.6} aria-hidden="true" />
+		{#if paused}<span class="ap-profile-paused" aria-hidden="true"><BellOff size={10} strokeWidth={2.2} /></span>{/if}
 	</button>
 </div>
 
@@ -386,6 +396,9 @@
 	.ap-profile-settings { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; color: var(--ink-muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; }
 	.ap-profile-settings:hover { color: var(--ink); background: var(--bg-300); }
 	.ap-profile-settings:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+	.ap-profile-settings { position: relative; }
+	/* Notifications paused (§4.11 `mute`): a small bell-off on the gear's corner. */
+	.ap-profile-paused { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--bg-100); color: var(--warn); box-shadow: 0 0 0 1px var(--line); }
 	.ap-profile-pop { max-height: calc(100dvh - 96px); overflow-y: auto; }
 	.ap-profile-pop .ap-profedit-actions { flex-wrap: wrap; }
 	.signin-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }

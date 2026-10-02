@@ -54,6 +54,7 @@
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
 	import { messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
+	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { inNotifyScopes, notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
 	import { canOfferInstall, needsHomeScreen, offeredWake, pushId, webPushAccount, webPushSupported, WebPushSync, type InstallPromptEvent } from '$lib/ui/web-push';
 
@@ -124,6 +125,10 @@
 	let webPushWake = $derived(pushWake(notifyScopes, webPushOffered));
 	let webPushError = $state<string | undefined>();
 	let webPushAvailable = $state(false);
+	/** Notifications are paused until then (§4.11 `mute`, the server's `you.mute`). */
+	let pausedUntil = $derived(session.snapshot.mutedUntil);
+	/** Pausing needs capability `status` and a signed-in account (a guest's `user_id` ends with its connection). */
+	let canPause = $derived(session.server?.capabilities?.includes('status') === true && pushAccount !== undefined);
 	/** Chromium's offer to install Apron, kept for the push setting's Install app button. */
 	let installPrompt = $state<InstallPromptEvent | undefined>();
 	const webPush = new WebPushSync();
@@ -285,7 +290,7 @@
 	$effect(() => {
 		const arrivedMentions = mentions.observe(session.rooms, session.you, paneRoom?.id, latestVisible);
 		const arrivedMessages = incomingMessages.observe(session.rooms, session.you);
-		if (!notificationsActive || !presence.away) return;
+		if (!notificationsActive || !presence.away || isPaused(pausedUntil)) return;
 		const mentioned = new Set(arrivedMentions.map((event) => event.message_id));
 		// The checked scopes, judged here; an edit that adds you counts as a mention.
 		const context = { me: session.you, rooms: session.rooms };
@@ -344,10 +349,11 @@
 		untrack(() => openDestination(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined));
 	});
 
-	// Nobody is attending a hidden or unfocused tab (§4.4): the server may push instead.
+	// Nobody is attending a hidden or unfocused tab (§4.11 `idle`): the server may push instead.
+	// The client keeps it across connections and reports it on each.
 	$effect(() => {
 		const away = presence.away;
-		if (client && session.ready) untrack(() => client?.setAway(away));
+		if (client) untrack(() => client?.setAway(away));
 	});
 
 	$effect(() => {
@@ -847,6 +853,11 @@
 		} catch {
 			if (pushAccount === account) webPushError = 'This browser couldn’t subscribe to push notifications. Try again later.';
 		}
+	}
+
+	/** Pauses notifications everywhere (§4.11 `mute`): seconds from now, or until resumed. */
+	function pauseNotifications(until: PausedUntil): void {
+		client?.setMute(muteFor(until));
 	}
 
 	/** What to notify about, kept per account; push registers again with the new `wake` at once. */
@@ -1623,6 +1634,7 @@
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 		webPush={webPushServerKey ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive, offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError ? { error: webPushError } : {}) } : undefined} onwebpush={toggleWebPush} oninstallapp={installApp}
+		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(0)}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={() => session.forget()}
 	/>

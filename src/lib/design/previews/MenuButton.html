@@ -1,0 +1,20 @@
+<!-- @dsCard group="Actions" height=260 subtitle="Pause notifications: closed, and open with when each choice ends" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>MenuButton</title></head>
+<body>
+<div class="ap-row" id="root" style="align-items:flex-start;gap:220px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props) { var box = document.createElement('div'); root.appendChild(box); return A.render(C, box, props || {}); }
+  var choices = [
+    { value: '1h', label: 'For 1 hour', hint: 'until 15:42' },
+    { value: '8h', label: 'For 8 hours', hint: 'until 22:42' },
+    { value: 'tomorrow', label: 'Until tomorrow', hint: '9:00' },
+    { value: 'resume', label: 'Until I resume' }
+  ];
+  add(A.MenuButton, { label: 'Pause…', choices: choices, onselect: function () {} });
+  add(A.MenuButton, { label: 'Pause…', choices: choices, open: true, onselect: function () {} });
+</script>
+</body>
+</html>

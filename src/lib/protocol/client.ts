@@ -60,6 +60,8 @@ import {
 } from './client-types';
 import {
 	FIRST_LOG_ID,
+	IDLE_AFTER_MS,
+	MAX_TIMER_MS,
 	MAX_TYPING_S,
 	MAX_UNANSWERED_PINGS,
 	NO_NOTICES,
@@ -109,7 +111,7 @@ import { capabilitiesOf } from './client-views';
 
 export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
-export { recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
+export { IDLE_AFTER_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
 export {
 	canEdit,
 	canManageRooms,
@@ -175,9 +177,19 @@ export class ChatClient {
 	/** Notices that arrived before there was a room to show them in; the first room shown takes them. */
 	private orphanNotices: Array<{ from: Identity; body?: MessageBody; welcome?: boolean }> = [];
 	private noticeCount = 0;
-	/** Nobody is attending this connection (§4.7); `awaySent` is what the server takes it to be. */
+	/**
+	 * Nobody is attending this connection (§4.11 `idle`): `away` as the page
+	 * says, `idle` once that has
+	 * lasted `IDLE_AFTER_MS` (`idleTimer` runs meanwhile), and `idleSent` what
+	 * the server takes it to be on connection `connection`.
+	 */
 	private away = false;
-	private awaySent = false;
+	private idle = false;
+	private idleTimer: ReturnType<typeof setTimeout> | undefined;
+	private idleSent: { connection: number; idle: boolean } | undefined;
+	/** Your notifications are paused until (§4.11 `mute`): epoch milliseconds, or `true`; `muteTimer` ends it. */
+	private mutedUntil: number | true | undefined;
+	private muteTimer: ReturnType<typeof setTimeout> | undefined;
 	/**
 	 * What `push_register` sends on each connection (§4.7), for the account
 	 * `pushUser`; `pushSent` is whether this connection has.
@@ -400,6 +412,9 @@ export class ChatClient {
 		this.reconnectTimer = undefined;
 		this.stopWaitingForPresence();
 		this.clearStableTimer();
+		this.clearIdleTimer();
+		if (this.muteTimer) clearTimeout(this.muteTimer);
+		this.muteTimer = undefined;
 		const socket = this.socket;
 		this.socket = undefined;
 		this.authenticated = false;
@@ -505,6 +520,7 @@ export class ChatClient {
 			...(this.passkeyAbort ? { passkeyBusy: !this.addingEmail } : {}),
 			readOnly: this.authenticated && !this.registeredSession && this.server?.ext?.demo?.guest_posting === false,
 			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
+			...(this.mutedUntil !== undefined ? { mutedUntil: this.mutedUntil } : {}),
 			error: this.error,
 			server: this.server,
 			capabilities: capabilitiesOf(this.server),
@@ -1045,9 +1061,9 @@ export class ChatClient {
 	send(room: string, text: string, format: MessageFormat = 'plain', options: SendOptions = {}): OperationHandle<MessageResult> {
 		if (!text && !options.embeds?.length) return rejectedHandle('message', new Error('Nothing to send'));
 		// The message ends this user's typing indicator for everyone (§4.4), so no
-		// `typing: 0` needs to follow it, and ends `push_away` (§4.7).
+		// `typing: 0` needs to follow it, and ends `idle` on the server (§4.11).
 		this.sentTypingAt.delete(room);
-		this.awaySent = false;
+		this.messageEndsIdle();
 		const handle = this.enqueueRequest<MessageResult>('message', this.messageParams(room, text, format, options), { visible: true, allowBeforeAuth: false });
 		if (room === DEFAULT_ROOM_ID) {
 			handle.promise.then((result) => {
@@ -1338,22 +1354,91 @@ export class ChatClient {
 	}
 
 	/**
-	 * Tells a server that offers push (`server.push`) whether anyone is
-	 * attending this connection, with the `push_away` notification (§4.7):
-	 * `true` while the tab is hidden or unfocused, `false` once it is back.
-	 * Sent only when it changes, and again on each connection that starts
-	 * while away and after a message sent while away.
+	 * Tells a server with capability `status` whether anyone is attending this
+	 * connection (§4.11 `idle`), as the tab is hidden or unfocused (`away`) or
+	 * back. Becoming attended goes at once; becoming idle only once it has
+	 * lasted `IDLE_AFTER_MS`. Each connection reports its state as soon as the
+	 * server frame arrives, before `auth`, and then each change.
 	 */
 	setAway(away: boolean): void {
 		this.away = away;
-		this.syncAway();
+		if (away) {
+			if (this.idle || this.idleTimer) return;
+			this.idleTimer = setTimeout(() => {
+				this.idleTimer = undefined;
+				this.idle = true;
+				this.syncIdle();
+			}, IDLE_AFTER_MS);
+			return;
+		}
+		this.clearIdleTimer();
+		this.idle = false;
+		this.syncIdle();
 	}
 
-	private syncAway(): void {
-		if (!this.authenticated || !isJsonObject(this.server?.push) || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
-		if (this.away === this.awaySent) return;
-		this.awaySent = this.away;
-		this.sendFrame({ method: 'push_away', params: { away: this.away } });
+	/** A message ends `idle` on the server (§4.11); still away, the tab becomes idle again after the wait. */
+	private messageEndsIdle(): void {
+		if (this.idleSent?.connection === this.connectionId) this.idleSent.idle = false;
+		if (!this.idle) return;
+		this.idle = false;
+		this.setAway(this.away);
+	}
+
+	private clearIdleTimer(): void {
+		if (this.idleTimer) clearTimeout(this.idleTimer);
+		this.idleTimer = undefined;
+	}
+
+	private syncIdle(): void {
+		if (!this.hasCap('status') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+		if (this.idleSent?.connection === this.connectionId && this.idleSent.idle === this.idle) return;
+		this.idleSent = { connection: this.connectionId, idle: this.idle };
+		this.sendFrame({ method: 'status', params: { idle: this.idle } });
+	}
+
+	/**
+	 * Pauses your notifications everywhere (§4.11 `mute`): for `mute`
+	 * seconds, until resumed (`true`), or resumes them (`0`). Applied here at
+	 * once; the server's `you.mute` then has the last word. Needs capability
+	 * `status` and a signed-in account.
+	 */
+	setMute(mute: number | true): void {
+		if (!this.authenticated || !this.registeredSession || !this.hasCap('status')) return;
+		this.sendFrame({ method: 'status', params: { mute } });
+		this.applyMute(mute);
+		this.emit();
+	}
+
+	/** Takes `mute` as the server echoes it in `you` (§4.11): seconds left, `true`, or absent when not paused. */
+	private applyMute(mute: JsonValue): void {
+		if (this.muteTimer) clearTimeout(this.muteTimer);
+		this.muteTimer = undefined;
+		if (mute === true) {
+			this.mutedUntil = true;
+		} else if (typeof mute === 'number' && Number.isFinite(mute) && mute > 0) {
+			this.mutedUntil = Date.now() + mute * 1000;
+			this.scheduleUnmute();
+		} else {
+			this.mutedUntil = undefined;
+		}
+	}
+
+	/** At the end of a pause, notifications resume here without a word from the server. */
+	private scheduleUnmute(): void {
+		const until = this.mutedUntil;
+		if (typeof until !== 'number') return;
+		// Timers can't wait longer than about 24 days: wait in steps.
+		const wait = Math.min(until - Date.now(), MAX_TIMER_MS);
+		this.muteTimer = setTimeout(() => {
+			this.muteTimer = undefined;
+			if (this.mutedUntil !== until) return;
+			if (Date.now() < until) {
+				this.scheduleUnmute();
+				return;
+			}
+			this.mutedUntil = undefined;
+			this.emit();
+		}, Math.max(0, wait));
 	}
 
 	/**
@@ -2061,8 +2146,9 @@ export class ChatClient {
 		// Each frame fully replaces the last (§3.1): features are worth trying again. A server
 		// before v7 would ignore `user_id` in `room_join`/`room_leave` and act on the caller.
 		this.memberChangesUnsupported = version < 7;
+		// Attendance may go before `auth` (§4.11): it applies once authenticated.
+		this.syncIdle();
 		if (this.authenticated || this.authRequested) {
-			this.syncAway();
 			this.syncPush();
 			this.emit();
 			return;
@@ -2237,8 +2323,7 @@ export class ChatClient {
 		} else if (!this.rooms.size) {
 			this.showDefaultRoom();
 		}
-		this.awaySent = false;
-		this.syncAway();
+		this.syncIdle();
 		this.pushSent = false;
 		this.syncPush();
 		this.emit();
@@ -2327,6 +2412,8 @@ export class ChatClient {
 		// A pending address addition belongs to the account that proposed it (§4.10): another identity needs a new code.
 		if (changed) this.addProposalConnection = undefined;
 		this.you = this.noteUser(identity);
+		// `mute` is the server's word on a pause (§4.11); absent, there is none.
+		this.applyMute(identity.mute);
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
 	}
@@ -3035,7 +3122,8 @@ export class ChatClient {
 		this.joinedListing = undefined;
 		this.directory = undefined;
 		this.threadDirectory.clear();
-		this.awaySent = false;
+		this.idleSent = undefined;
+		this.applyMute(undefined);
 		this.memberChangesUnsupported = false;
 	}
 

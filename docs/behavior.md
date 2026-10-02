@@ -42,12 +42,15 @@ seconds per room, with one `typing: 0` when typing pauses, to avoid charging a
 frame per keystroke. Sending a message sends no `typing: 0`: the message itself
 ends the indicator. Other people's indicators last as long as their `typing`
 asks, or until their next message arrives in that room.
-On a server offering push (`server.push`, §4.7), the client sends the
-notification `push_away` `{away: true}` while the tab is hidden or unfocused and
-`{away: false}` when it is back, so the server can push instead; it is never
-shown to anyone. It goes after `auth` and on each change, and again after a
-reconnect while still away. A message sent from the tab ends it on the server,
-so going away again sends it again; typing and read cursors don't.
+With the `status` capability (§4.11), the client tells the server whether
+anyone is attending the tab, so the server can push instead. It sends the
+notification `status` `{idle: true}` once the tab has been hidden or
+unfocused for 30 seconds, and `{idle: false}` as soon as it is back. Each
+connection reports the current state as soon as the server frame arrives,
+before `auth`, and then each change. A message sent from the tab ends `idle`
+on the server, and the client counts it as ended; typing and read cursors
+don't. It is never shown to anyone. A server without `status` gets none of
+this.
 Explicit server URLs keep their path: a bare hostname connects at `/`, while
 servers that require `/ws` should be entered with that suffix.
 
@@ -184,6 +187,19 @@ below turn notifications off. The choice is kept per account on each server,
 and for a server's guests together (their `user_id`s change with each
 connection), and applies in other tabs. The earlier settings carry over: push's
 wake scopes as they were, and the device-wide "Everything" as every scope.
+
+On a server with the `status` capability, a signed-in account (not a guest)
+gets **Pause notifications** at the top of the section. **Pause…** opens a
+menu: For 1 hour, For 8 hours, Until tomorrow (9:00 the next day) and Until I
+resume, each showing when it would end. Choosing one sends `status` `{mute}`
+with the seconds until then, or `true`, and **Resume** sends `{mute: 0}`. The
+server's `you.mute` (in `auth` and `me` results and `user` notifications about
+you: seconds left, `true`, or absent when not paused) is the word on it; the
+client works out when the pause ends from it as it arrives, and resumes on its
+own then. While paused, the row reads "Paused until 14:30" (or "until tomorrow
+9:00", "until you resume"), the profile bar shows a bell-off icon beside the
+gear that opens Preferences, and no desktop notifications show; the server
+sends no pushes.
 
 Below it, **Desktop notifications** alerts while Apron is open but hidden or
 unfocused; turning them on asks the browser's permission, and **Send a test

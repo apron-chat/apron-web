@@ -9,7 +9,7 @@ export class PagePresence {
 	visible = $state(typeof document === 'undefined' || document.visibilityState === 'visible');
 	/** Whether this window has focus: a mention while it doesn't alerts the tab. */
 	focused = $state(typeof document === 'undefined' || document.hasFocus());
-	/** Nobody is attending a hidden or unfocused tab (§4.4): the server may push instead. */
+	/** Nobody is attending a hidden or unfocused tab (§4.11 `idle`): the server may push instead. */
 	away = $derived(!(this.visible && this.focused));
 	/** A mention arrived while you were away. */
 	attention = $state(false);
