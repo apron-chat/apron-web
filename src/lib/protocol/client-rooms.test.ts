@@ -277,19 +277,31 @@ describe('rooms by request (cap rooms)', () => {
 		expect(room('20')?.loaded).toBe(true);
 	});
 
-	it('tells the server when nobody is attending, once per change and again on a new connection', async () => {
-		await authenticate(['rooms', 'activity']);
-		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
-		const away = () => socket.sent.filter((frame) => frame.method === 'activity' && 'away' in (frame.params as object)).map((frame) => (frame.params as { away: boolean }).away);
+	it('tells a push server when nobody is attending with push_away, once per change and again on a new connection', async () => {
+		const greet = async () => {
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms', 'activity'], push: { webpush: { key: 'BNcR' } } } });
+			await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
+			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
+		};
+		await greet();
+		const away = () => socket.sent.filter((frame) => frame.method === 'push_away').map((frame) => (frame.params as { away: boolean }).away);
 		client.setAway(true);
 		client.setAway(true);
 		expect(away()).toEqual([true]);
-		expect(socket.sent.find((frame) => frame.method === 'activity' && 'away' in (frame.params as object))).toEqual({ method: 'activity', params: { away: true } });
+		expect(socket.sent.find((frame) => frame.method === 'push_away')).toEqual({ method: 'push_away', params: { away: true } });
 		client.setAway(false);
 		expect(away()).toEqual([true, false]);
-		// Typing ends away on the server: coming back needs no frame, going away again says so again.
+		// Typing and read cursors don't end it: going away again while typing needs no new frame.
 		client.setAway(true);
 		client.sendTyping('general', true);
+		client.markRead('general', '1724803200001');
+		client.setAway(true);
+		expect(away()).toEqual([true, false, true]);
+		// `activity` never carries it.
+		expect(socket.sent.filter((frame) => frame.method === 'activity' && 'away' in (frame.params as object))).toEqual([]);
+		// A message ends it on the server: going away again says so again.
+		client.send('general', 'hi').promise.catch(() => undefined);
 		client.setAway(false);
 		client.setAway(true);
 		expect(away()).toEqual([true, false, true, true]);
@@ -297,22 +309,22 @@ describe('rooms by request (cap rooms)', () => {
 		socket.drop();
 		vi.advanceTimersByTime(5_000);
 		socket = FakeSocket.latest();
-		await authenticate(['rooms', 'activity']);
+		await greet();
 		expect(away()).toEqual([true]);
 	});
 
-	it('tells a push server when nobody is attending, even without activity', async () => {
-		const away = () => socket.sent.filter((frame) => frame.method === 'activity').map((frame) => frame.params);
+	it('sends push_away only to a server that offers push, whatever its capabilities', async () => {
+		const away = () => socket.sent.filter((frame) => frame.method === 'push_away' || (frame.method === 'activity' && 'away' in (frame.params as object))).map((frame) => [frame.method, frame.params]);
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [] } });
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['activity'] } });
 		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
 		client.setAway(true);
 		expect(away()).toEqual([]);
-		// A replacing server frame that offers push (§4.7) accepts `away`.
+		// A replacing server frame that offers push (§4.7) takes it.
 		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
-		expect(away()).toEqual([{ away: true }]);
+		expect(away()).toEqual([['push_away', { away: true }]]);
 		client.setAway(false);
-		expect(away()).toEqual([{ away: true }, { away: false }]);
+		expect(away()).toEqual([['push_away', { away: true }], ['push_away', { away: false }]]);
 	});
 
 	describe('push', () => {

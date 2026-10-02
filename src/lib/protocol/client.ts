@@ -175,7 +175,7 @@ export class ChatClient {
 	/** Notices that arrived before there was a room to show them in; the first room shown takes them. */
 	private orphanNotices: Array<{ from: Identity; body?: MessageBody; welcome?: boolean }> = [];
 	private noticeCount = 0;
-	/** Nobody is attending this connection (§4.4); `awaySent` is what the server was last told on it. */
+	/** Nobody is attending this connection (§4.7); `awaySent` is what the server takes it to be. */
 	private away = false;
 	private awaySent = false;
 	/**
@@ -1044,8 +1044,8 @@ export class ChatClient {
 	 */
 	send(room: string, text: string, format: MessageFormat = 'plain', options: SendOptions = {}): OperationHandle<MessageResult> {
 		if (!text && !options.embeds?.length) return rejectedHandle('message', new Error('Nothing to send'));
-		// The message ends this user's typing indicator for everyone (§4.4), and
-		// any `away`, so no `typing: 0` needs to follow it.
+		// The message ends this user's typing indicator for everyone (§4.4), so no
+		// `typing: 0` needs to follow it, and ends `push_away` (§4.7).
 		this.sentTypingAt.delete(room);
 		this.awaySent = false;
 		const handle = this.enqueueRequest<MessageResult>('message', this.messageParams(room, text, format, options), { visible: true, allowBeforeAuth: false });
@@ -1082,7 +1082,6 @@ export class ChatClient {
 	 * as the frames they cause. A failure rejects with the server's message.
 	 */
 	command(room: string, text: string, options: Omit<SendOptions, 'ext'> = {}): OperationHandle {
-		this.awaySent = false;
 		return this.enqueueRequest('command', this.messageParams(room, text, undefined, options), { visible: true, allowBeforeAuth: false });
 	}
 
@@ -1336,15 +1335,14 @@ export class ChatClient {
 			this.sentTypingAt.delete(room);
 		}
 		this.sendFrame({ method: 'activity', params: { room_id: room, typing: active ? TYPING_TIMEOUT_S : 0 } });
-		// Typing ends `away` on the server (§4.4).
-		this.awaySent = false;
 	}
 
 	/**
-	 * Tells the server whether anyone is attending this connection (capability
-	 * `activity` or `server.push`, §4.4 and §4.7): `true` while the tab is hidden or unfocused, `false`
-	 * once it is back. Sent only when it changes, and again on each connection
-	 * that starts while away.
+	 * Tells a server that offers push (`server.push`) whether anyone is
+	 * attending this connection, with the `push_away` notification (§4.7):
+	 * `true` while the tab is hidden or unfocused, `false` once it is back.
+	 * Sent only when it changes, and again on each connection that starts
+	 * while away and after a message sent while away.
 	 */
 	setAway(away: boolean): void {
 		this.away = away;
@@ -1352,11 +1350,10 @@ export class ChatClient {
 	}
 
 	private syncAway(): void {
-		// A push server accepts `away` without capability `activity` (§4.7).
-		if (!this.authenticated || !(this.hasCap('activity') || isJsonObject(this.server?.push)) || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+		if (!this.authenticated || !isJsonObject(this.server?.push) || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 		if (this.away === this.awaySent) return;
 		this.awaySent = this.away;
-		this.sendFrame({ method: 'activity', params: { away: this.away } });
+		this.sendFrame({ method: 'push_away', params: { away: this.away } });
 	}
 
 	/**
@@ -1420,8 +1417,6 @@ export class ChatClient {
 		// keeps no read cursors would only be charged a frame for it.
 		if (this.server?.ext?.demo?.read_cursors !== false) {
 			this.sendFrame({ method: 'activity', params: { room_id: roomId, read_message_id: messageId } });
-			// A read cursor ends `away` on the server (§4.4).
-			this.awaySent = false;
 		}
 		this.emit();
 	}

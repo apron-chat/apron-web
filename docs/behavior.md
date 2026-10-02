@@ -42,9 +42,12 @@ seconds per room, with one `typing: 0` when typing pauses, to avoid charging a
 frame per keystroke. Sending a message sends no `typing: 0`: the message itself
 ends the indicator. Other people's indicators last as long as their `typing`
 asks, or until their next message arrives in that room.
-With the `activity` capability, or on a server offering push (§4.7), the client also sends `activity` `{away: true}` while
-the tab is hidden or unfocused and `{away: false}` when it is back, so the
-server can push to your other devices instead; it is never shown to anyone.
+On a server offering push (`server.push`, §4.7), the client sends the
+notification `push_away` `{away: true}` while the tab is hidden or unfocused and
+`{away: false}` when it is back, so the server can push instead; it is never
+shown to anyone. It goes after `auth` and on each change, and again after a
+reconnect while still away. A message sent from the tab ends it on the server,
+so going away again sends it again; typing and read cursors don't.
 Explicit server URLs keep their path: a bare hostname connects at `/`, while
 servers that require `/ws` should be entered with that suffix.
 
