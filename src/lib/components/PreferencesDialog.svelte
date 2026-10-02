@@ -166,7 +166,7 @@
 					/>
 					<p class="ap-pref-help">For desktop and push notifications alike. At least one stays on; the switches below turn notifications off.</p>
 				</div>
-				<div class="ap-pref-setting">
+				<div class="ap-pref-setting ap-pref-desktop">
 					<div>
 						<strong>Desktop notifications</strong>
 						<p class="ap-profedit-hint">Alerts while Apron is open but hidden or unfocused.</p>
@@ -181,13 +181,9 @@
 						{:else}
 							<p class="ap-pref-note" role="status">Turning this on will ask your browser for permission.</p>
 						{/if}
-					</div>
-					<button class="ap-pref-switch" class:active={notificationsEnabled} type="button" role="switch" aria-checked={notificationsEnabled} aria-label="Desktop notifications" disabled={!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied')} onclick={onnotifications}><span></span></button>
-				</div>
-				<div class="ap-pref-setting ap-pref-test">
-					<div>
-						<strong>Test notification</strong>
-						<p class="ap-profedit-hint">Send a sample message notification to check browser delivery. This won’t turn notifications on.</p>
+						<p class="ap-pref-test">
+							<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={testNotificationStatus === 'sending' || !notificationsSupported || notificationPermission === 'denied'} onclick={sendTestNotification}>{testNotificationStatus === 'sending' ? 'Sending…' : 'Send a test notification'}</button>
+						</p>
 						{#if testNotificationStatus === 'sent'}
 							<p class="ap-pref-note ap-profedit-ok" role="status">Test notification sent. Check your system notification area.</p>
 						{:else if testNotificationStatus === 'denied'}
@@ -198,7 +194,7 @@
 							<p class="ap-pref-note ap-profedit-err" role="status">The browser couldn’t display the test notification.</p>
 						{/if}
 					</div>
-					<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={testNotificationStatus === 'sending' || !notificationsSupported || notificationPermission === 'denied'} onclick={sendTestNotification}>{testNotificationStatus === 'sending' ? 'Sending…' : 'Send test'}</button>
+					<button class="ap-pref-switch" class:active={notificationsEnabled} type="button" role="switch" aria-checked={notificationsEnabled} aria-label="Desktop notifications" disabled={!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied')} onclick={onnotifications}><span></span></button>
 				</div>
 				{#if webPush}
 					<div class="ap-pref-setting ap-pref-push">
@@ -315,7 +311,8 @@
 	.ap-pref-theme-setting select { flex: none; }
 	.ap-pref-font-setting { display: block; }
 	.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
-	.ap-pref-test + .ap-pref-push { border-top: 0; }
+	.ap-pref-desktop + .ap-pref-push { border-top: 0; }
+	.ap-pref-setting .ap-pref-test { margin: var(--space-2) 0 0 calc(-1 * var(--space-3)); }
 	.ap-pref-push { border-bottom: 0; }
 	.ap-pref-push-more { max-width: 460px; padding-bottom: var(--space-4); }
 	.ap-pref-scopes { max-width: 460px; padding-bottom: var(--space-4); }

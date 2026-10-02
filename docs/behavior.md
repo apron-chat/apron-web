@@ -183,8 +183,8 @@ connection), and applies in other tabs. The earlier settings carry over: push's
 wake scopes as they were, and the device-wide "Everything" as every scope.
 
 Below it, **Desktop notifications** alerts while Apron is open but hidden or
-unfocused; turning them on asks the browser's permission, and **Send test**
-shows a sample. While they're on, a notification replaces the chime (the chime
+unfocused; turning them on asks the browser's permission, and **Send a test
+notification** under it shows a sample through the same browser path. While they're on, a notification replaces the chime (the chime
 still plays if one couldn't be shown), each room keeps one notification that
 the next message replaces (its newest mention, else its newest message), and
 clicking it opens that room or thread. Notifications show through the service
