@@ -15,11 +15,13 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { findGitHubLinks, linkPreviews } from '$lib/ui/link-previews';
 	import { clockLabel } from '$lib/ui/time';
+	import type { StagedFile as Staged } from '$lib/ui/pane-drafts.svelte';
 	import AutocompletePicker from './AutocompletePicker.svelte';
 	import Avatar from './Avatar.svelte';
 	import MentionText from './MentionText.svelte';
 	import Embed from './embeds/Embed.svelte';
 	import EmbedRemove from './embeds/EmbedRemove.svelte';
+	import StagedFile from './StagedFile.svelte';
 
 	const MENTION_MATCHES_MAX = 8;
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
@@ -43,6 +45,8 @@
 		disabled: boolean;
 		/** Attachments and voice clips (capability `embed:upload`, §4.6.4): each file goes out as an `upload` embed. */
 		canUpload: boolean;
+		/** Files attached to the draft, shown above the field until it is sent; each can be removed first. */
+		files?: Staged[];
 		/** False once the server showed it takes images only: voice clips are hidden. */
 		canUploadAudio?: boolean;
 		/**
@@ -58,13 +62,15 @@
 		reply?: { name?: string; text: string };
 		oninput: () => void;
 		onsend: () => void;
-		/** Picked files or a finished voice clip, to send with whatever is in the field. */
+		/** Picked or pasted files, or a finished voice clip, to attach to the draft. */
 		onfiles: (files: File[]) => void;
+		/** A staged file's (x): take it off the draft. */
+		onunstage: (id: string) => void;
 		oncancelreply: () => void;
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, oncancelreply, onmention }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, oncancelreply, onmention }: Props = $props();
 
 	/** Unique per composer, for the open picker's ID. */
 	const uid = $props.id();
@@ -614,6 +620,16 @@
 		<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" aria-label="Cancel reply" onclick={oncancelreply}>Cancel reply</button>
 	</div>
 {/if}
+{#if files.length > 0}
+	<div class="previews" data-testid="staged-files" aria-label="Files to send">
+		{#each files as staged (staged.id)}
+			<div class="embed-slot staged">
+				<StagedFile file={staged.file} />
+				<EmbedRemove label={`Remove ${staged.file.name || 'file'}`} onremove={() => { onunstage(staged.id); focus(); }} />
+			</div>
+		{/each}
+	</div>
+{/if}
 {#if previews.length > 0}
 	<div class="previews" data-testid="link-previews" aria-label="Link previews to send">
 		{#each previews as embed (embed.url)}
@@ -751,7 +767,7 @@
 				<Smile size={18} aria-hidden="true" />
 			</button>
 		</span>
-		<button class="ap-btn ap-btn-primary ap-btn-sm" data-testid="send-button" type="submit" aria-label={command ? 'Run command' : 'Send message'} disabled={disabled || recording || !value.trim()}>{command ? 'Run' : 'Send'}</button>
+		<button class="ap-btn ap-btn-primary ap-btn-sm" data-testid="send-button" type="submit" aria-label={command ? 'Run command' : 'Send message'} disabled={disabled || recording || (!value.trim() && files.length === 0)}>{command ? 'Run' : 'Send'}</button>
 	</form>
 </div>
 
@@ -763,6 +779,9 @@
 	.previews { display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-3) var(--space-4) var(--space-2); }
 	.embed-slot { position: relative; flex: 0 1 320px; min-width: 0; }
 	.embed-slot :global(.ap-embed) { width: 100%; min-width: 0; }
+	/* A staged image is as wide as its thumbnail; other files take a card's width. */
+	.staged { flex: none; max-width: 320px; }
+	.staged :global(.ap-embed-figure) { width: auto; }
 	.reply-draft span { min-width: 0; overflow-wrap: anywhere; }
 	/* The field is an editable div so mentions can be chips; it sizes like the design system's textarea. */
 	.field { height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }

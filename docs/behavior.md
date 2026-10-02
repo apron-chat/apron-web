@@ -308,9 +308,16 @@ fetches from a CDN.
 
 Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#46-embeds-and-avatars)):
 
-- **Uploads** (capability `embed:upload`): the composer's paperclip and microphone send
-  files and voice clips as `upload` embeds with whatever is in the field, then
-  write each file to the `write_url` in the result. The message shows a pending
+- **Uploads** (capability `embed:upload`): files picked with the paperclip or
+  pasted into the field, and voice clips from the microphone, are attached to
+  the draft rather than sent: they show above the composer (an image as a
+  thumbnail, audio with a player, anything else as a file card with its size),
+  each with an **(x)** to take it off, and are kept per room or thread like the
+  draft's text. Images start shrinking as soon as they are attached; one that
+  can't be made small enough comes off again with the reason. Send (with or
+  without text) posts the message with one `upload` embed per attached file,
+  then writes each file to the `write_url` in the result. A failed send gives
+  the draft back with its files. The message shows a pending
   card with progress until the server publishes the finished file: an image, a
   video or audio player from its `og`, or else a file card.
 - **Streams** (capability `embed:stream`): while the embed has a `url` the client reads
