@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOTIFICATION_CLICK, PUSH_CLICK, closeOlderInGroup, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, pushClickTarget, pushNotification, pushRoute, pushTarget, showNotification, tabWithPushId } from './notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, closeOlderInGroup, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId } from './notifications';
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -96,7 +96,11 @@ describe('push notifications', () => {
 	});
 
 	it('shows a push with a push_id as its message\'s own notification, the tag the page uses for it', () => {
-		const shown = pushNotification({ message_id: '1724803200042', room_id: 'general', push_id: 'a1', from: { user_id: 'alice', name: 'Alice' }, body: { text: 'Deploy is done' } });
+		const message = { message_id: '1724803200042', room_id: 'general', from: { user_id: 'alice', name: 'Alice' }, body: { text: 'Deploy is done' } };
+		const push = readPush({ push_id: 'a1', unread: 2, message, future: true });
+		expect(push?.pushId).toBe('a1');
+		expect(push?.unread).toBe(2);
+		const shown = push?.notification;
 		expect(shown?.options).toEqual({
 			body: 'Deploy is done', tag: 'apron:a1:1724803200042', renotify: false,
 			data: { push: true, roomId: 'general', pushId: 'a1', messageId: '1724803200042', group: 'a1:general' }
@@ -153,5 +157,33 @@ describe('push notifications', () => {
 		await showNotification('ada · general', { tag: 'apron:a1:2', data }, () => undefined);
 		await showNotification('ada · ops', { tag: 'apron:a1:3', data: { group: 'a1:ops' } }, () => undefined);
 		expect(shown.map((entry) => entry.closed)).toEqual([true, false, false]);
+	});
+
+	it('reads a badge push, with no message, as no notification', () => {
+		expect(readPush({ push_id: 'a1', unread: 0 })).toEqual({ pushId: 'a1', unread: 0 });
+		expect(readPush({ push_id: 'a1' })).toEqual({ pushId: 'a1' });
+		expect(readPush({ unread: -1, message: 'nope' })).toEqual({});
+		expect(readPush({ unread: 1.5 })).toEqual({});
+		// Anything but an object can't be read.
+		expect(readPush('hello')).toBeUndefined();
+		expect(readPush(undefined)).toBeUndefined();
+	});
+
+	it('reads the bare message object servers sent before the envelope', () => {
+		const push = readPush({ message_id: '7', room_id: 'general', push_id: 'a1', from: { user_id: 'bob' }, body: { text: 'hi' } });
+		expect(push?.pushId).toBe('a1');
+		expect(push?.notification?.title).toBe('bob · general');
+		expect(push?.notification?.options.tag).toBe('apron:a1:7');
+	});
+
+	it('sets the app badge to the unread count, clearing it at 0, where there is one', async () => {
+		const nav = { setAppBadge: vi.fn(async () => undefined), clearAppBadge: vi.fn(async () => undefined) };
+		await setAppBadge(nav, 3);
+		await setAppBadge(nav, 0);
+		expect(nav.setAppBadge).toHaveBeenCalledWith(3);
+		expect(nav.clearAppBadge).toHaveBeenCalledOnce();
+		await setAppBadge({}, 2);
+		await setAppBadge(undefined, 2);
+		await setAppBadge({ setAppBadge: async () => { throw new Error('not allowed'); } }, 2);
 	});
 });

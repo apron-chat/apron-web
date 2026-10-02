@@ -3,7 +3,7 @@
 /// <reference lib="esnext" />
 /// <reference lib="webworker" />
 import { base, build, files, prerendered, version } from '$service-worker';
-import { NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, closeOlderInGroup, pushNotification, pushTarget, tabWithPushId } from '$lib/ui/notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, closeOlderInGroup, pushTarget, readPush, setAppBadge, tabWithPushId, type BadgeNavigator, type PushPayload } from '$lib/ui/notifications';
 
 /**
  * Keeps each deploy's app files cached so the app opens fast, still opens
@@ -57,19 +57,22 @@ sw.addEventListener('fetch', (event) => {
 	}
 });
 
-// A push from the server (§4.7) is a message object: show it, quietly replacing the page's
-// notification of the same message (same tag), and close older ones of its room. Browsers expect
-// every push to show a notification, so one that can't be read still says something arrived.
+// A push from the server (§4.7): `unread` sets the app badge, and `message` shows, quietly
+// replacing the page's notification of the same message (same tag) and closing older ones of its
+// room. A payload without `message` (a badge push) shows nothing. Browsers expect every push to
+// show a notification, so one that can't be read still says something arrived.
 sw.addEventListener('push', (event) => {
-	let payload: unknown;
+	let push: PushPayload | undefined;
 	try {
-		payload = event.data?.json();
+		push = readPush(event.data?.json());
 	} catch {
-		payload = undefined;
+		push = undefined;
 	}
-	const shown = pushNotification(payload) ?? { title: 'Apron', options: { body: 'New message', tag: 'apron:push' } };
-	const group = pushTarget(shown.options.data)?.group;
+	const shown = push ? push.notification : { title: 'Apron', options: { body: 'New message', tag: 'apron:push' } };
+	const group = pushTarget(shown?.options.data)?.group;
 	event.waitUntil((async () => {
+		if (push?.unread !== undefined) await setAppBadge(sw.navigator as BadgeNavigator, push.unread);
+		if (!shown) return;
 		await sw.registration.showNotification(shown.title, { icon: `${base}/icon-192.png`, ...shown.options });
 		if (group !== undefined && shown.options.tag) closeOlderInGroup(await sw.registration.getNotifications(), group, shown.options.tag);
 	})());

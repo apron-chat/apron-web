@@ -146,28 +146,67 @@ export const PUSH_ID_QUERY = 'apron:push-id';
 export const PUSH_ROOM_PARAM = 'push_room';
 export const PUSH_ID_PARAM = 'push_id';
 
+/** What a push payload (§4.7) carries: the registration's `push_id`, the user's `unread` count, and the notification for its `message`. */
+export interface PushPayload {
+	pushId?: string;
+	unread?: number;
+	notification?: { title: string; options: ShowNotificationOptions };
+}
+
 /**
- * The notification for a push payload (§4.7): a message object, whose `body`
- * may be truncated or missing, with the registration's `push_id`. Undefined
- * for anything else. With a `push_id` it is the message's own notification,
- * which replaces the page's for the same message quietly, and the other way
- * round; without one (an older server), a newer push for the room replaces it.
+ * Reads a push payload (§4.7): an object with `push_id`, `unread` and
+ * `message`, ignoring other fields. Without `message` (a badge push) there
+ * is no notification. A bare message object with a top-level `push_id`, as
+ * servers sent before the envelope, reads as its `message`. Undefined for
+ * anything but an object.
  */
-export function pushNotification(payload: unknown): { title: string; options: ShowNotificationOptions } | undefined {
-	if (!isJsonObject(payload) || typeof payload.room_id !== 'string' || !payload.room_id) return undefined;
-	const roomId = payload.room_id;
-	const from = isJsonObject(payload.from) ? payload.from : {};
-	const sender = [from.name, from.user_id].find((value): value is string => typeof value === 'string' && value.trim() !== '') ?? 'Someone';
-	const text = isJsonObject(payload.body) && typeof payload.body.text === 'string' ? payload.body.text : undefined;
-	const body = notificationBody(text) || 'New message';
+export function readPush(payload: unknown): PushPayload | undefined {
+	if (!isJsonObject(payload)) return undefined;
 	const pushId = typeof payload.push_id === 'string' && payload.push_id ? payload.push_id : undefined;
-	const messageId = typeof payload.message_id === 'string' && payload.message_id ? payload.message_id : undefined;
+	const unread = typeof payload.unread === 'number' && Number.isInteger(payload.unread) && payload.unread >= 0 ? payload.unread : undefined;
+	const message = isJsonObject(payload.message) ? payload.message : typeof payload.room_id === 'string' ? payload : undefined;
+	const notification = message ? pushNotification(message, pushId) : undefined;
+	return { ...(pushId ? { pushId } : {}), ...(unread !== undefined ? { unread } : {}), ...(notification ? { notification } : {}) };
+}
+
+/**
+ * The notification for a pushed message (a message object, whose `body` may
+ * be truncated or missing), for the registration with this `push_id`.
+ * Undefined for anything else. With a `push_id` it is the message's own
+ * notification, which replaces the page's for the same message quietly, and
+ * the other way round; without one (an older server), a newer push for the
+ * room replaces it.
+ */
+export function pushNotification(message: unknown, pushId?: string): { title: string; options: ShowNotificationOptions } | undefined {
+	if (!isJsonObject(message) || typeof message.room_id !== 'string' || !message.room_id) return undefined;
+	const roomId = message.room_id;
+	const from = isJsonObject(message.from) ? message.from : {};
+	const sender = [from.name, from.user_id].find((value): value is string => typeof value === 'string' && value.trim() !== '') ?? 'Someone';
+	const text = isJsonObject(message.body) && typeof message.body.text === 'string' ? message.body.text : undefined;
+	const body = notificationBody(text) || 'New message';
+	const messageId = typeof message.message_id === 'string' && message.message_id ? message.message_id : undefined;
 	if (pushId === undefined || messageId === undefined) {
 		const target: PushTarget = { push: true, roomId };
 		return { title: `${sender} · ${roomId}`, options: { body, tag: `apron:push:${roomId}`, renotify: true, data: target } };
 	}
 	const target: PushTarget = { push: true, roomId, pushId, messageId, group: notificationGroup(pushId, roomId) };
 	return { title: `${sender} · ${roomId}`, options: { body, tag: messageNotificationTag(pushId, messageId), renotify: false, data: target } };
+}
+
+/** The app badge API, where the browser has it (`navigator` in a page or a service worker). */
+export interface BadgeNavigator {
+	setAppBadge?: (count?: number) => Promise<void>;
+	clearAppBadge?: () => Promise<void>;
+}
+
+/** Shows the unread count as the app badge, clearing it at 0, where the browser supports badges. */
+export async function setAppBadge(nav: BadgeNavigator | undefined, unread: number): Promise<void> {
+	try {
+		if (unread > 0) await nav?.setAppBadge?.(unread);
+		else await nav?.clearAppBadge?.();
+	} catch {
+		// Badges are a nicety: not installed, or not allowed.
+	}
 }
 
 /** A push notification's target, read from its `data`, if it is one. */
