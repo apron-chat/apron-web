@@ -1,0 +1,23 @@
+<!-- @dsCard group="Input" height=200 subtitle="Files on a draft: images, audio, other files, preparing" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Attachments</title></head>
+<body>
+<div id="root" style="padding-top:8px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  function picture(w, h, a, b) {
+    var c = document.createElement('canvas'); c.width = w; c.height = h; var g = c.getContext('2d');
+    var grad = g.createLinearGradient(0, 0, w, h); grad.addColorStop(0, a); grad.addColorStop(1, b); g.fillStyle = grad; g.fillRect(0, 0, w, h);
+    return c.toDataURL();
+  }
+  add(A.Attachments, { onremove: function () {}, files: [
+    { kind: 'image', name: 'IMG_4031.webp', size: '671 KB', src: picture(300, 200, '#f6d365', '#fda085') },
+    { kind: 'image', name: 'night-sky-long-exposure.webp', preparing: true, src: picture(240, 200, '#0f2027', '#2c5364') },
+    { kind: 'file', name: 'deploy-plan.pdf', size: '84 KB' }
+  ] });
+  add(A.Composer, { room: 'Ops', canUpload: true });
+</script>
+</body>
+</html>

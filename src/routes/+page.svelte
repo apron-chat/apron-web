@@ -3,7 +3,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, type RoomSnapshot, type UploadFile, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
@@ -47,7 +47,8 @@
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
 	import { linkPreviews } from '$lib/ui/link-previews';
-	import { PaneDrafts } from '$lib/ui/pane-drafts.svelte';
+	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
+	import { PaneDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
 	import { notificationClickTarget, notificationPermission, requestNotificationPermission, showNotification, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
@@ -163,6 +164,8 @@
 	let latestVisible = $state(true);
 	let seenCount = $state(0);
 	let typingTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Numbers staged files, so each can be taken off its draft. */
+	let stagedCount = 0;
 	/** Where the last scroll event, or automatic scroll to the latest item, left the list. */
 	let lastScrollTop: number | undefined;
 	let highlightTimer: ReturnType<typeof setTimeout> | undefined;
@@ -189,6 +192,10 @@
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
 	let canCompose = $derived(paneReady && !session.readOnly);
+	/** Files dropped on the conversation or pasted outside the field attach to the draft while the composer is showing. */
+	let canAttach = $derived(canCompose && snapshot.capabilities['embed:upload'] && !selection.active);
+	/** Files are being dragged over the conversation. */
+	let dropping = $state(false);
 	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...messages], session.you, paneRoom?.members));
 	let roomSuggestions = $derived.by(() => {
 		const rooms = new Map<string, { id: string; title: string }>();
@@ -821,7 +828,12 @@
 	 * land too.
 	 */
 	function sendMessage(): void {
-		if (!client || !paneRoom || !canCompose || !drafts.text.trim()) return;
+		if (!client || !paneRoom || !canCompose) return;
+		if (drafts.files.length) {
+			void sendFiles();
+			return;
+		}
+		if (!drafts.text.trim()) return;
 		const chat = client;
 		const draft = drafts.text;
 		const roomId = paneRoom.id;
@@ -902,33 +914,67 @@
 	}
 
 	/**
-	 * Sends picked files (capability `embed:upload`) as upload embeds, with whatever
-	 * is in the composer as the text; each file is written to the URL the
-	 * server hands back, and the message shows it pending until then. A command
-	 * takes them as arguments instead (§4.8). Images are shrunk and stripped
-	 * of their metadata first.
+	 * Attaches picked, pasted or recorded files to the open pane's draft
+	 * (capability `embed:upload`), to go out when it is sent. Images start
+	 * shrinking and losing their metadata right away; one that can't be
+	 * readied is taken back off with the reason.
 	 */
-	async function sendFiles(picked: File[]): Promise<void> {
+	function stageFiles(picked: File[]): void {
+		if (!canCompose || !session.snapshot.capabilities['embed:upload']) return;
+		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: prepareUpload(file) }));
+		for (const { id, prepared } of staged) {
+			prepared.catch((cause: unknown) => {
+				drafts.unstage(id);
+				feedback.error(cause, 'Unable to attach the file');
+			});
+		}
+		drafts.stage(staged);
+		composer?.focus();
+	}
+
+	/**
+	 * Sends the draft with its staged files as upload embeds, with whatever is
+	 * in the composer as the text; each file is written to the URL the server
+	 * hands back, and the message shows it pending until then. A command
+	 * takes them as arguments instead (§4.8). A failed send gives the draft
+	 * back, files and all.
+	 */
+	async function sendFiles(): Promise<void> {
 		if (!client || !paneRoom || !canCompose || !session.snapshot.capabilities['embed:upload']) return;
 		const chat = client;
 		const room = paneRoom;
 		const roomId = room.id;
+		const originKey = draftKey(roomId);
+		const draft = drafts.text;
 		const reply = drafts.reply;
-		const action = composerAction(drafts.text, { command: snapshot.capabilities.command, rooms: false });
+		const staged = drafts.files;
+		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: false });
 		const command = action.kind === 'command';
-		const text = action.kind === 'message' ? action.text : drafts.text;
+		const text = action.kind === 'message' ? action.text : draft;
 		const mentions = composerMentions;
-		const embeds = command ? [] : linkPreviews.embeds(text, composerDismissed);
+		const dismissed = composerDismissed;
+		const embeds = command ? [] : linkPreviews.embeds(text, dismissed);
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };
-		feedback.pending(picked.length === 1 ? `Uploading ${picked[0].name || 'file'}…` : `Uploading ${picked.length} files…`);
-		let files: UploadFile[];
-		try {
-			files = await Promise.all(picked.map((file) => prepareUpload(file)));
-		} catch (cause) {
-			feedback.error(cause, 'Unable to attach the image');
+		clearComposer(roomId);
+		chat.sendTyping(roomId, false);
+		if (typingTimer) clearTimeout(typingTimer);
+		stickToBottom = true;
+		composer?.focus();
+		feedback.pending(staged.length === 1 ? `Uploading ${staged[0].file.name || 'file'}…` : `Uploading ${staged.length} files…`);
+		// A file that couldn't be readied was already taken off with its reason; the rest go.
+		const readied = await Promise.allSettled(staged.map(({ prepared }) => prepared));
+		const files = readied.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+		const kept = staged.filter((_, index) => readied[index].status === 'fulfilled');
+		const restore = () => {
+			if (!drafts.restore(originKey, draft, reply, kept)) return;
+			composerDismissed = dismissed;
+			composer?.focus();
+		};
+		if (client !== chat) {
+			restore();
 			return;
 		}
-		if (client !== chat) return;
+		if (files.length === 0 && !text.trim()) return;
 		const joining = command ? undefined : joinFirst(chat, room);
 		const { sent, uploaded } = joining
 			? (() => {
@@ -936,21 +982,18 @@
 				return { sent: posted.then(({ sent }) => sent), uploaded: posted.then(({ uploaded }) => uploaded) };
 			})()
 			: chat.sendFiles(roomId, text, files, 'markdown', options, command);
-		sent.then(() => {
-			clearComposer(roomId);
-		}, (cause: unknown) => {
-			if (!command) {
+		sent.catch((cause: unknown) => {
+			if (command) {
+				feedback.clear();
+				chat.notify(roomId, cause instanceof Error && cause.message ? cause.message : 'The command failed');
+			} else {
 				feedback.error(cause, 'Unable to send the attachment');
-				return;
 			}
-			feedback.clear();
-			chat.notify(roomId, cause instanceof Error && cause.message ? cause.message : 'The command failed');
+			restore();
 		});
 		uploaded.then(() => feedback.clear(), (cause: unknown) => {
 			if (!command) feedback.error(cause, 'Upload failed');
 		});
-		stickToBottom = true;
-		composer?.focus();
 	}
 
 	function toggleMemberList(): void {
@@ -1299,6 +1342,27 @@
 	}
 
 	/** Escape leaves select mode, as it leaves the thread menu. */
+	/**
+	 * Files pasted while focus is outside any field (on the timeline, say)
+	 * attach to the draft, as they would pasted into the composer.
+	 */
+	function windowPaste(event: ClipboardEvent): void {
+		if (event.defaultPrevented || !canAttach) return;
+		const target = event.target;
+		if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select'))) return;
+		const files = pastedFiles(event.clipboardData);
+		if (!files.length) return;
+		event.preventDefault();
+		stageFiles(files);
+	}
+
+	/** A file dropped anywhere else is refused, rather than opening in place of the app. */
+	function refuseDrop(event: DragEvent): void {
+		if (event.defaultPrevented || !carriesFiles(event.dataTransfer)) return;
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+	}
+
 	function windowKeydown(event: KeyboardEvent): void {
 		if (event.key !== 'Escape' || !selection.active) return;
 		if (selection.menuOpen) {
@@ -1310,7 +1374,7 @@
 	}
 </script>
 
-<svelte:window onkeydown={windowKeydown} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
+<svelte:window onkeydown={windowKeydown} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
 <svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); }} />
 
 <svelte:head>
@@ -1356,7 +1420,10 @@
 	/>
 	<SidebarHandle layout={sidebar} />
 
-	<main class="ap-shell-main" aria-label="Conversation">
+	<main class="ap-shell-main" aria-label="Conversation" use:fileDrop={{ enabled: canAttach, onfiles: stageFiles, onactive: (active) => (dropping = active) }}>
+		{#if dropping}
+			<div class="drop-zone" data-testid="drop-zone" aria-hidden="true"><span>Drop files to attach</span></div>
+		{/if}
 		{#if activeRoom}
 			<RoomHeader
 				bind:this={roomHeader}
@@ -1508,7 +1575,7 @@
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={sendMessage} onfiles={(files) => void sendFiles(files)} oncancelreply={cancelReply}
+					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} oncancelreply={cancelReply}
 					onmention={() => listMembers(MEMBERS_FRESH_MS)}
 				/>
 			{/if}
@@ -1554,6 +1621,13 @@
 	.side-collapsed :global(.ap-shell-side) { border-right: 0; visibility: hidden; }
 	.side-resizing, .side-resizing :global(*) { user-select: none; }
 	.banner { padding: var(--space-2) var(--space-4) 0; }
+	/* Over the conversation while files are dragged onto it; drag events pass through to the pane. */
+	.drop-zone {
+		position: absolute; inset: var(--space-2); z-index: 20; display: grid; place-items: center;
+		border: 2px dashed var(--accent); border-radius: var(--radius-lg);
+		background: color-mix(in srgb, var(--bg-100) 85%, transparent); color: var(--ink);
+		font-weight: 600; pointer-events: none;
+	}
 	.reconnect-quiet { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-4) 0; font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 	.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; }

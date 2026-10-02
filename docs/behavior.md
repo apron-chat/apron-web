@@ -308,9 +308,25 @@ fetches from a CDN.
 
 Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#46-embeds-and-avatars)):
 
-- **Uploads** (capability `embed:upload`): the composer's paperclip and microphone send
-  files and voice clips as `upload` embeds with whatever is in the field, then
-  write each file to the `write_url` in the result. The message shows a pending
+- **Uploads** (capability `embed:upload`): files picked with the paperclip,
+  dropped anywhere on the conversation (which shows a "Drop files to attach"
+  outline while they are dragged over it), or pasted, and voice clips from the
+  microphone, are attached to the draft rather than sent. A paste attaches
+  files whether or not the field has focus; pasted text wins over a picture of
+  it, as office apps copy both, unless the text only names the copied files,
+  as file managers add. Folders are left out of a drop, and a file dropped
+  outside the conversation is refused rather than opened in the tab. Attached
+  files show above the composer (the design system's `Attachments`: an image as
+  a thumbnail, audio with a player, anything else as a file card), each
+  labeled with its name and the size it will be sent at — "Preparing…" while
+  an image is still being shrunk, then its new size and name (a re-encoded
+  photo becomes `.webp`),
+  each with an **(x)** to take it off, and are kept per room or thread like the
+  draft's text. Images start shrinking as soon as they are attached; one that
+  can't be made small enough comes off again with the reason. Send (with or
+  without text) posts the message with one `upload` embed per attached file,
+  then writes each file to the `write_url` in the result. A failed send gives
+  the draft back with its files. The message shows a pending
   card with progress until the server publishes the finished file: an image, a
   video or audio player from its `og`, or else a file card.
 - **Streams** (capability `embed:stream`): while the embed has a `url` the client reads

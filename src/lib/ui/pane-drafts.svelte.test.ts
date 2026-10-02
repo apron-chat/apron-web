@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { PaneDrafts } from './pane-drafts.svelte';
+import { PaneDrafts, type StagedFile } from './pane-drafts.svelte';
+
+function staged(id: string): StagedFile {
+	const file = new File(['x'], `${id}.png`, { type: 'image/png' });
+	return { id, file, prepared: Promise.resolve({ file }) };
+}
 
 describe('PaneDrafts', () => {
 	it('keeps each pane its own draft and reply', () => {
@@ -36,5 +41,40 @@ describe('PaneDrafts', () => {
 		expect(drafts.restore('lobby', 'first', undefined)).toBe(false);
 		drafts.open('lobby');
 		expect(drafts.text).toBe('first');
+	});
+
+	it('keeps each pane its own staged files, removable before sending', () => {
+		const drafts = new PaneDrafts();
+		drafts.open('lobby');
+		drafts.stage([staged('a'), staged('b')]);
+		drafts.open('thread');
+		expect(drafts.files).toEqual([]);
+		drafts.stage([staged('c')]);
+		drafts.open('lobby');
+		expect(drafts.files.map(({ id }) => id)).toEqual(['a', 'b']);
+		drafts.unstage('a');
+		drafts.unstage('c');
+		expect(drafts.files.map(({ id }) => id)).toEqual(['b']);
+		drafts.open('thread');
+		expect(drafts.files).toEqual([]);
+		drafts.open(undefined);
+		drafts.stage([staged('d')]);
+		expect(drafts.files).toEqual([]);
+	});
+
+	it('gives staged files back with a failed send, unless something new was attached', () => {
+		const drafts = new PaneDrafts();
+		drafts.open('lobby');
+		const files = [staged('a')];
+		drafts.stage(files);
+		drafts.clear('lobby');
+		expect(drafts.files).toEqual([]);
+		expect(drafts.restore('lobby', '', undefined, files)).toBe(true);
+		expect(drafts.files).toEqual(files);
+
+		drafts.clear('lobby');
+		drafts.stage([staged('b')]);
+		expect(drafts.restore('lobby', 'caption', undefined, files)).toBe(false);
+		expect([drafts.text, drafts.files.map(({ id }) => id)]).toEqual(['', ['b']]);
 	});
 });

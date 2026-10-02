@@ -14,12 +14,15 @@
 	import { isCommand } from '$lib/ui/commands';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { findGitHubLinks, linkPreviews } from '$lib/ui/link-previews';
+	import { pastedFiles } from '$lib/ui/file-transfer';
 	import { clockLabel } from '$lib/ui/time';
+	import type { StagedFile as Staged } from '$lib/ui/pane-drafts.svelte';
 	import AutocompletePicker from './AutocompletePicker.svelte';
 	import Avatar from './Avatar.svelte';
 	import MentionText from './MentionText.svelte';
 	import Embed from './embeds/Embed.svelte';
 	import EmbedRemove from './embeds/EmbedRemove.svelte';
+	import StagedFile from './StagedFile.svelte';
 
 	const MENTION_MATCHES_MAX = 8;
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
@@ -43,6 +46,8 @@
 		disabled: boolean;
 		/** Attachments and voice clips (capability `embed:upload`, §4.6.4): each file goes out as an `upload` embed. */
 		canUpload: boolean;
+		/** Files attached to the draft, shown above the field until it is sent; each can be removed first. */
+		files?: Staged[];
 		/** False once the server showed it takes images only: voice clips are hidden. */
 		canUploadAudio?: boolean;
 		/**
@@ -58,13 +63,15 @@
 		reply?: { name?: string; text: string };
 		oninput: () => void;
 		onsend: () => void;
-		/** Picked files or a finished voice clip, to send with whatever is in the field. */
+		/** Picked or pasted files, or a finished voice clip, to attach to the draft. */
 		onfiles: (files: File[]) => void;
+		/** A staged file's (x): take it off the draft. */
+		onunstage: (id: string) => void;
 		oncancelreply: () => void;
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, oncancelreply, onmention }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, oncancelreply, onmention }: Props = $props();
 
 	/** Unique per composer, for the open picker's ID. */
 	const uid = $props.id();
@@ -545,19 +552,15 @@
 		focus();
 	}
 
-	/**
-	 * A pasted image (or file) is attached like a picked one. Pasted text wins
-	 * when there is some: office apps put a picture of the selection beside it.
-	 */
+	/** A pasted image (or file) is attached like a picked one, unless the paste is text (`pastedFiles`). */
 	function paste(event: ClipboardEvent): void {
-		const text = event.clipboardData?.getData('text/plain') ?? '';
-		const files = [...(event.clipboardData?.items ?? [])].flatMap((item) => (item.kind === 'file' ? [item.getAsFile()].filter((file): file is File => file !== null) : []));
-		if (canUpload && !disabled && !recording && files.length && !text.trim()) {
+		const files = pastedFiles(event.clipboardData);
+		if (canUpload && !disabled && !recording && files.length) {
 			event.preventDefault();
 			onfiles(files);
 			return;
 		}
-		void linkPreviews.prefetch(text);
+		void linkPreviews.prefetch(event.clipboardData?.getData('text/plain') ?? '');
 	}
 
 	function attach(input: HTMLInputElement): void {
@@ -612,6 +615,16 @@
 	<div class="reply-draft" data-testid="reply-draft" role="status">
 		<span>Replying to {#if reply.name}{reply.name}: <MentionText text={reply.text} />{:else}{reply.text}{/if}</span>
 		<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" aria-label="Cancel reply" onclick={oncancelreply}>Cancel reply</button>
+	</div>
+{/if}
+{#if files.length > 0}
+	<div class="ap-attachments" data-testid="staged-files" aria-label="Files to send">
+		{#each files as staged (staged.id)}
+			<div class="ap-attachment">
+				<StagedFile {staged} />
+				<EmbedRemove label={`Remove ${staged.file.name || 'file'}`} onremove={() => { onunstage(staged.id); focus(); }} />
+			</div>
+		{/each}
 	</div>
 {/if}
 {#if previews.length > 0}
@@ -751,7 +764,7 @@
 				<Smile size={18} aria-hidden="true" />
 			</button>
 		</span>
-		<button class="ap-btn ap-btn-primary ap-btn-sm" data-testid="send-button" type="submit" aria-label={command ? 'Run command' : 'Send message'} disabled={disabled || recording || !value.trim()}>{command ? 'Run' : 'Send'}</button>
+		<button class="ap-btn ap-btn-primary ap-btn-sm" data-testid="send-button" type="submit" aria-label={command ? 'Run command' : 'Send message'} disabled={disabled || recording || (!value.trim() && files.length === 0)}>{command ? 'Run' : 'Send'}</button>
 	</form>
 </div>
 
