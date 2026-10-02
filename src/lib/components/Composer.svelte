@@ -618,10 +618,10 @@
 	</div>
 {/if}
 {#if files.length > 0}
-	<div class="previews" data-testid="staged-files" aria-label="Files to send">
+	<div class="ap-attachments" data-testid="staged-files" aria-label="Files to send">
 		{#each files as staged (staged.id)}
-			<div class="embed-slot staged">
-				<StagedFile file={staged.file} />
+			<div class="ap-attachment">
+				<StagedFile {staged} />
 				<EmbedRemove label={`Remove ${staged.file.name || 'file'}`} onremove={() => { onunstage(staged.id); focus(); }} />
 			</div>
 		{/each}
@@ -776,9 +776,6 @@
 	.previews { display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-3) var(--space-4) var(--space-2); }
 	.embed-slot { position: relative; flex: 0 1 320px; min-width: 0; }
 	.embed-slot :global(.ap-embed) { width: 100%; min-width: 0; }
-	/* A staged image is as wide as its thumbnail; other files take a card's width. */
-	.staged { flex: none; max-width: 320px; }
-	.staged :global(.ap-embed-figure) { width: auto; }
 	.reply-draft span { min-width: 0; overflow-wrap: anywhere; }
 	/* The field is an editable div so mentions can be chips; it sizes like the design system's textarea. */
 	.field { height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }

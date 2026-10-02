@@ -316,8 +316,11 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](ht
   it, as office apps copy both, unless the text only names the copied files,
   as file managers add. Folders are left out of a drop, and a file dropped
   outside the conversation is refused rather than opened in the tab. Attached
-  files show above the composer (an image as a
-  thumbnail, audio with a player, anything else as a file card with its size),
+  files show above the composer (the design system's `Attachments`: an image as
+  a thumbnail, audio with a player, anything else as a file card), each
+  labeled with its name and the size it will be sent at — "Preparing…" while
+  an image is still being shrunk, then its new size and name (a re-encoded
+  photo becomes `.webp`),
   each with an **(x)** to take it off, and are kept per room or thread like the
   draft's text. Images start shrinking as soon as they are attached; one that
   can't be made small enough comes off again with the reason. Send (with or

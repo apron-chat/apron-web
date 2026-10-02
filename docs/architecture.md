@@ -25,7 +25,7 @@ The Svelte components under `src/lib/components` wrap the `ap-*`
 classes one to one with the design system's components, adding the app's
 state and behavior — `ConnectScreen`,
 `Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` and `RoomEditor`, `ThreadCard` and
-`ThreadSummary`, `Message` with its `ReactionBar` and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`), `SelectionBar`, `JumpBar`,
+`ThreadSummary`, `Message` with its `ReactionBar` and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`) and `StagedFile` (the design system's `Attachments`), `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the

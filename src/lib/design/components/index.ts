@@ -15,6 +15,7 @@ export { default as ThreadMarker } from './ThreadMarker.svelte';
 export { default as TimelineDivider } from './TimelineDivider.svelte';
 export { default as TypingIndicator } from './TypingIndicator.svelte';
 export { default as Composer } from './Composer.svelte';
+export { default as Attachments } from './Attachments.svelte';
 export { default as RoomItem } from './RoomItem.svelte';
 export { default as StatusBanner } from './StatusBanner.svelte';
 export { default as MessageActions } from './MessageActions.svelte';
