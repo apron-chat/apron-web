@@ -34,10 +34,12 @@ describe('CheckList', () => {
 		expect(document.body.textContent?.match(/Not offered/g)).toHaveLength(1);
 	});
 
-	it('shows a note on an option that can still be changed', () => {
-		const boxes = render({ value: ['mentions'], options: [{ value: 'joined', title: 'All joined rooms', note: 'Only while Apron is open' }] });
+	it('renders an option without a description as one line, its note inline beside the title', () => {
+		const boxes = render({ value: ['joined'], options: [{ value: 'joined', title: 'All messages in joined rooms', note: 'Desktop only' }] });
+		const row = boxes[0].closest('label')!;
 		expect(boxes[0].disabled).toBe(false);
-		expect(boxes[0].closest('label')?.textContent).toContain('Only while Apron is open');
+		expect(row.querySelector('.ap-choice-text')).toBeNull();
+		expect(row.querySelector('.ap-checklist-head')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('All messages in joined rooms Desktop only');
 	});
 
 	it('keeps the last checked box with `min`, and reports changes in the options\' order', () => {

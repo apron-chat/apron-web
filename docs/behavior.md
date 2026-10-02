@@ -171,11 +171,11 @@ since the quote is the button that jumps to its message.
 A mention that lands while the tab is hidden or unfocused flashes the tab title
 and plays a soft chime. **Preferences** (the gear beside your profile) starts
 its Notifications section with **Notify me about**, one choice for desktop
-notifications and push alike: Mentions (messages whose `body.mentions` list
-you, or an edit that adds you), Replies (replies to one of your messages that
-is loaded here; with the replied-to message not loaded, no notification),
-Private rooms (every message in a private room or its threads) and All joined
-rooms (every message in a joined room). Messages of your own never notify. At
+notifications and push alike, one line per option: Mentions (messages whose
+`body.mentions` list you, or an edit that adds you), Replies to my messages
+(replies to one of your messages that is loaded here; with the replied-to
+message not loaded, no notification), All messages in private rooms (a private
+room or its threads) and All messages in joined rooms. Messages of your own never notify. At
 least one stays checked, mentions and replies until you choose; the switches
 below turn notifications off. The choice is kept per account on each server,
 and for a server's guests together (their `user_id`s change with each
@@ -208,8 +208,8 @@ Signing out unregisters too.
 **Push notifications** alerts on this device even when Apron is closed. Its
 `wake` is the checked scopes that `server.push.wake` lists; when the server
 lists none, no `wake` goes and the server's defaults apply. While push is on, a
-checked scope the server doesn't push says "Only while Apron is open — this
-server doesn't push it". When none of the checked scopes is pushed, push still
+checked scope the server doesn't push is marked "Desktop only" beside its
+title. When none of the checked scopes is pushed, push still
 registers, with an empty `wake`, which wakes for nothing, and the setting says
 so. A change to the choice registers again at once, with the same `url`.
 

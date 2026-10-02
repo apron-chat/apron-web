@@ -8,10 +8,10 @@ import { isOwn } from './messages';
  * sends the ones the server pushes as `wake`.
  */
 export const NOTIFY_SCOPES = [
-	{ value: 'mentions', title: 'Mentions', text: 'When someone @-mentions you' },
-	{ value: 'replies', title: 'Replies', text: 'Replies to your messages' },
-	{ value: 'private', title: 'Private rooms', text: 'Every message in private rooms you’re in' },
-	{ value: 'joined', title: 'All joined rooms', text: 'Every message in rooms you’ve joined' }
+	{ value: 'mentions', title: 'Mentions' },
+	{ value: 'replies', title: 'Replies to my messages' },
+	{ value: 'private', title: 'All messages in private rooms' },
+	{ value: 'joined', title: 'All messages in joined rooms' }
 ] as const;
 
 export type NotifyScope = (typeof NOTIFY_SCOPES)[number]['value'];
@@ -77,8 +77,8 @@ export function pushWake(scopes: readonly string[], offered: readonly string[]):
 	return offered.length ? scopes.filter((scope) => offered.includes(scope)) : undefined;
 }
 
-/** Notes beside checked scopes: while push is on, the ones the server doesn't push work only while Apron is open. */
+/** Notes beside checked scopes: while push is on, the ones the server doesn't push are desktop only. */
 export function notifyScopeNotes(scopes: readonly string[], offered: readonly string[], pushOn: boolean): Record<string, string> {
 	if (!pushOn || !offered.length) return {};
-	return Object.fromEntries(scopes.filter((scope) => !offered.includes(scope)).map((scope) => [scope, 'Only while Apron is open — this server doesn’t push it']));
+	return Object.fromEntries(scopes.filter((scope) => !offered.includes(scope)).map((scope) => [scope, 'Desktop only']));
 }

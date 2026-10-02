@@ -74,8 +74,8 @@ describe('what to notify about', () => {
 		expect(pushWake(['joined'], [])).toBeUndefined();
 	});
 
-	it('notes the checked scopes the server doesn\'t push, only while push is on', () => {
-		const note = 'Only while Apron is open — this server doesn’t push it';
+	it('notes the checked scopes the server doesn\'t push as desktop only, only while push is on', () => {
+		const note = 'Desktop only';
 		expect(notifyScopeNotes(['mentions', 'private', 'joined'], ['mentions', 'replies', 'private'], true)).toEqual({ joined: note });
 		expect(notifyScopeNotes(['joined'], ['mentions'], false)).toEqual({});
 		expect(notifyScopeNotes(['joined'], [], true)).toEqual({});

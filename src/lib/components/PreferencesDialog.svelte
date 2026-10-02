@@ -32,7 +32,7 @@
 	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, onclosed }: Props = $props();
 
 	let preferencesSection = $state<'notifications' | 'appearance'>('notifications');
-	/** While push is on, checked scopes this server doesn't push say they work only while Apron is open. */
+	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
 	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: it wakes for nothing. */
 	let pushesNothing = $derived(pushWake(notifyScopes, webPush?.offered ?? [])?.length === 0);
@@ -159,7 +159,7 @@
 				<div class="ap-pref-scopes">
 					<CheckList
 						label="Notify me about"
-						options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, text: scope.text, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
+						options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
 						value={notifyScopes}
 						min={1}
 						onchange={onnotifyscopes}

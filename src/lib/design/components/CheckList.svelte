@@ -1,12 +1,12 @@
 <script lang="ts">
-	/** One option of a CheckList: its value, a title and a line saying what it does. */
+	/** One option of a CheckList: its value, a title, and optionally a line saying what it does (without one, the row is a single line). */
 	interface CheckOption {
 		value: string;
 		title: string;
 		text?: string;
 		/** Can't be changed here; `note` can say why. */
 		disabled?: boolean;
-		/** A short note under it, such as why it is disabled, or what it does here. */
+		/** A short muted note beside the title, such as why it is disabled, or "Desktop only". */
 		note?: string;
 	}
 
@@ -40,9 +40,11 @@
 		<label class={['ap-choice-item', 'ap-checklist-item', checked && 'ap-choice-on', (option.disabled || kept) && 'ap-checklist-item-locked']}>
 			<input class="ap-checklist-box" type="checkbox" {checked} disabled={disabled || option.disabled || kept} onchange={(event) => toggle(option.value, event.currentTarget.checked)} />
 			<span class="ap-checklist-label">
-				<span class="ap-choice-title">{option.title}</span>
+				<span class="ap-checklist-head">
+					<span class="ap-choice-title">{option.title}</span>
+					{#if option.note}<span class="ap-checklist-note">{option.note}</span>{/if}
+				</span>
 				{#if option.text}<span class="ap-choice-text">{option.text}</span>{/if}
-				{#if option.note}<span class="ap-checklist-note">{option.note}</span>{/if}
 			</span>
 		</label>
 	{/each}
