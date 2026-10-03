@@ -44,12 +44,19 @@ export async function loadEnabledPushIds(): Promise<string[] | undefined> {
 	}
 }
 
-export async function saveEnabledPushIds(ids: readonly string[]): Promise<void> {
-	try {
-		await run('readwrite', (store) => store.put([...ids], ENABLED));
-	} catch {
-		// Without IndexedDB, pushes aren't filtered by account.
-	}
+/** Writes of the enabled `push_id`s, one after another, so an older list never lands after a newer one. */
+let enabledWrites: Promise<void> = Promise.resolve();
+
+export function saveEnabledPushIds(ids: readonly string[]): Promise<void> {
+	const list = [...ids];
+	enabledWrites = enabledWrites.then(async () => {
+		try {
+			await run('readwrite', (store) => store.put(list, ENABLED));
+		} catch {
+			// Without IndexedDB, pushes aren't filtered by account.
+		}
+	});
+	return enabledWrites;
 }
 
 /** The newest `message_id` notified about, by notification group. */
@@ -62,17 +69,43 @@ export async function loadShownMarks(): Promise<Record<string, string>> {
 	}
 }
 
-/** Remembers that a group notified about this message, keeping the newest per group. */
+/** The marks with a group's newest message noted, keeping the most recently noted `SHOWN_MAX` groups; unchanged when not newer. */
+export function withShown(marks: Record<string, string>, group: string, messageId: string, newer: (a: string, b: string) => boolean): Record<string, string> | undefined {
+	const current = marks[group];
+	if (current !== undefined && !newer(messageId, current)) return undefined;
+	const next = { ...marks };
+	delete next[group];
+	next[group] = messageId;
+	const keys = Object.keys(next);
+	for (const key of keys.slice(0, Math.max(0, keys.length - SHOWN_MAX))) delete next[key];
+	return next;
+}
+
+/**
+ * Remembers that a group notified about this message, keeping the newest per
+ * group. The read and the write are one transaction, so the page and the
+ * service worker can't overwrite each other's marks.
+ */
 export async function markShown(group: string, messageId: string, newer: (a: string, b: string) => boolean): Promise<void> {
 	try {
-		const marks = await loadShownMarks();
-		const current = marks[group];
-		if (current !== undefined && !newer(messageId, current)) return;
-		delete marks[group];
-		marks[group] = messageId;
-		const keys = Object.keys(marks);
-		for (const key of keys.slice(0, Math.max(0, keys.length - SHOWN_MAX))) delete marks[key];
-		await run('readwrite', (store) => store.put(marks, SHOWN));
+		const db = await open();
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const transaction = db.transaction(STORE, 'readwrite');
+				const store = transaction.objectStore(STORE);
+				const read = store.get(SHOWN);
+				read.onsuccess = () => {
+					const value: unknown = read.result;
+					const next = withShown(value && typeof value === 'object' ? (value as Record<string, string>) : {}, group, messageId, newer);
+					if (next) store.put(next, SHOWN);
+				};
+				transaction.oncomplete = () => resolve();
+				transaction.onerror = () => reject(transaction.error);
+				transaction.onabort = () => reject(transaction.error);
+			});
+		} finally {
+			db.close();
+		}
 	} catch {
 		// Remembering is best effort.
 	}

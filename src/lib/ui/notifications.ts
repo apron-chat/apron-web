@@ -186,6 +186,8 @@ export interface PushPayload {
 	pushId?: string;
 	unread?: number;
 	notification?: { title: string; options: ShowNotificationOptions };
+	/** It has a `message` that isn't one this client can show. */
+	unreadable?: true;
 }
 
 /**
@@ -197,17 +199,20 @@ export function readPush(payload: unknown): PushPayload | undefined {
 	if (!isJsonObject(payload)) return undefined;
 	const pushId = typeof payload.push_id === 'string' && payload.push_id ? payload.push_id : undefined;
 	const unread = typeof payload.unread === 'number' && Number.isInteger(payload.unread) && payload.unread >= 0 ? payload.unread : undefined;
-	const message = isJsonObject(payload.message) ? payload.message : undefined;
-	const notification = message ? pushNotification(message, pushId) : undefined;
-	return { ...(pushId ? { pushId } : {}), ...(unread !== undefined ? { unread } : {}), ...(notification ? { notification } : {}) };
+	const notification = Object.hasOwn(payload, 'message') ? pushNotification(payload.message, pushId) : undefined;
+	const unreadable = Object.hasOwn(payload, 'message') && !notification;
+	return { ...(pushId ? { pushId } : {}), ...(unread !== undefined ? { unread } : {}), ...(notification ? { notification } : {}), ...(unreadable ? { unreadable: true as const } : {}) };
 }
 
 /**
- * Shown when a push can't be read, or is for an account push isn't on for
- * here, and none of this origin's notifications is showing: browsers expect
- * a push to leave one showing.
+ * Shown when a push brings nothing to show and none of this origin's
+ * notifications is showing: browsers expect each push to leave one showing,
+ * and WebKit revokes a subscription whose pushes don't.
  */
-export const QUIET_PUSH = { title: 'Apron', options: { body: 'Open Apron to catch up.', tag: 'apron:push', silent: true } satisfies ShowNotificationOptions };
+export const QUIET_PUSH = { title: 'Apron', options: { body: 'Open Apron to catch up.', tag: 'apron:push', renotify: false, silent: true } satisfies ShowNotificationOptions };
+
+/** A notification showing, as the service worker lists it. */
+export type VisibleNotification = Pick<Notification, 'title' | 'body' | 'tag' | 'data' | 'icon'>;
 
 /** What to do with a push. */
 export interface PushPlan {
@@ -218,31 +223,45 @@ export interface PushPlan {
 	badge?: number;
 }
 
+/** A notification shown again as it is, quietly: it changes nothing anyone sees. */
+function again(notification: VisibleNotification): { title: string; options: ShowNotificationOptions } {
+	return {
+		title: notification.title,
+		options: { body: notification.body, tag: notification.tag, data: notification.data, ...(notification.icon ? { icon: notification.icon } : {}), renotify: false, silent: true }
+	};
+}
+
 /**
- * Plans a push (`readPush`; undefined when unreadable). A push for a
- * `push_id` not among `enabled` (when known) is dropped. A message its group
- * already notified about (showing, or `marks`, perhaps dismissed since), or
- * older than one it did, isn't shown again. Browsers expect each push to leave
- * a notification showing: with nothing showing, an already-notified message
- * shows again quietly, and an unreadable or dropped push shows `QUIET_PUSH`.
- * A badge push (no `message`) never shows one (§4.7); this client doesn't ask
- * for them on web push, where the browser may then show its own notice.
+ * Plans a push (`readPush`; undefined when it can't be read). A push for a
+ * `push_id` not among `enabled` (when known) is dropped (§4.7), and doesn't
+ * set the badge. A new message shows and closes its room's older ones. The
+ * same message again (an edit, say) replaces its notification quietly,
+ * keeping its title. A message the room already notified about and that was
+ * dismissed, or one older than the room's newest, doesn't notify again.
+ *
+ * Every push but a badge push (no `message`, never shown, §4.7) shows
+ * something, as browsers require: what is showing, shown again as it is
+ * (the room's newest, else any), else the message quietly, else `QUIET_PUSH`.
  */
-export function planPush(push: PushPayload | undefined, visible: readonly Pick<ShownNotification, 'data'>[], known: { enabled?: readonly string[]; marks?: Record<string, string> } = {}): PushPlan {
-	const plan: PushPlan = push?.unread !== undefined ? { badge: push.unread } : {};
+export function planPush(push: PushPayload | undefined, visible: readonly VisibleNotification[], known: { enabled?: readonly string[]; marks?: Record<string, string> } = {}): PushPlan {
 	const dropped = push?.pushId !== undefined && known.enabled !== undefined && !known.enabled.includes(push.pushId);
-	const notification = push && !dropped ? push.notification : undefined;
-	const place = placeOf(notification?.options.data);
-	if (notification && place) {
-		const newest = newestNotified(visible, place.group, known.marks?.[place.group]);
-		if (newest === undefined || compareLogIds(place.messageId, newest) > 0) return { ...plan, show: notification, notified: place };
-		if (visible.length) return plan;
-		return { ...plan, show: { title: notification.title, options: { ...notification.options, renotify: false, silent: true } } };
-	}
-	if (notification) return { ...plan, show: notification };
-	// A push without `message` is a badge push (§4.7): it never shows a notification.
-	if (push && !dropped) return plan;
-	return visible.length ? plan : { ...plan, show: QUIET_PUSH };
+	const plan: PushPlan = !dropped && push?.unread !== undefined ? { badge: push.unread } : {};
+	const quietly = (preferred?: VisibleNotification) => {
+		const showing = preferred ?? visible[0];
+		return showing ? again(showing) : QUIET_PUSH;
+	};
+	if (!push || dropped || push.unreadable) return { ...plan, show: quietly() };
+	const notification = push.notification;
+	if (!notification) return plan;
+	const place = placeOf(notification.options.data);
+	if (!place) return { ...plan, show: notification };
+	const newest = newestNotified(visible, place.group, known.marks?.[place.group]);
+	const order = newest === undefined ? 1 : compareLogIds(place.messageId, newest);
+	if (order > 0) return { ...plan, show: notification, notified: place };
+	const same = visible.find((shown) => shown.tag === notification.options.tag);
+	if (order === 0 && same) return { ...plan, show: { title: same.title, options: { ...notification.options, renotify: false, silent: true } } };
+	if (!visible.length) return { ...plan, show: { title: notification.title, options: { ...notification.options, renotify: false, silent: true } } };
+	return { ...plan, show: quietly(visible.find((shown) => placeOf(shown.data)?.group === place.group && placeOf(shown.data)?.messageId === newest)) };
 }
 
 /**

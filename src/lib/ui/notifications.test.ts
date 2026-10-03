@@ -174,48 +174,61 @@ describe('push notifications', () => {
 
 	describe('planning a push', () => {
 		const push = (id: string, room = 'general', extra: Record<string, unknown> = {}) => readPush({ push_id: 'a1', message: { message_id: id, room_id: room, from: { user_id: 'bob' }, body: { text: `message ${id}` } }, ...extra });
+		/** A notification showing a room's message, as the service worker lists it. */
+		const showing = (id: string, room = 'general', title = `bob · ${room}`) => {
+			const options = messageOptions(id, room);
+			return { title, body: options.body ?? '', tag: options.tag ?? '', data: options.data, icon: '' };
+		};
+		const other = { title: 'Apron', body: 'hi', tag: 'apron:other', data: undefined, icon: '' };
 
 		it('shows a new message, closing older ones of its room after', () => {
-			const plan = planPush(push('12', 'general', { unread: 3 }), [{ data: messageOptions('11').data }], { enabled: ['a1'] });
+			const plan = planPush(push('12', 'general', { unread: 3 }), [showing('11')], { enabled: ['a1'] });
 			expect(plan.show?.options.tag).toBe('apron:a1:12');
+			expect(plan.show?.options.renotify).toBe(false);
 			expect(plan.notified).toEqual({ group: 'a1:general', messageId: '12' });
 			expect(plan.badge).toBe(3);
 		});
 
-		it('leaves the page\'s notifications of m1 and m2 alone when a late push of m1 arrives', () => {
-			// The page showed m1, then m2, which closed m1.
-			const plan = planPush(push('1'), [{ data: messageOptions('2').data }], { marks: { 'a1:general': '2' } });
-			expect(plan.show).toBeUndefined();
+		it('replaces the same message quietly, keeping the title showing (an edit that newly mentions you)', () => {
+			const plan = planPush(push('5'), [showing('5', 'general', 'bob · General')]);
+			expect(plan.show).toEqual({ title: 'bob · General', options: { ...push('5')!.notification!.options, renotify: false, silent: true } });
 			expect(plan.notified).toBeUndefined();
 		});
 
-		it('doesn\'t show again a message a push showed before the page tried', () => {
-			expect(planPush(push('5'), [{ data: messageOptions('5').data }]).show).toBeUndefined();
+		it('leaves the page\'s notifications of m1 and m2 as they are when a late push of m1 arrives', () => {
+			// The page showed m1, then m2, which closed m1. Browsers still need a notification for the push:
+			// m2 shows again, as it was, quietly.
+			const plan = planPush(push('1'), [showing('2')], { marks: { 'a1:general': '2' } });
+			expect(plan.show?.title).toBe('bob · general');
+			expect(plan.show?.options).toMatchObject({ tag: 'apron:a1:2', body: 'message 2', renotify: false, silent: true });
+			expect(plan.notified).toBeUndefined();
 		});
 
-		it('shows a dismissed message again only quietly, when nothing else is showing', () => {
+		it('shows a dismissed message again only quietly, and only when nothing else is showing', () => {
 			const plan = planPush(push('7'), [], { marks: { 'a1:general': '7' } });
 			expect(plan.show?.options).toMatchObject({ tag: 'apron:a1:7', renotify: false, silent: true });
 			expect(plan.notified).toBeUndefined();
-			// With another notification showing, nothing.
-			expect(planPush(push('7'), [{ data: messageOptions('3', 'ops').data }], { marks: { 'a1:general': '7' } }).show).toBeUndefined();
+			// Another notification showing: that one shows again, as it is.
+			expect(planPush(push('7'), [showing('3', 'ops')], { marks: { 'a1:general': '7' } }).show?.options.tag).toBe('apron:a1:3');
 		});
 
-		it('drops a push for an account push isn\'t on for, and stands in a quiet notification when none shows', () => {
-			expect(planPush(push('8'), [], { enabled: ['b2'] }).show).toEqual(QUIET_PUSH);
-			expect(planPush(push('8'), [{ data: undefined }], { enabled: ['b2'] }).show).toBeUndefined();
+		it('drops a push for an account push isn\'t on for, without setting the badge, still showing something', () => {
+			const plan = planPush(push('8', 'general', { unread: 9 }), [], { enabled: ['b2'] });
+			expect(plan).toEqual({ show: QUIET_PUSH });
+			expect(planPush(push('8', 'general', { unread: 9 }), [other], { enabled: ['b2'] })).toEqual({ show: { title: 'Apron', options: { body: 'hi', tag: 'apron:other', data: undefined, renotify: false, silent: true } } });
 			// Unknown before IndexedDB has the list: shown.
 			expect(planPush(push('8'), []).show?.options.tag).toBe('apron:a1:8');
 		});
 
 		it('never shows a notification for a badge push, only sets the badge', () => {
 			expect(planPush(readPush({ push_id: 'a1', unread: 0 }), [], { enabled: ['a1'] })).toEqual({ badge: 0 });
-			expect(planPush(readPush({ push_id: 'a1', unread: 4 }), [{ data: undefined }])).toEqual({ badge: 4 });
+			expect(planPush(readPush({ push_id: 'a1', unread: 4 }), [other])).toEqual({ badge: 4 });
 		});
 
-		it('shows the quiet stand-in for an unreadable push with nothing showing', () => {
+		it('shows the quiet stand-in for an unreadable push, or a message it can\'t show, with nothing showing', () => {
 			expect(planPush(undefined, []).show).toEqual(QUIET_PUSH);
-			expect(planPush(undefined, [{ data: undefined }]).show).toBeUndefined();
+			expect(planPush(readPush({ push_id: 'a1', message: { body: { text: 'no room' } } }), [])).toEqual({ show: QUIET_PUSH });
+			expect(planPush(undefined, [other]).show?.options.tag).toBe('apron:other');
 		});
 	});
 
@@ -246,7 +259,7 @@ describe('push notifications', () => {
 	it('reads a badge push, with no message, as no notification', () => {
 		expect(readPush({ push_id: 'a1', unread: 0 })).toEqual({ pushId: 'a1', unread: 0 });
 		expect(readPush({ push_id: 'a1' })).toEqual({ pushId: 'a1' });
-		expect(readPush({ unread: -1, message: 'nope' })).toEqual({});
+		expect(readPush({ unread: -1, message: 'nope' })).toEqual({ unreadable: true });
 		expect(readPush({ unread: 1.5 })).toEqual({});
 		// Anything but an object can't be read.
 		expect(readPush('hello')).toBeUndefined();
