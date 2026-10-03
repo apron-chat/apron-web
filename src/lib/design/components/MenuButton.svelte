@@ -32,11 +32,16 @@
 	}
 
 	async function toggle(): Promise<void> {
-		open = !open;
-		if (open) {
-			await tick();
-			items()[0]?.focus();
-		}
+		if (open) close(false);
+		else await show(0);
+	}
+
+	/** Opens the menu with this item (`-1`: the last) focused. */
+	async function show(at: number): Promise<void> {
+		open = true;
+		await tick();
+		const list = items();
+		list[at < 0 ? list.length - 1 : at]?.focus();
 	}
 
 	function close(refocus: boolean): void {
@@ -50,7 +55,14 @@
 	}
 
 	function keydown(event: KeyboardEvent): void {
-		if (!open) return;
+		if (!open) {
+			// On the closed button, the arrows open the menu at its first or last item.
+			if (event.target === trigger && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+				event.preventDefault();
+				void show(event.key === 'ArrowDown' ? 0 : -1);
+			}
+			return;
+		}
 		const list = items();
 		const at = list.indexOf(document.activeElement as HTMLButtonElement);
 		if (event.key === 'Escape') {
