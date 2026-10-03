@@ -368,6 +368,13 @@ describe('rooms by request (cap rooms)', () => {
 			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '23', title: 'Ops 2' }] } });
 			// Its pause has run out.
 			expect(muted().ops).toBeUndefined();
+			// A room's pause runs out on its own, without another record.
+			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '25', title: 'Ops 2', mute: 10 }] } });
+			expect(muted().ops).toBe(Date.now() + 10_000);
+			const emitted = snapshot;
+			vi.advanceTimersByTime(10_000);
+			expect(snapshot).not.toBe(emitted);
+			expect(muted().ops).toBeUndefined();
 		});
 
 		it('sends no status to a server without the capability, push or not', async () => {
@@ -411,6 +418,11 @@ describe('rooms by request (cap rooms)', () => {
 			// `0` ends it.
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
 			expect(snapshot.mutedUntil).toBeUndefined();
+			// An invalid `mute` leaves the pause as it is.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: true } } });
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: -5 } } });
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 'soon' } } });
+			expect(snapshot.mutedUntil).toBe(true);
 			// A new session (an `auth` result) without `mute` starts unpaused.
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: true } } });
 			reconnect();
@@ -514,6 +526,33 @@ describe('rooms by request (cap rooms)', () => {
 			await greet({ webpush: { key: 'BNcR' } });
 			expect(sent('push_unregister')).toEqual([{ url: renewed.url }]);
 			await socket.reply('push_unregister', {});
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_unregister')).toEqual([]);
+		});
+
+		it('shows a refused registration, until one succeeds', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn();
+			socket.receive({ id: socket.request('push_register').id, error: { code: -32001, message: 'Push is for members only' } });
+			await settle();
+			expect(snapshot.pushError).toBe('Push is for members only');
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			await socket.reply('push_register', {});
+			expect(snapshot.pushError).toBeUndefined();
+		});
+
+		it('unregisters this browser\'s endpoint after each auth while push is off for the account', async () => {
+			client.setPushOff('https://push.example/old');
+			await signIn();
+			expect(sent('push_unregister')).toEqual([{ url: 'https://push.example/old' }]);
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_unregister')).toEqual([{ url: 'https://push.example/old' }]);
+			// Not for the endpoint it registers.
+			client.setPushOff(undefined);
+			client.setPushRegistration({ ...webpush, url: 'https://push.example/old' }, 'ada');
 			reconnect();
 			await greet({ webpush: { key: 'BNcR' } });
 			expect(sent('push_unregister')).toEqual([]);

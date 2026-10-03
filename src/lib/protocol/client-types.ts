@@ -224,6 +224,8 @@ export interface ClientSnapshot {
 	 * then, in epoch milliseconds, or `true` until resumed. Absent when not.
 	 */
 	mutedUntil?: number | true;
+	/** The server refused this device's `push_register` (§4.7): its message, until one succeeds. */
+	pushError?: string;
 	/** This connection's rooms are listed: joined ones (capability `rooms`), else the default room. */
 	roomsListed?: boolean;
 	error?: string;

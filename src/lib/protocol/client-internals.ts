@@ -126,6 +126,11 @@ export type ValidHistoryResponse = JsonObject & {
 	history_log_id: string | null;
 };
 
+/** A valid `mute` (§4.11): seconds (0 for none), or `true` until changed. */
+export function isMuteValue(value: unknown): value is number | true {
+	return value === true || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+}
+
 /** How long nobody attends a connection before it reports `idle` (§4.11: about 30 seconds). */
 export const IDLE_AFTER_MS = 30_000;
 /** The longest `setTimeout` delay browsers keep. */

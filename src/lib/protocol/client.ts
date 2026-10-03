@@ -62,6 +62,7 @@ import {
 	FIRST_LOG_ID,
 	IDLE_AFTER_MS,
 	MAX_TIMER_MS,
+	isMuteValue,
 	MAX_TYPING_S,
 	MAX_UNANSWERED_PINGS,
 	NO_NOTICES,
@@ -201,6 +202,17 @@ export class ChatClient {
 	private pushSent = false;
 	/** Registration URLs replaced or turned off while they couldn't be unregistered: sent after the next `auth`. */
 	private pushUnregisters = new Set<string>();
+	/**
+	 * This browser's push endpoint while push is off for the account signed in:
+	 * unregistered after each `auth` (`pushOffSent`), in case an earlier
+	 * unregister never arrived (§4.7: an unknown `url` succeeds).
+	 */
+	private pushOffUrl: string | undefined;
+	private pushOffSent = false;
+	/** Why the server refused the last `push_register`, until one succeeds. */
+	private pushError: string | undefined;
+	/** Ends the earliest room pause, then the next. */
+	private roomMuteTimer: ReturnType<typeof setTimeout> | undefined;
 	/** The `room_id` of the server's default room once known (without capability `rooms`). */
 	private defaultRoom?: string;
 	/** Messages this client posted without `room_id`: their broadcast names the default room. */
@@ -417,6 +429,8 @@ export class ChatClient {
 		this.clearIdleTimer();
 		if (this.muteTimer) clearTimeout(this.muteTimer);
 		this.muteTimer = undefined;
+		if (this.roomMuteTimer) clearTimeout(this.roomMuteTimer);
+		this.roomMuteTimer = undefined;
 		const socket = this.socket;
 		this.socket = undefined;
 		this.authenticated = false;
@@ -523,6 +537,7 @@ export class ChatClient {
 			readOnly: this.authenticated && !this.registeredSession && this.server?.ext?.demo?.guest_posting === false,
 			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
 			...(this.mutedUntil !== undefined ? { mutedUntil: this.mutedUntil } : {}),
+			...(this.pushError !== undefined ? { pushError: this.pushError } : {}),
 			error: this.error,
 			server: this.server,
 			capabilities: capabilitiesOf(this.server),
@@ -1409,13 +1424,13 @@ export class ChatClient {
 		this.emit();
 	}
 
-	/** Takes `mute` as the server echoes it in `you` (§4.11): seconds left, `true`, or `0` when not paused. */
-	private applyMute(mute: JsonValue): void {
+	/** Takes `mute` as the server echoes it in `you` (§4.11): seconds left, `true`, or `0` (or undefined) when not paused. */
+	private applyMute(mute: number | true | undefined): void {
 		if (this.muteTimer) clearTimeout(this.muteTimer);
 		this.muteTimer = undefined;
 		if (mute === true) {
 			this.mutedUntil = true;
-		} else if (typeof mute === 'number' && Number.isFinite(mute) && mute > 0) {
+		} else if (typeof mute === 'number' && mute > 0) {
 			this.mutedUntil = Date.now() + mute * 1000;
 			this.scheduleUnmute();
 		} else {
@@ -1434,6 +1449,22 @@ export class ChatClient {
 		if (mute === true) this.roomMutes.set(roomId, true);
 		else if (typeof mute === 'number' && mute > 0) this.roomMutes.set(roomId, Date.now() + mute * 1000);
 		else this.roomMutes.delete(roomId);
+		this.scheduleRoomUnmutes();
+	}
+
+	/** At the end of the earliest room pause, the rooms show unpaused here without a word from the server. */
+	private scheduleRoomUnmutes(): void {
+		if (this.roomMuteTimer) clearTimeout(this.roomMuteTimer);
+		this.roomMuteTimer = undefined;
+		const now = Date.now();
+		const ends = [...this.roomMutes.values()].filter((until): until is number => until !== true && until > now);
+		if (!ends.length) return;
+		this.roomMuteTimer = setTimeout(() => {
+			this.roomMuteTimer = undefined;
+			for (const [roomId, until] of this.roomMutes) if (until !== true && until <= Date.now()) this.roomMutes.delete(roomId);
+			this.scheduleRoomUnmutes();
+			this.emit();
+		}, Math.min(Math.min(...ends) - now, MAX_TIMER_MS));
 	}
 
 	/** When a room's pause ends, if it is paused now. */
@@ -1477,6 +1508,22 @@ export class ChatClient {
 		this.pushSent = false;
 		if (registration) this.pushUnregisters.delete(registration.url);
 		if (previous && previous.url !== registration?.url) this.pushUnregisters.add(previous.url);
+		if (!registration && this.pushError !== undefined) {
+			this.pushError = undefined;
+			this.emit();
+		}
+		this.syncPush();
+	}
+
+	/**
+	 * While push is off for the account signed in here, this browser's push
+	 * endpoint (`url`) is unregistered after each `auth`, so a registration an
+	 * earlier unregister missed goes too. Undefined stops it.
+	 */
+	setPushOff(url: string | undefined): void {
+		if (url === this.pushOffUrl) return;
+		this.pushOffUrl = url;
+		this.pushOffSent = false;
 		this.syncPush();
 	}
 
@@ -1490,11 +1537,25 @@ export class ChatClient {
 			});
 		}
 		const registration = this.pushRegistration;
+		const off = this.pushOffUrl;
+		if (off !== undefined && !this.pushOffSent && registration?.url !== off) {
+			this.pushOffSent = true;
+			this.pushRequest('push_unregister', { url: off }).catch(() => undefined);
+		}
 		const push = this.server?.push;
 		if (!registration || this.pushSent || !isJsonObject(push) || !Object.hasOwn(push, registration.kind)) return;
 		if (this.you?.user_id !== this.pushUser) return;
 		this.pushSent = true;
-		this.pushRequest('push_register', registration).catch(() => undefined);
+		this.pushRequest('push_register', registration).then(() => {
+			if (this.pushRegistration !== registration || this.pushError === undefined) return;
+			this.pushError = undefined;
+			this.emit();
+		}, (cause: Error & { code?: number }) => {
+			// Lost with the connection, it goes again after the next `auth`; a refusal is the user's to see.
+			if (cause.code === undefined || this.pushRegistration !== registration) return;
+			this.pushError = cause.message || 'The server refused push notifications for this device.';
+			this.emit();
+		});
 	}
 
 	/** Signed in to an account (not a guest) on a server whose `server.push` enables push (§4.7). */
@@ -2348,6 +2409,7 @@ export class ChatClient {
 		}
 		this.syncIdle();
 		this.pushSent = false;
+		this.pushOffSent = false;
 		this.syncPush();
 		this.emit();
 		return true;
@@ -2437,7 +2499,8 @@ export class ChatClient {
 		this.you = this.noteUser(identity);
 		// `mute` is the server's word on a pause (§4.11). Like every field of a current
 		// object (§3.3), a missing one leaves it unchanged; `0` ends it.
-		if (Object.hasOwn(identity, 'mute')) this.applyMute(identity.mute);
+		// An invalid `mute` is ignored (§4.11), leaving the pause as it is.
+		if (isMuteValue(identity.mute)) this.applyMute(identity.mute);
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
 	}
@@ -3151,6 +3214,8 @@ export class ChatClient {
 		this.idleSent = undefined;
 		this.applyMute(undefined);
 		this.roomMutes.clear();
+		this.scheduleRoomUnmutes();
+		this.pushError = undefined;
 		this.memberChangesUnsupported = false;
 	}
 
