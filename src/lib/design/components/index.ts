@@ -33,4 +33,7 @@ export { default as SelectionBar } from './SelectionBar.svelte';
 export { default as Mention } from './Mention.svelte';
 export { default as MentionPicker } from './MentionPicker.svelte';
 export { default as RoleBadges } from './RoleBadges.svelte';
+export { default as CheckList } from './CheckList.svelte';
+export { default as Callout } from './Callout.svelte';
+export { default as MenuButton } from './MenuButton.svelte';
 export type * from './types';

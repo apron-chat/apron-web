@@ -66,6 +66,8 @@ export interface RoomSnapshot {
 	 * Fixed at creation; absent means an ordinary room.
 	 */
 	private?: boolean;
+	/** Your notifications from this room are paused until then (§4.11 `mute`): epoch milliseconds, or `true`. Absent when not. */
+	mutedUntil?: number | true;
 	/** What the room is about (§3.4), Markdown by convention; absent when empty. */
 	description?: string;
 	/**
@@ -217,6 +219,15 @@ export interface ClientSnapshot {
 	 * changes are denied until the user signs in.
 	 */
 	readOnly?: boolean;
+	/**
+	 * Your notifications are paused (§4.11 `mute`, from `you.mute`) until
+	 * then, in epoch milliseconds, or `true` until resumed. Absent when not.
+	 */
+	mutedUntil?: number | true;
+	/** The server refused this device's `push_register` (§4.7): its message, until one succeeds. */
+	pushError?: string;
+	/** This connection's rooms are listed: joined ones (capability `rooms`), else the default room. */
+	roomsListed?: boolean;
 	error?: string;
 	server?: ServerParams;
 	/** Which optional features the current `server` frame advertises (§4). */
@@ -281,6 +292,16 @@ export interface ClientSnapshot {
 	 * holds its own copy of the last authenticated snapshot meanwhile.
 	 */
 	disconnectedAt?: number;
+}
+
+/**
+ * The params of `push_register` (§4.7): `kind` is a key of `server.push`,
+ * `url` identifies the registration, `push_id` names it in payloads, and the
+ * rest is specific to the kind, such as a web push subscription's `keys`.
+ */
+export interface PushRegistration extends JsonObject {
+	kind: string;
+	url: string;
 }
 
 export interface OperationHandle<T extends JsonObject = JsonObject> {

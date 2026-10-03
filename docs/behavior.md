@@ -42,9 +42,15 @@ seconds per room, with one `typing: 0` when typing pauses, to avoid charging a
 frame per keystroke. Sending a message sends no `typing: 0`: the message itself
 ends the indicator. Other people's indicators last as long as their `typing`
 asks, or until their next message arrives in that room.
-With the `activity` capability the client also sends `activity` `{away: true}` while
-the tab is hidden or unfocused and `{away: false}` when it is back, so the
-server can push to your other devices instead; it is never shown to anyone.
+With the `status` capability (§4.11), the client tells the server whether
+anyone is attending the tab, so the server can push instead. It sends the
+notification `status` `{idle: true}` once the tab has been hidden or
+unfocused for 30 seconds, and `{idle: false}` as soon as it is back. Each
+connection reports the current state at once as the server frame arrives,
+before `auth`: a tab already hidden or unfocused then is idle from the start,
+without the wait. Only `{idle: false}` ends idle; a message sent from the tab
+doesn't. It is never shown to anyone. A server without `status` gets none of
+this.
 Explicit server URLs keep their path: a bare hostname connects at `/`, while
 servers that require `/ws` should be entered with that suffix.
 
@@ -169,15 +175,122 @@ outside, or tabbing out closes it. Mentions inside a reply's quote only read,
 since the quote is the button that jumps to its message.
 
 A mention that lands while the tab is hidden or unfocused flashes the tab title
-and plays a soft chime. **Preferences** (the gear beside your profile) can turn
-on desktop notifications instead, for mentions or for every message from
-someone else; turning them on asks the browser's permission, and **Send test**
-shows a sample. While they're on, a notification replaces the chime (the chime
+and plays a soft chime. **Preferences** (the gear beside your profile) starts
+its Notifications section with **Notify me about**, one choice for desktop
+notifications and push alike, one line per option: Mentions (messages whose
+`body.mentions` list you, or an edit that adds you), Replies to my messages
+(replies to one of your messages that is loaded here; with the replied-to
+message not loaded, no notification), All messages in private rooms (a private
+room or its threads) and All messages in joined rooms (a joined room or its
+threads). Messages of your own never notify. At
+least one stays checked, mentions and replies until you choose; the switches
+below turn notifications off. The choice is kept per account on each server,
+and for a server's guests together (their `user_id`s change with each
+connection), and applies in other tabs. The earlier device-wide "Everything"
+carries over as every scope.
+
+On a server with the `status` capability, a signed-in account (not a guest)
+gets **Pause notifications** at the top of the section. **Pause…** opens a
+menu: For 1 hour, For 8 hours, Until tomorrow (the next 9:00; "Until this
+morning" before 9:00) and Until I resume, each showing when it would end. The
+menu opens from the keyboard with the arrow keys too. Choosing one sends `status` `{mute}`
+with the seconds until then, or `true`, and **Resume** sends `{mute: 0}`. The
+server's `you.mute` (in `auth` and `me` results and `user` notifications about
+you: seconds left, `true`, or `0` when not paused) is the word on it. A `you`
+without `mute` leaves the pause as it is (§3.3); an `auth` result without it
+starts the session unpaused. The client works out when the pause ends from
+it as it arrives, and resumes on its own then. While paused, the row reads
+"Paused until 14:30" (or "until tomorrow 9:00", "until you resume"), the
+profile bar's gear carries a small bell-off badge, and nothing notifies here:
+no desktop notifications, chime or title flash. The server sends no pushes.
+
+A room's `mute`, echoed on your room records, pauses that room and its
+threads: there, only mentions notify. `room_list` entries and `room_update`
+`joined` records always say it (missing is `0`); on other records a missing
+`mute` leaves it, and `0` ends it. The client
+has no control for it yet.
+
+Below it, **Desktop notifications** alerts while Apron is open but hidden or
+unfocused; turning them on asks the browser's permission, and **Send a test
+notification** under it shows a sample through the same browser path. While they're on, a notification replaces the chime (the chime
 still plays if one couldn't be shown), each room keeps one notification that
 the next message replaces (its newest mention, else its newest message), and
-clicking it opens that room or thread. Where the page can't show notifications
-itself (Android Chrome) the service worker shows them. Permission revoked in the
-browser's site settings reads as off. **Appearance** picks a light or dark theme
+clicking it opens that room or thread. Notifications show through the service
+worker, or from the page where there is none yet. Permission revoked in the
+browser's site settings reads as off.
+
+When the server offers web push (`server.push.webpush` with its VAPID `key`,
+§4.7), Preferences also offers **Push notifications** to a signed-in account
+(not a guest), also while it reconnects. It is per account on each server, off
+until turned on, and turning it on or off in one tab applies in the others.
+Turning it on asks the browser's permission, subscribes this browser with the
+server's key (replacing a subscription made with another key), and sends
+`push_register` `{kind: "webpush", url, push_id, keys: {p256dh, auth}, wake}`
+from the subscription after each `auth` as that account. Turning it off sends
+`push_unregister`. This browser has one subscription for all accounts: it goes
+once no account here has push on (also checked on load, for one turned off
+while offline), and accounts on servers with the same key share it. When
+another server, with another key, holds it, the setting says "Push is on for
+another server in this browser (host)", and turning it on there takes it over;
+tabs don't take it back on their own. Its `push_id`s are kept in IndexedDB for
+the service worker, which drops a push for any account push isn't on for.
+Subscribing and unsubscribing run one at a time, across tabs too under the
+`apron-push` Web Lock where the browser has one, and a step that finishes
+after push was turned off, or after the tab moved to another server or
+account, registers nothing; waiting for the service worker gives up after 10
+seconds. A replaced registration is unregistered, after the next `auth` if not
+at once, and while push is off for the account signed in, this browser's
+endpoint is unregistered after each `auth`, in case an earlier unregister was
+missed. Signing out unregisters, and turns push off for that account here even
+when the server can't be told. A registration the server refuses shows its
+message in the setting.
+
+**Push notifications** alerts on this device even when Apron is closed. Its
+`wake` is the checked scopes that `server.push.wake` lists; when the server
+lists none, no `wake` goes and the server's defaults apply. While push is on, a
+checked scope the server doesn't push is marked "Desktop only" beside its
+title. When none of the checked scopes is pushed, push still
+registers, with an empty `wake`, which wakes for nothing, and the setting says
+so. A change to the choice registers again at once, with the same `url`.
+
+On iPhone and iPad Safari outside a Home Screen app, push isn't offered: the
+push setting shows a callout with the steps to add Apron to the Home Screen.
+Where the browser offers to install Apron (Chromium's `beforeinstallprompt`),
+the client holds that offer back and shows **Install app** in the push setting
+only, never elsewhere, and not once Apron runs installed. The web manifest
+(`static/manifest.webmanifest`) names Apron, its icons, `start_url` and
+`display: standalone`.
+
+`push_id` names the account: 12 random bytes in base64url (16 characters),
+made once per account on each server and kept in `apron.pushIds`, so it
+reveals neither. The service worker reads each
+push payload's `push_id`, `unread` and `message`, and shows the `message` as
+its sender and room. A payload without `message` is a badge push: it only sets
+the badge and never shows a notification. This client doesn't ask for those
+on web push, where a push that shows nothing may get the browser's own
+notice. `unread`
+becomes the app badge where the browser has one, cleared at 0; while Apron is
+in view, the badge is the page's own unread count. A message notification, the
+page's or a pushed one, is tagged with the `push_id` and the `message_id`, and
+a room's notifications are ordered by `message_id`: a message the room has
+already notified about (showing, or remembered in IndexedDB though dismissed)
+or one older than that doesn't notify again, and a new one closes only older
+ones; the same message again (an edit that newly mentions you, say) replaces
+its notification quietly, keeping its title. Browsers expect each push to
+show a notification, and WebKit revokes subscriptions whose pushes don't, so
+every push but a badge push shows one: a push with nothing new, one for an
+account push isn't on for here, or one that can't be read shows again, as it
+is and silently, what is already showing, else the message quietly, else
+"Open Apron to catch up". A dropped push leaves the badge alone, and so does
+the service worker while a page is in view. A click
+on a pushed notification, or on the page's when its tab has gone, asks the
+open tabs for their `push_id`, and the tab signed in to that account opens the
+room. With no such tab, a new one opens at it, on that account's server if
+push is on for it here. A pushed room that the listed rooms don't include, or
+that isn't open after 30 seconds, is dropped. Browsers without
+push say so; iPhone and iPad Safari say to add Apron to the Home Screen first.
+
+**Appearance** picks a light or dark theme
 over the system's, and an installed font for the interface, messages and code
 (suggested from installed fonts where the browser allows listing them); the
 font choice is marked experimental, to be replaced by a choice of themes. All

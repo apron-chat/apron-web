@@ -5,6 +5,9 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-4); }
 :where(.ap-btn, .ap-embed-remove, .ap-link, .ap-room, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-rail-item, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-field, .ap-reply, .ap-seg-item, .ap-connect-recent-item, .ap-choice-item, .ap-msg-check, .ap-menu-item, .ap-iconbtn, .ap-rchip, .ap-rpick, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
+/* Visually hidden, still read by screen readers: live regions, and explanations that controls refer to. */
+.ap-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
 /* Button */
 .ap-btn { font: inherit; font-size: 13px; line-height: 18px; font-weight: 600; height: 32px; padding: 0 14px; border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--bg-200); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .ap-btn:hover:not(:disabled) { background: var(--bg-300); }
@@ -384,6 +387,26 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-choice-text { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 .ap-choice-on, .ap-choice-on:hover:not(:disabled) { background: var(--bg-100); border-color: var(--line-strong); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.15); }
 @media (prefers-reduced-motion: reduce) { .ap-choice-item { transition: none; } }
+
+/* CheckList — choices that combine, one per row: a checkbox, a title with an optional muted note, and an optional line saying what it does */
+.ap-checklist { display: grid; gap: var(--space-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.ap-checklist-legend { margin-bottom: var(--space-1); padding: 0; color: var(--ink); font-size: 13px; font-weight: 600; }
+.ap-checklist-item { flex-direction: row; align-items: flex-start; gap: var(--space-3); }
+.ap-checklist-item:has(.ap-checklist-box:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ap-checklist-item-locked { cursor: default; }
+.ap-checklist-item:has(.ap-checklist-box:disabled:not(:checked)), .ap-checklist-item-off { opacity: .6; }
+.ap-checklist-box { flex: none; width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--accent); cursor: inherit; }
+.ap-checklist-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ap-checklist-head { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--space-2); }
+.ap-checklist-note { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
+
+/* Callout — something to know or do before a setting works (Add to Home Screen), with an optional action */
+.ap-callout { display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid var(--line); border-left: 3px solid var(--denim); border-radius: var(--radius-md); background: var(--denim-soft); color: var(--ink); font-size: 13px; line-height: 19px; }
+.ap-callout-title { margin: 0; font-weight: 600; }
+.ap-callout-body { color: var(--ink); }
+.ap-callout-body :is(p, ol, ul) { margin: 0; }
+.ap-callout-body :is(ol, ul) { padding-left: var(--space-6); }
+.ap-callout-action { margin-top: var(--space-1); }
 .ap-connect-recent { display: flex; flex-direction: column; gap: var(--space-1); width: min(100%, 400px); }
 .ap-connect-recent-item { font: inherit; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .ap-connect-recent-item:hover { background: var(--bg-300); }
@@ -400,6 +423,11 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-menu { position: absolute; right: 0; bottom: calc(100% + var(--space-1)); z-index: 5; min-width: 200px; margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
 .ap-menu-item { font: inherit; display: block; width: 100%; padding: 6px var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .ap-menu-item:hover { background: var(--bg-300); }
+/* MenuButton — a button that opens a menu of choices, each with an optional muted hint (Pause notifications) */
+.ap-menubtn { position: relative; display: inline-block; }
+.ap-menu-below { top: calc(100% + var(--space-1)); bottom: auto; }
+.ap-menubtn .ap-menu-item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); white-space: nowrap; }
+.ap-menu-hint { color: var(--ink-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
 /* Mention — the @name chip inside message text */
 .ap-mention { display: inline; padding: 1px 5px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }

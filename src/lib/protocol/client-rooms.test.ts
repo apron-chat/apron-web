@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatClient, DEFAULT_ROOM_ID, type ClientSnapshot } from './client';
+import { ChatClient, DEFAULT_ROOM_ID, IDLE_AFTER_MS, type ClientSnapshot } from './client';
 import { FakeSocket, settle } from './fake-socket';
 
 /** Operations whose outcome a test does not await still settle when the client stops. */
@@ -277,29 +277,302 @@ describe('rooms by request (cap rooms)', () => {
 		expect(room('20')?.loaded).toBe(true);
 	});
 
-	it('tells the server when nobody is attending, once per change and again on a new connection', async () => {
-		await authenticate(['rooms', 'activity']);
-		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
-		const away = () => socket.sent.filter((frame) => frame.method === 'activity' && 'away' in (frame.params as object)).map((frame) => (frame.params as { away: boolean }).away);
-		client.setAway(true);
-		client.setAway(true);
-		expect(away()).toEqual([true]);
-		expect(socket.sent.find((frame) => frame.method === 'activity' && 'away' in (frame.params as object))).toEqual({ method: 'activity', params: { away: true } });
-		client.setAway(false);
-		expect(away()).toEqual([true, false]);
-		// Typing ends away on the server: coming back needs no frame, going away again says so again.
-		client.setAway(true);
-		client.sendTyping('general', true);
-		client.setAway(false);
-		client.setAway(true);
-		expect(away()).toEqual([true, false, true, true]);
-		// A new connection starts attended: an away tab says so after auth.
-		socket.drop();
-		vi.advanceTimersByTime(5_000);
-		socket = FakeSocket.latest();
-		await authenticate(['rooms', 'activity']);
-		expect(away()).toEqual([true]);
+	describe('status', () => {
+		const statuses = () => socket.sent.filter((frame) => frame.method === 'status').map((frame) => frame.params as Record<string, unknown>);
+		async function greet(caps: string[] = ['rooms', 'status'], you: Record<string, unknown> = { user_id: 'guest_1', name: 'Guest' }, auth = ['guest']): Promise<void> {
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth, capabilities: caps } });
+			await socket.reply('auth', { you });
+			if (caps.includes('rooms')) await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
+		}
+		function reconnect(): void {
+			socket.drop();
+			vi.advanceTimersByTime(5_000);
+			socket = FakeSocket.latest();
+		}
+
+		it('reports attendance as soon as the server frame arrives, before auth, and again on each connection', async () => {
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['status'] } });
+			expect(socket.sent.map((frame) => frame.method)).toEqual(['status', 'auth']);
+			expect(statuses()).toEqual([{ idle: false }]);
+			await socket.reply('auth', { you: { user_id: 'guest_1' } });
+			// Auth doesn't repeat it.
+			expect(statuses()).toEqual([{ idle: false }]);
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }]);
+			// A new connection starts by saying the tab is still idle.
+			reconnect();
+			await greet(['status']);
+			expect(statuses()).toEqual([{ idle: true }]);
+		});
+
+		it('reports becoming idle only after the wait, and becoming attended at once', async () => {
+			await greet();
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS - 1);
+			expect(statuses()).toEqual([{ idle: false }]);
+			// Back before the wait is over: nothing to say.
+			client.setAway(false);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			expect(statuses()).toEqual([{ idle: false }]);
+			client.setAway(true);
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }]);
+			client.setAway(false);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }, { idle: false }]);
+		});
+
+		it('stays idle after a message: only idle: false ends it', async () => {
+			await greet();
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			client.sendTyping('general', true);
+			client.markRead('general', '1724803200001');
+			client.send('general', 'hi').promise.catch(() => undefined);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }]);
+			client.setAway(false);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }, { idle: false }]);
+			// `activity` never carries attendance.
+			expect(socket.sent.filter((frame) => frame.method === 'activity' && ('away' in (frame.params as object) || 'idle' in (frame.params as object)))).toEqual([]);
+		});
+
+		it('reports a tab away when a connection starts as idle at once, without the wait', async () => {
+			await greet();
+			client.setAway(true);
+			vi.advanceTimersByTime(1000);
+			expect(statuses()).toEqual([{ idle: false }]);
+			reconnect();
+			await greet();
+			expect(statuses()).toEqual([{ idle: true }]);
+		});
+
+		it('keeps a room\'s mute as the server echoes it on your room records', async () => {
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+			await socket.reply('auth', { you: { user_id: 'guest_1' } });
+			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', mute: true }, { room_id: 'random', title: 'Random', mute: 60 }, { room_id: 'ops', title: 'Ops' }] });
+			const muted = () => Object.fromEntries(snapshot.rooms.map((room) => [room.id, room.mutedUntil]));
+			expect(muted()).toEqual({ general: true, random: Date.now() + 60_000, ops: undefined });
+			// A record without `mute` leaves it; `0` ends it.
+			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '20', title: 'General!' }, { room_id: 'random', log_id: '21', title: 'Random', mute: 0 }] } });
+			expect(muted()).toEqual({ general: true, random: undefined, ops: undefined });
+			// A `joined` record always says it: missing is 0 there, as in a listing.
+			socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'general', log_id: '24', title: 'General!' }] } });
+			expect(muted().general).toBeUndefined();
+			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '22', title: 'Ops', mute: 30 }] } });
+			vi.advanceTimersByTime(30_000);
+			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '23', title: 'Ops 2' }] } });
+			// Its pause has run out.
+			expect(muted().ops).toBeUndefined();
+			// A room's pause runs out on its own, without another record.
+			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '25', title: 'Ops 2', mute: 10 }] } });
+			expect(muted().ops).toBe(Date.now() + 10_000);
+			const emitted = snapshot;
+			vi.advanceTimersByTime(10_000);
+			expect(snapshot).not.toBe(emitted);
+			expect(muted().ops).toBeUndefined();
+		});
+
+		it('sends no status to a server without the capability, push or not', async () => {
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['activity'], push: { webpush: { key: 'BNcR' } } } });
+			await socket.reply('auth', { you: { user_id: 'guest_1' } });
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			client.setMute(true);
+			expect(statuses()).toEqual([]);
+			// A replacing server frame with the capability hears the current state.
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['status'] } });
+			expect(statuses()).toEqual([{ idle: true }]);
+		});
+
+		it('pauses notifications with mute, and takes the server\'s you.mute as the word on it', async () => {
+			const now = Date.now();
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', mute: 120 }, ['token', 'guest']);
+			// A guest can't pause: this sign-in is a guest's.
+			client.setMute(true);
+			expect(statuses().filter((params) => 'mute' in params)).toEqual([]);
+			client.useToken('apron_token');
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', mute: 120 }, ['token', 'guest']);
+			// The server's `mute` is seconds left: the pause ends then.
+			expect(snapshot.mutedUntil).toBeGreaterThanOrEqual(now + 120_000);
+			client.setMute(3600);
+			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }]);
+			expect(snapshot.mutedUntil).toBe(Date.now() + 3_600_000);
+			client.setMute(0);
+			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }, { mute: 0 }]);
+			expect(snapshot.mutedUntil).toBeUndefined();
+			// Until resumed, from a `user` notification about you.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada', mute: true } } });
+			expect(snapshot.mutedUntil).toBe(true);
+			// A `you` without `mute`, such as the Go server's status-only frames, leaves the pause as it is (§3.3).
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', status: 'idle' } } });
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada' } } });
+			expect(snapshot.mutedUntil).toBe(true);
+			// `0` ends it.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
+			expect(snapshot.mutedUntil).toBeUndefined();
+			// An invalid `mute` leaves the pause as it is.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: true } } });
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: -5 } } });
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 'soon' } } });
+			expect(snapshot.mutedUntil).toBe(true);
+			// A new session (an `auth` result) without `mute` starts unpaused.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: true } } });
+			reconnect();
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada' }, ['token', 'guest']);
+			expect(snapshot.mutedUntil).toBeUndefined();
+			// A pause runs out here without a word from the server.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada', mute: 60 } } });
+			expect(snapshot.mutedUntil).toBe(Date.now() + 60_000);
+			vi.advanceTimersByTime(60_000);
+			expect(snapshot.mutedUntil).toBeUndefined();
+		});
 	});
+
+	describe('push', () => {
+		const webpush = { kind: 'webpush', url: 'https://push.example/a', push_id: 'a1', keys: { p256dh: 'BPk', auth: 'c2Vj' } };
+		const sent = (method: string) => socket.sent.filter((frame) => frame.method === method).map((frame) => frame.params);
+		async function greet(push?: Record<string, unknown>, you = 'ada'): Promise<void> {
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: [], ...(push ? { push } : {}) } });
+			// Nothing is registered before auth.
+			expect(sent('push_register')).toEqual([]);
+			await socket.reply('auth', { you: { user_id: you, name: you } });
+		}
+		function reconnect(): void {
+			socket.drop();
+			vi.advanceTimersByTime(5_000);
+			socket = FakeSocket.latest();
+		}
+		async function signIn(push: Record<string, unknown> = { webpush: { key: 'BNcR' } }, you = 'ada'): Promise<void> {
+			client.useToken('apron_token');
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await greet(push, you);
+		}
+
+		it('registers on each connection while the server offers the kind, and unregisters a replaced one', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			// A guest has no one to push to: nothing is registered.
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_register')).toEqual([]);
+			// Signed in to the account, it registers.
+			await signIn();
+			expect(sent('push_register')).toEqual([webpush]);
+			// The same registration again sends nothing.
+			client.setPushRegistration({ ...webpush, keys: { auth: 'c2Vj', p256dh: 'BPk' }, push_id: 'a1' }, 'ada');
+			expect(sent('push_register')).toHaveLength(1);
+			// A new subscription (another key) unregisters the old endpoint.
+			const renewed = { ...webpush, url: 'https://push.example/b' };
+			client.setPushRegistration(renewed, 'ada');
+			expect(sent('push_unregister')).toEqual([{ url: webpush.url }]);
+			expect(sent('push_register')).toEqual([webpush, renewed]);
+			await socket.reply('push_unregister', {});
+			// Each connection registers again.
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_register')).toEqual([renewed]);
+			// Turning push off unregisters.
+			client.setPushRegistration(undefined);
+			expect(sent('push_unregister')).toEqual([{ url: renewed.url }]);
+			// A server without the kind is never asked, until a replacing server frame offers it.
+			client.setPushRegistration(renewed, 'ada');
+			reconnect();
+			await greet({ relay: {} });
+			expect(sent('push_register')).toEqual([]);
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
+			expect(sent('push_register')).toEqual([renewed]);
+		});
+
+		it('registers again at once, on the same url, when the wake scopes change', async () => {
+			client.setPushRegistration({ ...webpush, wake: ['mentions', 'replies'] }, 'ada');
+			await signIn({ webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'private'] });
+			client.setPushRegistration({ ...webpush, wake: ['private'] }, 'ada');
+			expect(sent('push_register')).toEqual([{ ...webpush, wake: ['mentions', 'replies'] }, { ...webpush, wake: ['private'] }]);
+			// The same url: nothing to unregister.
+			expect(sent('push_unregister')).toEqual([]);
+		});
+
+		it('registers only for the account it was made for', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn(undefined, 'bob');
+			expect(sent('push_register')).toEqual([]);
+			client.setPushRegistration({ ...webpush, push_id: 'b2' }, 'bob');
+			expect(sent('push_register')).toEqual([{ ...webpush, push_id: 'b2' }]);
+		});
+
+		it('unregisters a replaced registration after the next auth when it couldn\'t at once', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn();
+			socket.drop();
+			const renewed = { ...webpush, url: 'https://push.example/b' };
+			client.setPushRegistration(renewed, 'ada');
+			vi.advanceTimersByTime(5_000);
+			socket = FakeSocket.latest();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(socket.sent.filter((frame) => frame.method === 'push_unregister' || frame.method === 'push_register').map((frame) => [frame.method, frame.params]))
+				.toEqual([['push_unregister', { url: webpush.url }], ['push_register', renewed]]);
+			await socket.reply('push_unregister', {});
+			// One lost with its connection goes again; one the server answered doesn't.
+			client.setPushRegistration(undefined);
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_unregister')).toEqual([{ url: renewed.url }]);
+			await socket.reply('push_unregister', {});
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_unregister')).toEqual([]);
+		});
+
+		it('shows a refused registration, until one succeeds', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn();
+			socket.receive({ id: socket.request('push_register').id, error: { code: -32001, message: 'Push is for members only' } });
+			await settle();
+			expect(snapshot.pushError).toBe('Push is for members only');
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			await socket.reply('push_register', {});
+			expect(snapshot.pushError).toBeUndefined();
+		});
+
+		it('unregisters this browser\'s endpoint after each auth while push is off for the account', async () => {
+			client.setPushOff('https://push.example/old');
+			await signIn();
+			expect(sent('push_unregister')).toEqual([{ url: 'https://push.example/old' }]);
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_unregister')).toEqual([{ url: 'https://push.example/old' }]);
+			// Not for the endpoint it registers.
+			client.setPushOff(undefined);
+			client.setPushRegistration({ ...webpush, url: 'https://push.example/old' }, 'ada');
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_unregister')).toEqual([]);
+		});
+
+		it('unregisters on sign-out, without waiting for a registration in flight', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn();
+			expect(sent('push_register')).toEqual([webpush]);
+			const signedOut = socket;
+			await client.signOut();
+			expect(signedOut.sent.filter((frame) => frame.method === 'push_unregister').map((frame) => frame.params)).toEqual([{ url: webpush.url }]);
+			// Forgotten: the next account isn't registered with it.
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await signIn();
+			expect(sent('push_register')).toEqual([]);
+		});
+	});
+
 });
 
 describe('the default room (no cap rooms)', () => {

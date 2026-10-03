@@ -49,6 +49,7 @@ import {
 	type MessageResult,
 	type Notice,
 	type OperationHandle,
+	type PushRegistration,
 	type RoomListing,
 	type RoomPatch,
 	type RoomResult,
@@ -59,6 +60,9 @@ import {
 } from './client-types';
 import {
 	FIRST_LOG_ID,
+	IDLE_AFTER_MS,
+	MAX_TIMER_MS,
+	isMuteValue,
 	MAX_TYPING_S,
 	MAX_UNANSWERED_PINGS,
 	NO_NOTICES,
@@ -108,7 +112,7 @@ import { capabilitiesOf } from './client-views';
 
 export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
-export { recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
+export { IDLE_AFTER_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
 export {
 	canEdit,
 	canManageRooms,
@@ -121,7 +125,8 @@ export {
 	normalizeWebSocketUrl,
 	timelineMessages,
 	topLevelRooms,
-	userIn
+	userIn,
+	webPushKey
 } from './client-views';
 
 /**
@@ -173,9 +178,41 @@ export class ChatClient {
 	/** Notices that arrived before there was a room to show them in; the first room shown takes them. */
 	private orphanNotices: Array<{ from: Identity; body?: MessageBody; welcome?: boolean }> = [];
 	private noticeCount = 0;
-	/** Nobody is attending this connection (§4.4); `awaySent` is what the server was last told on it. */
+	/**
+	 * Nobody is attending this connection (§4.11 `idle`): `away` as the page
+	 * says, `idle` once that has
+	 * lasted `IDLE_AFTER_MS` (`idleTimer` runs meanwhile), and `idleSent` what
+	 * the server takes it to be on connection `connection`.
+	 */
 	private away = false;
-	private awaySent = false;
+	private idle = false;
+	private idleTimer: ReturnType<typeof setTimeout> | undefined;
+	private idleSent: { connection: number; idle: boolean } | undefined;
+	/** Your notifications are paused until (§4.11 `mute`): epoch milliseconds, or `true`; `muteTimer` ends it. */
+	private mutedUntil: number | true | undefined;
+	/** Rooms whose notifications you paused (§4.11 room `mute`), as the server last echoed them: until then, or `true`. */
+	private readonly roomMutes = new Map<string, number | true>();
+	private muteTimer: ReturnType<typeof setTimeout> | undefined;
+	/**
+	 * What `push_register` sends on each connection (§4.7), for the account
+	 * `pushUser`; `pushSent` is whether this connection has.
+	 */
+	private pushRegistration: PushRegistration | undefined;
+	private pushUser: string | undefined;
+	private pushSent = false;
+	/** Registration URLs replaced or turned off while they couldn't be unregistered: sent after the next `auth`. */
+	private pushUnregisters = new Set<string>();
+	/**
+	 * This browser's push endpoint while push is off for the account signed in:
+	 * unregistered after each `auth` (`pushOffSent`), in case an earlier
+	 * unregister never arrived (§4.7: an unknown `url` succeeds).
+	 */
+	private pushOffUrl: string | undefined;
+	private pushOffSent = false;
+	/** Why the server refused the last `push_register`, until one succeeds. */
+	private pushError: string | undefined;
+	/** Ends the earliest room pause, then the next. */
+	private roomMuteTimer: ReturnType<typeof setTimeout> | undefined;
 	/** The `room_id` of the server's default room once known (without capability `rooms`). */
 	private defaultRoom?: string;
 	/** Messages this client posted without `room_id`: their broadcast names the default room. */
@@ -330,6 +367,10 @@ export class ChatClient {
 		this.retryAfterUntil = 0;
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
+		// A registration belongs to the server it was made for.
+		this.pushRegistration = undefined;
+		this.pushUser = undefined;
+		this.pushUnregisters.clear();
 		this.resetSession('Server URL changed; pending requests were cancelled');
 		// After the reset, which forgets the old server's session: this server's own comes back.
 		this.loadStoredSession();
@@ -385,6 +426,11 @@ export class ChatClient {
 		this.reconnectTimer = undefined;
 		this.stopWaitingForPresence();
 		this.clearStableTimer();
+		this.clearIdleTimer();
+		if (this.muteTimer) clearTimeout(this.muteTimer);
+		this.muteTimer = undefined;
+		if (this.roomMuteTimer) clearTimeout(this.roomMuteTimer);
+		this.roomMuteTimer = undefined;
 		const socket = this.socket;
 		this.socket = undefined;
 		this.authenticated = false;
@@ -489,6 +535,9 @@ export class ChatClient {
 			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
 			...(this.passkeyAbort ? { passkeyBusy: !this.addingEmail } : {}),
 			readOnly: this.authenticated && !this.registeredSession && this.server?.ext?.demo?.guest_posting === false,
+			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
+			...(this.mutedUntil !== undefined ? { mutedUntil: this.mutedUntil } : {}),
+			...(this.pushError !== undefined ? { pushError: this.pushError } : {}),
 			error: this.error,
 			server: this.server,
 			capabilities: capabilitiesOf(this.server),
@@ -509,6 +558,7 @@ export class ChatClient {
 					...(record ? { record } : {}),
 					...(thread ? { parentRoomId: record!.parent_room_id } : {}),
 					...(record?.private === true ? { private: true } : {}),
+					...(this.roomMutedUntil(room.id) !== undefined ? { mutedUntil: this.roomMutedUntil(room.id) } : {}),
 					...(this.store.firstRoomLogId(room.id) !== undefined ? { firstRecordLogId: this.store.firstRoomLogId(room.id) } : {}),
 					...(typeof record?.description === 'string' && record.description ? { description: record.description } : {}),
 					...(record && isJsonObject(record.ext) ? { ext: record.ext } : {}),
@@ -974,7 +1024,17 @@ export class ChatClient {
 	}
 
 	async signOut(): Promise<void> {
-		if (this.passkeyAbort || this.passkeyStarting || this.requests.size) throw new Error('Wait for pending requests to finish, then try again');
+		// Push requests run in the background and never hold up signing out.
+		const pending = [...this.requests.values()].some((request) => request.method !== 'push_register' && request.method !== 'push_unregister');
+		if (this.passkeyAbort || this.passkeyStarting || pending) throw new Error('Wait for pending requests to finish, then try again');
+		// This device stops receiving the account's pushes (§4.7), as far as the server can still be told.
+		const registration = this.pushRegistration;
+		if (registration && this.pushReady()) {
+			this.sendFrame({ method: 'push_unregister', id: makeRequestId('push_unregister'), params: { url: registration.url } });
+		}
+		this.pushRegistration = undefined;
+		this.pushUser = undefined;
+		this.pushUnregisters.clear();
 		this.sessionToken = undefined;
 		this.storeSession(undefined);
 		this.noteSignIn(undefined);
@@ -1018,10 +1078,9 @@ export class ChatClient {
 	 */
 	send(room: string, text: string, format: MessageFormat = 'plain', options: SendOptions = {}): OperationHandle<MessageResult> {
 		if (!text && !options.embeds?.length) return rejectedHandle('message', new Error('Nothing to send'));
-		// The message ends this user's typing indicator for everyone (§4.4), and
-		// any `away`, so no `typing: 0` needs to follow it.
+		// The message ends this user's typing indicator for everyone (§4.4), so no
+		// `typing: 0` needs to follow it. It doesn't end `idle` (§4.11): only `idle: false` does.
 		this.sentTypingAt.delete(room);
-		this.awaySent = false;
 		const handle = this.enqueueRequest<MessageResult>('message', this.messageParams(room, text, format, options), { visible: true, allowBeforeAuth: false });
 		if (room === DEFAULT_ROOM_ID) {
 			handle.promise.then((result) => {
@@ -1056,7 +1115,6 @@ export class ChatClient {
 	 * as the frames they cause. A failure rejects with the server's message.
 	 */
 	command(room: string, text: string, options: Omit<SendOptions, 'ext'> = {}): OperationHandle {
-		this.awaySent = false;
 		return this.enqueueRequest('command', this.messageParams(room, text, undefined, options), { visible: true, allowBeforeAuth: false });
 	}
 
@@ -1310,26 +1368,204 @@ export class ChatClient {
 			this.sentTypingAt.delete(room);
 		}
 		this.sendFrame({ method: 'activity', params: { room_id: room, typing: active ? TYPING_TIMEOUT_S : 0 } });
-		// Typing ends `away` on the server (§4.4).
-		this.awaySent = false;
 	}
 
 	/**
-	 * Tells the server whether anyone is attending this connection (capability
-	 * `activity`, §4.4): `true` while the tab is hidden or unfocused, `false`
-	 * once it is back. Sent only when it changes, and again on each connection
-	 * that starts while away.
+	 * Tells a server with capability `status` whether anyone is attending this
+	 * connection (§4.11 `idle`), as the tab is hidden or unfocused (`away`) or
+	 * back. Becoming attended goes at once; becoming idle only once it has
+	 * lasted `IDLE_AFTER_MS`. Each connection reports its state at once as the
+	 * server frame arrives, before `auth` (a tab already away is idle), and then
+	 * each change. Only `idle: false` ends it: sending a message doesn't.
 	 */
 	setAway(away: boolean): void {
 		this.away = away;
-		this.syncAway();
+		if (away) {
+			if (this.idle || this.idleTimer) return;
+			this.idleTimer = setTimeout(() => {
+				this.idleTimer = undefined;
+				this.idle = true;
+				this.syncIdle();
+			}, IDLE_AFTER_MS);
+			return;
+		}
+		this.clearIdleTimer();
+		this.idle = false;
+		this.syncIdle();
 	}
 
-	private syncAway(): void {
-		if (!this.authenticated || !this.hasCap('activity') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
-		if (this.away === this.awaySent) return;
-		this.awaySent = this.away;
-		this.sendFrame({ method: 'activity', params: { away: this.away } });
+	private clearIdleTimer(): void {
+		if (this.idleTimer) clearTimeout(this.idleTimer);
+		this.idleTimer = undefined;
+	}
+
+	private syncIdle(): void {
+		if (!this.hasCap('status') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+		// A connection reports its initial state at once (§4.11): a tab already away is idle from the start.
+		if (this.idleSent?.connection !== this.connectionId && this.away && !this.idle) {
+			this.clearIdleTimer();
+			this.idle = true;
+		}
+		if (this.idleSent?.connection === this.connectionId && this.idleSent.idle === this.idle) return;
+		this.idleSent = { connection: this.connectionId, idle: this.idle };
+		this.sendFrame({ method: 'status', params: { idle: this.idle } });
+	}
+
+	/**
+	 * Pauses your notifications everywhere (§4.11 `mute`): for `mute`
+	 * seconds, until resumed (`true`), or resumes them (`0`). Applied here at
+	 * once; the server's `you.mute` then has the last word. Needs capability
+	 * `status` and a signed-in account.
+	 */
+	setMute(mute: number | true): void {
+		if (!this.authenticated || !this.registeredSession || !this.hasCap('status')) return;
+		this.sendFrame({ method: 'status', params: { mute } });
+		this.applyMute(mute);
+		this.emit();
+	}
+
+	/** Takes `mute` as the server echoes it in `you` (§4.11): seconds left, `true`, or `0` (or undefined) when not paused. */
+	private applyMute(mute: number | true | undefined): void {
+		if (this.muteTimer) clearTimeout(this.muteTimer);
+		this.muteTimer = undefined;
+		if (mute === true) {
+			this.mutedUntil = true;
+		} else if (typeof mute === 'number' && mute > 0) {
+			this.mutedUntil = Date.now() + mute * 1000;
+			this.scheduleUnmute();
+		} else {
+			this.mutedUntil = undefined;
+		}
+	}
+
+	/**
+	 * A room's `mute` as the server echoes it to you (§4.11): `0` ends it, and a
+	 * missing one leaves it, except in a listing or a `room_update` `joined`
+	 * record (`complete`), which always say it: missing is `0` there.
+	 */
+	private noteRoomMute(roomId: string, delivery: RoomDelivery, complete: boolean): void {
+		if (!complete && !Object.hasOwn(delivery, 'mute')) return;
+		const mute = delivery.mute;
+		if (mute === true) this.roomMutes.set(roomId, true);
+		else if (typeof mute === 'number' && mute > 0) this.roomMutes.set(roomId, Date.now() + mute * 1000);
+		else this.roomMutes.delete(roomId);
+		this.scheduleRoomUnmutes();
+	}
+
+	/** At the end of the earliest room pause, the rooms show unpaused here without a word from the server. */
+	private scheduleRoomUnmutes(): void {
+		if (this.roomMuteTimer) clearTimeout(this.roomMuteTimer);
+		this.roomMuteTimer = undefined;
+		const now = Date.now();
+		const ends = [...this.roomMutes.values()].filter((until): until is number => until !== true && until > now);
+		if (!ends.length) return;
+		this.roomMuteTimer = setTimeout(() => {
+			this.roomMuteTimer = undefined;
+			for (const [roomId, until] of this.roomMutes) if (until !== true && until <= Date.now()) this.roomMutes.delete(roomId);
+			this.scheduleRoomUnmutes();
+			this.emit();
+		}, Math.min(Math.min(...ends) - now, MAX_TIMER_MS));
+	}
+
+	/** When a room's pause ends, if it is paused now. */
+	private roomMutedUntil(roomId: string): number | true | undefined {
+		const until = this.roomMutes.get(roomId);
+		return until === true || (until !== undefined && until > Date.now()) ? until : undefined;
+	}
+
+	/** At the end of a pause, notifications resume here without a word from the server. */
+	private scheduleUnmute(): void {
+		const until = this.mutedUntil;
+		if (typeof until !== 'number') return;
+		// Timers can't wait longer than about 24 days: wait in steps.
+		const wait = Math.min(until - Date.now(), MAX_TIMER_MS);
+		this.muteTimer = setTimeout(() => {
+			this.muteTimer = undefined;
+			if (this.mutedUntil !== until) return;
+			if (Date.now() < until) {
+				this.scheduleUnmute();
+				return;
+			}
+			this.mutedUntil = undefined;
+			this.emit();
+		}, Math.max(0, wait));
+	}
+
+	/**
+	 * Registers this device for push (§4.7) for the account `userId`:
+	 * `push_register` goes out once that account is signed in, and again on
+	 * each connection, while the server advertises the registration's `kind`.
+	 * A registration that replaces another with another `url`, or none,
+	 * unregisters the previous `url` with `push_unregister`, after the next
+	 * `auth` if it can't now. Switching servers and signing out forget it.
+	 */
+	setPushRegistration(registration: PushRegistration | undefined, userId?: string): void {
+		const previous = this.pushRegistration;
+		const user = registration ? userId : undefined;
+		if (canonicalJson(previous) === canonicalJson(registration) && this.pushUser === user) return;
+		this.pushRegistration = registration;
+		this.pushUser = user;
+		this.pushSent = false;
+		if (registration) this.pushUnregisters.delete(registration.url);
+		if (previous && previous.url !== registration?.url) this.pushUnregisters.add(previous.url);
+		if (!registration && this.pushError !== undefined) {
+			this.pushError = undefined;
+			this.emit();
+		}
+		this.syncPush();
+	}
+
+	/**
+	 * While push is off for the account signed in here, this browser's push
+	 * endpoint (`url`) is unregistered after each `auth`, so a registration an
+	 * earlier unregister missed goes too. Undefined stops it.
+	 */
+	setPushOff(url: string | undefined): void {
+		if (url === this.pushOffUrl) return;
+		this.pushOffUrl = url;
+		this.pushOffSent = false;
+		this.syncPush();
+	}
+
+	private syncPush(): void {
+		if (!this.pushReady()) return;
+		for (const url of [...this.pushUnregisters]) {
+			this.pushUnregisters.delete(url);
+			this.pushRequest('push_unregister', { url }).catch((cause: Error & { code?: number }) => {
+				// Lost with the connection: try again after the next `auth`, unless it is registered again.
+				if (cause.code === undefined && this.pushRegistration?.url !== url) this.pushUnregisters.add(url);
+			});
+		}
+		const registration = this.pushRegistration;
+		const off = this.pushOffUrl;
+		if (off !== undefined && !this.pushOffSent && registration?.url !== off) {
+			this.pushOffSent = true;
+			this.pushRequest('push_unregister', { url: off }).catch(() => undefined);
+		}
+		const push = this.server?.push;
+		if (!registration || this.pushSent || !isJsonObject(push) || !Object.hasOwn(push, registration.kind)) return;
+		if (this.you?.user_id !== this.pushUser) return;
+		this.pushSent = true;
+		this.pushRequest('push_register', registration).then(() => {
+			if (this.pushRegistration !== registration || this.pushError === undefined) return;
+			this.pushError = undefined;
+			this.emit();
+		}, (cause: Error & { code?: number }) => {
+			// Lost with the connection, it goes again after the next `auth`; a refusal is the user's to see.
+			if (cause.code === undefined || this.pushRegistration !== registration) return;
+			this.pushError = cause.message || 'The server refused push notifications for this device.';
+			this.emit();
+		});
+	}
+
+	/** Signed in to an account (not a guest) on a server whose `server.push` enables push (§4.7). */
+	private pushReady(): boolean {
+		return this.authenticated && this.registeredSession && isJsonObject(this.server?.push);
+	}
+
+	/** Push is a convenience: a refusal leaves the session as it was. */
+	private pushRequest(method: 'push_register' | 'push_unregister', params: JsonObject): Promise<JsonObject> {
+		return this.enqueueRequest(method, params, { visible: false, allowBeforeAuth: false }).promise;
 	}
 
 	/**
@@ -1346,8 +1582,6 @@ export class ChatClient {
 		// keeps no read cursors would only be charged a frame for it.
 		if (this.server?.ext?.demo?.read_cursors !== false) {
 			this.sendFrame({ method: 'activity', params: { room_id: roomId, read_message_id: messageId } });
-			// A read cursor ends `away` on the server (§4.4).
-			this.awaySent = false;
 		}
 		this.emit();
 	}
@@ -1472,6 +1706,7 @@ export class ChatClient {
 				const record = decoded.record;
 				this.observeLogId(decoded.delivery.latest_log_id);
 				this.noteMembers(record.room_id, decoded.delivery);
+				this.noteRoomMute(record.room_id, decoded.delivery, true);
 				if (joined && joinedSet) {
 					joinedIds.add(record.room_id);
 					this.showRoom(decoded, 'joined');
@@ -1984,6 +2219,7 @@ export class ChatClient {
 			...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
 			...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
 			...(isJsonObject(params.ext) ? { ext: params.ext as ServerExt } : {}),
+			...(isJsonObject(params.push) ? { push: params.push } : {}),
 			...(typeof params.ping === 'number' && Number.isFinite(params.ping) && params.ping > 0 ? { ping: params.ping } : {})
 		};
 		// Liveness starts before authentication (§1); a replacing frame may change the interval.
@@ -1991,7 +2227,10 @@ export class ChatClient {
 		// Each frame fully replaces the last (§3.1): features are worth trying again. A server
 		// before v7 would ignore `user_id` in `room_join`/`room_leave` and act on the caller.
 		this.memberChangesUnsupported = version < 7;
+		// Attendance may go before `auth` (§4.11): it applies once authenticated.
+		this.syncIdle();
 		if (this.authenticated || this.authRequested) {
+			this.syncPush();
 			this.emit();
 			return;
 		}
@@ -2094,6 +2333,9 @@ export class ChatClient {
 			this.emit();
 			return false;
 		}
+		// A session starts unpaused unless the server says otherwise; an address added
+		// on this connection (`added`) is the same session.
+		if (!added && !Object.hasOwn(identity, 'mute')) this.applyMute(0);
 		this.setYou(identity as Identity);
 		if (signedIn && added && this.registeredSession) {
 			// Added to the account (§4.9, §4.10): another way back in, not how this session signed in,
@@ -2165,8 +2407,10 @@ export class ChatClient {
 		} else if (!this.rooms.size) {
 			this.showDefaultRoom();
 		}
-		this.awaySent = false;
-		this.syncAway();
+		this.syncIdle();
+		this.pushSent = false;
+		this.pushOffSent = false;
+		this.syncPush();
 		this.emit();
 		return true;
 	}
@@ -2253,6 +2497,10 @@ export class ChatClient {
 		// A pending address addition belongs to the account that proposed it (§4.10): another identity needs a new code.
 		if (changed) this.addProposalConnection = undefined;
 		this.you = this.noteUser(identity);
+		// `mute` is the server's word on a pause (§4.11). Like every field of a current
+		// object (§3.3), a missing one leaves it unchanged; `0` ends it.
+		// An invalid `mute` is ignored (§4.11), leaving the pause as it is.
+		if (isMuteValue(identity.mute)) this.applyMute(identity.mute);
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
 	}
@@ -2381,12 +2629,14 @@ export class ChatClient {
 			if (!decoded) continue;
 			this.observeLogId(decoded.delivery.latest_log_id);
 			this.noteMembers(decoded.record.room_id, decoded.delivery);
+			this.noteRoomMute(decoded.record.room_id, decoded.delivery, true);
 			this.showRoom(decoded, 'joined');
 		}
 		for (const value of Array.isArray(params.updated) ? params.updated : []) {
 			const decoded = decodeRoom(value);
 			if (!decoded) continue;
 			this.observeLogId(decoded.delivery.latest_log_id);
+			this.noteRoomMute(decoded.record.room_id, decoded.delivery, false);
 			if (this.rooms.has(decoded.record.room_id)) {
 				this.showRoom(decoded);
 			} else {
@@ -2961,7 +3211,11 @@ export class ChatClient {
 		this.joinedListing = undefined;
 		this.directory = undefined;
 		this.threadDirectory.clear();
-		this.awaySent = false;
+		this.idleSent = undefined;
+		this.applyMute(undefined);
+		this.roomMutes.clear();
+		this.scheduleRoomUnmutes();
+		this.pushError = undefined;
 		this.memberChangesUnsupported = false;
 	}
 

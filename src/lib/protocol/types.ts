@@ -15,7 +15,7 @@ export interface JsonObject {
  * Optional features of `server.capabilities` (§4) that this client uses;
  * it ignores the rest.
  */
-export type Capability = 'history' | 'edit' | 'rooms' | 'reactions' | 'activity' | 'embed:upload' | 'embed:stream' | 'command';
+export type Capability = 'history' | 'edit' | 'rooms' | 'reactions' | 'activity' | 'embed:upload' | 'embed:stream' | 'command' | 'status';
 
 /**
  * A user object (§3.3). Current objects (`you`, `new` in `user`, room
@@ -148,6 +148,8 @@ export interface ServerParams {
 	ext?: ServerExt;
 	/** Seconds between client pings (§1, §3.1). */
 	ping?: number;
+	/** Each push kind the server delivers, with its public configuration (§4.7). */
+	push?: JsonObject;
 }
 
 export interface ServerExt extends JsonObject {
@@ -189,6 +191,12 @@ export interface RoomDelivery {
 	 * most recently active (§4.3.1).
 	 */
 	member_count?: number;
+	/**
+	 * Your notifications from this room are paused (§4.11 `mute`): seconds
+	 * left, `true` until resumed, or `0` for not. Sent to you only; a record
+	 * without it leaves it unchanged.
+	 */
+	mute?: number | true;
 }
 
 /**
@@ -320,6 +328,7 @@ export function decodeRoom(value: unknown): { record: RoomRecord; delivery: Room
 	if (value.history_log_id === null || isLogId(value.history_log_id)) delivery.history_log_id = value.history_log_id;
 	if (Array.isArray(value.members)) delivery.members = value.members.filter(isIdentity).map((member) => cloneJson(member));
 	if (typeof value.member_count === 'number' && Number.isSafeInteger(value.member_count) && value.member_count >= 0) delivery.member_count = value.member_count;
+	if (value.mute === true || (typeof value.mute === 'number' && Number.isFinite(value.mute) && value.mute >= 0)) delivery.mute = value.mute;
 	return { record, delivery };
 }
 

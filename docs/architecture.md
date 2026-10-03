@@ -29,7 +29,12 @@ state and behavior — `ConnectScreen`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
-design system with the next `npm run design:bundle`.
+design system with the next `npm run design:bundle`. `PreferencesDialog` renders
+the design system's `CheckList` (what to notify about), `Callout` (installing
+for push) and `MenuButton` (Pause…, in `PauseNotifications`) as they are, and
+`pause.ts` words and times the pause. Its status notes are read through one
+live region, and switches and checkboxes that can't change stay focusable with
+`aria-disabled`, referring to the note that says why.
 
 `src/routes/+page.svelte` owns the session and the navigation (which room or
 thread is open, per-room drafts) and composes the components. The
@@ -53,8 +58,18 @@ and `time.ts` read messages, `connection.ts` words the connection state, and
 `members.ts` reads the `user_id` typed to add a member, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences included (on this device only; nothing is synced), and
-`notifications.ts` shows notifications, through `service-worker.ts` where the
-page can't.
+`notifications.ts` shows notifications, through `service-worker.ts` where it
+is registered, and words pushed messages for the service worker,
+`notify-scopes.ts` decides which arriving messages the page notifies about from
+the checked scopes, and which of them push sends as `wake`, and
+`push-store.ts` keeps in IndexedDB, for the service worker too, the enabled
+`push_id`s and the newest message each notification group notified about,
+`web-push.ts` keeps this browser's push subscription for the server's key
+(`WebPushSync` runs subscribing and unsubscribing one at a time, under a Web
+Lock), `push-settings.svelte.ts` (`PushSettings`) turns push on and off per
+account and shares the one subscription between accounts and tabs, and
+`sw-handlers.ts` holds the service worker's push and click handlers, apart
+from the worker so tests can run them.
 
 Protocol types, replay reduction, and the WebSocket session live under
 `src/lib/protocol` and speak Apron protocol v7. `client.ts` holds the session,
@@ -108,6 +123,18 @@ authentication on; a ping that goes a whole interval without the
 `{"method":"pong"}` answer marks the socket dead, and it is replaced through
 the usual reconnect. With `room_leave: false` the client offers no Leave, and
 with `read_cursors: false` it moves your read cursor locally without sending it.
+`setAway(away)` reports attendance with `status` `{idle}` (§4.11, capability
+`status`): idle only after `IDLE_AFTER_MS`, attended at once, and the current
+state as each connection's server frame arrives. `setMute(mute)` sends
+`status` `{mute}` and applies it at once; `you.mute` from the server sets the
+snapshot's `mutedUntil`, which a timer clears when the pause ends.
+`setPushRegistration(params, userId)` keeps the `push_register` params (§4.7)
+and sends them after each `auth` as that account while `server.push` offers
+their `kind`. A replaced or cleared registration is unregistered, after the
+next `auth` if it can't be at once. Signing out unregisters, and switching
+servers forgets it. `setPushOff(url)` unregisters this browser's endpoint after
+each `auth` while push is off for the account, and a refused `push_register`
+is the snapshot's `pushError`.
 
 Edits, moves, and deletion use the same `message` request as creation, with an
 existing `message_id`, and resubmit every client field of the latest snapshot
