@@ -128,15 +128,11 @@ export function saveNotificationsEnabled(enabled: boolean): void {
 export const WEB_PUSH_ACCOUNTS_KEY = KEY.webPush;
 export const NOTIFY_SCOPES_KEY = KEY.notifyScopes;
 
-/** Push opt-ins from before they were per account: one can't tell whose they were, so they go. */
-const LEGACY_WEB_PUSH_KEYS = ['apron.webPush', 'apron.webPushServer'];
-
 /**
  * The accounts the user turned push notifications on for (§4.7), each as
  * `webPushAccount(server, userId)`: another account signing in here isn't on.
  */
 export function loadWebPushAccounts(): string[] {
-	for (const key of LEGACY_WEB_PUSH_KEYS) remove(key);
 	try {
 		const parsed: unknown = JSON.parse(read(KEY.webPush) ?? '[]');
 		return Array.isArray(parsed) ? parsed.filter((account): account is string => typeof account === 'string') : [];
@@ -179,20 +175,19 @@ function remove(key: string): void {
 }
 
 /**
- * Moves the earlier settings into `apron.notifyScopes`: push's per-account
- * wake scopes as they were, and the device-wide desktop setting as the
- * choice of accounts that have none ("Everything" is every scope; "Mentions"
- * was the default, now mentions and replies).
+ * Moves the device-wide desktop setting (`apron.notificationScope`) into
+ * `apron.notifyScopes` as the choice of accounts that have none:
+ * "Everything" is every scope; "Mentions" was the default, now mentions and
+ * replies.
  */
 function migrateNotifyScopes(): void {
-	const wake = read('apron.webPushWake');
 	const scope = read('apron.notificationScope');
-	if (wake === null && scope === null) return;
-	const choices = readScopeChoices(KEY.notifyScopes);
-	for (const [account, scopes] of Object.entries(readScopeChoices('apron.webPushWake'))) choices[account] ??= scopes;
-	if (scope === 'everything') choices[NOTIFY_DEFAULT] ??= ['mentions', 'replies', 'private', 'joined'];
-	write(KEY.notifyScopes, JSON.stringify(choices));
-	remove('apron.webPushWake');
+	if (scope === null) return;
+	if (scope === 'everything') {
+		const choices = readScopeChoices(KEY.notifyScopes);
+		choices[NOTIFY_DEFAULT] ??= ['mentions', 'replies', 'private', 'joined'];
+		write(KEY.notifyScopes, JSON.stringify(choices));
+	}
 	remove('apron.notificationScope');
 }
 

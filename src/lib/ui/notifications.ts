@@ -156,15 +156,13 @@ export interface PushPayload {
 /**
  * Reads a push payload (§4.7): an object with `push_id`, `unread` and
  * `message`, ignoring other fields. Without `message` (a badge push) there
- * is no notification. A bare message object with a top-level `push_id`, as
- * servers sent before the envelope, reads as its `message`. Undefined for
- * anything but an object.
+ * is no notification. Undefined for anything but an object.
  */
 export function readPush(payload: unknown): PushPayload | undefined {
 	if (!isJsonObject(payload)) return undefined;
 	const pushId = typeof payload.push_id === 'string' && payload.push_id ? payload.push_id : undefined;
 	const unread = typeof payload.unread === 'number' && Number.isInteger(payload.unread) && payload.unread >= 0 ? payload.unread : undefined;
-	const message = isJsonObject(payload.message) ? payload.message : typeof payload.room_id === 'string' ? payload : undefined;
+	const message = isJsonObject(payload.message) ? payload.message : undefined;
 	const notification = message ? pushNotification(message, pushId) : undefined;
 	return { ...(pushId ? { pushId } : {}), ...(unread !== undefined ? { unread } : {}), ...(notification ? { notification } : {}) };
 }

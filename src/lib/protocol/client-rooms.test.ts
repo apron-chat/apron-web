@@ -336,8 +336,8 @@ describe('rooms by request (cap rooms)', () => {
 			expect(statuses()).toEqual([{ idle: false }, { idle: true }]);
 			vi.advanceTimersByTime(IDLE_AFTER_MS);
 			expect(statuses()).toEqual([{ idle: false }, { idle: true }, { idle: true }]);
-			// `activity` never carries attendance, and nothing is sent as `push_away`.
-			expect(socket.sent.filter((frame) => frame.method === 'push_away' || (frame.method === 'activity' && ('away' in (frame.params as object) || 'idle' in (frame.params as object))))).toEqual([]);
+			// `activity` never carries attendance.
+			expect(socket.sent.filter((frame) => frame.method === 'activity' && ('away' in (frame.params as object) || 'idle' in (frame.params as object)))).toEqual([]);
 		});
 
 		it('sends no status to a server without the capability, push or not', async () => {

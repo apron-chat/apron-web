@@ -244,9 +244,8 @@ only, never elsewhere, and not once Apron runs installed. The web manifest
 `user_id`, in base64url, cut to 16 characters. The service worker reads each push
 payload's `push_id`, `unread` and `message`, and shows the `message` as its
 sender and room; a payload without `message` shows nothing. `unread` becomes
-the app badge where the browser has one, cleared at 0. A bare message object
-with a top-level `push_id`, as servers sent before, reads as the `message`, and
-a payload that isn't an object at all shows a generic notification. A message notification, the page's or a
+the app badge where the browser has one, cleared at 0, and a payload that isn't
+an object at all shows a generic notification. A message notification, the page's or a
 pushed one, is tagged with the `push_id` and the `message_id`, so a message
 shows once: whichever arrives second replaces the first without alerting
 again. A newer message in the room closes the older one. A click on a pushed

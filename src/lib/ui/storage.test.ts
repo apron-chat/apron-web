@@ -26,11 +26,8 @@ describe('preference storage', () => {
 		expect(loadNotificationsEnabled()).toBe(false);
 	});
 
-	it('keeps push on per account, and which account the subscription is for, dropping per-server opt-ins', () => {
-		values.set('apron.webPush', JSON.stringify(['wss://a.example/']));
-		values.set('apron.webPushServer', 'wss://a.example/');
+	it('keeps push on per account, and which account the subscription is for', () => {
 		expect(loadWebPushAccounts()).toEqual([]);
-		expect([values.has('apron.webPush'), values.has('apron.webPushServer')]).toEqual([false, false]);
 		const ada = 'wss://a.example/\nada';
 		const bob = 'wss://a.example/\nbob';
 		let accounts = saveWebPushEnabled([], ada, true);
@@ -64,14 +61,11 @@ describe('preference storage', () => {
 		expect(loadNotifyScopes(ada)).toBeUndefined();
 	});
 
-	it('carries over push\'s wake scopes and the device-wide "Everything", then drops the old keys', () => {
-		const ada = notifyAccount('wss://a.example/', 'ada');
-		values.set('apron.webPushWake', JSON.stringify({ [ada]: ['private'] }));
+	it('carries over the device-wide "Everything", then drops the old key', () => {
 		values.set('apron.notificationScope', 'everything');
-		expect(loadNotifyScopes(ada)).toEqual(['private']);
 		// Accounts without a choice take what "Everything" meant: every scope.
 		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'bob'))).toEqual(['mentions', 'replies', 'private', 'joined']);
-		expect([values.has('apron.webPushWake'), values.has('apron.notificationScope')]).toEqual([false, false]);
+		expect(values.has('apron.notificationScope')).toBe(false);
 		// A choice made since wins over it.
 		saveNotifyScopes(notifyAccount('wss://b.example/', 'bob'), ['mentions']);
 		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'bob'))).toEqual(['mentions']);

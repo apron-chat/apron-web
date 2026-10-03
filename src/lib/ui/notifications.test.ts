@@ -169,11 +169,8 @@ describe('push notifications', () => {
 		expect(readPush(undefined)).toBeUndefined();
 	});
 
-	it('reads the bare message object servers sent before the envelope', () => {
-		const push = readPush({ message_id: '7', room_id: 'general', push_id: 'a1', from: { user_id: 'bob' }, body: { text: 'hi' } });
-		expect(push?.pushId).toBe('a1');
-		expect(push?.notification?.title).toBe('bob · general');
-		expect(push?.notification?.options.tag).toBe('apron:a1:7');
+	it('reads a message object without the envelope as no notification', () => {
+		expect(readPush({ message_id: '7', room_id: 'general', push_id: 'a1', from: { user_id: 'bob' } })).toEqual({ pushId: 'a1' });
 	});
 
 	it('sets the app badge to the unread count, clearing it at 0, where there is one', async () => {
