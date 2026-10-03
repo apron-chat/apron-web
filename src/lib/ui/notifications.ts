@@ -202,7 +202,11 @@ export function readPush(payload: unknown): PushPayload | undefined {
 	return { ...(pushId ? { pushId } : {}), ...(unread !== undefined ? { unread } : {}), ...(notification ? { notification } : {}) };
 }
 
-/** Shown when a push brings nothing to show and none of this origin's notifications is showing: browsers require one (§4.7). */
+/**
+ * Shown when a push can't be read, or is for an account push isn't on for
+ * here, and none of this origin's notifications is showing: browsers expect
+ * a push to leave one showing.
+ */
 export const QUIET_PUSH = { title: 'Apron', options: { body: 'Open Apron to catch up.', tag: 'apron:push', silent: true } satisfies ShowNotificationOptions };
 
 /** What to do with a push. */
@@ -220,7 +224,9 @@ export interface PushPlan {
  * already notified about (showing, or `marks`, perhaps dismissed since), or
  * older than one it did, isn't shown again. Browsers expect each push to leave
  * a notification showing: with nothing showing, an already-notified message
- * shows again quietly, and a push with nothing to show shows `QUIET_PUSH`.
+ * shows again quietly, and an unreadable or dropped push shows `QUIET_PUSH`.
+ * A badge push (no `message`) never shows one (§4.7); this client doesn't ask
+ * for them on web push, where the browser may then show its own notice.
  */
 export function planPush(push: PushPayload | undefined, visible: readonly Pick<ShownNotification, 'data'>[], known: { enabled?: readonly string[]; marks?: Record<string, string> } = {}): PushPlan {
 	const plan: PushPlan = push?.unread !== undefined ? { badge: push.unread } : {};
@@ -234,6 +240,8 @@ export function planPush(push: PushPayload | undefined, visible: readonly Pick<S
 		return { ...plan, show: { title: notification.title, options: { ...notification.options, renotify: false, silent: true } } };
 	}
 	if (notification) return { ...plan, show: notification };
+	// A push without `message` is a badge push (§4.7): it never shows a notification.
+	if (push && !dropped) return plan;
 	return visible.length ? plan : { ...plan, show: QUIET_PUSH };
 }
 

@@ -208,10 +208,14 @@ describe('push notifications', () => {
 			expect(planPush(push('8'), []).show?.options.tag).toBe('apron:a1:8');
 		});
 
-		it('shows the quiet stand-in for a badge push or an unreadable one with nothing showing', () => {
-			expect(planPush(readPush({ push_id: 'a1', unread: 0 }), [], { enabled: ['a1'] })).toEqual({ badge: 0, show: QUIET_PUSH });
-			expect(planPush(readPush({ push_id: 'a1', unread: 0 }), [{ data: undefined }])).toEqual({ badge: 0 });
+		it('never shows a notification for a badge push, only sets the badge', () => {
+			expect(planPush(readPush({ push_id: 'a1', unread: 0 }), [], { enabled: ['a1'] })).toEqual({ badge: 0 });
+			expect(planPush(readPush({ push_id: 'a1', unread: 4 }), [{ data: undefined }])).toEqual({ badge: 4 });
+		});
+
+		it('shows the quiet stand-in for an unreadable push with nothing showing', () => {
 			expect(planPush(undefined, []).show).toEqual(QUIET_PUSH);
+			expect(planPush(undefined, [{ data: undefined }]).show).toBeUndefined();
 		});
 	});
 

@@ -1064,9 +1064,8 @@ export class ChatClient {
 	send(room: string, text: string, format: MessageFormat = 'plain', options: SendOptions = {}): OperationHandle<MessageResult> {
 		if (!text && !options.embeds?.length) return rejectedHandle('message', new Error('Nothing to send'));
 		// The message ends this user's typing indicator for everyone (§4.4), so no
-		// `typing: 0` needs to follow it, and ends `idle` on the server (§4.11).
+		// `typing: 0` needs to follow it. It doesn't end `idle` (§4.11): only `idle: false` does.
 		this.sentTypingAt.delete(room);
-		this.messageEndsIdle();
 		const handle = this.enqueueRequest<MessageResult>('message', this.messageParams(room, text, format, options), { visible: true, allowBeforeAuth: false });
 		if (room === DEFAULT_ROOM_ID) {
 			handle.promise.then((result) => {
@@ -1360,8 +1359,9 @@ export class ChatClient {
 	 * Tells a server with capability `status` whether anyone is attending this
 	 * connection (§4.11 `idle`), as the tab is hidden or unfocused (`away`) or
 	 * back. Becoming attended goes at once; becoming idle only once it has
-	 * lasted `IDLE_AFTER_MS`. Each connection reports its state as soon as the
-	 * server frame arrives, before `auth`, and then each change.
+	 * lasted `IDLE_AFTER_MS`. Each connection reports its state at once as the
+	 * server frame arrives, before `auth` (a tab already away is idle), and then
+	 * each change. Only `idle: false` ends it: sending a message doesn't.
 	 */
 	setAway(away: boolean): void {
 		this.away = away;
@@ -1379,14 +1379,6 @@ export class ChatClient {
 		this.syncIdle();
 	}
 
-	/** A message ends `idle` on the server (§4.11); still away, the tab becomes idle again after the wait. */
-	private messageEndsIdle(): void {
-		if (this.idleSent?.connection === this.connectionId) this.idleSent.idle = false;
-		if (!this.idle) return;
-		this.idle = false;
-		this.setAway(this.away);
-	}
-
 	private clearIdleTimer(): void {
 		if (this.idleTimer) clearTimeout(this.idleTimer);
 		this.idleTimer = undefined;
@@ -1394,6 +1386,11 @@ export class ChatClient {
 
 	private syncIdle(): void {
 		if (!this.hasCap('status') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+		// A connection reports its initial state at once (§4.11): a tab already away is idle from the start.
+		if (this.idleSent?.connection !== this.connectionId && this.away && !this.idle) {
+			this.clearIdleTimer();
+			this.idle = true;
+		}
 		if (this.idleSent?.connection === this.connectionId && this.idleSent.idle === this.idle) return;
 		this.idleSent = { connection: this.connectionId, idle: this.idle };
 		this.sendFrame({ method: 'status', params: { idle: this.idle } });
@@ -1426,9 +1423,13 @@ export class ChatClient {
 		}
 	}
 
-	/** A room's `mute` as the server echoes it to you (§4.11): absent leaves it, `0` ends it. */
-	private noteRoomMute(roomId: string, delivery: RoomDelivery): void {
-		if (!Object.hasOwn(delivery, 'mute')) return;
+	/**
+	 * A room's `mute` as the server echoes it to you (§4.11): `0` ends it, and a
+	 * missing one leaves it, except in a listing or a `room_update` `joined`
+	 * record (`complete`), which always say it: missing is `0` there.
+	 */
+	private noteRoomMute(roomId: string, delivery: RoomDelivery, complete: boolean): void {
+		if (!complete && !Object.hasOwn(delivery, 'mute')) return;
 		const mute = delivery.mute;
 		if (mute === true) this.roomMutes.set(roomId, true);
 		else if (typeof mute === 'number' && mute > 0) this.roomMutes.set(roomId, Date.now() + mute * 1000);
@@ -1644,7 +1645,7 @@ export class ChatClient {
 				const record = decoded.record;
 				this.observeLogId(decoded.delivery.latest_log_id);
 				this.noteMembers(record.room_id, decoded.delivery);
-				this.noteRoomMute(record.room_id, decoded.delivery);
+				this.noteRoomMute(record.room_id, decoded.delivery, true);
 				if (joined && joinedSet) {
 					joinedIds.add(record.room_id);
 					this.showRoom(decoded, 'joined');
@@ -2565,14 +2566,14 @@ export class ChatClient {
 			if (!decoded) continue;
 			this.observeLogId(decoded.delivery.latest_log_id);
 			this.noteMembers(decoded.record.room_id, decoded.delivery);
-			this.noteRoomMute(decoded.record.room_id, decoded.delivery);
+			this.noteRoomMute(decoded.record.room_id, decoded.delivery, true);
 			this.showRoom(decoded, 'joined');
 		}
 		for (const value of Array.isArray(params.updated) ? params.updated : []) {
 			const decoded = decodeRoom(value);
 			if (!decoded) continue;
 			this.observeLogId(decoded.delivery.latest_log_id);
-			this.noteRoomMute(decoded.record.room_id, decoded.delivery);
+			this.noteRoomMute(decoded.record.room_id, decoded.delivery, false);
 			if (this.rooms.has(decoded.record.room_id)) {
 				this.showRoom(decoded);
 			} else {

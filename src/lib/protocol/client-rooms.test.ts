@@ -325,19 +325,29 @@ describe('rooms by request (cap rooms)', () => {
 			expect(statuses()).toEqual([{ idle: false }, { idle: true }, { idle: false }]);
 		});
 
-		it('counts a message as ending idle, and becomes idle again after the wait while still away', async () => {
+		it('stays idle after a message: only idle: false ends it', async () => {
 			await greet();
 			client.setAway(true);
 			vi.advanceTimersByTime(IDLE_AFTER_MS);
-			// Typing and read cursors don't end it.
 			client.sendTyping('general', true);
 			client.markRead('general', '1724803200001');
 			client.send('general', 'hi').promise.catch(() => undefined);
-			expect(statuses()).toEqual([{ idle: false }, { idle: true }]);
 			vi.advanceTimersByTime(IDLE_AFTER_MS);
-			expect(statuses()).toEqual([{ idle: false }, { idle: true }, { idle: true }]);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }]);
+			client.setAway(false);
+			expect(statuses()).toEqual([{ idle: false }, { idle: true }, { idle: false }]);
 			// `activity` never carries attendance.
 			expect(socket.sent.filter((frame) => frame.method === 'activity' && ('away' in (frame.params as object) || 'idle' in (frame.params as object)))).toEqual([]);
+		});
+
+		it('reports a tab away when a connection starts as idle at once, without the wait', async () => {
+			await greet();
+			client.setAway(true);
+			vi.advanceTimersByTime(1000);
+			expect(statuses()).toEqual([{ idle: false }]);
+			reconnect();
+			await greet();
+			expect(statuses()).toEqual([{ idle: true }]);
 		});
 
 		it('keeps a room\'s mute as the server echoes it on your room records', async () => {
@@ -350,6 +360,9 @@ describe('rooms by request (cap rooms)', () => {
 			// A record without `mute` leaves it; `0` ends it.
 			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '20', title: 'General!' }, { room_id: 'random', log_id: '21', title: 'Random', mute: 0 }] } });
 			expect(muted()).toEqual({ general: true, random: undefined, ops: undefined });
+			// A `joined` record always says it: missing is 0 there, as in a listing.
+			socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'general', log_id: '24', title: 'General!' }] } });
+			expect(muted().general).toBeUndefined();
 			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '22', title: 'Ops', mute: 30 }] } });
 			vi.advanceTimersByTime(30_000);
 			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '23', title: 'Ops 2' }] } });

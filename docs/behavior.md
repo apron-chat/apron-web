@@ -46,10 +46,10 @@ With the `status` capability (§4.11), the client tells the server whether
 anyone is attending the tab, so the server can push instead. It sends the
 notification `status` `{idle: true}` once the tab has been hidden or
 unfocused for 30 seconds, and `{idle: false}` as soon as it is back. Each
-connection reports the current state as soon as the server frame arrives,
-before `auth`, and then each change. A message sent from the tab ends `idle`
-on the server, and the client counts it as ended; typing and read cursors
-don't. It is never shown to anyone. A server without `status` gets none of
+connection reports the current state at once as the server frame arrives,
+before `auth`: a tab already hidden or unfocused then is idle from the start,
+without the wait. Only `{idle: false}` ends idle; a message sent from the tab
+doesn't. It is never shown to anyone. A server without `status` gets none of
 this.
 Explicit server URLs keep their path: a bare hostname connects at `/`, while
 servers that require `/ws` should be entered with that suffix.
@@ -204,9 +204,10 @@ it as it arrives, and resumes on its own then. While paused, the row reads
 profile bar's gear carries a small bell-off badge, and nothing notifies here:
 no desktop notifications, chime or title flash. The server sends no pushes.
 
-A room's `mute`, echoed on your room records (`room_list` entries, and
-`room_update` joined and updated records; a missing one leaves it, `0` ends
-it), pauses that room and its threads: there, only mentions notify. The client
+A room's `mute`, echoed on your room records, pauses that room and its
+threads: there, only mentions notify. `room_list` entries and `room_update`
+`joined` records always say it (missing is `0`); on other records a missing
+`mute` leaves it, and `0` ends it. The client
 has no control for it yet.
 
 Below it, **Desktop notifications** alerts while Apron is open but hidden or
@@ -257,16 +258,21 @@ only, never elsewhere, and not once Apron runs installed. The web manifest
 `push_id` names the account: the SHA-256 of the server URL, a newline and the
 `user_id`, in base64url, cut to 16 characters. The service worker reads each
 push payload's `push_id`, `unread` and `message`, and shows the `message` as
-its sender and room; a payload without `message` shows nothing new. `unread`
+its sender and room. A payload without `message` is a badge push: it only sets
+the badge and never shows a notification. This client doesn't ask for those
+on web push, where a push that shows nothing may get the browser's own
+notice. `unread`
 becomes the app badge where the browser has one, cleared at 0; while Apron is
 in view, the badge is the page's own unread count. A message notification, the
 page's or a pushed one, is tagged with the `push_id` and the `message_id`, and
 a room's notifications are ordered by `message_id`: a message the room has
 already notified about (showing, or remembered in IndexedDB though dismissed)
 or one older than that doesn't notify again, and a new one closes only older
-ones. Browsers expect each push to leave a notification showing, so when one
-brings nothing to show and none is showing, a quiet one stands in: the
-already-notified message without sound, or "Open Apron to catch up". A click
+ones. Browsers expect each push to leave a notification showing, so when a
+message push brings nothing new and none is showing, the already-notified
+message shows again without sound. An unreadable push, or one for an account
+push isn't on for here, shows a quiet "Open Apron to catch up" when nothing
+else is showing. A click
 on a pushed notification, or on the page's when its tab has gone, asks the
 open tabs for their `push_id`, and the tab signed in to that account opens the
 room. With no such tab, a new one opens at it, on that account's server if
