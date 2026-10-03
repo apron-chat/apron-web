@@ -14,13 +14,13 @@ export const NOTIFY_SCOPES = [
 	{ value: 'joined', title: 'All messages in joined rooms' }
 ] as const;
 
-export type NotifyScope = (typeof NOTIFY_SCOPES)[number]['value'];
+type NotifyScope = (typeof NOTIFY_SCOPES)[number]['value'];
 
 /** Until an account chooses: mentions and replies, the protocol's default wake scopes. */
-export const DEFAULT_NOTIFY_SCOPES: readonly NotifyScope[] = ['mentions', 'replies'];
+const DEFAULT_NOTIFY_SCOPES: readonly NotifyScope[] = ['mentions', 'replies'];
 
 /** Who the scopes of a guest are kept for: guests' `user_id`s change with each connection. */
-export const GUEST_ACCOUNT = '~guest';
+const GUEST_ACCOUNT = '~guest';
 
 /** The account the scopes are kept for: one per signed-in account on each server, one for its guests. */
 export function notifyAccount(serverUrl: string, userId: string | undefined): string {

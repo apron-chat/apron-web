@@ -5,6 +5,9 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-4); }
 :where(.ap-btn, .ap-embed-remove, .ap-link, .ap-room, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-rail-item, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-field, .ap-reply, .ap-seg-item, .ap-connect-recent-item, .ap-choice-item, .ap-msg-check, .ap-menu-item, .ap-iconbtn, .ap-rchip, .ap-rpick, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
+/* Visually hidden, still read by screen readers: live regions, and explanations that controls refer to. */
+.ap-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
 /* Button */
 .ap-btn { font: inherit; font-size: 13px; line-height: 18px; font-weight: 600; height: 32px; padding: 0 14px; border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--bg-200); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .ap-btn:hover:not(:disabled) { background: var(--bg-300); }
@@ -391,7 +394,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-checklist-item { flex-direction: row; align-items: flex-start; gap: var(--space-3); }
 .ap-checklist-item:has(.ap-checklist-box:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ap-checklist-item-locked { cursor: default; }
-.ap-checklist-item:has(.ap-checklist-box:disabled:not(:checked)) { opacity: .6; }
+.ap-checklist-item:has(.ap-checklist-box:disabled:not(:checked)), .ap-checklist-item-off { opacity: .6; }
 .ap-checklist-box { flex: none; width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--accent); cursor: inherit; }
 .ap-checklist-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ap-checklist-head { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--space-2); }

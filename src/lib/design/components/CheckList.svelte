@@ -22,8 +22,11 @@
 		disabled?: boolean;
 		/** Called with the new checked values, in the options' order. */
 		onchange?: (value: string[]) => void;
+		/** Says why the last checked ones can't be unchecked (read to screen readers). */
+		minNote?: string;
 	}
-	let { label, options, value = $bindable([]), min = 0, disabled = false, onchange }: Props = $props();
+	let { label, options, value = $bindable([]), min = 0, disabled = false, onchange, minNote = 'At least one stays checked.' }: Props = $props();
+	const uid = $props.id();
 
 	function toggle(option: string, checked: boolean): void {
 		const next = options.map((entry) => entry.value).filter((entry) => (entry === option ? checked : value.includes(entry)));
@@ -37,15 +40,22 @@
 	{#each options as option (option.value)}
 		{@const checked = value.includes(option.value)}
 		{@const kept = checked && value.length <= min}
-		<label class={['ap-choice-item', 'ap-checklist-item', checked && 'ap-choice-on', (option.disabled || kept) && 'ap-checklist-item-locked']}>
-			<input class="ap-checklist-box" type="checkbox" {checked} disabled={disabled || option.disabled || kept} onchange={(event) => toggle(option.value, event.currentTarget.checked)} />
+		{@const locked = Boolean(option.disabled) || kept}
+		{@const noteId = `${uid}-${option.value}-note`}
+		<label class={['ap-choice-item', 'ap-checklist-item', checked && 'ap-choice-on', locked && 'ap-checklist-item-locked', option.disabled && 'ap-checklist-item-off']}>
+			<!-- Locked boxes stay focusable and say why (aria-disabled with the note), rather than vanishing from the tab order. -->
+			<input class="ap-checklist-box" type="checkbox" {checked} aria-disabled={locked || undefined}
+				aria-describedby={[option.note && noteId, kept && `${uid}-min`].filter(Boolean).join(' ') || undefined}
+				onclick={(event) => { if (locked) event.preventDefault(); }}
+				onchange={(event) => toggle(option.value, event.currentTarget.checked)} />
 			<span class="ap-checklist-label">
 				<span class="ap-checklist-head">
 					<span class="ap-choice-title">{option.title}</span>
-					{#if option.note}<span class="ap-checklist-note">{option.note}</span>{/if}
+					{#if option.note}<span class="ap-checklist-note" id={noteId}>{option.note}</span>{/if}
 				</span>
 				{#if option.text}<span class="ap-choice-text">{option.text}</span>{/if}
 			</span>
 		</label>
 	{/each}
+	{#if min > 0}<span class="ap-sr" id={`${uid}-min`}>{minNote}</span>{/if}
 </fieldset>

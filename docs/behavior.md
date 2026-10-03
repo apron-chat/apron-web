@@ -186,8 +186,8 @@ threads). Messages of your own never notify. At
 least one stays checked, mentions and replies until you choose; the switches
 below turn notifications off. The choice is kept per account on each server,
 and for a server's guests together (their `user_id`s change with each
-connection), and applies in other tabs. The earlier settings carry over: push's
-wake scopes as they were, and the device-wide "Everything" as every scope.
+connection), and applies in other tabs. The earlier device-wide "Everything"
+carries over as every scope.
 
 On a server with the `status` capability, a signed-in account (not a guest)
 gets **Pause notifications** at the top of the section. **Pause…** opens a
@@ -233,11 +233,17 @@ while offline), and accounts on servers with the same key share it. When
 another server, with another key, holds it, the setting says "Push is on for
 another server in this browser (host)", and turning it on there takes it over;
 tabs don't take it back on their own. Its `push_id`s are kept in IndexedDB for
-the service worker, which drops a push for any account push isn't on for. Subscribing and unsubscribing
-run one at a time, and a step that finishes after push was turned off, or
-after the tab moved to another server or account, registers nothing. A
-replaced registration is unregistered, after the next `auth` if not at once.
-Signing out unregisters too.
+the service worker, which drops a push for any account push isn't on for.
+Subscribing and unsubscribing run one at a time, across tabs too under the
+`apron-push` Web Lock where the browser has one, and a step that finishes
+after push was turned off, or after the tab moved to another server or
+account, registers nothing; waiting for the service worker gives up after 10
+seconds. A replaced registration is unregistered, after the next `auth` if not
+at once, and while push is off for the account signed in, this browser's
+endpoint is unregistered after each `auth`, in case an earlier unregister was
+missed. Signing out unregisters, and turns push off for that account here even
+when the server can't be told. A registration the server refuses shows its
+message in the setting.
 
 **Push notifications** alerts on this device even when Apron is closed. Its
 `wake` is the checked scopes that `server.push.wake` lists; when the server
@@ -255,8 +261,9 @@ only, never elsewhere, and not once Apron runs installed. The web manifest
 (`static/manifest.webmanifest`) names Apron, its icons, `start_url` and
 `display: standalone`.
 
-`push_id` names the account: the SHA-256 of the server URL, a newline and the
-`user_id`, in base64url, cut to 16 characters. The service worker reads each
+`push_id` names the account: 12 random bytes in base64url (16 characters),
+made once per account on each server and kept in `apron.pushIds`, so it
+reveals neither. The service worker reads each
 push payload's `push_id`, `unread` and `message`, and shows the `message` as
 its sender and room. A payload without `message` is a badge push: it only sets
 the badge and never shows a notification. This client doesn't ask for those
@@ -268,17 +275,19 @@ page's or a pushed one, is tagged with the `push_id` and the `message_id`, and
 a room's notifications are ordered by `message_id`: a message the room has
 already notified about (showing, or remembered in IndexedDB though dismissed)
 or one older than that doesn't notify again, and a new one closes only older
-ones. Browsers expect each push to leave a notification showing, so when a
-message push brings nothing new and none is showing, the already-notified
-message shows again without sound. An unreadable push, or one for an account
-push isn't on for here, shows a quiet "Open Apron to catch up" when nothing
-else is showing. A click
+ones; the same message again (an edit that newly mentions you, say) replaces
+its notification quietly, keeping its title. Browsers expect each push to
+show a notification, and WebKit revokes subscriptions whose pushes don't, so
+every push but a badge push shows one: a push with nothing new, one for an
+account push isn't on for here, or one that can't be read shows again, as it
+is and silently, what is already showing, else the message quietly, else
+"Open Apron to catch up". A dropped push leaves the badge alone, and so does
+the service worker while a page is in view. A click
 on a pushed notification, or on the page's when its tab has gone, asks the
 open tabs for their `push_id`, and the tab signed in to that account opens the
 room. With no such tab, a new one opens at it, on that account's server if
 push is on for it here. A pushed room that the listed rooms don't include, or
-that isn't open after 30 seconds, is dropped. Without a `push_id` of its own (no
-`crypto.subtle`), the page keeps one notification per room. Browsers without
+that isn't open after 30 seconds, is dropped. Browsers without
 push say so; iPhone and iPad Safari say to add Apron to the Home Screen first.
 
 **Appearance** picks a light or dark theme

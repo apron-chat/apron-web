@@ -136,7 +136,7 @@ function serviceWorkerReady(): Promise<ServiceWorkerRegistration> {
 	return Promise.race([navigator.serviceWorker.ready, timeout]).finally(() => clearTimeout(timer));
 }
 
-export const browserPush: PushBrowser = {
+const browserPush: PushBrowser = {
 	async subscribe(key) {
 		const registration = await serviceWorkerReady();
 		let subscription = await registration.pushManager.getSubscription();

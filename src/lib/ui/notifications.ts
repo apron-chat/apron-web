@@ -57,7 +57,7 @@ export function notificationGroup(pushId: string, roomId: string): string {
 type ShownNotification = Pick<Notification, 'tag' | 'data' | 'close'>;
 
 /** Where a message notification sits: its group (a room for an account) and its message, from its `data`. */
-export function placeOf(data: unknown): { group: string; messageId: string } | undefined {
+function placeOf(data: unknown): { group: string; messageId: string } | undefined {
 	if (!isJsonObject(data) || typeof data.group !== 'string' || typeof data.messageId !== 'string') return undefined;
 	return { group: data.group, messageId: data.messageId };
 }
@@ -67,7 +67,7 @@ export function placeOf(data: unknown): { group: string; messageId: string } | u
  * showing, and `mark`, the newest it notified about before (perhaps
  * dismissed since). `message_id`s order by creation (§3.5).
  */
-export function newestNotified(visible: readonly Pick<ShownNotification, 'data'>[], group: string, mark?: string): string | undefined {
+function newestNotified(visible: readonly Pick<ShownNotification, 'data'>[], group: string, mark?: string): string | undefined {
 	let newest = mark;
 	for (const notification of visible) {
 		const place = placeOf(notification.data);

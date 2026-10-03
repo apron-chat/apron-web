@@ -92,7 +92,7 @@ export async function handleClick<T extends Tab>(data: unknown, context: ClickCo
 }
 
 /** How long a tab has to say which account it is signed in to. */
-export const PUSH_ID_ANSWER_MS = 500;
+const PUSH_ID_ANSWER_MS = 500;
 
 /** Asks a tab for its account's `push_id` over a MessageChannel, closed after the answer or the wait. */
 export function askPushId(tab: Tab): Promise<string | undefined> {
