@@ -1,4 +1,6 @@
 import type { PushRegistration } from '$lib/protocol/client';
+import { base64url } from '$lib/protocol/webauthn';
+import { pushIdFor } from './storage';
 
 /**
  * Web push (§4.7, kind `webpush`): this browser's one push subscription, made
@@ -56,18 +58,11 @@ export function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
 	return bytes;
 }
 
-/** Encodes bytes as unpadded base64url. */
-export function bytesToBase64Url(bytes: ArrayBuffer | Uint8Array): string {
-	let binary = '';
-	for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
-	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
 /** Whether a subscription's `applicationServerKey` is this base64url key. */
 export function sameServerKey(current: ArrayBuffer | null | undefined, key: string): boolean {
 	if (!current) return false;
 	try {
-		return bytesToBase64Url(current) === bytesToBase64Url(base64UrlToBytes(key));
+		return base64url(current) === base64url(base64UrlToBytes(key));
 	} catch {
 		return false;
 	}
@@ -81,7 +76,7 @@ export function sameServerKey(current: ArrayBuffer | null | undefined, key: stri
  */
 export function pushHeldBy(owner: { account: string; key: string } | undefined, account: string | undefined, key: string | undefined, accounts: readonly string[]): string | undefined {
 	if (!owner || owner.account === account || owner.key === key || !accounts.includes(owner.account)) return undefined;
-	return owner.account.slice(0, owner.account.indexOf('\n'));
+	return accountServer(owner.account);
 }
 
 /**
@@ -95,25 +90,17 @@ export function webPushRegistration(subscription: PushSubscriptionJSON, pushId?:
 	return { kind: 'webpush', url: endpoint, ...(pushId ? { push_id: pushId } : {}), keys: { p256dh: keys.p256dh, auth: keys.auth }, ...(wake ? { wake: [...wake] } : {}) };
 }
 
-/** One account on one server, as push is turned on for it and as its `push_id` is made from. */
+/** One account on one server, as push is turned on for it. */
 export function webPushAccount(serverUrl: string, userId: string): string {
 	return `${serverUrl}\n${userId}`;
 }
 
-/**
- * The `push_id` (§4.7) of an account (`webPushAccount`): its SHA-256 in
- * base64url, cut to 16 characters. The server copies it into every payload,
- * so a pushed message can be matched to its server and account, and to the
- * page's own notification of it. Undefined where the browser can't hash.
- */
-export async function pushId(account: string): Promise<string | undefined> {
-	try {
-		const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(account));
-		return bytesToBase64Url(digest).slice(0, 16);
-	} catch {
-		return undefined;
-	}
+/** The server of an account (`webPushAccount`). */
+export function accountServer(account: string): string {
+	const at = account.indexOf('\n');
+	return at < 0 ? account : account.slice(0, at);
 }
+
 
 /** Whether this browser can subscribe to web push here. */
 export function webPushSupported(): boolean {
@@ -133,11 +120,25 @@ export interface PushBrowser {
 	subscribe(key: string): Promise<PushSubscriptionJSON>;
 	/** Drops the subscription, if there is one. */
 	unsubscribe(): Promise<void>;
+	/** The subscription's endpoint, if there is one. */
+	endpoint(): Promise<string | undefined>;
+}
+
+/** How long to wait for the service worker before giving up on subscribing. */
+const READY_WAIT_MS = 10_000;
+
+/** The active service worker's registration, or a rejection after `READY_WAIT_MS` (one that never activates). */
+function serviceWorkerReady(): Promise<ServiceWorkerRegistration> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<never>((_, reject) => {
+		timer = setTimeout(() => reject(new Error('The service worker isn’t ready')), READY_WAIT_MS);
+	});
+	return Promise.race([navigator.serviceWorker.ready, timeout]).finally(() => clearTimeout(timer));
 }
 
 export const browserPush: PushBrowser = {
 	async subscribe(key) {
-		const registration = await navigator.serviceWorker.ready;
+		const registration = await serviceWorkerReady();
 		let subscription = await registration.pushManager.getSubscription();
 		if (subscription && !sameServerKey(subscription.options.applicationServerKey, key)) {
 			await subscription.unsubscribe();
@@ -150,6 +151,10 @@ export const browserPush: PushBrowser = {
 		const registration = await navigator.serviceWorker?.getRegistration();
 		const subscription = await registration?.pushManager.getSubscription();
 		await subscription?.unsubscribe();
+	},
+	async endpoint() {
+		const registration = await navigator.serviceWorker?.getRegistration();
+		return (await registration?.pushManager.getSubscription())?.endpoint ?? undefined;
 	}
 };
 
@@ -170,10 +175,20 @@ export class WebPushSync {
 	private run = 0;
 	private queue: Promise<unknown> = Promise.resolve();
 
-	constructor(private readonly browser: PushBrowser = browserPush) {}
+	/** `pushIdOf` gives an account's `push_id` (`pushIdFor`, kept in storage). */
+	constructor(readonly browser: PushBrowser = browserPush, private readonly pushIdOf: (account: string) => string = pushIdFor) {}
 
+	/**
+	 * Runs subscription steps one at a time: in this tab in the order asked,
+	 * and across tabs under the `apron-push` Web Lock where the browser has
+	 * one, so two tabs can't subscribe and unsubscribe at once.
+	 */
 	private serially<T>(step: () => Promise<T>): Promise<T> {
-		const next = this.queue.then(step, step);
+		const locked = (): Promise<T> => {
+			const locks = globalThis.navigator?.locks;
+			return locks ? (locks.request('apron-push', step) as Promise<T>) : step();
+		};
+		const next = this.queue.then(locked, locked);
 		this.queue = next.catch(() => undefined);
 		return next;
 	}
@@ -188,8 +203,8 @@ export class WebPushSync {
 		const run = ++this.run;
 		const url = client.url;
 		const live = () => run === this.run && client.url === url && current();
-		const id = await pushId(webPushAccount(url, userId));
-		if (!live()) return false;
+		// Worked out before subscribing, with nothing to wait for: Safari subscribes only close to the user's tap.
+		const id = this.pushIdOf(webPushAccount(url, userId));
 		const subscription = await this.serially(async () => (live() ? this.browser.subscribe(key) : undefined));
 		if (!subscription || !live()) return false;
 		const registration = webPushRegistration(subscription, id, wake);

@@ -1,4 +1,5 @@
 import { isJsonObject, type JsonObject } from '$lib/protocol/types';
+import { base64url } from '$lib/protocol/webauthn';
 import type { AppearancePreferences } from './appearance.svelte';
 
 /** Everything this client remembers between visits lives under one prefix. */
@@ -13,6 +14,8 @@ const KEY = {
 	webPushOwner: 'apron.webPushOwner',
 	/** What to notify about, per account (`notifyAccount`): desktop notifications and push alike. */
 	notifyScopes: 'apron.notifyScopes',
+	/** Each account's `push_id` (§4.7), by `webPushAccount`: random, made here. */
+	pushIds: 'apron.pushIds',
 	memberList: 'apron.memberList',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
@@ -122,6 +125,39 @@ export function loadNotificationsEnabled(): boolean {
 
 export function saveNotificationsEnabled(enabled: boolean): void {
 	write(KEY.notificationsEnabled, String(enabled));
+}
+
+/** `push_id`s made here and not saved (no storage, or `/__preview`). */
+const unsavedPushIds = new Map<string, string>();
+
+/**
+ * The `push_id` (§4.7) of an account (`webPushAccount`): a random one,
+ * made the first time and kept in `apron.pushIds`, so it reveals neither
+ * server nor account.
+ */
+export function pushIdFor(account: string, make: () => string = defaultPushId): string {
+	const ids = readPushIds();
+	const kept = ids[account] ?? unsavedPushIds.get(account);
+	if (kept) return kept;
+	const id = make();
+	unsavedPushIds.set(account, id);
+	write(KEY.pushIds, JSON.stringify({ ...ids, [account]: id }));
+	return id;
+}
+
+function readPushIds(): Record<string, string> {
+	try {
+		const parsed: unknown = JSON.parse(read(KEY.pushIds) ?? '{}');
+		if (!isJsonObject(parsed)) return {};
+		return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(entry[1])));
+	} catch {
+		return {};
+	}
+}
+
+/** 12 random bytes in base64url: 16 characters. */
+function defaultPushId(): string {
+	return base64url(globalThis.crypto.getRandomValues(new Uint8Array(12)));
 }
 
 /** The storage keys of the accounts push is on for, and of what to notify about: other tabs follow their `storage` events. */

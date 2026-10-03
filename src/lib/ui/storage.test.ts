@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadAppearance, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadAppearance, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 
 const values = new Map<string, string>();
@@ -77,6 +77,18 @@ describe('preference storage', () => {
 		values.set('apron.notificationScope', 'mentions');
 		expect(loadNotifyScopes(notifyAccount('wss://a.example/', 'ada'))).toBeUndefined();
 		expect(values.has('apron.notificationScope')).toBe(false);
+	});
+
+	it('makes each account a random push_id once, and keeps it', () => {
+		let made = 0;
+		const make = () => `random${++made}`;
+		const ada = notifyAccount('wss://a.example/', 'ada');
+		expect(pushIdFor(ada, make)).toBe('random1');
+		expect(pushIdFor(ada, make)).toBe('random1');
+		expect(pushIdFor(notifyAccount('wss://a.example/', 'bob'), make)).toBe('random2');
+		expect(JSON.parse(values.get('apron.pushIds')!)).toEqual({ [ada]: 'random1', 'wss://a.example/\nbob': 'random2' });
+		// Made with the browser's randomness by default: 16 base64url characters.
+		expect(pushIdFor(notifyAccount('wss://c.example/', 'cy'))).toMatch(/^[A-Za-z0-9_-]{16}$/);
 	});
 
 	it('round-trips appearance, and reads nothing from a missing or broken entry', () => {

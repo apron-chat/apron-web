@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { webPushKey } from '$lib/protocol/client';
 import type { PushRegistration } from '$lib/protocol/client';
-import { base64UrlToBytes, bytesToBase64Url, canOfferInstall, isStandalone, needsHomeScreen, offeredWake, pushHeldBy, pushId, sameServerKey, webPushAccount, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
+import { base64url } from '$lib/protocol/webauthn';
+import { accountServer, base64UrlToBytes, canOfferInstall, isStandalone, needsHomeScreen, offeredWake, pushHeldBy, sameServerKey, webPushAccount, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
 
 describe('web push', () => {
 	it('decodes base64url keys, padded or not, and encodes them back unpadded', () => {
@@ -12,8 +13,8 @@ describe('web push', () => {
 		const bytes = base64UrlToBytes(key);
 		expect(bytes.length).toBe(65);
 		expect(bytes[0]).toBe(0x04);
-		expect(bytesToBase64Url(bytes)).toBe(key);
-		expect(bytesToBase64Url(bytes.buffer)).toBe(key);
+		expect(base64url(bytes)).toBe(key);
+		expect(base64url(bytes.buffer)).toBe(key);
 		expect(() => base64UrlToBytes('not+base64/url')).toThrow();
 	});
 
@@ -51,16 +52,13 @@ describe('web push', () => {
 		expect(offeredWake(undefined)).toEqual([]);
 	});
 
-	it('names an account on a server by a short hash, its push_id', async () => {
+	it('names an account on a server, and finds its server again', () => {
 		const ada = webPushAccount('wss://server.apron.chat/', 'ada');
 		expect(ada).toBe('wss://server.apron.chat/\nada');
-		const id = await pushId(ada);
-		// SHA-256 of the server URL, a newline and the user_id, in base64url, cut to 16 characters.
-		expect(id).toBe('Fd1XwTQeRSM33_hP');
-		expect(await pushId(ada)).toBe(id);
-		expect(await pushId(webPushAccount('wss://server.apron.chat/', 'bob'))).not.toBe(id);
-		expect(await pushId(webPushAccount('wss://chat.example/ws', 'ada'))).not.toBe(id);
+		expect(accountServer(ada)).toBe('wss://server.apron.chat/');
+		expect(accountServer('wss://bare/')).toBe('wss://bare/');
 	});
+
 });
 
 describe('installing', () => {
@@ -128,7 +126,8 @@ describe('keeping the push subscription in step', () => {
 		};
 		const browser: PushBrowser = {
 			subscribe: () => step('subscribe', () => subscription(`https://push.example/${++endpoint}`)),
-			unsubscribe: () => step('unsubscribe', () => undefined)
+			unsubscribe: () => step('unsubscribe', () => undefined),
+			endpoint: async () => undefined
 		};
 		/** Finishes the step under way, once it has started. */
 		const finish = async () => {
@@ -147,11 +146,11 @@ describe('keeping the push subscription in step', () => {
 	it('registers the subscription with the account\'s push_id and wake scopes', async () => {
 		const { browser, finish } = fakeBrowser();
 		const client = fakeClient();
-		const sync = new WebPushSync(browser);
+		const sync = new WebPushSync(browser, (account) => `id:${account}`);
 		const enabled = sync.enable(client, 'BNcR', 'ada', undefined, ['mentions', 'replies']);
 		await finish();
 		expect(await enabled).toBe(true);
-		const registered = { kind: 'webpush', url: 'https://push.example/1', push_id: await pushId('wss://a.example/\nada'), keys: { p256dh: 'BPk', auth: 'c2Vj' } };
+		const registered = { kind: 'webpush', url: 'https://push.example/1', push_id: 'id:wss://a.example/\nada', keys: { p256dh: 'BPk', auth: 'c2Vj' } };
 		expect(client.calls).toEqual([[{ ...registered, wake: ['mentions', 'replies'] }, 'ada']]);
 		// An empty `wake` wakes for nothing, and goes as is.
 		const nothing = sync.enable(client, 'BNcR', 'ada', undefined, []);
@@ -168,7 +167,7 @@ describe('keeping the push subscription in step', () => {
 	it('registers nothing when turned off while subscribing, and unsubscribes after the subscribing ends', async () => {
 		const { browser, log, finish, overlapped } = fakeBrowser();
 		const client = fakeClient();
-		const sync = new WebPushSync(browser);
+		const sync = new WebPushSync(browser, (account) => `id:${account}`);
 		const enabled = sync.enable(client, 'BNcR', 'ada');
 		await vi.waitFor(() => expect(log).toEqual(['subscribe start']));
 		const disabled = sync.disable(client, true);
@@ -184,7 +183,7 @@ describe('keeping the push subscription in step', () => {
 	it('turned off and straight back on, unsubscribes first and then registers a new subscription', async () => {
 		const { browser, log, finish, overlapped } = fakeBrowser();
 		const client = fakeClient();
-		const sync = new WebPushSync(browser);
+		const sync = new WebPushSync(browser, (account) => `id:${account}`);
 		const disabled = sync.disable(client, true);
 		const enabled = sync.enable(client, 'BNcR', 'ada');
 		await finish();
@@ -199,7 +198,7 @@ describe('keeping the push subscription in step', () => {
 	it('drops the subscription when released, after the subscribing under way', async () => {
 		const { browser, log, finish, overlapped } = fakeBrowser();
 		const client = fakeClient();
-		const sync = new WebPushSync(browser);
+		const sync = new WebPushSync(browser, (account) => `id:${account}`);
 		const enabled = sync.enable(client, 'BNcR', 'ada');
 		await vi.waitFor(() => expect(log).toEqual(['subscribe start']));
 		const released = sync.release();
@@ -214,7 +213,7 @@ describe('keeping the push subscription in step', () => {
 	it('registers nothing once the client has moved to another server or account', async () => {
 		const { browser, log, finish } = fakeBrowser();
 		const client = fakeClient();
-		const sync = new WebPushSync(browser);
+		const sync = new WebPushSync(browser, (account) => `id:${account}`);
 		const moved = sync.enable(client, 'BNcR', 'ada');
 		await vi.waitFor(() => expect(log).toEqual(['subscribe start']));
 		client.url = 'wss://b.example/';

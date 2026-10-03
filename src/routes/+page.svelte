@@ -40,7 +40,7 @@
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadWebPushAccounts, loadWebPushOwner, loadNotifyScopes, saveWebPushEnabled, saveWebPushOwner, saveNotifyScopes, WEB_PUSH_ACCOUNTS_KEY, WEB_PUSH_OWNER_KEY, NOTIFY_SCOPES_KEY, type RecentServer, type WebPushOwner } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, type RecentServer } from '$lib/ui/storage';
 	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadLostPrivacy, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
 	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
@@ -55,9 +55,9 @@
 	import { setAppBadge, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
-	import { saveEnabledPushIds } from '$lib/ui/push-store';
+	import { PushSettings } from '$lib/ui/push-settings.svelte';
 	import { inNotifyScopes, notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
-	import { canOfferInstall, needsHomeScreen, pushHeldBy, offeredWake, pushId, webPushAccount, webPushSupported, WebPushSync, type InstallPromptEvent } from '$lib/ui/web-push';
+	import { accountServer, canOfferInstall, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
 
 	/**
 	 * A thread this viewer created, opened once its `room_update` has arrived;
@@ -102,8 +102,8 @@
 	let notificationsActive = $derived(notificationsEnabled && notificationState === 'granted');
 	/** The server the client is on (`client.url`), kept as page state. */
 	let serverUrl = $state('');
-	/** The accounts push notifications are on for (§4.7); this browser's one subscription follows the account in use. */
-	let webPushAccounts = $state<string[]>([]);
+	/** Push per account (§4.7), and this browser's one subscription between them. */
+	const pushSettings = new PushSettings({ setBadge: (unread) => void setAppBadge(navigator, unread) });
 	/**
 	 * The signed-in account (`webPushAccount`), not a guest: a guest's identity ends with its
 	 * connection, so there is no one to push to. A reconnect keeps it.
@@ -111,9 +111,7 @@
 	let pushAccount = $derived(session.you && (session.snapshot.passkeySession || session.snapshot.keptSession) ? webPushAccount(serverUrl, session.you.user_id) : undefined);
 	/** The server's VAPID key, offered to a signed-in account. */
 	let webPushServerKey = $derived(pushAccount ? webPushKey(session.server) : undefined);
-	let webPushActive = $derived(pushAccount !== undefined && webPushAccounts.includes(pushAccount) && notificationState === 'granted');
-	/** Whose this browser's one push subscription is (§4.7), as this and other tabs last made it. */
-	let webPushOwner = $state<WebPushOwner | undefined>();
+	let webPushActive = $derived(pushSettings.isOn(pushAccount) && notificationState === 'granted');
 	/**
 	 * Push is on for this account, but the subscription is another account's, on
 	 * a server with another key, that still has push on: that server's host. It
@@ -121,7 +119,7 @@
 	 * it back and forth.
 	 */
 	let webPushHeldBy = $derived.by(() => {
-		const server = webPushActive ? pushHeldBy(webPushOwner, pushAccount, webPushServerKey, webPushAccounts) : undefined;
+		const server = webPushActive ? pushSettings.heldBy(pushAccount, webPushServerKey) : undefined;
 		return server === undefined ? undefined : backendHost(server) || 'another server';
 	});
 	/** Bumped when a choice of what to notify about is saved, here or in another tab, so it is read again. */
@@ -136,7 +134,8 @@
 	/** The wake scopes the server pushes (§4.7), and the `wake` push sends: the checked ones of them. */
 	let webPushOffered = $derived(offeredWake(session.server?.push));
 	let webPushWake = $derived(pushWake(notifyScopes, webPushOffered));
-	let webPushError = $state<string | undefined>();
+	/** Why push doesn't work: the browser couldn't subscribe, or the server refused the registration. */
+	let webPushError = $derived(pushSettings.error ?? session.snapshot.pushError);
 	let webPushAvailable = $state(false);
 	/** Notifications are paused until then (§4.11 `mute`, the server's `you.mute`). */
 	let pausedUntil = $derived(session.snapshot.mutedUntil);
@@ -144,9 +143,8 @@
 	let canPause = $derived(session.server?.capabilities?.includes('status') === true && pushAccount !== undefined);
 	/** Chromium's offer to install Apron, kept for the push setting's Install app button. */
 	let installPrompt = $state<InstallPromptEvent | undefined>();
-	const webPush = new WebPushSync();
 	/** The account's `push_id` (§4.7): it names the account in pushed payloads and in message notifications. */
-	let accountPushId = $state<string | undefined>();
+	let accountPushId = $derived(pushAccount ? pushSettings.pushId(pushAccount) : undefined);
 	/** A pushed room to open once it is listed, if its `push_id` is this account's. */
 	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
 	/** How long a pushed room waits for its account and rooms before it is dropped. */
@@ -327,22 +325,16 @@
 		const wake = webPushWake;
 		if (!chat || !key || !userId || !webPushActive || webPushHeldBy || !session.ready) return;
 		// A new choice of scopes registers again at once: the same `url`, new params.
-		untrack(() => void enablePush(chat, key, userId, wake));
+		untrack(() => void pushSettings.enable(chat, key, userId, wake, () => session.you?.user_id === userId && webPushActive));
 	});
 
 	// Turned off, here or in another tab, or for another account now, or the subscription moved to
-	// another server: this one isn't registered.
+	// another server: this one isn't registered, and the browser's endpoint is unregistered after
+	// each `auth`, in case an earlier unregister was missed.
 	$effect(() => {
 		const chat = client;
-		if (!chat || (webPushActive && !webPushHeldBy)) return;
-		untrack(() => void webPush.disable(chat, false));
-	});
-
-	// The service worker drops pushes for accounts push isn't on for here (§4.7): it keeps their `push_id`s.
-	$effect(() => {
-		const accounts = webPushAccounts;
-		if (previewMode) return;
-		void Promise.all(accounts.map(pushId)).then((ids) => saveEnabledPushIds(ids.filter((id): id is string => id !== undefined)));
+		if (!chat || previewMode || (webPushActive && !webPushHeldBy)) return;
+		untrack(() => void pushSettings.keepOff(chat));
 	});
 
 	// While Apron is in view, the app badge shows its own unread count; away, pushes' `unread` sets it.
@@ -361,18 +353,12 @@
 		return () => clearTimeout(timer);
 	});
 
-	$effect(() => {
-		const account = pushAccount;
-		accountPushId = undefined;
-		if (account) void pushId(account).then((id) => { if (pushAccount === account) accountPushId = id; });
-	});
-
 	// A pushed room opens once it is listed, a thread under its room, if it was pushed for this
 	// account; once the rooms are listed without it, it goes.
 	$effect(() => {
 		const pending = pushRoom;
 		if (!pending) return;
-		const route = pushRoute(pending, accountPushId, untrack(() => pushAccount !== undefined && pushAccount === webPushOwner?.account));
+		const route = pushRoute(pending, accountPushId, untrack(() => pushAccount !== undefined && pushAccount === pushSettings.owner?.account));
 		if (route === 'wait') return;
 		if (route === 'ignore') {
 			pushRoom = undefined;
@@ -609,20 +595,12 @@
 		recentServers = previewMode ? [] : loadRecentServers();
 		notificationsEnabled = loadNotificationsEnabled();
 		notificationState = notificationPermission();
-		webPushAccounts = previewMode ? [] : loadWebPushAccounts();
-		webPushOwner = previewMode ? undefined : loadWebPushOwner();
-		// No account here has push on (it was turned off, perhaps while offline): the subscription goes.
-		if (!previewMode && !webPushAccounts.length) {
-			saveWebPushOwner(undefined);
-			webPushOwner = undefined;
-			void webPush.release().catch(() => undefined);
-		}
+		if (!previewMode) pushSettings.load();
 		webPushAvailable = webPushSupported();
 		// Push turned on or off in another tab applies here too.
 		const storageChanged = (event: StorageEvent) => {
 			if (previewMode) return;
-			if (event.key === WEB_PUSH_ACCOUNTS_KEY) webPushAccounts = loadWebPushAccounts();
-			if (event.key === WEB_PUSH_OWNER_KEY) webPushOwner = loadWebPushOwner();
+			pushSettings.storageChanged(event.key);
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 		};
 		window.addEventListener('storage', storageChanged);
@@ -865,9 +843,9 @@
 	async function followPush(chat: ChatClient, target: Pick<PushTarget, 'roomId' | 'pushId'>): Promise<void> {
 		const id = target.pushId;
 		if (id !== undefined) {
-			for (const account of webPushAccounts) {
-				if ((await pushId(account)) !== id) continue;
-				const server = account.slice(0, account.indexOf('\n'));
+			for (const account of pushSettings.accounts) {
+				if (pushSettings.pushId(account) !== id) continue;
+				const server = accountServer(account);
 				if (server && server !== chat.url) {
 					leaveBackend();
 					serverInput = server;
@@ -892,18 +870,7 @@
 		return roomId ? { roomId, ...(id ? { pushId: id } : {}) } : undefined;
 	}
 
-	/** Subscribes this browser with the server's key, and has the client register it for this account (§4.7). */
-	async function enablePush(chat: ChatClient, key: string, userId: string, wake: string[] | undefined): Promise<void> {
-		const account = webPushAccount(chat.url, userId);
-		try {
-			if (!await webPush.enable(chat, key, userId, () => session.you?.user_id === userId && webPushActive, wake)) return;
-			webPushOwner = { account, key };
-			saveWebPushOwner(webPushOwner);
-			webPushError = undefined;
-		} catch {
-			if (pushAccount === account) webPushError = 'This browser couldn’t subscribe to push notifications. Try again later.';
-		}
-	}
+
 
 	/** Pauses notifications everywhere (§4.11 `mute`): seconds from now, or until resumed. */
 	function pauseNotifications(until: PausedUntil): void {
@@ -928,37 +895,31 @@
 	 * Push is opt-in per account. Turning it on asks for notification
 	 * permission first, from this tap, and takes the browser's subscription
 	 * over from another server holding it. Turning it off unregisters this
-	 * device; the subscription goes once no account here has push on, and
-	 * otherwise is left for the others (their tabs see it free up).
+	 * device (see `PushSettings.turnOff`).
 	 */
 	async function toggleWebPush(): Promise<void> {
 		const chat = client;
 		const account = pushAccount;
 		const key = webPushServerKey;
 		const userId = session.you?.user_id;
-		if (!chat || !account) return;
-		webPushError = undefined;
+		if (!chat || !account || !userId) return;
 		if (webPushActive && webPushHeldBy) {
-			if (key && userId) await enablePush(chat, key, userId, webPushWake);
+			if (key) await pushSettings.enable(chat, key, userId, webPushWake);
 			return;
 		}
 		if (webPushActive) {
-			webPushAccounts = saveWebPushEnabled(webPushAccounts, account, false);
-			const owned = webPushOwner?.account === account;
-			const last = !webPushAccounts.length;
-			if (owned || last) {
-				saveWebPushOwner(undefined);
-				webPushOwner = undefined;
-			}
-			if (last) void setAppBadge(navigator, 0);
-			await webPush.disable(chat, last).catch(() => undefined);
+			await pushSettings.turnOff(chat, account);
 			return;
 		}
 		if (notificationState !== 'granted') notificationState = await requestNotificationPermission();
-		if (notificationState !== 'granted') return;
-		webPushAccounts = saveWebPushEnabled(webPushAccounts, account, true);
-		// Turned on here: the subscription comes here even if another server holds it.
-		if (key && userId && session.ready) await enablePush(chat, key, userId, webPushWake);
+		if (notificationState === 'granted') await pushSettings.turnOn(chat, userId, key, webPushWake, session.ready);
+	}
+
+	/** Signing out: push goes off for the account here, so its previews stop even if the server can't be told. */
+	function signedOut(): void {
+		const account = pushAccount;
+		if (client && account) void pushSettings.signedOut(client, account);
+		session.forget();
 	}
 
 	function connected(): void {
@@ -1684,7 +1645,7 @@
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
 		canCancel={session.rooms.length > 0 || session.ready} initialScheme={connectScheme}
 		initialError={emailLinkFailure?.error}
-		onconnect={leaveBackend} onconnected={connected} oncancel={() => (connectOpen = false)} onsignout={() => session.forget()}
+		onconnect={leaveBackend} onconnected={connected} oncancel={() => (connectOpen = false)} onsignout={signedOut}
 	/>
 {:else}
 <div
@@ -1702,7 +1663,7 @@
 		webPush={webPushServerKey ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError ? { error: webPushError } : {}) } : undefined} onwebpush={toggleWebPush} oninstallapp={installApp}
 		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(0)}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
-		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={() => session.forget()}
+		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={signedOut}
 	/>
 	<SidebarHandle layout={sidebar} />
 
