@@ -38,8 +38,10 @@ describe('preference storage', () => {
 		expect(loadWebPushAccounts()).toEqual([ada]);
 		values.set('apron.webPushAccounts', '{broken');
 		expect(loadWebPushAccounts()).toEqual([]);
-		saveWebPushOwner(ada);
-		expect(loadWebPushOwner()).toBe(ada);
+		saveWebPushOwner({ account: ada, key: 'BNcR' });
+		expect(loadWebPushOwner()).toEqual({ account: ada, key: 'BNcR' });
+		values.set('apron.webPushOwner', 'wss://a.example/\nada');
+		expect(loadWebPushOwner()).toBeUndefined();
 		saveWebPushOwner(undefined);
 		expect(loadWebPushOwner()).toBeUndefined();
 	});

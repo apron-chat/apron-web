@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { webPushKey } from '$lib/protocol/client';
 import type { PushRegistration } from '$lib/protocol/client';
-import { base64UrlToBytes, bytesToBase64Url, canOfferInstall, isStandalone, needsHomeScreen, offeredWake, pushId, sameServerKey, webPushAccount, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
+import { base64UrlToBytes, bytesToBase64Url, canOfferInstall, isStandalone, needsHomeScreen, offeredWake, pushHeldBy, pushId, sameServerKey, webPushAccount, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
 
 describe('web push', () => {
 	it('decodes base64url keys, padded or not, and encodes them back unpadded', () => {
@@ -95,6 +95,19 @@ describe('installing', () => {
 	});
 });
 
+describe('sharing the one subscription', () => {
+	const ada = 'wss://a.example/\nada';
+	const bob = 'wss://b.example/\nbob';
+	it('is held by another server only while its account, with another key, still has push on', () => {
+		expect(pushHeldBy({ account: bob, key: 'K2' }, ada, 'K1', [ada, bob])).toBe('wss://b.example/');
+		// Free once that account turned push off, or ours, or made with our key.
+		expect(pushHeldBy({ account: bob, key: 'K2' }, ada, 'K1', [ada])).toBeUndefined();
+		expect(pushHeldBy({ account: ada, key: 'K1' }, ada, 'K1', [ada, bob])).toBeUndefined();
+		expect(pushHeldBy({ account: bob, key: 'K1' }, ada, 'K1', [ada, bob])).toBeUndefined();
+		expect(pushHeldBy(undefined, ada, 'K1', [ada])).toBeUndefined();
+	});
+});
+
 describe('keeping the push subscription in step', () => {
 	const subscription = (endpoint: string): PushSubscriptionJSON => ({ endpoint, keys: { p256dh: 'BPk', auth: 'c2Vj' } });
 
@@ -181,6 +194,21 @@ describe('keeping the push subscription in step', () => {
 		expect(log).toEqual(['unsubscribe start', 'unsubscribe end', 'subscribe start', 'subscribe end']);
 		expect(overlapped()).toBe(false);
 		expect(client.calls.map(([registration]) => registration?.url)).toEqual([undefined, 'https://push.example/1']);
+	});
+
+	it('drops the subscription when released, after the subscribing under way', async () => {
+		const { browser, log, finish, overlapped } = fakeBrowser();
+		const client = fakeClient();
+		const sync = new WebPushSync(browser);
+		const enabled = sync.enable(client, 'BNcR', 'ada');
+		await vi.waitFor(() => expect(log).toEqual(['subscribe start']));
+		const released = sync.release();
+		await finish();
+		await finish();
+		await released;
+		expect(await enabled).toBe(false);
+		expect(log).toEqual(['subscribe start', 'subscribe end', 'unsubscribe start', 'unsubscribe end']);
+		expect(overlapped()).toBe(false);
 	});
 
 	it('registers nothing once the client has moved to another server or account', async () => {

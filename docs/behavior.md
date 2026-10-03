@@ -181,7 +181,8 @@ notifications and push alike, one line per option: Mentions (messages whose
 `body.mentions` list you, or an edit that adds you), Replies to my messages
 (replies to one of your messages that is loaded here; with the replied-to
 message not loaded, no notification), All messages in private rooms (a private
-room or its threads) and All messages in joined rooms. Messages of your own never notify. At
+room or its threads) and All messages in joined rooms (a joined room or its
+threads). Messages of your own never notify. At
 least one stays checked, mentions and replies until you choose; the switches
 below turn notifications off. The choice is kept per account on each server,
 and for a server's guests together (their `user_id`s change with each
@@ -190,16 +191,23 @@ wake scopes as they were, and the device-wide "Everything" as every scope.
 
 On a server with the `status` capability, a signed-in account (not a guest)
 gets **Pause notifications** at the top of the section. **Pause…** opens a
-menu: For 1 hour, For 8 hours, Until tomorrow (9:00 the next day) and Until I
-resume, each showing when it would end. Choosing one sends `status` `{mute}`
+menu: For 1 hour, For 8 hours, Until tomorrow (the next 9:00; "Until this
+morning" before 9:00) and Until I resume, each showing when it would end. The
+menu opens from the keyboard with the arrow keys too. Choosing one sends `status` `{mute}`
 with the seconds until then, or `true`, and **Resume** sends `{mute: 0}`. The
 server's `you.mute` (in `auth` and `me` results and `user` notifications about
-you: seconds left, `true`, or absent when not paused) is the word on it; the
-client works out when the pause ends from it as it arrives, and resumes on its
-own then. While paused, the row reads "Paused until 14:30" (or "until tomorrow
-9:00", "until you resume"), the profile bar shows a bell-off icon beside the
-gear that opens Preferences, and no desktop notifications show; the server
-sends no pushes.
+you: seconds left, `true`, or `0` when not paused) is the word on it. A `you`
+without `mute` leaves the pause as it is (§3.3); an `auth` result without it
+starts the session unpaused. The client works out when the pause ends from
+it as it arrives, and resumes on its own then. While paused, the row reads
+"Paused until 14:30" (or "until tomorrow 9:00", "until you resume"), the
+profile bar's gear carries a small bell-off badge, and nothing notifies here:
+no desktop notifications, chime or title flash. The server sends no pushes.
+
+A room's `mute`, echoed on your room records (`room_list` entries, and
+`room_update` joined and updated records; a missing one leaves it, `0` ends
+it), pauses that room and its threads: there, only mentions notify. The client
+has no control for it yet.
 
 Below it, **Desktop notifications** alerts while Apron is open but hidden or
 unfocused; turning them on asks the browser's permission, and **Send a test
@@ -218,7 +226,13 @@ Turning it on asks the browser's permission, subscribes this browser with the
 server's key (replacing a subscription made with another key), and sends
 `push_register` `{kind: "webpush", url, push_id, keys: {p256dh, auth}, wake}`
 from the subscription after each `auth` as that account. Turning it off sends
-`push_unregister` and drops the subscription. Subscribing and unsubscribing
+`push_unregister`. This browser has one subscription for all accounts: it goes
+once no account here has push on (also checked on load, for one turned off
+while offline), and accounts on servers with the same key share it. When
+another server, with another key, holds it, the setting says "Push is on for
+another server in this browser (host)", and turning it on there takes it over;
+tabs don't take it back on their own. Its `push_id`s are kept in IndexedDB for
+the service worker, which drops a push for any account push isn't on for. Subscribing and unsubscribing
 run one at a time, and a step that finishes after push was turned off, or
 after the tab moved to another server or account, registers nothing. A
 replaced registration is unregistered, after the next `auth` if not at once.
@@ -241,20 +255,23 @@ only, never elsewhere, and not once Apron runs installed. The web manifest
 `display: standalone`.
 
 `push_id` names the account: the SHA-256 of the server URL, a newline and the
-`user_id`, in base64url, cut to 16 characters. The service worker reads each push
-payload's `push_id`, `unread` and `message`, and shows the `message` as its
-sender and room; a payload without `message` shows nothing. `unread` becomes
-the app badge where the browser has one, cleared at 0, and a payload that isn't
-an object at all shows a generic notification. A message notification, the page's or a
-pushed one, is tagged with the `push_id` and the `message_id`, so a message
-shows once: whichever arrives second replaces the first without alerting
-again. A newer message in the room closes the older one. A click on a pushed
-one asks the open tabs for their `push_id`, and the tab signed in to that
-account opens the room. With no such tab, a new one opens at it, on that
-account's server if push is on for it here. A pushed room that the listed
-rooms don't include is dropped. A payload without a `push_id` (an older
-server) shows one notification per room and opens in the tab on the account
-that holds the subscription. Without a `push_id` of its own (no
+`user_id`, in base64url, cut to 16 characters. The service worker reads each
+push payload's `push_id`, `unread` and `message`, and shows the `message` as
+its sender and room; a payload without `message` shows nothing new. `unread`
+becomes the app badge where the browser has one, cleared at 0; while Apron is
+in view, the badge is the page's own unread count. A message notification, the
+page's or a pushed one, is tagged with the `push_id` and the `message_id`, and
+a room's notifications are ordered by `message_id`: a message the room has
+already notified about (showing, or remembered in IndexedDB though dismissed)
+or one older than that doesn't notify again, and a new one closes only older
+ones. Browsers expect each push to leave a notification showing, so when one
+brings nothing to show and none is showing, a quiet one stands in: the
+already-notified message without sound, or "Open Apron to catch up". A click
+on a pushed notification, or on the page's when its tab has gone, asks the
+open tabs for their `push_id`, and the tab signed in to that account opens the
+room. With no such tab, a new one opens at it, on that account's server if
+push is on for it here. A pushed room that the listed rooms don't include, or
+that isn't open after 30 seconds, is dropped. Without a `push_id` of its own (no
 `crypto.subtle`), the page keeps one notification per room. Browsers without
 push say so; iPhone and iPad Safari say to add Apron to the Home Screen first.
 

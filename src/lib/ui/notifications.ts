@@ -1,4 +1,6 @@
+import { compareLogIds } from '$lib/protocol/reducer';
 import { isJsonObject } from '$lib/protocol/types';
+import { loadShownMarks, markShown } from './push-store';
 
 export type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
 export type NotificationTestResult = 'sent' | 'denied' | 'unsupported' | 'error';
@@ -54,12 +56,35 @@ export function notificationGroup(pushId: string, roomId: string): string {
 
 type ShownNotification = Pick<Notification, 'tag' | 'data' | 'close'>;
 
-/** Closes the notifications of a group but the one with this tag: its room's newer message replaces them. */
-export function closeOlderInGroup(notifications: readonly ShownNotification[], group: string, tag: string): void {
+/** Where a message notification sits: its group (a room for an account) and its message, from its `data`. */
+export function placeOf(data: unknown): { group: string; messageId: string } | undefined {
+	if (!isJsonObject(data) || typeof data.group !== 'string' || typeof data.messageId !== 'string') return undefined;
+	return { group: data.group, messageId: data.messageId };
+}
+
+/**
+ * The newest message a group has notified about: among the notifications
+ * showing, and `mark`, the newest it notified about before (perhaps
+ * dismissed since). `message_id`s order by creation (§3.5).
+ */
+export function newestNotified(visible: readonly Pick<ShownNotification, 'data'>[], group: string, mark?: string): string | undefined {
+	let newest = mark;
+	for (const notification of visible) {
+		const place = placeOf(notification.data);
+		if (place?.group === group && (newest === undefined || compareLogIds(place.messageId, newest) > 0)) newest = place.messageId;
+	}
+	return newest;
+}
+
+/** Closes a group's notifications of messages strictly older than this one: its room's newer message replaces them. */
+export function closeOlderInGroup(notifications: readonly ShownNotification[], group: string, messageId: string): void {
 	for (const notification of notifications) {
-		if (notification.tag !== tag && isJsonObject(notification.data) && notification.data.group === group) notification.close();
+		const place = placeOf(notification.data);
+		if (place?.group === group && compareLogIds(place.messageId, messageId) < 0) notification.close();
 	}
 }
+
+const newer = (a: string, b: string) => compareLogIds(a, b) > 0;
 
 /** The page's own notifications, by group, where there is no service worker to list them. */
 const pageNotifications = new Map<string, Notification>();
@@ -73,18 +98,28 @@ export type ShowNotificationOptions = NotificationOptions & { renotify?: boolean
 /**
  * Shows a notification through the service worker, so it shares tags with
  * pushed ones (§4.7) and can be listed and closed, or from the page where
- * there is no service worker. Resolves whether one was shown. `onclick`
- * handles a click on the page's own notification; a click on the service
- * worker's posts `NOTIFICATION_CLICK`.
+ * there is no service worker. Resolves whether one was shown, or the
+ * message already was (by a push, or before): a message notification shows
+ * at most once, and never under a newer one of its room. `onclick` handles a
+ * click on the page's own notification; a click on the service worker's
+ * posts `NOTIFICATION_CLICK`.
  */
 export async function showNotification(title: string, options: ShowNotificationOptions, onclick: () => void): Promise<boolean> {
 	if (notificationPermission() !== 'granted') return false;
-	const group = isJsonObject(options.data) && typeof options.data.group === 'string' ? options.data.group : undefined;
+	const place = placeOf(options.data);
+	const group = place?.group;
 	const registration = await globalThis.navigator?.serviceWorker?.getRegistration().catch(() => undefined);
 	if (registration) {
 		try {
+			if (place) {
+				const newest = newestNotified(await registration.getNotifications(), place.group, (await loadShownMarks())[place.group]);
+				if (newest !== undefined && compareLogIds(place.messageId, newest) <= 0) return true;
+			}
 			await registration.showNotification(title, options);
-			if (group !== undefined && options.tag) closeOlderInGroup(await registration.getNotifications(), group, options.tag);
+			if (place) {
+				closeOlderInGroup(await registration.getNotifications(), place.group, place.messageId);
+				await markShown(place.group, place.messageId, newer);
+			}
 			return true;
 		} catch {
 			// Not active yet: the page shows its own.
@@ -96,9 +131,9 @@ export async function showNotification(title: string, options: ShowNotificationO
 			onclick();
 			notification.close();
 		};
-		if (group !== undefined && options.tag) {
+		if (group !== undefined && place) {
 			const older = pageNotifications.get(group);
-			if (older) closeOlderInGroup([older], group, options.tag);
+			if (older) closeOlderInGroup([older], group, place.messageId);
 			pageNotifications.set(group, notification);
 			notification.onclose = () => {
 				if (pageNotifications.get(group) === notification) pageNotifications.delete(group);
@@ -167,6 +202,41 @@ export function readPush(payload: unknown): PushPayload | undefined {
 	return { ...(pushId ? { pushId } : {}), ...(unread !== undefined ? { unread } : {}), ...(notification ? { notification } : {}) };
 }
 
+/** Shown when a push brings nothing to show and none of this origin's notifications is showing: browsers require one (§4.7). */
+export const QUIET_PUSH = { title: 'Apron', options: { body: 'Open Apron to catch up.', tag: 'apron:push', silent: true } satisfies ShowNotificationOptions };
+
+/** What to do with a push. */
+export interface PushPlan {
+	show?: { title: string; options: ShowNotificationOptions };
+	/** After showing, close the group's notifications of older messages, and remember this one. */
+	notified?: { group: string; messageId: string };
+	/** Set the app badge to this unread count. */
+	badge?: number;
+}
+
+/**
+ * Plans a push (`readPush`; undefined when unreadable). A push for a
+ * `push_id` not among `enabled` (when known) is dropped. A message its group
+ * already notified about (showing, or `marks`, perhaps dismissed since), or
+ * older than one it did, isn't shown again. Browsers expect each push to leave
+ * a notification showing: with nothing showing, an already-notified message
+ * shows again quietly, and a push with nothing to show shows `QUIET_PUSH`.
+ */
+export function planPush(push: PushPayload | undefined, visible: readonly Pick<ShownNotification, 'data'>[], known: { enabled?: readonly string[]; marks?: Record<string, string> } = {}): PushPlan {
+	const plan: PushPlan = push?.unread !== undefined ? { badge: push.unread } : {};
+	const dropped = push?.pushId !== undefined && known.enabled !== undefined && !known.enabled.includes(push.pushId);
+	const notification = push && !dropped ? push.notification : undefined;
+	const place = placeOf(notification?.options.data);
+	if (notification && place) {
+		const newest = newestNotified(visible, place.group, known.marks?.[place.group]);
+		if (newest === undefined || compareLogIds(place.messageId, newest) > 0) return { ...plan, show: notification, notified: place };
+		if (visible.length) return plan;
+		return { ...plan, show: { title: notification.title, options: { ...notification.options, renotify: false, silent: true } } };
+	}
+	if (notification) return { ...plan, show: notification };
+	return visible.length ? plan : { ...plan, show: QUIET_PUSH };
+}
+
 /**
  * The notification for a pushed message (a message object, whose `body` may
  * be truncated or missing), for the registration with this `push_id`.
@@ -224,6 +294,17 @@ export function pushRoute(target: Pick<PushTarget, 'pushId'>, pushId: string | u
 	if (target.pushId === undefined) return subscribed ? 'open' : 'ignore';
 	if (pushId === undefined) return 'wait';
 	return target.pushId === pushId ? 'open' : 'ignore';
+}
+
+/**
+ * A page notification's place as a push target, for a click with no tab
+ * that raised it to open: the room or thread its message is in, and its
+ * account's `push_id` if it has one.
+ */
+export function pageTarget(data: unknown): PushTarget | undefined {
+	if (!isJsonObject(data) || typeof data.roomId !== 'string' || !data.roomId || typeof data.tab !== 'string') return undefined;
+	const roomId = typeof data.threadId === 'string' && data.threadId ? data.threadId : data.roomId;
+	return { push: true, roomId, ...(typeof data.pushId === 'string' && data.pushId ? { pushId: data.pushId } : {}) };
 }
 
 /** A `PUSH_CLICK` message's target, if the message is one. */

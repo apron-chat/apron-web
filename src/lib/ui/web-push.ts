@@ -14,6 +14,8 @@ export interface WebPushPreference {
 	homeScreen: boolean;
 	/** On for this account, and notifications are allowed. */
 	enabled: boolean;
+	/** On, but this browser's subscription is another server's for now (its host): turning it on here moves it. */
+	heldBy?: string;
 	/** The wake scopes the server advertises (§4.7); empty when it lists none. */
 	offered: string[];
 	/** The browser offers to install Apron (`beforeinstallprompt`), and it isn't installed. */
@@ -69,6 +71,17 @@ export function sameServerKey(current: ArrayBuffer | null | undefined, key: stri
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * The server holding this browser's one push subscription, when it isn't
+ * `account`'s to use: another account's, made with another key, whose push
+ * is still on here (one of `accounts`). Accounts on servers with the same key
+ * share it. Undefined when it is free or usable.
+ */
+export function pushHeldBy(owner: { account: string; key: string } | undefined, account: string | undefined, key: string | undefined, accounts: readonly string[]): string | undefined {
+	if (!owner || owner.account === account || owner.key === key || !accounts.includes(owner.account)) return undefined;
+	return owner.account.slice(0, owner.account.indexOf('\n'));
 }
 
 /**
@@ -194,5 +207,11 @@ export class WebPushSync {
 		this.run += 1;
 		client.setPushRegistration(undefined);
 		if (unsubscribe) await this.serially(() => this.browser.unsubscribe());
+	}
+
+	/** Drops the browser's subscription when no account here has push on any more, after whatever is under way. */
+	async release(): Promise<void> {
+		this.run += 1;
+		await this.serially(() => this.browser.unsubscribe());
 	}
 }

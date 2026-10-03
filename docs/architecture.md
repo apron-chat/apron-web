@@ -60,6 +60,8 @@ Preferences included (on this device only; nothing is synced), and
 is registered, and words pushed messages for the service worker,
 `notify-scopes.ts` decides which arriving messages the page notifies about from
 the checked scopes, and which of them push sends as `wake`, and
+`push-store.ts` keeps in IndexedDB, for the service worker too, the enabled
+`push_id`s and the newest message each notification group notified about,
 `web-push.ts` keeps this browser's push subscription for the server's key
 (`WebPushSync` runs subscribing and unsubscribing one at a time).
 

@@ -237,6 +237,8 @@
 								<p class="ap-pref-note ap-profedit-err" role="status">Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.</p>
 							{:else if webPush.error}
 								<p class="ap-pref-note ap-profedit-err" role="status">{webPush.error}</p>
+							{:else if webPush.heldBy}
+								<p class="ap-pref-note" role="status">Push is on for another server in this browser ({webPush.heldBy}). Turn it on to move it here.</p>
 							{:else if webPush.enabled && pushesNothing}
 								<p class="ap-pref-note" role="status">On, but this server pushes none of your choices above: push won’t send anything.</p>
 							{:else if webPush.enabled}

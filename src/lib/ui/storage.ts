@@ -203,19 +203,32 @@ export function saveNotifyScopes(account: string, scopes: readonly string[]): vo
 	write(KEY.notifyScopes, JSON.stringify({ ...readScopeChoices(KEY.notifyScopes), [account]: [...scopes] }));
 }
 
-/** The account this browser's one push subscription is registered for. */
-export function loadWebPushOwner(): string | undefined {
-	return read(KEY.webPushOwner) ?? undefined;
+/**
+ * Whose this browser's one push subscription is: the account it was last
+ * subscribed for, and the server key it was made with. Other accounts on a
+ * server with the same key share it; one on a server with another key would
+ * replace it.
+ */
+export interface WebPushOwner {
+	account: string;
+	key: string;
 }
 
-export function saveWebPushOwner(account: string | undefined): void {
-	if (!persisting) return;
+/** The storage key of the subscription's owner: other tabs follow its `storage` events. */
+export const WEB_PUSH_OWNER_KEY = KEY.webPushOwner;
+
+export function loadWebPushOwner(): WebPushOwner | undefined {
 	try {
-		if (account === undefined) globalThis.localStorage?.removeItem(KEY.webPushOwner);
-		else globalThis.localStorage?.setItem(KEY.webPushOwner, account);
+		const parsed: unknown = JSON.parse(read(KEY.webPushOwner) ?? 'null');
+		return isJsonObject(parsed) && typeof parsed.account === 'string' && typeof parsed.key === 'string' ? { account: parsed.account, key: parsed.key } : undefined;
 	} catch {
-		// As `write`.
+		return undefined;
 	}
+}
+
+export function saveWebPushOwner(owner: WebPushOwner | undefined): void {
+	if (owner === undefined) remove(KEY.webPushOwner);
+	else write(KEY.webPushOwner, JSON.stringify(owner));
 }
 
 /** The saved theme and fonts as stored; `decodeAppearance` checks them. */

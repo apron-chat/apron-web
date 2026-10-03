@@ -3,7 +3,9 @@
 /// <reference lib="esnext" />
 /// <reference lib="webworker" />
 import { base, build, files, prerendered, version } from '$service-worker';
-import { NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, closeOlderInGroup, pushTarget, readPush, setAppBadge, tabWithPushId, type BadgeNavigator, type PushPayload } from '$lib/ui/notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, closeOlderInGroup, pageTarget, planPush, pushTarget, readPush, setAppBadge, tabWithPushId, type BadgeNavigator, type PushPayload } from '$lib/ui/notifications';
+import { loadEnabledPushIds, loadShownMarks, markShown } from '$lib/ui/push-store';
+import { compareLogIds } from '$lib/protocol/reducer';
 
 /**
  * Keeps each deploy's app files cached so the app opens fast, still opens
@@ -59,8 +61,9 @@ sw.addEventListener('fetch', (event) => {
 
 // A push from the server (§4.7): `unread` sets the app badge, and `message` shows, quietly
 // replacing the page's notification of the same message (same tag) and closing older ones of its
-// room. A payload without `message` (a badge push) shows nothing. Browsers expect every push to
-// show a notification, so one that can't be read still says something arrived.
+// room. A push for an account push isn't on for here is dropped, and a message its room already
+// notified about isn't shown again (`planPush`). Browsers expect every push to leave a
+// notification showing, so with none showing a quiet one stands in.
 sw.addEventListener('push', (event) => {
 	let push: PushPayload | undefined;
 	try {
@@ -68,13 +71,16 @@ sw.addEventListener('push', (event) => {
 	} catch {
 		push = undefined;
 	}
-	const shown = push ? push.notification : { title: 'Apron', options: { body: 'New message', tag: 'apron:push' } };
-	const group = pushTarget(shown?.options.data)?.group;
 	event.waitUntil((async () => {
-		if (push?.unread !== undefined) await setAppBadge(sw.navigator as BadgeNavigator, push.unread);
-		if (!shown) return;
-		await sw.registration.showNotification(shown.title, { icon: `${base}/icon-192.png`, ...shown.options });
-		if (group !== undefined && shown.options.tag) closeOlderInGroup(await sw.registration.getNotifications(), group, shown.options.tag);
+		const [visible, enabled, marks] = await Promise.all([sw.registration.getNotifications(), loadEnabledPushIds(), loadShownMarks()]);
+		const plan = planPush(push, visible, { ...(enabled ? { enabled } : {}), marks });
+		if (plan.badge !== undefined) await setAppBadge(sw.navigator as BadgeNavigator, plan.badge);
+		if (!plan.show) return;
+		await sw.registration.showNotification(plan.show.title, { icon: `${base}/icon-192.png`, ...plan.show.options });
+		if (plan.notified) {
+			closeOlderInGroup(await sw.registration.getNotifications(), plan.notified.group, plan.notified.messageId);
+			await markShown(plan.notified.group, plan.notified.messageId, (a, b) => compareLogIds(a, b) > 0);
+		}
 	})());
 });
 
@@ -85,41 +91,45 @@ const PUSH_ID_ANSWER_MS = 500;
 function askPushId(tab: WindowClient): Promise<string | undefined> {
 	return new Promise((resolve) => {
 		const channel = new MessageChannel();
-		const timer = setTimeout(() => resolve(undefined), PUSH_ID_ANSWER_MS);
-		channel.port1.onmessage = (event: MessageEvent) => {
+		const done = (pushId: string | undefined) => {
 			clearTimeout(timer);
+			channel.port1.close();
+			resolve(pushId);
+		};
+		const timer = setTimeout(() => done(undefined), PUSH_ID_ANSWER_MS);
+		channel.port1.onmessage = (event: MessageEvent) => {
 			const pushId: unknown = event.data?.pushId;
-			resolve(typeof pushId === 'string' ? pushId : undefined);
+			done(typeof pushId === 'string' ? pushId : undefined);
 		};
 		tab.postMessage({ type: PUSH_ID_QUERY }, [channel.port2]);
 	});
 }
 
-// A notification shown through here. A pushed one with a `push_id` goes to the tab signed in to
-// that account, or a new tab opens at its room. Otherwise the tabs are told, so the one that raised
-// it (see `showNotification`), or, for a push without a `push_id`, the one on the subscribed
-// account, opens the room, and the first comes forward.
+// A notification shown through here. One for an account (a push, or the page's with a `push_id`)
+// goes to the tab signed in to that account, or a new tab opens at its room. Otherwise the tabs are
+// told, so the one that raised it (see `showNotification`) opens the room, and the first comes
+// forward; with no tab, a new one opens at the room.
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
 	const data: unknown = event.notification.data;
-	const push = pushTarget(data);
+	const target = pushTarget(data) ?? pageTarget(data);
 	event.waitUntil((async () => {
 		const tabs = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
-		if (push?.pushId !== undefined) {
-			const tab = await tabWithPushId(tabs, push.pushId, askPushId);
+		if (target?.pushId !== undefined) {
+			const tab = await tabWithPushId(tabs, target.pushId, askPushId);
 			if (tab) {
-				tab.postMessage({ type: PUSH_CLICK, target: push });
+				tab.postMessage({ type: PUSH_CLICK, target });
 				await tab.focus();
 			} else {
-				await sw.clients.openWindow(`${APP_PAGE}?${new URLSearchParams({ [PUSH_ROOM_PARAM]: push.roomId, [PUSH_ID_PARAM]: push.pushId })}`);
+				await sw.clients.openWindow(`${APP_PAGE}?${new URLSearchParams({ [PUSH_ROOM_PARAM]: target.roomId, [PUSH_ID_PARAM]: target.pushId })}`);
 			}
 			return;
 		}
 		if (tabs.length === 0) {
-			await sw.clients.openWindow(push ? `${APP_PAGE}?${new URLSearchParams({ [PUSH_ROOM_PARAM]: push.roomId })}` : APP_PAGE);
+			await sw.clients.openWindow(target ? `${APP_PAGE}?${new URLSearchParams({ [PUSH_ROOM_PARAM]: target.roomId })}` : APP_PAGE);
 			return;
 		}
-		const message = push ? { type: PUSH_CLICK, target: push } : { type: NOTIFICATION_CLICK, target: data };
+		const message = pushTarget(data) ? { type: PUSH_CLICK, target: data } : { type: NOTIFICATION_CLICK, target: data };
 		for (const tab of tabs) tab.postMessage(message);
 		await tabs[0].focus();
 	})());

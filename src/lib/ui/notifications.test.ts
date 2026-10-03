@@ -1,5 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOTIFICATION_CLICK, PUSH_CLICK, closeOlderInGroup, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId } from './notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId, type ShowNotificationOptions } from './notifications';
+
+/** A service worker registration's notifications: one per tag, a newer one with a tag replacing the older. */
+function fakeRegistration() {
+	const list: Array<{ title: string; tag?: string; data?: unknown; options: ShowNotificationOptions; close: () => void }> = [];
+	const registration = {
+		list,
+		showNotification: vi.fn(async (title: string, options: ShowNotificationOptions) => {
+			const at = list.findIndex((entry) => options.tag !== undefined && entry.tag === options.tag);
+			const entry = { title, tag: options.tag, data: options.data, options, close: () => { const index = list.indexOf(entry); if (index >= 0) list.splice(index, 1); } };
+			if (at >= 0) list.splice(at, 1, entry); else list.push(entry);
+		}),
+		getNotifications: async () => [...list]
+	};
+	return registration;
+}
+
+/** A message notification's options, as the page and the service worker make them. */
+function messageOptions(id: string, room = 'general'): ShowNotificationOptions {
+	return { body: `message ${id}`, tag: messageNotificationTag('a1', id), renotify: false, data: { pushId: 'a1', messageId: id, group: notificationGroup('a1', room) } };
+}
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -23,14 +43,25 @@ describe('showing notifications', () => {
 	it('shows through the service worker when there is one, so pushes share its tags, and closes the room\'s older one', async () => {
 		const construct = vi.fn();
 		stubPermission('granted', construct);
-		const older = { tag: 'apron:a1:1', data: { group: 'a1:general' }, close: vi.fn() };
-		const shown = vi.fn(async () => undefined);
-		vi.stubGlobal('navigator', { serviceWorker: { getRegistration: async () => ({ showNotification: shown, getNotifications: async () => [older, { tag: 'apron:a1:2', data: { group: 'a1:general' }, close: vi.fn() }] }) } });
-		const options = { body: 'hi', tag: 'apron:a1:2', renotify: false, data: { group: 'a1:general' } };
-		expect(await showNotification('ada · general', options, () => undefined)).toBe(true);
-		expect(shown).toHaveBeenCalledWith('ada · general', options);
+		const registration = fakeRegistration();
+		vi.stubGlobal('navigator', { serviceWorker: { getRegistration: async () => registration } });
+		expect(await showNotification('ada · general', messageOptions('100'), () => undefined)).toBe(true);
+		expect(await showNotification('ada · general', messageOptions('101'), () => undefined)).toBe(true);
+		expect(registration.list.map((entry) => entry.tag)).toEqual(['apron:a1:101']);
 		expect(construct).not.toHaveBeenCalled();
-		expect(older.close).toHaveBeenCalledOnce();
+	});
+
+	it('shows a message the room already notified about, or one older than it, no more', async () => {
+		stubPermission('granted', () => undefined);
+		const registration = fakeRegistration();
+		vi.stubGlobal('navigator', { serviceWorker: { getRegistration: async () => registration } });
+		// A push showed message 101 first; the page's notification of it, or of the older 100, doesn't show.
+		await registration.showNotification('ada · #general', messageOptions('101'));
+		expect(await showNotification('ada · General', messageOptions('101'), () => undefined)).toBe(true);
+		expect(await showNotification('ada · General', messageOptions('100'), () => undefined)).toBe(true);
+		expect(registration.showNotification).toHaveBeenCalledTimes(1);
+		// The push's notification stays as it was.
+		expect(registration.list.map((entry) => entry.title)).toEqual(['ada · #general']);
 	});
 
 	it('falls back to the page\'s own notification while the service worker isn\'t active', async () => {
@@ -130,14 +161,64 @@ describe('push notifications', () => {
 		expect(await tabWithPushId([], 'a1', ask)).toBeUndefined();
 	});
 
-	it('closes the older notifications of a room, and only those', () => {
+	it('closes the notifications of a room\'s strictly older messages, and only those', () => {
 		const shown = (tag: string, data: unknown) => ({ tag, data, close: vi.fn() });
-		const older = shown('apron:a1:1', { group: notificationGroup('a1', 'general') });
-		const newest = shown('apron:a1:2', { group: 'a1:general' });
-		const otherRoom = shown('apron:a1:3', { group: 'a1:ops' });
+		const older = shown('apron:a1:9', { group: notificationGroup('a1', 'general'), messageId: '9' });
+		const same = shown('apron:a1:10', { group: 'a1:general', messageId: '10' });
+		const newer = shown('apron:a1:11', { group: 'a1:general', messageId: '11' });
+		const otherRoom = shown('apron:a1:3', { group: 'a1:ops', messageId: '3' });
 		const test = shown('apron:test', undefined);
-		closeOlderInGroup([older, newest, otherRoom, test], 'a1:general', 'apron:a1:2');
-		expect([older, newest, otherRoom, test].map((entry) => entry.close.mock.calls.length)).toEqual([1, 0, 0, 0]);
+		closeOlderInGroup([older, same, newer, otherRoom, test], 'a1:general', '10');
+		expect([older, same, newer, otherRoom, test].map((entry) => entry.close.mock.calls.length)).toEqual([1, 0, 0, 0, 0]);
+	});
+
+	describe('planning a push', () => {
+		const push = (id: string, room = 'general', extra: Record<string, unknown> = {}) => readPush({ push_id: 'a1', message: { message_id: id, room_id: room, from: { user_id: 'bob' }, body: { text: `message ${id}` } }, ...extra });
+
+		it('shows a new message, closing older ones of its room after', () => {
+			const plan = planPush(push('12', 'general', { unread: 3 }), [{ data: messageOptions('11').data }], { enabled: ['a1'] });
+			expect(plan.show?.options.tag).toBe('apron:a1:12');
+			expect(plan.notified).toEqual({ group: 'a1:general', messageId: '12' });
+			expect(plan.badge).toBe(3);
+		});
+
+		it('leaves the page\'s notifications of m1 and m2 alone when a late push of m1 arrives', () => {
+			// The page showed m1, then m2, which closed m1.
+			const plan = planPush(push('1'), [{ data: messageOptions('2').data }], { marks: { 'a1:general': '2' } });
+			expect(plan.show).toBeUndefined();
+			expect(plan.notified).toBeUndefined();
+		});
+
+		it('doesn\'t show again a message a push showed before the page tried', () => {
+			expect(planPush(push('5'), [{ data: messageOptions('5').data }]).show).toBeUndefined();
+		});
+
+		it('shows a dismissed message again only quietly, when nothing else is showing', () => {
+			const plan = planPush(push('7'), [], { marks: { 'a1:general': '7' } });
+			expect(plan.show?.options).toMatchObject({ tag: 'apron:a1:7', renotify: false, silent: true });
+			expect(plan.notified).toBeUndefined();
+			// With another notification showing, nothing.
+			expect(planPush(push('7'), [{ data: messageOptions('3', 'ops').data }], { marks: { 'a1:general': '7' } }).show).toBeUndefined();
+		});
+
+		it('drops a push for an account push isn\'t on for, and stands in a quiet notification when none shows', () => {
+			expect(planPush(push('8'), [], { enabled: ['b2'] }).show).toEqual(QUIET_PUSH);
+			expect(planPush(push('8'), [{ data: undefined }], { enabled: ['b2'] }).show).toBeUndefined();
+			// Unknown before IndexedDB has the list: shown.
+			expect(planPush(push('8'), []).show?.options.tag).toBe('apron:a1:8');
+		});
+
+		it('shows the quiet stand-in for a badge push or an unreadable one with nothing showing', () => {
+			expect(planPush(readPush({ push_id: 'a1', unread: 0 }), [], { enabled: ['a1'] })).toEqual({ badge: 0, show: QUIET_PUSH });
+			expect(planPush(readPush({ push_id: 'a1', unread: 0 }), [{ data: undefined }])).toEqual({ badge: 0 });
+			expect(planPush(undefined, []).show).toEqual(QUIET_PUSH);
+		});
+	});
+
+	it('routes a clicked page notification by its room when the tab that raised it is gone', () => {
+		expect(pageTarget({ tab: 't1', server: 'wss://a/', roomId: 'general', threadId: 'th1', pushId: 'a1', messageId: '5', group: 'a1:th1' })).toEqual({ push: true, roomId: 'th1', pushId: 'a1' });
+		expect(pageTarget({ tab: 't1', server: 'wss://a/', roomId: 'general' })).toEqual({ push: true, roomId: 'general' });
+		expect(pageTarget({ push: true, roomId: 'general' })).toBeUndefined();
 	});
 
 	it('replaces the page\'s older notification of a room with the newer message\'s, without a service worker', async () => {
@@ -152,10 +233,9 @@ describe('push notifications', () => {
 		});
 		vi.stubGlobal('Notification', Object.assign(Page, { permission: 'granted' }));
 		vi.stubGlobal('isSecureContext', true);
-		const data = { group: 'a1:general' };
-		await showNotification('ada · general', { tag: 'apron:a1:1', data }, () => undefined);
-		await showNotification('ada · general', { tag: 'apron:a1:2', data }, () => undefined);
-		await showNotification('ada · ops', { tag: 'apron:a1:3', data: { group: 'a1:ops' } }, () => undefined);
+		await showNotification('ada · general', messageOptions('1'), () => undefined);
+		await showNotification('ada · general', messageOptions('2'), () => undefined);
+		await showNotification('ada · ops', messageOptions('3', 'ops'), () => undefined);
 		expect(shown.map((entry) => entry.closed)).toEqual([true, false, false]);
 	});
 
