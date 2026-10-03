@@ -374,8 +374,17 @@ describe('rooms by request (cap rooms)', () => {
 			// Until resumed, from a `user` notification about you.
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada', mute: true } } });
 			expect(snapshot.mutedUntil).toBe(true);
-			// Absent: not paused.
+			// A `you` without `mute`, such as the Go server's status-only frames, leaves the pause as it is (§3.3).
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', status: 'idle' } } });
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada' } } });
+			expect(snapshot.mutedUntil).toBe(true);
+			// `0` ends it.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
+			expect(snapshot.mutedUntil).toBeUndefined();
+			// A new session (an `auth` result) without `mute` starts unpaused.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: true } } });
+			reconnect();
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada' }, ['token', 'guest']);
 			expect(snapshot.mutedUntil).toBeUndefined();
 			// A pause runs out here without a word from the server.
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada', mute: 60 } } });

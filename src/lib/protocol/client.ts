@@ -1409,7 +1409,7 @@ export class ChatClient {
 		this.emit();
 	}
 
-	/** Takes `mute` as the server echoes it in `you` (§4.11): seconds left, `true`, or absent when not paused. */
+	/** Takes `mute` as the server echoes it in `you` (§4.11): seconds left, `true`, or `0` when not paused. */
 	private applyMute(mute: JsonValue): void {
 		if (this.muteTimer) clearTimeout(this.muteTimer);
 		this.muteTimer = undefined;
@@ -2252,6 +2252,9 @@ export class ChatClient {
 			this.emit();
 			return false;
 		}
+		// A session starts unpaused unless the server says otherwise; an address added
+		// on this connection (`added`) is the same session.
+		if (!added && !Object.hasOwn(identity, 'mute')) this.applyMute(0);
 		this.setYou(identity as Identity);
 		if (signedIn && added && this.registeredSession) {
 			// Added to the account (§4.9, §4.10): another way back in, not how this session signed in,
@@ -2412,8 +2415,9 @@ export class ChatClient {
 		// A pending address addition belongs to the account that proposed it (§4.10): another identity needs a new code.
 		if (changed) this.addProposalConnection = undefined;
 		this.you = this.noteUser(identity);
-		// `mute` is the server's word on a pause (§4.11); absent, there is none.
-		this.applyMute(identity.mute);
+		// `mute` is the server's word on a pause (§4.11). Like every field of a current
+		// object (§3.3), a missing one leaves it unchanged; `0` ends it.
+		if (Object.hasOwn(identity, 'mute')) this.applyMute(identity.mute);
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
 	}
