@@ -358,6 +358,8 @@
 
 	$effect(() => {
 		const arrived = mentions.arrived;
+		// Paused (§4.11 `mute`): no client notifications, so no chime or title flash either.
+		if (isPaused(pausedUntil)) return;
 		// A notification chimes instead; `notifyMessage` chimes if it couldn't show one.
 		const playSound = !notificationsActive;
 		untrack(() => presence.noteMentions(arrived, playSound));

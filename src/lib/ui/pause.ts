@@ -21,15 +21,19 @@ function clock(at: Date): string {
 	return at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-/** The Pause menu: an hour, eight hours, until tomorrow morning, or until resumed. */
+/**
+ * The Pause menu: an hour, eight hours, until the next 9:00 (this morning
+ * before 9:00, else tomorrow), or until resumed.
+ */
 export function pauseChoices(now = new Date()): PauseChoice[] {
 	const hour = new Date(now.getTime() + 60 * 60 * 1000);
 	const eight = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-	const morning = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, MORNING_HOUR);
+	const today = now.getHours() < MORNING_HOUR;
+	const morning = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (today ? 0 : 1), MORNING_HOUR);
 	return [
 		{ value: '1h', label: 'For 1 hour', hint: `until ${clock(hour)}`, until: hour.getTime() },
 		{ value: '8h', label: 'For 8 hours', hint: `until ${clock(eight)}`, until: eight.getTime() },
-		{ value: 'tomorrow', label: 'Until tomorrow', hint: clock(morning), until: morning.getTime() },
+		{ value: 'morning', label: today ? 'Until this morning' : 'Until tomorrow', hint: clock(morning), until: morning.getTime() },
 		{ value: 'resume', label: 'Until I resume', until: true }
 	];
 }

@@ -340,6 +340,23 @@ describe('rooms by request (cap rooms)', () => {
 			expect(socket.sent.filter((frame) => frame.method === 'activity' && ('away' in (frame.params as object) || 'idle' in (frame.params as object)))).toEqual([]);
 		});
 
+		it('keeps a room\'s mute as the server echoes it on your room records', async () => {
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+			await socket.reply('auth', { you: { user_id: 'guest_1' } });
+			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', mute: true }, { room_id: 'random', title: 'Random', mute: 60 }, { room_id: 'ops', title: 'Ops' }] });
+			const muted = () => Object.fromEntries(snapshot.rooms.map((room) => [room.id, room.mutedUntil]));
+			expect(muted()).toEqual({ general: true, random: Date.now() + 60_000, ops: undefined });
+			// A record without `mute` leaves it; `0` ends it.
+			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '20', title: 'General!' }, { room_id: 'random', log_id: '21', title: 'Random', mute: 0 }] } });
+			expect(muted()).toEqual({ general: true, random: undefined, ops: undefined });
+			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '22', title: 'Ops', mute: 30 }] } });
+			vi.advanceTimersByTime(30_000);
+			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '23', title: 'Ops 2' }] } });
+			// Its pause has run out.
+			expect(muted().ops).toBeUndefined();
+		});
+
 		it('sends no status to a server without the capability, push or not', async () => {
 			socket.open();
 			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['activity'], push: { webpush: { key: 'BNcR' } } } });

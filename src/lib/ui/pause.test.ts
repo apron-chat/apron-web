@@ -14,6 +14,14 @@ describe('pausing notifications', () => {
 		expect(choices[3]).toEqual({ value: 'resume', label: 'Until I resume', until: true });
 	});
 
+	it('pauses until this morning at 9:00 when it is not 9:00 yet', () => {
+		const early = new Date(2026, 9, 2, 2, 15);
+		const morning = pauseChoices(early)[2];
+		expect(morning).toMatchObject({ label: 'Until this morning', hint: clock(9), until: new Date(2026, 9, 2, 9).getTime() });
+		expect(pausedUntilLabel(morning.until, early)).toBe(`until ${clock(9)}`);
+		expect(pauseChoices(new Date(2026, 9, 2, 9))[2]).toMatchObject({ label: 'Until tomorrow', until: new Date(2026, 9, 3, 9).getTime() });
+	});
+
 	it('sends mute as the seconds left, at least one, or true', () => {
 		expect(muteFor(now.getTime() + 3_600_000, now.getTime())).toBe(3600);
 		expect(muteFor(now.getTime() + 1500, now.getTime())).toBe(2);

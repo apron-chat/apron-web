@@ -189,6 +189,8 @@ export class ChatClient {
 	private idleSent: { connection: number; idle: boolean } | undefined;
 	/** Your notifications are paused until (§4.11 `mute`): epoch milliseconds, or `true`; `muteTimer` ends it. */
 	private mutedUntil: number | true | undefined;
+	/** Rooms whose notifications you paused (§4.11 room `mute`), as the server last echoed them: until then, or `true`. */
+	private readonly roomMutes = new Map<string, number | true>();
 	private muteTimer: ReturnType<typeof setTimeout> | undefined;
 	/**
 	 * What `push_register` sends on each connection (§4.7), for the account
@@ -541,6 +543,7 @@ export class ChatClient {
 					...(record ? { record } : {}),
 					...(thread ? { parentRoomId: record!.parent_room_id } : {}),
 					...(record?.private === true ? { private: true } : {}),
+					...(this.roomMutedUntil(room.id) !== undefined ? { mutedUntil: this.roomMutedUntil(room.id) } : {}),
 					...(this.store.firstRoomLogId(room.id) !== undefined ? { firstRecordLogId: this.store.firstRoomLogId(room.id) } : {}),
 					...(typeof record?.description === 'string' && record.description ? { description: record.description } : {}),
 					...(record && isJsonObject(record.ext) ? { ext: record.ext } : {}),
@@ -1423,6 +1426,21 @@ export class ChatClient {
 		}
 	}
 
+	/** A room's `mute` as the server echoes it to you (§4.11): absent leaves it, `0` ends it. */
+	private noteRoomMute(roomId: string, delivery: RoomDelivery): void {
+		if (!Object.hasOwn(delivery, 'mute')) return;
+		const mute = delivery.mute;
+		if (mute === true) this.roomMutes.set(roomId, true);
+		else if (typeof mute === 'number' && mute > 0) this.roomMutes.set(roomId, Date.now() + mute * 1000);
+		else this.roomMutes.delete(roomId);
+	}
+
+	/** When a room's pause ends, if it is paused now. */
+	private roomMutedUntil(roomId: string): number | true | undefined {
+		const until = this.roomMutes.get(roomId);
+		return until === true || (until !== undefined && until > Date.now()) ? until : undefined;
+	}
+
 	/** At the end of a pause, notifications resume here without a word from the server. */
 	private scheduleUnmute(): void {
 		const until = this.mutedUntil;
@@ -1626,6 +1644,7 @@ export class ChatClient {
 				const record = decoded.record;
 				this.observeLogId(decoded.delivery.latest_log_id);
 				this.noteMembers(record.room_id, decoded.delivery);
+				this.noteRoomMute(record.room_id, decoded.delivery);
 				if (joined && joinedSet) {
 					joinedIds.add(record.room_id);
 					this.showRoom(decoded, 'joined');
@@ -2546,12 +2565,14 @@ export class ChatClient {
 			if (!decoded) continue;
 			this.observeLogId(decoded.delivery.latest_log_id);
 			this.noteMembers(decoded.record.room_id, decoded.delivery);
+			this.noteRoomMute(decoded.record.room_id, decoded.delivery);
 			this.showRoom(decoded, 'joined');
 		}
 		for (const value of Array.isArray(params.updated) ? params.updated : []) {
 			const decoded = decodeRoom(value);
 			if (!decoded) continue;
 			this.observeLogId(decoded.delivery.latest_log_id);
+			this.noteRoomMute(decoded.record.room_id, decoded.delivery);
 			if (this.rooms.has(decoded.record.room_id)) {
 				this.showRoom(decoded);
 			} else {
@@ -3128,6 +3149,7 @@ export class ChatClient {
 		this.threadDirectory.clear();
 		this.idleSent = undefined;
 		this.applyMute(undefined);
+		this.roomMutes.clear();
 		this.memberChangesUnsupported = false;
 	}
 

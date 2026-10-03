@@ -9,12 +9,13 @@ function message(id: string, room: string, from: string, extra: Partial<MessageR
 	return { message_id: id, log_id: id, room_id: room, from: { user_id: from }, body: { text: 'hi' }, ...extra };
 }
 
-function room(id: string, options: { joined?: boolean; private?: boolean; parent?: string; messages?: MessageRecord[] } = {}): RoomSnapshot {
+function room(id: string, options: { joined?: boolean; private?: boolean; parent?: string; messages?: MessageRecord[]; muted?: boolean } = {}): RoomSnapshot {
 	const events = Object.fromEntries((options.messages ?? []).map((event) => [event.message_id, event]));
 	return {
 		id, title: id, joined: options.joined ?? true,
 		...(options.private ? { private: true } : {}),
 		...(options.parent ? { parentRoomId: options.parent } : {}),
+		...(options.muted ? { mutedUntil: true } : {}),
 		timeline: { order: Object.keys(events), events }
 	} as unknown as RoomSnapshot;
 }
@@ -25,7 +26,10 @@ describe('what to notify about', () => {
 		room('general', { messages: [mine, message('11', 'general', 'bob')] }),
 		room('secret', { private: true }),
 		room('t1', { parent: 'secret' }),
-		room('lobby', { joined: false })
+		room('lobby', { joined: false }),
+		room('t2', { parent: 'general', joined: false }),
+		room('quiet', { private: true, muted: true }),
+		room('t3', { parent: 'quiet' })
 	];
 	const judge = (event: MessageRecord, scopes: string[], mentioned = false) => inNotifyScopes(event, scopes, { me: ada, mentioned, rooms });
 
@@ -60,6 +64,14 @@ describe('what to notify about', () => {
 	it('notifies about every message in joined rooms with joined checked', () => {
 		expect(judge(message('28', 'general', 'bob'), ['joined'])).toBe(true);
 		expect(judge(message('29', 'lobby', 'bob'), ['joined'])).toBe(false);
+		// A thread of a joined room counts as joined, like `private` follows its room.
+		expect(judge(message('29b', 't2', 'bob'), ['joined'])).toBe(true);
+	});
+
+	it('notifies only about mentions in a room you paused, and its threads', () => {
+		expect(judge(message('40', 'quiet', 'bob'), ['joined', 'private'])).toBe(false);
+		expect(judge(message('41', 't3', 'bob', { reply_to: { message_id: '10' } }), ['joined', 'replies'])).toBe(false);
+		expect(judge(message('42', 'quiet', 'bob'), ['mentions', 'joined'], true)).toBe(true);
 	});
 
 	it('never notifies about your own or deleted messages', () => {

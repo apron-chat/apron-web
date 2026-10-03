@@ -46,13 +46,16 @@ export interface NotifyContext {
  * Whether a message from someone else is in a checked scope, judged here:
  * `mentions`, it mentions you; `replies`, it replies to one of your messages
  * that is loaded here; `private`, its room (or a thread's room) is private;
- * `joined`, its room is joined.
+ * `joined`, its room (or a thread's room) is joined. In a room you paused,
+ * only `mentions` counts.
  */
 export function inNotifyScopes(event: MessageRecord, scopes: readonly string[], context: NotifyContext): boolean {
 	if (!context.me || isOwn(event, context.me) || event.deleted) return false;
 	const room = context.rooms.find((candidate) => candidate.id === event.room_id);
 	const parent = room?.parentRoomId === undefined ? undefined : context.rooms.find((candidate) => candidate.id === room.parentRoomId);
-	return scopes.some((scope) => {
+	// In a room you paused (§4.11 room `mute`), or a thread of one, only mentions notify.
+	const muted = room?.mutedUntil !== undefined || parent?.mutedUntil !== undefined;
+	return (muted ? scopes.filter((scope) => scope === 'mentions') : scopes).some((scope) => {
 		switch (scope) {
 			case 'mentions':
 				return context.mentioned;
@@ -65,7 +68,7 @@ export function inNotifyScopes(event: MessageRecord, scopes: readonly string[], 
 			case 'private':
 				return room?.private === true || parent?.private === true;
 			case 'joined':
-				return room?.joined === true;
+				return room?.joined === true || parent?.joined === true;
 			default:
 				return false;
 		}

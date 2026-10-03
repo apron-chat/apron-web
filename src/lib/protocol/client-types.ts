@@ -66,6 +66,8 @@ export interface RoomSnapshot {
 	 * Fixed at creation; absent means an ordinary room.
 	 */
 	private?: boolean;
+	/** Your notifications from this room are paused until then (§4.11 `mute`): epoch milliseconds, or `true`. Absent when not. */
+	mutedUntil?: number | true;
 	/** What the room is about (§3.4), Markdown by convention; absent when empty. */
 	description?: string;
 	/**
