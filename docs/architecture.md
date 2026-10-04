@@ -29,7 +29,15 @@ state and behavior — `ConnectScreen`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
-design system with the next `npm run design:bundle`. `PreferencesDialog` renders
+design system with the next `npm run design:bundle`. A user's `status` (§4.11)
+is the design system's `StatusDot` on their `Avatar`: online a dot, idle a
+crescent, dnd a barred dot and offline (or an unknown value) a hollow ring,
+cut out of the avatar, with nothing where the server sends no status. Its
+colors are the `--presence-*` tokens. `directory.status` reads it from the kept
+user object only, never a recorded `from`, and `user-status.ts` gives your own
+(dnd at once while paused, its tooltip saying until when) and sorts the member
+list by it (online, idle, dnd, offline, then none), where offline members are
+dimmed. Messages show no status: it is about now, and they are history. `PreferencesDialog` renders
 the design system's `CheckList` (what to notify about), `Callout` (installing
 for push) and `MenuButton` (Pause…, in `PauseNotifications`) as they are, and
 `pause.ts` words and times the pause. Its status notes are read through one

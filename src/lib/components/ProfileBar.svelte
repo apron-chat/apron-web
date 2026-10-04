@@ -12,6 +12,8 @@
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
+	import { PRESENCE_LABELS } from '$lib/design/components/util';
+	import { ownStatus, ownStatusLabel } from '$lib/ui/user-status';
 	import Avatar from './Avatar.svelte';
 	import PreferencesDialog from './PreferencesDialog.svelte';
 	import TypingDots from './TypingDots.svelte';
@@ -67,6 +69,10 @@
 	/** While notifications are paused, when that ends in words ("until 14:30"). */
 	let paused = $derived(pause?.until !== undefined ? pausedUntilLabel(pause.until) : undefined);
 	let avatar = $derived(directory.avatar(you));
+	/** Your real `status` (§4.11): dnd at once while paused, else what `you` last said. */
+	let presence = $derived(ownStatus(you?.status, pause?.until));
+	/** Its tooltip, saying when a pause ends. */
+	let presenceLabel = $derived(ownStatusLabel(presence, pause?.until));
 	/** Avatars are uploaded with a `/avatar` command (§4.6.6), which needs capabilities `command` and `embed:upload`. */
 	let canUploadAvatar = $derived(session.snapshot.capabilities.command && session.snapshot.capabilities['embed:upload']);
 	let snapshot = $derived(session.snapshot);
@@ -374,8 +380,8 @@
 		{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 		onclosed={() => preferencesTrigger?.focus()}
 	/>
-	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || 'not signed in'}. Edit`} onclick={toggle}>
-		<Avatar name={you?.name || you?.user_id || '?'} id={you?.user_id} src={avatar} />
+	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || 'not signed in'}${presence ? `, ${PRESENCE_LABELS[presence].toLowerCase()}` : ''}. Edit`} onclick={toggle}>
+		<Avatar name={you?.name || you?.user_id || '?'} id={you?.user_id} src={avatar} status={presence} statusLabel={presenceLabel} />
 		<span class="ap-profile-text">
 			<span class="ap-profile-name">{you?.name || you?.user_id || 'Not signed in'}</span>
 			<span class="ap-profile-sub">on {backendLabel}{#if wayBack} · add a sign-in{/if}</span>

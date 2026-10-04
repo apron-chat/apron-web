@@ -1,0 +1,77 @@
+// @vitest-environment jsdom
+import { flushSync, mount, unmount } from 'svelte';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { ClientSnapshot, RoomSnapshot } from '$lib/protocol/client';
+import type { Identity } from '$lib/protocol/types';
+import { directory } from '$lib/ui/directory.svelte';
+import { blankSnapshot, type SessionView } from '$lib/ui/session.svelte';
+import MemberListSidebar from './MemberListSidebar.svelte';
+
+let instance: ReturnType<typeof mount> | undefined;
+
+afterEach(() => {
+	if (instance) unmount(instance);
+	instance = undefined;
+	document.body.innerHTML = '';
+	directory.forget();
+});
+
+const ada: Identity = { user_id: 'ada', name: 'Ada', status: 'online' };
+
+/** The member list of a room whose members carry these statuses, signed in as Ada. */
+function render(users: Identity[], fields: Partial<ClientSnapshot> = {}) {
+	const snapshot: ClientSnapshot = {
+		...blankSnapshot(),
+		authenticated: true,
+		you: ada,
+		users: Object.fromEntries(users.map((user) => [user.user_id, user])),
+		recordedUsers: {},
+		userAliases: {},
+		...fields
+	};
+	directory.apply(snapshot, undefined);
+	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })) } as unknown as RoomSnapshot;
+	const session = { snapshot, canManageRooms: true } as unknown as SessionView;
+	instance = mount(MemberListSidebar, { target: document.body, props: { client: undefined, session, room, open: true, canChange: false } });
+	flushSync();
+	return [...document.querySelectorAll<HTMLLIElement>('li.member')];
+}
+
+describe('MemberListSidebar', () => {
+	it('lists members online, idle, dnd, offline, then those with no status, by name within each', () => {
+		const rows = render([
+			{ user_id: 'zed', name: 'Zed' },
+			{ user_id: 'bo', name: 'Bo', status: 'offline' },
+			{ user_id: 'cy', name: 'Cy', status: 'dnd' },
+			{ user_id: 'di', name: 'Di', status: 'idle' },
+			{ user_id: 'eve', name: 'Eve', status: 'away' },
+			{ user_id: 'fay', name: 'Fay', status: 'online' },
+			{ user_id: 'al', name: 'Al' },
+			ada
+		]);
+		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'fay', 'di', 'cy', 'bo', 'eve', 'al', 'zed']);
+		expect(rows.map((row) => row.dataset.status ?? '')).toEqual(['online', 'online', 'idle', 'dnd', 'offline', 'offline', '', '']);
+	});
+
+	it('dims offline members only, with a ring; no status shows no dot and is not dimmed', () => {
+		const rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'offline' }, { user_id: 'cy', name: 'Cy' }]);
+		const [me, bo, cy] = rows;
+		expect(bo.classList.contains('offline')).toBe(true);
+		expect(bo.querySelector('.ap-presence-offline')).not.toBeNull();
+		expect(bo.querySelector('.ap-sr')?.textContent).toBe(', offline');
+		expect(bo.querySelector('button')?.title).toBe('@bo · Offline');
+		expect(cy.classList.contains('offline')).toBe(false);
+		expect(cy.querySelector('.ap-presence')).toBeNull();
+		expect(cy.querySelector('.ap-sr')).toBeNull();
+		expect(cy.querySelector('button')?.title).toBe('@cy');
+		expect(me.classList.contains('offline')).toBe(false);
+		expect(me.textContent).toContain('(you)');
+	});
+
+	it('shows you as do not disturb at once while your notifications are paused', () => {
+		const rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'online' }], { mutedUntil: true });
+		expect(rows.map((row) => row.dataset.user)).toEqual(['bo', 'ada']);
+		expect(rows[1].dataset.status).toBe('dnd');
+		expect(rows[1].querySelector('.ap-presence-dnd')).not.toBeNull();
+	});
+});

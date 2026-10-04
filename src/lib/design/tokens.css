@@ -25,6 +25,11 @@
 	--ok: #62c287;
 	--term-magenta: #d99be8;
 	--term-cyan: #6cc9d1;
+	/* A user's status (§4.11) on a StatusDot: the status colors, so each theme carries its own. */
+	--presence-online: var(--ok);
+	--presence-idle: var(--warn);
+	--presence-dnd: var(--danger);
+	--presence-offline: var(--line-strong);
 	--shadow-popover: 0 8px 24px rgba(4, 4, 10, 0.6);
 	--shadow-float: 0 2px 8px rgba(4, 4, 10, 0.55);
 
@@ -87,6 +92,8 @@
 		--ok: #1c6c3d;
 		--term-magenta: #8b3199;
 		--term-cyan: #0e6a73;
+		/* --warn is too brown for a dot this small: a brighter amber, still 3:1 on every light ground. */
+		--presence-idle: #b26f00;
 		--shadow-popover: 0 8px 24px rgba(28, 31, 51, 0.12);
 		--shadow-float: 0 2px 8px rgba(28, 31, 51, 0.1);
 	}
@@ -118,6 +125,7 @@
 	--ok: #1c6c3d;
 	--term-magenta: #8b3199;
 	--term-cyan: #0e6a73;
+	--presence-idle: #b26f00;
 	--shadow-popover: 0 8px 24px rgba(28, 31, 51, 0.12);
 	--shadow-float: 0 2px 8px rgba(28, 31, 51, 0.1);
 }

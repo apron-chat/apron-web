@@ -81,3 +81,6 @@ export interface BackendEntry {
 
 /** waiting: `retry_after` · denied: don't reconnect until the user acts (§1.1) · reconnecting: also when a `pong` stops coming (§1) */
 export type ConnectionState = 'connected' | 'connecting' | 'reconnecting' | 'waiting' | 'offline' | 'denied' | 'error';
+
+/** A user's `status` (§4.11): here now, not looking (still notified), muted (not notified), or gone or invisible. */
+export type Presence = 'online' | 'idle' | 'dnd' | 'offline';

@@ -2,22 +2,36 @@
 	import { safeAvatar } from '$lib/protocol/embeds';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { avatarHue, initials } from '$lib/ui/messages';
+	import StatusDot from '$lib/design/components/StatusDot.svelte';
+	import { presence } from '$lib/design/components/util';
 
 	/**
 	 * An image when the user object carries a usable avatar (§4.6.6: `https:`,
 	 * small image data URLs, or files the chat server hosts), else initials on a
 	 * tint whose hue comes from the `user_id`, so people are told apart at a
 	 * glance. Without an ID the placeholder keeps the design system's denim.
+	 * With a `status` (§4.11), a StatusDot sits on its corner (offline a
+	 * hollow ring); it is decorative, with `statusLabel` as its tooltip, so
+	 * whoever shows the name says the status.
 	 */
-	let { name, id, src, size = 'md' }: { name: string; id?: string; src?: string; size?: 'sm' | 'md' | 'lg' } = $props();
+	let { name, id, src, size = 'md', status, statusLabel }: { name: string; id?: string; src?: string; size?: 'sm' | 'md' | 'lg'; status?: string; statusLabel?: string } = $props();
+	let dot = $derived(presence(status) !== undefined);
 	let url = $derived(safeAvatar(src, directory.origin));
 	let hue = $derived(id ? avatarHue(id) : undefined);
 </script>
 
-{#if url}
-	<img class="ap-avatar ap-avatar-{size}" src={url} alt="" />
+{#snippet face()}
+	{#if url}
+		<img class="ap-avatar ap-avatar-{size}" src={url} alt="" />
+	{:else}
+		<span class="ap-avatar ap-avatar-{size}" class:hued={hue !== undefined} style:--avatar-hue={hue} aria-hidden="true">{initials(name || '?')}</span>
+	{/if}
+{/snippet}
+
+{#if dot}
+	<span class="ap-avatar-status ap-avatar-status-{size}">{@render face()}<StatusDot {status} {size} label={statusLabel} decorative /></span>
 {:else}
-	<span class="ap-avatar ap-avatar-{size}" class:hued={hue !== undefined} style:--avatar-hue={hue} aria-hidden="true">{initials(name || '?')}</span>
+	{@render face()}
 {/if}
 
 <style>
