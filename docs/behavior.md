@@ -49,13 +49,12 @@ unfocused for 30 seconds, and `{idle: false}` as soon as it is back. Each
 connection reports the current state at once as the server frame arrives,
 before `auth`: a tab already hidden or unfocused then is idle from the start,
 without the wait. Only `{idle: false}` ends idle; a message sent from the tab
-doesn't. Others never see `idle` itself: the server folds it, with your
-pause and push registrations, into the `status` they see (§4.11): `dnd`
-while paused with a tab open, else `online` while a tab is attended, `idle`
-while one is open but unattended or a push would reach you, and `offline`
-otherwise (or while invisible). A
-connection's first `idle` also gets it the `status` of the connected users
-it shares a room with. A server without `status` gets none of this.
+doesn't. Others never see `idle` itself: while your status is `online`, the
+server folds it into the `status` they see (§4.11): `online` while a
+connection is attended, `idle` while you are connected but none is, and
+`offline` with no connections. After `auth` the server sends the `status` of
+the connected users this one shares a room with. A server without `status`
+gets none of this.
 Explicit server URLs keep their path: a bare hostname connects at `/`, while
 servers that require `/ws` should be entered with that suffix.
 
@@ -136,18 +135,23 @@ narrow screens it overlays the conversation, starts closed, and hides with
 the conversation on the phone's rooms pane. It shows no
 typing or connection status. Where the server sends a `status` (§4.11), each
 member's avatar carries a dot cut into its corner: online a filled dot, idle
-a crescent, do not disturb a barred dot, and offline (or any unknown value) a
-hollow ring; the row's tooltip and screen-reader text say it in words. A
-member with no status (none sent, or an empty one, which clears it) has no
+a crescent, do not disturb a barred dot, and offline a hollow ring; the
+row's tooltip and screen-reader text say it in words. A value the client
+doesn't know is unknown, not offline: a placeholder, a ring broken into
+dashes, whose tooltip says "Unknown status: brb", and the profile card shows
+the literal value. A member with no status (none sent, or `""`, none) has no
 dot and isn't taken for offline. The list sorts online, idle, do not
-disturb, offline, then those with no status, by name within each, and dims
-offline members. Your own row and the profile bar show your status from
-`you`, and do not disturb at once while your notifications are paused, but
-only on a server that sends `status`. Statuses are kept across a reconnect
-of 60 seconds or less, measured from the drop to the next `auth`; after a
-longer one the client drops the others' kept statuses, so they show no dot
-until the server sends them again, as it does for connected users once the
-new connection reports `idle`.
+disturb, unknown, offline, then those with no status, by name within each,
+and dims offline members. Your own row, the profile card and the profile bar
+show the status you chose, from `you`: online, do not disturb, invisible (the
+hollow ring others see, its tooltip "Invisible · others see you as offline"),
+or no dot for none. Others' view of you (`offline` while you are invisible,
+`idle`) arrives in `new` user objects and room `members`, and never replaces
+your own. Pausing notifications doesn't change your status: a pause is
+private. Statuses are kept across a reconnect of 60 seconds or less,
+measured from the drop to the next `auth`; after a longer one the client
+drops the others' kept statuses, so they show no dot until the server sends
+them again, as it does for connected users after `auth`.
 
 Mentions follow the `@user_id` convention ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-mention-text)). Typing `@` in the
 composer opens the mention picker over the room's members (from the room's
@@ -207,31 +211,47 @@ and for a server's guests together (their `user_id`s change with each
 connection), and applies in other tabs. The earlier device-wide "Everything"
 carries over as every scope.
 
-On a server with the `status` capability, a signed-in account (not a guest)
-gets **Pause notifications** at the top of the section. **Pause…** opens a
-menu: For 1 hour, For 8 hours, Until tomorrow (the next 9:00; "Until this
-morning" before 9:00) and Until I resume, each showing when it would end. The
-menu opens from the keyboard with the arrow keys too. Choosing one sends `status` `{mute}`
-with the seconds until then, or `true`, and **Resume** sends `{mute: 0}`.
-Neither changes anything here by itself: the server may ignore or shorten a
-mute, and echoes what it applied. The server's `you.mute` (in `auth` and `me`
-results and `user` notifications about you: seconds left, `true`, or `0` when
-not paused) is the word on it, so the row shows the pause the server kept, a
-shorter one or none, and focus moves to **Resume** (or back to **Pause…**)
-once the echo arrives. A `you`
-without `mute` leaves the pause as it is (§3.3); an `auth` result without it
-starts the session unpaused. The client works out when the pause ends from
-it as it arrives, and resumes on its own then. While paused, the row reads
-"Paused until 14:30" (or "until tomorrow 9:00", "until you resume"), the
-profile bar's gear carries a small bell-off badge, and nothing notifies here:
-no desktop notifications, chime or title flash. The server sends no pushes.
+On a server with the `status` capability, the section starts with
+**Status**, your presence status as others see it (§4.11). Its menu, with a
+dot before each choice and a check on the current one, offers Online
+(automatic: others see online, idle or offline as you come and go), Do not
+disturb, Invisible (others see you offline) and None (no status). Choosing
+one sends `me` `{status}` (`""` for None); there are no durations. Do not
+disturb and Invisible are optional, so a server may answer another value:
+`you` in the result is the status in effect, the row shows it, and a callout
+says what the server answered ("This server doesn't offer Invisible. Your
+status is None."); for the rest of the session the menu stops offering a
+value the server answered something else for. A value the client doesn't know
+(one the server set) shows as itself, quoted, with nothing checked. Do not
+disturb silences this page as a pause does: no desktop notifications, chime
+or title flash, and the server sends no pushes with messages.
 
-A room's `mute`, echoed on your room records, pauses that room and its
-threads: there, only mentions notify. `room_list` entries (`joined` and
-`not_joined` alike) and `room_update`
-`joined` records always say it (missing is `0`); on other records a missing
-`mute` leaves it, and `0` ends it. The client
-has no control for it yet.
+Below it, a signed-in account (not a guest) gets **Pause notifications**, a
+private mute nobody else sees. **Pause…** opens a menu: For 1 hour, For 8
+hours, Until tomorrow (the next 9:00; "Until this morning" before 9:00) and
+Until I resume, each showing when it would end. The menu opens from the
+keyboard with the arrow keys too. Choosing one sends `status` `{mute}` with
+the seconds until then, or `true`, and **Resume** sends `{mute: false}`.
+Neither changes anything here by itself: the server sends each change to
+your mutes back to all your connections as a `status` notification
+(`{mute}` with seconds left, `true` or `false`), and the client takes that
+as its own setting. So the row shows the pause the server kept, a shorter
+one or none, and focus moves to **Resume** (or back to **Pause…**) once it
+arrives; a pause set in another tab or on another device shows here too.
+Each `auth` starts unmuted, and the server then sends every mute in effect;
+any it doesn't send is off. A lost connection keeps the pause until then,
+so it doesn't flicker off while reconnecting. The client works out when the
+pause ends as it arrives, and resumes on its own then. While paused, the row
+reads "Paused until 14:30" (or "until tomorrow 9:00", "until you resume"),
+the profile bar's gear carries a small bell-off badge, and nothing notifies
+here: no desktop notifications, chime or title flash, and mentions that
+arrive meanwhile don't alert once it ends. The server sends no pushes with
+messages.
+
+A `status` with a `room_id` mutes that room and its threads, mentions
+included: they don't notify, chime or flash the title. It applies whether or
+not the room is joined, and `false` (or `0`) ends it. The client has no
+control for it yet, but follows mutes set elsewhere.
 
 Below it, **Desktop notifications** alerts while Apron is open but hidden or
 unfocused; turning them on asks the browser's permission, and **Send a test

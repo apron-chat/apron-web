@@ -31,18 +31,23 @@ state and behavior — `ConnectScreen`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
 design system with the next `npm run design:bundle`. A user's `status` (§4.11)
 is the design system's `StatusDot` on their `Avatar`: online a dot, idle a
-crescent, dnd a barred dot and offline (or an unknown value) a hollow ring,
-cut out of the avatar, with nothing where the server sends no status or an
-empty one (cleared, §3.3). Its
-colors are the `--presence-*` tokens. `directory.status` reads it from the kept
-user object only, never a recorded `from`, and `user-status.ts` gives your own
-(dnd at once while paused, its tooltip saying until when, only where `you`
-carries a `status`) and sorts the member
-list by it (online, idle, dnd, offline, then none), where offline members are
-dimmed. Messages show no status: it is about now, and they are history. `PreferencesDialog` renders
-the design system's `CheckList` (what to notify about), `Callout` (installing
-for push) and `MenuButton` (Pause…, in `PauseNotifications`) as they are, and
-`pause.ts` words and times the pause. Its status notes are read through one
+crescent, dnd a barred dot, offline a hollow ring, your own `invisible` the
+same ring with its own words, and any other value `unknown`, a dashed ring
+whose words carry the value (`presenceLabel`), cut out of the avatar, with
+nothing where the server sends no status or `""`. Its colors are the
+`--presence-*` tokens. `directory.status` reads it from the kept user object
+only, never a recorded `from`; for you that is the status you chose, since
+the client keeps `status` only from a `you`. `user-status.ts` lists the
+choices, words your own (`ownStatusLabel`), decides when the page is silent
+(`pageSilenced`: paused, or `dnd`) and sorts the member list (online, idle,
+dnd, unknown, offline, then none), where offline members are dimmed.
+`ProfileCard` shows an unknown value literally. Messages show no status: it
+is about now, and they are history. `PreferencesDialog` renders the design
+system's `CheckList` (what to notify about), `Callout` (installing for push,
+and what the server answered for a status) and `MenuButton` (Status, in
+`StatusPicker`, as a picker with `selected` and a `lead` dot per choice; and
+Pause…, in `PauseNotifications`) as they are, and `pause.ts` words and times
+the pause. Its status notes are read through one
 live region, and switches and checkboxes that can't change stay focusable with
 `aria-disabled`, referring to the note that says why.
 
@@ -135,10 +140,14 @@ the usual reconnect. With `room_leave: false` the client offers no Leave, and
 with `read_cursors: false` it moves your read cursor locally without sending it.
 `setAway(away)` reports attendance with `status` `{idle}` (§4.11, capability
 `status`): idle only after `IDLE_AFTER_MS`, attended at once, and the current
-state as each connection's server frame arrives. `setMute(mute)` sends
-`status` `{mute}` and changes nothing else: the server MAY ignore or shorten
-it, and only `you.mute` from the server (its echo, `0` included) sets the
-snapshot's `mutedUntil`, which a timer clears when the pause ends. Kept
+state as each connection's server frame arrives. `setStatus(status)` sends
+`me` `{status}` and resolves with the `you` the server kept, whose `status`
+is the one in effect. `setMute(mute)` sends `status` `{mute}` and changes
+nothing else: only a `status` notification from the server (`handleStatus`)
+sets the snapshot's `mutedUntil`, or a room's with its `room_id`, which
+timers clear when they run out. Each `auth` (but an address or passkey added
+on the same connection) resets them, and the `status` frames after it bring
+back those in effect; a lost connection keeps them until then. Kept
 users' `status` values outlast a reconnect of up to `STATUS_KEEP_MS` (60
 seconds, from the drop to the next `auth`, timed by the client's `now`
 clock); after a longer one `dropStaleStatuses` removes all but your own,
