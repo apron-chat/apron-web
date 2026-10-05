@@ -73,6 +73,7 @@ import {
 	RETRY_AFTER_MAX_MS,
 	ROOM_LIST_REUSE_MS,
 	STABLE_CONNECTION_MS,
+	STATUS_KEEP_MS,
 	THREAD_PAGE_SIZE,
 	TYPING_REFRESH_MS,
 	TYPING_TIMEOUT_S,
@@ -332,7 +333,7 @@ export class ChatClient {
 	private connectionProbe?: AbortController;
 	private disconnectedAt?: number;
 
-	constructor(private serverUrl: string, displayName = '', webSocketFactory: WebSocketFactory = (url) => new WebSocket(url)) {
+	constructor(private serverUrl: string, displayName = '', webSocketFactory: WebSocketFactory = (url) => new WebSocket(url), private readonly now: () => number = () => Date.now()) {
 		this.webSocketFactory = webSocketFactory;
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
@@ -340,7 +341,7 @@ export class ChatClient {
 	}
 
 	static fromOptions(options: ChatClientOptions): ChatClient {
-		const client = new ChatClient(options.serverUrl, options.displayName, options.webSocketFactory);
+		const client = new ChatClient(options.serverUrl, options.displayName, options.webSocketFactory, options.now);
 		if (options.onChange) client.subscribe(options.onChange);
 		return client;
 	}
@@ -500,7 +501,7 @@ export class ChatClient {
 			this.clearTransientRequests();
 			if (socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'retrying');
 		}
-		this.disconnectedAt ??= Date.now();
+		this.disconnectedAt ??= this.now();
 		this.error = undefined;
 		this.connectNow();
 	}
@@ -2089,7 +2090,7 @@ export class ChatClient {
 			// disconnectedAt.
 			this.suspendProtocolView('Connection closed');
 			if (this.running) {
-				this.disconnectedAt ??= Date.now();
+				this.disconnectedAt ??= this.now();
 				this.status = 'reconnecting';
 				if (opened) this.scheduleReconnect();
 				else void this.diagnoseConnection(id);
@@ -2382,6 +2383,7 @@ export class ChatClient {
 			this.stableTimer = undefined;
 			if (this.socket === stableSocket && this.authenticated) this.reconnectAttempt = 0;
 		}, STABLE_CONNECTION_MS);
+		this.dropStaleStatuses();
 		this.disconnectedAt = undefined;
 		// A reconnect keeps each room's records, and a server with capability `history`
 		// fills the gap through recovery; only a session-only scrollback (§4
@@ -2552,6 +2554,22 @@ export class ChatClient {
 	 * left alone. Returns the kept object, which is replaced only when it
 	 * changes.
 	 */
+	/**
+	 * Back after a disconnection longer than `STATUS_KEEP_MS` (§4.11): the
+	 * other users' kept `status` values are stale, so they are dropped, and
+	 * those users show no status (not `offline`) until the server sends it
+	 * again, as it does for connected users once this connection sends `idle`.
+	 * Your own comes from this `auth`'s `you`. A shorter one keeps them.
+	 */
+	private dropStaleStatuses(): void {
+		if (this.disconnectedAt === undefined || this.now() - this.disconnectedAt <= STATUS_KEEP_MS) return;
+		for (const [userId, user] of this.users) {
+			if (userId === this.you?.user_id || !Object.hasOwn(user, 'status')) continue;
+			const { status: _dropped, ...rest } = user;
+			this.users.set(userId, rest);
+		}
+	}
+
 	private noteUser(identity: Identity): Identity {
 		const current = this.users.get(identity.user_id);
 		const merged = mergeIdentity(current, identity);
@@ -3385,7 +3403,7 @@ export class ChatClient {
 	private handleConnectionFailure(id: number, message: string): void {
 		if (id !== this.connectionId) return;
 		this.error = message;
-		if (this.running) this.disconnectedAt ??= Date.now();
+		if (this.running) this.disconnectedAt ??= this.now();
 		this.status = this.running ? 'reconnecting' : 'offline';
 		if (this.running) this.scheduleReconnect();
 		this.emit();

@@ -160,6 +160,13 @@ export const MAX_UNANSWERED_PINGS = 1;
  * auth be reconnected to every half second, each time paying for a new session.
  */
 export const STABLE_CONNECTION_MS = 30_000;
+/**
+ * How long a reconnect may take and keep other users' kept `status` values
+ * (§4.11): from when the previous connection dropped to when the new one is
+ * authenticated. Longer, they are dropped, so those users show no status
+ * until the server sends it again.
+ */
+export const STATUS_KEEP_MS = 60_000;
 /** How long a `room_list` result is reused for the same parent unless the caller asks for fresher. */
 export const ROOM_LIST_REUSE_MS = 10_000;
 const MAX_HISTORY_BUFFER_ENTRIES = 1_000;

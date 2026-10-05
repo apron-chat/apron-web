@@ -74,4 +74,21 @@ describe('MemberListSidebar', () => {
 		expect(rows[1].dataset.status).toBe('dnd');
 		expect(rows[1].querySelector('.ap-presence-dnd')).not.toBeNull();
 	});
+
+	it('shows no dot for a cleared status, or one dropped after a long reconnect, and the dot again once the server sends it', () => {
+		const statuses = (rows: HTMLLIElement[]) => rows.map((row) => [row.dataset.user, row.dataset.status ?? '', row.querySelector('.ap-presence') !== null]);
+		const before = render([ada, { user_id: 'bo', name: 'Bo', status: 'idle' }, { user_id: 'cy', name: 'Cy', status: '' }]);
+		expect(statuses(before)).toEqual([['ada', 'online', true], ['bo', 'idle', true], ['cy', '', false]]);
+		// Back after more than 60 seconds: the client dropped Bo's kept status (§4.11). Unknown, not offline.
+		const snapshotWith = (bo: Identity) => ({ ...blankSnapshot(), authenticated: true, you: ada, users: { ada, bo, cy: { user_id: 'cy', name: 'Cy' } }, recordedUsers: {}, userAliases: {} });
+		directory.apply(snapshotWith({ user_id: 'bo', name: 'Bo' }), undefined);
+		flushSync();
+		const dropped = [...document.querySelectorAll<HTMLLIElement>('li.member')];
+		expect(statuses(dropped)).toEqual([['ada', 'online', true], ['bo', '', false], ['cy', '', false]]);
+		expect(dropped[1].classList.contains('offline')).toBe(false);
+		// The server sends it again once this connection sends `idle`.
+		directory.apply(snapshotWith({ user_id: 'bo', name: 'Bo', status: 'online' }), undefined);
+		flushSync();
+		expect(statuses([...document.querySelectorAll<HTMLLIElement>('li.member')])).toEqual([['ada', 'online', true], ['bo', 'online', true], ['cy', '', false]]);
+	});
 });

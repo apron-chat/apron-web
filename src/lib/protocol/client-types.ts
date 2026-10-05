@@ -367,4 +367,6 @@ export interface ChatClientOptions {
 	displayName?: string;
 	webSocketFactory?: WebSocketFactory;
 	onChange?: (snapshot: ClientSnapshot) => void;
+	/** The clock that times disconnections (epoch milliseconds); `Date.now` by default. */
+	now?: () => number;
 }
