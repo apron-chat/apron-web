@@ -8,6 +8,7 @@
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
 	import { sidebarRooms, type ThreadEntry } from '$lib/ui/timeline';
+	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import CreateRoomDialog from './CreateRoomDialog.svelte';
 	import ProfileBar from './ProfileBar.svelte';
 
@@ -48,7 +49,7 @@
 		onjoin: (roomId: string) => void;
 		/** A room created here, asked for as private or not; it opens once its `room_update` arrives. */
 		oncreateroom: (roomId: string, options: { private: boolean }) => void;
-		onsignout: () => void;
+		onsignout: SignOutHandler;
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}

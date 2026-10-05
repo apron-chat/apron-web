@@ -5,7 +5,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { initials } from '$lib/ui/messages';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import type { Scheme } from '$lib/ui/sign-in';
+	import type { Scheme, SignOutHandler } from '$lib/ui/sign-in';
 	import type { RecentServer } from '$lib/ui/storage';
 	import SignIn from './SignIn.svelte';
 
@@ -30,7 +30,7 @@
 		onconnected: () => void;
 		oncancel: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
-		onsignout: () => void;
+		onsignout: SignOutHandler;
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), passkeyUnavailable, recentServers, canCancel,

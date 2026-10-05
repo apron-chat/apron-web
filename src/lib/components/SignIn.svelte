@@ -11,7 +11,7 @@
 	import { offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
 	import { codeStillFor, type SentCode } from '$lib/ui/email-link';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import { passkeyChoice, passkeyMode, signInHint, signInView, type PasskeyMode, type Scheme } from '$lib/ui/sign-in';
+	import { passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, type PasskeyMode, type SignOutHandler, type Scheme } from '$lib/ui/sign-in';
 	import { saveDisplayName, saveServerUrl } from '$lib/ui/storage';
 	import TypingDots from './TypingDots.svelte';
 
@@ -51,7 +51,7 @@
 		onconnected: () => void;
 		oncancel: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
-		onsignout: () => void;
+		onsignout: SignOutHandler;
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), busy = $bindable(false), passkeyUnavailable, canCancel,
@@ -301,7 +301,7 @@
 			return;
 		}
 		// Another identity on this backend, or another backend: drop what the page held.
-		if (normalized === client.url) onsignout();
+		if (normalized === client.url) onsignout()();
 		else onconnect();
 		joinedAsGuest = false;
 		const name = inviteToken ? displayName.trim() : '';
@@ -362,7 +362,7 @@
 		emailBusy = true;
 		try {
 			const switching = sent.url !== client.url;
-			await client.signInWithEmail(code, displayName.trim() || undefined, () => (switching ? onconnect() : onsignout()));
+			await client.signInWithEmail(code, displayName.trim() || undefined, () => (switching ? onconnect() : onsignout()()));
 			codeSent = undefined;
 			code = '';
 			finish();
@@ -405,8 +405,7 @@
 
 	async function signOut(): Promise<void> {
 		try {
-			onsignout();
-			await client.signOut();
+			await signOutThen(client, onsignout);
 			pending = true;
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Unable to sign out';

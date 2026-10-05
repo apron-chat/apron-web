@@ -14,6 +14,7 @@
 	import type { PausedUntil } from '$lib/ui/pause';
 	import { PRESENCE_LABELS } from '$lib/design/components/util';
 	import { ownStatus, ownStatusLabel } from '$lib/ui/user-status';
+	import { signOutThen, type SignOutHandler } from '$lib/ui/sign-in';
 	import Avatar from './Avatar.svelte';
 	import PreferencesDialog from './PreferencesDialog.svelte';
 	import TypingDots from './TypingDots.svelte';
@@ -44,7 +45,7 @@
 		onpause: (until: PausedUntil) => void;
 		onresume: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
-		onsignout: () => void;
+		onsignout: SignOutHandler;
 		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
 		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
@@ -173,8 +174,7 @@
 		passkeyNotice = '';
 		try {
 			if (action === 'logout') {
-				onsignout();
-				await client.signOut();
+				await signOutThen(client, onsignout);
 				passkeyNotice = 'Signed out.';
 			} else {
 				// Labelled with the account's name, so the passkey manager shows whose it is.

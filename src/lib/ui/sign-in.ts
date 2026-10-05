@@ -164,3 +164,21 @@ export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'register
 	if (input.scheme === 'token') return 'Signs in with a token the server gave you, such as a bot token from /invite-bot.';
 	return input.guestReadOnly ? 'No token needed, but guests only read here: sign in with a passkey to post.' : 'No token needed; the server picks a guest identity.';
 }
+
+/**
+ * What the page does when this session is left: `onsignout` notes what it
+ * needs now (the account push is on for, before signing out clears `you`)
+ * and returns what to do once the session is gone.
+ */
+export type SignOutHandler = () => () => void;
+
+/**
+ * Leaves the registered session, and only once that worked does the page
+ * drop it (turning push off for the account): a sign-out that throws, such
+ * as with requests pending, leaves push and the page as they were.
+ */
+export async function signOutThen(client: { signOut(): Promise<void> }, onsignout: SignOutHandler): Promise<void> {
+	const signedOut = onsignout();
+	await client.signOut();
+	signedOut();
+}

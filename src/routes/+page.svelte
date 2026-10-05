@@ -915,11 +915,19 @@
 		if (notificationState === 'granted') await pushSettings.turnOn(chat, userId, key, webPushWake, session.ready);
 	}
 
-	/** Signing out: push goes off for the account here, so its previews stop even if the server can't be told. */
-	function signedOut(): void {
+	/**
+	 * Signing out: notes the account push is on for while `you` still names
+	 * it, and returns what to do once the session is gone: push goes off for
+	 * that account here, so its previews stop even if the server can't be
+	 * told. A sign-out that fails never calls it, so push stays on.
+	 */
+	function signedOut(): () => void {
 		const account = pushAccount;
-		if (client && account) void pushSettings.signedOut(client, account);
-		session.forget();
+		const chat = client;
+		return () => {
+			if (chat && account) void pushSettings.signedOut(chat, account);
+			session.forget();
+		};
 	}
 
 	function connected(): void {
