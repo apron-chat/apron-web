@@ -70,9 +70,12 @@ export function ogRatio(m?: { width?: number; height?: number }): string | undef
 
 export const count99 = (n: number) => (n > 99 ? '99+' : String(n));
 
-/** A `status` (§4.11) as one of the four: absent stays absent, and an unknown value counts as `offline`. */
+/**
+ * A `status` (§4.11) as one of the four: absent or empty (cleared, §3.3)
+ * shows none, and any other unknown value counts as `offline`.
+ */
 export function presence(status: string | undefined): 'online' | 'idle' | 'dnd' | 'offline' | undefined {
-	if (status === undefined) return undefined;
+	if (status === undefined || status === '') return undefined;
 	return status === 'online' || status === 'idle' || status === 'dnd' ? status : 'offline';
 }
 

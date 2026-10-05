@@ -139,5 +139,8 @@ describe('directory', () => {
 		// No status kept: none to show.
 		expect(directory.status(ada)).toBeUndefined();
 		expect(directory.status(undefined)).toBeUndefined();
+		// An empty status clears it (§3.3): the same as none.
+		directory.apply(snapshot([{ ...ada, status: '' }]), undefined);
+		expect(directory.status(ada)).toBeUndefined();
 	});
 });

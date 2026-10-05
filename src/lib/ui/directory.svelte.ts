@@ -84,12 +84,12 @@ class Directory {
 	/**
 	 * A user's `status` (§4.11), from the kept current object only: a recorded
 	 * one (a `from`) is as of its record, not now. Undefined when the server
-	 * sends none, so nothing is shown.
+	 * sends none, or cleared it with `""` (§3.3), so nothing is shown.
 	 */
 	status(from: Identity | undefined): string | undefined {
 		const id = this.person(from)?.user_id;
 		const status = id === undefined ? undefined : this.users.users[id]?.status;
-		return typeof status === 'string' ? status : undefined;
+		return typeof status === 'string' && status !== '' ? status : undefined;
 	}
 
 	/**

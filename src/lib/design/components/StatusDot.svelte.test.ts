@@ -23,7 +23,9 @@ describe('presence', () => {
 	it('keeps the four statuses, counts an unknown one as offline, and leaves an absent one absent (§4.11)', () => {
 		expect(['online', 'idle', 'dnd', 'offline'].map(presence)).toEqual(['online', 'idle', 'dnd', 'offline']);
 		expect(presence('away')).toBe('offline');
-		expect(presence('')).toBe('offline');
+		// Empty clears the status (§3.3): no dot, as when absent.
+		expect(presence('')).toBeUndefined();
+		expect(presence('Online')).toBe('offline');
 		expect(presence(undefined)).toBeUndefined();
 	});
 });
