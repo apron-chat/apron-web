@@ -126,9 +126,9 @@ export type ValidHistoryResponse = JsonObject & {
 	history_log_id: string | null;
 };
 
-/** A valid `mute` (§4.11): seconds (0 for none), or `true` until changed. */
-export function isMuteValue(value: unknown): value is number | true {
-	return value === true || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+/** A valid `mute` (§4.11): `true` until changed, `false` for none, or seconds (`0` is `false`). */
+export function isMuteValue(value: unknown): value is number | boolean {
+	return typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
 }
 
 /** How long nobody attends a connection before it reports `idle` (§4.11: about 30 seconds). */

@@ -189,9 +189,13 @@ export class ChatClient {
 	private idle = false;
 	private idleTimer: ReturnType<typeof setTimeout> | undefined;
 	private idleSent: { connection: number; idle: boolean } | undefined;
-	/** Your notifications are paused until (§4.11 `mute`): epoch milliseconds, or `true`; `muteTimer` ends it. */
+	/**
+	 * Your notifications are paused until (§4.11 `mute` without `room_id`), as
+	 * the server's last `status` said: epoch milliseconds, or `true`;
+	 * `muteTimer` ends it.
+	 */
 	private mutedUntil: number | true | undefined;
-	/** Rooms whose notifications you paused (§4.11 room `mute`), as the server last echoed them: until then, or `true`. */
+	/** Rooms whose notifications you paused (§4.11 `mute` with `room_id`), as the server's last `status` for each said: until then, or `true`. */
 	private readonly roomMutes = new Map<string, number | true>();
 	private muteTimer: ReturnType<typeof setTimeout> | undefined;
 	/**
@@ -1414,18 +1418,55 @@ export class ChatClient {
 
 	/**
 	 * Asks to pause your notifications everywhere (§4.11 `mute`): for `mute`
-	 * seconds, until resumed (`true`), or to resume them (`0`). Nothing changes
-	 * here until the server echoes `you.mute`: it MAY ignore or shorten a
-	 * mute, and the pause is whatever it echoes, so a pause it didn't apply
-	 * never shows. Needs capability `status` and a signed-in account.
+	 * seconds, until resumed (`true`), or to resume them (`false`). Nothing
+	 * changes here until the server sends the change back as a `status` to
+	 * each of your connections: the pause is whatever that says, so one the
+	 * server didn't apply never shows. Needs capability `status` and a
+	 * signed-in account.
 	 */
-	setMute(mute: number | true): void {
+	setMute(mute: number | boolean): void {
 		if (!this.authenticated || !this.registeredSession || !this.hasCap('status')) return;
 		this.sendFrame({ method: 'status', params: { mute } });
 	}
 
-	/** Takes `mute` as the server echoes it in `you` (§4.11): seconds left, `true`, or `0` (or undefined) when not paused. */
-	private applyMute(mute: number | true | undefined): void {
+	/**
+	 * Sets your `status` with `me` (§3.3, §4.11): `online` (the default),
+	 * `""` (none), or the optional `dnd` or `invisible`. The server MAY
+	 * decline or alter it; resolves with the `you` it kept, whose `status`
+	 * is the one in effect. Needs capability `status`.
+	 */
+	setStatus(status: string): Promise<Identity> {
+		if (!this.hasCap('status')) return Promise.reject(new Error('This server has no status'));
+		return this.updateProfile({ status });
+	}
+
+	/**
+	 * A `status` from the server (§4.11): a change to one of your mutes, sent
+	 * to each of your connections, or after `auth` one of the mutes in
+	 * effect. The client takes it as its own setting: `mute` without
+	 * `room_id` pauses everything, with one that room and its threads.
+	 * Servers never send `idle`; an invalid `mute` is ignored.
+	 */
+	private handleStatus(params: JsonObject | undefined): void {
+		if (!params || !isMuteValue(params.mute)) return;
+		if (params.room_id === undefined) this.applyMute(params.mute);
+		else if (typeof params.room_id === 'string') this.applyRoomMute(params.room_id, params.mute);
+		else return;
+		this.emit();
+	}
+
+	/**
+	 * Each `auth` starts from no mutes: the server then sends every mute in
+	 * effect as a `status`, and any scope it doesn't send is unmuted (§4.11).
+	 */
+	private resetMutes(): void {
+		this.applyMute(false);
+		this.roomMutes.clear();
+		this.scheduleRoomUnmutes();
+	}
+
+	/** Takes your unscoped `mute` (§4.11): seconds left, `true`, or `false` (or `0`, or undefined) when not paused. */
+	private applyMute(mute: number | boolean | undefined): void {
 		if (this.muteTimer) clearTimeout(this.muteTimer);
 		this.muteTimer = undefined;
 		if (mute === true) {
@@ -1438,14 +1479,8 @@ export class ChatClient {
 		}
 	}
 
-	/**
-	 * A room's `mute` as the server echoes it to you (§4.11): `0` ends it, and a
-	 * missing one leaves it, except in a listing or a `room_update` `joined`
-	 * record (`complete`), which always say it: missing is `0` there.
-	 */
-	private noteRoomMute(roomId: string, delivery: RoomDelivery, complete: boolean): void {
-		if (!complete && !Object.hasOwn(delivery, 'mute')) return;
-		const mute = delivery.mute;
+	/** A room's `mute` (§4.11): seconds left, `true`, or `false` (or `0`) to end it. It applies whether or not the room is joined. */
+	private applyRoomMute(roomId: string, mute: number | boolean): void {
 		if (mute === true) this.roomMutes.set(roomId, true);
 		else if (typeof mute === 'number' && mute > 0) this.roomMutes.set(roomId, Date.now() + mute * 1000);
 		else this.roomMutes.delete(roomId);
@@ -1706,7 +1741,6 @@ export class ChatClient {
 				const record = decoded.record;
 				this.observeLogId(decoded.delivery.latest_log_id);
 				this.noteMembers(record.room_id, decoded.delivery);
-				this.noteRoomMute(record.room_id, decoded.delivery, true);
 				if (joined && joinedSet) {
 					joinedIds.add(record.room_id);
 					this.showRoom(decoded, 'joined');
@@ -1783,7 +1817,7 @@ export class ChatClient {
 	 * ones and `""` (or `{}` for `ext`) removes one. Resolves with the `you`
 	 * the server kept, which may differ from what was asked.
 	 */
-	updateProfile(patch: { name?: string; avatar?: string; ext?: JsonObject }): Promise<Identity> {
+	updateProfile(patch: { name?: string; avatar?: string; ext?: JsonObject; status?: string }): Promise<Identity> {
 		if (patch.name !== undefined) this.displayName = patch.name.trim();
 		return this.enqueueRequest('me', { ...patch }, { visible: true, allowBeforeAuth: false }).promise.then((result) => {
 			if (!isIdentity(result.you)) throw new Error('The server did not return your profile');
@@ -2176,6 +2210,9 @@ export class ChatClient {
 			case 'pong':
 				this.unansweredPings = 0;
 				return;
+			case 'status':
+				this.handleStatus(frame.params);
+				return;
 		}
 		if (frame.method !== undefined) return;
 		if (typeof frame.id === 'string' && (frame.result !== undefined || frame.error !== undefined)) {
@@ -2333,9 +2370,10 @@ export class ChatClient {
 			this.emit();
 			return false;
 		}
-		// A session starts unpaused unless the server says otherwise; an address added
-		// on this connection (`added`) is the same session.
-		if (!added && !Object.hasOwn(identity, 'mute')) this.applyMute(0);
+		// Each sign-in starts unmuted: the server's `status` frames that follow
+		// bring back the mutes in effect (§4.11). An address or passkey added on
+		// this connection (`added`) is the same session, its mutes unchanged.
+		if (!added) this.resetMutes();
 		this.setYou(identity as Identity);
 		if (signedIn && added && this.registeredSession) {
 			// Added to the account (§4.9, §4.10): another way back in, not how this session signed in,
@@ -2497,11 +2535,7 @@ export class ChatClient {
 		const changed = this.you?.user_id !== identity.user_id;
 		// A pending address addition belongs to the account that proposed it (§4.10): another identity needs a new code.
 		if (changed) this.addProposalConnection = undefined;
-		this.you = this.noteUser(identity);
-		// `mute` is the server's word on a pause (§4.11). Like every field of a current
-		// object (§3.3), a missing one leaves it unchanged; `0` ends it.
-		// An invalid `mute` is ignored (§4.11), leaving the pause as it is.
-		if (isMuteValue(identity.mute)) this.applyMute(identity.mute);
+		this.you = this.noteUser(identity, true);
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
 	}
@@ -2548,17 +2582,10 @@ export class ChatClient {
 	}
 
 	/**
-	 * Merges a current user object (`you`, `new`, room `members` and `users`)
-	 * into the one kept for its `user_id` (§3.3), field by field: a present
-	 * field replaces, an empty one (`""`, `{}`) removes, and a missing one is
-	 * left alone. Returns the kept object, which is replaced only when it
-	 * changes.
-	 */
-	/**
 	 * Back after a disconnection longer than `STATUS_KEEP_MS` (§4.11): the
 	 * other users' kept `status` values are stale, so they are dropped, and
 	 * those users show no status (not `offline`) until the server sends it
-	 * again, as it does for connected users once this connection sends `idle`.
+	 * again, as it does for connected users after `auth`.
 	 * Your own comes from this `auth`'s `you`. A shorter one keeps them.
 	 */
 	private dropStaleStatuses(): void {
@@ -2570,7 +2597,23 @@ export class ChatClient {
 		}
 	}
 
-	private noteUser(identity: Identity): Identity {
+	/**
+	 * Merges a current user object (`you`, `new`, room `members` and `users`)
+	 * into the one kept for its `user_id` (§3.3), field by field: a present
+	 * field replaces, an empty one (`""`, `{}`) removes, and a missing one is
+	 * left alone. Returns the kept object, which is replaced only when it
+	 * changes.
+	 *
+	 * `own` is a `you` (§3.2, §3.3): its `status` is the one you chose
+	 * (§4.11). Others' view of you, in a `new` or a room's `members`, carries
+	 * the status they see (`offline` while you are invisible, `idle`), so its
+	 * `status` never replaces yours.
+	 */
+	private noteUser(identity: Identity, own = false): Identity {
+		if (!own && identity.user_id === this.you?.user_id && Object.hasOwn(identity, 'status')) {
+			const { status: _seen, ...rest } = identity;
+			identity = rest as Identity;
+		}
 		const current = this.users.get(identity.user_id);
 		const merged = mergeIdentity(current, identity);
 		if (merged !== current) this.users.set(identity.user_id, merged);
@@ -2646,14 +2689,12 @@ export class ChatClient {
 			if (!decoded) continue;
 			this.observeLogId(decoded.delivery.latest_log_id);
 			this.noteMembers(decoded.record.room_id, decoded.delivery);
-			this.noteRoomMute(decoded.record.room_id, decoded.delivery, true);
 			this.showRoom(decoded, 'joined');
 		}
 		for (const value of Array.isArray(params.updated) ? params.updated : []) {
 			const decoded = decodeRoom(value);
 			if (!decoded) continue;
 			this.observeLogId(decoded.delivery.latest_log_id);
-			this.noteRoomMute(decoded.record.room_id, decoded.delivery, false);
 			if (this.rooms.has(decoded.record.room_id)) {
 				this.showRoom(decoded);
 			} else {
@@ -3213,9 +3254,15 @@ export class ChatClient {
 		this.defaultPosts.clear();
 		this.joinedComplete = false;
 		this.keptUserId = undefined;
+		this.resetMutes();
 		this.forgetConnectionState();
 	}
 
+	/**
+	 * Forgets what belonged to the connection. Your mutes stay through a lost
+	 * connection, so a pause doesn't flicker off while reconnecting: the next
+	 * `auth` resets them and the server sends those in effect (§4.11).
+	 */
 	private forgetConnectionState(): void {
 		this.reactionIntents.clear();
 		this.pendingMessageSaves.clear();
@@ -3229,9 +3276,6 @@ export class ChatClient {
 		this.directory = undefined;
 		this.threadDirectory.clear();
 		this.idleSent = undefined;
-		this.applyMute(undefined);
-		this.roomMutes.clear();
-		this.scheduleRoomUnmutes();
 		this.pushError = undefined;
 		this.memberChangesUnsupported = false;
 	}

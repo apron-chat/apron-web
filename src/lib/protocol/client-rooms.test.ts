@@ -350,26 +350,35 @@ describe('rooms by request (cap rooms)', () => {
 			expect(statuses()).toEqual([{ idle: true }]);
 		});
 
-		it('keeps a room\'s mute as the server echoes it on your room records', async () => {
+		it('keeps a room\'s mute from the server\'s status for it (§4.11), joined or not', async () => {
 			socket.open();
 			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 			await socket.reply('auth', { you: { user_id: 'guest_1' } });
-			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', mute: true }, { room_id: 'random', title: 'Random', mute: 60 }, { room_id: 'ops', title: 'Ops' }] });
+			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }, { room_id: 'random', title: 'Random' }, { room_id: 'ops', title: 'Ops' }] });
 			const muted = () => Object.fromEntries(snapshot.rooms.map((room) => [room.id, room.mutedUntil]));
+			socket.receive({ method: 'status', params: { room_id: 'general', mute: true } });
+			socket.receive({ method: 'status', params: { room_id: 'random', mute: 60 } });
+			// A room not listed here yet keeps its mute for when it is.
+			socket.receive({ method: 'status', params: { room_id: 'elsewhere', mute: true } });
 			expect(muted()).toEqual({ general: true, random: Date.now() + 60_000, ops: undefined });
-			// A record without `mute` leaves it; `0` ends it.
-			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '20', title: 'General!' }, { room_id: 'random', log_id: '21', title: 'Random', mute: 0 }] } });
-			expect(muted()).toEqual({ general: true, random: undefined, ops: undefined });
-			// A `joined` record always says it: missing is 0 there, as in a listing.
+			// Room records no longer carry it: a record without `mute`, or with one, changes nothing.
+			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '20', title: 'General!' }, { room_id: 'ops', log_id: '21', title: 'Ops', mute: true }] } });
 			socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'general', log_id: '24', title: 'General!' }] } });
-			expect(muted().general).toBeUndefined();
-			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '22', title: 'Ops', mute: 30 }] } });
-			vi.advanceTimersByTime(30_000);
-			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '23', title: 'Ops 2' }] } });
-			// Its pause has run out.
+			expect(muted()).toEqual({ general: true, random: Date.now() + 60_000, ops: undefined });
+			// `false` ends it, and so does `0`.
+			socket.receive({ method: 'status', params: { room_id: 'random', mute: false } });
+			socket.receive({ method: 'status', params: { room_id: 'general', mute: 0 } });
+			expect(muted()).toEqual({ general: undefined, random: undefined, ops: undefined });
+			// A room's mute leaves the unscoped one alone.
+			expect(snapshot.mutedUntil).toBeUndefined();
+			// An invalid one is ignored.
+			socket.receive({ method: 'status', params: { room_id: 'ops', mute: -1 } });
+			socket.receive({ method: 'status', params: { room_id: 'ops', mute: 'soon' } });
+			socket.receive({ method: 'status', params: { room_id: 7, mute: true } });
 			expect(muted().ops).toBeUndefined();
-			// A room's pause runs out on its own, without another record.
-			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '25', title: 'Ops 2', mute: 10 }] } });
+			expect(snapshot.mutedUntil).toBeUndefined();
+			// A room's mute runs out here without a word from the server.
+			socket.receive({ method: 'status', params: { room_id: 'ops', mute: 10 } });
 			expect(muted().ops).toBe(Date.now() + 10_000);
 			const emitted = snapshot;
 			vi.advanceTimersByTime(10_000);
@@ -390,79 +399,134 @@ describe('rooms by request (cap rooms)', () => {
 			expect(statuses()).toEqual([{ idle: true }]);
 		});
 
-		it('pauses notifications with mute, and takes the server\'s you.mute as the word on it', async () => {
-			const now = Date.now();
-			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', mute: 120 }, ['token', 'guest']);
+		it('pauses notifications with mute, and takes the server\'s status as the word on it (§4.11)', async () => {
+			await greet(['rooms', 'status'], { user_id: 'guest_1' }, ['token', 'guest']);
 			// A guest can't pause: this sign-in is a guest's.
 			client.setMute(true);
 			expect(statuses().filter((params) => 'mute' in params)).toEqual([]);
 			client.useToken('apron_token');
 			vi.advanceTimersByTime(0);
 			socket = FakeSocket.latest();
-			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', mute: 120 }, ['token', 'guest']);
-			// The server's `mute` is seconds left: the pause ends then.
-			expect(snapshot.mutedUntil).toBeGreaterThanOrEqual(now + 120_000);
-			// Asking changes nothing until the server echoes what it applied (§4.11).
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada' }, ['token', 'guest']);
+			// Asking changes nothing until the server sends the change back as a `status`.
 			client.setMute(3600);
 			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }]);
-			expect(snapshot.mutedUntil).toBeGreaterThanOrEqual(now + 120_000);
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 3600 } } });
-			expect(snapshot.mutedUntil).toBe(Date.now() + 3_600_000);
-			client.setMute(0);
-			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }, { mute: 0 }]);
-			expect(snapshot.mutedUntil).toBe(Date.now() + 3_600_000);
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
 			expect(snapshot.mutedUntil).toBeUndefined();
-			// Until resumed, from a `user` notification about you.
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada', mute: true } } });
-			expect(snapshot.mutedUntil).toBe(true);
-			// A `you` without `mute`, such as the Go server's status-only frames, leaves the pause as it is (§3.3).
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', status: 'idle' } } });
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada' } } });
-			expect(snapshot.mutedUntil).toBe(true);
-			// `0` ends it.
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
+			socket.receive({ method: 'status', params: { mute: 3600 } });
+			expect(snapshot.mutedUntil).toBe(Date.now() + 3_600_000);
+			// Resuming sends `false`.
+			client.setMute(false);
+			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }, { mute: false }]);
+			expect(snapshot.mutedUntil).toBe(Date.now() + 3_600_000);
+			socket.receive({ method: 'status', params: { mute: false } });
 			expect(snapshot.mutedUntil).toBeUndefined();
-			// An invalid `mute` leaves the pause as it is.
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: true } } });
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: -5 } } });
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 'soon' } } });
+			// Another of your connections paused: the server sends it here too, and this one takes it as its own.
+			socket.receive({ method: 'status', params: { mute: true } });
 			expect(snapshot.mutedUntil).toBe(true);
-			// A new session (an `auth` result) without `mute` starts unpaused.
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: true } } });
-			reconnect();
-			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada' }, ['token', 'guest']);
+			// `you` no longer says anything about mutes (§4.11): a `mute` in it is ignored.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', status: 'online' } } });
+			expect(snapshot.mutedUntil).toBe(true);
+			// `0` ends it, as `false` does; an invalid `mute` leaves it.
+			socket.receive({ method: 'status', params: { mute: 'soon' } });
+			socket.receive({ method: 'status', params: { mute: -5 } });
+			expect(snapshot.mutedUntil).toBe(true);
+			socket.receive({ method: 'status', params: { mute: 0 } });
 			expect(snapshot.mutedUntil).toBeUndefined();
 			// A pause runs out here without a word from the server.
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada', mute: 60 } } });
+			socket.receive({ method: 'status', params: { mute: 60 } });
 			expect(snapshot.mutedUntil).toBe(Date.now() + 60_000);
 			vi.advanceTimersByTime(60_000);
 			expect(snapshot.mutedUntil).toBeUndefined();
 		});
 
-		it('takes a mute the server shortened or ignored from its echo, never the one asked for', async () => {
+		it('takes a mute the server shortened or ignored from its status, never the one asked for', async () => {
 			await greet(['rooms', 'status'], { user_id: 'guest_1' }, ['token', 'guest']);
 			client.useToken('apron_token');
 			vi.advanceTimersByTime(0);
 			socket = FakeSocket.latest();
 			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada' }, ['token', 'guest']);
-			// Shortened: the server echoes the 600 seconds it kept of the 3600 asked for.
+			// Shortened: the server sends the 600 seconds it kept of the 3600 asked for.
 			client.setMute(3600);
-			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }]);
 			expect(snapshot.mutedUntil).toBeUndefined();
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 600 } } });
+			socket.receive({ method: 'status', params: { mute: 600 } });
 			expect(snapshot.mutedUntil).toBe(Date.now() + 600_000);
 			vi.advanceTimersByTime(600_000);
 			expect(snapshot.mutedUntil).toBeUndefined();
-			// Ignored: the server echoes `0`, and no pause ever shows here.
-			client.setMute(true);
-			expect(snapshot.mutedUntil).toBeUndefined();
-			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
-			expect(snapshot.mutedUntil).toBeUndefined();
-			// No echo at all (the frame was lost, or the server applied nothing): still no pause.
+			// A server without timed mutes takes seconds as `true` (§4.11), and says so.
+			client.setMute(60);
+			socket.receive({ method: 'status', params: { mute: true } });
+			expect(snapshot.mutedUntil).toBe(true);
+			socket.receive({ method: 'status', params: { mute: false } });
+			// No answer at all (the frame was lost, or the server applied nothing): still no pause.
 			client.setMute(60);
 			vi.advanceTimersByTime(1_000);
 			expect(snapshot.mutedUntil).toBeUndefined();
+		});
+
+		it('starts each auth unmuted and takes the mutes in effect from the status frames after it (§4.11)', async () => {
+			await greet(['rooms', 'status'], { user_id: 'guest_1' }, ['token', 'guest']);
+			client.useToken('apron_token');
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada' }, ['token', 'guest']);
+			socket.receive({ method: 'status', params: { mute: true } });
+			socket.receive({ method: 'status', params: { room_id: 'general', mute: true } });
+			socket.receive({ method: 'status', params: { room_id: 'random', mute: 600 } });
+			const roomMute = (id: string) => snapshot.rooms.find((room) => room.id === id)?.mutedUntil;
+			expect([snapshot.mutedUntil, roomMute('general')]).toEqual([true, true]);
+			// Reconnected: the server lost the global mute and shortened the room's while this client was away.
+			reconnect();
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: ['rooms', 'status'] } });
+			// Until the new auth, the kept mutes still apply.
+			expect(snapshot.mutedUntil).toBe(true);
+			await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+			// The auth starts from none; any scope not sent after it is unmuted.
+			expect(snapshot.mutedUntil).toBeUndefined();
+			socket.receive({ method: 'status', params: { room_id: 'general', mute: 1800 } });
+			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }, { room_id: 'random', title: 'Random' }] });
+			expect(snapshot.mutedUntil).toBeUndefined();
+			expect(roomMute('general')).toBe(Date.now() + 1_800_000);
+			expect(roomMute('random')).toBeUndefined();
+		});
+
+		it('sets your status with me, and shows what the server kept (§4.11)', async () => {
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', status: 'online' });
+			const asked = client.setStatus('dnd');
+			const request = socket.request('me');
+			expect(request.params).toEqual({ status: 'dnd' });
+			await socket.reply('me', { you: { user_id: 'ada', status: 'dnd' } });
+			expect((await asked).status).toBe('dnd');
+			expect(snapshot.you?.status).toBe('dnd');
+			expect(snapshot.users.ada.status).toBe('dnd');
+			// A server without invisible sets "" (none) instead: `you` shows the result.
+			const invisible = client.setStatus('invisible');
+			await socket.reply('me', { you: { user_id: 'ada', status: '' } });
+			expect((await invisible).status).toBe('');
+			expect(snapshot.you?.status).toBe('');
+			// Setting none sends "".
+			client.setStatus('').catch(() => undefined);
+			expect(socket.sent.filter((frame) => frame.method === 'me').map((frame) => frame.params)).toEqual([{ status: 'dnd' }, { status: 'invisible' }, { status: '' }]);
+		});
+
+		it('keeps your chosen status when others\' view of you says otherwise', async () => {
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', status: 'invisible' });
+			// Others see you offline while you are invisible (§4.11); that view never replaces your choice.
+			socket.receive({ method: 'user', params: { new: { user_id: 'ada', name: 'Ada', status: 'offline' } } });
+			socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', title: 'Ops', members: [{ user_id: 'ada', status: 'offline' }, { user_id: 'bo', status: 'idle' }] }] } });
+			expect(snapshot.you?.status).toBe('invisible');
+			expect(snapshot.users.ada.status).toBe('invisible');
+			expect(snapshot.users.bo.status).toBe('idle');
+			// A `you` changes it.
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', status: 'online' } } });
+			expect(snapshot.users.ada.status).toBe('online');
+		});
+
+		it('sets no status without the capability', async () => {
+			await greet(['rooms'], { user_id: 'ada', name: 'Ada' });
+			await expect(client.setStatus('dnd')).rejects.toThrow();
+			expect(socket.sent.filter((frame) => frame.method === 'me')).toEqual([]);
 		});
 	});
 

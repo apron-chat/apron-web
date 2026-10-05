@@ -59,8 +59,7 @@ describe('kept statuses across reconnects', () => {
 		expect(statusOf('ada')).toBe('idle');
 		expect(snapshot.users.bo).toEqual({ user_id: 'bo', name: 'Bo' });
 		expect(Object.hasOwn(snapshot.users.cy, 'status')).toBe(false);
-		// The connection's first `idle` gets connected users' statuses again (§4.11); a user who isn't connected stays unknown.
-		expect(socket.sent.some((frame) => frame.method === 'status' && (frame.params as { idle?: boolean }).idle === false)).toBe(true);
+		// After `auth` the server sends connected users' statuses again (§4.11); a user who isn't connected stays unknown.
 		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'online' } } });
 		expect(statusOf('bo')).toBe('online');
 		expect(statusOf('cy')).toBeUndefined();

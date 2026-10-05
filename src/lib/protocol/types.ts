@@ -32,6 +32,12 @@ export interface Identity extends JsonObject {
 	 * only, beside the name and never as part of it; they grant nothing here.
 	 */
 	roles?: string[];
+	/**
+	 * Current objects only (§4.11): in `you`, the status you chose (`online`,
+	 * `""`, `dnd`, `invisible`); for others, the one they show (`online`,
+	 * `idle`, `offline`, `dnd`). Other values are unknown.
+	 */
+	status?: string;
 	ext?: JsonObject;
 }
 
@@ -191,12 +197,6 @@ export interface RoomDelivery {
 	 * most recently active (§4.3.1).
 	 */
 	member_count?: number;
-	/**
-	 * Your notifications from this room are paused (§4.11 `mute`): seconds
-	 * left, `true` until resumed, or `0` for not. Sent to you only; a record
-	 * without it leaves it unchanged.
-	 */
-	mute?: number | true;
 }
 
 /**
@@ -328,7 +328,6 @@ export function decodeRoom(value: unknown): { record: RoomRecord; delivery: Room
 	if (value.history_log_id === null || isLogId(value.history_log_id)) delivery.history_log_id = value.history_log_id;
 	if (Array.isArray(value.members)) delivery.members = value.members.filter(isIdentity).map((member) => cloneJson(member));
 	if (typeof value.member_count === 'number' && Number.isSafeInteger(value.member_count) && value.member_count >= 0) delivery.member_count = value.member_count;
-	if (value.mute === true || (typeof value.mute === 'number' && Number.isFinite(value.mute) && value.mute >= 0)) delivery.mute = value.mute;
 	return { record, delivery };
 }
 

@@ -66,7 +66,7 @@ export interface RoomSnapshot {
 	 * Fixed at creation; absent means an ordinary room.
 	 */
 	private?: boolean;
-	/** Your notifications from this room are paused until then (§4.11 `mute`): epoch milliseconds, or `true`. Absent when not. */
+	/** Your notifications from this room and its threads are paused until then (§4.11 `mute` with its `room_id`): epoch milliseconds, or `true`. Absent when not. */
 	mutedUntil?: number | true;
 	/** What the room is about (§3.4), Markdown by convention; absent when empty. */
 	description?: string;
@@ -220,8 +220,9 @@ export interface ClientSnapshot {
 	 */
 	readOnly?: boolean;
 	/**
-	 * Your notifications are paused (§4.11 `mute`, from `you.mute`) until
-	 * then, in epoch milliseconds, or `true` until resumed. Absent when not.
+	 * Your notifications are paused (§4.11 `mute` without `room_id`, from the
+	 * server's `status`) until then, in epoch milliseconds, or `true` until
+	 * resumed. Absent when not.
 	 */
 	mutedUntil?: number | true;
 	/** The server refused this device's `push_register` (§4.7): its message, until one succeeds. */
