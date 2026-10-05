@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, type Snippet } from 'svelte';
 
 	/** One choice of a MenuButton: its value, a label, and an optional muted hint after it. */
 	interface MenuChoice {
@@ -21,8 +21,14 @@
 		disabled?: boolean;
 		/** Open now; bindable. */
 		open?: boolean;
+		/** A picker: the current choice's value. Its items are radio items, this one checked, and it is focused as the menu opens. */
+		selected?: string;
+		/** Drawn before each choice's label, such as a status dot; it gets the choice's value. */
+		lead?: Snippet<[string]>;
+		/** Words for screen readers instead of `label`, such as "Status: Online". */
+		ariaLabel?: string;
 	}
-	let { label, choices, onselect, variant = 'quiet', size = 'sm', placement = 'below', disabled = false, open = $bindable(false) }: Props = $props();
+	let { label, choices, onselect, variant = 'quiet', size = 'sm', placement = 'below', disabled = false, open = $bindable(false), selected, lead, ariaLabel }: Props = $props();
 
 	let root = $state<HTMLElement | undefined>();
 	let trigger = $state<HTMLButtonElement | undefined>();
@@ -33,7 +39,7 @@
 
 	async function toggle(): Promise<void> {
 		if (open) close(false);
-		else await show(0);
+		else await show(Math.max(0, choices.findIndex((choice) => choice.value === selected)));
 	}
 
 	/** Opens the menu with this item (`-1`: the last) focused. */
@@ -88,13 +94,14 @@
 <svelte:window onpointerdown={outside} />
 
 <div class="ap-menubtn" bind:this={root} onkeydown={keydown} role="presentation">
-	<button bind:this={trigger} type="button" class={['ap-btn', 'ap-btn-' + variant, size === 'sm' && 'ap-btn-sm']} aria-haspopup="menu" aria-expanded={open} {disabled} onclick={toggle}>{label}</button>
+	<button bind:this={trigger} type="button" class={['ap-btn', 'ap-btn-' + variant, size === 'sm' && 'ap-btn-sm']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel} {disabled} onclick={toggle}>{label}</button>
 	{#if open}
-		<ul class={['ap-menu', placement === 'below' && 'ap-menu-below']} role="menu" aria-label={label}>
+		<ul class={['ap-menu', placement === 'below' && 'ap-menu-below', selected !== undefined && 'ap-menu-pick']} role="menu" aria-label={ariaLabel ?? label}>
 			{#each choices as choice (choice.value)}
+				{@const on = selected !== undefined && choice.value === selected}
 				<li role="none">
-					<button class="ap-menu-item" type="button" role="menuitem" onclick={() => choose(choice.value)}>
-						<span>{choice.label}</span>{#if choice.hint}<span class="ap-menu-hint">{choice.hint}</span>{/if}
+					<button class={['ap-menu-item', on && 'ap-menu-item-on']} type="button" role={selected !== undefined ? 'menuitemradio' : 'menuitem'} aria-checked={selected !== undefined ? on : undefined} onclick={() => choose(choice.value)}>
+						<span class="ap-menu-label">{#if lead}<span class="ap-menu-lead">{@render lead(choice.value)}</span>{/if}{choice.label}</span>{#if choice.hint}<span class="ap-menu-hint">{choice.hint}</span>{/if}
 					</button>
 				</li>
 			{/each}

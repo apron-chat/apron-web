@@ -1,9 +1,9 @@
-<!-- @dsCard group="Actions" height=260 subtitle="Pause notifications: closed, and open with when each choice ends" -->
+<!-- @dsCard group="Actions" height=260 subtitle="Pause notifications: closed, and open with when each choice ends; a status picker, open on the current choice with a dot before each" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>MenuButton</title></head>
 <body>
-<div class="ap-row" id="root" style="align-items:flex-start;gap:220px"></div>
+<div class="ap-row" id="root" style="align-items:flex-start;gap:220px;flex-wrap:wrap;row-gap:200px"></div>
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props) { var box = document.createElement('div'); root.appendChild(box); return A.render(C, box, props || {}); }
@@ -15,6 +15,16 @@
   ];
   add(A.MenuButton, { label: 'Pause…', choices: choices, onselect: function () {} });
   add(A.MenuButton, { label: 'Pause…', choices: choices, open: true, onselect: function () {} });
+  // As a picker: `selected` checks the current choice; `lead` draws a StatusDot before each label.
+  var statuses = [
+    { value: 'online', label: 'Online', hint: 'Automatic' },
+    { value: 'dnd', label: 'Do not disturb', hint: 'Mutes notifications' },
+    { value: 'invisible', label: 'Invisible', hint: 'Appear offline' },
+    { value: 'none', label: 'None', hint: 'Show no status' }
+  ];
+  var picker = document.createElement('div'); root.appendChild(picker);
+  A.render(A.MenuButton, picker, { label: 'Do not disturb', choices: statuses, selected: 'dnd', open: true, onselect: function () {},
+    lead: A.partOf(A.StatusDot, function (value) { return { status: value === 'none' ? undefined : value, decorative: true }; }) });
 </script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { flushSync, mount, tick, unmount } from 'svelte';
+import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import MenuButton from './MenuButton.svelte';
 
@@ -63,5 +63,24 @@ describe('MenuButton', () => {
 		flushSync();
 		await tick();
 		expect(document.activeElement).toBe(items()[0]);
+	});
+
+	it('as a picker, checks the selected choice, opens on it, and draws a lead before each label', async () => {
+		const onselect = vi.fn();
+		instance = mount(MenuButton, { target: document.body, props: { label: '8 hours', choices, onselect, selected: '8h', ariaLabel: 'Pause: 8 hours', lead: createRawSnippet((value: () => string) => ({ render: () => `<i class="lead">${value()}</i>` })) } });
+		flushSync();
+		const trigger = document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
+		expect(trigger.getAttribute('aria-label')).toBe('Pause: 8 hours');
+		trigger.click();
+		flushSync();
+		await tick();
+		const radios = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+		expect(radios.map((item) => item.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
+		expect(radios[1].classList.contains('ap-menu-item-on')).toBe(true);
+		expect(document.activeElement).toBe(radios[1]);
+		expect([...document.querySelectorAll('.ap-menu-label > .ap-menu-lead > i.lead')].map((lead) => lead.textContent)).toEqual(['1h', '8h', 'resume']);
+		expect(document.querySelector('[role="menu"]')?.getAttribute('aria-label')).toBe('Pause: 8 hours');
+		radios[2].click();
+		expect(onselect).toHaveBeenCalledWith('resume');
 	});
 });

@@ -38,7 +38,7 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}) {
 }
 
 describe('MemberListSidebar', () => {
-	it('lists members online, idle, dnd, offline, then those with no status, by name within each', () => {
+	it('lists members online, idle, dnd, unknown, offline, then those with no status, by name within each', () => {
 		const rows = render([
 			{ user_id: 'zed', name: 'Zed' },
 			{ user_id: 'bo', name: 'Bo', status: 'offline' },
@@ -49,8 +49,8 @@ describe('MemberListSidebar', () => {
 			{ user_id: 'al', name: 'Al' },
 			ada
 		]);
-		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'fay', 'di', 'cy', 'bo', 'eve', 'al', 'zed']);
-		expect(rows.map((row) => row.dataset.status ?? '')).toEqual(['online', 'online', 'idle', 'dnd', 'offline', 'offline', '', '']);
+		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'fay', 'di', 'cy', 'eve', 'bo', 'al', 'zed']);
+		expect(rows.map((row) => row.dataset.status ?? '')).toEqual(['online', 'online', 'idle', 'dnd', 'unknown', 'offline', '', '']);
 	});
 
 	it('dims offline members only, with a ring; no status shows no dot and is not dimmed', () => {
@@ -68,11 +68,25 @@ describe('MemberListSidebar', () => {
 		expect(me.textContent).toContain('(you)');
 	});
 
-	it('shows you as do not disturb at once while your notifications are paused', () => {
-		const rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'online' }], { mutedUntil: true });
+	it('shows an unknown status as a placeholder that says its value, not as offline (§4.11)', () => {
+		const rows = render([ada, { user_id: 'eve', name: 'Eve', status: 'brb' }]);
+		const eve = rows[1];
+		expect(eve.dataset.status).toBe('unknown');
+		expect(eve.classList.contains('offline')).toBe(false);
+		expect(eve.querySelector('.ap-presence-unknown')?.getAttribute('title')).toBe('Unknown status: brb');
+		expect(eve.querySelector('button')?.title).toBe('@eve · Unknown status: brb');
+		expect(eve.querySelector('.ap-sr')?.textContent).toBe(', unknown status: brb');
+	});
+
+	it('shows your own status as you chose it: a pause doesn\'t change it, and invisible is a ring that says so', () => {
+		let rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'online' }], { mutedUntil: true });
+		expect(rows.find((row) => row.dataset.user === 'ada')?.dataset.status).toBe('online');
+		unmount(instance!);
+		const hidden = { ...ada, status: 'invisible' };
+		rows = render([hidden, { user_id: 'bo', name: 'Bo', status: 'online' }], { you: hidden });
 		expect(rows.map((row) => row.dataset.user)).toEqual(['bo', 'ada']);
-		expect(rows[1].dataset.status).toBe('dnd');
-		expect(rows[1].querySelector('.ap-presence-dnd')).not.toBeNull();
+		expect(rows[1].querySelector('.ap-presence-invisible')?.getAttribute('title')).toBe('Invisible · others see you as offline');
+		expect(rows[1].querySelector('button')?.title).toBe('@ada · Invisible · others see you as offline');
 	});
 
 	it('shows no dot for a cleared status, or one dropped after a long reconnect, and the dot again once the server sends it', () => {
@@ -86,7 +100,7 @@ describe('MemberListSidebar', () => {
 		const dropped = [...document.querySelectorAll<HTMLLIElement>('li.member')];
 		expect(statuses(dropped)).toEqual([['ada', 'online', true], ['bo', '', false], ['cy', '', false]]);
 		expect(dropped[1].classList.contains('offline')).toBe(false);
-		// The server sends it again once this connection sends `idle`.
+		// The server sends it again after `auth`, for users who are connected.
 		directory.apply(snapshotWith({ user_id: 'bo', name: 'Bo', status: 'online' }), undefined);
 		flushSync();
 		expect(statuses([...document.querySelectorAll<HTMLLIElement>('li.member')])).toEqual([['ada', 'online', true], ['bo', 'online', true], ['cy', '', false]]);

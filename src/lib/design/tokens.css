@@ -30,6 +30,7 @@
 	--presence-idle: var(--warn);
 	--presence-dnd: var(--danger);
 	--presence-offline: var(--line-strong);
+	--presence-unknown: var(--ink-muted);
 	--shadow-popover: 0 8px 24px rgba(4, 4, 10, 0.6);
 	--shadow-float: 0 2px 8px rgba(4, 4, 10, 0.55);
 

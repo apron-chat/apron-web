@@ -1,36 +1,54 @@
 import { PRESENCE_LABELS, presence } from '$lib/design/components/util';
 import type { Presence } from '$lib/design/components/types';
-import { pausedUntilLabel, type PausedUntil } from './pause';
+import { isPaused, type PausedUntil } from './pause';
 
 /**
- * Your own `status` (§4.11, `you` ignores `invisible`): what `you` last said,
- * shown as `dnd` at once while your notifications are paused, ahead of the
- * server's echo. Only where the server sends a `status` at all: a server
- * that sends none (or cleared it with `""`, §3.3) shows no status, paused
- * or not.
+ * The statuses you can choose with `me` (§4.11), as the picker lists them:
+ * `online` (the default: others see online, idle or offline) and `""`
+ * (none) every server takes; `dnd` and `invisible` are optional, so a server
+ * may answer another value, which `you` then shows.
  */
-export function ownStatus(status: unknown, pausedUntil: PausedUntil | undefined): Presence | undefined {
-	if (typeof status !== 'string' || status === '') return undefined;
-	return pausedUntil !== undefined ? 'dnd' : presence(status);
+export const STATUS_CHOICES = [
+	{ value: 'online', label: 'Online', hint: 'Automatic' },
+	{ value: 'dnd', label: 'Do not disturb', hint: 'Mutes notifications' },
+	{ value: 'invisible', label: 'Invisible', hint: 'Appear offline' },
+	{ value: '', label: 'None', hint: 'Show no status' }
+] as const;
+
+/** The optional ones (§4.11): a server may not support them. */
+export const OPTIONAL_STATUSES: readonly string[] = ['dnd', 'invisible'];
+
+/** A chosen status in words, as the picker names it: "Online", "None", or an unknown value as itself. */
+export function chosenStatusLabel(status: string | undefined): string {
+	const choice = STATUS_CHOICES.find((entry) => entry.value === (status ?? ''));
+	return choice ? choice.label : String(status);
 }
 
-/** Your status in words for its tooltip: while paused, when that ends ("Do not disturb · until 14:30"). */
-export function ownStatusLabel(status: Presence | undefined, pausedUntil: PausedUntil | undefined, now = new Date()): string | undefined {
-	if (!status) return undefined;
-	return status === 'dnd' && pausedUntil !== undefined ? `${PRESENCE_LABELS.dnd} · ${pausedUntilLabel(pausedUntil, now)}` : PRESENCE_LABELS[status];
+/** Your own dot's tooltip: invisible says how others see you. */
+export function ownStatusLabel(status: string | undefined): string | undefined {
+	return status === 'invisible' ? `${PRESENCE_LABELS.invisible} · others see you as offline` : undefined;
 }
-
-const ORDER: Record<Presence, number> = { online: 0, idle: 1, dnd: 2, offline: 3 };
 
 /**
- * People in status order: online, idle, do not disturb, offline, then those
- * with no status (a server that sends none). Stable: each group keeps the
- * order it came in.
+ * Whether this page stays quiet (no desktop notifications, chime or title
+ * flash): your notifications are paused (§4.11 `mute`), or your status is
+ * `dnd`, which silences them as `mute` does.
  */
-export function byStatus<T>(people: readonly T[], statusOf: (person: T) => Presence | undefined): T[] {
+export function pageSilenced(pausedUntil: PausedUntil | undefined, status: unknown, now = Date.now()): boolean {
+	return isPaused(pausedUntil, now) || status === 'dnd';
+}
+
+const ORDER: Record<Presence, number> = { online: 0, idle: 1, dnd: 2, unknown: 3, offline: 4, invisible: 4 };
+
+/**
+ * People in status order: online, idle, do not disturb, unknown, offline
+ * (and your own invisible), then those with no status (a server that sends
+ * none). Stable: each group keeps the order it came in.
+ */
+export function byStatus<T>(people: readonly T[], statusOf: (person: T) => string | undefined): T[] {
 	const rank = (person: T) => {
-		const status = statusOf(person);
-		return status === undefined ? 4 : ORDER[status];
+		const status = presence(statusOf(person));
+		return status === undefined ? 5 : ORDER[status];
 	};
 	return people.map((person, index) => ({ person, index, rank: rank(person) })).sort((a, b) => a.rank - b.rank || a.index - b.index).map(({ person }) => person);
 }

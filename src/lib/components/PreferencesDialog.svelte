@@ -7,6 +7,7 @@
 	import CheckList from '$lib/design/components/CheckList.svelte';
 	import { pausedUntilLabel, type PausedUntil } from '$lib/ui/pause';
 	import PauseNotifications from './PauseNotifications.svelte';
+	import StatusPicker from './StatusPicker.svelte';
 	import { NOTIFY_SCOPES, notifyScopeNotes, pushWake } from '$lib/ui/notify-scopes';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import FontFamilyField from './FontFamilyField.svelte';
@@ -32,10 +33,16 @@
 		onresume: () => void;
 		/** Chromium's install prompt, from the push setting. */
 		oninstallapp: () => void;
+		/**
+		 * Choosing your `status` (§4.11), on a server with capability `status`:
+		 * `value` as `you` shows it, and the optional ones this server answered
+		 * something else for.
+		 */
+		status?: { value?: string; unsupported: readonly string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void; disabled?: boolean };
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onclosed }: Props = $props();
+	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onclosed }: Props = $props();
 
 	let preferencesSection = $state<'notifications' | 'appearance'>('notifications');
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
@@ -212,6 +219,9 @@
 				<h3 id="ap-pref-notifications">Notifications</h3>
 				<p class="ap-profedit-hint">Choose when Apron can interrupt you.</p>
 				<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
+				{#if status}
+					<StatusPicker status={status.value} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} disabled={status.disabled} />
+				{/if}
 				{#if pause}
 					<PauseNotifications until={pause.until} {onpause} {onresume} />
 				{/if}

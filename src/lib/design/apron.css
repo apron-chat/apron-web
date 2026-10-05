@@ -34,7 +34,9 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-presence-online { --presence-color: var(--presence-online); }
 .ap-presence-idle { --presence-color: var(--presence-idle); -webkit-mask: radial-gradient(circle at 18% 18%, transparent calc(var(--presence-d) * .36), #000 calc(var(--presence-d) * .36 + .5px)); mask: radial-gradient(circle at 18% 18%, transparent calc(var(--presence-d) * .36), #000 calc(var(--presence-d) * .36 + .5px)); }
 .ap-presence-dnd { --presence-color: var(--presence-dnd); -webkit-mask: linear-gradient(#000 0 0) center / 62% 24% no-repeat, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) center / 62% 24% no-repeat exclude, linear-gradient(#000 0 0); }
-.ap-presence-offline { --presence-color: var(--presence-offline); -webkit-mask: radial-gradient(circle, transparent calc(var(--presence-d) * .25), #000 calc(var(--presence-d) * .25 + .5px)); mask: radial-gradient(circle, transparent calc(var(--presence-d) * .25), #000 calc(var(--presence-d) * .25 + .5px)); }
+.ap-presence-offline, .ap-presence-invisible { --presence-color: var(--presence-offline); -webkit-mask: radial-gradient(circle, transparent calc(var(--presence-d) * .25), #000 calc(var(--presence-d) * .25 + .5px)); mask: radial-gradient(circle, transparent calc(var(--presence-d) * .25), #000 calc(var(--presence-d) * .25 + .5px)); }
+/* A status this client doesn't know (§4.11): a placeholder, a ring broken into four dashes. */
+.ap-presence-unknown { --presence-color: var(--presence-unknown); -webkit-mask: radial-gradient(circle, transparent calc(var(--presence-d) * .25), #000 calc(var(--presence-d) * .25 + .5px)), repeating-conic-gradient(from 22.5deg, #000 0 45deg, transparent 45deg 90deg); -webkit-mask-composite: source-in; mask: radial-gradient(circle, transparent calc(var(--presence-d) * .25), #000 calc(var(--presence-d) * .25 + .5px)) intersect, repeating-conic-gradient(from 22.5deg, #000 0 45deg, transparent 45deg 90deg); }
 /* On an avatar: the dot sits on the bottom-right corner, and a gap around it is cut out of the avatar, so it reads on
    any picture and any ground (a hovered row, the active one) without a ring painted in one surface's color. */
 .ap-avatar-status { --presence-d: 8px; --presence-gap: 2px; position: relative; display: inline-grid; flex: none; vertical-align: middle; }
@@ -445,6 +447,11 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-menu-below { top: calc(100% + var(--space-1)); bottom: auto; }
 .ap-menubtn .ap-menu-item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); white-space: nowrap; }
 .ap-menu-hint { color: var(--ink-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* As a picker (`selected`): radio items, a check before the current one; `lead` draws before each label, such as a status dot. */
+.ap-menu-label { display: inline-flex; align-items: baseline; gap: var(--space-2); }
+.ap-menu-lead { display: inline-grid; place-items: center; align-self: center; min-width: 10px; }
+.ap-menu-pick .ap-menu-item { position: relative; padding-left: 28px; }
+.ap-menu-item-on::before { content: ''; position: absolute; left: 11px; top: 50%; width: 8px; height: 4px; border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: translateY(-75%) rotate(-45deg); }
 
 /* Mention — the @name chip inside message text */
 .ap-mention { display: inline; padding: 1px 5px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }

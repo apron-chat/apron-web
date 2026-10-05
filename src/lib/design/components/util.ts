@@ -1,4 +1,5 @@
 /* Shared helpers for the presentational components. No protocol state: everything arrives as props. */
+import type { Presence } from './types';
 
 /** A user object (§3.3). `user_id` is stable; `name` falls back to it; `avatar` is optional (§4.6.6). */
 export interface Sender {
@@ -71,13 +72,22 @@ export function ogRatio(m?: { width?: number; height?: number }): string | undef
 export const count99 = (n: number) => (n > 99 ? '99+' : String(n));
 
 /**
- * A `status` (§4.11) as one of the four: absent or empty (cleared, §3.3)
- * shows none, and any other unknown value counts as `offline`.
+ * A `status` (§4.11) as a StatusDot draws it: absent or empty (none, §3.3)
+ * shows nothing, and a value this client doesn't know is `unknown`.
  */
-export function presence(status: string | undefined): 'online' | 'idle' | 'dnd' | 'offline' | undefined {
+export function presence(status: string | undefined): Presence | undefined {
 	if (status === undefined || status === '') return undefined;
-	return status === 'online' || status === 'idle' || status === 'dnd' ? status : 'offline';
+	return KNOWN.has(status) ? (status as Presence) : 'unknown';
+}
+
+const KNOWN = new Set<string>(['online', 'idle', 'dnd', 'offline', 'invisible']);
+
+/** A `status` in words: its label, or for an unknown one with the value itself (“Unknown status: brb”). Undefined when there is none. */
+export function presenceLabel(status: string | undefined): string | undefined {
+	const shown = presence(status);
+	if (!shown) return undefined;
+	return shown === 'unknown' ? `${PRESENCE_LABELS.unknown}: ${String(status).slice(0, 64)}` : PRESENCE_LABELS[shown];
 }
 
 /** A status in words, for tooltips and screen readers. */
-export const PRESENCE_LABELS = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Offline' } as const;
+export const PRESENCE_LABELS: Record<Presence, string> = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Offline', invisible: 'Invisible', unknown: 'Unknown status' };

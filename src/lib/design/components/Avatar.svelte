@@ -10,7 +10,7 @@
 		size?: 'lg' | 'md' | 'sm';
 		/** The user's `status` (§4.11): a StatusDot on the bottom-right corner, cut out of the avatar. Absent shows none. */
 		status?: Presence | (string & {});
-		/** The dot's tooltip, instead of the status's own words ("Do not disturb · until 14:30"). */
+		/** The dot's tooltip, instead of the status's own words ("Invisible · others see you as offline"). */
 		statusLabel?: string;
 	}
 	let { name, user_id, src, size = 'md', status, statusLabel }: Props = $props();

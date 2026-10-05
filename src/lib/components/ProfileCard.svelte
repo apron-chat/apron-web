@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import { isSystemId } from '$lib/protocol/types';
-	import { PRESENCE_LABELS, presence } from '$lib/design/components/util';
+	import { presence, presenceLabel } from '$lib/design/components/util';
+	import { ownStatusLabel } from '$lib/ui/user-status';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { NARROW_MAX, placePicker } from '$lib/ui/emoji';
 	import { profileCard } from '$lib/ui/profile-card.svelte';
@@ -47,8 +48,9 @@
 	});
 
 	let person = $derived(request ? directory.person({ user_id: request.userId }) : undefined);
-	/** Their `status` (§4.11), when the server sends one: on the avatar and in words. */
-	let status = $derived(presence(directory.status(person)));
+	/** Their `status` (§4.11), when the server sends one: on the avatar and in words. An unknown one shows its value. */
+	let status = $derived(directory.status(person));
+	let shown = $derived(presence(status));
 	let userId = $derived(person?.user_id ?? request?.userId ?? '');
 	let name = $derived(directory.name(person));
 	let me = $derived(directory.isMe(userId));
@@ -167,14 +169,18 @@
 		onfocusout={focusout}
 	>
 		<div class="who">
-			<Avatar {name} id={userId} src={directory.avatar(person)} size="lg" {status} />
+			<Avatar {name} id={userId} src={directory.avatar(person)} size="lg" {status} statusLabel={me ? ownStatusLabel(status) : undefined} />
 			<div class="names">
 				<div class="name-line">
 					<span class="name">{name}</span>
 					{#if me}<span class="you">(you)</span>{/if}
 				</div>
 				<div class="handle" data-testid="profile-handle">@{userId}</div>
-				{#if status}<div class="presence" data-testid="profile-status">{PRESENCE_LABELS[status]}</div>{/if}
+				{#if shown === 'unknown'}
+					<div class="presence" data-testid="profile-status">Unknown status: <code class="literal">{status}</code></div>
+				{:else if shown}
+					<div class="presence" data-testid="profile-status">{(me ? ownStatusLabel(status) : undefined) ?? presenceLabel(status)}</div>
+				{/if}
 				<RoleBadges user={person} />
 			</div>
 		</div>
@@ -207,7 +213,8 @@
 	.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; line-height: 22px; font-weight: 600; }
 	.you { flex: none; color: var(--ink-muted); font-size: 12px; }
 	.handle { color: var(--ink-muted); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; user-select: all; }
-	.presence { color: var(--ink-muted); font-size: 12px; line-height: 16px; }
+	.presence { color: var(--ink-muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+	.presence .literal { font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
 	.names :global(.ap-roles) { align-self: flex-start; margin: 2px 0 0; }
 	.muted, .warn { margin: 0; font-size: 13px; line-height: 18px; }
 	.muted { color: var(--ink-muted); }

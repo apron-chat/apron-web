@@ -7,9 +7,10 @@
 
 	interface Props {
 		/**
-		 * Until when notifications are paused (§4.11 `mute`), as the server
-		 * echoed it; undefined when not. Pausing and resuming only ask: this
-		 * changes when the echo arrives, perhaps shorter, or not at all.
+		 * Until when notifications are paused (§4.11 `mute` without `room_id`),
+		 * as the server's `status` said; undefined when not. Pausing and
+		 * resuming only ask: this changes when the server sends the change
+		 * back, perhaps shorter, or not at all.
 		 */
 		until?: PausedUntil;
 		onpause: (until: PausedUntil) => void;
@@ -55,7 +56,7 @@
 		{#if until !== undefined}
 			<p class="ap-pref-note ap-pref-paused"><BellOff size={14} strokeWidth={1.8} aria-hidden="true" /> Paused {pausedUntilLabel(until)} · no desktop or push notifications on your devices.</p>
 		{:else}
-			<p class="ap-profedit-hint">Silence desktop and push notifications on all your devices for a while.</p>
+			<p class="ap-profedit-hint">Silence desktop and push notifications on all your devices for a while. Only you see it.</p>
 		{/if}
 	</div>
 	<div class="ap-pause-action">

@@ -3,7 +3,7 @@ import { flushSync, mount, unmount, type Component } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import Avatar from './Avatar.svelte';
 import StatusDot from './StatusDot.svelte';
-import { presence } from './util';
+import { presence, presenceLabel } from './util';
 
 let instance: ReturnType<typeof mount> | undefined;
 
@@ -20,21 +20,33 @@ function render<P extends Record<string, unknown>>(C: Component<P>, props: P): H
 }
 
 describe('presence', () => {
-	it('keeps the four statuses, counts an unknown one as offline, and leaves an absent one absent (§4.11)', () => {
-		expect(['online', 'idle', 'dnd', 'offline'].map(presence)).toEqual(['online', 'idle', 'dnd', 'offline']);
-		expect(presence('away')).toBe('offline');
-		// Empty clears the status (§3.3): no dot, as when absent.
+	it('keeps the known statuses, takes any other as unknown, and leaves an absent one absent (§4.11)', () => {
+		expect(['online', 'idle', 'dnd', 'offline', 'invisible'].map(presence)).toEqual(['online', 'idle', 'dnd', 'offline', 'invisible']);
+		expect(presence('away')).toBe('unknown');
+		// Empty is no status (§4.11): no dot, as when absent.
 		expect(presence('')).toBeUndefined();
-		expect(presence('Online')).toBe('offline');
+		expect(presence('Online')).toBe('unknown');
 		expect(presence(undefined)).toBeUndefined();
+	});
+
+	it('says an unknown status with its value', () => {
+		expect(presenceLabel('dnd')).toBe('Do not disturb');
+		expect(presenceLabel('brb')).toBe('Unknown status: brb');
+		expect(presenceLabel('')).toBeUndefined();
 	});
 });
 
 describe('StatusDot', () => {
-	it('draws offline, and an unknown status, as a hollow ring', () => {
+	it('draws offline as a hollow ring, your invisible as one too, and an unknown status as a placeholder with its value', () => {
 		expect(render(StatusDot, { status: 'offline' })?.className).toContain('ap-presence-offline');
 		unmount(instance!);
-		expect(render(StatusDot, { status: 'invisible-ish' })?.className).toContain('ap-presence-offline');
+		const invisible = render(StatusDot, { status: 'invisible' })!;
+		expect(invisible.className).toContain('ap-presence-invisible');
+		expect(invisible.title).toBe('Invisible');
+		unmount(instance!);
+		const unknown = render(StatusDot, { status: 'invisible-ish' })!;
+		expect(unknown.className).toContain('ap-presence-unknown');
+		expect(unknown.getAttribute('aria-label')).toBe('Unknown status: invisible-ish');
 	});
 
 	it('draws nothing without a status', () => {
@@ -51,8 +63,8 @@ describe('StatusDot', () => {
 	});
 
 	it('takes other words, and keeps only the tooltip when decorative', () => {
-		const dot = render(StatusDot, { status: 'dnd', label: 'Do not disturb · until 14:30', decorative: true })!;
-		expect(dot.title).toBe('Do not disturb · until 14:30');
+		const dot = render(StatusDot, { status: 'invisible', label: 'Invisible · others see you as offline', decorative: true })!;
+		expect(dot.title).toBe('Invisible · others see you as offline');
 		expect(dot.getAttribute('aria-hidden')).toBe('true');
 		expect(dot.hasAttribute('role')).toBe(false);
 		expect(dot.hasAttribute('aria-label')).toBe(false);
@@ -67,7 +79,7 @@ describe('Avatar with a status', () => {
 		expect(dot.title).toBe('Offline');
 		expect(dot.getAttribute('aria-hidden')).toBe('true');
 		unmount(instance!);
-		expect(render(Avatar, { name: 'Alice Chen', status: 'dnd', statusLabel: 'Do not disturb · until you resume' })?.title).toBe('Do not disturb · until you resume');
+		expect(render(Avatar, { name: 'Alice Chen', status: 'invisible', statusLabel: 'Invisible · others see you as offline' })?.title).toBe('Invisible · others see you as offline');
 	});
 
 	it('is the bare face without one', () => {

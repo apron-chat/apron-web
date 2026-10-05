@@ -36,6 +36,8 @@ ${names.map((n) => `  ${n}: typeof ${n};\n`).join('')}  /** Mount a component; c
   html(markup: string): Snippet;
   /** A snippet prop that renders another component. */
   part<P extends Record<string, any>>(C: Component<P>, props?: P): Snippet;
+  /** A snippet prop that takes arguments (such as MenuButton's \`lead\`) and renders another component with props made from them. */
+  partOf<P extends Record<string, any>>(C: Component<P>, propsOf: (...args: any[]) => P): Snippet<any[]>;
   /** Several snippets in a row, for one snippet prop. */
   parts(...snippets: Snippet[]): Snippet;
 } } }

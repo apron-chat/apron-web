@@ -17,7 +17,7 @@ js = js.replace(/<\/script/gi, '<\\/script').replace(/<!--/g, '\\x3C!--');
 if (/\bimport\s*\(|\beval\s*\(|new Function\s*\(/.test(js)) throw new Error('bundle.js must not import, eval or new Function');
 
 // Variables the app's tokens.css derives from other tokens (the design system's tokens.json holds only literal values).
-const derived = `:root { --font-chat: var(--font-sans); --font-emoji: 'EmojiMart', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Segoe UI', 'Apple Color Emoji', 'Twemoji Mozilla', 'Noto Color Emoji', 'Android Emoji'; --presence-online: var(--ok); --presence-idle: var(--warn); --presence-dnd: var(--danger); --presence-offline: var(--line-strong); }\n`;
+const derived = `:root { --font-chat: var(--font-sans); --font-emoji: 'EmojiMart', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Segoe UI', 'Apple Color Emoji', 'Twemoji Mozilla', 'Noto Color Emoji', 'Android Emoji'; --presence-online: var(--ok); --presence-idle: var(--warn); --presence-dnd: var(--danger); --presence-offline: var(--line-strong); --presence-unknown: var(--ink-muted); }\n`;
 const css = derived + readFileSync('src/lib/design/apron.css', 'utf8');
 if (/<\/style/i.test(css)) throw new Error('bundle.css must not contain </style');
 

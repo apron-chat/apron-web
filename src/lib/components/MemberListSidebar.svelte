@@ -6,8 +6,8 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { userIdToAdd } from '$lib/ui/members';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
-	import { PRESENCE_LABELS, presence } from '$lib/design/components/util';
-	import { byStatus, ownStatus } from '$lib/ui/user-status';
+	import { presence, presenceLabel } from '$lib/design/components/util';
+	import { byStatus, ownStatusLabel } from '$lib/ui/user-status';
 	import Avatar from './Avatar.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 
@@ -27,12 +27,11 @@
 	}
 	let { client, session, room, open, canChange }: Props = $props();
 
-	/** Each member's `status` (§4.11); yours as the profile bar shows it, dnd at once while paused. */
-	function statusOf(person: Identity) {
-		const status = directory.status(person);
-		return directory.isMe(person.user_id) ? ownStatus(status, session.snapshot.mutedUntil) : presence(status);
+	/** Each member's `status` (§4.11) as kept: yours is the one you chose, as the profile bar shows it. */
+	function statusOf(person: Identity): string | undefined {
+		return directory.status(person);
 	}
-	/** By status (online, idle, dnd, offline, then none), and by name within each. */
+	/** By status (online, idle, dnd, unknown, offline, then none), and by name within each. */
 	let members = $derived(byStatus([...(room?.members ?? [])].sort((a, b) =>
 		directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)
 	), statusOf));
@@ -123,11 +122,13 @@
 						{@const name = directory.name(person)}
 						{@const me = directory.isMe(person.user_id)}
 						{@const status = statusOf(person)}
-						<li class="member" class:offline={status === 'offline'} data-user={person.user_id} data-status={status}>
-							<button class="who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={status ? `@${person.user_id} · ${PRESENCE_LABELS[status]}` : `@${person.user_id}`} onclick={(event) => openProfileFrom(event.currentTarget)}>
-								<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" {status} />
+						{@const shown = presence(status)}
+						{@const words = (me ? ownStatusLabel(status) : undefined) ?? presenceLabel(status)}
+						<li class="member" class:offline={shown === 'offline' || shown === 'invisible'} data-user={person.user_id} data-status={shown}>
+							<button class="who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => openProfileFrom(event.currentTarget)}>
+								<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" {status} statusLabel={words} />
 								<span class="member-name">
-									{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}{#if status}<span class="ap-sr">, {PRESENCE_LABELS[status].toLowerCase()}</span>{/if}
+									{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.toLowerCase()}</span>{/if}
 								</span>
 							</button>
 							<RoleBadges user={person} />

@@ -12,8 +12,8 @@
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
-	import { PRESENCE_LABELS } from '$lib/design/components/util';
-	import { ownStatus, ownStatusLabel } from '$lib/ui/user-status';
+	import { presenceLabel } from '$lib/design/components/util';
+	import { ownStatusLabel } from '$lib/ui/user-status';
 	import { signOutThen, type SignOutHandler } from '$lib/ui/sign-in';
 	import Avatar from './Avatar.svelte';
 	import PreferencesDialog from './PreferencesDialog.svelte';
@@ -70,10 +70,24 @@
 	/** While notifications are paused, when that ends in words ("until 14:30"). */
 	let paused = $derived(pause?.until !== undefined ? pausedUntilLabel(pause.until) : undefined);
 	let avatar = $derived(directory.avatar(you));
-	/** Your real `status` (§4.11): dnd at once while paused, else what `you` last said. */
-	let presence = $derived(ownStatus(you?.status, pause?.until));
-	/** Its tooltip, saying when a pause ends. */
-	let presenceLabel = $derived(ownStatusLabel(presence, pause?.until));
+	/** Your `status` as you chose it (§4.11), from `you`: no dot without one. */
+	let ownStatus = $derived(typeof you?.status === 'string' && you.status !== '' ? you.status : undefined);
+	/** Its tooltip: invisible says how others see you. */
+	let ownLabel = $derived(ownStatusLabel(ownStatus));
+	/** Choosing a status (§4.11): with capability `status`, signed in. */
+	let canSetStatus = $derived(session.snapshot.capabilities.status && session.snapshot.authenticated && you !== undefined);
+	/** Optional statuses this server answered something else for (§4.11), per server: not offered again. */
+	let unsupportedStatuses = $state<{ server: string; values: string[] }>({ server: '', values: [] });
+	let unsupported = $derived(unsupportedStatuses.server === client.url ? unsupportedStatuses.values : []);
+
+	async function chooseStatus(status: string): Promise<string | undefined> {
+		const kept = await client.setStatus(status);
+		return kept.status;
+	}
+
+	function noteUnsupported(status: string): void {
+		unsupportedStatuses = { server: client.url, values: [...unsupported.filter((value) => value !== status), status] };
+	}
 	/** Avatars are uploaded with a `/avatar` command (§4.6.6), which needs capabilities `command` and `embed:upload`. */
 	let canUploadAvatar = $derived(session.snapshot.capabilities.command && session.snapshot.capabilities['embed:upload']);
 	let snapshot = $derived(session.snapshot);
@@ -271,7 +285,7 @@
 		<div class="ap-profile-pop" role="dialog" aria-label="Edit profile">
 			<form class="ap-profedit" onsubmit={save}>
 				<div class="ap-profedit-top">
-					<Avatar name={draft || you?.user_id || '?'} id={you?.user_id} src={avatar} size="lg" />
+					<Avatar name={draft || you?.user_id || '?'} id={you?.user_id} src={avatar} size="lg" status={ownStatus} statusLabel={ownLabel} />
 					<div class="ap-profedit-av">
 						{#if canUploadAvatar}
 							<span class="ap-profedit-avbtns">
@@ -378,10 +392,11 @@
 		bind:open={preferencesOpen}
 		{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
 		{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
+		status={canSetStatus ? { value: you?.status, unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
 		onclosed={() => preferencesTrigger?.focus()}
 	/>
-	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || 'not signed in'}${presence ? `, ${PRESENCE_LABELS[presence].toLowerCase()}` : ''}. Edit`} onclick={toggle}>
-		<Avatar name={you?.name || you?.user_id || '?'} id={you?.user_id} src={avatar} status={presence} statusLabel={presenceLabel} />
+	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || 'not signed in'}${ownStatus ? `, ${(ownLabel ?? presenceLabel(ownStatus) ?? '').toLowerCase()}` : ''}. Edit`} onclick={toggle}>
+		<Avatar name={you?.name || you?.user_id || '?'} id={you?.user_id} src={avatar} status={ownStatus} statusLabel={ownLabel} />
 		<span class="ap-profile-text">
 			<span class="ap-profile-name">{you?.name || you?.user_id || 'Not signed in'}</span>
 			<span class="ap-profile-sub">on {backendLabel}{#if wayBack} · add a sign-in{/if}</span>
