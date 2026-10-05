@@ -49,8 +49,13 @@ unfocused for 30 seconds, and `{idle: false}` as soon as it is back. Each
 connection reports the current state at once as the server frame arrives,
 before `auth`: a tab already hidden or unfocused then is idle from the start,
 without the wait. Only `{idle: false}` ends idle; a message sent from the tab
-doesn't. It is never shown to anyone. A server without `status` gets none of
-this.
+doesn't. Others never see `idle` itself: the server folds it, with your
+pause and push registrations, into the `status` they see (§4.11): `dnd`
+while paused with a tab open, else `online` while a tab is attended, `idle`
+while one is open but unattended or a push would reach you, and `offline`
+otherwise (or while invisible). A
+connection's first `idle` also gets it the `status` of the connected users
+it shares a room with. A server without `status` gets none of this.
 Explicit server URLs keep their path: a bare hostname connects at `/`, while
 servers that require `/ws` should be entered with that suffix.
 
@@ -129,7 +134,20 @@ brings it back, and takes focus when the border collapsed it from the keyboard),
 Dragging either list shut restores its earlier width when it reopens. On
 narrow screens it overlays the conversation, starts closed, and hides with
 the conversation on the phone's rooms pane. It shows no
-typing or connection status.
+typing or connection status. Where the server sends a `status` (§4.11), each
+member's avatar carries a dot cut into its corner: online a filled dot, idle
+a crescent, do not disturb a barred dot, and offline (or any unknown value) a
+hollow ring; the row's tooltip and screen-reader text say it in words. A
+member with no status (none sent, or an empty one, which clears it) has no
+dot and isn't taken for offline. The list sorts online, idle, do not
+disturb, offline, then those with no status, by name within each, and dims
+offline members. Your own row and the profile bar show your status from
+`you`, and do not disturb at once while your notifications are paused, but
+only on a server that sends `status`. Statuses are kept across a reconnect
+of 60 seconds or less, measured from the drop to the next `auth`; after a
+longer one the client drops the others' kept statuses, so they show no dot
+until the server sends them again, as it does for connected users once the
+new connection reports `idle`.
 
 Mentions follow the `@user_id` convention ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-mention-text)). Typing `@` in the
 composer opens the mention picker over the room's members (from the room's
@@ -209,7 +227,8 @@ profile bar's gear carries a small bell-off badge, and nothing notifies here:
 no desktop notifications, chime or title flash. The server sends no pushes.
 
 A room's `mute`, echoed on your room records, pauses that room and its
-threads: there, only mentions notify. `room_list` entries and `room_update`
+threads: there, only mentions notify. `room_list` entries (`joined` and
+`not_joined` alike) and `room_update`
 `joined` records always say it (missing is `0`); on other records a missing
 `mute` leaves it, and `0` ends it. The client
 has no control for it yet.
@@ -245,8 +264,9 @@ account, registers nothing; waiting for the service worker gives up after 10
 seconds. A replaced registration is unregistered, after the next `auth` if not
 at once, and while push is off for the account signed in, this browser's
 endpoint is unregistered after each `auth`, in case an earlier unregister was
-missed. Signing out unregisters, and turns push off for that account here even
-when the server can't be told. A registration the server refuses shows its
+missed. Signing out unregisters, and once it has worked turns push off for
+that account here even when the server can't be told; a sign-out that fails
+(with requests still pending, say) leaves push on. A registration the server refuses shows its
 message in the setting.
 
 **Push notifications** alerts on this device even when Apron is closed. Its

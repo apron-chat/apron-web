@@ -32,10 +32,12 @@ state and behavior — `ConnectScreen`,
 design system with the next `npm run design:bundle`. A user's `status` (§4.11)
 is the design system's `StatusDot` on their `Avatar`: online a dot, idle a
 crescent, dnd a barred dot and offline (or an unknown value) a hollow ring,
-cut out of the avatar, with nothing where the server sends no status. Its
+cut out of the avatar, with nothing where the server sends no status or an
+empty one (cleared, §3.3). Its
 colors are the `--presence-*` tokens. `directory.status` reads it from the kept
 user object only, never a recorded `from`, and `user-status.ts` gives your own
-(dnd at once while paused, its tooltip saying until when) and sorts the member
+(dnd at once while paused, its tooltip saying until when, only where `you`
+carries a `status`) and sorts the member
 list by it (online, idle, dnd, offline, then none), where offline members are
 dimmed. Messages show no status: it is about now, and they are history. `PreferencesDialog` renders
 the design system's `CheckList` (what to notify about), `Callout` (installing
@@ -136,7 +138,12 @@ with `read_cursors: false` it moves your read cursor locally without sending it.
 state as each connection's server frame arrives. `setMute(mute)` sends
 `status` `{mute}` and changes nothing else: the server MAY ignore or shorten
 it, and only `you.mute` from the server (its echo, `0` included) sets the
-snapshot's `mutedUntil`, which a timer clears when the pause ends.
+snapshot's `mutedUntil`, which a timer clears when the pause ends. Kept
+users' `status` values outlast a reconnect of up to `STATUS_KEEP_MS` (60
+seconds, from the drop to the next `auth`, timed by the client's `now`
+clock); after a longer one `dropStaleStatuses` removes all but your own,
+which the `auth` result's `you` gives, so they show none until the server
+sends them again.
 `setPushRegistration(params, userId)` keeps the `push_register` params (§4.7)
 and sends them after each `auth` as that account while `server.push` offers
 their `kind`. A replaced or cleared registration is unregistered, after the
