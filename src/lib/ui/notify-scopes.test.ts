@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
-import { inNotifyScopes, notifyScopeNotes, notifyScopesOf, pushWake } from './notify-scopes';
+import { inMutedRoom, inNotifyScopes, notifyScopeNotes, notifyScopesOf, pushWake } from './notify-scopes';
 
 const ada = { user_id: 'ada', name: 'Ada' };
 
@@ -68,10 +68,13 @@ describe('what to notify about', () => {
 		expect(judge(message('29b', 't2', 'bob'), ['joined'])).toBe(true);
 	});
 
-	it('notifies only about mentions in a room you paused, and its threads', () => {
+	it('notifies about nothing in a room you muted, or its threads, mentions included (§4.11)', () => {
 		expect(judge(message('40', 'quiet', 'bob'), ['joined', 'private'])).toBe(false);
 		expect(judge(message('41', 't3', 'bob', { reply_to: { message_id: '10' } }), ['joined', 'replies'])).toBe(false);
-		expect(judge(message('42', 'quiet', 'bob'), ['mentions', 'joined'], true)).toBe(true);
+		expect(judge(message('42', 'quiet', 'bob'), ['mentions', 'joined'], true)).toBe(false);
+		expect(judge(message('43', 't3', 'bob'), ['mentions'], true)).toBe(false);
+		expect(inMutedRoom(message('44', 't3', 'bob'), rooms)).toBe(true);
+		expect(inMutedRoom(message('45', 'general', 'bob'), rooms)).toBe(false);
 	});
 
 	it('never notifies about your own or deleted messages', () => {

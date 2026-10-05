@@ -42,20 +42,27 @@ export interface NotifyContext {
 	rooms: readonly RoomSnapshot[];
 }
 
+/** Whether a message is in a room you muted (§4.11 `mute` with its `room_id`), or in a thread of one. */
+export function inMutedRoom(event: Pick<MessageRecord, 'room_id'>, rooms: readonly RoomSnapshot[]): boolean {
+	const room = rooms.find((candidate) => candidate.id === event.room_id);
+	const parent = room?.parentRoomId === undefined ? undefined : rooms.find((candidate) => candidate.id === room.parentRoomId);
+	return room?.mutedUntil !== undefined || parent?.mutedUntil !== undefined;
+}
+
 /**
  * Whether a message from someone else is in a checked scope, judged here:
  * `mentions`, it mentions you; `replies`, it replies to one of your messages
  * that is loaded here; `private`, its room (or a thread's room) is private;
- * `joined`, its room (or a thread's room) is joined. In a room you paused,
- * only `mentions` counts.
+ * `joined`, its room (or a thread's room) is joined. A room you muted, or a
+ * thread of one, notifies nothing.
  */
 export function inNotifyScopes(event: MessageRecord, scopes: readonly string[], context: NotifyContext): boolean {
 	if (!context.me || isOwn(event, context.me) || event.deleted) return false;
+	// A room you muted (§4.11 `mute` with its `room_id`), or a thread of one, notifies nothing, mentions included.
+	if (inMutedRoom(event, context.rooms)) return false;
 	const room = context.rooms.find((candidate) => candidate.id === event.room_id);
 	const parent = room?.parentRoomId === undefined ? undefined : context.rooms.find((candidate) => candidate.id === room.parentRoomId);
-	// In a room you paused (§4.11 room `mute`), or a thread of one, only mentions notify.
-	const muted = room?.mutedUntil !== undefined || parent?.mutedUntil !== undefined;
-	return (muted ? scopes.filter((scope) => scope === 'mentions') : scopes).some((scope) => {
+	return scopes.some((scope) => {
 		switch (scope) {
 			case 'mentions':
 				return context.mentioned;

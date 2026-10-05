@@ -55,8 +55,9 @@
 	import { setAppBadge, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
+	import { pageSilenced } from '$lib/ui/user-status';
 	import { PushSettings } from '$lib/ui/push-settings.svelte';
-	import { inNotifyScopes, notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
+	import { inMutedRoom, inNotifyScopes, notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
 	import { accountServer, canOfferInstall, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
 
 	/**
@@ -90,6 +91,8 @@
 	const session = new SessionView();
 	const feedback = new FeedbackState();
 	const mentions = new MentionTracker();
+	/** How many mentions of you have arrived outside the rooms you muted: each new one can alert the tab. */
+	let audibleMentions = $state(0);
 	const incomingMessages = new IncomingMessageTracker();
 	const unread = new UnreadTracker();
 	const presence = new PagePresence();
@@ -137,8 +140,13 @@
 	/** Why push doesn't work: the browser couldn't subscribe, or the server refused the registration. */
 	let webPushError = $derived(pushSettings.error ?? session.snapshot.pushError);
 	let webPushAvailable = $state(false);
-	/** Notifications are paused until then (§4.11 `mute`, the server's `you.mute`). */
+	/** Notifications are paused until then (§4.11 `mute`, as the server's `status` says). */
 	let pausedUntil = $derived(session.snapshot.mutedUntil);
+	/**
+	 * This page stays quiet (no desktop notifications, chime or title flash):
+	 * paused, or your status is `dnd`, which silences like a pause (§4.11).
+	 */
+	let silenced = $derived(pageSilenced(pausedUntil, session.you?.status));
 	/** Pausing needs capability `status` and a signed-in account (a guest's `user_id` ends with its connection). */
 	let canPause = $derived(session.server?.capabilities?.includes('status') === true && pushAccount !== undefined);
 	/** Chromium's offer to install Apron, kept for the push setting's Install app button. */
@@ -303,7 +311,10 @@
 	$effect(() => {
 		const arrivedMentions = mentions.observe(session.rooms, session.you, paneRoom?.id, latestVisible);
 		const arrivedMessages = incomingMessages.observe(session.rooms, session.you);
-		if (!notificationsActive || !presence.away || isPaused(pausedUntil)) return;
+		// A mention in a room you muted (§4.11) doesn't alert the tab either.
+		const audible = arrivedMentions.filter((event) => !inMutedRoom(event, session.rooms)).length;
+		if (audible) untrack(() => (audibleMentions += audible));
+		if (!notificationsActive || !presence.away || silenced) return;
 		const mentioned = new Set(arrivedMentions.map((event) => event.message_id));
 		// The checked scopes, judged here; an edit that adds you counts as a mention.
 		const context = { me: session.you, rooms: session.rooms };
@@ -382,12 +393,13 @@
 	});
 
 	$effect(() => {
-		const arrived = mentions.arrived;
-		// Paused (§4.11 `mute`): no client notifications, so no chime or title flash either.
-		if (isPaused(pausedUntil)) return;
+		const arrived = audibleMentions;
+		// Paused (§4.11 `mute`) or do not disturb: no client notifications, so no chime or title flash
+		// either, and the mentions that arrive meanwhile don't alert once it ends.
+		const quiet = silenced;
 		// A notification chimes instead; `notifyMessage` chimes if it couldn't show one.
 		const playSound = !notificationsActive;
-		untrack(() => presence.noteMentions(arrived, playSound));
+		untrack(() => presence.noteMentions(arrived, playSound, quiet));
 	});
 
 	// The New divider is placed once per visit, from the read cursor the server kept.
@@ -1669,7 +1681,7 @@
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 		webPush={webPushServerKey ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError ? { error: webPushError } : {}) } : undefined} onwebpush={toggleWebPush} oninstallapp={installApp}
-		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(0)}
+		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false)}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={signedOut}
 	/>

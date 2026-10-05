@@ -33,11 +33,15 @@ export class PagePresence {
 		if (!this.away) this.setAttention(false);
 	}
 
-	/** Each mention that lands (by the running count) while you're away flags the tab, and can chime. */
-	noteMentions(arrived: number, playSound = true): void {
+	/**
+	 * Each mention that lands (by the running count) while you're away flags
+	 * the tab, and can chime. While `silenced` (paused, or do not disturb,
+	 * §4.11) it is counted and nothing else: it doesn't alert later either.
+	 */
+	noteMentions(arrived: number, playSound = true, silenced = false): void {
 		if (arrived === this.alerted) return;
 		this.alerted = arrived;
-		if (!this.away) return;
+		if (silenced || !this.away) return;
 		this.setAttention(true);
 		if (playSound) playPing();
 	}
