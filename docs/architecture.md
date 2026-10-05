@@ -134,7 +134,8 @@ with `read_cursors: false` it moves your read cursor locally without sending it.
 `setAway(away)` reports attendance with `status` `{idle}` (§4.11, capability
 `status`): idle only after `IDLE_AFTER_MS`, attended at once, and the current
 state as each connection's server frame arrives. `setMute(mute)` sends
-`status` `{mute}` and applies it at once; `you.mute` from the server sets the
+`status` `{mute}` and changes nothing else: the server MAY ignore or shorten
+it, and only `you.mute` from the server (its echo, `0` included) sets the
 snapshot's `mutedUntil`, which a timer clears when the pause ends.
 `setPushRegistration(params, userId)` keeps the `push_register` params (§4.7)
 and sends them after each `auth` as that account while `server.push` offers

@@ -402,11 +402,16 @@ describe('rooms by request (cap rooms)', () => {
 			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', mute: 120 }, ['token', 'guest']);
 			// The server's `mute` is seconds left: the pause ends then.
 			expect(snapshot.mutedUntil).toBeGreaterThanOrEqual(now + 120_000);
+			// Asking changes nothing until the server echoes what it applied (§4.11).
 			client.setMute(3600);
 			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }]);
+			expect(snapshot.mutedUntil).toBeGreaterThanOrEqual(now + 120_000);
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 3600 } } });
 			expect(snapshot.mutedUntil).toBe(Date.now() + 3_600_000);
 			client.setMute(0);
 			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }, { mute: 0 }]);
+			expect(snapshot.mutedUntil).toBe(Date.now() + 3_600_000);
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
 			expect(snapshot.mutedUntil).toBeUndefined();
 			// Until resumed, from a `user` notification about you.
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada', mute: true } } });
@@ -432,6 +437,31 @@ describe('rooms by request (cap rooms)', () => {
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', name: 'Ada', mute: 60 } } });
 			expect(snapshot.mutedUntil).toBe(Date.now() + 60_000);
 			vi.advanceTimersByTime(60_000);
+			expect(snapshot.mutedUntil).toBeUndefined();
+		});
+
+		it('takes a mute the server shortened or ignored from its echo, never the one asked for', async () => {
+			await greet(['rooms', 'status'], { user_id: 'guest_1' }, ['token', 'guest']);
+			client.useToken('apron_token');
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada' }, ['token', 'guest']);
+			// Shortened: the server echoes the 600 seconds it kept of the 3600 asked for.
+			client.setMute(3600);
+			expect(statuses().filter((params) => 'mute' in params)).toEqual([{ mute: 3600 }]);
+			expect(snapshot.mutedUntil).toBeUndefined();
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 600 } } });
+			expect(snapshot.mutedUntil).toBe(Date.now() + 600_000);
+			vi.advanceTimersByTime(600_000);
+			expect(snapshot.mutedUntil).toBeUndefined();
+			// Ignored: the server echoes `0`, and no pause ever shows here.
+			client.setMute(true);
+			expect(snapshot.mutedUntil).toBeUndefined();
+			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
+			expect(snapshot.mutedUntil).toBeUndefined();
+			// No echo at all (the frame was lost, or the server applied nothing): still no pause.
+			client.setMute(60);
+			vi.advanceTimersByTime(1_000);
 			expect(snapshot.mutedUntil).toBeUndefined();
 		});
 	});

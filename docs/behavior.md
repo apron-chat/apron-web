@@ -194,9 +194,13 @@ gets **Pause notifications** at the top of the section. **Pause…** opens a
 menu: For 1 hour, For 8 hours, Until tomorrow (the next 9:00; "Until this
 morning" before 9:00) and Until I resume, each showing when it would end. The
 menu opens from the keyboard with the arrow keys too. Choosing one sends `status` `{mute}`
-with the seconds until then, or `true`, and **Resume** sends `{mute: 0}`. The
-server's `you.mute` (in `auth` and `me` results and `user` notifications about
-you: seconds left, `true`, or `0` when not paused) is the word on it. A `you`
+with the seconds until then, or `true`, and **Resume** sends `{mute: 0}`.
+Neither changes anything here by itself: the server may ignore or shorten a
+mute, and echoes what it applied. The server's `you.mute` (in `auth` and `me`
+results and `user` notifications about you: seconds left, `true`, or `0` when
+not paused) is the word on it, so the row shows the pause the server kept, a
+shorter one or none, and focus moves to **Resume** (or back to **Pause…**)
+once the echo arrives. A `you`
 without `mute` leaves the pause as it is (§3.3); an `auth` result without it
 starts the session unpaused. The client works out when the pause ends from
 it as it arrives, and resumes on its own then. While paused, the row reads

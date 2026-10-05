@@ -1412,16 +1412,15 @@ export class ChatClient {
 	}
 
 	/**
-	 * Pauses your notifications everywhere (§4.11 `mute`): for `mute`
-	 * seconds, until resumed (`true`), or resumes them (`0`). Applied here at
-	 * once; the server's `you.mute` then has the last word. Needs capability
-	 * `status` and a signed-in account.
+	 * Asks to pause your notifications everywhere (§4.11 `mute`): for `mute`
+	 * seconds, until resumed (`true`), or to resume them (`0`). Nothing changes
+	 * here until the server echoes `you.mute`: it MAY ignore or shorten a
+	 * mute, and the pause is whatever it echoes, so a pause it didn't apply
+	 * never shows. Needs capability `status` and a signed-in account.
 	 */
 	setMute(mute: number | true): void {
 		if (!this.authenticated || !this.registeredSession || !this.hasCap('status')) return;
 		this.sendFrame({ method: 'status', params: { mute } });
-		this.applyMute(mute);
-		this.emit();
 	}
 
 	/** Takes `mute` as the server echoes it in `you` (§4.11): seconds left, `true`, or `0` (or undefined) when not paused. */

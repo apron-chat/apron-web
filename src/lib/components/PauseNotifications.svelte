@@ -6,7 +6,11 @@
 	import { pauseChoices, pausedUntilLabel, type PausedUntil } from '$lib/ui/pause';
 
 	interface Props {
-		/** Until when notifications are paused (§4.11 `mute`); undefined when not. */
+		/**
+		 * Until when notifications are paused (§4.11 `mute`), as the server
+		 * echoed it; undefined when not. Pausing and resuming only ask: this
+		 * changes when the echo arrives, perhaps shorter, or not at all.
+		 */
 		until?: PausedUntil;
 		onpause: (until: PausedUntil) => void;
 		onresume: () => void;
@@ -21,22 +25,27 @@
 		return pauseChoices();
 	});
 
-	/** Pause and Resume replace each other: focus moves to the one that took its place. */
-	async function focusReplacement(): Promise<void> {
-		await tick();
-		row?.querySelector<HTMLButtonElement>('.ap-pause-action button')?.focus();
-	}
+	/** What was asked for here, until the server's echo makes it so: then focus follows. */
+	let asked = $state<'pause' | 'resume' | undefined>();
+
+	/** Pause and Resume replace each other once the echo arrives: focus moves to the one that took its place. */
+	$effect(() => {
+		const now = until !== undefined ? 'pause' : 'resume';
+		if (asked !== now) return;
+		asked = undefined;
+		void tick().then(() => row?.querySelector<HTMLButtonElement>('.ap-pause-action button')?.focus());
+	});
 
 	function pause(value: string): void {
 		const choice = choices.find((entry) => entry.value === value);
 		if (!choice) return;
+		asked = 'pause';
 		onpause(choice.until);
-		void focusReplacement();
 	}
 
 	function resume(): void {
+		asked = 'resume';
 		onresume();
-		void focusReplacement();
 	}
 </script>
 
