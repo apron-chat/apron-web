@@ -45,7 +45,10 @@ dnd, unknown, offline, then none), where offline members are dimmed.
 is about now, and they are history. `PreferencesDialog` renders the design
 system's `CheckList` (what to notify about), `Callout` (installing for push,
 and what the server answered for a status) and `MenuButton` (Status, in
-`StatusPicker`, as a picker with `selected` and a `lead` dot per choice; and
+`StatusPicker`, as a picker with `selected` and a `lead` dot per choice,
+offering Online and None, and `dnd` and `invisible` where `accepted`
+(`server.status`, which `ProfileBar` passes from the server frame) lists them
+and the server hasn't answered something else for them (`unsupported`); and
 Pause…, in `PauseNotifications`) as they are, and `pause.ts` words and times
 the pause. Its status notes are read through one
 live region, and switches and checkboxes that can't change stay focusable with
@@ -145,9 +148,13 @@ state as each connection's server frame arrives. `setStatus(status)` sends
 is the one in effect. `setMute(mute)` sends `status` `{mute}` and changes
 nothing else: only a `status` notification from the server (`handleStatus`)
 sets the snapshot's `mutedUntil`, or a room's with its `room_id`, which
-timers clear when they run out. Each `auth` (but an address or passkey added
-on the same connection) resets them, and the `status` frames after it bring
-back those in effect; a lost connection keeps them until then. Kept
+timers clear when they run out. Each sign-in resets them in `handleAuth`,
+and the `status` frames after its result bring back those in effect; a lost
+connection keeps them until then. An `auth` that adds to the signed-in
+connection isn't a sign-in: a passkey registered while authenticated, a
+guest's included, passes `added`, and an added address's `{}` result never
+reaches `handleAuth`. `handleServer` keeps `server.status`, the optional
+statuses the server accepts, as strings. Kept
 users' `status` values outlast a reconnect of up to `STATUS_KEEP_MS` (60
 seconds, from the drop to the next `auth`, timed by the client's `now`
 clock); after a longer one `dropStaleStatuses` removes all but your own,
