@@ -6,11 +6,19 @@ import type { Presence } from '$lib/design/components/types';
 describe('ownStatus', () => {
 	it('is dnd at once while paused, else what `you` says (§4.11)', () => {
 		expect(ownStatus('online', 1_700_000_000_000)).toBe('dnd');
-		expect(ownStatus(undefined, true)).toBe('dnd');
+		expect(ownStatus('idle', true)).toBe('dnd');
 		expect(ownStatus('idle', undefined)).toBe('idle');
 		expect(ownStatus('away', undefined)).toBe('offline');
 		expect(ownStatus(undefined, undefined)).toBeUndefined();
 		expect(ownStatus(3, undefined)).toBeUndefined();
+	});
+	it('shows no dnd while paused where the server sends no status', () => {
+		expect(ownStatus(undefined, true)).toBeUndefined();
+		expect(ownStatus(undefined, 1_700_000_000_000)).toBeUndefined();
+	});
+	it('takes an empty status as none (§3.3)', () => {
+		expect(ownStatus('', undefined)).toBeUndefined();
+		expect(ownStatus('', true)).toBeUndefined();
 	});
 });
 

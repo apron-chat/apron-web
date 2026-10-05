@@ -3,13 +3,15 @@ import type { Presence } from '$lib/design/components/types';
 import { pausedUntilLabel, type PausedUntil } from './pause';
 
 /**
- * Your own `status` (§4.11, `you` ignores `invisible`): `dnd` at once while
- * your notifications are paused, as the server will echo, else what `you`
- * last said. Undefined when the server says nothing.
+ * Your own `status` (§4.11, `you` ignores `invisible`): what `you` last said,
+ * shown as `dnd` at once while your notifications are paused, ahead of the
+ * server's echo. Only where the server sends a `status` at all: a server
+ * that sends none (or cleared it with `""`, §3.3) shows no status, paused
+ * or not.
  */
 export function ownStatus(status: unknown, pausedUntil: PausedUntil | undefined): Presence | undefined {
-	if (pausedUntil !== undefined) return 'dnd';
-	return typeof status === 'string' ? presence(status) : undefined;
+	if (typeof status !== 'string' || status === '') return undefined;
+	return pausedUntil !== undefined ? 'dnd' : presence(status);
 }
 
 /** Your status in words for its tooltip: while paused, when that ends ("Do not disturb · until 14:30"). */
