@@ -388,3 +388,86 @@ describe('accounts and their ways back in', () => {
 		expect(snapshot.emailCode).toBeUndefined();
 	});
 });
+
+/**
+ * Mutes across `auth` (§4.11): a sign-in starts unmuted and takes the mutes
+ * the server sends after its result; an `auth` that adds a passkey or an
+ * address to the signed-in connection is no sign-in, and the mutes stand.
+ */
+describe('mutes and sign-ins', () => {
+	let client: ChatClient;
+	let snapshot: ClientSnapshot;
+	const latest = () => FakeSocket.latest();
+	const roomMute = (id: string) => snapshot.rooms.find((room) => room.id === id)?.mutedUntil;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		FakeSocket.instances = [];
+		vi.stubGlobal('WebSocket', FakeSocket);
+		vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined, removeItem: () => undefined });
+		vi.mocked(requestPasskey).mockReset();
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
+		client = new ChatClient('ws://fake.test/');
+		client.subscribe((next) => (snapshot = next));
+		client.start();
+	});
+
+	afterEach(() => {
+		client.stop();
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
+	});
+
+	/** Signed in as `you` (a registered session with `token`), with a global mute and one on `general`. */
+	async function signedInMuted(auth: string[], you: Record<string, unknown>, token?: string): Promise<FakeSocket> {
+		const socket = latest();
+		await socket.greet(['status'], { auth, you, room: { room_id: 'general', title: 'General' }, ...(token ? { token } : {}) });
+		socket.receive({ method: 'status', params: { mute: true } });
+		socket.receive({ method: 'status', params: { room_id: 'general', mute: true } });
+		expect([snapshot.mutedUntil, roomMute('general')]).toEqual([true, true]);
+		return socket;
+	}
+
+	async function passkey(socket: FakeSocket, action: 'register' | 'login', you: string): Promise<void> {
+		const done = client.usePasskey(action);
+		await vi.advanceTimersByTimeAsync(0);
+		await socket.reply('auth', { challenge_id: 'c1', public_key: { challenge: 'x' } });
+		await vi.advanceTimersByTimeAsync(0);
+		await socket.reply('auth', { you: { user_id: you } });
+		await done;
+	}
+
+	it('keeps them when a signed-in account adds a passkey', async () => {
+		const socket = await signedInMuted(['webauthn', 'token', 'guest'], { user_id: 'ada' }, 'st_ada');
+		await passkey(socket, 'register', 'ada');
+		expect([snapshot.mutedUntil, roomMute('general')]).toEqual([true, true]);
+	});
+
+	it('keeps them when a guest adds a passkey to its signed-in connection', async () => {
+		const socket = await signedInMuted(['webauthn', 'guest'], { user_id: 'guest_1' });
+		await passkey(socket, 'register', 'guest_1');
+		expect(snapshot.passkeySession).toBe(true);
+		expect([snapshot.mutedUntil, roomMute('general')]).toEqual([true, true]);
+	});
+
+	it('keeps them when a signed-in account adds an address', async () => {
+		const socket = await signedInMuted(['email', 'token', 'guest'], { user_id: 'ada' }, 'st_ada');
+		const asked = client.requestEmailCodeToAdd('ada@example.com');
+		await socket.reply('auth', {});
+		await asked;
+		const added = client.addEmail('1');
+		await vi.advanceTimersByTimeAsync(0);
+		socket.receive({ id: socket.request('auth').id, result: {} });
+		await added;
+		expect([snapshot.mutedUntil, roomMute('general')]).toEqual([true, true]);
+	});
+
+	it('starts a passkey sign-in on a signed-in connection unmuted, and applies the status frames after its result', async () => {
+		const socket = await signedInMuted(['webauthn', 'guest'], { user_id: 'guest_1' });
+		await passkey(socket, 'login', 'ada');
+		expect([snapshot.mutedUntil, roomMute('general')]).toEqual([undefined, undefined]);
+		socket.receive({ method: 'status', params: { room_id: 'general', mute: 600 } });
+		expect(snapshot.mutedUntil).toBeUndefined();
+		expect(roomMute('general')).toBe(Date.now() + 600_000);
+	});
+});

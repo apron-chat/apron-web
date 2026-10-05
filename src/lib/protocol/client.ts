@@ -977,8 +977,10 @@ export class ChatClient {
 		// Signing in again on this connection: an address proposed for the account it was is not approved for this one.
 		if (action === 'login') this.addProposalConnection = undefined;
 		if (name) this.displayName = name;
-		// A passkey registered on a registered session is added to it (§4.9), not a new way it signed in.
-		const adding = action === 'register' && this.registeredSession && this.authenticated;
+		// A passkey registered on a signed-in connection, a guest's included, is added to that
+		// account (§4.9): not a sign-in, so its mutes stand (§4.11). For a registered session it
+		// is another way back in, not a new way it signed in; a guest's account becomes registered.
+		const adding = action === 'register' && this.authenticated;
 		if (!this.handleAuth(result, 'webauthn', adding)) throw new Error('Server authentication response did not include an identity');
 		if (action === 'login') this.relabelPasskey(begun.publicKey, credential);
 		return this.authNameRequest;
@@ -1442,8 +1444,8 @@ export class ChatClient {
 
 	/**
 	 * A `status` from the server (§4.11): a change to one of your mutes, sent
-	 * to each of your connections, or after `auth` one of the mutes in
-	 * effect. The client takes it as its own setting: `mute` without
+	 * to each of your connections, or, after a sign-in's result, one of the
+	 * mutes in effect. The client takes it as its own setting: `mute` without
 	 * `room_id` pauses everything, with one that room and its threads.
 	 * Servers never send `idle`; an invalid `mute` is ignored.
 	 */
@@ -1456,8 +1458,9 @@ export class ChatClient {
 	}
 
 	/**
-	 * Each `auth` starts from no mutes: the server then sends every mute in
-	 * effect as a `status`, and any scope it doesn't send is unmuted (§4.11).
+	 * Each sign-in starts from no mutes: after its result the server sends
+	 * every mute in effect as a `status`, and any scope it doesn't send is
+	 * unmuted (§4.11). An `auth` that adds a passkey or address isn't a sign-in.
 	 */
 	private resetMutes(): void {
 		this.applyMute(false);
@@ -2372,8 +2375,10 @@ export class ChatClient {
 			return false;
 		}
 		// Each sign-in starts unmuted: the server's `status` frames that follow
-		// bring back the mutes in effect (§4.11). An address or passkey added on
-		// this connection (`added`) is the same session, its mutes unchanged.
+		// the result bring back the mutes in effect (§4.11). A passkey added on
+		// this signed-in connection (`added`) is not a sign-in: the server sends
+		// no mutes after it, and those in effect stand. (An added address never
+		// comes here: its result is `{}`.)
 		if (!added) this.resetMutes();
 		this.setYou(identity as Identity);
 		if (signedIn && added && this.registeredSession) {
@@ -3262,7 +3267,7 @@ export class ChatClient {
 	/**
 	 * Forgets what belonged to the connection. Your mutes stay through a lost
 	 * connection, so a pause doesn't flicker off while reconnecting: the next
-	 * `auth` resets them and the server sends those in effect (§4.11).
+	 * sign-in resets them and the server sends those in effect (§4.11).
 	 */
 	private forgetConnectionState(): void {
 		this.reactionIntents.clear();
