@@ -79,3 +79,32 @@ describe('kept statuses across reconnects', () => {
 		expect(statusOf('bo')).toBeUndefined();
 	});
 });
+
+/** `server.status` (§3.1, §4.11): the optional statuses the server accepts. */
+describe('server.status', () => {
+	let client: ChatClient;
+	let snapshot: ClientSnapshot;
+
+	beforeEach(() => {
+		FakeSocket.instances = [];
+		vi.stubGlobal('WebSocket', FakeSocket);
+		client = ChatClient.fromOptions({ serverUrl: 'ws://fake.test/', onChange: (next) => (snapshot = next) });
+		client.start();
+	});
+
+	afterEach(() => {
+		client.stop();
+		vi.unstubAllGlobals();
+	});
+
+	it('takes the strings listed, and a replacing frame without it leaves none', () => {
+		const socket = FakeSocket.latest();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['status'], status: ['dnd', 'invisible', 7] } });
+		expect(snapshot.server?.status).toEqual(['dnd', 'invisible']);
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['status'] } });
+		expect(snapshot.server && Object.hasOwn(snapshot.server, 'status')).toBe(false);
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['status'], status: 'dnd' } });
+		expect(snapshot.server && Object.hasOwn(snapshot.server, 'status')).toBe(false);
+	});
+});

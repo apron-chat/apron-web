@@ -5,8 +5,9 @@ import { isPaused, type PausedUntil } from './pause';
 /**
  * The statuses you can choose with `me` (§4.11), as the picker lists them:
  * `online` (the default: others see online, idle or offline) and `""`
- * (none) every server takes; `dnd` and `invisible` are optional, so a server
- * may answer another value, which `you` then shows.
+ * (none) every server takes; `dnd` and `invisible` are optional, offered
+ * only where `server.status` lists them (§3.1). A server may still answer
+ * another value, which `you` then shows.
  */
 export const STATUS_CHOICES = [
 	{ value: 'online', label: 'Online', hint: 'Automatic' },
@@ -15,7 +16,7 @@ export const STATUS_CHOICES = [
 	{ value: '', label: 'None', hint: 'Show no status' }
 ] as const;
 
-/** The optional ones (§4.11): a server may not support them. */
+/** The optional ones (§4.11): a server accepts those `server.status` lists. */
 export const OPTIONAL_STATUSES: readonly string[] = ['dnd', 'invisible'];
 
 /** A chosen status in words, as the picker names it: "Online", "None", or an unknown value as itself. */

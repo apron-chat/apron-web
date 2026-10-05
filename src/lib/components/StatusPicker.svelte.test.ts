@@ -13,6 +13,7 @@ afterEach(() => {
 
 const trigger = () => document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
 const radios = () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+const labels = () => radios().map((item) => item.querySelector('.ap-menu-label')?.textContent);
 
 async function open(): Promise<void> {
 	trigger().click();
@@ -30,10 +31,14 @@ async function pick(label: string): Promise<void> {
 	flushSync();
 }
 
-/** The picker as the profile bar mounts it: `status` follows what `onchoose` resolves with, like `you` does. */
-function render(initial: string | undefined, answer: (asked: string) => string | undefined | Error) {
-	const props = $state<{ status?: string; unsupported: string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void }>({
+/**
+ * The picker as the profile bar mounts it: `status` follows what `onchoose`
+ * resolves with, like `you` does. `accepted` is `server.status`; null leaves it out.
+ */
+function render(initial: string | undefined, answer: (asked: string) => string | undefined | Error, accepted: string[] | null = ['dnd', 'invisible']) {
+	const props = $state<{ status?: string; accepted?: string[]; unsupported: string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void }>({
 		status: initial,
+		...(accepted ? { accepted } : {}),
 		unsupported: [],
 		onchoose: vi.fn(async (asked: string) => {
 			const kept = answer(asked);
@@ -49,7 +54,7 @@ function render(initial: string | undefined, answer: (asked: string) => string |
 }
 
 describe('StatusPicker', () => {
-	it('offers Online, Do not disturb, Invisible and None, with the current one checked', async () => {
+	it('offers Online, Do not disturb, Invisible and None where server.status lists both, with the current one checked', async () => {
 		render('online', (asked) => asked);
 		expect(trigger().textContent).toBe('Online');
 		expect(trigger().getAttribute('aria-label')).toBe('Status: Online');
@@ -58,6 +63,45 @@ describe('StatusPicker', () => {
 		expect(radios().map((item) => item.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'false']);
 		// Each with its dot; None has none.
 		expect(radios().map((item) => item.querySelector('.ap-presence')?.className.match(/ap-presence-(online|dnd|invisible)/)?.[1] ?? '')).toEqual(['online', 'dnd', 'invisible', '']);
+	});
+
+	it('offers only Online and None without server.status', async () => {
+		render('online', (asked) => asked, null);
+		await open();
+		expect(labels()).toEqual(['Online', 'None']);
+	});
+
+	it('offers only Online and None for an empty server.status', async () => {
+		render('online', (asked) => asked, []);
+		await open();
+		expect(labels()).toEqual(['Online', 'None']);
+	});
+
+	it('offers just the optional statuses server.status lists', async () => {
+		render('online', (asked) => asked, ['dnd']);
+		await open();
+		expect(labels()).toEqual(['Online', 'Do not disturb', 'None']);
+		document.body.innerHTML = '';
+		if (instance) unmount(instance);
+		render('online', (asked) => asked, ['invisible', 'busy']);
+		await open();
+		expect(labels()).toEqual(['Online', 'Invisible', 'None']);
+	});
+
+	it('follows a replacing server frame', async () => {
+		const props = render('online', (asked) => asked, []);
+		props.accepted = ['dnd', 'invisible'];
+		flushSync();
+		await open();
+		expect(labels()).toEqual(['Online', 'Do not disturb', 'Invisible', 'None']);
+	});
+
+	it('keeps an unlisted current status listed and checked', async () => {
+		render('dnd', (asked) => asked, []);
+		expect(trigger().textContent).toBe('Do not disturb');
+		await open();
+		expect(labels()).toEqual(['Online', 'Do not disturb', 'None']);
+		expect(radios().map((item) => item.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
 	});
 
 	it('takes the absent status as the default, online', () => {
@@ -78,7 +122,7 @@ describe('StatusPicker', () => {
 		expect(document.querySelector('.ap-status-pick-dot .ap-presence')).toBeNull();
 	});
 
-	it('shows what the server answered for an optional status it doesn\'t offer, and stops offering it', async () => {
+	it('shows what the server answered for a listed optional status it substituted, and stops offering it', async () => {
 		const props = render('online', (asked) => (asked === 'invisible' ? '' : asked));
 		await pick('Invisible');
 		expect(props.onchoose).toHaveBeenCalledWith('invisible');
@@ -88,7 +132,7 @@ describe('StatusPicker', () => {
 		expect(callout.textContent).toContain('Your status is None.');
 		expect(props.unsupported).toEqual(['invisible']);
 		await open();
-		expect(radios().map((item) => item.querySelector('.ap-menu-label')?.textContent)).toEqual(['Online', 'Do not disturb', 'None']);
+		expect(labels()).toEqual(['Online', 'Do not disturb', 'None']);
 	});
 
 	it('says when the server declined', async () => {

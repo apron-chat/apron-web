@@ -38,7 +38,7 @@
 		 * `value` as `you` shows it, and the optional ones this server answered
 		 * something else for.
 		 */
-		status?: { value?: string; unsupported: readonly string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void; disabled?: boolean };
+		status?: { value?: string; accepted?: readonly string[]; unsupported: readonly string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void; disabled?: boolean };
 		onclosed?: () => void;
 	}
 
@@ -220,7 +220,7 @@
 				<p class="ap-profedit-hint">Choose when Apron can interrupt you.</p>
 				<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
 				{#if status}
-					<StatusPicker status={status.value} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} disabled={status.disabled} />
+					<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} disabled={status.disabled} />
 				{/if}
 				{#if pause}
 					<PauseNotifications until={pause.until} {onpause} {onresume} />

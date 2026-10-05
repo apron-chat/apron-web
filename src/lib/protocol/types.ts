@@ -156,6 +156,12 @@ export interface ServerParams {
 	ping?: number;
 	/** Each push kind the server delivers, with its public configuration (§4.7). */
 	push?: JsonObject;
+	/**
+	 * The optional `status` values the server accepts with `me` (§3.1, §4.11),
+	 * such as `dnd` and `invisible`; `online` and `""` aren't listed. Only with
+	 * capability `status`. Absent: none.
+	 */
+	status?: string[];
 }
 
 export interface ServerExt extends JsonObject {

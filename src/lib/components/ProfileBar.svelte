@@ -76,7 +76,7 @@
 	let ownLabel = $derived(ownStatusLabel(ownStatus));
 	/** Choosing a status (§4.11): with capability `status`, signed in. */
 	let canSetStatus = $derived(session.snapshot.capabilities.status && session.snapshot.authenticated && you !== undefined);
-	/** Optional statuses this server answered something else for (§4.11), per server: not offered again. */
+	/** Optional statuses this server answered something else for anyway (§4.11), per server: not offered again. */
 	let unsupportedStatuses = $state<{ server: string; values: string[] }>({ server: '', values: [] });
 	let unsupported = $derived(unsupportedStatuses.server === client.url ? unsupportedStatuses.values : []);
 
@@ -392,7 +392,7 @@
 		bind:open={preferencesOpen}
 		{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
 		{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
-		status={canSetStatus ? { value: you?.status, unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
+		status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
 		onclosed={() => preferencesTrigger?.focus()}
 	/>
 	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || 'not signed in'}${ownStatus ? `, ${(ownLabel ?? presenceLabel(ownStatus) ?? '').toLowerCase()}` : ''}. Edit`} onclick={toggle}>

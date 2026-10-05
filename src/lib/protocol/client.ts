@@ -2257,6 +2257,7 @@ export class ChatClient {
 			...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
 			...(isJsonObject(params.ext) ? { ext: params.ext as ServerExt } : {}),
 			...(isJsonObject(params.push) ? { push: params.push } : {}),
+			...(Array.isArray(params.status) ? { status: params.status.filter(isString) } : {}),
 			...(typeof params.ping === 'number' && Number.isFinite(params.ping) && params.ping > 0 ? { ping: params.ping } : {})
 		};
 		// Liveness starts before authentication (§1); a replacing frame may change the interval.
