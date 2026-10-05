@@ -272,11 +272,12 @@ notice. `unread`
 becomes the app badge where the browser has one, cleared at 0; while Apron is
 in view, the badge is the page's own unread count. A message notification, the
 page's or a pushed one, is tagged with the `push_id` and the `message_id`, and
-a room's notifications are ordered by `message_id`: a message the room has
-already notified about (showing, or remembered in IndexedDB though dismissed)
-or one older than that doesn't notify again, and a new one closes only older
-ones; the same message again (an edit that newly mentions you, say) replaces
-its notification quietly, keeping its title. Browsers expect each push to
+a room's notifications are ordered by `message_id`: a message older than the
+room's newest notified one doesn't notify, and a new one closes only older
+ones. The same message again replaces its notification quietly (same tag,
+`renotify: false`, silent) while it is showing: a push's with the page's own,
+or an edit that newly mentions you, keeping the pushed one's title. Once
+dismissed (remembered in IndexedDB), it doesn't notify again. Browsers expect each push to
 show a notification, and WebKit revokes subscriptions whose pushes don't, so
 every push but a badge push shows one: a push with nothing new, one for an
 account push isn't on for here, or one that can't be read shows again, as it

@@ -21,8 +21,16 @@ function messageOptions(id: string, room = 'general'): ShowNotificationOptions {
 	return { body: `message ${id}`, tag: messageNotificationTag('a1', id), renotify: false, data: { pushId: 'a1', messageId: id, group: notificationGroup('a1', room) } };
 }
 
+/** What the service worker remembers notifying about per group, as `loadShownMarks` reads it (dismissed ones too). */
+const shownMarks = vi.hoisted(() => ({ value: {} as Record<string, string> }));
+vi.mock('./push-store', async (importOriginal) => ({
+	...await importOriginal<typeof import('./push-store')>(),
+	loadShownMarks: async () => ({ ...shownMarks.value })
+}));
+
 afterEach(() => {
 	vi.unstubAllGlobals();
+	shownMarks.value = {};
 });
 
 describe('showing notifications', () => {
@@ -51,17 +59,32 @@ describe('showing notifications', () => {
 		expect(construct).not.toHaveBeenCalled();
 	});
 
-	it('shows a message the room already notified about, or one older than it, no more', async () => {
+	it('replaces a pushed notification of the same message quietly, and shows an older one no more', async () => {
 		stubPermission('granted', () => undefined);
 		const registration = fakeRegistration();
 		vi.stubGlobal('navigator', { serviceWorker: { getRegistration: async () => registration } });
-		// A push showed message 101 first; the page's notification of it, or of the older 100, doesn't show.
+		// A push showed message 101 first; the page's notification of it takes its place, quietly.
 		await registration.showNotification('ada · #general', messageOptions('101'));
 		expect(await showNotification('ada · General', messageOptions('101'), () => undefined)).toBe(true);
+		expect(registration.list.map((entry) => entry.title)).toEqual(['ada · General']);
+		expect(registration.list[0].options).toMatchObject({ tag: 'apron:a1:101', renotify: false, silent: true });
+		// The room's older message 100 doesn't show under it.
 		expect(await showNotification('ada · General', messageOptions('100'), () => undefined)).toBe(true);
-		expect(registration.showNotification).toHaveBeenCalledTimes(1);
-		// The push's notification stays as it was.
-		expect(registration.list.map((entry) => entry.title)).toEqual(['ada · #general']);
+		expect(registration.showNotification).toHaveBeenCalledTimes(2);
+		expect(registration.list.map((entry) => entry.tag)).toEqual(['apron:a1:101']);
+	});
+
+	it('doesn\'t bring back a message notification that was dismissed', async () => {
+		stubPermission('granted', () => undefined);
+		const registration = fakeRegistration();
+		vi.stubGlobal('navigator', { serviceWorker: { getRegistration: async () => registration } });
+		// A push notified about 101, and it was dismissed: only the mark is left.
+		shownMarks.value = { [notificationGroup('a1', 'general')]: '101' };
+		expect(await showNotification('ada · General', messageOptions('101'), () => undefined)).toBe(true);
+		expect(registration.showNotification).not.toHaveBeenCalled();
+		// A newer message still shows, as usual (not silent).
+		expect(await showNotification('ada · General', messageOptions('102'), () => undefined)).toBe(true);
+		expect(registration.list.map((entry) => entry.options.silent)).toEqual([undefined]);
 	});
 
 	it('falls back to the page\'s own notification while the service worker isn\'t active', async () => {

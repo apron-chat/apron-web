@@ -100,7 +100,9 @@ export type ShowNotificationOptions = NotificationOptions & { renotify?: boolean
  * pushed ones (§4.7) and can be listed and closed, or from the page where
  * there is no service worker. Resolves whether one was shown, or the
  * message already was (by a push, or before): a message notification shows
- * at most once, and never under a newer one of its room. `onclick` handles a
+ * at most once per `push_id` and `message_id`, and never under a newer one
+ * of its room. One still showing (a push's, say) is replaced by the page's
+ * quietly (same tag, `renotify: false`, silent); one dismissed stays gone. `onclick` handles a
  * click on the page's own notification; a click on the service worker's
  * posts `NOTIFICATION_CLICK`.
  */
@@ -111,11 +113,20 @@ export async function showNotification(title: string, options: ShowNotificationO
 	const registration = await globalThis.navigator?.serviceWorker?.getRegistration().catch(() => undefined);
 	if (registration) {
 		try {
+			let shownOptions = options;
 			if (place) {
-				const newest = newestNotified(await registration.getNotifications(), place.group, (await loadShownMarks())[place.group]);
-				if (newest !== undefined && compareLogIds(place.messageId, newest) <= 0) return true;
+				const visible = await registration.getNotifications();
+				const newest = newestNotified(visible, place.group, (await loadShownMarks())[place.group]);
+				const order = newest === undefined ? 1 : compareLogIds(place.messageId, newest);
+				if (order < 0) return true;
+				if (order === 0) {
+					// Already notified: replace it quietly while it shows (a push's, say), never bring it back once dismissed.
+					const same = visible.some((shown) => { const at = placeOf(shown.data); return at?.group === place.group && at.messageId === place.messageId; });
+					if (!same) return true;
+					shownOptions = { ...options, renotify: false, silent: true };
+				}
 			}
-			await registration.showNotification(title, options);
+			await registration.showNotification(title, shownOptions);
 			if (place) {
 				closeOlderInGroup(await registration.getNotifications(), place.group, place.messageId);
 				await markShown(place.group, place.messageId, newer);
