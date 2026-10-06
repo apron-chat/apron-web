@@ -260,13 +260,46 @@ export function roomTitle(roomId: string, record: RoomRecord | undefined): strin
 	return roomId;
 }
 
+/** An empty value (§3.3): `""`, `[]`, or `{}`, which clears what it replaces. */
+export function isEmptyValue(value: unknown): boolean {
+	if (value === '') return true;
+	if (Array.isArray(value)) return value.length === 0;
+	return isJsonObject(value) && Object.keys(value).length === 0;
+}
+
 /**
- * One user object merged into the kept one (§3.3): each field it carries
- * replaces the kept value, and a missing (or `null`) field leaves it. An
- * empty value (`""`, `[]`, `{}`) means the field was cleared, and is kept as
- * such rather than dropped, so rendering never falls back to a stale
- * recorded object for it (see `userIn`). Returns `current` itself when
- * nothing changes.
+ * `ext` merged one level deep (§3.5): each key that `incoming` carries
+ * replaces the kept value, an empty value (`""`, `[]`, `{}`) clears that key,
+ * and keys it leaves out stay. `"ext": {}` changes nothing. The value under a
+ * key is replaced whole; `null` is an ordinary value. Returns `kept` itself
+ * when nothing changes, and `undefined` when nothing is left of an absent one.
+ */
+export function mergeExt(kept: JsonObject | undefined, incoming: JsonObject): JsonObject | undefined {
+	let next: JsonObject | undefined;
+	for (const key of Object.keys(incoming)) {
+		const value = incoming[key];
+		if (value === undefined) continue;
+		const base = next ?? kept;
+		if (isEmptyValue(value)) {
+			if (!base || !Object.hasOwn(base, key)) continue;
+			next ??= Object.assign(Object.create(null), kept) as JsonObject;
+			delete next[key];
+		} else if (!base || !Object.hasOwn(base, key) || canonicalJson(base[key]) !== canonicalJson(value)) {
+			next ??= Object.assign(Object.create(null), kept) as JsonObject;
+			next[key] = cloneJson(value);
+		}
+	}
+	return next ?? kept;
+}
+
+/**
+ * A partial current user object (a `user` notification's `you` or `new`, a
+ * room's `members`) merged into the kept one (§3.3): each field it carries
+ * replaces the kept value, and fields it leaves out stay. `null` is an
+ * ordinary value. An empty value (`""`, `[]`, `{}`) means the field was
+ * cleared, and is kept as such rather than dropped, so rendering never falls
+ * back to a stale recorded object for it (see `userIn`); `ext` instead merges
+ * by its keys (`mergeExt`). Returns `current` itself when nothing changes.
  */
 export function mergeIdentity(current: Identity | undefined, incoming: Identity): Identity {
 	const next: JsonObject = Object.create(null);
@@ -276,13 +309,35 @@ export function mergeIdentity(current: Identity | undefined, incoming: Identity)
 	for (const key of Object.keys(incoming)) {
 		if (key === 'user_id') continue;
 		const value = incoming[key];
-		if (value === undefined || value === null) continue;
+		if (value === undefined) continue;
+		if (key === 'ext' && isJsonObject(value)) {
+			const kept = isJsonObject(next.ext) ? next.ext : undefined;
+			const merged = mergeExt(kept, value);
+			if (merged !== kept) {
+				if (merged === undefined) delete next.ext;
+				else next.ext = merged;
+				changed = true;
+			}
+			continue;
+		}
 		if (!Object.hasOwn(next, key) || canonicalJson(next[key]) !== canonicalJson(value)) {
 			next[key] = cloneJson(value);
 			changed = true;
 		}
 	}
 	return changed ? next as Identity : current!;
+}
+
+/**
+ * A complete user object (`you` in an `auth` or `me` result, a listing's
+ * `users`, §3.3) in place of the kept one: fields it leaves out are gone.
+ * Returns `current` itself when the two are equal.
+ */
+export function replaceIdentity(current: Identity | undefined, incoming: Identity): Identity {
+	if (current && canonicalJson(current) === canonicalJson(incoming)) return current;
+	const next: JsonObject = Object.create(null);
+	for (const key of Object.keys(incoming)) if (incoming[key] !== undefined) next[key] = cloneJson(incoming[key]);
+	return next as Identity;
 }
 
 export function sameEmojiSet(left: readonly string[], right: readonly string[]): boolean {

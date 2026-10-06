@@ -66,12 +66,17 @@ connection is attended, `idle` while you are connected but none is, and
 Explicit server URLs keep their path: a bare hostname connects at `/`, while
 servers that require `/ws` should be entered with that suffix.
 
-The client keeps one user object per `user_id` ([PROTOCOL.md §3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)) and merges
-every current object into it field by field — `you`, `user` notifications, and
-room `members` and `users` in `room_list` and `room_update` — so a rename or a
-new avatar shows on earlier messages too. A present field replaces, an empty
-one (`""`, `[]`, `{}`) clears it and is kept as cleared, and a missing one
-changes nothing. Recorded objects, a message's or reaction's `from` and a
+The client keeps one user object per `user_id` ([PROTOCOL.md §3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)), so a
+rename or a new avatar shows on earlier messages too. A complete object — `you`
+in an `auth` or `me` result, and the `users` of `room_list` and `room_update`
+— replaces it: a field it leaves out is gone. Every other current object — the
+`you` and `new` of a `user` notification, and room `members` — merges into it
+field by field: a present field replaces (`null` too, as an ordinary value), an
+empty one (`""`, `[]`, `{}`) clears it and is kept as cleared, and a missing
+one changes nothing. `ext` merges by its keys instead
+([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)): each key replaces the kept value, an empty value
+clears that key, and `"ext": {}` changes nothing. Your own `status` comes only
+from `you`, never from your entry in `users` or `members`. Recorded objects, a message's or reaction's `from` and a
 membership's `user`, describe the user as of their record and never merge. A
 user renders field by field from the kept object, falling back to the
 recorded one the message carries only for fields the kept object lacks, so a

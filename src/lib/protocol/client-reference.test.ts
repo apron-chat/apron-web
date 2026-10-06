@@ -45,13 +45,14 @@ describe('ChatClient reference features', () => {
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' } } });
 		socket.receive({ method: 'message', params: { message_id: '21', log_id: '21', room_id: 'general', from: { user_id: 'bob', name: 'Robert' }, body: { text: 'hi' } } });
 		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' });
-		// A bare object changes nothing; an empty value clears the field, and stays as the cleared value.
+		// A bare object changes nothing; an empty value clears the field, and stays as the cleared value;
+		// `"ext": {}` changes nothing (§3.5).
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob' } } });
 		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' });
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', avatar: '', ext: {} } } });
-		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '', ext: {} });
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '' });
 		// A stale from with an avatar doesn't bring the cleared one back (§3.3).
-		expect(userIn(snapshot, { user_id: 'bob', name: 'Bob', avatar: 'https://example.com/old.png' })).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '', ext: {} });
+		expect(userIn(snapshot, { user_id: 'bob', name: 'Bob', avatar: 'https://example.com/old.png' })).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '' });
 		// The latest recorded object is kept apart, by log_id: an edit of an older message does not replace it.
 		socket.receive({ method: 'message', params: { message_id: '20', log_id: '22', room_id: 'general', from: { user_id: 'bob', name: 'Bob' }, body: { text: 'edited' } } });
 		expect(snapshot.recordedUsers.bob).toEqual({ user_id: 'bob', name: 'Bob' });
@@ -62,9 +63,42 @@ describe('ChatClient reference features', () => {
 		// `old` alone, or `user` with a room_id, is not an identity change (§3.3).
 		socket.receive({ method: 'user', params: { old: { user_id: 'bob' } } });
 		socket.receive({ method: 'user', params: { room_id: 'general', old: { user_id: 'bob' } } });
-		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '', ext: {} });
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: '' });
 		// `you` merges into this connection's identity.
 		socket.receive({ method: 'user', params: { you: { user_id: 'guest_1', avatar: 'https://example.com/me.png' } } });
+		expect(snapshot.you).toEqual({ user_id: 'guest_1', name: 'Guest', avatar: 'https://example.com/me.png' });
+		expect(snapshot.users.guest_1).toBe(snapshot.you);
+	});
+
+	it('replaces the kept user object with a complete one, and merges ext by its keys from a user notification', async () => {
+		await connect();
+		socket.receive({ method: 'user', params: { new: { user_id: 'bob', name: 'Bob', avatar: 'https://example.com/b.png', roles: ['bot'], ext: { irc: { nick: 'bob_' }, git: 'b' } } } });
+		// Each ext key replaces the kept value whole, an empty value clears that key, and keys left out stay (§3.5).
+		socket.receive({ method: 'user', params: { new: { user_id: 'bob', ext: { irc: { network: 'libera' }, git: '', mx: null } } } });
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bob', avatar: 'https://example.com/b.png', roles: ['bot'], ext: { irc: { network: 'libera' }, mx: null } });
+		// `null` is an ordinary value (§3.3), and `[]` clears.
+		socket.receive({ method: 'user', params: { new: { user_id: 'bob', name: null, roles: [] } } });
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: null, avatar: 'https://example.com/b.png', roles: [], ext: { irc: { network: 'libera' }, mx: null } });
+		// A listing's users are complete: what they leave out is gone, ext included.
+		const listing = client.listMembers('general', 0);
+		await socket.reply('room_list', {
+			joined: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10', members: [{ user_id: 'bob' }, { user_id: 'guest_1' }] }],
+			not_joined: [],
+			users: [{ user_id: 'bob', name: 'Bobby' }, { user_id: 'guest_1', name: 'Guest', status: 'offline' }]
+		});
+		await listing;
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby' });
+		// Your own status comes only from `you`, never from your users entry (§4.5).
+		expect(snapshot.you).toEqual({ user_id: 'guest_1', name: 'Guest' });
+		socket.receive({ method: 'user', params: { you: { user_id: 'guest_1', status: 'dnd', ext: { theme: 'dark' } } } });
+		const again = client.listMembers('general', 0);
+		await socket.reply('room_list', { joined: [], not_joined: [], users: [{ user_id: 'guest_1', name: 'Guest', status: 'offline' }] });
+		await again;
+		expect(snapshot.you).toEqual({ user_id: 'guest_1', name: 'Guest', status: 'dnd' });
+		// The `you` of a `me` result is complete: it replaces the kept object.
+		const profile = client.updateProfile({ avatar: 'https://example.com/me.png' });
+		await socket.reply('me', { you: { user_id: 'guest_1', name: 'Guest', avatar: 'https://example.com/me.png' } });
+		await profile;
 		expect(snapshot.you).toEqual({ user_id: 'guest_1', name: 'Guest', avatar: 'https://example.com/me.png' });
 		expect(snapshot.users.guest_1).toBe(snapshot.you);
 	});

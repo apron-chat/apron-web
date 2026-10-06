@@ -90,6 +90,7 @@ import {
 	makeRequestId,
 	maxDefined,
 	mergeIdentity,
+	replaceIdentity,
 	messageClientFields,
 	newRoomState,
 	reconnectDelay,
@@ -427,7 +428,7 @@ export class ChatClient {
 		});
 		request.promise
 			.then((result) => {
-				if (isJsonObject(result.you) && typeof result.you.user_id === 'string') this.setYou(result.you as Identity);
+				if (isJsonObject(result.you) && typeof result.you.user_id === 'string') this.setYou(cloneJson(result.you as Identity), true);
 				if (this.declinedName === name) this.declinedName = undefined;
 				this.emit();
 			})
@@ -1939,7 +1940,7 @@ export class ChatClient {
 
 	/**
 	 * A room's `members`, complete (§4.3.1, §4.3.3): current user objects,
-	 * merged into the kept ones, that start its member list as of the room's
+	 * possibly partial, merged into the kept ones, that start its member list as of the room's
 	 * `latest_log_id` in the same frame.
 	 */
 	private noteMembers(roomId: string, delivery: RoomDelivery): void {
@@ -1951,9 +1952,9 @@ export class ChatClient {
 		this.store.seedMembers(roomId, delivery.members, delivery.latest_log_id);
 	}
 
-	/** A frame's `users` (§3.3): complete current user objects. */
+	/** A frame's `users` (§3.3): complete current user objects, which replace the kept ones. */
 	private noteUsers(users: unknown): void {
-		for (const user of Array.isArray(users) ? users : []) if (isIdentity(user)) this.noteUser(cloneJson(user));
+		for (const user of Array.isArray(users) ? users : []) if (isIdentity(user)) this.noteUser(cloneJson(user), { complete: true });
 	}
 
 	/** Membership changed: listings of rooms and threads to join are stale. */
@@ -1974,7 +1975,7 @@ export class ChatClient {
 		if (patch.name !== undefined) this.displayName = patch.name.trim();
 		return this.enqueueRequest('me', { ...patch }, { visible: true, allowBeforeAuth: false }).promise.then((result) => {
 			if (!isIdentity(result.you)) throw new Error('The server did not return your profile');
-			this.setYou(cloneJson(result.you));
+			this.setYou(cloneJson(result.you), true);
 			this.emit();
 			return this.you!;
 		});
@@ -2537,7 +2538,7 @@ export class ChatClient {
 		// the result bring back the mutes in effect (§4.5), gathered until the
 		// first frame after them, while the previous mutes still show.
 		if (signIn) this.gatherMutes();
-		this.setYou(identity as Identity);
+		this.setYou(cloneJson(identity as Identity), true);
 		if (signIn) this.dropKeptStatuses();
 		if (signedIn && added && this.registeredSession) {
 			// Added to the account (§4.10, §4.11): another way back in, not how this session signed in,
@@ -2694,11 +2695,16 @@ export class ChatClient {
 		this.pingTimer = undefined;
 	}
 
-	private setYou(identity: Identity): void {
+	/**
+	 * Takes this connection's identity: `complete` for the `you` of an `auth`
+	 * or `me` result, which replaces the kept object, or else a `user`
+	 * notification's, which merges into it (§3.3).
+	 */
+	private setYou(identity: Identity, complete: boolean): void {
 		const changed = this.you?.user_id !== identity.user_id;
 		// A pending address addition belongs to the account that proposed it (§4.11): another identity needs a new code.
 		if (changed) this.addProposalConnection = undefined;
-		this.you = this.noteUser(identity, true);
+		this.you = this.noteUser(identity, { own: true, complete });
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
 	}
@@ -2714,7 +2720,7 @@ export class ChatClient {
 		if (!params) return;
 		if (isIdentity(params.you)) {
 			const previous = this.you?.user_id;
-			this.setYou(cloneJson(params.you));
+			this.setYou(cloneJson(params.you), false);
 			// The connection now acts as another identity, with its own rooms (§3.3).
 			if (previous !== undefined && previous !== params.you.user_id && this.authenticated && this.hasCap('rooms')) this.listJoinedRooms();
 		} else if (isIdentity(params.new)) {
@@ -2760,24 +2766,28 @@ export class ChatClient {
 	}
 
 	/**
-	 * Merges a current user object (`you`, `new`, room `members` and `users`)
-	 * into the one kept for its `user_id` (§3.3), field by field: a present
-	 * field replaces, an empty one (`""`, `{}`) removes, and a missing one is
-	 * left alone. Returns the kept object, which is replaced only when it
-	 * changes.
+	 * Takes a current user object into the one kept for its `user_id` (§3.3).
+	 * A `complete` one (`you` in an `auth` or `me` result, a listing's
+	 * `users`) replaces the kept object. Any other (`you` and `new` in a
+	 * `user` notification, a room's `members`) merges into it field by field:
+	 * a present field replaces, an empty one (`""`, `[]`, `{}`) clears, `ext`
+	 * merges by its keys, and a missing one is left alone. Returns the kept
+	 * object, which is replaced only when it changes.
 	 *
 	 * `own` is a `you` (§3.2, §3.3): its `status` is the one you chose
-	 * (§4.5). Others' view of you, in a `new` or a room's `members`, carries
-	 * the status they see (`offline` while you are invisible, `idle`), so its
-	 * `status` never replaces yours.
+	 * (§4.5). Others' view of you, in a `new`, a room's `members` or a
+	 * listing's `users`, carries the status they see (`offline` while you are
+	 * invisible, `idle`), so its `status` never replaces yours.
 	 */
-	private noteUser(identity: Identity, own = false): Identity {
-		if (!own && identity.user_id === this.you?.user_id && Object.hasOwn(identity, 'status')) {
+	private noteUser(identity: Identity, { own = false, complete = false }: { own?: boolean; complete?: boolean } = {}): Identity {
+		const current = this.users.get(identity.user_id);
+		if (!own && identity.user_id === this.you?.user_id) {
 			const { status: _seen, ...rest } = identity;
 			identity = rest as Identity;
+			// A complete object of yours still keeps the status `you` set.
+			if (complete && current && Object.hasOwn(current, 'status')) identity.status = current.status;
 		}
-		const current = this.users.get(identity.user_id);
-		const merged = mergeIdentity(current, identity);
+		const merged = complete ? replaceIdentity(current, identity) : mergeIdentity(current, identity);
 		if (merged !== current) this.users.set(identity.user_id, merged);
 		if (this.you?.user_id === identity.user_id) this.you = merged;
 		return merged;
