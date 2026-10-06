@@ -43,13 +43,19 @@ frame per keystroke. Sending a message sends no `typing: 0`: the message itself
 ends the indicator. Other people's indicators last as long as their `typing`
 asks, or until their next message arrives in that room.
 With the `status` capability (§4.11), the client tells the server whether
-anyone is attending the tab, so the server can push instead. It sends the
-notification `status` `{idle: true}` once the tab has been hidden or
-unfocused for 30 seconds, and `{idle: false}` as soon as it is back. Each
-connection reports the current state at once as the server frame arrives,
-before `auth`: a tab already hidden or unfocused then is idle from the start,
-without the wait. Only `{idle: false}` ends idle; a message sent from the tab
-doesn't. Others never see `idle` itself: while your status is `online`, the
+anyone is attending the tab, so the server can push instead. It sends a
+`status` request (with an `id`) only once signed in, after the `auth`
+result, never before. A connection starts attended, so a focused tab sends
+nothing. One that starts unattended (a hidden or unfocused tab, a tab a push
+notification opened in the background, a reconnect while away) sends
+`{idle: true}` at once, without a wait. After that, the client sends
+`{idle: true}` once the tab has been hidden or unfocused for 30 seconds, and
+`{idle: false}` as soon as it is back. One `idle` request is in flight at a
+time; a change meanwhile goes after the server's `{}`. If the server answers
+`retry_after`, the client sends the tab's state as it is after the delay, not
+the refused one, and nothing if that is what the server already has; another
+error changes nothing, and the next change tries again. Only
+`{idle: false}` ends idle; a message sent from the tab doesn't. Others never see `idle` itself: while your status is `online`, the
 server folds it into the `status` they see (§4.11): `online` while a
 connection is attended, `idle` while you are connected but none is, and
 `offline` with no connections. After a sign-in's result the server sends the
@@ -235,12 +241,17 @@ Below it, a signed-in account (not a guest) gets **Pause notifications**, a
 private mute nobody else sees. **Pause…** opens a menu: For 1 hour, For 8
 hours, Until tomorrow (the next 9:00; "Until this morning" before 9:00) and
 Until I resume, each showing when it would end. The menu opens from the
-keyboard with the arrow keys too. Choosing one sends `status` `{mute}` with
-the seconds until then, or `true`, and **Resume** sends `{mute: false}`.
-Neither changes anything here by itself: the server sends each change to
-your mutes back to all your connections as a `status` notification
-(`{mute}` with seconds left, `true` or `false`), and the client takes that
-as its own setting. So the row shows the pause the server kept, a shorter
+keyboard with the arrow keys too. Choosing one sends a `status` request
+`{mute}` with the seconds until then, or `true`, and **Resume** sends
+`{mute: false}`. Neither changes anything here by itself: the server sends
+each change to your mutes back to all your connections, this one included,
+as a `status` notification (`{mute}` with seconds left, `true` or `false`)
+before the request's `{}` result, and the client takes that as its own
+setting. If the server answers with an error instead, such as `retry_after`,
+nothing changed: the row keeps what it showed and adds a callout with the
+server's message ("Notifications weren't paused", or "Notifications are
+still paused" for a refused **Resume**) until the next ask. A refused mute is
+not sent again on its own. So the row shows the pause the server kept, a shorter
 one or none, and focus moves to **Resume** (or back to **Pause…**) once it
 arrives; a pause set in another tab or on another device shows here too.
 Each sign-in starts unmuted, and after its result the server sends every

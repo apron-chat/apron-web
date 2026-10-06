@@ -181,14 +181,19 @@ export class ChatClient {
 	private noticeCount = 0;
 	/**
 	 * Nobody is attending this connection (§4.11 `idle`): `away` as the page
-	 * says, `idle` once that has
-	 * lasted `IDLE_AFTER_MS` (`idleTimer` runs meanwhile), and `idleSent` what
-	 * the server takes it to be on connection `connection`.
+	 * says, `idle` once that has lasted `IDLE_AFTER_MS` (`idleTimer` runs
+	 * meanwhile), or at once on a connection that starts away.
 	 */
 	private away = false;
 	private idle = false;
 	private idleTimer: ReturnType<typeof setTimeout> | undefined;
-	private idleSent: { connection: number; idle: boolean } | undefined;
+	/**
+	 * What the server takes `idle` to be on connection `connection`: each
+	 * starts attended (`applied: false`). `sending` is the `status` request in
+	 * flight, one at a time; `retry` waits out a `retry_after` before the
+	 * current state goes again.
+	 */
+	private idleReport: { connection: number; applied: boolean; sending?: boolean; retry?: ReturnType<typeof setTimeout> } | undefined;
 	/**
 	 * Your notifications are paused until (§4.11 `mute` without `room_id`), as
 	 * the server's last `status` said: epoch milliseconds, or `true`;
@@ -432,6 +437,7 @@ export class ChatClient {
 		this.stopWaitingForPresence();
 		this.clearStableTimer();
 		this.clearIdleTimer();
+		this.clearIdleRetry();
 		if (this.muteTimer) clearTimeout(this.muteTimer);
 		this.muteTimer = undefined;
 		if (this.roomMuteTimer) clearTimeout(this.roomMuteTimer);
@@ -1380,10 +1386,11 @@ export class ChatClient {
 	/**
 	 * Tells a server with capability `status` whether anyone is attending this
 	 * connection (§4.11 `idle`), as the tab is hidden or unfocused (`away`) or
-	 * back. Becoming attended goes at once; becoming idle only once it has
-	 * lasted `IDLE_AFTER_MS`. Each connection reports its state at once as the
-	 * server frame arrives, before `auth` (a tab already away is idle), and then
-	 * each change. Only `idle: false` ends it: sending a message doesn't.
+	 * back. A connection starts attended, so an attended one sends nothing.
+	 * Once signed in, one that starts away reports `idle: true` at once;
+	 * after that, becoming idle goes once it has lasted `IDLE_AFTER_MS`, and
+	 * becoming attended at once. Only `idle: false` ends it: sending a
+	 * message doesn't.
 	 */
 	setAway(away: boolean): void {
 		this.away = away;
@@ -1406,29 +1413,69 @@ export class ChatClient {
 		this.idleTimer = undefined;
 	}
 
+	/**
+	 * Sends `idle` when the server's view of this connection differs from the
+	 * page's, as a `status` request (§4.11), never before sign-in. One goes at
+	 * a time, so they apply in order (§1); a change meanwhile goes after the
+	 * reply. On `retry_after` the current state, not the refused one, goes
+	 * after the delay; another error changes nothing, and the next change
+	 * tries again.
+	 */
 	private syncIdle(): void {
-		if (!this.hasCap('status') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
-		// A connection reports its initial state at once (§4.11): a tab already away is idle from the start.
-		if (this.idleSent?.connection !== this.connectionId && this.away && !this.idle) {
-			this.clearIdleTimer();
-			this.idle = true;
+		if (!this.authenticated || !this.hasCap('status') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+		const connection = this.connectionId;
+		if (this.idleReport?.connection !== connection) {
+			this.clearIdleRetry();
+			// A connection starts attended (§4.11); one that starts away is idle at once, without the wait.
+			this.idleReport = { connection, applied: false };
+			if (this.away && !this.idle) {
+				this.clearIdleTimer();
+				this.idle = true;
+			}
 		}
-		if (this.idleSent?.connection === this.connectionId && this.idleSent.idle === this.idle) return;
-		this.idleSent = { connection: this.connectionId, idle: this.idle };
-		this.sendFrame({ method: 'status', params: { idle: this.idle } });
+		const report = this.idleReport;
+		if (report.sending || report.retry || report.applied === this.idle) return;
+		const idle = this.idle;
+		report.sending = true;
+		this.enqueueRequest('status', { idle }, { visible: false, allowBeforeAuth: false }).promise.then(() => {
+			if (this.idleReport !== report) return;
+			report.sending = false;
+			report.applied = idle;
+			this.syncIdle();
+		}, (cause: unknown) => {
+			if (this.idleReport !== report) return;
+			report.sending = false;
+			const wait = (cause as Error & { retryAfterMs?: number }).retryAfterMs;
+			if (wait === undefined) return;
+			report.retry = setTimeout(() => {
+				report.retry = undefined;
+				if (this.idleReport === report) this.syncIdle();
+			}, wait);
+		});
+	}
+
+	private clearIdleRetry(): void {
+		if (this.idleReport?.retry) clearTimeout(this.idleReport.retry);
+		this.idleReport = undefined;
 	}
 
 	/**
 	 * Asks to pause your notifications everywhere (§4.11 `mute`): for `mute`
-	 * seconds, until resumed (`true`), or to resume them (`false`). Nothing
-	 * changes here until the server sends the change back as a `status` to
-	 * each of your connections: the pause is whatever that says, so one the
-	 * server didn't apply never shows. Needs capability `status` and a
-	 * signed-in account.
+	 * seconds, until resumed (`true`), or to resume them (`false`), with a
+	 * `status` request. Nothing changes here until the server sends the
+	 * change back as a `status` notification to each of your connections,
+	 * this one included, before its `{}` result: the pause is whatever that
+	 * says, so one the server didn't apply never shows. Rejects with the
+	 * server's error, such as `retry_after`, when nothing changed. Needs
+	 * capability `status` and a signed-in account.
 	 */
-	setMute(mute: number | boolean): void {
-		if (!this.authenticated || !this.registeredSession || !this.hasCap('status')) return;
-		this.sendFrame({ method: 'status', params: { mute } });
+	setMute(mute: number | boolean): Promise<void> {
+		const promise = !this.authenticated || !this.registeredSession || !this.hasCap('status')
+			? Promise.reject(new Error('Sign in to pause notifications'))
+			: this.enqueueRequest('status', { mute }, { visible: false, allowBeforeAuth: false }).promise.then(() => undefined);
+		// A caller that doesn't wait for the answer leaves no unhandled rejection.
+		promise.catch(() => undefined);
+		return promise;
 	}
 
 	/**
@@ -2268,9 +2315,9 @@ export class ChatClient {
 		// Each frame fully replaces the last (§3.1): features are worth trying again. A server
 		// before v7 would ignore `user_id` in `room_join`/`room_leave` and act on the caller.
 		this.memberChangesUnsupported = version < 7;
-		// Attendance may go before `auth` (§4.11): it applies once authenticated.
-		this.syncIdle();
 		if (this.authenticated || this.authRequested) {
+			// A replacing frame may add capability `status`: attendance goes once signed in (§4.11).
+			this.syncIdle();
 			this.syncPush();
 			this.emit();
 			return;
@@ -3281,7 +3328,7 @@ export class ChatClient {
 		this.joinedListing = undefined;
 		this.directory = undefined;
 		this.threadDirectory.clear();
-		this.idleSent = undefined;
+		this.clearIdleRetry();
 		this.pushError = undefined;
 		this.memberChangesUnsupported = false;
 	}

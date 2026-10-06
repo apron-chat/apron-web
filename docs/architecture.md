@@ -141,12 +141,22 @@ authentication on; a ping that goes a whole interval without the
 `{"method":"pong"}` answer marks the socket dead, and it is replaced through
 the usual reconnect. With `room_leave: false` the client offers no Leave, and
 with `read_cursors: false` it moves your read cursor locally without sending it.
-`setAway(away)` reports attendance with `status` `{idle}` (§4.11, capability
-`status`): idle only after `IDLE_AFTER_MS`, attended at once, and the current
-state as each connection's server frame arrives. `setStatus(status)` sends
+`setAway(away)` reports attendance with `status` requests `{idle}` (§4.11,
+capability `status`) through `syncIdle`, which sends nothing until the
+connection is signed in (`handleAuth` calls it after the result; a replacing
+server frame while signed in calls it too). `idleReport` holds what the
+server has for the current connection: each starts attended, so an attended
+start sends nothing, and one that starts away is idle at once, without
+`IDLE_AFTER_MS`. Later, idle goes only after `IDLE_AFTER_MS`, attended at
+once. One request is in flight at a time and the latest state follows its
+`{}`; a `retry_after` error waits out the delay and then syncs the current
+state, any other error waits for the next change. `setStatus(status)` sends
 `me` `{status}` and resolves with the `you` the server kept, whose `status`
-is the one in effect. `setMute(mute)` sends `status` `{mute}` and changes
-nothing else: only a `status` notification from the server (`handleStatus`)
+is the one in effect. `setMute(mute)` sends a `status` request `{mute}` and
+returns a promise that resolves on `{}` and rejects with the server's error
+(nothing changed; `PauseNotifications` shows it in a `Callout`); it changes
+nothing else: only a `status` notification from the server (`handleStatus`),
+which reaches the sending connection too, before the result,
 sets the snapshot's `mutedUntil`, or a room's with its `room_id`, which
 timers clear when they run out. Each sign-in resets them in `handleAuth`,
 and the `status` frames after its result bring back those in effect; a lost

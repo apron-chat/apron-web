@@ -885,8 +885,8 @@
 
 
 	/** Pauses notifications everywhere (§4.11 `mute`): seconds from now, or until resumed. */
-	function pauseNotifications(until: PausedUntil): void {
-		client?.setMute(muteFor(until));
+	function pauseNotifications(until: PausedUntil): Promise<void> {
+		return client?.setMute(muteFor(until)) ?? Promise.resolve();
 	}
 
 	/** What to notify about, kept per account; push registers again with the new `wake` at once. */
@@ -1681,7 +1681,7 @@
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 		webPush={webPushServerKey ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError ? { error: webPushError } : {}) } : undefined} onwebpush={toggleWebPush} oninstallapp={installApp}
-		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false)}
+		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={signedOut}
 	/>

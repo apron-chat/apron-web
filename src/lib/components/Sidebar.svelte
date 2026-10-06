@@ -40,8 +40,8 @@
 		oninstallapp: () => void;
 		/** Pausing notifications (§4.11 `mute`), on a server with capability `status`. */
 		pause?: { until?: PausedUntil };
-		onpause: (until: PausedUntil) => void;
-		onresume: () => void;
+		onpause: (until: PausedUntil) => Promise<void> | void;
+		onresume: () => Promise<void> | void;
 		onconnect: () => void;
 		onroom: (room: RoomSnapshot) => void;
 		onthread: (thread: string) => void;

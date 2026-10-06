@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import Button from '$lib/design/components/Button.svelte';
+	import Callout from '$lib/design/components/Callout.svelte';
 	import MenuButton from '$lib/design/components/MenuButton.svelte';
 	import { pauseChoices, pausedUntilLabel, type PausedUntil } from '$lib/ui/pause';
 
@@ -13,8 +14,10 @@
 		 * back, perhaps shorter, or not at all.
 		 */
 		until?: PausedUntil;
-		onpause: (until: PausedUntil) => void;
-		onresume: () => void;
+		/** Asks to pause; rejects with the server's error when nothing changed. */
+		onpause: (until: PausedUntil) => Promise<void> | void;
+		/** Asks to resume; rejects with the server's error when nothing changed. */
+		onresume: () => Promise<void> | void;
 	}
 	let { until, onpause, onresume }: Props = $props();
 
@@ -37,16 +40,28 @@
 		void tick().then(() => row?.querySelector<HTMLButtonElement>('.ap-pause-action button')?.focus());
 	});
 
+	/** The server refused the last pause or resume (§4.11: nothing changed): why, until the next ask. */
+	let refused = $state<{ action: 'pause' | 'resume'; message: string } | undefined>();
+
+	function ask(action: 'pause' | 'resume', request: () => Promise<void> | void): void {
+		asked = action;
+		refused = undefined;
+		void Promise.resolve()
+			.then(request)
+			.catch((cause: unknown) => {
+				if (asked === action) asked = undefined;
+				refused = { action, message: cause instanceof Error ? cause.message : String(cause) };
+			});
+	}
+
 	function pause(value: string): void {
 		const choice = choices.find((entry) => entry.value === value);
 		if (!choice) return;
-		asked = 'pause';
-		onpause(choice.until);
+		ask('pause', () => onpause(choice.until));
 	}
 
 	function resume(): void {
-		asked = 'resume';
-		onresume();
+		ask('resume', onresume);
 	}
 </script>
 
@@ -57,6 +72,13 @@
 			<p class="ap-pref-note ap-pref-paused"><BellOff size={14} strokeWidth={1.8} aria-hidden="true" /> Paused {pausedUntilLabel(until)} · no desktop or push notifications on your devices.</p>
 		{:else}
 			<p class="ap-profedit-hint">Silence desktop and push notifications on all your devices for a while. Only you see it.</p>
+		{/if}
+		{#if refused}
+			<div class="ap-pause-refused" role="alert">
+				<Callout title={refused.action === 'pause' ? 'Notifications weren’t paused' : 'Notifications are still paused'}>
+					<p>{refused.message}</p>
+				</Callout>
+			</div>
 		{/if}
 	</div>
 	<div class="ap-pause-action">
@@ -74,4 +96,5 @@
 	.ap-pref-pause p { max-width: 420px; margin: var(--space-1) 0 0; }
 	.ap-pref-paused { display: flex; align-items: center; gap: var(--space-1); color: var(--warn); font-size: 13px; line-height: 19px; }
 	.ap-pause-action { flex: none; }
+	.ap-pause-refused { margin-top: var(--space-2); max-width: 420px; }
 </style>

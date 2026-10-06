@@ -29,8 +29,8 @@
 		onwebpush: () => void;
 		/** Pausing notifications (§4.11 `mute`), on a server with capability `status`: `until` while paused. */
 		pause?: { until?: PausedUntil };
-		onpause: (until: PausedUntil) => void;
-		onresume: () => void;
+		onpause: (until: PausedUntil) => Promise<void> | void;
+		onresume: () => Promise<void> | void;
 		/** Chromium's install prompt, from the push setting. */
 		oninstallapp: () => void;
 		/**
