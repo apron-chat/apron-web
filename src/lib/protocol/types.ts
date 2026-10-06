@@ -217,7 +217,6 @@ export interface RpcError extends JsonObject {
 }
 
 export interface WireFrame {
-	jsonrpc?: '2.0';
 	method?: string;
 	id?: string | null;
 	params?: JsonObject;
