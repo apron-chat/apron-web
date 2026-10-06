@@ -845,6 +845,32 @@ describe('display name on connect', () => {
 		expect(renames(latest())).toBe(1);
 		client.stop();
 	});
+
+	it('asks for the name the server kept, so a normalized one is not sent again at each reconnect', async () => {
+		const client = new ChatClient('ws://fake.test/', 'Dana ');
+		client.start();
+		await latest().greet();
+		const first = latest();
+		expect(first.request('me').params).toEqual({ name: 'Dana' });
+		// The server normalizes the name it keeps (§1.1).
+		await first.reply('me', { you: { user_id: 'guest_1', name: 'dana' } });
+		first.drop();
+		vi.advanceTimersByTime(5_000);
+		await latest().greet(undefined, { you: { user_id: 'guest_1', name: 'dana' } });
+		expect(latest()).not.toBe(first);
+		expect(renames(latest())).toBe(0);
+		// So does a rename through the profile.
+		const profile = client.updateProfile({ name: 'Dee Dee' });
+		await latest().reply('me', { you: { user_id: 'guest_1', name: 'Dee' } });
+		await profile;
+		const second = latest();
+		second.drop();
+		vi.advanceTimersByTime(5_000);
+		await latest().greet(undefined, { you: { user_id: 'guest_1', name: 'Dee' } });
+		expect(latest()).not.toBe(second);
+		expect(renames(latest())).toBe(0);
+		client.stop();
+	});
 });
 
 describe('reconnect damping', () => {

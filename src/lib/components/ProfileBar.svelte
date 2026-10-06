@@ -255,6 +255,9 @@
 			} else {
 				serverName = kept;
 				status = 'altered';
+				// The client asks for the kept name from now on; so does the next visit.
+				displayName = kept;
+				saveDisplayName(kept);
 			}
 			draft = kept;
 			openedWith = kept;

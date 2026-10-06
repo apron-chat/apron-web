@@ -420,6 +420,17 @@ export class ChatClient {
 		return undefined;
 	}
 
+	/**
+	 * After a `me` that set the name, the name the server kept is the one to
+	 * ask for (§1.1: servers may normalize what clients send): a server that
+	 * normalizes it then gets no `me` again at each reconnect (`handleAuth`
+	 * sends one only when `you.name` differs). Not when another name was
+	 * asked for meanwhile: that one stands.
+	 */
+	private adoptName(you: Identity, sent: string): void {
+		if (this.displayName === sent) this.displayName = typeof you.name === 'string' ? you.name : '';
+	}
+
 	private sendName(): OperationHandle {
 		const name = this.displayName;
 		const request = this.enqueueRequest('me', { name }, {
@@ -428,7 +439,10 @@ export class ChatClient {
 		});
 		request.promise
 			.then((result) => {
-				if (isJsonObject(result.you) && typeof result.you.user_id === 'string') this.setYou(cloneJson(result.you as Identity), true);
+				if (isIdentity(result.you)) {
+					this.setYou(cloneJson(result.you), true);
+					this.adoptName(result.you, name);
+				}
 				if (this.declinedName === name) this.declinedName = undefined;
 				this.emit();
 			})
@@ -1985,6 +1999,7 @@ export class ChatClient {
 		return this.enqueueRequest('me', { ...patch }, { visible: true, allowBeforeAuth: false }).promise.then((result) => {
 			if (!isIdentity(result.you)) throw new Error('The server did not return your profile');
 			this.setYou(cloneJson(result.you), true);
+			if (patch.name !== undefined) this.adoptName(result.you, patch.name.trim());
 			this.emit();
 			return this.you!;
 		});

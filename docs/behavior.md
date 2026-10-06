@@ -581,14 +581,16 @@ base URL, a display name, and a sign-in choice among the schemes the server
 advertises (Guest by default; Passkey, below; Email and Token, further down). Once the server in the field
 has answered, its `server.welcome`
 ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication))
-shows at the top of the form, rendered as Markdown and sanitized like a message.
+shows at the top of the form, rendered as CommonMark and sanitized like a message.
 A server without the `guest` scheme opens this screen by itself once, since
 nothing works before signing in, and so does a session held for a sign-in
 (below) with nothing on screen yet. The server and name
 are stored in local storage, and the last few backends are listed under the
 form. The profile bar at the foot of the sidebar edits your handle, which is
 sent with the protocol `me` request after authentication; the editor shows
-what the server actually kept. With the `command` and `embed:upload` capabilities it
+what the server actually kept. The kept name is the one asked for from then
+on, and the one remembered for the next visit, so a server that normalizes
+names isn't sent `me` again at each reconnect. With the `command` and `embed:upload` capabilities it
 also sets your avatar: a `/avatar` command carrying one `upload` embed
 ([PROTOCOL.md §4.8.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#486-avatars)), whose result names the `write_url` the image is written to; the
 server applies it with a `user` notification. **Remove** sends `me` with
