@@ -2,10 +2,12 @@ import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
 
 /**
- * CommonMark with GitHub tables and strikethrough. Raw HTML in a message is
- * shown as text, never markup (`html: false`), and links with unsafe schemes
- * (`javascript:`, `data:` other than images, ...) are not linked. A typed line
- * break is meant: soft breaks render as `<br>`, not as a space.
+ * A body's `markdown` format is CommonMark (§3.5). This renders CommonMark
+ * with three extensions beyond it: GitHub tables and strikethrough, and
+ * `breaks: true`, so a typed line break is meant: soft breaks render as
+ * `<br>`, not as a space. Raw HTML in a message is shown as text, never
+ * markup (`html: false`, §3.5), and links with unsafe schemes (`javascript:`,
+ * `data:` other than images, ...) are not linked.
  */
 const md = new MarkdownIt({ html: false, breaks: true, linkify: false, typographer: false });
 
@@ -22,7 +24,7 @@ md.renderer.rules.table_open = () => '<div class="ap-table"><table>\n';
 md.renderer.rules.table_close = () => '</table></div>\n';
 
 /**
- * The only markup a body may hold once rendered: what the Markdown above
+ * The only markup a body may hold once rendered: what the CommonMark above
  * produces, plus the links and mention chips added to it. Raw HTML never gets
  * this far; sanitizing last also covers everything done after rendering.
  */

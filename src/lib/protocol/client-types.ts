@@ -68,7 +68,7 @@ export interface RoomSnapshot {
 	private?: boolean;
 	/** Your notifications from this room and its threads are paused until then (§4.5 `mute` with its `room_id`): epoch milliseconds, or `true`. Absent when not. */
 	mutedUntil?: number | true;
-	/** What the room is about (§3.4), Markdown by convention; absent when empty. */
+	/** What the room is about (§3.4), CommonMark by convention; absent when empty. */
 	description?: string;
 	/**
 	 * The least `log_id` of this room's records seen: where a thread's card
@@ -350,7 +350,7 @@ export interface CreateRoomOptions {
 	/** Visible only to its members (§4.3.4); fixed at creation. */
 	private?: boolean;
 	title?: string;
-	/** What the room is about, Markdown by convention (§3.4). */
+	/** What the room is about, CommonMark by convention (§3.4). */
 	description?: string;
 	ext?: JsonObject;
 }

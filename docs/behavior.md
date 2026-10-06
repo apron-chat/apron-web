@@ -16,7 +16,7 @@ message text, link cards, uploads and HTML embeds, opens in a new tab.
 
 `/__preview` mounts this same app against a page-local in-memory WebSocket
 server, not the saved, configured, or same-origin backend. It seeds a guest,
-rooms, a thread, people, Markdown examples, and a message moved into the thread,
+rooms, a thread, people, CommonMark examples, and a message moved into the thread,
 and implements the app's protocol
 requests (auth, room listings/history, messages, reactions, room changes,
 profile updates, activity, commands, and ping). Changes last only for the page
@@ -188,7 +188,10 @@ the same chip once finished, when exactly one person in the room goes by it;
 one ending the draft collapses on send. Chips are always sent as `@user_id`, so
 the field reads by name while the wire stays ID-based, and each chip's `user_id`
 goes in `body.mentions` ([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)): a chip deleted before sending mentions no one,
-and an edit resubmits the message's mentions. A rendered body (plain or Markdown, never inside
+and an edit resubmits the message's mentions. A `markdown` body renders as CommonMark
+([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)) with three extensions beyond it: GitHub tables,
+strikethrough, and a typed line break kept as a break; raw HTML shows as
+text. A rendered body (plain or CommonMark, never inside
 code) shows a known user's `@user_id` as a chip with their current name, a known room's
 `#room_id` as a link showing its title that opens the room (or joins it), and unknown
 IDs as written ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)): `@` names only users. Typing `#` in the composer opens room autocomplete over known
@@ -435,7 +438,7 @@ listed; that listing is also what refreshes their cards, since they deliver
 nothing live. Opening one of those reads it through `history` without joining
 it: its header offers **Join**, and replying joins it first.
 With the `rooms` capability, the **+** beside Rooms in the sidebar creates a room
-from a name and an optional Markdown description (`room_set` with `title` and
+from a name and an optional CommonMark description (`room_set` with `title` and
 `description`); it opens once its `room_update` arrives, and the dialog stays
 open, with the server's error, if creating fails. **Private** asks for
 `private: true` ([PROTOCOL.md §4.3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#434-creating-and-editing)):
@@ -449,7 +452,7 @@ comes back without `private: true` gets the same error, and neither the reply
 composer opens on it nor do selected messages move into it. Private rooms and
 threads show a lock beside their name.
 
-A room's `description` (Markdown by convention) shows as one line of text
+A room's `description` (CommonMark by convention) shows as one line of text
 under its title in the header. With the `rooms` capability the header's **Edit** opens
 a form for the open room's or thread's title and description ("Summary" for a
 thread), saved with one `room_set`; the `room_update` that follows is what
@@ -463,7 +466,7 @@ the thread's first reply carries the link back as its `reply_to` (the
 convention of the protocol's fixtures): its quote shows the message and jumps
 to it. The message stays in the room, with the thread's card after it. A
 thread's description shows as a **Summary** pinned at the top of the thread,
-rendered as Markdown. Threads load their newest page of
+rendered as CommonMark. Threads load their newest page of
 history when opened (50 records); one with older replies opens at its latest
 reply, shows "N+ replies", and loads the page before whenever the reader nears
 the top, keeping what is on screen in place. Drafts are kept per room, threads

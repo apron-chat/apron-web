@@ -6,7 +6,7 @@
 
 	/**
 	 * A thread's `description` (PROTOCOL.md §3.4), pinned at the top of the
-	 * thread as the design system's summary: Markdown, rendered and sanitized
+	 * thread as the design system's summary: CommonMark, rendered and sanitized
 	 * as a message body is, with its mentions and room links.
 	 */
 	let { description, onopenroom }: { description: string; onopenroom: (roomId: string) => void } = $props();

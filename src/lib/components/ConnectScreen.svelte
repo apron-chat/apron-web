@@ -45,7 +45,7 @@
 			return serverInput.trim();
 		}
 	});
-	/** `server.welcome` (§3.2), for the server in the field once it has answered: Markdown, sanitized as a message is. */
+	/** `server.welcome` (§3.2), for the server in the field once it has answered: CommonMark, sanitized as a message is. */
 	let welcome = $derived.by(() => {
 		const text = normalizedInput === client.url ? session.server?.welcome : undefined;
 		return text ? renderMarkdown(text, directory.resolve, directory.resolveRoom) : '';

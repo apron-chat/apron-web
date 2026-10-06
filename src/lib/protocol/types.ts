@@ -120,7 +120,7 @@ export interface RoomRecord extends JsonObject {
 	/** Visible only to its members (§4.3.4); fixed at creation. Only `true` means private. */
 	private?: boolean;
 	title?: string;
-	/** What the room is about, Markdown by convention; set with `room_set`. */
+	/** What the room is about, CommonMark by convention; set with `room_set`. */
 	description?: string;
 	ext?: JsonObject;
 }
@@ -148,7 +148,7 @@ export interface ServerParams {
 	 * those that sign in. Absent: `auth` does both.
 	 */
 	signup?: string[];
-	/** Markdown for the sign-in screen (§3.2): how this server's schemes fit together. */
+	/** CommonMark for the sign-in screen (§3.2): how this server's schemes fit together. */
 	welcome?: string;
 	/** Extension metadata (§3.1). */
 	ext?: ServerExt;
