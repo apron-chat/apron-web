@@ -190,11 +190,12 @@ export class ChatClient {
 	private idleTimer: ReturnType<typeof setTimeout> | undefined;
 	/**
 	 * What the server takes `idle` to be on connection `connection`: each
-	 * starts attended (`applied: false`). `sending` is the `status` request in
-	 * flight, one at a time; `retry` waits out a `retry_after` before the
-	 * current state goes again.
+	 * starts attended (`applied: false`); undefined once a request went
+	 * unanswered, which the server may or may not have applied. `sending` is
+	 * the `status` request in flight, one at a time; `retry` waits out a
+	 * `retry_after` before the current state goes again.
 	 */
-	private idleReport: { connection: number; applied: boolean; sending?: boolean; retry?: ReturnType<typeof setTimeout> } | undefined;
+	private idleReport: { connection: number; applied: boolean | undefined; sending?: boolean; retry?: ReturnType<typeof setTimeout> } | undefined;
 	/**
 	 * Your notifications are paused until (§4.11 `mute` without `room_id`), as
 	 * the server's last `status` said: epoch milliseconds, or `true`;
@@ -1427,7 +1428,8 @@ export class ChatClient {
 	 * a time, so they apply in order (§1); a change meanwhile goes after the
 	 * reply. On `retry_after` the current state, not the refused one, goes
 	 * after the delay; another error changes nothing, and the next change
-	 * tries again.
+	 * tries again. A request with no answer (timed out) may have been
+	 * applied or not, so the next sync sends the current state whatever it is.
 	 */
 	private syncIdle(): void {
 		if (!this.authenticated || !this.hasCap('status') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
@@ -1453,7 +1455,8 @@ export class ChatClient {
 		}, (cause: unknown) => {
 			if (this.idleReport !== report) return;
 			report.sending = false;
-			const wait = (cause as Error & { retryAfterMs?: number }).retryAfterMs;
+			const { code, retryAfterMs: wait } = cause as Error & { code?: number; retryAfterMs?: number };
+			if (code === undefined) report.applied = undefined;
 			if (wait === undefined) return;
 			report.retry = setTimeout(() => {
 				report.retry = undefined;

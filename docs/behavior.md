@@ -54,7 +54,9 @@ notification opened in the background, a reconnect while away) sends
 time; a change meanwhile goes after the server's `{}`. If the server answers
 `retry_after`, the client sends the tab's state as it is after the delay, not
 the refused one, and nothing if that is what the server already has; another
-error changes nothing, and the next change tries again. Only
+error changes nothing, and the next change tries again. A request that
+times out may or may not have applied, so after one the next change sends
+the tab's state even if it is what the server had before. Only
 `{idle: false}` ends idle; a message sent from the tab doesn't. Others never see `idle` itself: while your status is `online`, the
 server folds it into the `status` they see (§4.11): `online` while a
 connection is attended, `idle` while you are connected but none is, and

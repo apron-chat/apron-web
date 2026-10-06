@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, DEFAULT_ROOM_ID, IDLE_AFTER_MS, type ClientSnapshot } from './client';
 import { FakeSocket, settle } from './fake-socket';
-import { MUTES_SETTLE_MS } from './client-internals';
+import { MUTES_SETTLE_MS, REQUEST_TIMEOUT_MS } from './client-internals';
 
 /** Operations whose outcome a test does not await still settle when the client stops. */
 function quiet(value: { promise: Promise<unknown> } | undefined): void {
@@ -443,6 +443,22 @@ describe('rooms by request (cap rooms)', () => {
 			client.setAway(true);
 			vi.advanceTimersByTime(IDLE_AFTER_MS);
 			expect(statuses()).toEqual([{ idle: true }, { idle: true }]);
+		});
+
+		it('sends the current idle state after a request that timed out, which the server may have applied', async () => {
+			await greet();
+			client.setAway(true);
+			vi.advanceTimersByTime(IDLE_AFTER_MS);
+			expect(statuses()).toEqual([{ idle: true }]);
+			// No answer: the server may take the connection as idle, or not.
+			await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+			// Back: attended goes, though the connection started attended.
+			client.setAway(false);
+			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			await answer();
+			// Answered: the server has it, and nothing more goes.
+			client.setAway(false);
+			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
 		});
 
 		it('keeps a room\'s mute from the server\'s status for it (§4.11), joined or not', async () => {
