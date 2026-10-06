@@ -74,6 +74,52 @@ describe('in-memory preview protocol', () => {
 		await expect(client.joinRoom(created.room_id).promise).rejects.toThrow('Unknown room');
 	});
 
+	it('merges ext on message saves, room_set and me, drops it on tombstones, and answers with the complete you', async () => {
+		const server = new MemoryProtocolServer();
+		const frames: Array<Record<string, unknown>> = [];
+		const factory = server.factory;
+		const client = new ChatClient('ws://apron-preview.invalid', 'Preview User', (url) => {
+			const socket = factory(url);
+			const deliver = (socket as unknown as { deliver: (frame: Record<string, unknown>) => void }).deliver;
+			(socket as unknown as { deliver: (frame: Record<string, unknown>) => void }).deliver = (frame) => {
+				frames.push(frame);
+				deliver(frame);
+			};
+			return socket;
+		});
+		clients.push(client);
+		client.start();
+		await waitFor(() => client.snapshot().authenticated && client.snapshot().rooms.some((room) => room.id === 'general' && room.loaded));
+		// The auth result comes first: nothing the sign-in causes precedes it (§3.2).
+		expect(frames[0]).toMatchObject({ method: 'server' });
+		expect(frames[1]).toMatchObject({ result: { you: { user_id: 'preview_guest' } } });
+
+		const sent = await client.send('general', 'with ext', 'plain', { ext: { a: 1, b: { c: 2 } } }).promise;
+		await waitFor(() => client.message(sent.message_id)?.ext !== undefined);
+		await client.saveMessage(sent.message_id, { ext: { a: '', d: null } }).promise;
+		await waitFor(() => client.message(sent.message_id)?.log_id !== sent.message_id);
+		expect(client.message(sent.message_id)?.ext).toEqual({ b: { c: 2 }, d: null });
+		// An edit sends no ext: the server keeps it.
+		await client.editMessage(sent.message_id, 'edited').promise;
+		expect(client.message(sent.message_id)?.ext).toEqual({ b: { c: 2 }, d: null });
+		await client.deleteMessage(sent.message_id).promise;
+		expect(client.message(sent.message_id)).toMatchObject({ deleted: true });
+		expect(client.message(sent.message_id)).not.toHaveProperty('ext');
+		expect(client.message(sent.message_id)).not.toHaveProperty('body');
+
+		const room = () => client.snapshot().rooms.find((candidate) => candidate.id === 'general');
+		await client.updateRoom('general', { ext: { irc: { channel: '#general' }, x: 1 } }).promise;
+		await waitFor(() => room()?.ext !== undefined);
+		await client.updateRoom('general', { title: 'General', ext: { x: [] } }).promise;
+		await waitFor(() => room()?.title === 'General');
+		expect(room()?.ext).toEqual({ irc: { channel: '#general' } });
+
+		const you = await client.updateProfile({ ext: { theme: 'dark', lang: 'en' } });
+		expect(you.ext).toEqual({ theme: 'dark', lang: 'en' });
+		const after = await client.updateProfile({ ext: { lang: '' } });
+		expect(after).toEqual({ user_id: 'preview_guest', name: 'Preview User', ext: { theme: 'dark' } });
+	});
+
 	it('moves messages with their author and resolves reactions in the latest room', async () => {
 		const server = new MemoryProtocolServer();
 		const client = new ChatClient('ws://apron-preview.invalid', 'Preview User', server.factory);

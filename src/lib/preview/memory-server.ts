@@ -1,3 +1,4 @@
+import { mergeExt } from '$lib/protocol/client-internals';
 import type { WebSocketFactory } from '$lib/protocol/client-types';
 import { isJsonObject, type JsonObject, type WireFrame } from '$lib/protocol/types';
 
@@ -7,6 +8,7 @@ export type PreviewRoom = {
 	parent_room_id?: string;
 	private?: boolean;
 	description?: string;
+	ext?: JsonObject;
 	members: Set<string>;
 	messages: JsonObject[];
 	reactions: Map<string, Map<string, string[]>>;
@@ -25,7 +27,7 @@ type PreviewSocket = {
 	deliver(frame: WireFrame): void;
 };
 
-const people: Record<string, { user_id: string; name: string; avatar?: string; roles?: string[] }> = {
+const people: Record<string, { user_id: string; name: string; avatar?: string; roles?: string[]; ext?: JsonObject }> = {
 	preview_guest: { user_id: 'preview_guest', name: 'You' },
 	ada: { user_id: 'ada', name: 'Ada Lovelace', roles: ['admin'] },
 	grace: { user_id: 'grace', name: 'Grace Hopper' },
@@ -45,6 +47,11 @@ const seed = [
 	{ id: '1710000000014', from: 'margaret', text: '```ts\nconst preview = "markdown";\nconsole.log(preview);\n```\n\n    Indented code blocks work too.\n\n---\n\nA hard line break  \nkeeps both lines in one paragraph.' },
 	{ id: '1710000000015', from: 'ada', text: '| Feature | Example |\n| :-- | --: |\n| Strong | **bold** |\n| Inline code | `const x = 1` |\n| Room link | #engineering |\n\nRaw HTML is shown as text: <b>not bold</b>.' }
 ];
+
+/** A write's `ext` merged into what is kept (§3.5); a write that leaves it out keeps it. */
+function mergedExt(kept: JsonObject | undefined, write: unknown): JsonObject | undefined {
+	return isJsonObject(write) ? mergeExt(kept, write) : kept;
+}
 
 /** A single, page-lifetime demo server. It owns no network connection or persistent storage. */
 export class MemoryProtocolServer {
@@ -139,9 +146,9 @@ export class MemoryProtocolServer {
 		try {
 			switch (frame.method) {
 				case 'auth': {
-					const you = { ...people.preview_guest, ...(typeof params.name === 'string' && params.name ? { name: params.name } : {}) };
-					socket.deliver({ method: 'user', params: { you } });
-					reply({ you });
+					if (typeof params.name === 'string' && params.name) people.preview_guest.name = params.name;
+					// The complete `you` (§3.3); anything the sign-in causes would follow the result (§3.2).
+					reply({ you: structuredClone(people.preview_guest) });
 					return;
 				}
 				case 'room_list': reply(this.listRooms(params)); return;
@@ -162,6 +169,7 @@ export class MemoryProtocolServer {
 	private roomRecord(room: PreviewRoom, members = false): JsonObject {
 		return { room_id: room.room_id, title: room.title, log_id: String(room.log_id), latest_log_id: String(room.log_id), history_log_id: room.messages.length ? room.messages[0].log_id : null,
 			...(room.parent_room_id ? { parent_room_id: room.parent_room_id } : {}), ...(room.private ? { private: true } : {}), ...(room.description ? { description: room.description } : {}),
+			...(room.ext ? { ext: structuredClone(room.ext) } : {}),
 			...(members ? { members: [...room.members].map((id) => ({ user_id: id })) } : {}) };
 	}
 
@@ -228,11 +236,14 @@ export class MemoryProtocolServer {
 			}
 		}
 		const from = previous && isJsonObject(previous.message.from) ? previous.message.from : { ...people.preview_guest };
+		// A save merges `ext` into the stored one, a creation into nothing (§3.5); a tombstone has neither `body` nor `ext` (§4.4).
+		const kept = previous && isJsonObject(previous.message.ext) ? previous.message.ext : undefined;
+		const ext = p.deleted ? undefined : mergedExt(kept, p.ext);
 		const record: JsonObject = {
 			message_id: id, log_id: log, room_id: room.room_id, from,
-			...(p.body ? { body: p.body } : {}),
+			...(p.body && !p.deleted ? { body: p.body } : {}),
 			...(p.reply_to ? { reply_to: p.reply_to } : {}),
-			...(p.ext ? { ext: p.ext } : {}),
+			...(ext ? { ext } : {}),
 			...(p.deleted ? { deleted: true } : {})
 		};
 		if (reactions.size) room.reactions.set(id, reactions);
@@ -275,11 +286,13 @@ export class MemoryProtocolServer {
 			// A thread created without `private` takes its parent's (§4.3.4).
 			if (p.private === true || (p.private === undefined && parent && this.rooms.get(parent)?.private)) room.private = true;
 		} else {
-			// An update resubmits every client field; one left out is cleared, except `private`, which is kept (§4.3.4). It is a new room record.
+			// An update resubmits every client field; one left out is cleared, except `private`, which is kept,
+			// and `ext`, which merges (§3.4, §4.3.4). It is a new room record.
 			room.title = typeof p.title === 'string' ? p.title : room.room_id;
 			this.nextLog(room);
 		}
 		room.description = typeof p.description === 'string' && p.description ? p.description : undefined;
+		room.ext = mergedExt(room.ext, p.ext);
 		const record = this.roomRecord(room, true);
 		socket.deliver({ method: 'room_update', params: { joined: [record], users: Object.values(people) } });
 		this.broadcast({ method: 'room_update', params: { updated: [this.roomRecord(room)] } }, room);
@@ -312,11 +325,26 @@ export class MemoryProtocolServer {
 		reply();
 	}
 
+	/** `me` (§3.3): given fields replace, `""` clears, omitted ones stay, and `ext` merges by its keys (§3.5). */
 	private updateMe(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void): void {
-		if (typeof p.name === 'string') people.preview_guest.name = p.name || 'You';
-		const you = { ...people.preview_guest };
-		socket.deliver({ method: 'user', params: { you } });
-		reply({ you });
+		const me = people.preview_guest;
+		const changed: JsonObject = { user_id: me.user_id };
+		if (typeof p.name === 'string') changed.name = me.name = p.name || 'You';
+		if (typeof p.avatar === 'string') {
+			if (p.avatar) me.avatar = p.avatar;
+			else delete me.avatar;
+			changed.avatar = p.avatar;
+		}
+		if (isJsonObject(p.ext) && Object.keys(p.ext).length) {
+			const ext = mergedExt(me.ext, p.ext);
+			if (ext) me.ext = ext;
+			else delete me.ext;
+			// The notification carries the keys that changed, cleared ones as their empty values.
+			changed.ext = structuredClone(p.ext);
+		}
+		for (const peer of this.sockets) peer.deliver({ method: 'user', params: { you: changed } });
+		// The result's `you` is complete.
+		reply({ you: structuredClone(me) });
 	}
 	private activity(socket: PreviewSocket, p: JsonObject): void {
 		if (typeof p.room_id !== 'string') return;
