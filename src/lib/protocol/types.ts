@@ -1,5 +1,5 @@
 /**
- * Wire types and decoders for Apron protocol v7 (PROTOCOL.md at the repository
+ * Wire types and decoders for Apron protocol v8 (PROTOCOL.md at the repository
  * root). Decoders normalize server records to the fields the protocol defines
  * and drop unknown top-level keys (§1: unknown keys MAY be dropped), while
  * copying known values exactly, including `ext`, literal `null`s, unknown embed

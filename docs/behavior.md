@@ -98,7 +98,7 @@ the design system's notice card: left-aligned, and titled by the sender as the
 server names it, `Name (~user_id)`, such as "System message to you (~private)"
 from the Apron example servers. From a server before protocol v7, `@private`,
 `@room` and `@server` senders are read as those three (the client renames them
-to `~` as they arrive); on a v7 server they are ordinary users, and no `@` ID
+to `~` as they arrive); on a server of v7 or later they are ordinary users, and no `@` ID
 is ever special. A `~private` message reaches only the connection it was sent
 on. Every `~private` message, whatever it carries, and every `message` without
 a `message_id` (such as a command's reply), are transient notices: a dashed card for the session, never stored, and gone on
@@ -451,7 +451,7 @@ shows, since the server may alter or decline it.
 With the `rooms` capability, **Start thread** on a message creates a thread under the
 room titled after the message's first line, with the message's text as its
 `description` (unless the title already says it all), and opens it with the
-composer replying to that message. Threads don't point at a message in v7, so
+composer replying to that message. Threads don't point at a message since v7, so
 the thread's first reply carries the link back as its `reply_to` (the
 convention of the protocol's fixtures): its quote shows the message and jumps
 to it. The message stays in the room, with the thread's card after it. A

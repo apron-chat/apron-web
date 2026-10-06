@@ -146,6 +146,19 @@ describe('server.status', () => {
 		vi.unstubAllGlobals();
 	});
 
+	it('takes a v8 server as it is: status, its sign-ins and member changes all apply', async () => {
+		const socket = FakeSocket.latest();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms', 'status'], status: ['dnd'] } });
+		expect(snapshot.server?.apron).toBe(8);
+		expect(snapshot.server?.status).toEqual(['dnd']);
+		await socket.reply('auth', { you: { user_id: 'ada', status: 'online' } });
+		expect(snapshot.authenticated).toBe(true);
+		expect(snapshot.memberChangesUnsupported).toBeUndefined();
+		client.setStatus('dnd').catch(() => undefined);
+		expect(socket.request('me').params).toEqual({ status: 'dnd' });
+	});
+
 	it('takes the strings listed, and a replacing frame without it leaves none', () => {
 		const socket = FakeSocket.latest();
 		socket.open();

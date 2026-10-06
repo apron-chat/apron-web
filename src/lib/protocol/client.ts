@@ -133,7 +133,7 @@ export {
 } from './client-views';
 
 /**
- * A browser-only Apron protocol v7 session; instantiate one per mounted UI.
+ * A browser-only Apron protocol v8 session; instantiate one per mounted UI.
  *
  * State model: one store of room records, message snapshots, reaction sets,
  * and memberships shared by every room (PROTOCOL.md §2), projected per visible
@@ -3037,7 +3037,7 @@ export class ChatClient {
 	/**
 	 * A message from a server before v7 whose sender is `@server`, `@room` or
 	 * `@private` gets that identity's `~` name (the legacy fallback; see
-	 * `legacySystemId`). Everything else, and every message from a v7 server,
+	 * `legacySystemId`). Everything else, and every message from a server of v7 or later,
 	 * is left as it is.
 	 */
 	private fromLegacySender(value: unknown): unknown {

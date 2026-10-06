@@ -125,7 +125,7 @@ export class MemoryProtocolServer {
 			server.sockets.add(socket);
 			socket.readyState = 1;
 			socket.onopen?.({} as Event);
-			socket.deliver({ method: 'server', params: { apron: 7, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities: ['history', 'edit', 'rooms', 'reactions', 'activity', 'command'] } });
+			socket.deliver({ method: 'server', params: { apron: 8, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities: ['history', 'edit', 'rooms', 'reactions', 'activity', 'command'] } });
 		});
 		return socket as unknown as WebSocket;
 	}

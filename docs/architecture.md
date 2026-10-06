@@ -92,7 +92,7 @@ account and shares the one subscription between accounts and tabs, and
 from the worker so tests can run them.
 
 Protocol types, replay reduction, and the WebSocket session live under
-`src/lib/protocol` and speak Apron protocol v7. `client.ts` holds the session,
+`src/lib/protocol` and speak Apron protocol v8. `client.ts` holds the session,
 `ChatClient`, and re-exports the rest of its API: `client-types.ts` has the
 snapshot and option types, `client-views.ts` the pure helpers over snapshots,
 capabilities and server URLs, and `client-internals.ts` the per-room state,
