@@ -6,14 +6,11 @@ describe('emailed sign-in links (§4.11)', () => {
 		expect(parseEmailLink('#token=Hk41x9')).toEqual({ token: 'Hk41x9' });
 		expect(parseEmailLink('#x=1&token=Hk41x9')).toEqual({ token: 'Hk41x9' });
 		expect(parseEmailLink('#token=Hk41x9&server=wss%3A%2F%2Fchat.example%2Fws')).toEqual({ token: 'Hk41x9', server: 'wss://chat.example/ws' });
-		// An address, as earlier drafts' links carried, is not needed and not used.
-		expect(parseEmailLink('#email=ada%40example.com&token=418092')).toEqual({ token: '418092' });
 	});
 
 	it('refuses fragments that are not a complete link, or name a server that isn’t a WebSocket URL', () => {
 		expect(parseEmailLink('')).toBeUndefined();
 		expect(parseEmailLink('#')).toBeUndefined();
-		expect(parseEmailLink('#email=ada%40example.com')).toBeUndefined();
 		expect(parseEmailLink('#token=')).toBeUndefined();
 		expect(parseEmailLink('#room')).toBeUndefined();
 		expect(parseEmailLink('#token=1&server=https%3A%2F%2Fevil.example')).toBeUndefined();
@@ -27,9 +24,8 @@ describe('emailed sign-in links (§4.11)', () => {
 		expect(replaced).toEqual(['/login?x=1']);
 		// An unusable one is scrubbed too; anything else in the fragment is left alone.
 		expect(takeEmailLink({ hash: '#token=1&server=javascript%3Aalert(1)', pathname: '/', search: '' }, (url) => replaced.push(url))).toBeUndefined();
-		expect(takeEmailLink({ hash: '#email=a%40b', pathname: '/', search: '' }, (url) => replaced.push(url))).toBeUndefined();
 		expect(takeEmailLink({ hash: '#section', pathname: '/', search: '' }, (url) => replaced.push(url))).toBeUndefined();
-		expect(replaced).toEqual(['/login?x=1', '/', '/']);
+		expect(replaced).toEqual(['/login?x=1', '/']);
 	});
 
 	it('reads the link before scrubbing a live location', () => {

@@ -283,24 +283,21 @@ export function planPush(push: PushPayload | undefined, visible: readonly Visibl
 
 /**
  * The notification for a pushed message (a message object, whose `body` may
- * be truncated or missing), for the registration with this `push_id`.
- * Undefined for anything else. With a `push_id` it is the message's own
- * notification, which replaces the page's for the same message quietly, and
- * the other way round; without one (an older server), a newer push for the
- * room replaces it.
+ * be truncated or missing, §4.9), for the registration with this `push_id`:
+ * the message's own notification, which replaces the page's for the same
+ * message quietly, and the other way round. Undefined for anything else,
+ * and without a `push_id` or `message_id`, which every push of this
+ * client's registrations carries.
  */
-export function pushNotification(message: unknown, pushId?: string): { title: string; options: ShowNotificationOptions } | undefined {
+export function pushNotification(message: unknown, pushId: string | undefined): { title: string; options: ShowNotificationOptions } | undefined {
 	if (!isJsonObject(message) || typeof message.room_id !== 'string' || !message.room_id) return undefined;
+	const messageId = typeof message.message_id === 'string' && message.message_id ? message.message_id : undefined;
+	if (pushId === undefined || messageId === undefined) return undefined;
 	const roomId = message.room_id;
 	const from = isJsonObject(message.from) ? message.from : {};
 	const sender = [from.name, from.user_id].find((value): value is string => typeof value === 'string' && value.trim() !== '') ?? 'Someone';
 	const text = isJsonObject(message.body) && typeof message.body.text === 'string' ? message.body.text : undefined;
 	const body = notificationBody(text) || 'New message';
-	const messageId = typeof message.message_id === 'string' && message.message_id ? message.message_id : undefined;
-	if (pushId === undefined || messageId === undefined) {
-		const target: PushTarget = { push: true, roomId };
-		return { title: `${sender} · ${roomId}`, options: { body, tag: `apron:push:${roomId}`, renotify: true, data: target } };
-	}
 	const target: PushTarget = { push: true, roomId, pushId, messageId, group: notificationGroup(pushId, roomId) };
 	return { title: `${sender} · ${roomId}`, options: { body, tag: messageNotificationTag(pushId, messageId), renotify: false, data: target } };
 }
@@ -330,12 +327,12 @@ export function pushTarget(data: unknown): PushTarget | undefined {
 
 /**
  * What a tab does with a pushed room: open it when the `push_id` is its
- * account's, or, for a push without one (an older server), when its account
- * holds this browser's push subscription; wait while its own `push_id` is
+ * account's, or when there is none (a page notification clicked after its
+ * tab closed, from an account without one); wait while its own `push_id` is
  * still being worked out; otherwise leave it.
  */
-export function pushRoute(target: Pick<PushTarget, 'pushId'>, pushId: string | undefined, subscribed: boolean): 'open' | 'wait' | 'ignore' {
-	if (target.pushId === undefined) return subscribed ? 'open' : 'ignore';
+export function pushRoute(target: Pick<PushTarget, 'pushId'>, pushId: string | undefined): 'open' | 'wait' | 'ignore' {
+	if (target.pushId === undefined) return 'open';
 	if (pushId === undefined) return 'wait';
 	return target.pushId === pushId ? 'open' : 'ignore';
 }

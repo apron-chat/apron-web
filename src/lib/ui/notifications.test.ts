@@ -112,40 +112,33 @@ describe('showing notifications', () => {
 });
 
 describe('push notifications', () => {
-	it('shows a pushed message from its sender, in its room, replacing the room\'s last one', () => {
-		expect(pushNotification({
-			message_id: '1724803200042', room_id: 'general',
-			from: { user_id: 'alice', name: 'Alice' },
-			body: { text: 'Deploy is done,\n  can someone check?' }
-		})).toEqual({
-			title: 'Alice · general',
-			options: { body: 'Deploy is done, can someone check?', tag: 'apron:push:general', renotify: true, data: { push: true, roomId: 'general' } }
-		});
-	});
-
 	it('falls back to the user_id, and says only that a message arrived when the body was left out', () => {
-		const shown = pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'bob', name: ' ' } });
+		const shown = pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'bob', name: ' ' } }, 'a1');
 		expect(shown?.title).toBe('bob · ops');
 		expect(shown?.options.body).toBe('New message');
-		expect(pushNotification({ room_id: 'ops', body: { text: 'hi' } })?.title).toBe('Someone · ops');
+		expect(pushNotification({ message_id: '1', room_id: 'ops', body: { text: 'hi' } }, 'a1')?.title).toBe('Someone · ops');
 	});
 
 	it('shortens a long body', () => {
 		expect(notificationBody('x'.repeat(200))).toBe(`${'x'.repeat(179)}…`);
-		expect(pushNotification({ room_id: 'ops', from: { user_id: 'bob' }, body: { text: 'y'.repeat(181) } })?.options.body).toHaveLength(180);
+		expect(pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'bob' }, body: { text: 'y'.repeat(181) } }, 'a1')?.options.body).toHaveLength(180);
 	});
 
-	it('shows nothing for a payload that isn\'t a message', () => {
-		expect(pushNotification(undefined)).toBeUndefined();
-		expect(pushNotification('hello')).toBeUndefined();
-		expect(pushNotification({ from: { user_id: 'bob' }, body: { text: 'no room' } })).toBeUndefined();
+	it('shows nothing for a payload that isn\'t a message, or lacks its push_id or message_id', () => {
+		expect(pushNotification(undefined, 'a1')).toBeUndefined();
+		expect(pushNotification('hello', 'a1')).toBeUndefined();
+		expect(pushNotification({ message_id: '1', from: { user_id: 'bob' }, body: { text: 'no room' } }, 'a1')).toBeUndefined();
+		expect(pushNotification({ room_id: 'ops', from: { user_id: 'bob' }, body: { text: 'no id' } }, 'a1')).toBeUndefined();
+		expect(pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'bob' } }, undefined)).toBeUndefined();
+		expect(readPush({ message: { message_id: '1', room_id: 'ops', from: { user_id: 'bob' } } })).toEqual({ unreadable: true });
 	});
 
 	it('reads a push click target, and tells it apart from a page notification\'s', () => {
-		const data = pushNotification({ room_id: 'general' })!.options.data;
-		expect(pushTarget(data)).toEqual({ push: true, roomId: 'general' });
+		const data = pushNotification({ message_id: '7', room_id: 'general' }, 'a1')!.options.data;
+		const target = { push: true, roomId: 'general', pushId: 'a1', messageId: '7', group: 'a1:general' };
+		expect(pushTarget(data)).toEqual(target);
 		expect(pushTarget({ tab: 't1', server: 'wss://chat.example/', roomId: 'general' })).toBeUndefined();
-		expect(pushClickTarget({ type: PUSH_CLICK, target: data })).toEqual({ push: true, roomId: 'general' });
+		expect(pushClickTarget({ type: PUSH_CLICK, target: data })).toEqual(target);
 		expect(pushClickTarget({ type: NOTIFICATION_CLICK, target: data })).toBeUndefined();
 	});
 
@@ -165,12 +158,11 @@ describe('push notifications', () => {
 	});
 
 	it('opens a pushed room only in a tab signed in to the account its push_id names', () => {
-		expect(pushRoute({ pushId: 'a1' }, 'a1', false)).toBe('open');
-		expect(pushRoute({ pushId: 'a1' }, 'b2', true)).toBe('ignore');
-		expect(pushRoute({ pushId: 'a1' }, undefined, true)).toBe('wait');
-		// Without a push_id (an older server): the tab on the account holding the subscription.
-		expect(pushRoute({}, 'a1', true)).toBe('open');
-		expect(pushRoute({}, 'a1', false)).toBe('ignore');
+		expect(pushRoute({ pushId: 'a1' }, 'a1')).toBe('open');
+		expect(pushRoute({ pushId: 'a1' }, 'b2')).toBe('ignore');
+		expect(pushRoute({ pushId: 'a1' }, undefined)).toBe('wait');
+		// A page notification from an account without one: whichever tab opened for it.
+		expect(pushRoute({}, 'a1')).toBe('open');
 	});
 
 	it('picks the first tab that answers with the push_id', async () => {

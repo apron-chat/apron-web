@@ -376,7 +376,7 @@
 	$effect(() => {
 		const pending = pushRoom;
 		if (!pending) return;
-		const route = pushRoute(pending, accountPushId, untrack(() => pushAccount !== undefined && pushAccount === pushSettings.owner?.account));
+		const route = pushRoute(pending, accountPushId);
 		if (route === 'wait') return;
 		if (route === 'ignore') {
 			pushRoom = undefined;
@@ -844,11 +844,7 @@
 		if (pushed) openPushedRoom(pushed);
 	}
 
-	/**
-	 * A push notification's room opens in a tab signed in to the account it
-	 * was pushed for: the one its `push_id` names, or, from a server that sends
-	 * none, the one this browser's push subscription is registered for.
-	 */
+	/** A push notification's room opens in a tab signed in to the account its `push_id` names. */
 	function openPushedRoom(target: Pick<PushTarget, 'roomId' | 'pushId'>): void {
 		window.focus();
 		pushRoom = target;

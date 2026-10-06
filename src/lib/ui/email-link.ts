@@ -20,15 +20,15 @@ export interface EmailLink {
 /**
  * Reads an emailed sign-in link from `location`'s fragment and scrubs the
  * fragment from the address bar (and so from history and bookmarks) at once,
- * keeping the rest of the URL. Any fragment carrying `token` (or `email`, as
- * earlier drafts' links did) is scrubbed, even one that isn't a usable link.
+ * keeping the rest of the URL. Any fragment carrying `token` is scrubbed, even
+ * one that isn't a usable link.
  * Returns undefined, touching nothing else, when the fragment is not such a
  * link.
  */
 export function takeEmailLink(location: Pick<Location, 'hash' | 'pathname' | 'search'>, replace: (url: string) => void): EmailLink | undefined {
 	const hash = location.hash;
 	const params = fragmentParams(hash);
-	if (!params || (!params.has('email') && !params.has('token'))) return undefined;
+	if (!params?.has('token')) return undefined;
 	// Read before scrubbing: a real `Location` changes under us.
 	const link = parseEmailLink(hash);
 	replace(`${location.pathname}${location.search}`);

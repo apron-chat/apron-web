@@ -755,9 +755,7 @@ in (a passkey that only signs in is never registered from there).
 The email's link is `#token=…`, with an optional `&server=` naming the
 server's `ws:`/`wss:` URL (the suggested convention of §4.11), all
 `application/x-www-form-urlencoded` in the URL fragment; it carries no address.
-The fragment is read and scrubbed from the address bar before anything else
-(an earlier draft's `#email=…&token=…` is scrubbed too, and its address
-ignored). A link is a credential someone else may have crafted or forwarded,
+The fragment is read and scrubbed from the address bar before anything else. A link is a credential someone else may have crafted or forwarded,
 so it is never used silently: a dialog asks "Sign in to *server* with this
 email link?", says whom it signs out when you are signed in there (or that a
 saved session is kept there, before it has resumed), and warns that a link
