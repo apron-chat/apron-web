@@ -24,8 +24,9 @@
 	let noun = $derived(thread ? 'thread' : 'room');
 
 	/**
-	 * Saves the title and description with `room_set` (§4.3.4), which
-	 * resubmits `ext` unchanged; an emptied field is cleared. The
+	 * Saves the title and description with `room_set` (§4.3.4); an emptied
+	 * field is cleared, and `ext`, which the server merges (§3.5), is left as
+	 * it is. The
 	 * `room_update` that follows is the truth, since a server may alter or
 	 * decline.
 	 */

@@ -62,7 +62,7 @@ describe('ChatClient operations', () => {
 		expect(snapshot.activeRoom).toBe('ops');
 	});
 
-	it('resubmits ext exactly, reply_to bare, and the rest of the body on edits', async () => {
+	it('resubmits reply_to bare and the rest of the body on edits, but never ext, which the server merges', async () => {
 		await connect();
 		const ext = JSON.parse('{"example.org": {"nested": null}, "__proto__": {"opaque": true}}');
 		socket.receive({ method: 'message', params: message('100', {
@@ -73,11 +73,10 @@ describe('ChatClient operations', () => {
 		expect(client.message('50')?.room_id).toBe('elsewhere');
 		quiet(client.editMessage('100', 'new'));
 		const params = socket.request('message').params;
-		expect(JSON.parse(JSON.stringify(params))).toEqual(JSON.parse(JSON.stringify({
+		expect(params).toEqual({
 			message_id: '100', room_id: 'general', body: { text: 'new', format: 'markdown', embeds: [{ kind: 'future' }] },
-			reply_to: { message_id: '50' }, ext
-		})));
-		expect(JSON.stringify(params)).toContain('"__proto__":{"opaque":true}');
+			reply_to: { message_id: '50' }
+		});
 		// Later saves build on the unconfirmed ones: the edited body is kept.
 		quiet(client.setMessageReply('100', null));
 		const unreplied = socket.request('message').params;
@@ -88,6 +87,22 @@ describe('ChatClient operations', () => {
 		expect(deleted).not.toHaveProperty('body');
 		expect(deleted).not.toHaveProperty('reply_to');
 		expect(deleted).toMatchObject({ message_id: '100', room_id: 'general', deleted: true });
+	});
+
+	it('sends only the ext keys a save changes, an empty value clearing one, and settles on a record whatever its ext', async () => {
+		await connect();
+		socket.receive({ method: 'message', params: message('100', { body: { text: 'old' }, ext: { irc: { nick: 'ada_' }, git: 'abc' } }) });
+		// Remove `git` and change `irc`; the rest of ext is the server's to keep (§3.5).
+		quiet(client.saveMessage('100', { ext: { git: '', irc: { nick: 'ada' } } }));
+		expect(socket.request('message').params).toEqual({ message_id: '100', room_id: 'general', body: { text: 'old' }, ext: { git: '', irc: { nick: 'ada' } } });
+		// The merged record settles the save: the next one builds on the store, and sends no ext.
+		socket.receive({ method: 'message', params: message('100', { body: { text: 'old' }, ext: { irc: { nick: 'ada' }, other: 1 } }, '101') });
+		socket.receive({ method: 'message', params: message('100', { body: { text: 'new', format: 'markdown' }, ext: { other: 1 } }, '102') });
+		quiet(client.editMessage('100', 'later'));
+		expect(socket.request('message').params).toEqual({ message_id: '100', room_id: 'general', body: { text: 'later', format: 'markdown' } });
+		// A delete sends no ext: a tombstone carries none (§4.4).
+		quiet(client.saveMessage('100', { deleted: true, ext: { git: 'x' } }));
+		expect(socket.request('message').params).toEqual({ message_id: '100', room_id: 'general', deleted: true });
 	});
 
 	it('removes one embed by embed_id, or by value for servers that store embeds as given', async () => {
@@ -153,12 +168,13 @@ describe('ChatClient operations', () => {
 		expect(socket.request('room_set').params).toEqual({ parent_room_id: 'general', title: 'Deploy', description: 'Deploy?' });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'thread', log_id: '21', parent_room_id: 'general', title: 'Side', description: 'Deploy?', ext: { x: { y: 1 } } }] } });
 		quiet(client.updateRoom('thread', { title: 'Renamed' }));
-		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed', description: 'Deploy?', ext: { x: { y: 1 } } });
-		// A second update before the first is confirmed builds on it.
-		quiet(client.updateRoom('thread', { description: null, ext: null }));
-		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed' });
+		// `ext` merges (§3.5): an update never resubmits it.
+		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed', description: 'Deploy?' });
+		// A second update before the first is confirmed builds on it; an empty ext value removes that key.
+		quiet(client.updateRoom('thread', { description: null, ext: { x: {} } }));
+		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed', ext: { x: {} } });
 		// The matching record confirms it; later updates build on the store again.
-		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'thread', log_id: '22', parent_room_id: 'general', title: 'Renamed' }] } });
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'thread', log_id: '22', parent_room_id: 'general', title: 'Renamed', ext: { w: 1 } }] } });
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'thread', log_id: '23', parent_room_id: 'general', title: 'Elsewhere' }] } });
 		quiet(client.updateRoom('thread', { ext: { z: 1 } }));
 		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Elsewhere', ext: { z: 1 } });

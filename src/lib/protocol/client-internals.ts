@@ -218,25 +218,28 @@ export function maxDefined(a: string | undefined, b: string | undefined): string
 	return compareLogIds(a, b) >= 0 ? a : b;
 }
 
-/** A message's client fields (§4.4), as a save would submit them. */
+/**
+ * A message's client fields (§4.4), as a save would submit them. Not `ext`:
+ * a save merges it (§3.5), so what the server keeps stays without sending it
+ * back, and another client's change to it is never undone.
+ */
 export function messageClientFields(record: MessageRecord): JsonObject {
 	const fields: JsonObject = { room_id: record.room_id };
 	if (record.body !== undefined) fields.body = record.body;
 	if (record.reply_to) fields.reply_to = { message_id: record.reply_to.message_id };
 	if (record.deleted === true) fields.deleted = true;
-	if (record.ext !== undefined) fields.ext = record.ext;
 	return fields;
 }
 
 /**
  * A room's client fields as an update would submit them (§4.3.4): all but
- * `parent_room_id` and `private`, which are fixed at creation.
+ * `parent_room_id` and `private`, which are fixed at creation, and `ext`,
+ * which `room_set` merges (§3.5).
  */
 export function roomClientFields(record: RoomRecord): JsonObject {
 	const fields: JsonObject = {};
 	if (record.title !== undefined) fields.title = record.title;
 	if (record.description !== undefined) fields.description = record.description;
-	if (record.ext !== undefined) fields.ext = record.ext;
 	return fields;
 }
 

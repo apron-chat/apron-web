@@ -191,11 +191,14 @@ is the snapshot's `pushError`.
 
 Edits, moves, and deletion use the same `message` request as creation, with an
 existing `message_id`, and resubmit every client field of the latest snapshot
-(`room_id`, `body`, a bare `reply_to`, and `ext` unchanged). A move is a save
+(`room_id`, `body`, and a bare `reply_to`). `ext` is not resubmitted: a save
+merges it one level deep (§3.5), so a save sends only the `ext` keys it
+changes, a key with an empty value removes it, and a pending save settles on a
+record that matches it whatever its `ext`. A move is a save
 with another `room_id`. Rooms and threads are created and updated with the
 `room_set` request (capability `rooms`); a creation may ask for `private: true`, and
-updates resubmit `title`, `description`, and `ext` (never `parent_room_id` or
-`private`), and the change arrives as a `room_update`. The
+updates resubmit `title` and `description` (never `parent_room_id`,
+`private`, or `ext`, which merges like a message's), and the change arrives as a `room_update`. The
 client does not depend on the notifications a request causes arriving before
 its result, as servers send them.
 `room_join` and `room_leave` take the `room_id`, and a `user_id` to add or

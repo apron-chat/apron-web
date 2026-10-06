@@ -1174,8 +1174,10 @@ export class ChatClient {
 
 	/**
 	 * Saves a message (capability `edit`, §4.4) from its latest stored snapshot:
-	 * every client field (`room_id`, `body`, bare `reply_to`, `ext`) is
-	 * resubmitted unless the patch changes it. `deleted: true` omits `body`.
+	 * every client field (`room_id`, `body`, bare `reply_to`) is resubmitted
+	 * unless the patch changes it. `ext` is not: a save merges it (§3.5), so
+	 * only the patch's keys go, and an empty value clears one. `deleted: true`
+	 * omits `body`.
 	 */
 	saveMessage(messageId: string, patch: MessagePatch = {}): OperationHandle<MessageResult> {
 		const current = this.messageBase(messageId);
@@ -1194,11 +1196,7 @@ export class ChatClient {
 		} else if (patch.reply_to !== null) {
 			params.reply_to = { message_id: patch.reply_to };
 		}
-		if (patch.ext === undefined) {
-			if (current.ext !== undefined) params.ext = current.ext;
-		} else if (patch.ext !== null) {
-			params.ext = patch.ext;
-		}
+		if (patch.ext !== undefined && !params.deleted) params.ext = patch.ext;
 		const handle = this.enqueueRequest<MessageResult>('message', params, { visible: true, allowBeforeAuth: false });
 		const { message_id: _id, ...state } = params;
 		this.trackSave(this.pendingMessageSaves, messageId, handle, state, () => this.store.message(messageId)?.log_id);
@@ -1234,11 +1232,17 @@ export class ChatClient {
 		});
 	}
 
-	/** Settle a pending save when a newer record arrives that matches it, or after its result. */
+	/**
+	 * Settle a pending save when a newer record arrives that matches it, or
+	 * after its result. `ext` is left out of the comparison: the save merged
+	 * it into whatever the record had (§3.5).
+	 */
 	private settleSave(pending: Map<string, PendingSave>, key: string, fields: JsonObject): void {
 		const entry = pending.get(key);
 		if (!entry) return;
-		if (entry.confirmed || canonicalJson(fields) === canonicalJson(entry.state)) pending.delete(key);
+		const { ext: _merged, ...state } = entry.state;
+		const { ext: _kept, ...record } = fields;
+		if (entry.confirmed || canonicalJson(record) === canonicalJson(state)) pending.delete(key);
 	}
 
 	private installMessage(record: MessageRecord): void {
@@ -1339,19 +1343,22 @@ export class ChatClient {
 
 	/**
 	 * Updates a room's client fields with `room_set` (§4.3.4) from its latest
-	 * record with the patch applied, resubmitting `title`, `description`, and
-	 * `ext`: omitted fields are cleared. `parent_room_id` and `private` are
-	 * fixed at creation and never sent.
+	 * record with the patch applied, resubmitting `title` and `description`:
+	 * omitted fields are cleared, so `null` clears one. `ext` is not
+	 * resubmitted: `room_set` merges it (§3.5), so only the patch's keys go,
+	 * and an empty value clears one. `parent_room_id` and `private` are fixed
+	 * at creation and never sent.
 	 */
 	updateRoom(roomId: string, patch: RoomPatch): OperationHandle<RoomResult> {
 		// Build on the latest submitted update while one is unconfirmed.
 		const stored = this.store.room(roomId);
 		const current = this.pendingRoomSaves.get(roomId)?.state ?? (stored ? roomClientFields(stored) : {});
 		const params: JsonObject = { room_id: roomId };
-		for (const key of ['title', 'description', 'ext'] as const) {
+		for (const key of ['title', 'description'] as const) {
 			const value = patch[key] === undefined ? current[key] : patch[key];
 			if (value !== undefined && value !== null) params[key] = value;
 		}
+		if (patch.ext !== undefined) params.ext = patch.ext;
 		const handle = this.enqueueRequest<RoomResult>('room_set', params, { visible: true, allowBeforeAuth: false });
 		const { room_id: _id, ...state } = params;
 		this.trackSave(this.pendingRoomSaves, roomId, handle, state, () => this.store.room(roomId)?.log_id);
@@ -1968,8 +1975,10 @@ export class ChatClient {
 
 	/**
 	 * Updates your profile with `me` (§3.3): given fields replace the current
-	 * ones and `""` (or `{}` for `ext`) removes one. Resolves with the `you`
-	 * the server kept, which may differ from what was asked.
+	 * ones, `""` clears one, and omitted ones stay. `ext` merges by its keys
+	 * (§3.5): each given key replaces its value, a key with an empty value
+	 * (`""`, `[]`, `{}`) is removed, and keys left out stay. Resolves with the
+	 * `you` the server kept, which may differ from what was asked.
 	 */
 	updateProfile(patch: { name?: string; avatar?: string; ext?: JsonObject; status?: string }): Promise<Identity> {
 		if (patch.name !== undefined) this.displayName = patch.name.trim();

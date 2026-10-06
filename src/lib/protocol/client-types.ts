@@ -329,14 +329,18 @@ export interface SendOptions {
 
 /**
  * Changes to a saved message. Absent keys keep the latest snapshot's value;
- * `null` removes `reply_to` or `ext`. Saves always resubmit every client field
- * (§4.4).
+ * `null` removes `reply_to`. Saves resubmit every client field (§4.4) except
+ * `ext`, which the server merges (§3.5).
  */
 export interface MessagePatch {
 	room_id?: string;
 	body?: MessageBody;
 	reply_to?: string | null;
-	ext?: JsonObject | null;
+	/**
+	 * `ext` keys to change: each replaces its value, a key with an empty value
+	 * (`""`, `[]`, `{}`) is removed, and keys left out stay (§3.5).
+	 */
+	ext?: JsonObject;
 	deleted?: true;
 }
 
@@ -353,12 +357,17 @@ export interface CreateRoomOptions {
 
 /**
  * Changes to a room's client fields. Absent keys keep the latest record's
- * value; `null` clears. `parent_room_id` and `private` are fixed at creation.
+ * value; `null` clears `title` or `description`. `parent_room_id` and
+ * `private` are fixed at creation.
  */
 export interface RoomPatch {
 	title?: string | null;
 	description?: string | null;
-	ext?: JsonObject | null;
+	/**
+	 * `ext` keys to change: each replaces its value, a key with an empty value
+	 * (`""`, `[]`, `{}`) is removed, and keys left out stay (§3.5).
+	 */
+	ext?: JsonObject;
 }
 
 export type WebSocketFactory = (url: string) => WebSocket;
