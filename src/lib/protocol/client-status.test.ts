@@ -86,6 +86,49 @@ describe('kept statuses and sign-ins', () => {
 	});
 });
 
+/**
+ * Signing in to an existing account (§3.3): servers announce the previous
+ * identity's departure, never an `old` change, which means only the same
+ * account under a new `user_id`.
+ */
+describe('a guest that signs in to an existing account, as others see it', () => {
+	let client: ChatClient;
+	let snapshot: ClientSnapshot;
+	let socket: FakeSocket;
+
+	beforeEach(() => {
+		FakeSocket.instances = [];
+		vi.stubGlobal('WebSocket', FakeSocket);
+		client = ChatClient.fromOptions({ serverUrl: 'ws://fake.test/', onChange: (next) => (snapshot = next) });
+		client.start();
+		socket = FakeSocket.latest();
+	});
+
+	afterEach(() => {
+		client.stop();
+		vi.unstubAllGlobals();
+	});
+
+	it('shows the guest leaving and the account arriving as two people, without an alias', async () => {
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+		await socket.reply('auth', { you: { user_id: 'bo' } });
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', latest_log_id: '10', members: [{ user_id: 'bo' }, { user_id: 'guest_7', name: 'Guest 7', status: 'online' }] }] });
+		const members = () => snapshot.rooms.find((room) => room.id === 'general')?.members?.map((member) => member.user_id);
+		expect(members()).toEqual(['bo', 'guest_7']);
+		// The guest signs in to Ada's account on its connection: it leaves, and Ada, already an account, arrives.
+		socket.receive({ method: 'user', params: { new: { user_id: 'guest_7', name: 'Guest 7', status: 'offline' } } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '11', room_id: 'general', members: [{ user: { user_id: 'guest_7', name: 'Guest 7' }, joined: false }] }] } });
+		socket.receive({ method: 'user', params: { new: { user_id: 'ada', name: 'Ada', status: 'online' } } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '12', room_id: 'general', members: [{ user: { user_id: 'ada', name: 'Ada' }, joined: true }] }] } });
+		expect(members()).toEqual(['bo', 'ada']);
+		expect(snapshot.users.guest_7.status).toBe('offline');
+		expect(snapshot.users.ada).toEqual({ user_id: 'ada', name: 'Ada', status: 'online' });
+		// Two people: the guest's past messages stay the guest's.
+		expect(snapshot.userAliases).toEqual({});
+	});
+});
+
 /** `server.status` (§3.1, §4.11): the optional statuses the server accepts. */
 describe('server.status', () => {
 	let client: ChatClient;

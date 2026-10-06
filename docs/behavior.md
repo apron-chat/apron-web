@@ -78,7 +78,11 @@ recorded one the message carries only for fields the kept object lacks, so a
 cleared avatar, name or `roles` stays cleared however stale the message; an
 empty or unknown name shows as the `user_id`. A
 `user` notification with `new` and `old` maps the retired ID to the new
-identity. Message headers show the name with the muted `@user_id` beside it,
+identity: the same account under a new `user_id`, such as a guest that
+becomes a new account. Signing in to an existing account isn't one: others
+see the guest leave (a membership leave, `offline`) and the account arrive,
+two people, the guest's messages staying the guest's, and the connection
+that signed in takes its own identity from the `auth` result or `you`. Message headers show the name with the muted `@user_id` beside it,
 always when another user the client knows of shows under the same name, so no
 one can pass as someone else; a name that is the user's own `user_id` needs no
 handle beside it. Without an avatar, a
