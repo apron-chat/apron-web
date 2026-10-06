@@ -171,12 +171,6 @@ export const MAX_UNANSWERED_PINGS = 1;
  * auth be reconnected to every half second, each time paying for a new session.
  */
 export const STABLE_CONNECTION_MS = 30_000;
-/**
- * How long after a sign-in's result the previous mutes stand at most while
- * the server's `status` frames bring those in effect (§4.5), when no other
- * frame follows them sooner.
- */
-export const MUTES_SETTLE_MS = 2_000;
 /** How long a `room_list` result is reused for the same parent unless the caller asks for fresher. */
 export const ROOM_LIST_REUSE_MS = 10_000;
 const MAX_HISTORY_BUFFER_ENTRIES = 1_000;

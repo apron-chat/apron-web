@@ -272,11 +272,10 @@ still paused" for a refused **Resume**) until the next ask. A refused mute is
 not sent again on its own. So the row shows the pause the server kept, a shorter
 one or none, and focus moves to **Resume** (or back to **Pause…**) once it
 arrives; a pause set in another tab or on another device shows here too.
-Each sign-in starts unmuted, and after its result the server sends every
-mute in effect; any it doesn't send is off. The client gathers those and
-keeps showing the mutes it had until the first other frame after them (or
-two seconds, if none comes), then takes the gathered ones in one step, so a
-pause in effect before and after doesn't flicker off in between. Adding a
+Every notification a sign-in causes comes after its result
+([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), so at each sign-in the client drops the mutes
+it kept, and after the result the server sends every mute in effect, which
+the client applies as it arrives; any it doesn't send is off. Adding a
 passkey or an email address to the signed-in connection isn't a sign-in, a
 guest's included, nor is a repeat `auth` as the user the connection is
 already signed in as: the mutes stand. A lost connection keeps the pause

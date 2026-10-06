@@ -165,11 +165,13 @@ as a user the connection isn't already signed in as: an `auth` that adds to
 the signed-in connection isn't one (a passkey registered while
 authenticated, a guest's included, passes `added`, and an added address's
 `{}` result never reaches `handleAuth`), nor is a repeat `auth` as the same
-user. Each sign-in starts from no mutes: `gatherMutes` collects the `status`
-frames after its result in `incomingMutes`, while the kept mutes still
-show, and `settleMutes` swaps them in at the first frame after them other
-than `status` or `user` (or after `MUTES_SETTLE_MS`), so a pause doesn't
-flicker off in between; a lost connection keeps the mutes until then. `handleServer` keeps `server.status`, the optional
+user (§3.2). Every notification a sign-in causes comes after its result, so
+each sign-in drops the kept mutes (`resetMutes`) when its result arrives,
+and the `status` notifications after it apply as they come, like any
+other; a lost connection keeps the mutes until then. A `room_update` the
+sign-in causes, such as an automatic join with its membership, also comes
+after the result, and applies like any other, before or after the joined
+`room_list` sent behind `auth` answers. `handleServer` keeps `server.status`, the optional
 statuses the server accepts, as strings. Kept
 users' `status` values outlast a lost connection, and each sign-in drops
 them (`dropKeptStatuses`), all but your own, which the `auth` result's `you`

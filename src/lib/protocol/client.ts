@@ -74,7 +74,6 @@ import {
 	REQUEST_TIMEOUT_MS,
 	RETRY_AFTER_MAX_MS,
 	ROOM_LIST_REUSE_MS,
-	MUTES_SETTLE_MS,
 	STABLE_CONNECTION_MS,
 	THREAD_PAGE_SIZE,
 	TYPING_REFRESH_MS,
@@ -207,13 +206,6 @@ export class ChatClient {
 	/** Rooms whose notifications you paused (§4.5 `mute` with `room_id`), as the server's last `status` for each said: until then, or `true`. */
 	private readonly roomMutes = new Map<string, number | true>();
 	private muteTimer: ReturnType<typeof setTimeout> | undefined;
-	/**
-	 * After a sign-in's result, the mutes its `status` frames bring (§4.5),
-	 * gathered until the first frame after them; the kept ones show meanwhile.
-	 * `mutesSettleTimer` bounds the wait.
-	 */
-	private incomingMutes: { mute?: number | true; rooms: Map<string, number | true | undefined> } | undefined;
-	private mutesSettleTimer: ReturnType<typeof setTimeout> | undefined;
 	/**
 	 * What `push_register` sends on each connection (§4.9), for the account
 	 * `pushUser`; `pushSent` is whether this connection has.
@@ -1019,7 +1011,7 @@ export class ChatClient {
 		if (action === 'login') this.addProposalConnection = undefined;
 		if (name) this.displayName = name;
 		// A passkey registered on a signed-in connection, a guest's included, is added to that
-		// account (§4.10): not a sign-in, so its mutes stand (§4.5). For a registered session it
+		// account (§4.10): not a sign-in (§3.2), so its mutes stand (§4.5). For a registered session it
 		// is another way back in, not a new way it signed in; a guest's account becomes registered.
 		const adding = action === 'register' && this.authenticated;
 		if (!this.handleAuth(result, 'webauthn', adding)) throw new Error('Server authentication response did not include an identity');
@@ -1554,57 +1546,17 @@ export class ChatClient {
 	private handleStatus(params: JsonObject | undefined): void {
 		if (!params || !isMuteValue(params.mute)) return;
 		if (params.room_id !== undefined && typeof params.room_id !== 'string') return;
-		const gathering = this.incomingMutes;
-		if (gathering) {
-			// After a sign-in: one of the mutes in effect, taken with the rest once they have all come.
-			if (params.room_id === undefined) gathering.mute = muteEnd(params.mute);
-			else gathering.rooms.set(params.room_id, muteEnd(params.mute));
-			return;
-		}
 		if (params.room_id === undefined) this.applyMute(params.mute);
 		else this.applyRoomMute(params.room_id, params.mute);
 		this.emit();
 	}
 
 	/**
-	 * Each sign-in starts from no mutes: after its result the server sends
-	 * every mute in effect as a `status`, and any scope it doesn't send is
-	 * unmuted (§4.5). Those are gathered here, and the previous mutes stand
-	 * until the first frame after them (`settleMutes`), so a pause in effect
-	 * before and after doesn't flicker off between the result and its
-	 * `status` frames. A frame that never comes is waited for
-	 * `MUTES_SETTLE_MS` at most.
+	 * No mutes at all: at each sign-in, whose `status` notifications after
+	 * its result bring back those in effect (§4.5), and when signed out or
+	 * switching servers.
 	 */
-	private gatherMutes(): void {
-		this.clearIncomingMutes();
-		this.incomingMutes = { rooms: new Map() };
-		this.mutesSettleTimer = setTimeout(() => {
-			this.mutesSettleTimer = undefined;
-			this.settleMutes();
-		}, MUTES_SETTLE_MS);
-	}
-
-	/** The mutes gathered after a sign-in replace the previous ones: any scope not sent is unmuted. */
-	private settleMutes(): void {
-		const incoming = this.incomingMutes;
-		if (!incoming) return;
-		this.clearIncomingMutes();
-		this.setMutedUntil(incoming.mute);
-		this.roomMutes.clear();
-		for (const [roomId, until] of incoming.rooms) if (until !== undefined) this.roomMutes.set(roomId, until);
-		this.scheduleRoomUnmutes();
-		this.emit();
-	}
-
-	private clearIncomingMutes(): void {
-		if (this.mutesSettleTimer) clearTimeout(this.mutesSettleTimer);
-		this.mutesSettleTimer = undefined;
-		this.incomingMutes = undefined;
-	}
-
-	/** No mutes at all: signed out, or switched servers. */
 	private resetMutes(): void {
-		this.clearIncomingMutes();
 		this.applyMute(false);
 		this.roomMutes.clear();
 		this.scheduleRoomUnmutes();
@@ -2366,9 +2318,6 @@ export class ChatClient {
 		}
 		if (!isJsonObject(value)) return;
 		const frame = value as WireFrame;
-		// The mutes a sign-in's `status` frames bring are all in by the first frame after them
-		// other than a `user`, which the server may send among them with others' statuses (§4.5).
-		if (this.incomingMutes && frame.method !== 'status' && frame.method !== 'user') this.settleMutes();
 		switch (frame.method) {
 			case 'server':
 				this.handleServer(frame.params);
@@ -2553,15 +2502,16 @@ export class ChatClient {
 			return false;
 		}
 		// A sign-in signs the connection in as a user it isn't already signed in
-		// as (§4.5). A passkey added on this signed-in connection (`added`) is
+		// as (§3.2). A passkey added on this signed-in connection (`added`) is
 		// not one, nor is a repeat `auth` as the same user: the server sends no
 		// mutes or statuses after those, and what is kept stands. (An added
 		// address never comes here: its result is `{}`.)
 		const signIn = !added && !(this.authenticated && this.you?.user_id === identity.user_id);
-		// Each sign-in starts unmuted: the server's `status` frames that follow
-		// the result bring back the mutes in effect (§4.5), gathered until the
-		// first frame after them, while the previous mutes still show.
-		if (signIn) this.gatherMutes();
+		// Every notification a sign-in causes comes after its result (§3.2). So
+		// at each sign-in the kept mutes and statuses go, and the `status` and
+		// `user` notifications that follow bring back those in effect, applied
+		// as they arrive like any other (§4.5).
+		if (signIn) this.resetMutes();
 		this.setYou(cloneJson(identity as Identity), true);
 		if (signIn) this.dropKeptStatuses();
 		if (signedIn && added && this.registeredSession) {
@@ -2775,7 +2725,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * At each sign-in (§4.5) the other users' kept `status` values are
+	 * At each sign-in (§3.2, §4.5) the other users' kept `status` values are
 	 * dropped: those users show no status (not `offline`) until the server
 	 * sends it again, as it does after the result for each connected user who
 	 * shares a room, and as `room_list` and `room_update` carry it. Your own
@@ -3472,8 +3422,6 @@ export class ChatClient {
 		this.directory = undefined;
 		this.threadDirectory.clear();
 		this.clearIdleRetry();
-		// Mutes gathered from a sign-in cut short: the kept ones stand until the next.
-		this.clearIncomingMutes();
 		this.pushError = undefined;
 		this.memberChangesUnsupported = false;
 	}
