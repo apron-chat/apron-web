@@ -732,7 +732,9 @@ is taken the same way. On confirmation the client opens a fresh connection to
 the link's server (this one unless it names another) that is not signed in,
 presents the token there (`scheme: "email"` and `token`), and carries on with
 that connection once it has worked, as above; only then is a switch to another
-server remembered, and the server listed under Recent. A link never adds an
+server remembered, and the server listed under Recent. On the same server the
+account signed in before is signed out of as **Sign out** does, so push goes
+off for it here. A link never adds an
 address to an account. If it fails (expired, used), nothing changes: the page
 stays on its server, and the connect screen opens on Email, set to the link's
 server, with the reason.

@@ -688,8 +688,9 @@
 		emailLinkBusy = true;
 		feedback.pending('Signing in…');
 		void runEmailLink(link, chat, {
-			// Another account from here on: the view held for the current one goes.
-			beforeSwitch: (switched) => (switched ? leaveBackend() : session.forget()),
+			// Another account from here on: the view held for the current one goes, and on this
+			// server it is signed out of, push going off for it as a sign-out does.
+			beforeSwitch: (switched) => (switched ? leaveBackend() : signedOut()()),
 			onSignedIn: (server, switched) => {
 				feedback.clear();
 				emailLinkFailure = undefined;
