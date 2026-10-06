@@ -1060,14 +1060,25 @@ export class ChatClient {
 		// Push requests run in the background and never hold up signing out.
 		const pending = [...this.requests.values()].some((request) => request.method !== 'push_register' && request.method !== 'push_unregister');
 		if (this.passkeyAbort || this.passkeyStarting || pending) throw new Error('Wait for pending requests to finish, then try again');
-		// This device stops receiving the account's pushes (§4.7), as far as the server can still be told.
+		// This device stops receiving the account's pushes (§4.7). The connection
+		// is replaced at once, before the answer can come: the unregister stays
+		// queued for its account until answered, and goes again after that
+		// account's next `auth` (never another's), so the server is sure to drop it.
 		const registration = this.pushRegistration;
-		if (registration && this.pushReady()) {
-			this.sendFrame({ method: 'push_unregister', id: makeRequestId('push_unregister'), params: { url: registration.url } });
-		}
+		const user = this.pushUser;
 		this.pushRegistration = undefined;
 		this.pushUser = undefined;
-		this.pushUnregisters.clear();
+		if (registration && user !== undefined) {
+			const key = pushKey(registration.url, user);
+			const entry = { url: registration.url, user };
+			this.pushUnregisters.set(key, entry);
+			// Sent now, not after a registration in flight: there is no time to wait for its reply.
+			if (this.pushReady() && this.you?.user_id === user) {
+				this.enqueueRequest('push_unregister', { url: entry.url }, { visible: false, allowBeforeAuth: false }).promise.then(() => true, (cause: Error & { code?: number }) => cause.code !== undefined).then((answered) => {
+					if (answered && this.pushUnregisters.get(key) === entry) this.pushUnregisters.delete(key);
+				});
+			}
+		}
 		this.sessionToken = undefined;
 		this.storeSession(undefined);
 		this.noteSignIn(undefined);
@@ -1642,7 +1653,8 @@ export class ChatClient {
 	 * each connection, while the server advertises the registration's `kind`.
 	 * A registration that replaces another with another `url`, or none,
 	 * unregisters the previous `url` with `push_unregister`, after the next
-	 * `auth` if it can't now. Switching servers and signing out forget it.
+	 * `auth` if it can't now. Switching servers forgets it; signing out
+	 * unregisters it, again after that account's next `auth` if unanswered.
 	 */
 	setPushRegistration(registration: PushRegistration | undefined, userId?: string): void {
 		const previous = this.pushRegistration;

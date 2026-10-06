@@ -182,7 +182,9 @@ their `kind`. A replaced or cleared registration is unregistered, after the
 next `auth` as the account it belonged to if it can't be at once
 (`pushUnregisters` keeps each `url` with its user). `pushRequest` chains
 requests for the same `url` on a connection, each after the last one's reply
-(§1), so an unregister and a register can't apply out of order. Signing out unregisters, and switching
+(§1), so an unregister and a register can't apply out of order. Signing out unregisters and keeps the
+unregister queued for its user until answered, so one lost with the replaced
+connection goes again after that user's next `auth`; switching
 servers forgets it. `setPushOff(url)` unregisters this browser's endpoint after
 each `auth` while push is off for the account, and a refused `push_register`
 is the snapshot's `pushError`.

@@ -893,6 +893,36 @@ describe('rooms by request (cap rooms)', () => {
 			await signIn();
 			expect(sent('push_register')).toEqual([]);
 		});
+
+		it('sends a sign-out\'s unanswered unregister again when that account signs in, and only then', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn();
+			await socket.reply('push_register', {});
+			const signedOut = socket;
+			await client.signOut();
+			// The connection is replaced as a guest before the answer comes: it is lost.
+			expect(signedOut.sent.filter((frame) => frame.method === 'push_unregister').map((frame) => frame.params)).toEqual([{ url: webpush.url }]);
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await greet({ webpush: { key: 'BNcR' } }, 'guest_1');
+			expect(sent('push_unregister')).toEqual([]);
+			// Another account isn't asked: it would drop that account's registration of the url.
+			await signIn(undefined, 'bob');
+			expect(sent('push_unregister')).toEqual([]);
+			// The same account signs in again: the unregister goes, and push stays off.
+			await signIn();
+			expect(sent('push_unregister')).toEqual([{ url: webpush.url }]);
+			expect(sent('push_register')).toEqual([]);
+			await socket.reply('push_unregister', {});
+			// Answered, it is done.
+			const answered = socket;
+			socket.drop();
+			vi.advanceTimersByTime(60_000);
+			socket = FakeSocket.latest();
+			expect(socket).not.toBe(answered);
+			await greet({ webpush: { key: 'BNcR' } });
+			expect(sent('push_unregister')).toEqual([]);
+		});
 	});
 });
 

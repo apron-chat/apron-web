@@ -324,7 +324,10 @@ the account signed in, this browser's endpoint is unregistered after each
 the page knows the account, so a page load doesn't unregister and then
 register again. Requests for the same endpoint go one at a time, each after
 the last one's reply, so turning push off and straight back on can't apply
-in the wrong order. Signing out unregisters, and once it has worked turns push off for
+in the wrong order. Signing out unregisters; the connection is replaced before
+the answer can come, so the unregister is kept for that account and sent again
+after its next `auth` (not another account's) until the server answers it.
+Once signing out has worked it turns push off for
 that account here even when the server can't be told; a sign-out that fails
 (with requests still pending, say) leaves push on. A registration the server refuses shows its
 message in the setting.
