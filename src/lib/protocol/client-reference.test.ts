@@ -73,12 +73,16 @@ describe('ChatClient reference features', () => {
 	it('replaces the kept user object with a complete one, and merges ext by its keys from a user notification', async () => {
 		await connect();
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', name: 'Bob', avatar: 'https://example.com/b.png', roles: ['bot'], ext: { irc: { nick: 'bob_' }, git: 'b' } } } });
-		// Each ext key replaces the kept value whole, an empty value clears that key, and keys left out stay (§3.5).
+		// Each ext key replaces the kept value whole, an empty value clears that key (kept as cleared, as at the
+		// top level), and keys left out stay (§3.5).
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', ext: { irc: { network: 'libera' }, git: '', mx: null } } } });
-		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bob', avatar: 'https://example.com/b.png', roles: ['bot'], ext: { irc: { network: 'libera' }, mx: null } });
-		// `null` is an ordinary value (§3.3), and `[]` clears.
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bob', avatar: 'https://example.com/b.png', roles: ['bot'], ext: { irc: { network: 'libera' }, git: '', mx: null } });
+		// `"ext": {}` changes nothing, `null` is an ordinary value (§3.3), and `[]` clears.
+		const kept = snapshot.users.bob;
+		socket.receive({ method: 'user', params: { new: { user_id: 'bob', ext: {} } } });
+		expect(snapshot.users.bob).toBe(kept);
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', name: null, roles: [] } } });
-		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: null, avatar: 'https://example.com/b.png', roles: [], ext: { irc: { network: 'libera' }, mx: null } });
+		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: null, avatar: 'https://example.com/b.png', roles: [], ext: { irc: { network: 'libera' }, git: '', mx: null } });
 		// A listing's users are complete: what they leave out is gone, ext included.
 		const listing = client.listMembers('general', 0);
 		await socket.reply('room_list', {

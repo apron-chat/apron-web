@@ -271,11 +271,13 @@ export function isEmptyValue(value: unknown): boolean {
 }
 
 /**
- * `ext` merged one level deep (§3.5): each key that `incoming` carries
- * replaces the kept value, an empty value (`""`, `[]`, `{}`) clears that key,
- * and keys it leaves out stay. `"ext": {}` changes nothing. The value under a
- * key is replaced whole; `null` is an ordinary value. Returns `kept` itself
- * when nothing changes, and `undefined` when nothing is left of an absent one.
+ * A write's `ext` merged one level deep into what is stored (§3.5), as a
+ * server does: each key that `incoming` carries replaces the kept value, an
+ * empty value (`""`, `[]`, `{}`) removes that key, and keys it leaves out
+ * stay. `"ext": {}` changes nothing. The value under a key is replaced whole;
+ * `null` is an ordinary value. Returns `kept` itself when nothing changes.
+ * (A client's kept user object keeps a cleared key as its empty value
+ * instead: see `mergeIdentity`.)
  */
 export function mergeExt(kept: JsonObject | undefined, incoming: JsonObject): JsonObject | undefined {
 	let next: JsonObject | undefined;
@@ -292,6 +294,7 @@ export function mergeExt(kept: JsonObject | undefined, incoming: JsonObject): Js
 			next[key] = cloneJson(value);
 		}
 	}
+	if (next && !Object.keys(next).length) return undefined;
 	return next ?? kept;
 }
 
@@ -301,8 +304,11 @@ export function mergeExt(kept: JsonObject | undefined, incoming: JsonObject): Js
  * replaces the kept value, and fields it leaves out stay. `null` is an
  * ordinary value. An empty value (`""`, `[]`, `{}`) means the field was
  * cleared, and is kept as such rather than dropped, so rendering never falls
- * back to a stale recorded object for it (see `userIn`); `ext` instead merges
- * by its keys (`mergeExt`). Returns `current` itself when nothing changes.
+ * back to a stale recorded object for it (see `userIn`). `ext` merges the
+ * same way one level down (§3.5): each key it carries replaces the kept
+ * value, a cleared one kept as its empty value, and keys it leaves out stay,
+ * so `"ext": {}` changes nothing. Returns `current` itself when nothing
+ * changes.
  */
 export function mergeIdentity(current: Identity | undefined, incoming: Identity): Identity {
 	const next: JsonObject = Object.create(null);
@@ -315,10 +321,17 @@ export function mergeIdentity(current: Identity | undefined, incoming: Identity)
 		if (value === undefined) continue;
 		if (key === 'ext' && isJsonObject(value)) {
 			const kept = isJsonObject(next.ext) ? next.ext : undefined;
-			const merged = mergeExt(kept, value);
-			if (merged !== kept) {
-				if (merged === undefined) delete next.ext;
-				else next.ext = merged;
+			let ext: JsonObject | undefined;
+			for (const extKey of Object.keys(value)) {
+				const extValue = value[extKey];
+				if (extValue === undefined) continue;
+				const base = ext ?? kept;
+				if (base && Object.hasOwn(base, extKey) && canonicalJson(base[extKey]) === canonicalJson(extValue)) continue;
+				ext ??= Object.assign(Object.create(null), kept) as JsonObject;
+				ext[extKey] = cloneJson(extValue);
+			}
+			if (ext) {
+				next.ext = ext;
 				changed = true;
 			}
 			continue;

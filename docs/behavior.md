@@ -73,9 +73,9 @@ in an `auth` or `me` result, and the `users` of `room_list` and `room_update`
 `you` and `new` of a `user` notification, and room `members` — merges into it
 field by field: a present field replaces (`null` too, as an ordinary value), an
 empty one (`""`, `[]`, `{}`) clears it and is kept as cleared, and a missing
-one changes nothing. `ext` merges by its keys instead
+one changes nothing. `ext` merges the same way one level down
 ([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)): each key replaces the kept value, an empty value
-clears that key, and `"ext": {}` changes nothing. Your own `status` comes only
+clears that key (kept as cleared), and `"ext": {}` changes nothing. Your own `status` comes only
 from `you`, never from your entry in `users` or `members`. Recorded objects, a message's or reaction's `from` and a
 membership's `user`, describe the user as of their record and never merge. A
 user renders field by field from the kept object, falling back to the
