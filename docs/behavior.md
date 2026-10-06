@@ -10,7 +10,7 @@ The default connection is `VITE_DEFAULT_SERVER_URL` from the build, which
 
 Embed media (`og` images, video and audio) loads from the chat server's origin
 and from the origins in `VITE_TRUSTED_MEDIA_ORIGINS`, which `.env.production`
-sets to `https://media.apron.chat`, the reference server's upload bucket.
+sets to `https://media.apron.chat`, the Cloudflare demo server's upload bucket.
 Streams load from the chat server's origin only. Every link in chat, from
 message text, link cards, uploads and HTML embeds, opens in a new tab.
 
@@ -605,7 +605,7 @@ which adds the address to the guest's account (§4.11); Sign in with email is a
 sign-in to the address's own account. Adding needs the
 scheme in `auth`, since adding is a way back in and a scheme listed only in
 `signup` doesn't sign in (the spec doesn't say whether servers may allow
-adding such a scheme; this client doesn't offer it). With the Go example, open
+adding such a scheme; this client doesn't offer it). With the Go reference server, open
 `http://localhost:5173` (or `http://localhost:8080` for a static build); other
 deployments need HTTPS and configured RP/frontend origins. A passkey registered
 on a signed-in connection is added to that account
@@ -703,8 +703,8 @@ adding or removing members, and Join and Leave are hidden; Browse rooms and More
 **Join**, which reads the room through its history without joining it. Other
 servers' denials show as errors as usual.
 
-The client understands one extension of its own, `ext:settings`: a server
-that advertises it in `capabilities` describes how it runs in its `server`
+The client understands `ext:settings`, an extension that the Cloudflare demo
+server defines: a server that advertises it in `capabilities` describes how it runs in its `server`
 frame's `ext.settings`, `{guest_posting?, read_cursors?}`. Both are booleans,
 and a setting left out is `true`; without the capability the client reads
 none of them. `guest_posting: false` keeps guests read-only, as above, and
@@ -793,12 +793,12 @@ connection that was refused. If the server has closed that connection
 meanwhile, the passkey tap reconnects in place first, keeping the rooms
 on screen. It never prompts on its own
 and never replaces the session with a guest identity. Signing out clears the stored
-credentials and reconnects as a guest. The Go example's sessions are in memory
-and are lost on backend restart.
+credentials and reconnects as a guest. The Go reference server keeps unexpired
+sessions across restarts unless it runs with `--store memory`.
 
 The WebAuthn exchange follows [§4.10 of the protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-webauthn-authentication):
 both registration and login use `action` plus `step: "begin"` or
 `step: "finish"`, with the server's `challenge_id` and `public_key` and the
 browser's standard JSON credential representation. The implementation details
-for the Go example are documented in
-[`servers/go/README.md`](https://github.com/shazow/apron/blob/main/servers/go/README.md#example-webauthn-exchange).
+for the Go reference server are documented in its
+[`SERVER.md`](https://github.com/apron-chat/apron-server-go/blob/main/SERVER.md#example-webauthn-exchange).

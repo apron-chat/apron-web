@@ -5,7 +5,8 @@ A Svelte 5 / SvelteKit 2 + TypeScript client for the
 deployed at `https://web.apron.chat`. It builds as a static shell with
 `adapter-static`; the browser opens the WebSocket from `onMount`, so any static
 host can serve the generated site, including the
-[Go reference server](https://github.com/shazow/apron/tree/main/servers/go).
+[Go reference server](https://github.com/apron-chat/apron-server-go)
+(`aprond --static-dir`).
 
 Use Node.js 24 (see `.node-version`), or `devenv shell`, which also provides
 Wrangler:
@@ -22,7 +23,8 @@ npm run preview
 ```
 
 `npm run dev` needs a backend on port 8080: the Go reference server from
-[shazow/apron](https://github.com/shazow/apron) (`make dev-server`), or the
+[apron-chat/apron-server-go](https://github.com/apron-chat/apron-server-go)
+(`make dev-server`), or the
 demo Worker from
 [apron-chat/apron-server-cloudflare](https://github.com/apron-chat/apron-server-cloudflare)
 (`npx wrangler dev --port 8080`).
@@ -33,7 +35,8 @@ The server the client opens first is `VITE_DEFAULT_SERVER_URL` from the build
 - `npm run dev` leaves it unset, so it uses same-origin `/ws`, proxied to
   port 8080. To start dev against another server, set it in `.env.local`.
 - Builds (`npm run build`, production, and Previews) read `.env.production`:
-  `wss://server.apron.chat/`, the reference server for testing and demos. To
+  `wss://server.apron.chat/`, the Cloudflare demo server
+  ([apron-chat/apron-server-cloudflare](https://github.com/apron-chat/apron-server-cloudflare)). To
   build for another server, set it in `.env.production.local` (`.env.local`
   doesn't override `.env.production`) or on the command line, e.g.
   `VITE_DEFAULT_SERVER_URL=wss://chat.example/ npm run build`. Set it empty for
@@ -42,7 +45,7 @@ The server the client opens first is `VITE_DEFAULT_SERVER_URL` from the build
 Embed media (upload previews, link card images) loads only from the chat
 server's own origin, plus the origins listed in `VITE_TRUSTED_MEDIA_ORIGINS`
 (comma-separated, set the same way). `.env.production` trusts
-`https://media.apron.chat`, where the reference server serves uploads.
+`https://media.apron.chat`, where the demo server serves uploads.
 
 The unit tests replay the implementation-agnostic protocol fixtures in
 [shazow/apron](https://github.com/shazow/apron), checked out as the `protocol`
@@ -50,7 +53,7 @@ submodule and pinned to a commit. Dependabot opens a pull request when it
 moves, so CI runs the client against new fixtures before they are adopted; to
 update by hand, run `git -C protocol fetch origin main`, check out the commit
 you want, and commit `protocol`. The end-to-end browser tests against the Go
-server are in shazow/apron's `tests/interop`.
+server are in apron-chat/apron-server-go's `tests/interop`.
 
 The favicon and app icons are generated from the logo in that submodule,
 `protocol/art/apron-logo.svg`: run `npm run icons` after it changes (or
