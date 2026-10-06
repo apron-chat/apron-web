@@ -1708,7 +1708,7 @@
 				canEdit={canEditPane}
 				editorOpen={roomEditorOpen}
 				editDisabled={!paneReady}
-				canLeave={session.canLeaveRooms && !session.readOnly && Boolean(paneRoom?.joined)}
+				canLeave={session.canManageRooms && !session.readOnly && Boolean(paneRoom?.joined)}
 				canJoin={session.canManageRooms && !session.readOnly && Boolean(paneRoom) && !paneRoom?.joined}
 				{memberListOpen}
 				onback={() => (mobilePane = 'rooms')} onroom={backToRoom} onedit={() => (roomEditorOpen = !roomEditorOpen)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}

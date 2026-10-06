@@ -214,7 +214,7 @@ export function maxDefined(a: string | undefined, b: string | undefined): string
 
 /**
  * A message's client fields (§4.4), as a save would submit them. Not `ext`:
- * a save merges it (§3.5), so what the server keeps stays without sending it
+ * a save merges it (§4.12), so what the server keeps stays without sending it
  * back, and another client's change to it is never undone.
  */
 export function messageClientFields(record: MessageRecord): JsonObject {
@@ -228,7 +228,7 @@ export function messageClientFields(record: MessageRecord): JsonObject {
 /**
  * A room's client fields as an update would submit them (§4.3.4): all but
  * `parent_room_id` and `private`, which are fixed at creation, and `ext`,
- * which `room_set` merges (§3.5).
+ * which `room_set` merges (§4.12).
  */
 export function roomClientFields(record: RoomRecord): JsonObject {
 	const fields: JsonObject = {};
@@ -265,7 +265,7 @@ export function isEmptyValue(value: unknown): boolean {
 }
 
 /**
- * A write's `ext` merged one level deep into what is stored (§3.5), as a
+ * A write's `ext` merged one level deep into what is stored (§4.12), as a
  * server does: each key that `incoming` carries replaces the kept value, an
  * empty value (`""`, `[]`, `{}`) removes that key, and keys it leaves out
  * stay. `"ext": {}` changes nothing. The value under a key is replaced whole;
@@ -299,7 +299,7 @@ export function mergeExt(kept: JsonObject | undefined, incoming: JsonObject): Js
  * ordinary value. An empty value (`""`, `[]`, `{}`) means the field was
  * cleared, and is kept as such rather than dropped, so rendering never falls
  * back to a stale recorded object for it (see `userIn`). `ext` merges the
- * same way one level down (§3.5): each key it carries replaces the kept
+ * same way one level down (§4.12): each key it carries replaces the kept
  * value, a cleared one kept as its empty value, and keys it leaves out stay,
  * so `"ext": {}` changes nothing. Returns `current` itself when nothing
  * changes.

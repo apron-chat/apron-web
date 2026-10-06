@@ -46,7 +46,7 @@ describe('ChatClient reference features', () => {
 		socket.receive({ method: 'message', params: { message_id: '21', log_id: '21', room_id: 'general', from: { user_id: 'bob', name: 'Robert' }, body: { text: 'hi' } } });
 		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' });
 		// A bare object changes nothing; an empty value clears the field, and stays as the cleared value;
-		// `"ext": {}` changes nothing (§3.5).
+		// `"ext": {}` changes nothing (§4.12).
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob' } } });
 		expect(snapshot.users.bob).toEqual({ user_id: 'bob', name: 'Bobby', avatar: 'https://example.com/b.png' });
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', avatar: '', ext: {} } } });
@@ -158,10 +158,10 @@ describe('ChatClient reference features', () => {
 		expect(general().readMessageId).toBe('31');
 	});
 
-	it('keeps your read cursor locally when the server keeps none', async () => {
-		await socket.greet(['history', 'rooms', 'activity'], {
+	it('keeps your read cursor locally when the server keeps none (ext:settings)', async () => {
+		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], {
 			room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' },
-			ext: { demo: { read_cursors: false } }
+			ext: { settings: { read_cursors: false } }
 		});
 		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
 		socket.sent = [];

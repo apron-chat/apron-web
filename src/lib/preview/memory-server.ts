@@ -48,7 +48,7 @@ const seed = [
 	{ id: '1710000000015', from: 'ada', text: '| Feature | Example |\n| :-- | --: |\n| Strong | **bold** |\n| Inline code | `const x = 1` |\n| Room link | #engineering |\n\nRaw HTML is shown as text: <b>not bold</b>.' }
 ];
 
-/** A write's `ext` merged into what is kept (§3.5); a write that leaves it out keeps it. */
+/** A write's `ext` merged into what is kept (§4.12); a write that leaves it out keeps it. */
 function mergedExt(kept: JsonObject | undefined, write: unknown): JsonObject | undefined {
 	return isJsonObject(write) ? mergeExt(kept, write) : kept;
 }
@@ -132,7 +132,7 @@ export class MemoryProtocolServer {
 			server.sockets.add(socket);
 			socket.readyState = 1;
 			socket.onopen?.({} as Event);
-			socket.deliver({ method: 'server', params: { apron: 8, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities: ['history', 'edit', 'rooms', 'reactions', 'activity', 'command'] } });
+			socket.deliver({ method: 'server', params: { apron: 8, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities: ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'ext'] } });
 		});
 		return socket as unknown as WebSocket;
 	}
@@ -236,7 +236,7 @@ export class MemoryProtocolServer {
 			}
 		}
 		const from = previous && isJsonObject(previous.message.from) ? previous.message.from : { ...people.preview_guest };
-		// A save merges `ext` into the stored one, a creation into nothing (§3.5); a tombstone has neither `body` nor `ext` (§4.4).
+		// A save merges `ext` into the stored one, a creation into nothing (§4.12); a tombstone has neither `body` nor `ext` (§4.4).
 		const kept = previous && isJsonObject(previous.message.ext) ? previous.message.ext : undefined;
 		const ext = p.deleted ? undefined : mergedExt(kept, p.ext);
 		const record: JsonObject = {
@@ -287,7 +287,7 @@ export class MemoryProtocolServer {
 			if (p.private === true || (p.private === undefined && parent && this.rooms.get(parent)?.private)) room.private = true;
 		} else {
 			// An update resubmits every client field; one left out is cleared, except `private`, which is kept,
-			// and `ext`, which merges (§3.4, §4.3.4). It is a new room record.
+			// and `ext`, which merges (§4.3.4, §4.12). It is a new room record.
 			room.title = typeof p.title === 'string' ? p.title : room.room_id;
 			this.nextLog(room);
 		}
@@ -325,7 +325,7 @@ export class MemoryProtocolServer {
 		reply();
 	}
 
-	/** `me` (§3.3): given fields replace, `""` clears, omitted ones stay, and `ext` merges by its keys (§3.5). */
+	/** `me` (§3.3): given fields replace, `""` clears, omitted ones stay, and `ext` merges by its keys (§4.12). */
 	private updateMe(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void): void {
 		const me = people.preview_guest;
 		const changed: JsonObject = { user_id: me.user_id };

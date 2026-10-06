@@ -7,7 +7,7 @@
 	 * for a sign-in) lands here, so there is one flow to keep right.
 	 */
 	import { onDestroy, untrack, type Snippet } from 'svelte';
-	import { normalizeWebSocketUrl, type ChatClient } from '$lib/protocol/client';
+	import { normalizeWebSocketUrl, serverSettings, type ChatClient } from '$lib/protocol/client';
 	import { offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
 	import { codeStillFor, type SentCode } from '$lib/ui/email-link';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -119,8 +119,8 @@
 	let known = $derived(sameServer ? session.server : undefined);
 	/** Whether the chosen scheme signs in, creates an account, or both (`server.signup`, §3.1); unknown servers get both. */
 	let use = $derived(known ? schemeUse(known, chosen) : { signIn: true, signUp: true });
-	/** The server in the field is the connected one, and its guests only read. */
-	let guestReadOnly = $derived(sameServer && session.server?.ext?.demo?.guest_posting === false);
+	/** The server in the field is the connected one, and its guests only read (`ext:settings`). */
+	let guestReadOnly = $derived(sameServer && !serverSettings(session.server).guest_posting);
 	/** The passkey action a tap runs: the one chosen, where the server lets passkeys do it. */
 	let mode = $derived(passkeyMode(use, passkeyChosen));
 	let view = $derived(signInView({

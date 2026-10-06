@@ -90,9 +90,9 @@ describe('ChatClient operations', () => {
 	});
 
 	it('sends only the ext keys a save changes, an empty value clearing one, and settles on a record whatever its ext', async () => {
-		await connect();
+		await connect(['edit', 'rooms', 'reactions', 'ext']);
 		socket.receive({ method: 'message', params: message('100', { body: { text: 'old' }, ext: { irc: { nick: 'ada_' }, git: 'abc' } }) });
-		// Remove `git` and change `irc`; the rest of ext is the server's to keep (§3.5).
+		// Remove `git` and change `irc`; the rest of ext is the server's to keep (§4.12).
 		quiet(client.saveMessage('100', { ext: { git: '', irc: { nick: 'ada' } } }));
 		expect(socket.request('message').params).toEqual({ message_id: '100', room_id: 'general', body: { text: 'old' }, ext: { git: '', irc: { nick: 'ada' } } });
 		// The merged record settles the save: the next one builds on the store, and sends no ext.
@@ -163,12 +163,12 @@ describe('ChatClient operations', () => {
 	});
 
 	it('creates threads and updates rooms from the latest record', async () => {
-		await connect();
+		await connect(['edit', 'rooms', 'reactions', 'ext']);
 		quiet(client.createRoom({ parentRoomId: 'general', title: 'Deploy', description: 'Deploy?' }));
 		expect(socket.request('room_set').params).toEqual({ parent_room_id: 'general', title: 'Deploy', description: 'Deploy?' });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'thread', log_id: '21', parent_room_id: 'general', title: 'Side', description: 'Deploy?', ext: { x: { y: 1 } } }] } });
 		quiet(client.updateRoom('thread', { title: 'Renamed' }));
-		// `ext` merges (§3.5): an update never resubmits it.
+		// `ext` merges (§4.12): an update never resubmits it.
 		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed', description: 'Deploy?' });
 		// A second update before the first is confirmed builds on it; an empty ext value removes that key.
 		quiet(client.updateRoom('thread', { description: null, ext: { x: {} } }));
@@ -178,6 +178,22 @@ describe('ChatClient operations', () => {
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'thread', log_id: '23', parent_room_id: 'general', title: 'Elsewhere' }] } });
 		quiet(client.updateRoom('thread', { ext: { z: 1 } }));
 		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Elsewhere', ext: { z: 1 } });
+	});
+
+	it('writes ext only to a server with capability ext (§4.12), and still reads what it sends', async () => {
+		await connect();
+		socket.receive({ method: 'message', params: message('100', { ext: { irc: { nick: 'ada_' } } }) });
+		expect(client.message('100')?.ext).toEqual({ irc: { nick: 'ada_' } });
+		quiet(client.send('general', 'hi', 'plain', { ext: { irc: { msgid: 'a1' } } }));
+		expect(socket.request('message').params).toEqual({ room_id: 'general', body: { text: 'hi', format: 'plain' } });
+		quiet(client.saveMessage('100', { ext: { irc: '' } }));
+		expect(socket.request('message').params).toEqual({ message_id: '100', room_id: 'general', body: { text: 'm100' } });
+		quiet(client.createRoom({ title: 'Ops', ext: { bot: { on: true } } }));
+		expect(socket.request('room_set').params).toEqual({ title: 'Ops' });
+		quiet(client.updateRoom('thread', { ext: { bot: { on: true } } }));
+		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Side', description: 'Why *side*' });
+		void client.updateProfile({ name: 'Ada', ext: { tz: 'Europe/Oslo' } }).catch(() => undefined);
+		expect(socket.request('me').params).toEqual({ name: 'Ada' });
 	});
 
 	it('builds an edit then a move on the submitted state until a matching snapshot arrives', async () => {

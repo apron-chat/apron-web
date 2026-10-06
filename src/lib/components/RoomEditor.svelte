@@ -25,7 +25,7 @@
 
 	/**
 	 * Saves the title and description with `room_set` (§4.3.4); an emptied
-	 * field is cleared, and `ext`, which the server merges (§3.5), is left as
+	 * field is cleared, and `ext`, which the server merges (§4.12), is left as
 	 * it is. The
 	 * `room_update` that follows is the truth, since a server may alter or
 	 * decline.

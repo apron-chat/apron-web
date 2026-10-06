@@ -33,7 +33,6 @@ import {
 	type MessageRecord,
 	type RoomRecord,
 	type ServerParams,
-	type ServerExt,
 	type RoomDelivery,
 	type RpcError,
 	type WireFrame
@@ -111,7 +110,7 @@ import {
 	type TypingState,
 	type ValidHistoryResponse
 } from './client-internals';
-import { capabilitiesOf } from './client-views';
+import { capabilitiesOf, serverSettings } from './client-views';
 
 export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
@@ -126,6 +125,7 @@ export {
 	findMessage,
 	hasHistory,
 	normalizeWebSocketUrl,
+	serverSettings,
 	timelineMessages,
 	topLevelRooms,
 	userIn,
@@ -577,7 +577,7 @@ export class ChatClient {
 			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith, signInMethods: [this.signedInWith, ...[...this.addedMethods].filter((method) => method !== this.signedInWith)] } : {}),
 			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
 			...(this.passkeyAbort ? { passkeyBusy: !this.addingEmail } : {}),
-			readOnly: this.authenticated && !this.registeredSession && this.server?.ext?.demo?.guest_posting === false,
+			readOnly: this.authenticated && !this.registeredSession && !serverSettings(this.server).guest_posting,
 			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
 			...(this.mutedUntil !== undefined ? { mutedUntil: this.mutedUntil } : {}),
 			...(this.pushError !== undefined ? { pushError: this.pushError } : {}),
@@ -1149,7 +1149,10 @@ export class ChatClient {
 		return handle;
 	}
 
-	/** The params of a new message or a command: `room_id`, `body`, bare `reply_to`, `ext` (§3.5, §4.1). */
+	/**
+	 * The params of a new message or a command: `room_id`, `body`, bare
+	 * `reply_to`, and `ext` where the server keeps it (§3.5, §4.1, §4.12).
+	 */
 	private messageParams(room: string, text: string, format: MessageFormat | undefined, options: SendOptions): JsonObject {
 		const body: JsonObject = { text, ...(format ? { format } : {}) };
 		if (options.embeds && options.embeds.length > 0) body.embeds = options.embeds;
@@ -1159,7 +1162,7 @@ export class ChatClient {
 			...(room !== DEFAULT_ROOM_ID ? { room_id: room } : {}),
 			body,
 			...(options.replyTo !== undefined ? { reply_to: { message_id: options.replyTo } } : {}),
-			...(options.ext !== undefined ? { ext: options.ext } : {})
+			...(options.ext !== undefined && this.hasCap('ext') ? { ext: options.ext } : {})
 		};
 	}
 
@@ -1186,9 +1189,9 @@ export class ChatClient {
 	/**
 	 * Saves a message (capability `edit`, §4.4) from its latest stored snapshot:
 	 * every client field (`room_id`, `body`, bare `reply_to`) is resubmitted
-	 * unless the patch changes it. `ext` is not: a save merges it (§3.5), so
-	 * only the patch's keys go, and an empty value clears one. `deleted: true`
-	 * omits `body`.
+	 * unless the patch changes it. `ext` is not: a save merges it (§4.12), so
+	 * only the patch's keys go, and an empty value clears one, and only to a
+	 * server with capability `ext`. `deleted: true` omits `body` and `ext`.
 	 */
 	saveMessage(messageId: string, patch: MessagePatch = {}): OperationHandle<MessageResult> {
 		const current = this.messageBase(messageId);
@@ -1207,7 +1210,7 @@ export class ChatClient {
 		} else if (patch.reply_to !== null) {
 			params.reply_to = { message_id: patch.reply_to };
 		}
-		if (patch.ext !== undefined && !params.deleted) params.ext = patch.ext;
+		if (patch.ext !== undefined && !params.deleted && this.hasCap('ext')) params.ext = patch.ext;
 		const handle = this.enqueueRequest<MessageResult>('message', params, { visible: true, allowBeforeAuth: false });
 		const { message_id: _id, ...state } = params;
 		this.trackSave(this.pendingMessageSaves, messageId, handle, state, () => this.store.message(messageId)?.log_id);
@@ -1246,7 +1249,7 @@ export class ChatClient {
 	/**
 	 * Settle a pending save when a newer record arrives that matches it, or
 	 * after its result. `ext` is left out of the comparison: the save merged
-	 * it into whatever the record had (§3.5).
+	 * it into whatever the record had (§4.12).
 	 */
 	private settleSave(pending: Map<string, PendingSave>, key: string, fields: JsonObject): void {
 		const entry = pending.get(key);
@@ -1348,7 +1351,7 @@ export class ChatClient {
 		if (options.private === true) params.private = true;
 		if (options.title !== undefined) params.title = options.title;
 		if (options.description !== undefined) params.description = options.description;
-		if (options.ext !== undefined) params.ext = options.ext;
+		if (options.ext !== undefined && this.hasCap('ext')) params.ext = options.ext;
 		return this.enqueueRequest<RoomResult>('room_set', params, { visible: true, allowBeforeAuth: false });
 	}
 
@@ -1356,9 +1359,9 @@ export class ChatClient {
 	 * Updates a room's client fields with `room_set` (§4.3.4) from its latest
 	 * record with the patch applied, resubmitting `title` and `description`:
 	 * omitted fields are cleared, so `null` clears one. `ext` is not
-	 * resubmitted: `room_set` merges it (§3.5), so only the patch's keys go,
-	 * and an empty value clears one. `parent_room_id` and `private` are fixed
-	 * at creation and never sent.
+	 * resubmitted: `room_set` merges it (§4.12), so only the patch's keys go,
+	 * and an empty value clears one, and only to a server with capability
+	 * `ext`. `parent_room_id` and `private` are fixed at creation and never sent.
 	 */
 	updateRoom(roomId: string, patch: RoomPatch): OperationHandle<RoomResult> {
 		// Build on the latest submitted update while one is unconfirmed.
@@ -1369,7 +1372,7 @@ export class ChatClient {
 			const value = patch[key] === undefined ? current[key] : patch[key];
 			if (value !== undefined && value !== null) params[key] = value;
 		}
-		if (patch.ext !== undefined) params.ext = patch.ext;
+		if (patch.ext !== undefined && this.hasCap('ext')) params.ext = patch.ext;
 		const handle = this.enqueueRequest<RoomResult>('room_set', params, { visible: true, allowBeforeAuth: false });
 		const { room_id: _id, ...state } = params;
 		this.trackSave(this.pendingRoomSaves, roomId, handle, state, () => this.store.room(roomId)?.log_id);
@@ -1746,8 +1749,8 @@ export class ChatClient {
 		if (current !== undefined && compareLogIds(messageId, current) <= 0) return;
 		this.setReadCursor(roomId, this.you!.user_id, messageId);
 		// The cursor still moves here (it places the New divider); a server that
-		// keeps no read cursors would only be charged a frame for it.
-		if (this.server?.ext?.demo?.read_cursors !== false) {
+		// keeps no read cursors (`ext:settings`) would only be charged a frame for it.
+		if (serverSettings(this.server).read_cursors) {
 			this.sendFrame({ method: 'activity', params: { room_id: roomId, read_message_id: messageId } });
 		}
 		this.emit();
@@ -1947,13 +1950,16 @@ export class ChatClient {
 	/**
 	 * Updates your profile with `me` (§3.3): given fields replace the current
 	 * ones, `""` clears one, and omitted ones stay. `ext` merges by its keys
-	 * (§3.5): each given key replaces its value, a key with an empty value
-	 * (`""`, `[]`, `{}`) is removed, and keys left out stay. Resolves with the
-	 * `you` the server kept, which may differ from what was asked.
+	 * (§4.12): each given key replaces its value, a key with an empty value
+	 * (`""`, `[]`, `{}`) is removed, and keys left out stay; it goes only to
+	 * a server with capability `ext`. Resolves with the `you` the server
+	 * kept, which may differ from what was asked.
 	 */
 	updateProfile(patch: { name?: string; avatar?: string; ext?: JsonObject; status?: string }): Promise<Identity> {
 		if (patch.name !== undefined) this.displayName = patch.name.trim();
-		return this.enqueueRequest('me', { ...patch }, { visible: true, allowBeforeAuth: false }).promise.then((result) => {
+		const { ext, ...fields } = patch;
+		const params: JsonObject = { ...fields, ...(ext !== undefined && this.hasCap('ext') ? { ext } : {}) };
+		return this.enqueueRequest('me', params, { visible: true, allowBeforeAuth: false }).promise.then((result) => {
 			if (!isIdentity(result.you)) throw new Error('The server did not return your profile');
 			this.setYou(cloneJson(result.you), true);
 			if (patch.name !== undefined) this.adoptName(result.you, patch.name.trim());
@@ -2390,7 +2396,7 @@ export class ChatClient {
 			auth,
 			...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
 			...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
-			...(isJsonObject(params.ext) ? { ext: params.ext as ServerExt } : {}),
+			...(isJsonObject(params.ext) ? { ext: params.ext } : {}),
 			...(isJsonObject(params.push) ? { push: params.push } : {}),
 			...(Array.isArray(params.status) ? { status: params.status.filter(isString) } : {}),
 			...(typeof params.ping === 'number' && Number.isFinite(params.ping) && params.ping > 0 ? { ping: params.ping } : {})

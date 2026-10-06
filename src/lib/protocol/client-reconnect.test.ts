@@ -352,28 +352,29 @@ describe('persisted session tokens', () => {
 		client.stop();
 	});
 
-	it('reads only as a guest where the server says guests only read, until a sign-in', async () => {
-		const readOnlyExt = { demo: { guest_posting: false } };
+	it('reads only as a guest where the server says guests only read (ext:settings), until a sign-in', async () => {
+		const readOnly = { settings: { guest_posting: false } };
 		const guest = new ChatClient('ws://fake.test/');
 		guest.subscribe((next) => (snapshot = next));
 		guest.start();
-		await latest().greet([], { auth: ['webauthn', 'token', 'guest'], ext: readOnlyExt });
+		await latest().greet(['ext:settings'], { auth: ['webauthn', 'token', 'guest'], ext: readOnly });
 		expect(snapshot.readOnly).toBe(true);
 		guest.stop();
 
-		// A signed-in session writes; so does a guest where guests may post, or where nothing is said.
+		// A signed-in session writes; so does a guest where guests may post, where nothing is said,
+		// or where the server sends settings without advertising `ext:settings`.
 		const signedIn = new ChatClient('ws://fake.test/');
 		signedIn.subscribe((next) => (snapshot = next));
 		signedIn.start();
-		await latest().greet([], { auth: ['webauthn', 'token', 'guest'], ext: readOnlyExt, token: 'session-3' });
+		await latest().greet(['ext:settings'], { auth: ['webauthn', 'token', 'guest'], ext: readOnly, token: 'session-3' });
 		expect(snapshot.readOnly).toBe(false);
 		signedIn.stop();
-		for (const ext of [{ demo: { guest_posting: true } }, undefined]) {
+		for (const [caps, ext] of [[['ext:settings'], { settings: { guest_posting: true } }], [['ext:settings'], { settings: {} }], [['ext:settings'], undefined], [[], readOnly]] as const) {
 			storage.clear();
 			const open = new ChatClient('ws://fake.test/');
 			open.subscribe((next) => (snapshot = next));
 			open.start();
-			await latest().greet([], { ...(ext ? { ext } : {}) });
+			await latest().greet([...caps], { ...(ext ? { ext } : {}) });
 			expect(snapshot.readOnly).toBe(false);
 			open.stop();
 		}

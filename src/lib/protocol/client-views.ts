@@ -10,7 +10,7 @@ import type {
 } from './types';
 import type { Capabilities, ClientSnapshot, RoomSnapshot } from './client-types';
 
-const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status'];
+const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings'];
 
 /**
  * How to render a user (§3.3): field by field, the kept object for its
@@ -74,6 +74,16 @@ export const canManageRooms = (server: ServerParams | undefined) => hasCapabilit
 export const canReact = (server: ServerParams | undefined) => hasCapability(server, 'reactions');
 /** History recovery and paging (capability `history`). */
 export const hasHistory = (server: ServerParams | undefined) => hasCapability(server, 'history');
+
+/**
+ * The server's settings (extension `ext:settings`, `server.ext.settings`),
+ * each `true` unless the server says `false`: also without the extension.
+ */
+export function serverSettings(server: ServerParams | undefined): { guest_posting: boolean; read_cursors: boolean } {
+	const ext = hasCapability(server, 'ext:settings') ? server?.ext : undefined;
+	const settings = isJsonObject(ext) && isJsonObject(ext.settings) ? ext.settings : {};
+	return { guest_posting: settings.guest_posting !== false, read_cursors: settings.read_cursors !== false };
+}
 
 /** The VAPID public key (base64url) of the server's `webpush` push kind (§4.9), if it offers one. */
 export function webPushKey(server: ServerParams | undefined): string | undefined {

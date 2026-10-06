@@ -74,7 +74,7 @@ in an `auth` or `me` result, and the `users` of `room_list` and `room_update`
 field by field: a present field replaces (`null` too, as an ordinary value), an
 empty one (`""`, `[]`, `{}`) clears it and is kept as cleared, and a missing
 one changes nothing. `ext` merges the same way one level down
-([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)): each key replaces the kept value, an empty value
+([PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext)): each key replaces the kept value, an empty value
 clears that key (kept as cleared), and `"ext": {}` changes nothing. Your own `status` comes only
 from `you`, never from your entry in `users` or `members`. Recorded objects, a message's or reaction's `from` and a
 membership's `user`, describe the user as of their record and never merge. A
@@ -416,7 +416,9 @@ Without the capability, `/` text is an ordinary message.
 With the `activity` capability, reading the latest message of a room advances your
 read cursor (`read_message_id`), which the server syncs across your
 connections. Opening a room places a **New** divider above the first message
-after the cursor as it was when you arrived; it stays put while you read.
+after the cursor as it was when you arrived; it stays put while you read. A
+server whose settings say `read_cursors: false` (below) keeps no cursors: the
+cursor still moves here, for the divider, but isn't sent.
 
 With the `rooms` capability, rooms come by request ([PROTOCOL.md §4.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#43-rooms)): right behind
 `auth`, without waiting for its result ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), the client lists
@@ -478,7 +480,9 @@ Back leaves the page from the first room opened. A room left since stays put
 for that step, and a thread left since is read without joining.
 
 With the `rooms` capability the header also offers **Leave**, which leaves the room or
-the thread; a thread is a room of its own, so leaving its parent keeps it.
+the thread; a thread is a room of its own, so leaving its parent keeps it. A
+server that keeps you in a room answers `denied`, and its message shows as
+the error.
 **Browse rooms** in the sidebar lists, via `room_list` with
 `filter: "not_joined"`, the most active visible rooms you haven't joined, and
 **More threads…** under the
@@ -696,13 +700,25 @@ verification failure alike (§4.10 `denied`), so this is where the reason
 shows. The connection's own sign-in, as a guest or by a saved session,
 warns too when refused, without the token.
 
-A server may keep guests read-only; the demo worker does, and says so with
-`ext.demo.guest_posting: false`. Signed in as a guest there, the composer gives
+A server may keep guests read-only, and says so with `guest_posting: false`
+in its settings (below). Signed in as a guest there, the composer gives
 way to a bar saying so with a **Sign in** button (it opens the sign-in panel
 on Passkey). Replying, reacting, starting threads, editing rooms and threads,
 adding or removing members, and Join and Leave are hidden; Browse rooms and More threads… offer **Open** instead of
 **Join**, which reads the room through its history without joining it. Other
 servers' denials show as errors as usual.
+
+The client understands one extension of its own, `ext:settings`: a server
+that advertises it in `capabilities` describes how it runs in its `server`
+frame's `ext.settings`, `{guest_posting?, read_cursors?}`. Both are booleans,
+and a setting left out is `true`; without the capability the client reads
+none of them. `guest_posting: false` keeps guests read-only, as above, and
+the connect screen's Guest hint says so. `read_cursors: false` says the server
+keeps no read cursors, so the client doesn't send `read_message_id`. Other
+extension data (`ext`, [PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext))
+on users, messages and rooms is kept as the server sends it, and the client
+writes `ext` (with `me`, a message, or `room_set`) only to a server with the
+capability `ext`, which keeps it; the app itself writes none.
 
 Passkeys use the browser's native WebAuthn JSON APIs, with no frontend dependency.
 An up-to-date browser is required; unsupported browsers can still chat as guests.

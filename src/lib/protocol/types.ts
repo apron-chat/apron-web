@@ -15,7 +15,7 @@ export interface JsonObject {
  * Optional features of `server.capabilities` (§4) that this client uses;
  * it ignores the rest.
  */
-export type Capability = 'history' | 'edit' | 'rooms' | 'reactions' | 'activity' | 'embed:upload' | 'embed:stream' | 'command' | 'status';
+export type Capability = 'history' | 'edit' | 'rooms' | 'reactions' | 'activity' | 'embed:upload' | 'embed:stream' | 'command' | 'status' | 'ext' | 'ext:settings';
 
 /**
  * A user object (§3.3). Current objects (`you`, `new` in `user`, room
@@ -38,6 +38,7 @@ export interface Identity extends JsonObject {
 	 * `idle`, `offline`, `dnd`). Other values are unknown.
 	 */
 	status?: string;
+	/** Extension data (§4.12). */
 	ext?: JsonObject;
 }
 
@@ -104,6 +105,7 @@ export interface MessageRecord extends JsonObject {
 	body?: MessageBody;
 	reply_to?: MessageRef;
 	deleted?: boolean;
+	/** Extension data (§4.12); absent on tombstones. */
 	ext?: JsonObject;
 }
 
@@ -122,6 +124,7 @@ export interface RoomRecord extends JsonObject {
 	title?: string;
 	/** What the room is about, CommonMark by convention; set with `room_set`. */
 	description?: string;
+	/** Extension data (§4.12). */
 	ext?: JsonObject;
 }
 
@@ -150,8 +153,11 @@ export interface ServerParams {
 	signup?: string[];
 	/** CommonMark for the sign-in screen (§3.2): how this server's schemes fit together. */
 	welcome?: string;
-	/** Extension metadata (§3.1). */
-	ext?: ServerExt;
+	/**
+	 * Extensions' data, each under its name without `ext:` (§1, §4.12), such
+	 * as `settings` for `ext:settings`. Read only with that extension's capability.
+	 */
+	ext?: JsonObject;
 	/** Seconds between client pings (§1, §3.1). */
 	ping?: number;
 	/** Each push kind the server delivers, with its public configuration (§4.9). */
@@ -164,23 +170,13 @@ export interface ServerParams {
 	status?: string[];
 }
 
-export interface ServerExt extends JsonObject {
-	demo?: DemoParams;
-}
-
-/** Non-standard hints from the public demo worker, in `server.ext.demo`. */
-export interface DemoParams extends JsonObject {
-	retention_seconds?: number;
-	cleanup_seconds?: number;
-	max_frame_bytes?: number;
-	max_message_text_bytes?: number;
-	max_snapshot_bytes?: number;
-	guest_posts_per_minute?: number;
-	registered_posts_per_minute?: number;
+/**
+ * Extension `ext:settings`, in `server.ext.settings`: how this server runs,
+ * for clients to fit in. A setting left out is `true`.
+ */
+export interface ServerSettings extends JsonObject {
 	/** `false` when guests only read: posting, reacting, and room changes need a sign-in. */
 	guest_posting?: boolean;
-	/** `false` when every room is joined for good and `room_leave` is always denied. */
-	room_leave?: boolean;
 	/** `false` when the server keeps no read cursors, so `read_message_id` is not worth sending. */
 	read_cursors?: boolean;
 }
@@ -343,13 +339,12 @@ export function decodeRoom(value: unknown): { record: RoomRecord; delivery: Room
  * rendered for the session but never installed as a snapshot. Null when the
  * value has a `message_id` (a snapshot) or no valid `from`.
  */
-export function decodeNotice(value: unknown): { room_id?: string; from: Identity; body?: MessageBody; ext?: JsonObject } | null {
+export function decodeNotice(value: unknown): { room_id?: string; from: Identity; body?: MessageBody } | null {
 	if (!isJsonObject(value) || value.message_id !== undefined || !isIdentity(value.from)) return null;
 	return {
 		...(typeof value.room_id === 'string' ? { room_id: value.room_id } : {}),
 		from: cloneJson(value.from),
-		...(isJsonObject(value.body) ? { body: cloneJson(value.body) as MessageBody } : {}),
-		...(isJsonObject(value.ext) ? { ext: cloneJson(value.ext) } : {})
+		...(isJsonObject(value.body) ? { body: cloneJson(value.body) as MessageBody } : {})
 	};
 }
 

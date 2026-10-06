@@ -75,7 +75,7 @@ export interface RoomSnapshot {
 	 * stays put in its parent's feed while edits give the record new `log_id`s.
 	 */
 	firstRecordLogId?: string;
-	/** Opaque extension data from the room record. */
+	/** Extension data from the room record (§4.12). */
 	ext?: JsonObject;
 	/** Title changes seen in the room's log, ascending (absent when none). */
 	renames?: RoomRename[];
@@ -214,9 +214,9 @@ export interface ClientSnapshot {
 	 */
 	emailCode?: { email: string; url: string };
 	/**
-	 * Signed in as a guest on a server whose guests only read (the demo
-	 * worker's `ext.demo.guest_posting: false`): posting, reacting, and room
-	 * changes are denied until the user signs in.
+	 * Signed in as a guest on a server whose guests only read
+	 * (`ext:settings` with `guest_posting: false`): posting, reacting, and
+	 * room changes are denied until the user signs in.
 	 */
 	readOnly?: boolean;
 	/**
@@ -324,13 +324,14 @@ export interface SendOptions {
 	embeds?: Embed[];
 	/** The `user_id`s the message mentions (§3.5), sent as `body.mentions`. */
 	mentions?: string[];
+	/** Extension data (§4.12), sent only to a server with capability `ext`. */
 	ext?: JsonObject;
 }
 
 /**
  * Changes to a saved message. Absent keys keep the latest snapshot's value;
  * `null` removes `reply_to`. Saves resubmit every client field (§4.4) except
- * `ext`, which the server merges (§3.5).
+ * `ext`, which the server merges (§4.12).
  */
 export interface MessagePatch {
 	room_id?: string;
@@ -338,7 +339,8 @@ export interface MessagePatch {
 	reply_to?: string | null;
 	/**
 	 * `ext` keys to change: each replaces its value, a key with an empty value
-	 * (`""`, `[]`, `{}`) is removed, and keys left out stay (§3.5).
+	 * (`""`, `[]`, `{}`) is removed, and keys left out stay (§4.12). Sent only
+	 * to a server with capability `ext`.
 	 */
 	ext?: JsonObject;
 	deleted?: true;
@@ -352,6 +354,7 @@ export interface CreateRoomOptions {
 	title?: string;
 	/** What the room is about, CommonMark by convention (§3.4). */
 	description?: string;
+	/** Extension data (§4.12), sent only to a server with capability `ext`. */
 	ext?: JsonObject;
 }
 
@@ -365,7 +368,8 @@ export interface RoomPatch {
 	description?: string | null;
 	/**
 	 * `ext` keys to change: each replaces its value, a key with an empty value
-	 * (`""`, `[]`, `{}`) is removed, and keys left out stay (§3.5).
+	 * (`""`, `[]`, `{}`) is removed, and keys left out stay (§4.12). Sent only
+	 * to a server with capability `ext`.
 	 */
 	ext?: JsonObject;
 }

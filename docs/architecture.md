@@ -134,15 +134,16 @@ stays if that connection's `room_list` lists it as joined. A resumed passkey
 session asks only for the rooms whose `latest_log_id` passed the kept
 checkpoints (`latest_log_id` in `room_list`): rooms in `left` go and the rest
 stay; a result without `left` is a full listing. A thread reopened after a
-reconnect loads only what came after its own checkpoint. Signing out or switching servers still starts over. The UI displays
-a notice that the demo retains roughly the last day (from the worker's
-`server.ext.demo` hints) and honors server retry delays with jittered reconnect
-backoff. When the `server` frame carries `ping` ([PROTOCOL.md §1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#1-transport--framing)), the client sends
+reconnect loads only what came after its own checkpoint. Signing out or switching servers still starts over. The client
+honors server retry delays with jittered reconnect backoff. When the `server` frame carries `ping` ([PROTOCOL.md §1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#1-transport--framing)), the client sends
 exactly `{"method":"ping"}` every that many seconds, from before
 authentication on; a ping that goes a whole interval without the
 `{"method":"pong"}` answer marks the socket dead, and it is replaced through
-the usual reconnect. With `room_leave: false` the client offers no Leave, and
-with `read_cursors: false` it moves your read cursor locally without sending it.
+the usual reconnect. `serverSettings` reads extension `ext:settings`
+(`server.ext.settings`, only where `capabilities` lists it): with
+`guest_posting: false` a guest's snapshot is `readOnly`, and with
+`read_cursors: false` the client moves your read cursor locally without
+sending it.
 `setAway(away)` reports attendance with `status` requests `{idle}` (§4.5,
 capability `status`) through `syncIdle`, which sends nothing until the
 connection is signed in (`handleAuth` calls it after the result; a replacing
@@ -194,9 +195,11 @@ is the snapshot's `pushError`.
 Edits, moves, and deletion use the same `message` request as creation, with an
 existing `message_id`, and resubmit every client field of the latest snapshot
 (`room_id`, `body`, and a bare `reply_to`). `ext` is not resubmitted: a save
-merges it one level deep (§3.5), so a save sends only the `ext` keys it
+merges it one level deep (§4.12), so a save sends only the `ext` keys it
 changes, a key with an empty value removes it, and a pending save settles on a
-record that matches it whatever its `ext`. A move is a save
+record that matches it whatever its `ext`. `ext` goes in `me`, messages and
+`room_set` only to a server with capability `ext`; without it the client
+leaves `ext` out of the request. A move is a save
 with another `room_id`. Rooms and threads are created and updated with the
 `room_set` request (capability `rooms`); a creation may ask for `private: true`, and
 updates resubmit `title` and `description` (never `parent_room_id`,
