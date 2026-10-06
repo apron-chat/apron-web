@@ -45,7 +45,7 @@ describe('sign-in', () => {
 		const requested = client.requestEmailCode(email);
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 7, auth, capabilities: ['rooms'], ...extra } });
+		side.receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'], ...extra } });
 		await settle();
 		side.receive({ id: side.request('auth').id, result: {} });
 		await requested;
@@ -166,7 +166,7 @@ describe('sign-in', () => {
 
 	it('signs in by email on a server without guests', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['email', 'token'], capabilities: ['rooms'], welcome: 'Create an account with **email**.' } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['email', 'token'], capabilities: ['rooms'], welcome: 'Create an account with **email**.' } });
 		expect(auths()).toHaveLength(0);
 		expect(snapshot.error).toMatch(/email/);
 		expect(snapshot.server?.welcome).toBe('Create an account with **email**.');
@@ -187,7 +187,7 @@ describe('sign-in', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 7, auth: ['email', 'guest', 'webauthn'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 8, auth: ['email', 'guest', 'webauthn'], capabilities: [] } });
 		await settle();
 		expect(next.sent.filter((frame) => frame.method === 'auth')).toEqual([]);
 		expect(snapshot.authenticated).toBe(false);
@@ -238,7 +238,7 @@ describe('sign-in', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 7, auth: ['email', 'guest'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 8, auth: ['email', 'guest'], capabilities: [] } });
 		await settle();
 		expect(next.sent.filter((frame) => frame.method === 'auth')).toEqual([]);
 		expect(snapshot.error).toMatch(/email/);
@@ -293,14 +293,14 @@ describe('sign-in', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 7, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
+		next.receive({ method: 'server', params: { apron: 8, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
 		expect(next.sent.filter((frame) => (frame.params as { token?: string } | undefined)?.token === 'bob-session')).toEqual([]);
 	});
 
 	it('signs up with a scheme listed only in signup', async () => {
 		const server = { auth: ['webauthn'], signup: ['email'] };
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 7, capabilities: ['rooms'], ...server } });
+		latest().receive({ method: 'server', params: { apron: 8, capabilities: ['rooms'], ...server } });
 		expect(snapshot.server?.signup).toEqual(['email']);
 		expect(snapshot.error).toMatch(/email/);
 		const side = await propose('new@example.com', [], server);
@@ -321,7 +321,7 @@ describe('sign-in', () => {
 		const bad = latest();
 		expect(bad.url).toBe('ws://other.test/');
 		bad.open();
-		bad.receive({ method: 'server', params: { apron: 7, auth: ['email', 'token'], capabilities: ['rooms'] } });
+		bad.receive({ method: 'server', params: { apron: 8, auth: ['email', 'token'], capabilities: ['rooms'] } });
 		await settle();
 		expect(bad.request('auth').params).toEqual({ scheme: 'email', token: 'Hk41x9', agent: 'apron-web/0.4' });
 		bad.receive({ id: bad.request('auth').id, error: { code: -32001, message: 'Invalid or expired token' } });
@@ -335,7 +335,7 @@ describe('sign-in', () => {
 		const signedIn = client.signInWithEmailLink('Hk41x9', 'ws://other.test/', () => (switched = true));
 		const good = latest();
 		good.open();
-		good.receive({ method: 'server', params: { apron: 7, auth: ['email', 'token'], capabilities: ['rooms'] } });
+		good.receive({ method: 'server', params: { apron: 8, auth: ['email', 'token'], capabilities: ['rooms'] } });
 		await settle();
 		good.receive({ id: good.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_other' } });
 		await signedIn;
@@ -366,23 +366,23 @@ describe('sign-in', () => {
 
 	it('reads the server frame’s apron, capabilities and agent, and sends its own agent with auth', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 7, agent: 'aprond/0.9', auth: ['guest'], capabilities: ['rooms', 'history'] } });
-		expect(snapshot.server).toMatchObject({ apron: 7, agent: 'aprond/0.9', capabilities: ['rooms', 'history'] });
+		latest().receive({ method: 'server', params: { apron: 8, agent: 'aprond/0.9', auth: ['guest'], capabilities: ['rooms', 'history'] } });
+		expect(snapshot.server).toMatchObject({ apron: 8, agent: 'aprond/0.9', capabilities: ['rooms', 'history'] });
 		expect(snapshot.capabilities.rooms).toBe(true);
 		expect(auths()[0].params).toEqual({ scheme: 'guest', agent: 'apron-web/0.4' });
 		// Without a version it isn't an Apron server frame.
 		latest().receive({ method: 'server', params: { auth: ['guest'], capabilities: [] } });
-		expect(snapshot.server?.apron).toBe(7);
+		expect(snapshot.server?.apron).toBe(8);
 	});
 
 	it('keeps server.welcome from each server frame, which replaces the last', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [], welcome: 'Hello *there*' } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: [], welcome: 'Hello *there*' } });
 		expect(snapshot.server?.welcome).toBe('Hello *there*');
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [] } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: [] } });
 		expect(snapshot.server?.welcome).toBeUndefined();
 		// Not a string: ignored.
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [], welcome: { text: 'x' } } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: [], welcome: { text: 'x' } } });
 		expect(snapshot.server).not.toHaveProperty('welcome');
 	});
 

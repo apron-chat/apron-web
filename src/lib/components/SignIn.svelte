@@ -37,8 +37,6 @@
 		canCancel: boolean;
 		/** Preselects a scheme, e.g. when the profile asks to sign in with a passkey. */
 		initialScheme?: Scheme;
-		/** On Passkey, preselects Sign in (the default) or Create account. */
-		initialPasskey?: PasskeyMode;
 		/** Prefills the email field, e.g. after an emailed sign-in link failed. */
 		initialEmail?: string;
 		/** Shows an error to start with, e.g. why an emailed sign-in link failed. */
@@ -55,13 +53,13 @@
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), busy = $bindable(false), passkeyUnavailable, canCancel,
-		initialScheme, initialPasskey, initialEmail, initialError, header, onconnect, onconnected, oncancel, onsignout
+		initialScheme, initialEmail, initialError, header, onconnect, onconnected, oncancel, onsignout
 	}: Props = $props();
 
 	// The initial choice follows the request or the current session; the segmented control owns it from then on.
 	let scheme = $state<Scheme>(untrack(() => initialScheme ?? (session.snapshot.passkeySession ? 'webauthn' : 'guest')));
 	/** On Passkey, Sign in or Create account: the viewer picks, the panel never guesses. */
-	let passkeyChosen = $state<PasskeyMode>(untrack(() => initialPasskey ?? 'login'));
+	let passkeyChosen = $state<PasskeyMode>('login');
 	/** Waiting for the connection this panel opened to the server in the form. */
 	let pending = $state(false);
 	/** That connection signed in as a guest, which the passkey step can leave as it is. */

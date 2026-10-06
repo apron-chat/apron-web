@@ -258,7 +258,7 @@ export function roomTitle(roomId: string, record: RoomRecord | undefined): strin
 }
 
 /** An empty value (§3.3): `""`, `[]`, or `{}`, which clears what it replaces. */
-export function isEmptyValue(value: unknown): boolean {
+function isEmptyValue(value: unknown): boolean {
 	if (value === '') return true;
 	if (Array.isArray(value)) return value.length === 0;
 	return isJsonObject(value) && Object.keys(value).length === 0;

@@ -3,7 +3,7 @@ import { ProtocolStore, applyRecords, createTimeline, decodeHistoryRecords, time
 import type { RoomSnapshot } from '$lib/protocol/client';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, homeRoomOf, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadPreview, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadPreview, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
 
@@ -62,9 +62,6 @@ describe('thread grouping', () => {
 		expect(threadEntries(rooms, 'general').map((entry) => entry.id)).toEqual(['t1']);
 		expect(threadEntries(rooms, 'ops')).toEqual([]);
 		expect(threadEntries(rooms, undefined)).toEqual([]);
-		expect(homeRoomOf(rooms, 't1')).toBe('general');
-		expect(homeRoomOf(rooms, 't2')).toBe('t2');
-		expect(homeRoomOf(rooms, 'ops')).toBe('ops');
 	});
 
 	it('counts a thread’s messages only once its history has loaded, and shows its newest faces', () => {

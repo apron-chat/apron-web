@@ -441,7 +441,7 @@ describe('ChatClient history per room', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = FakeSocket.latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: [] } });
 		quiet(client.send('general', 'queued'));
 		expect(next.sent.some((frame) => frame.method === 'message')).toBe(false);
 		next.receive({ id: next.request('auth').id, result: { you: { user_id: 'guest_2' } } });

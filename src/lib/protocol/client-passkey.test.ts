@@ -246,7 +246,7 @@ describe('console diagnostics', () => {
 
 describe('a failed session resume never prompts on its own', () => {
 	const key = 'apron.session:ws://fake.test/';
-	const server = { method: 'server', params: { apron: 7, auth: ['webauthn', 'token', 'guest'], capabilities: [] } };
+	const server = { method: 'server', params: { apron: 8, auth: ['webauthn', 'token', 'guest'], capabilities: [] } };
 
 	async function resuming(): Promise<{ client: ChatClient; socket: FakeSocket; auth: { id: string } }> {
 		vi.useFakeTimers();

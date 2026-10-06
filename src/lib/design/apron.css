@@ -161,7 +161,6 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-thread-faces { display: inline-flex; align-self: center; }
 .ap-thread-faces .ap-avatar + .ap-avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--denim-soft); }
 .ap-thread-last { color: var(--ink-muted); }
-.ap-thread-summary { color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ap-thread-moved { background: transparent; padding-left: 0; cursor: default; color: var(--ink-muted); font-size: 12px; line-height: 16px; font-style: italic; }
 .ap-thread-moved:hover { background: transparent; }
 .ap-thread-moved .ap-link { font-style: normal; }

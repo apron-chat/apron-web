@@ -9,12 +9,10 @@ export interface Sender {
 	/** Server-assigned labels such as "admin" or "bot" (§3.3), shown as badges beside the name. */
 	roles?: string[];
 	ext?: Record<string, unknown>;
-	/** @deprecated alias of user_id */
-	id?: string;
 }
 
-export function uid(u: { user_id?: string; id?: string } | undefined | null): string | undefined {
-	return u ? u.user_id || u.id : undefined;
+export function uid(u: { user_id?: string } | undefined | null): string | undefined {
+	return u?.user_id || undefined;
 }
 
 export function initials(name: string | undefined): string {
@@ -47,17 +45,6 @@ export function times(timestamp?: number, time?: string): Times {
 		exact: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`,
 		iso: d.toISOString()
 	};
-}
-
-export function fmtSize(n?: number): string {
-	if (n == null) return '';
-	const u = ['B', 'KB', 'MB', 'GB'];
-	let i = 0;
-	while (n >= 1024 && i < u.length - 1) {
-		n /= 1024;
-		i++;
-	}
-	return (i ? n.toFixed(1) : n) + ' ' + u[i];
 }
 
 /** Only https/http, small inline images, local blob: previews and in-page anchors are rendered. */

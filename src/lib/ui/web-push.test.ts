@@ -38,7 +38,7 @@ describe('web push', () => {
 	});
 
 	it('reads the webpush key from the server frame\'s push kinds', () => {
-		const server = { apron: 7, auth: ['guest'] };
+		const server = { apron: 8, auth: ['guest'] };
 		expect(webPushKey({ ...server, push: { relay: {}, webpush: { key: 'BNcR' } } })).toBe('BNcR');
 		expect(webPushKey({ ...server, push: { relay: {} } })).toBeUndefined();
 		expect(webPushKey({ ...server, push: { webpush: { key: '' } } })).toBeUndefined();
