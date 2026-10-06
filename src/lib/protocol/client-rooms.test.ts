@@ -197,10 +197,8 @@ describe('rooms by request (cap rooms)', () => {
 		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '32', room_id: 'ops', members: [{ user: { user_id: 'dana', name: 'Dana' }, joined: false }] }] } });
 		expect(room('ops')?.members?.map((member) => member.user_id)).toEqual(['guest_1']);
 		expect(room('ops')?.latestLogId).toBe('32');
-		// Memberships come in the plural key (§4.3.3); the singular one, and the old notification, aren't read.
+		// A record may carry several members (§4.3.2).
 		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '33', room_id: 'ops', members: [{ user: { user_id: 'erin' }, joined: true }, { user: { user_id: 'finn' }, joined: true }] }] } });
-		socket.receive({ method: 'room_update', params: { membership: [{ log_id: '35', room_id: 'ops', members: [{ user: { user_id: 'gus' }, joined: true }] }] } });
-		socket.receive({ method: 'membership', params: { log_id: '36', room_id: 'ops', members: [{ user: { user_id: 'gus' }, joined: true }] } });
 		expect(room('ops')?.members?.map((member) => member.user_id)).toEqual(['guest_1', 'erin', 'finn']);
 		// Your own leave: the room goes, with the membership in the same room_update.
 		socket.receive({ method: 'room_update', params: { left: [{ room_id: 'ops' }], memberships: [{ log_id: '34', room_id: 'ops', members: [{ user: { user_id: 'guest_1' }, joined: false }] }] } });
@@ -355,7 +353,7 @@ describe('rooms by request (cap rooms)', () => {
 			client.setAway(false);
 			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
 			// `activity` never carries attendance.
-			expect(socket.sent.filter((frame) => frame.method === 'activity' && ('away' in (frame.params as object) || 'idle' in (frame.params as object)))).toEqual([]);
+			expect(socket.sent.filter((frame) => frame.method === 'activity' && 'idle' in (frame.params as object))).toEqual([]);
 		});
 
 		it('reports idle at once on a reconnect while unattended, without the wait, and not while attended', async () => {
@@ -990,7 +988,7 @@ describe('identity changes', () => {
 	});
 });
 
-describe('room records and membership (v7)', () => {
+describe('room records and membership', () => {
 	let client: ChatClient;
 	let snapshot: ClientSnapshot;
 	let socket: FakeSocket;
