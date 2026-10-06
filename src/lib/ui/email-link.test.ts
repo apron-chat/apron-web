@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { codeStillFor, emailLinkPrompt, parseEmailLink, runEmailLink, takeEmailLink, type EmailLinkClient } from './email-link';
 
-describe('emailed sign-in links (§4.10)', () => {
+describe('emailed sign-in links (§4.11)', () => {
 	it('reads the token and optional server from the fragment', () => {
 		expect(parseEmailLink('#token=Hk41x9')).toEqual({ token: 'Hk41x9' });
 		expect(parseEmailLink('#x=1&token=Hk41x9')).toEqual({ token: 'Hk41x9' });

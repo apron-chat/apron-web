@@ -33,12 +33,12 @@
 		onnotifications: () => void;
 		onnotifyscopes: (scopes: string[]) => void;
 		ontestnotifications: () => Promise<NotificationTestResult>;
-		/** Push notifications (§4.7), when the server offers web push. */
+		/** Push notifications (§4.9), when the server offers web push. */
 		webPush?: WebPushPreference;
 		onwebpush: () => void;
 		/** Chromium's install prompt, from the push setting. */
 		oninstallapp: () => void;
-		/** Pausing notifications (§4.11 `mute`), on a server with capability `status`. */
+		/** Pausing notifications (§4.5 `mute`), on a server with capability `status`. */
 		pause?: { until?: PausedUntil };
 		onpause: (until: PausedUntil) => Promise<void> | void;
 		onresume: () => Promise<void> | void;

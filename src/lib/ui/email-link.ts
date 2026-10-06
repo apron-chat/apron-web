@@ -1,5 +1,5 @@
 /**
- * An emailed sign-in link (PROTOCOL.md §4.10). The server puts the temporary
+ * An emailed sign-in link (PROTOCOL.md §4.11). The server puts the temporary
  * token and, when the link opens a client that isn't tied to one server, the
  * WebSocket URL of the server that sent it in the URL fragment,
  * `application/x-www-form-urlencoded`, so they stay out of server logs:
@@ -101,7 +101,7 @@ export interface EmailLinkClient {
 }
 
 /**
- * Uses a link the viewer confirmed (§4.10): the client presents its token
+ * Uses a link the viewer confirmed (§4.11): the client presents its token
  * on a fresh connection to the server it names (this one by default) that is
  * not signed in, and carries on with that connection once signed in.
  * `beforeSwitch` runs just before, so the page can let go of the view it held;
@@ -123,7 +123,7 @@ export async function runEmailLink(
 	hooks.onSignedIn(server, switched);
 }
 
-/** An email code the connect screen asked for (§4.10): the address, and the server that will send it. */
+/** An email code the connect screen asked for (§4.11): the address, and the server that will send it. */
 export interface SentCode {
 	email: string;
 	url: string;

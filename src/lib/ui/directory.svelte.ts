@@ -82,7 +82,7 @@ class Directory {
 	}
 
 	/**
-	 * A user's `status` (§4.11), from the kept current object only: a recorded
+	 * A user's `status` (§4.5), from the kept current object only: a recorded
 	 * one (a `from`) is as of its record, not now. Undefined when the server
 	 * sends none, or cleared it with `""` (§3.3), so nothing is shown.
 	 */

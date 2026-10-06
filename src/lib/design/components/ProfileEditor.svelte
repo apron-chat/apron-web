@@ -10,7 +10,7 @@
 		/** Change notification for callers that can't bind (plain pages); fires after `name` updates. */
 		oninput?: (name: string) => void;
 		avatar?: string;
-		/** Caps `command` and `embed:upload`: a `/avatar` command with one `upload` embed (§4.6.6). */
+		/** Caps `command` and `embed:upload`: a `/avatar` command with one `upload` embed (§4.8.6). */
 		canUpload?: boolean;
 		onchangeavatar?: () => void;
 		/** Sends `me` `{avatar: ""}`. */
@@ -22,7 +22,7 @@
 		serverName?: string;
 		onsave?: () => void;
 		oncancel?: () => void;
-		/** `server.auth` lists `webauthn` and this session isn't one: "Add passkey" runs `auth` action "register" (§4.9). */
+		/** `server.auth` lists `webauthn` and this session isn't one: "Add passkey" runs `auth` action "register" (§4.10). */
 		canPasskey?: boolean;
 		onaddpasskey?: () => void;
 		passkey?: 'idle' | 'waiting' | 'done' | 'declined' | 'cancelled';

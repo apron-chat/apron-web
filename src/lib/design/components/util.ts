@@ -1,7 +1,7 @@
 /* Shared helpers for the presentational components. No protocol state: everything arrives as props. */
 import type { Presence } from './types';
 
-/** A user object (§3.3). `user_id` is stable; `name` falls back to it; `avatar` is optional (§4.6.6). */
+/** A user object (§3.3). `user_id` is stable; `name` falls back to it; `avatar` is optional (§4.8.6). */
 export interface Sender {
 	user_id: string;
 	name?: string;
@@ -72,7 +72,7 @@ export function ogRatio(m?: { width?: number; height?: number }): string | undef
 export const count99 = (n: number) => (n > 99 ? '99+' : String(n));
 
 /**
- * A `status` (§4.11) as a StatusDot draws it: absent or empty (none, §3.3)
+ * A `status` (§4.5) as a StatusDot draws it: absent or empty (none, §3.3)
  * shows nothing, and a value this client doesn't know is `unknown`.
  */
 export function presence(status: string | undefined): Presence | undefined {

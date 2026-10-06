@@ -22,7 +22,7 @@ interface PushSettingsDeps {
 }
 
 /**
- * Push on or off per account (§4.7), and this browser's one subscription
+ * Push on or off per account (§4.9), and this browser's one subscription
  * between them: kept in storage, so every tab of the app follows the others
  * (`storageChanged`), and in IndexedDB for the service worker.
  */

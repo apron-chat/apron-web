@@ -7,7 +7,7 @@
 <script>
   var A = window.Apron, root = document.getElementById('root');
   // The last: no status at all (a server without capability `status`), which draws nothing.
-  // 'brb' stands for any value this client doesn't know (§4.11): a placeholder whose tooltip carries the value.
+  // 'brb' stands for any value this client doesn't know (§4.5): a placeholder whose tooltip carries the value.
   var STATES = ['online', 'idle', 'dnd', 'offline', 'brb', undefined];
   var PEOPLE = { online: 'Alice Chen', idle: 'Bob Ito', dnd: 'Cleo Park', offline: 'Dev Rao', brb: 'Fay Lund', undefined: 'Eli Moss' };
   // A photo stand-in: a busy, saturated picture, where a dot without its cut-out would get lost.

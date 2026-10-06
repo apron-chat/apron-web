@@ -126,7 +126,7 @@ describe('directory', () => {
 		expect(directory.sharesName(impostors.guest_4)).toBe(true);
 	});
 
-	it('reads a status (§4.11) from the kept object only, following renames', () => {
+	it('reads a status (§4.5) from the kept object only, following renames', () => {
 		const stale = { user_id: 'cy', name: 'Cy', status: 'online' };
 		directory.apply(snapshot([ada, { ...bo, status: 'idle' }, { user_id: 'dee', status: 'away' }], { recordedUsers: { cy: stale, guest_5: { user_id: 'guest_5' } }, userAliases: { guest_5: 'bo' } }), undefined);
 		expect(directory.status(bo)).toBe('idle');

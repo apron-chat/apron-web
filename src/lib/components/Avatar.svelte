@@ -6,11 +6,11 @@
 	import { presence } from '$lib/design/components/util';
 
 	/**
-	 * An image when the user object carries a usable avatar (§4.6.6: `https:`,
+	 * An image when the user object carries a usable avatar (§4.8.6: `https:`,
 	 * small image data URLs, or files the chat server hosts), else initials on a
 	 * tint whose hue comes from the `user_id`, so people are told apart at a
 	 * glance. Without an ID the placeholder keeps the design system's denim.
-	 * With a `status` (§4.11), a StatusDot sits on its corner (offline a
+	 * With a `status` (§4.5), a StatusDot sits on its corner (offline a
 	 * hollow ring); it is decorative, with `statusLabel` as its tooltip, so
 	 * whoever shows the name says the status.
 	 */

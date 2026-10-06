@@ -4,7 +4,7 @@ import { isOwn } from './messages';
 
 /**
  * What to notify about: one set of scopes for desktop notifications and push.
- * They are the wake scopes of §4.7. The page applies them itself, and push
+ * They are the wake scopes of §4.9. The page applies them itself, and push
  * sends the ones the server pushes as `wake`.
  */
 export const NOTIFY_SCOPES = [
@@ -42,7 +42,7 @@ interface NotifyContext {
 	rooms: readonly RoomSnapshot[];
 }
 
-/** Whether a message is in a room you muted (§4.11 `mute` with its `room_id`), or in a thread of one. */
+/** Whether a message is in a room you muted (§4.5 `mute` with its `room_id`), or in a thread of one. */
 export function inMutedRoom(event: Pick<MessageRecord, 'room_id'>, rooms: readonly RoomSnapshot[]): boolean {
 	const room = rooms.find((candidate) => candidate.id === event.room_id);
 	const parent = room?.parentRoomId === undefined ? undefined : rooms.find((candidate) => candidate.id === room.parentRoomId);
@@ -58,7 +58,7 @@ export function inMutedRoom(event: Pick<MessageRecord, 'room_id'>, rooms: readon
  */
 export function inNotifyScopes(event: MessageRecord, scopes: readonly string[], context: NotifyContext): boolean {
 	if (!context.me || isOwn(event, context.me) || event.deleted) return false;
-	// A room you muted (§4.11 `mute` with its `room_id`), or a thread of one, notifies nothing, mentions included.
+	// A room you muted (§4.5 `mute` with its `room_id`), or a thread of one, notifies nothing, mentions included.
 	if (inMutedRoom(event, context.rooms)) return false;
 	const room = context.rooms.find((candidate) => candidate.id === event.room_id);
 	const parent = room?.parentRoomId === undefined ? undefined : context.rooms.find((candidate) => candidate.id === room.parentRoomId);
@@ -82,7 +82,7 @@ export function inNotifyScopes(event: MessageRecord, scopes: readonly string[], 
 	});
 }
 
-/** The `wake` push sends (§4.7): the checked scopes the server pushes; undefined when it lists none (its defaults apply). */
+/** The `wake` push sends (§4.9): the checked scopes the server pushes; undefined when it lists none (its defaults apply). */
 export function pushWake(scopes: readonly string[], offered: readonly string[]): string[] | undefined {
 	return offered.length ? scopes.filter((scope) => offered.includes(scope)) : undefined;
 }

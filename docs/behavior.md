@@ -42,7 +42,7 @@ seconds per room, with one `typing: 0` when typing pauses, to avoid charging a
 frame per keystroke. Sending a message sends no `typing: 0`: the message itself
 ends the indicator. Other people's indicators last as long as their `typing`
 asks, or until their next message arrives in that room.
-With the `status` capability (§4.11), the client tells the server whether
+With the `status` capability (§4.5), the client tells the server whether
 anyone is attending the tab, so the server can push instead. It sends a
 `status` request (with an `id`) only once signed in, after the `auth`
 result, never before. A connection starts attended, so a focused tab sends
@@ -58,7 +58,7 @@ error changes nothing, and the next change tries again. A request that
 times out may or may not have applied, so after one the next change sends
 the tab's state even if it is what the server had before. Only
 `{idle: false}` ends idle; a message sent from the tab doesn't. Others never see `idle` itself: while your status is `online`, the
-server folds it into the `status` they see (§4.11): `online` while a
+server folds it into the `status` they see (§4.5): `online` while a
 connection is attended, `idle` while you are connected but none is, and
 `offline` with no connections. After a sign-in's result the server sends the
 `status` others see of each user this one shares a room with, other than
@@ -145,7 +145,7 @@ brings it back, and takes focus when the border collapsed it from the keyboard),
 Dragging either list shut restores its earlier width when it reopens. On
 narrow screens it overlays the conversation, starts closed, and hides with
 the conversation on the phone's rooms pane. It shows no
-typing or connection status. Where the server sends a `status` (§4.11), each
+typing or connection status. Where the server sends a `status` (§4.5), each
 member's avatar carries a dot cut into its corner: online a filled dot, idle
 a crescent, do not disturb a barred dot, and offline a hollow ring; the
 row's tooltip and screen-reader text say it in words. A value the client
@@ -230,7 +230,7 @@ connection), and applies in other tabs. The earlier device-wide "Everything"
 carries over as every scope.
 
 On a server with the `status` capability, the section starts with
-**Status**, your presence status as others see it (§4.11). Its menu, with a
+**Status**, your presence status as others see it (§4.5). Its menu, with a
 dot before each choice and a check on the current one, offers Online
 (automatic: others see online, idle or offline as you come and go) and None
 (no status), and Do not disturb (others see it while you're connected, and
@@ -298,7 +298,7 @@ worker, or from the page where there is none yet. Permission revoked in the
 browser's site settings reads as off.
 
 When the server offers web push (`server.push.webpush` with its VAPID `key`,
-§4.7), Preferences also offers **Push notifications** to a signed-in account
+§4.9), Preferences also offers **Push notifications** to a signed-in account
 (not a guest), also while it reconnects. It is per account on each server, off
 until turned on, and turning it on or off in one tab applies in the others.
 Turning it on asks the browser's permission, subscribes this browser with the
@@ -390,7 +390,7 @@ font choice is marked experimental, to be replaced by a choice of themes. All
 of these stay on this device; settings aren't synced.
 
 With the `command` capability, composer text that starts with one `/` is a command
-([PROTOCOL.md §4.8](https://github.com/shazow/apron/blob/main/PROTOCOL.md#48-command)): the composer shows a **Command** tag, sets the line in
+([PROTOCOL.md §4.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#41-command)): the composer shows a **Command** tag, sets the line in
 monospace, and **Run** replaces **Send**. `/nick` (a `me` request), `/join`,
 `/leave`, `/topic` (`room_join`, `room_leave`, and `room_set` with the room's
 new `description`), and `/kick @user` and `/invite @user` (`room_leave` and
@@ -512,7 +512,7 @@ the first time the full picker opens. Both stay out of the main bundle, and the
 picker gets its data, English strings and native glyphs passed in, so it never
 fetches from a CDN.
 
-Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#46-embeds-and-avatars)):
+Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](https://github.com/shazow/apron/blob/main/PROTOCOL.md#48-embeds-and-avatars)):
 
 - **Uploads** (capability `embed:upload`): files picked with the paperclip,
   dropped anywhere on the conversation (which shows a "Drop files to attach"
@@ -561,7 +561,7 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](ht
 
 With the `edit` capability, each embed on your own messages shows an **(x)** on its
 corner while hovered (always on touch screens), which saves the message without
-that embed ([PROTOCOL.md §4.6.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#462-embed-identity)): it is identified by `embed_id`, or by
+that embed ([PROTOCOL.md §4.8.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#482-embed-identity)): it is identified by `embed_id`, or by
 value on servers that store embeds as given. Removing an upload or stream asks
 first, since the server deletes its content. A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
@@ -585,7 +585,7 @@ form. The profile bar at the foot of the sidebar edits your handle, which is
 sent with the protocol `me` request after authentication; the editor shows
 what the server actually kept. With the `command` and `embed:upload` capabilities it
 also sets your avatar: a `/avatar` command carrying one `upload` embed
-([PROTOCOL.md §4.6.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#466-avatars)), whose result names the `write_url` the image is written to; the
+([PROTOCOL.md §4.8.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#486-avatars)), whose result names the `write_url` the image is written to; the
 server applies it with a `user` notification. **Remove** sends `me` with
 `avatar: ""`.
 
@@ -593,7 +593,7 @@ The profile editor's Sign-in row offers, where the server's `auth` lists them,
 **Sign in with a passkey**, **Sign in with email** and **Add email** to a
 guest, and **Add passkey**, **Add email** and **Sign out** to a registered
 account. A guest's Add email proposes and approves on the guest's connection,
-which adds the address to the guest's account (§4.10); Sign in with email is a
+which adds the address to the guest's account (§4.11); Sign in with email is a
 sign-in to the address's own account. Adding needs the
 scheme in `auth`, since adding is a way back in and a scheme listed only in
 `signup` doesn't sign in (the spec doesn't say whether servers may allow
@@ -601,13 +601,13 @@ adding such a scheme; this client doesn't offer it). With the Go example, open
 `http://localhost:5173` (or `http://localhost:8080` for a static build); other
 deployments need HTTPS and configured RP/frontend origins. A passkey registered
 on a signed-in connection is added to that account
-([PROTOCOL.md §4.9](https://github.com/shazow/apron/blob/main/PROTOCOL.md#49-webauthn-authentication)),
+([PROTOCOL.md §4.10](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-webauthn-authentication)),
 so adding one keeps your guest identity and message ownership; signing in
 restores the identity attached to your chosen passkey. **Add email** asks for
 an address, proposes adding it on this signed-in connection (`auth` with
 `scheme: "email"` and `email`), and approves the proposal with the emailed code
 on this same connection (`scheme: "email"` and `token`, no address), which
-adds the address to the account and answers `{}` (§4.10); a refused code says
+adds the address to the account and answers `{}` (§4.11); a refused code says
 the address may belong to another account. If this connection dropped in
 between, the proposal went with it and the form asks for a new code. Adding doesn't change how
 the session signed in: it is remembered beside it, as another way back in.
@@ -683,7 +683,7 @@ whether its origin and challenge are the expected ones, and the
 authenticator data's flags (user present, user verified, backup), whether
 its RP ID hash matches, and its AAGUID with the provider it names
 (Bitwarden, 1Password, iCloud Keychain…). Servers answer every
-verification failure alike (§4.9 `denied`), so this is where the reason
+verification failure alike (§4.10 `denied`), so this is where the reason
 shows. The connection's own sign-in, as a guest or by a saved session,
 warns too when refused, without the token.
 
@@ -702,7 +702,7 @@ connection change cancels the active ceremony. Chat requests pause while a
 ceremony is active, preventing edits from crossing an identity change.
 
 With `email` in the server's `auth` or `signup`
-([PROTOCOL.md §4.10](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-email-authentication)),
+([PROTOCOL.md §4.11](https://github.com/shazow/apron/blob/main/PROTOCOL.md#411-email-authentication)),
 the connect screen's **Email** asks for an address and proposes signing in
 with it: `auth` with `scheme: "email"` and `email`, which authenticates nothing
 and answers `{}` whether or not the address has an account. A proposal on a
@@ -733,7 +733,7 @@ which each does. A scheme listed only in `signup` works end to end for joining
 in (a passkey that only signs in is never registered from there).
 
 The email's link is `#token=…`, with an optional `&server=` naming the
-server's `ws:`/`wss:` URL (the suggested convention of §4.10), all
+server's `ws:`/`wss:` URL (the suggested convention of §4.11), all
 `application/x-www-form-urlencoded` in the URL fragment; it carries no address.
 The fragment is read and scrubbed from the address bar before anything else
 (an earlier draft's `#email=…&token=…` is scrubbed too, and its address
@@ -778,7 +778,7 @@ and never replaces the session with a guest identity. Signing out clears the sto
 credentials and reconnects as a guest. The Go example's sessions are in memory
 and are lost on backend restart.
 
-The WebAuthn exchange follows [§4.9 of the protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md#49-webauthn-authentication):
+The WebAuthn exchange follows [§4.10 of the protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-webauthn-authentication):
 both registration and login use `action` plus `step: "begin"` or
 `step: "finish"`, with the server's `challenge_id` and `public_key` and the
 browser's standard JSON credential representation. The implementation details

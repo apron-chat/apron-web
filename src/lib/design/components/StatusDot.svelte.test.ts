@@ -20,10 +20,10 @@ function render<P extends Record<string, unknown>>(C: Component<P>, props: P): H
 }
 
 describe('presence', () => {
-	it('keeps the known statuses, takes any other as unknown, and leaves an absent one absent (§4.11)', () => {
+	it('keeps the known statuses, takes any other as unknown, and leaves an absent one absent (§4.5)', () => {
 		expect(['online', 'idle', 'dnd', 'offline', 'invisible'].map(presence)).toEqual(['online', 'idle', 'dnd', 'offline', 'invisible']);
 		expect(presence('away')).toBe('unknown');
-		// Empty is no status (§4.11): no dot, as when absent.
+		// Empty is no status (§4.5): no dot, as when absent.
 		expect(presence('')).toBeUndefined();
 		expect(presence('Online')).toBe('unknown');
 		expect(presence(undefined)).toBeUndefined();

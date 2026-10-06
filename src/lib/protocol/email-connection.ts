@@ -4,7 +4,7 @@ import { isJsonObject, type JsonObject, type RpcError, type WireFrame } from './
 
 /**
  * The longest a proposal connection stays open waiting for its code. A
- * proposal expires within minutes (PROTOCOL.md §4.10), so one still open past
+ * proposal expires within minutes (PROTOCOL.md §4.11), so one still open past
  * this has nothing left to approve.
  */
 export const EMAIL_PROPOSAL_MS = 15 * 60_000;
@@ -13,7 +13,7 @@ export const EMAIL_PROPOSAL_MS = 15 * 60_000;
 export type RpcFailure = Error & { code?: number };
 
 /**
- * A connection of its own for an email sign-in (§4.10), never signed in
+ * A connection of its own for an email sign-in (§4.11), never signed in
  * until the approval: it waits for the `server` frame, proposes signing in
  * with an address, and stays open while the user types the code, because a
  * short code works only on the connection that made the proposal. The

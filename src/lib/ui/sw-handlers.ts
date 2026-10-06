@@ -6,7 +6,7 @@ import {
 } from './notifications';
 
 /**
- * The service worker's push and notification-click handlers (§4.7), apart
+ * The service worker's push and notification-click handlers (§4.9), apart
  * from the worker so they can run against stand-ins.
  */
 

@@ -75,7 +75,7 @@ export const canReact = (server: ServerParams | undefined) => hasCapability(serv
 /** History recovery and paging (capability `history`). */
 export const hasHistory = (server: ServerParams | undefined) => hasCapability(server, 'history');
 
-/** The VAPID public key (base64url) of the server's `webpush` push kind (§4.7), if it offers one. */
+/** The VAPID public key (base64url) of the server's `webpush` push kind (§4.9), if it offers one. */
 export function webPushKey(server: ServerParams | undefined): string | undefined {
 	const webpush = server?.push?.webpush;
 	const key = isJsonObject(webpush) ? webpush.key : undefined;

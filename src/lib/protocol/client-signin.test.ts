@@ -6,7 +6,7 @@ function latest(): FakeSocket {
 	return FakeSocket.latest();
 }
 
-/** Email sign-in (§4.10), token rotation (§3.2), `server.welcome`, and roles (§3.3). */
+/** Email sign-in (§4.11), token rotation (§3.2), `server.welcome`, and roles (§3.3). */
 describe('sign-in', () => {
 	const storage = new Map<string, string>();
 	const fakeLocalStorage = {
@@ -38,7 +38,7 @@ describe('sign-in', () => {
 	const auths = () => latest().sent.filter((frame) => frame.method === 'auth');
 
 	/**
-	 * Proposes an email sign-in (§4.10) and answers it: the connection of its
+	 * Proposes an email sign-in (§4.11) and answers it: the connection of its
 	 * own it opens, greeted by `auth`, left open for the code.
 	 */
 	async function propose(email: string, auth: string[], extra: Record<string, unknown> = {}): Promise<FakeSocket> {
@@ -64,7 +64,7 @@ describe('sign-in', () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
 		expect(snapshot.you?.user_id).toBe('guest_1');
 
-		// Proposed on a signed-in connection (a guest's too), it would add the address (§4.10): the proposal
+		// Proposed on a signed-in connection (a guest's too), it would add the address (§4.11): the proposal
 		// goes on a connection of its own that is not signed in, and this one is left alone.
 		const main = latest();
 		const sending = client.send('lobby', 'hello');

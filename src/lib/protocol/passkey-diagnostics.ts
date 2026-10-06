@@ -2,7 +2,7 @@
  * What the browser console says when a passkey ceremony fails, so a failure
  * someone reports (a password-manager extension, an RP ID mismatch, a missing
  * user-verification flag) can be told apart afterwards. Servers deliberately
- * answer every verification failure with one message (§4.9: `denied`); the
+ * answer every verification failure with one message (§4.10: `denied`); the
  * credential the browser handed back usually says why. Nothing logged is
  * secret: the options and the credential are public by design, and the
  * credential's signature is not logged.
@@ -27,7 +27,7 @@ export function credentialSource(json: JsonObject): CredentialSource | undefined
 	return sources.get(json);
 }
 
-/** The parts of the server's options (§4.9 `public_key`) that decide what a browser or extension will do. */
+/** The parts of the server's options (§4.10 `public_key`) that decide what a browser or extension will do. */
 export function describeOptions(action: 'register' | 'login', publicKey: JsonObject | undefined): Record<string, unknown> | undefined {
 	if (!publicKey) return undefined;
 	const count = (value: unknown) => (Array.isArray(value) ? value.length : 0);

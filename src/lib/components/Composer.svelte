@@ -44,14 +44,14 @@
 		dismissed?: string[];
 		placeholder: string;
 		disabled: boolean;
-		/** Attachments and voice clips (capability `embed:upload`, §4.6.4): each file goes out as an `upload` embed. */
+		/** Attachments and voice clips (capability `embed:upload`, §4.8.4): each file goes out as an `upload` embed. */
 		canUpload: boolean;
 		/** Files attached to the draft, shown above the field until it is sent; each can be removed first. */
 		files?: Staged[];
 		/** False once the server showed it takes images only: voice clips are hidden. */
 		canUploadAudio?: boolean;
 		/**
-		 * Cap `command` (§4.8): text starting with one `/` is a command, shown
+		 * Cap `command` (§4.1): text starting with one `/` is a command, shown
 		 * with a Command tag in monospace and sent with Run.
 		 */
 		canCommand?: boolean;

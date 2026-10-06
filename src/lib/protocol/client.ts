@@ -167,7 +167,7 @@ export class ChatClient {
 	private readonly userAliases = new Map<string, string>();
 	/** The greatest `log_id` this client has received: where a notice sits in its room's timeline. */
 	private greatestLogId?: string;
-	/** Read cursors per room, per user (§4.4). */
+	/** Read cursors per room, per user (§4.6). */
 	private readonly reads = new Map<string, Map<string, string>>();
 	private readonly uploads = new Map<string, UploadState>();
 	/** A 415 on a file that isn't an image: this server takes images only. */
@@ -182,7 +182,7 @@ export class ChatClient {
 	private orphanNotices: Array<{ from: Identity; body?: MessageBody; welcome?: boolean }> = [];
 	private noticeCount = 0;
 	/**
-	 * Nobody is attending this connection (§4.11 `idle`): `away` as the page
+	 * Nobody is attending this connection (§4.5 `idle`): `away` as the page
 	 * says, `idle` once that has lasted `IDLE_AFTER_MS` (`idleTimer` runs
 	 * meanwhile), or at once on a connection that starts away.
 	 */
@@ -198,23 +198,23 @@ export class ChatClient {
 	 */
 	private idleReport: { connection: number; applied: boolean | undefined; sending?: boolean; retry?: ReturnType<typeof setTimeout> } | undefined;
 	/**
-	 * Your notifications are paused until (§4.11 `mute` without `room_id`), as
+	 * Your notifications are paused until (§4.5 `mute` without `room_id`), as
 	 * the server's last `status` said: epoch milliseconds, or `true`;
 	 * `muteTimer` ends it.
 	 */
 	private mutedUntil: number | true | undefined;
-	/** Rooms whose notifications you paused (§4.11 `mute` with `room_id`), as the server's last `status` for each said: until then, or `true`. */
+	/** Rooms whose notifications you paused (§4.5 `mute` with `room_id`), as the server's last `status` for each said: until then, or `true`. */
 	private readonly roomMutes = new Map<string, number | true>();
 	private muteTimer: ReturnType<typeof setTimeout> | undefined;
 	/**
-	 * After a sign-in's result, the mutes its `status` frames bring (§4.11),
+	 * After a sign-in's result, the mutes its `status` frames bring (§4.5),
 	 * gathered until the first frame after them; the kept ones show meanwhile.
 	 * `mutesSettleTimer` bounds the wait.
 	 */
 	private incomingMutes: { mute?: number | true; rooms: Map<string, number | true | undefined> } | undefined;
 	private mutesSettleTimer: ReturnType<typeof setTimeout> | undefined;
 	/**
-	 * What `push_register` sends on each connection (§4.7), for the account
+	 * What `push_register` sends on each connection (§4.9), for the account
 	 * `pushUser`; `pushSent` is whether this connection has.
 	 */
 	private pushRegistration: PushRegistration | undefined;
@@ -222,7 +222,7 @@ export class ChatClient {
 	private pushSent = false;
 	/**
 	 * Registrations replaced or turned off while they couldn't be
-	 * unregistered, each with the account it belongs to (§4.7): sent after
+	 * unregistered, each with the account it belongs to (§4.9): sent after
 	 * the next `auth` as that account, never as another. Keyed by `pushKey`.
 	 */
 	private readonly pushUnregisters = new Map<string, { url: string; user: string }>();
@@ -235,7 +235,7 @@ export class ChatClient {
 	/**
 	 * This browser's push endpoint while push is off for the account signed in:
 	 * unregistered after each `auth` (`pushOffSent`), in case an earlier
-	 * unregister never arrived (§4.7: an unknown `url` succeeds).
+	 * unregister never arrived (§4.9: an unknown `url` succeeds).
 	 */
 	private pushOffUrl: string | undefined;
 	private pushOffSent = false;
@@ -251,7 +251,7 @@ export class ChatClient {
 	 * Rooms kept from a lost connection with their records, floors and
 	 * checkpoints. Hidden until joined again on the next connection, when
 	 * recovery resumes from the checkpoint instead of paging all retained
-	 * history (§4.1).
+	 * history (§4.2).
 	 */
 	private readonly retainedRooms = new Map<string, RoomState>();
 	/**
@@ -298,7 +298,7 @@ export class ChatClient {
 	/** A tap started a passkey ceremony, which is waiting for its turn (`readyToSignIn`): busy from the tap on. */
 	private passkeyStarting?: AbortController;
 	/**
-	 * An email sign-in proposal (§4.10) waiting for its code, on a connection
+	 * An email sign-in proposal (§4.11) waiting for its code, on a connection
 	 * of its own that is not signed in (see `requestEmailCode`).
 	 */
 	private emailProposal?: { connection: EmailConnection; email: string; proposed: boolean };
@@ -323,7 +323,7 @@ export class ChatClient {
 	 * passkey or an email to (§3.2).
 	 */
 	private signedInWith?: SignInMethod;
-	/** Ways back into the account this browser added to it since (§4.9, §4.10), kept beside the token. */
+	/** Ways back into the account this browser added to it since (§4.10, §4.11), kept beside the token. */
 	private addedMethods = new Set<SignInMethod>();
 	/** This browser has signed in here with a passkey: how a session kept from before sign-in methods were remembered is read. */
 	private passkeyHint = false;
@@ -667,7 +667,7 @@ export class ChatClient {
 	/**
 	 * Runs one passkey ceremony, started by the user's tap: `login` signs in
 	 * with a passkey the browser offers in its sheet, `register` creates an
-	 * account with a new passkey, or adds one to the signed-in account (§4.9).
+	 * account with a new passkey, or adds one to the signed-in account (§4.10).
 	 * Works on the connection to this server whether or not it is signed in
 	 * (a guest, or held for a sign-in). A `name` is the requested display name
 	 * (§3.2): it goes along with `begin` and labels a new passkey, and becomes
@@ -731,7 +731,7 @@ export class ChatClient {
 
 	/**
 	 * Proposes signing in with `email` on the server at `url` (this client's
-	 * by default), which then emails a code (§4.10). The proposal goes on a
+	 * by default), which then emails a code (§4.11). The proposal goes on a
 	 * connection of its own that is not signed in, since one on a signed-in
 	 * connection (a guest's too) proposes adding the address instead, and
 	 * that connection stays open for `signInWithEmail`: a short code works
@@ -777,7 +777,7 @@ export class ChatClient {
 
 	/**
 	 * Signs in with the code emailed for the open proposal (`requestEmailCode`,
-	 * §4.10), approving it on the connection that proposed it. That
+	 * §4.11), approving it on the connection that proposed it. That
 	 * connection, now signed in, becomes this client's connection, on the
 	 * proposal's server; the identity the result names replaces any before,
 	 * and the bearer `token` in it resumes the session on later connections
@@ -795,7 +795,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Signs in with the token from an emailed link (§4.10), which the viewer
+	 * Signs in with the token from an emailed link (§4.11), which the viewer
 	 * has confirmed: it is presented on a fresh connection to `url` (this
 	 * client's server by default) that is not signed in, which then becomes
 	 * this client's connection as with `signInWithEmail`. A refused link
@@ -920,7 +920,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Proposes adding `email` to the signed-in account (§4.10), guests
+	 * Proposes adding `email` to the signed-in account (§4.11), guests
 	 * included: on this connection, which is signed in, a proposal adds
 	 * rather than signs in. `addEmail` approves it, on this same connection.
 	 */
@@ -936,7 +936,7 @@ export class ChatClient {
 
 	/**
 	 * Adds the address proposed with `requestEmailCodeToAdd` to the signed-in
-	 * account (§4.10), approving the proposal with the emailed code on the
+	 * account (§4.11), approving the proposal with the emailed code on the
 	 * connection that made it. The result is `{}`: the identity is unchanged,
 	 * and the address is one more way back into the account. Only an explicit
 	 * action does this; an emailed link always signs in.
@@ -1004,7 +1004,7 @@ export class ChatClient {
 		if (action === 'login') this.addProposalConnection = undefined;
 		if (name) this.displayName = name;
 		// A passkey registered on a signed-in connection, a guest's included, is added to that
-		// account (§4.9): not a sign-in, so its mutes stand (§4.11). For a registered session it
+		// account (§4.10): not a sign-in, so its mutes stand (§4.5). For a registered session it
 		// is another way back in, not a new way it signed in; a guest's account becomes registered.
 		const adding = action === 'register' && this.authenticated;
 		if (!this.handleAuth(result, 'webauthn', adding)) throw new Error('Server authentication response did not include an identity');
@@ -1060,7 +1060,7 @@ export class ChatClient {
 		// Push requests run in the background and never hold up signing out.
 		const pending = [...this.requests.values()].some((request) => request.method !== 'push_register' && request.method !== 'push_unregister');
 		if (this.passkeyAbort || this.passkeyStarting || pending) throw new Error('Wait for pending requests to finish, then try again');
-		// This device stops receiving the account's pushes (§4.7). The connection
+		// This device stops receiving the account's pushes (§4.9). The connection
 		// is replaced at once, before the answer can come: the unregister stays
 		// queued for its account until answered, and goes again after that
 		// account's next `auth` (never another's), so the server is sure to drop it.
@@ -1122,8 +1122,8 @@ export class ChatClient {
 	 */
 	send(room: string, text: string, format: MessageFormat = 'plain', options: SendOptions = {}): OperationHandle<MessageResult> {
 		if (!text && !options.embeds?.length) return rejectedHandle('message', new Error('Nothing to send'));
-		// The message ends this user's typing indicator for everyone (§4.4), so no
-		// `typing: 0` needs to follow it. It doesn't end `idle` (§4.11): only `idle: false` does.
+		// The message ends this user's typing indicator for everyone (§4.6), so no
+		// `typing: 0` needs to follow it. It doesn't end `idle` (§4.5): only `idle: false` does.
 		this.sentTypingAt.delete(room);
 		const handle = this.enqueueRequest<MessageResult>('message', this.messageParams(room, text, format, options), { visible: true, allowBeforeAuth: false });
 		if (room === DEFAULT_ROOM_ID) {
@@ -1137,7 +1137,7 @@ export class ChatClient {
 		return handle;
 	}
 
-	/** The params of a new message or a command: `room_id`, `body`, bare `reply_to`, `ext` (§3.5, §4.8). */
+	/** The params of a new message or a command: `room_id`, `body`, bare `reply_to`, `ext` (§3.5, §4.1). */
 	private messageParams(room: string, text: string, format: MessageFormat | undefined, options: SendOptions): JsonObject {
 		const body: JsonObject = { text, ...(format ? { format } : {}) };
 		if (options.embeds && options.embeds.length > 0) body.embeds = options.embeds;
@@ -1152,7 +1152,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Sends a `command` (capability `command`, §4.8): `text` is the command line as
+	 * Sends a `command` (capability `command`, §4.1): `text` is the command line as
 	 * typed, slash included, with the params a message would have; mentions,
 	 * `replyTo`, and embeds are arguments. Nothing is posted: the result is
 	 * `{}` (or `embeds` with write URLs), replies come as notices, and effects
@@ -1172,7 +1172,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Saves a message (capability `edit`, §4.2) from its latest stored snapshot:
+	 * Saves a message (capability `edit`, §4.4) from its latest stored snapshot:
 	 * every client field (`room_id`, `body`, bare `reply_to`, `ext`) is
 	 * resubmitted unless the patch changes it. `deleted: true` omits `body`.
 	 */
@@ -1256,7 +1256,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Saves the message without one embed (§4.6.2): the one with `embed_id`,
+	 * Saves the message without one embed (§4.8.2): the one with `embed_id`,
 	 * or for a server that stores embeds as given, the first equal to `embed`.
 	 * The server SHOULD delete content it hosted for it.
 	 */
@@ -1289,7 +1289,7 @@ export class ChatClient {
 
 	/**
 	 * Sets your complete emoji set on a message (capability `reactions`,
-	 * §4.5); `[]` clears it. The result is `{}`; the broadcast carries the state.
+	 * §4.7); `[]` clears it. The result is `{}`; the broadcast carries the state.
 	 */
 	react(messageId: string, emojis: string[]): OperationHandle {
 		const request = this.enqueueRequest('reactions', { message_id: messageId, emojis: [...emojis] }, {
@@ -1395,7 +1395,7 @@ export class ChatClient {
 
 	/**
 	 * Reports typing in a room as an `activity` notification (capability `activity`,
-	 * §4.4): `typing` seconds while active, `0` to stop. Sends nothing
+	 * §4.6): `typing` seconds while active, `0` to stop. Sends nothing
 	 * to a server without the capability.
 	 */
 	sendTyping(room: string, active: boolean): void {
@@ -1416,7 +1416,7 @@ export class ChatClient {
 
 	/**
 	 * Tells a server with capability `status` whether anyone is attending this
-	 * connection (§4.11 `idle`), as the tab is hidden or unfocused (`away`) or
+	 * connection (§4.5 `idle`), as the tab is hidden or unfocused (`away`) or
 	 * back. A connection starts attended, so an attended one sends nothing.
 	 * Once signed in, one that starts away reports `idle: true` at once;
 	 * after that, becoming idle goes once it has lasted `IDLE_AFTER_MS`, and
@@ -1446,7 +1446,7 @@ export class ChatClient {
 
 	/**
 	 * Sends `idle` when the server's view of this connection differs from the
-	 * page's, as a `status` request (§4.11), never before sign-in. One goes at
+	 * page's, as a `status` request (§4.5), never before sign-in. One goes at
 	 * a time, so they apply in order (§1); a change meanwhile goes after the
 	 * reply. On `retry_after` the current state, not the refused one, goes
 	 * after the delay; another error changes nothing, and the next change
@@ -1458,7 +1458,7 @@ export class ChatClient {
 		const connection = this.connectionId;
 		if (this.idleReport?.connection !== connection) {
 			this.clearIdleRetry();
-			// A connection starts attended (§4.11); one that starts away is idle at once, without the wait.
+			// A connection starts attended (§4.5); one that starts away is idle at once, without the wait.
 			this.idleReport = { connection, applied: false };
 			if (this.away && !this.idle) {
 				this.clearIdleTimer();
@@ -1493,7 +1493,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Asks to pause your notifications everywhere (§4.11 `mute`): for `mute`
+	 * Asks to pause your notifications everywhere (§4.5 `mute`): for `mute`
 	 * seconds, until resumed (`true`), or to resume them (`false`), with a
 	 * `status` request. Nothing changes here until the server sends the
 	 * change back as a `status` notification to each of your connections,
@@ -1512,7 +1512,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Sets your `status` with `me` (§3.3, §4.11): `online` (the default),
+	 * Sets your `status` with `me` (§3.3, §4.5): `online` (the default),
 	 * `""` (none), or the optional `dnd` or `invisible`. The server MAY
 	 * decline or alter it; resolves with the `you` it kept, whose `status`
 	 * is the one in effect. Needs capability `status`.
@@ -1523,7 +1523,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * A `status` from the server (§4.11): a change to one of your mutes, sent
+	 * A `status` from the server (§4.5): a change to one of your mutes, sent
 	 * to each of your connections, or, after a sign-in's result, one of the
 	 * mutes in effect. The client takes it as its own setting: `mute` without
 	 * `room_id` pauses everything, with one that room and its threads.
@@ -1547,7 +1547,7 @@ export class ChatClient {
 	/**
 	 * Each sign-in starts from no mutes: after its result the server sends
 	 * every mute in effect as a `status`, and any scope it doesn't send is
-	 * unmuted (§4.11). Those are gathered here, and the previous mutes stand
+	 * unmuted (§4.5). Those are gathered here, and the previous mutes stand
 	 * until the first frame after them (`settleMutes`), so a pause in effect
 	 * before and after doesn't flicker off between the result and its
 	 * `status` frames. A frame that never comes is waited for
@@ -1588,7 +1588,7 @@ export class ChatClient {
 		this.scheduleRoomUnmutes();
 	}
 
-	/** Takes your unscoped `mute` (§4.11): seconds left, `true`, or `false` (or `0`, or undefined) when not paused. */
+	/** Takes your unscoped `mute` (§4.5): seconds left, `true`, or `false` (or `0`, or undefined) when not paused. */
 	private applyMute(mute: number | boolean | undefined): void {
 		this.setMutedUntil(muteEnd(mute));
 	}
@@ -1600,7 +1600,7 @@ export class ChatClient {
 		this.scheduleUnmute();
 	}
 
-	/** A room's `mute` (§4.11): seconds left, `true`, or `false` (or `0`) to end it. It applies whether or not the room is joined. */
+	/** A room's `mute` (§4.5): seconds left, `true`, or `false` (or `0`) to end it. It applies whether or not the room is joined. */
 	private applyRoomMute(roomId: string, mute: number | boolean): void {
 		const until = muteEnd(mute);
 		if (until === undefined) this.roomMutes.delete(roomId);
@@ -1648,7 +1648,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Registers this device for push (§4.7) for the account `userId`:
+	 * Registers this device for push (§4.9) for the account `userId`:
 	 * `push_register` goes out once that account is signed in, and again on
 	 * each connection, while the server advertises the registration's `kind`.
 	 * A registration that replaces another with another `url`, or none,
@@ -1725,7 +1725,7 @@ export class ChatClient {
 		});
 	}
 
-	/** Signed in to an account (not a guest) on a server whose `server.push` enables push (§4.7). */
+	/** Signed in to an account (not a guest) on a server whose `server.push` enables push (§4.9). */
 	private pushReady(): boolean {
 		return this.authenticated && this.registeredSession && isJsonObject(this.server?.push);
 	}
@@ -1757,7 +1757,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Advances your read cursor in a room (capability `activity`, §4.4) to a
+	 * Advances your read cursor in a room (capability `activity`, §4.6) to a
 	 * message, if that is further than the cursor already is. The server
 	 * syncs it to your other connections.
 	 */
@@ -1982,7 +1982,7 @@ export class ChatClient {
 
 	/**
 	 * Posts a message with files attached as `upload` embeds (capability
-	 * `embed:upload`, §4.6.4): the message goes out with one pending embed
+	 * `embed:upload`, §4.8.4): the message goes out with one pending embed
 	 * per file, then each file is written to the `write_url` the result lists.
 	 * `sent` settles with the message result; `uploaded` when every write has
 	 * finished. Progress and failures appear in the snapshot's `uploads`.
@@ -1993,14 +1993,14 @@ export class ChatClient {
 		const files = attached.map((item) => (item instanceof File ? { file: item } : item));
 		const uploads: Embed[] = files.map(({ file }) => ({ kind: 'upload', ...(file.name ? { title: file.name } : {}) }));
 		const embeds = [...(options.embeds ?? []), ...uploads];
-		// A command takes embeds as arguments, and its result lists their write URLs too (§4.6.3, §4.8).
+		// A command takes embeds as arguments, and its result lists their write URLs too (§4.8.3, §4.1).
 		const handle: OperationHandle = command ? this.command(room, text, { ...options, embeds }) : this.send(room, text, format, { ...options, embeds });
 		const uploaded = handle.promise.then((result) => this.writeUploads(result, files));
 		return { sent: handle.promise, uploaded };
 	}
 
 	/**
-	 * Uploads an image as your avatar (§4.6.6, capabilities `command` and
+	 * Uploads an image as your avatar (§4.8.6, capabilities `command` and
 	 * `embed:upload`): a `/avatar` command with one upload embed, then the file
 	 * written to the result's `write_url`. The server sets `avatar` and sends a
 	 * `user` notification once the image is written.
@@ -2045,7 +2045,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Loads a room's history (§4.1). Threads and rooms opened without joining
+	 * Loads a room's history (§4.2). Threads and rooms opened without joining
 	 * never recover automatically: call this when one is opened. It loads the
 	 * newest page the first time, and afterwards pages from the previous load's
 	 * checkpoint up to the head known at the call, resolving after the last
@@ -2141,7 +2141,7 @@ export class ChatClient {
 
 	/**
 	 * Loads the page of a thread's history just before what is loaded, when a
-	 * newest-first load left older records (§4.1, backward paging).
+	 * newest-first load left older records (§4.2, backward paging).
 	 */
 	async loadOlder(roomId: string): Promise<void> {
 		const room = this.rooms.get(roomId);
@@ -2182,7 +2182,7 @@ export class ChatClient {
 
 	/**
 	 * Opens a room the user has not joined, such as a thread from its card,
-	 * without joining it: reading needs no membership (§4.1), and joining would
+	 * without joining it: reading needs no membership (§4.2), and joining would
 	 * log a membership for everyone (§4.3.2). It shows in the snapshot with
 	 * `joined: false` and loads with `loadRoom`, but nothing about it arrives live
 	 * until it is joined, so its head moves only when a listing (`listRooms`
@@ -2342,7 +2342,7 @@ export class ChatClient {
 		if (!isJsonObject(value)) return;
 		const frame = value as WireFrame;
 		// The mutes a sign-in's `status` frames bring are all in by the first frame after them
-		// other than a `user`, which the server may send among them with others' statuses (§4.11).
+		// other than a `user`, which the server may send among them with others' statuses (§4.5).
 		if (this.incomingMutes && frame.method !== 'status' && frame.method !== 'user') this.settleMutes();
 		switch (frame.method) {
 			case 'server':
@@ -2422,7 +2422,7 @@ export class ChatClient {
 		// before v7 would ignore `user_id` in `room_join`/`room_leave` and act on the caller.
 		this.memberChangesUnsupported = version < 7;
 		if (this.authenticated || this.authRequested) {
-			// A replacing frame may add capability `status`: attendance goes once signed in (§4.11).
+			// A replacing frame may add capability `status`: attendance goes once signed in (§4.5).
 			this.syncIdle();
 			this.syncPush();
 			this.emit();
@@ -2528,19 +2528,19 @@ export class ChatClient {
 			return false;
 		}
 		// A sign-in signs the connection in as a user it isn't already signed in
-		// as (§4.11). A passkey added on this signed-in connection (`added`) is
+		// as (§4.5). A passkey added on this signed-in connection (`added`) is
 		// not one, nor is a repeat `auth` as the same user: the server sends no
 		// mutes or statuses after those, and what is kept stands. (An added
 		// address never comes here: its result is `{}`.)
 		const signIn = !added && !(this.authenticated && this.you?.user_id === identity.user_id);
 		// Each sign-in starts unmuted: the server's `status` frames that follow
-		// the result bring back the mutes in effect (§4.11), gathered until the
+		// the result bring back the mutes in effect (§4.5), gathered until the
 		// first frame after them, while the previous mutes still show.
 		if (signIn) this.gatherMutes();
 		this.setYou(identity as Identity);
 		if (signIn) this.dropKeptStatuses();
 		if (signedIn && added && this.registeredSession) {
-			// Added to the account (§4.9, §4.10): another way back in, not how this session signed in,
+			// Added to the account (§4.10, §4.11): another way back in, not how this session signed in,
 			// and never a reason to drop its token. A session kept before sign-in methods were
 			// remembered gets the same guess as a resume.
 			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
@@ -2622,7 +2622,7 @@ export class ChatClient {
 	 * the last connection: those opened without joining come back as they
 	 * were, and joined ones wait, hidden, for the listing to say whether they
 	 * still are, while their recovery (capability `history`) already pages forward
-	 * from their checkpoints (§4.1). `sameIdentity`: this sign-in resumes the
+	 * from their checkpoints (§4.2). `sameIdentity`: this sign-in resumes the
 	 * kept rooms' identity, so the listing may ask only for what changed since
 	 * the rooms' checkpoints (§4.3.1).
 	 */
@@ -2696,7 +2696,7 @@ export class ChatClient {
 
 	private setYou(identity: Identity): void {
 		const changed = this.you?.user_id !== identity.user_id;
-		// A pending address addition belongs to the account that proposed it (§4.10): another identity needs a new code.
+		// A pending address addition belongs to the account that proposed it (§4.11): another identity needs a new code.
 		if (changed) this.addProposalConnection = undefined;
 		this.you = this.noteUser(identity, true);
 		// `mine` in every reaction summary depends on the viewer.
@@ -2745,7 +2745,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * At each sign-in (§4.11) the other users' kept `status` values are
+	 * At each sign-in (§4.5) the other users' kept `status` values are
 	 * dropped: those users show no status (not `offline`) until the server
 	 * sends it again, as it does after the result for each connected user who
 	 * shares a room, and as `room_list` and `room_update` carry it. Your own
@@ -2767,7 +2767,7 @@ export class ChatClient {
 	 * changes.
 	 *
 	 * `own` is a `you` (§3.2, §3.3): its `status` is the one you chose
-	 * (§4.11). Others' view of you, in a `new` or a room's `members`, carries
+	 * (§4.5). Others' view of you, in a `new` or a room's `members`, carries
 	 * the status they see (`offline` while you are invisible, `idle`), so its
 	 * `status` never replaces yours.
 	 */
@@ -2877,7 +2877,7 @@ export class ChatClient {
 	 * as `kind` (a joined room's, or one opened without joining), or turning a
 	 * room viewed or kept from the last connection into a joined one: installs
 	 * the record, takes its delivery fields, and starts or resumes its
-	 * automatic recovery (§4.1).
+	 * automatic recovery (§4.2).
 	 */
 	private showRoom(decoded: { record: RoomRecord; delivery: RoomDelivery }, kind?: 'joined'): void {
 		const roomId = decoded.record.room_id;
@@ -3092,7 +3092,7 @@ export class ChatClient {
 		this.showMessageRoom(record.room_id);
 		// A room shown for its messages has no record to say where its log
 		// ends: its first message on a connection does, and it recovers up to
-		// that (§4.1), buffering the message meanwhile.
+		// that (§4.2), buffering the message meanwhile.
 		const room = this.rooms.get(record.room_id);
 		if (room && !this.store.room(room.id) && room.recoveredOn !== this.connectionId && isLogId(record.log_id)) {
 			room.recoveredOn = this.connectionId;
@@ -3101,7 +3101,7 @@ export class ChatClient {
 		}
 		this.acceptLiveMessage(record, true);
 		for (const embedded of decoded.embedded) this.acceptLiveMessage(embedded, false);
-		// A new message from a user ends their typing indicator in that room (§4.4).
+		// A new message from a user ends their typing indicator in that room (§4.6).
 		if (record.log_id === record.message_id) {
 			this.removeTyping(record.room_id, record.from.user_id);
 			// A server-wide notice reaches every user, joined to its room or not
@@ -3220,7 +3220,7 @@ export class ChatClient {
 			this.abortRecovery(room, 'Invalid history response');
 			return;
 		}
-		// A recovery started without a head takes the first page's (§4.1).
+		// A recovery started without a head takes the first page's (§4.2).
 		recovery.head ??= result.latest_log_id;
 		this.observeHistoryResponse(room, result);
 		if (room.recovery !== recovery || recovery.generation !== generation) return;
@@ -3368,7 +3368,7 @@ export class ChatClient {
 	/**
 	 * After a lost connection: hide every room until the next connection
 	 * lists it as joined, but keep its records, floor and checkpoint so it resumes
-	 * from there (§4.1 recovery from `C + 1`). Everything else scoped to
+	 * from there (§4.2 recovery from `C + 1`). Everything else scoped to
 	 * the connection is forgotten as in `discardProtocolView`.
 	 */
 	private suspendProtocolView(reason: string): void {
@@ -3423,7 +3423,7 @@ export class ChatClient {
 	/**
 	 * Forgets what belonged to the connection. Your mutes stay through a lost
 	 * connection, so a pause doesn't flicker off while reconnecting: the next
-	 * sign-in resets them and the server sends those in effect (§4.11).
+	 * sign-in resets them and the server sends those in effect (§4.5).
 	 */
 	private forgetConnectionState(): void {
 		this.reactionIntents.clear();
@@ -3451,7 +3451,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * An `activity` broadcast (§4.4): present fields change the user's
+	 * An `activity` broadcast (§4.6): present fields change the user's
 	 * transient state, absent ones leave it. `typing` seconds show or refresh
 	 * the indicator, `0` removes it. `read_message_id` moves that user's read
 	 * cursor forward; yours places the New divider.
@@ -3795,7 +3795,7 @@ function readMethods(value: string | null): SignInMethod[] {
 	return (value ?? '').split(',').filter((method): method is SignInMethod => method === 'webauthn' || method === 'email' || method === 'token');
 }
 
-/** A passkey challenge the server issued (`begin`, §4.9). */
+/** A passkey challenge the server issued (`begin`, §4.10). */
 interface PasskeyChallenge {
 	challengeId: string;
 	options: JsonObject;

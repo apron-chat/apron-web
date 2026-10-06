@@ -48,7 +48,7 @@
 	});
 
 	let person = $derived(request ? directory.person({ user_id: request.userId }) : undefined);
-	/** Their `status` (§4.11), when the server sends one: on the avatar and in words. An unknown one shows its value. */
+	/** Their `status` (§4.5), when the server sends one: on the avatar and in words. An unknown one shows its value. */
 	let status = $derived(directory.status(person));
 	let shown = $derived(presence(status));
 	let userId = $derived(person?.user_id ?? request?.userId ?? '');

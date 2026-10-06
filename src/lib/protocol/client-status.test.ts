@@ -3,7 +3,7 @@ import { ChatClient, type ClientSnapshot } from './client';
 import { FakeSocket } from './fake-socket';
 
 /**
- * Kept statuses across sign-ins (§4.11): dropped at each one, however short
+ * Kept statuses across sign-ins (§4.5): dropped at each one, however short
  * the reconnect, and taken again from what the server sends, `room_list` and
  * `room_update` included.
  */
@@ -63,7 +63,7 @@ describe('kept statuses and sign-ins', () => {
 		expect(statusOf('ada')).toBe('dnd');
 		expect(snapshot.users.bo).toEqual({ user_id: 'bo' });
 		expect(Object.hasOwn(snapshot.users.cy, 'status')).toBe(false);
-		// After the result the server sends connected users' statuses again (§4.11).
+		// After the result the server sends connected users' statuses again (§4.5).
 		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'online' } } });
 		expect(statusOf('bo')).toBe('online');
 		expect(statusOf('cy')).toBeUndefined();
@@ -129,7 +129,7 @@ describe('a guest that signs in to an existing account, as others see it', () =>
 	});
 });
 
-/** `server.status` (§3.1, §4.11): the optional statuses the server accepts. */
+/** `server.status` (§3.1, §4.5): the optional statuses the server accepts. */
 describe('server.status', () => {
 	let client: ChatClient;
 	let snapshot: ClientSnapshot;

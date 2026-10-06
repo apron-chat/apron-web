@@ -68,7 +68,7 @@ describe('MemberListSidebar', () => {
 		expect(me.textContent).toContain('(you)');
 	});
 
-	it('shows an unknown status as a placeholder that says its value, not as offline (§4.11)', () => {
+	it('shows an unknown status as a placeholder that says its value, not as offline (§4.5)', () => {
 		const rows = render([ada, { user_id: 'eve', name: 'Eve', status: 'brb' }]);
 		const eve = rows[1];
 		expect(eve.dataset.status).toBe('unknown');
@@ -93,7 +93,7 @@ describe('MemberListSidebar', () => {
 		const statuses = (rows: HTMLLIElement[]) => rows.map((row) => [row.dataset.user, row.dataset.status ?? '', row.querySelector('.ap-presence') !== null]);
 		const before = render([ada, { user_id: 'bo', name: 'Bo', status: 'idle' }, { user_id: 'cy', name: 'Cy', status: '' }]);
 		expect(statuses(before)).toEqual([['ada', 'online', true], ['bo', 'idle', true], ['cy', '', false]]);
-		// Signed in again: the client dropped Bo's kept status (§4.11). Unknown, not offline.
+		// Signed in again: the client dropped Bo's kept status (§4.5). Unknown, not offline.
 		const snapshotWith = (bo: Identity) => ({ ...blankSnapshot(), authenticated: true, you: ada, users: { ada, bo, cy: { user_id: 'cy', name: 'Cy' } }, recordedUsers: {}, userAliases: {} });
 		directory.apply(snapshotWith({ user_id: 'bo', name: 'Bo' }), undefined);
 		flushSync();

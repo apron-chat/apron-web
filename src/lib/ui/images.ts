@@ -1,6 +1,6 @@
 /**
- * Shrinks images before they're uploaded (capability `embed:upload`, §4.6.4, and
- * `/avatar`, §4.6.6). Photos are always re-encoded, so their EXIF (GPS
+ * Shrinks images before they're uploaded (capability `embed:upload`, §4.8.4, and
+ * `/avatar`, §4.8.6). Photos are always re-encoded, so their EXIF (GPS
  * location included) never reaches the server, which stores bytes as sent.
  * Large images are scaled so their longest side fits and encoded as WebP, or
  * JPEG where the browser can't encode WebP, stepping the quality down until

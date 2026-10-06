@@ -2,7 +2,7 @@ import type { Snippet } from 'svelte';
 import type { Sender } from './util';
 export type { Sender };
 
-/** OpenGraph description of an embed (§4.6.1), `og:` prefix dropped, structured properties nested. */
+/** OpenGraph description of an embed (§4.8.1), `og:` prefix dropped, structured properties nested. */
 export interface OG {
 	title?: string;
 	description?: string;
@@ -12,21 +12,21 @@ export interface OG {
 	audio?: { url: string; type?: string };
 }
 
-/** One entry of `body.embeds` (§4.6). `kind` picks the renderer; unknown kinds render from `og`, else EmbedFallback (§3.5). */
+/** One entry of `body.embeds` (§4.8). `kind` picks the renderer; unknown kinds render from `og`, else EmbedFallback (§3.5). */
 export interface EmbedProps {
 	embed_id?: string;
 	kind: 'upload' | 'stream' | 'iframe' | 'html' | (string & {});
 	url?: string;
 	title?: string;
 	og?: OG;
-	/** upload, sender side only: 0–1 while the HTTP write to `write_url` is in flight (§4.6.3); `failed` if it never completed. */
+	/** upload, sender side only: 0–1 while the HTTP write to `write_url` is in flight (§4.8.3); `failed` if it never completed. */
 	progress?: number;
 	failed?: boolean;
 	/** upload without og media: a detail line under the file name (size, type). */
 	detail?: string;
 	/** upload with og.image: false hides the caption under the picture. */
 	caption?: boolean;
-	/** stream (§4.6.5): `format` plain | markdown | terminal. Live while `url` is set and not `done`. */
+	/** stream (§4.8.5): `format` plain | markdown | terminal. Live while `url` is set and not `done`. */
 	format?: string;
 	text?: string;
 	done?: boolean;
@@ -41,7 +41,7 @@ export interface EmbedProps {
 	html?: string;
 }
 
-/** One chip per emoji, aggregated by you from the reaction sets (§4.5). */
+/** One chip per emoji, aggregated by you from the reaction sets (§4.7). */
 export interface ReactionChip {
 	emoji: string;
 	count: number;
@@ -83,7 +83,7 @@ export interface BackendEntry {
 export type ConnectionState = 'connected' | 'connecting' | 'reconnecting' | 'waiting' | 'offline' | 'denied' | 'error';
 
 /**
- * A user's `status` (§4.11) as a StatusDot draws it: here now, connected but
+ * A user's `status` (§4.5) as a StatusDot draws it: here now, connected but
  * not looking, do not disturb, or gone (others see an invisible user as
  * offline); `invisible` is your own choice as `you` shows it, and `unknown`
  * any value this client doesn't know.

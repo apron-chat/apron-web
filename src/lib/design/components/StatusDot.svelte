@@ -4,7 +4,7 @@
 
 	interface Props {
 		/**
-		 * A user's `status` (§4.11) from the kept current object: `online`, `idle`, `dnd` or `offline`, or your own
+		 * A user's `status` (§4.5) from the kept current object: `online`, `idle`, `dnd` or `offline`, or your own
 		 * `invisible` (a hollow ring, as others see you). Any other value is unknown: a placeholder, a dashed ring, whose
 		 * words carry the value. Absent or empty (no status) draws nothing.
 		 */

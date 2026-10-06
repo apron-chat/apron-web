@@ -68,7 +68,7 @@ describe('what to notify about', () => {
 		expect(judge(message('29b', 't2', 'bob'), ['joined'])).toBe(true);
 	});
 
-	it('notifies about nothing in a room you muted, or its threads, mentions included (§4.11)', () => {
+	it('notifies about nothing in a room you muted, or its threads, mentions included (§4.5)', () => {
 		expect(judge(message('40', 'quiet', 'bob'), ['joined', 'private'])).toBe(false);
 		expect(judge(message('41', 't3', 'bob', { reply_to: { message_id: '10' } }), ['joined', 'replies'])).toBe(false);
 		expect(judge(message('42', 'quiet', 'bob'), ['mentions', 'joined'], true)).toBe(false);

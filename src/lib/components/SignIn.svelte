@@ -71,13 +71,13 @@
 	let error = $state(untrack(() => initialError ?? ''));
 	/** What to do next, in place of the hint: the browser refused a sheet that followed a connection. */
 	let notice = $state('');
-	/** Email sign-in (§4.10): the address, and the code once the server was asked to send one. */
+	/** Email sign-in (§4.11): the address, and the code once the server was asked to send one. */
 	let email = $state(untrack(() => initialEmail ?? ''));
 	let code = $state('');
 	/**
 	 * The address a code was requested for, and the server that will send it:
 	 * the code field shows while it is set, and the code only ever goes back to
-	 * the connection that proposed it, on that server (§4.10). Changing the
+	 * the connection that proposed it, on that server (§4.11). Changing the
 	 * Server field drops it, and so does that connection closing.
 	 */
 	let codeSent = $state<SentCode | undefined>();
@@ -317,7 +317,7 @@
 	}
 
 	/**
-	 * Asks the server in the field for a code (§4.10). The client proposes
+	 * Asks the server in the field for a code (§4.11). The client proposes
 	 * the sign-in on a connection of its own that isn't signed in and keeps it
 	 * open for the code, so neither a session here nor a new server's
 	 * throwaway guest is involved. The server answers the same whether or not

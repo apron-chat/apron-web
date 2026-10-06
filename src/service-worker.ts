@@ -13,7 +13,7 @@ import { anyWindowVisible, appWindows, askPushId, handleClick, handlePush, isNew
  * Only the app's own files and page loads are handled: the WebSocket,
  * uploads, files, streams and every backend's URLs go straight to the network.
  * It also shows message notifications where a page can't show its own, and
- * the messages the server pushes (§4.7).
+ * the messages the server pushes (§4.9).
  */
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -59,7 +59,7 @@ sw.addEventListener('fetch', (event) => {
 	}
 });
 
-// Pushes and clicks on notifications (§4.7): see `sw-handlers.ts`.
+// Pushes and clicks on notifications (§4.9): see `sw-handlers.ts`.
 sw.addEventListener('push', (event) => {
 	event.waitUntil(handlePush(() => event.data?.json(), {
 		registration: sw.registration,

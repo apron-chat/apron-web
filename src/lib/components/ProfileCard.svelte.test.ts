@@ -44,7 +44,7 @@ function render(userId: string, users: Identity[], you: Identity = ada): HTMLEle
 }
 
 describe('ProfileCard status', () => {
-	it('shows an unknown status as unknown, with its literal value (§4.11)', () => {
+	it('shows an unknown status as unknown, with its literal value (§4.5)', () => {
 		const card = render('eve', [ada, { user_id: 'eve', name: 'Eve', status: 'in a meeting' }]);
 		expect(card.querySelector('[data-testid="profile-status"]')?.textContent).toBe('Unknown status: in a meeting');
 		expect(card.querySelector('[data-testid="profile-status"] code')?.textContent).toBe('in a meeting');

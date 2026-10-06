@@ -25,7 +25,7 @@
 	--ok: #62c287;
 	--term-magenta: #d99be8;
 	--term-cyan: #6cc9d1;
-	/* A user's status (§4.11) on a StatusDot: the status colors, so each theme carries its own. */
+	/* A user's status (§4.5) on a StatusDot: the status colors, so each theme carries its own. */
 	--presence-online: var(--ok);
 	--presence-idle: var(--warn);
 	--presence-dnd: var(--danger);

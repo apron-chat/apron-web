@@ -26,7 +26,7 @@ describe('Base history fixtures', () => {
 			expect(result.latest_log_id).toBe(roomParams.latest_log_id);
 			expect(Object.hasOwn(result, 'history_log_id')).toBe(true);
 			if (result.history_log_id !== null) expect(isLogId(result.history_log_id)).toBe(true);
-			// Empty arrays may be omitted (§4.1).
+			// Empty arrays may be omitted (§4.2).
 			for (const entry of ('messages' in result ? result.messages ?? [] : [])) expect(entry).toHaveProperty('log_id');
 		}
 	});

@@ -29,7 +29,7 @@ state and behavior — `ConnectScreen`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog`,
 `StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
-design system with the next `npm run design:bundle`. A user's `status` (§4.11)
+design system with the next `npm run design:bundle`. A user's `status` (§4.5)
 is the design system's `StatusDot` on their `Avatar`: online a dot, idle a
 crescent, dnd a barred dot, offline a hollow ring, your own `invisible` the
 same ring with its own words, and any other value `unknown`, a dashed ring
@@ -143,7 +143,7 @@ authentication on; a ping that goes a whole interval without the
 `{"method":"pong"}` answer marks the socket dead, and it is replaced through
 the usual reconnect. With `room_leave: false` the client offers no Leave, and
 with `read_cursors: false` it moves your read cursor locally without sending it.
-`setAway(away)` reports attendance with `status` requests `{idle}` (§4.11,
+`setAway(away)` reports attendance with `status` requests `{idle}` (§4.5,
 capability `status`) through `syncIdle`, which sends nothing until the
 connection is signed in (`handleAuth` calls it after the result; a replacing
 server frame while signed in calls it too). `idleReport` holds what the
@@ -176,7 +176,7 @@ them (`dropKeptStatuses`), all but your own, which the `auth` result's `you`
 gives, so they show none until the server sends them again: as `user`
 notifications after the result, and in the current user objects of
 `room_list` and `room_update`, which carry `offline` and `""` too.
-`setPushRegistration(params, userId)` keeps the `push_register` params (§4.7)
+`setPushRegistration(params, userId)` keeps the `push_register` params (§4.9)
 and sends them after each `auth` as that account while `server.push` offers
 their `kind`. A replaced or cleared registration is unregistered, after the
 next `auth` as the account it belonged to if it can't be at once
@@ -209,7 +209,7 @@ Every successful `auth` result is handled alike: its `you` becomes the
 connection's identity and a `token` in it replaces the saved one, whether it
 answers a guest sign-in, a token resume (rotation), a passkey or an email code.
 A passkey ceremony is `usePasskey(action, name?)`, one per tap: `login` or
-`register` (§4.9), modal mediation only, on the connection to this server
+`register` (§4.10), modal mediation only, on the connection to this server
 whether or not it is signed in. It is busy (`authBusy`, `passkeyBusy`) from
 the call on, waits for requests sent as the old identity to settle, sends
 `name` with a register `begin` and labels the new passkey with it
@@ -221,7 +221,7 @@ sign-in never runs one: where only a passkey brings a registered session back
 connection (`held`) and says how to sign in (`signInNeeded`), and the page's
 sign-in panel (`SignIn.svelte`, state machine in `$lib/ui/sign-in`) takes the
 user's tap from there.
-Email sign-in (§4.10) proposes and approves on one connection, since a short
+Email sign-in (§4.11) proposes and approves on one connection, since a short
 code works only on the connection that proposed it: `requestEmailCode(email,
 url?)` opens an `EmailConnection` (`email-connection.ts`) to that server that
 never signs in until approved, waits for its `server` frame, proposes (`auth`

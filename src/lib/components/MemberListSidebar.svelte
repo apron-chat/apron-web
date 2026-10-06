@@ -27,7 +27,7 @@
 	}
 	let { client, session, room, open, canChange }: Props = $props();
 
-	/** Each member's `status` (§4.11) as kept: yours is the one you chose, as the profile bar shows it. */
+	/** Each member's `status` (§4.5) as kept: yours is the one you chose, as the profile bar shows it. */
 	function statusOf(person: Identity): string | undefined {
 		return directory.status(person);
 	}
@@ -159,7 +159,7 @@
 	.who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 	.who:hover .member-name { text-decoration: underline; }
 	.who:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-	/* Offline members (§4.11) recede; their ring and name still read. */
+	/* Offline members (§4.5) recede; their ring and name still read. */
 	.member.offline .who { color: var(--ink-muted); }
 	.member.offline :global(.ap-avatar) { opacity: .6; }
 	.member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

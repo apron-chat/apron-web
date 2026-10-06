@@ -33,7 +33,7 @@ export interface Identity extends JsonObject {
 	 */
 	roles?: string[];
 	/**
-	 * Current objects only (§4.11): in `you`, the status you chose (`online`,
+	 * Current objects only (§4.5): in `you`, the status you chose (`online`,
 	 * `""`, `dnd`, `invisible`); for others, the one they show (`online`,
 	 * `idle`, `offline`, `dnd`). Other values are unknown.
 	 */
@@ -50,7 +50,7 @@ export interface MessageBody extends JsonObject {
 	mentions?: string[];
 }
 
-/** OpenGraph description of an embed (§4.6.1): `og:` prefix dropped, structured properties nested. */
+/** OpenGraph description of an embed (§4.8.1): `og:` prefix dropped, structured properties nested. */
 export interface OpenGraph extends JsonObject {
 	title?: string;
 	description?: string;
@@ -69,7 +69,7 @@ export interface OpenGraphMedia extends JsonObject {
 }
 
 /**
- * One entry of `body.embeds` (§4.6). `kind` picks the renderer:
+ * One entry of `body.embeds` (§4.8). `kind` picks the renderer:
  * `upload` (a file the server hosts; pending while `url` is absent), `stream`
  * (live text at `url`, finished with `text`), `iframe`, `html`, and any other
  * kind from `og` or as a fallback card.
@@ -125,7 +125,7 @@ export interface RoomRecord extends JsonObject {
 	ext?: JsonObject;
 }
 
-/** One user's complete emoji set on one message at one `log_id` (§4.5). */
+/** One user's complete emoji set on one message at one `log_id` (§4.7). */
 export interface ReactionSet {
 	log_id: string;
 	message_id: string;
@@ -154,10 +154,10 @@ export interface ServerParams {
 	ext?: ServerExt;
 	/** Seconds between client pings (§1, §3.1). */
 	ping?: number;
-	/** Each push kind the server delivers, with its public configuration (§4.7). */
+	/** Each push kind the server delivers, with its public configuration (§4.9). */
 	push?: JsonObject;
 	/**
-	 * The optional `status` values the server accepts with `me` (§3.1, §4.11),
+	 * The optional `status` values the server accepts with `me` (§3.1, §4.5),
 	 * such as `dnd` and `invisible`; `online` and `""` aren't listed. Only with
 	 * capability `status`. Absent: none.
 	 */
@@ -206,7 +206,7 @@ export interface RoomDelivery {
 }
 
 /**
- * A history page (§4.1). Every array MAY be omitted when empty; clients treat
+ * A history page (§4.2). Every array MAY be omitted when empty; clients treat
  * a missing array as empty. An empty slice has neither bound.
  */
 export interface HistoryResult {
@@ -353,7 +353,7 @@ export function decodeNotice(value: unknown): { room_id?: string; from: Identity
 	};
 }
 
-/** Decode a `reactions` record into one reaction set per element (§4.5). */
+/** Decode a `reactions` record into one reaction set per element (§4.7). */
 export function decodeReactions(value: unknown): ReactionSet[] {
 	if (!isJsonObject(value) || !isLogId(value.log_id) || !isLogId(value.message_id) || !Array.isArray(value.reactions)) return [];
 	const sets: ReactionSet[] = [];

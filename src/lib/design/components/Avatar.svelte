@@ -8,7 +8,7 @@
 		user_id?: string;
 		src?: string;
 		size?: 'lg' | 'md' | 'sm';
-		/** The user's `status` (§4.11): a StatusDot on the bottom-right corner, cut out of the avatar. Absent shows none. */
+		/** The user's `status` (§4.5): a StatusDot on the bottom-right corner, cut out of the avatar. Absent shows none. */
 		status?: Presence | (string & {});
 		/** The dot's tooltip, instead of the status's own words ("Invisible · others see you as offline"). */
 		statusLabel?: string;

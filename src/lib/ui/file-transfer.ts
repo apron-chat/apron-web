@@ -1,6 +1,6 @@
 /**
  * Files arriving by drag and drop or paste, to attach to the draft
- * (capability `embed:upload`, §4.6.4).
+ * (capability `embed:upload`, §4.8.4).
  */
 
 /** A drag or paste that carries files, rather than text or a link. */

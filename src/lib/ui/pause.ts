@@ -1,5 +1,5 @@
 /**
- * Pausing notifications (§4.11 `status` `mute`): for a while, or until
+ * Pausing notifications (§4.5 `status` `mute`): for a while, or until
  * resumed. The client keeps when the pause ends, as epoch milliseconds or
  * `true` (until resumed), and sends `mute` as the seconds left or `true`.
  */

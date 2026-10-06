@@ -35,12 +35,12 @@
 		onnotifications: () => void;
 		onnotifyscopes: (scopes: string[]) => void;
 		ontestnotifications: () => Promise<NotificationTestResult>;
-		/** Push notifications (§4.7), when the server offers web push. */
+		/** Push notifications (§4.9), when the server offers web push. */
 		webPush?: WebPushPreference;
 		onwebpush: () => void;
 		/** Chromium's install prompt, from the push setting. */
 		oninstallapp: () => void;
-		/** Pausing notifications (§4.11 `mute`), on a server with capability `status`. */
+		/** Pausing notifications (§4.5 `mute`), on a server with capability `status`. */
 		pause?: { until?: PausedUntil };
 		onpause: (until: PausedUntil) => Promise<void> | void;
 		onresume: () => Promise<void> | void;
@@ -70,13 +70,13 @@
 	/** While notifications are paused, when that ends in words ("until 14:30"). */
 	let paused = $derived(pause?.until !== undefined ? pausedUntilLabel(pause.until) : undefined);
 	let avatar = $derived(directory.avatar(you));
-	/** Your `status` as you chose it (§4.11), from `you`: no dot without one. */
+	/** Your `status` as you chose it (§4.5), from `you`: no dot without one. */
 	let ownStatus = $derived(typeof you?.status === 'string' && you.status !== '' ? you.status : undefined);
 	/** Its tooltip: invisible says how others see you. */
 	let ownLabel = $derived(ownStatusLabel(ownStatus));
-	/** Choosing a status (§4.11): with capability `status`, signed in. */
+	/** Choosing a status (§4.5): with capability `status`, signed in. */
 	let canSetStatus = $derived(session.snapshot.capabilities.status && session.snapshot.authenticated && you !== undefined);
-	/** Optional statuses this server answered something else for anyway (§4.11), per server: not offered again. */
+	/** Optional statuses this server answered something else for anyway (§4.5), per server: not offered again. */
 	let unsupportedStatuses = $state<{ server: string; values: string[] }>({ server: '', values: [] });
 	let unsupported = $derived(unsupportedStatuses.server === client.url ? unsupportedStatuses.values : []);
 
@@ -88,12 +88,12 @@
 	function noteUnsupported(status: string): void {
 		unsupportedStatuses = { server: client.url, values: [...unsupported.filter((value) => value !== status), status] };
 	}
-	/** Avatars are uploaded with a `/avatar` command (§4.6.6), which needs capabilities `command` and `embed:upload`. */
+	/** Avatars are uploaded with a `/avatar` command (§4.8.6), which needs capabilities `command` and `embed:upload`. */
 	let canUploadAvatar = $derived(session.snapshot.capabilities.command && session.snapshot.capabilities['embed:upload']);
 	let snapshot = $derived(session.snapshot);
 	let connected = $derived(snapshot.status === 'connected');
 	let canUsePasskey = $derived(!!session.server?.auth.includes('webauthn'));
-	/** Email sign-in (§4.10), where the server offers it. */
+	/** Email sign-in (§4.11), where the server offers it. */
 	let canUseEmail = $derived(!!session.server?.auth.includes('email'));
 	/**
 	 * No way back into the account that the server signs in with, as far as
@@ -103,7 +103,7 @@
 	 */
 	let wayBack = $derived(snapshot.passkeySession ? wayBackNudge(session.server, snapshot.signInMethods) : undefined);
 	/**
-	 * Adding an email to this account (§4.10): an explicit action, the code
+	 * Adding an email to this account (§4.11): an explicit action, the code
 	 * requested and presented on this signed-in connection. An emailed link
 	 * never does this; it signs in.
 	 */
@@ -203,7 +203,7 @@
 
 	/**
 	 * The Add email form's next step: propose adding the address on this
-	 * signed-in connection, then approve it with the code on the same one (§4.10).
+	 * signed-in connection, then approve it with the code on the same one (§4.11).
 	 */
 	async function continueAddEmail(): Promise<void> {
 		const form = addEmail;
@@ -330,7 +330,7 @@
 							<span class="ap-profedit-row">
 								<span class="signin-actions">
 									{#if snapshot.passkeySession}
-										<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.9, §4.10). -->
+										<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
 										{#if canUsePasskey && you}
 											<button class="ap-btn ap-btn-sm" type="button" data-testid="add-passkey" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
 										{/if}
@@ -345,7 +345,7 @@
 										{#if canUseEmail}
 											<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-email" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
 											<!-- Adding an address to a guest asks and answers on this connection; whether that keeps the
-											     guest identity as an account is the server's call (§4.10). -->
+											     guest identity as an account is the server's call (§4.11). -->
 											{#if you && !addEmail}
 												<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
 											{/if}
@@ -418,7 +418,7 @@
 	.ap-profile-settings:hover { color: var(--ink); background: var(--bg-300); }
 	.ap-profile-settings:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 	.ap-profile-settings { position: relative; }
-	/* Notifications paused (§4.11 `mute`): a small bell-off on the gear's corner. */
+	/* Notifications paused (§4.5 `mute`): a small bell-off on the gear's corner. */
 	.ap-profile-paused { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--bg-100); color: var(--warn); box-shadow: 0 0 0 1px var(--line); }
 	.ap-profile-pop { max-height: calc(100dvh - 96px); overflow-y: auto; }
 	.ap-profile-pop .ap-profedit-actions { flex-wrap: wrap; }

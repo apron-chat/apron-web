@@ -8,7 +8,7 @@
 
 	interface Props {
 		/**
-		 * Until when notifications are paused (§4.11 `mute` without `room_id`),
+		 * Until when notifications are paused (§4.5 `mute` without `room_id`),
 		 * as the server's `status` said; undefined when not. Pausing and
 		 * resuming only ask: this changes when the server sends the change
 		 * back, perhaps shorter, or not at all.
@@ -40,7 +40,7 @@
 		void tick().then(() => row?.querySelector<HTMLButtonElement>('.ap-pause-action button')?.focus());
 	});
 
-	/** The server refused the last pause or resume (§4.11: nothing changed): why, until the next ask. */
+	/** The server refused the last pause or resume (§4.5: nothing changed): why, until the next ask. */
 	let refused = $state<{ action: 'pause' | 'resume'; message: string } | undefined>();
 
 	function ask(action: 'pause' | 'resume', request: () => Promise<void> | void): void {

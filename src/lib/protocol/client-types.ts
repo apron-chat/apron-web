@@ -66,7 +66,7 @@ export interface RoomSnapshot {
 	 * Fixed at creation; absent means an ordinary room.
 	 */
 	private?: boolean;
-	/** Your notifications from this room and its threads are paused until then (§4.11 `mute` with its `room_id`): epoch milliseconds, or `true`. Absent when not. */
+	/** Your notifications from this room and its threads are paused until then (§4.5 `mute` with its `room_id`): epoch milliseconds, or `true`. Absent when not. */
 	mutedUntil?: number | true;
 	/** What the room is about (§3.4), Markdown by convention; absent when empty. */
 	description?: string;
@@ -108,7 +108,7 @@ export interface RoomSnapshot {
 	olderAvailable?: boolean;
 	/** A `loadOlder` request is in flight. */
 	loadingOlder?: boolean;
-	/** Your read cursor in this room (§4.4), as the server last reported or you advanced it. */
+	/** Your read cursor in this room (§4.6), as the server last reported or you advanced it. */
 	readMessageId?: string;
 	/**
 	 * The room's members (§4.3.2): started from a complete `members` listing
@@ -151,7 +151,7 @@ export interface RoomListing {
 /** The room a client posts to without naming one: the server's default room (§3.5), before its `room_id` is known. */
 export const DEFAULT_ROOM_ID = '';
 
-/** A file this client is writing to an embed's `write_url` (§4.6.3). */
+/** A file this client is writing to an embed's `write_url` (§4.8.3). */
 export interface UploadState {
 	name: string;
 	/** An image's dimensions as sent, shown while pending; the server fills in `og` once written. */
@@ -178,7 +178,7 @@ export interface PendingOperation {
 	createdAt: number;
 }
 
-/** A typing indicator shown for another user (§4.4). */
+/** A typing indicator shown for another user (§4.6). */
 export interface TypingSnapshot {
 	room: string;
 	from: Identity;
@@ -198,7 +198,7 @@ export interface ClientSnapshot {
 	 * is its only way back in here, worth adding a passkey or email to (§3.2).
 	 */
 	signedInWith?: 'webauthn' | 'email' | 'token';
-	/** How this browser can get back into the account: how it signed in, then what it added (§4.9, §4.10). */
+	/** How this browser can get back into the account: how it signed in, then what it added (§4.10, §4.11). */
 	signInMethods?: Array<'webauthn' | 'email' | 'token'>;
 	/**
 	 * A registered session is kept for this server (a token to resume with),
@@ -208,7 +208,7 @@ export interface ClientSnapshot {
 	/** The sign-in guard is held by a passkey ceremony (true) or an email step (false). */
 	passkeyBusy?: boolean;
 	/**
-	 * An email sign-in proposal waiting for its code (§4.10): the address,
+	 * An email sign-in proposal waiting for its code (§4.11): the address,
 	 * and the server whose connection proposed it and alone takes the code.
 	 * Gone once used, replaced, or closed (by the server, or on expiry).
 	 */
@@ -220,12 +220,12 @@ export interface ClientSnapshot {
 	 */
 	readOnly?: boolean;
 	/**
-	 * Your notifications are paused (§4.11 `mute` without `room_id`, from the
+	 * Your notifications are paused (§4.5 `mute` without `room_id`, from the
 	 * server's `status`) until then, in epoch milliseconds, or `true` until
 	 * resumed. Absent when not.
 	 */
 	mutedUntil?: number | true;
-	/** The server refused this device's `push_register` (§4.7): its message, until one succeeds. */
+	/** The server refused this device's `push_register` (§4.9): its message, until one succeeds. */
 	pushError?: string;
 	/** This connection's rooms are listed: joined ones (capability `rooms`), else the default room. */
 	roomsListed?: boolean;
@@ -296,7 +296,7 @@ export interface ClientSnapshot {
 }
 
 /**
- * The params of `push_register` (§4.7): `kind` is a key of `server.push`,
+ * The params of `push_register` (§4.9): `kind` is a key of `server.push`,
  * `url` identifies the registration, `push_id` names it in payloads, and the
  * rest is specific to the kind, such as a web push subscription's `keys`.
  */
@@ -330,7 +330,7 @@ export interface SendOptions {
 /**
  * Changes to a saved message. Absent keys keep the latest snapshot's value;
  * `null` removes `reply_to` or `ext`. Saves always resubmit every client field
- * (§4.2).
+ * (§4.4).
  */
 export interface MessagePatch {
 	room_id?: string;

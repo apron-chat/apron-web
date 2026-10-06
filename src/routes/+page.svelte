@@ -105,7 +105,7 @@
 	let notificationsActive = $derived(notificationsEnabled && notificationState === 'granted');
 	/** The server the client is on (`client.url`), kept as page state. */
 	let serverUrl = $state('');
-	/** Push per account (§4.7), and this browser's one subscription between them. */
+	/** Push per account (§4.9), and this browser's one subscription between them. */
 	const pushSettings = new PushSettings({ setBadge: (unread) => void setAppBadge(navigator, unread) });
 	/**
 	 * The signed-in account (`webPushAccount`), not a guest: a guest's identity ends with its
@@ -134,24 +134,24 @@
 		void notifyScopesSaved;
 		return notifyScopesOf(loadNotifyScopes(notifyKey));
 	});
-	/** The wake scopes the server pushes (§4.7), and the `wake` push sends: the checked ones of them. */
+	/** The wake scopes the server pushes (§4.9), and the `wake` push sends: the checked ones of them. */
 	let webPushOffered = $derived(offeredWake(session.server?.push));
 	let webPushWake = $derived(pushWake(notifyScopes, webPushOffered));
 	/** Why push doesn't work: the browser couldn't subscribe, or the server refused the registration. */
 	let webPushError = $derived(pushSettings.error ?? session.snapshot.pushError);
 	let webPushAvailable = $state(false);
-	/** Notifications are paused until then (§4.11 `mute`, as the server's `status` says). */
+	/** Notifications are paused until then (§4.5 `mute`, as the server's `status` says). */
 	let pausedUntil = $derived(session.snapshot.mutedUntil);
 	/**
 	 * This page stays quiet (no desktop notifications, chime or title flash):
-	 * paused, or your status is `dnd`, which silences like a pause (§4.11).
+	 * paused, or your status is `dnd`, which silences like a pause (§4.5).
 	 */
 	let silenced = $derived(pageSilenced(pausedUntil, session.you?.status));
 	/** Pausing needs capability `status` and a signed-in account (a guest's `user_id` ends with its connection). */
 	let canPause = $derived(session.server?.capabilities?.includes('status') === true && pushAccount !== undefined);
 	/** Chromium's offer to install Apron, kept for the push setting's Install app button. */
 	let installPrompt = $state<InstallPromptEvent | undefined>();
-	/** The account's `push_id` (§4.7): it names the account in pushed payloads and in message notifications. */
+	/** The account's `push_id` (§4.9): it names the account in pushed payloads and in message notifications. */
 	let accountPushId = $derived(pushSettings.accountPushId);
 	/** A pushed room to open once it is listed, if its `push_id` is this account's. */
 	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
@@ -185,7 +185,7 @@
 	let editingId = $state<string | undefined>();
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
-	/** An emailed sign-in link this page was opened with (§4.10), until the viewer answers whether to use it. */
+	/** An emailed sign-in link this page was opened with (§4.11), until the viewer answers whether to use it. */
 	let emailLink = $state<EmailLink | undefined>();
 	/** The link is being used: its code goes out as a fresh connection's first `auth`. */
 	let emailLinkBusy = $state(false);
@@ -201,7 +201,7 @@
 	let pendingPrivate = $state(false);
 	/**
 	 * Where the New divider sits in the open pane: after your read cursor as it
-	 * was when the pane opened (§4.4). It stays put while you read.
+	 * was when the pane opened (§4.6). It stays put while you read.
 	 */
 	let newDivider = $state<{ room: string; after?: string; fixed: boolean }>({ room: '', fixed: false });
 	/** Messages a thread is being started from, for the button's "Starting…". */
@@ -311,7 +311,7 @@
 	$effect(() => {
 		const arrivedMentions = mentions.observe(session.rooms, session.you, paneRoom?.id, latestVisible);
 		const arrivedMessages = incomingMessages.observe(session.rooms, session.you);
-		// A mention in a room you muted (§4.11) doesn't alert the tab either.
+		// A mention in a room you muted (§4.5) doesn't alert the tab either.
 		const audible = arrivedMentions.filter((event) => !inMutedRoom(event, session.rooms)).length;
 		if (audible) untrack(() => (audibleMentions += audible));
 		if (!notificationsActive || !presence.away || silenced) return;
@@ -333,7 +333,7 @@
 		untrack(() => pushSettings.follow(account));
 	});
 
-	// While push is on for this account (§4.7), keep this browser subscribed with the server's
+	// While push is on for this account (§4.9), keep this browser subscribed with the server's
 	// key, which the client registers on each connection.
 	$effect(() => {
 		const chat = client;
@@ -392,7 +392,7 @@
 		untrack(() => openDestination(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined));
 	});
 
-	// Nobody is attending a hidden or unfocused tab (§4.11 `idle`): the server may push instead.
+	// Nobody is attending a hidden or unfocused tab (§4.5 `idle`): the server may push instead.
 	// The client keeps it across connections and reports it on each.
 	$effect(() => {
 		const away = presence.away;
@@ -401,7 +401,7 @@
 
 	$effect(() => {
 		const arrived = audibleMentions;
-		// Paused (§4.11 `mute`) or do not disturb: no client notifications, so no chime or title flash
+		// Paused (§4.5 `mute`) or do not disturb: no client notifications, so no chime or title flash
 		// either, and the mentions that arrive meanwhile don't alert once it ends.
 		const quiet = silenced;
 		// A notification chimes instead; `notifyMessage` chimes if it couldn't show one.
@@ -678,7 +678,7 @@
 
 	/**
 	 * The viewer confirmed an emailed link, having been shown its server
-	 * (§4.10: a link's token is presented on a connection that is not signed
+	 * (§4.11: a link's token is presented on a connection that is not signed
 	 * in, once the user has confirmed): the client presents its token on a
 	 * fresh connection to the server it names, and carries on with that
 	 * connection once it has worked, when the page lets go of the view it held.
@@ -816,7 +816,7 @@
 		};
 		const shown = await showNotification(`${senderName(event)} · ${room.title}`, {
 			body: body || 'New message',
-			// One per message, shared with the server's push of it (§4.7), which replaces it quietly;
+			// One per message, shared with the server's push of it (§4.9), which replaces it quietly;
 			// a newer message in the room closes it. Without a `push_id`, one per room.
 			...(id ? { tag: messageNotificationTag(id, event.message_id), renotify: false } : { tag: `apron:${client.url}:${room.id}`, renotify: true }),
 			data: target
@@ -889,7 +889,7 @@
 		return roomId ? { roomId, ...(id ? { pushId: id } : {}) } : undefined;
 	}
 
-	/** Pauses notifications everywhere (§4.11 `mute`): seconds from now, or until resumed. */
+	/** Pauses notifications everywhere (§4.5 `mute`): seconds from now, or until resumed. */
 	function pauseNotifications(until: PausedUntil): Promise<void> {
 		return client?.setMute(muteFor(until)) ?? Promise.resolve();
 	}
@@ -1061,7 +1061,7 @@
 		chooseThread(thread);
 	}
 
-	/** Loads a thread's history (§4.1); a failure the client recorded is reported once. */
+	/** Loads a thread's history (§4.2); a failure the client recorded is reported once. */
 	function loadThread(roomId: string): void {
 		client?.loadRoom(roomId).catch((cause: unknown) => {
 			if (session.rooms.find((room) => room.id === roomId)?.recoveryError) feedback.error(cause, 'Unable to load thread');
@@ -1091,8 +1091,8 @@
 
 	/**
 	 * Sends the composer's text: a message with the draft's mentions (§3.5) and
-	 * previews of its GitHub links as `link` embeds (§4.6.1), or
-	 * with capability `command` a command (§4.8), which `/nick`, `/join`, `/leave`,
+	 * previews of its GitHub links as `link` embeds (§4.8.1), or
+	 * with capability `command` a command (§4.1), which `/nick`, `/join`, `/leave`,
 	 * `/topic`, `/kick` and `/invite` turn into the requests they spell. A
 	 * command's failure shows as a local notice in the pane, where its replies
 	 * land too.
@@ -1154,7 +1154,7 @@
 				chat.updateRoom(roomId, { description: action.description }).promise.catch(failed);
 			} else {
 				// `/kick @user` and `/invite @user` as `room_leave`/`room_join` with `user_id` (§4.3.2). A server
-				// that answers `unsupported` may still have the command itself (§4.8): it gets the text as typed.
+				// that answers `unsupported` may still have the command itself (§4.1): it gets the text as typed.
 				const change = action.kind === 'kick' ? chat.leaveRoom(roomId, action.user) : chat.joinRoom(roomId, action.user);
 				change.promise.catch((cause: Error & { code?: number }) => {
 					if (cause.code === UNSUPPORTED) chat.command(roomId, draft, options).promise.catch(failed);
@@ -1206,7 +1206,7 @@
 	 * Sends the draft with its staged files as upload embeds, with whatever is
 	 * in the composer as the text; each file is written to the URL the server
 	 * hands back, and the message shows it pending until then. A command
-	 * takes them as arguments instead (§4.8). A failed send gives the draft
+	 * takes them as arguments instead (§4.1). A failed send gives the draft
 	 * back, files and all.
 	 */
 	async function sendFiles(): Promise<void> {
@@ -1286,7 +1286,7 @@
 
 	/**
 	 * Opens a listed room or thread without joining it, read through its
-	 * history (§4.1), for a guest on a server whose guests only read.
+	 * history (§4.2), for a guest on a server whose guests only read.
 	 */
 	function openWithoutJoining(roomId: string): void {
 		if (!client || !client.viewRoom(roomId)) return;
@@ -1311,7 +1311,7 @@
 	}
 
 	/**
-	 * Posting needs no membership (§4.3.5), but a poster who hasn't joined
+	 * Posting needs no membership (§4.3.2), but a poster who hasn't joined
 	 * doesn't receive the broadcast: a reply in a thread read without joining
 	 * joins it first, so the reply and what follows arrive.
 	 */

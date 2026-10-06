@@ -30,7 +30,7 @@ export interface NotificationTarget extends MessageNotificationData {
 
 /**
  * What a message notification, the page's or a pushed one, says about its
- * message: the account's `push_id` (§4.7), the message, and its `group`, the
+ * message: the account's `push_id` (§4.9), the message, and its `group`, the
  * room whose newer notification closes this one.
  */
 export interface MessageNotificationData {
@@ -42,7 +42,7 @@ export interface MessageNotificationData {
 /**
  * The notification tag of a message for the account with this `push_id`.
  * The page and the service worker use the same one, so a message shows at
- * most once (§4.7): whichever comes second replaces the first, quietly
+ * most once (§4.9): whichever comes second replaces the first, quietly
  * (`renotify: false`).
  */
 export function messageNotificationTag(pushId: string, messageId: string): string {
@@ -97,7 +97,7 @@ export type ShowNotificationOptions = NotificationOptions & { renotify?: boolean
 
 /**
  * Shows a notification through the service worker, so it shares tags with
- * pushed ones (§4.7) and can be listed and closed, or from the page where
+ * pushed ones (§4.9) and can be listed and closed, or from the page where
  * there is no service worker. Resolves whether one was shown, or the
  * message already was (by a push, or before): a message notification shows
  * at most once per `push_id` and `message_id`, and never under a newer one
@@ -192,7 +192,7 @@ export const PUSH_ID_QUERY = 'apron:push-id';
 export const PUSH_ROOM_PARAM = 'push_room';
 export const PUSH_ID_PARAM = 'push_id';
 
-/** What a push payload (§4.7) carries: the registration's `push_id`, the user's `unread` count, and the notification for its `message`. */
+/** What a push payload (§4.9) carries: the registration's `push_id`, the user's `unread` count, and the notification for its `message`. */
 export interface PushPayload {
 	pushId?: string;
 	unread?: number;
@@ -202,7 +202,7 @@ export interface PushPayload {
 }
 
 /**
- * Reads a push payload (§4.7): an object with `push_id`, `unread` and
+ * Reads a push payload (§4.9): an object with `push_id`, `unread` and
  * `message`, ignoring other fields. Without `message` (a badge push) there
  * is no notification. Undefined for anything but an object.
  */
@@ -244,7 +244,7 @@ function again(notification: VisibleNotification): { title: string; options: Sho
 
 /**
  * Plans a push (`readPush`; undefined when it can't be read). A push for a
- * `push_id` not among `enabled` (when known) is dropped (§4.7), and doesn't
+ * `push_id` not among `enabled` (when known) is dropped (§4.9), and doesn't
  * set the badge; when the list couldn't be read (`unreadable`), a push with a
  * `push_id` may be any account's, so it shows only `QUIET_PUSH`, without its
  * preview or the badge. A new message shows and closes its room's older ones. The
@@ -253,7 +253,7 @@ function again(notification: VisibleNotification): { title: string; options: Sho
  * dismissed doesn't notify again, and one older than the room's newest never
  * shows: with nothing showing, `QUIET_PUSH` stands in.
  *
- * Every push but a badge push (no `message`, never shown, §4.7) shows
+ * Every push but a badge push (no `message`, never shown, §4.9) shows
  * something, as browsers require: what is showing, shown again as it is
  * (the room's newest, else any), else the message quietly, else `QUIET_PUSH`.
  */

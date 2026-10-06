@@ -14,7 +14,7 @@ const KEY = {
 	webPushOwner: 'apron.webPushOwner',
 	/** What to notify about, per account (`notifyAccount`): desktop notifications and push alike. */
 	notifyScopes: 'apron.notifyScopes',
-	/** Each account's `push_id` (§4.7), by `webPushAccount`: random, made here. */
+	/** Each account's `push_id` (§4.9), by `webPushAccount`: random, made here. */
 	pushIds: 'apron.pushIds',
 	memberList: 'apron.memberList',
 	/** app.html reads this one too, to apply the theme before the app loads. */
@@ -131,7 +131,7 @@ export function saveNotificationsEnabled(enabled: boolean): void {
 const unsavedPushIds = new Map<string, string>();
 
 /**
- * The `push_id` (§4.7) of an account (`webPushAccount`): a random one,
+ * The `push_id` (§4.9) of an account (`webPushAccount`): a random one,
  * made the first time and kept in `apron.pushIds`, so it reveals neither
  * server nor account.
  */
@@ -165,7 +165,7 @@ export const WEB_PUSH_ACCOUNTS_KEY = KEY.webPush;
 export const NOTIFY_SCOPES_KEY = KEY.notifyScopes;
 
 /**
- * The accounts the user turned push notifications on for (§4.7), each as
+ * The accounts the user turned push notifications on for (§4.9), each as
  * `webPushAccount(server, userId)`: another account signing in here isn't on.
  */
 export function loadWebPushAccounts(): string[] {

@@ -3,7 +3,7 @@ import { base64url } from '$lib/protocol/webauthn';
 import { pushIdFor } from './storage';
 
 /**
- * Web push (§4.7, kind `webpush`): this browser's one push subscription, made
+ * Web push (§4.9, kind `webpush`): this browser's one push subscription, made
  * with the server's VAPID key and registered with `push_register`. The
  * service worker shows what arrives.
  */
@@ -18,14 +18,14 @@ export interface WebPushPreference {
 	enabled: boolean;
 	/** On, but this browser's subscription is another server's for now (its host): turning it on here moves it. */
 	heldBy?: string;
-	/** The wake scopes the server advertises (§4.7); empty when it lists none. */
+	/** The wake scopes the server advertises (§4.9); empty when it lists none. */
 	offered: string[];
 	/** The browser offers to install Apron (`beforeinstallprompt`), and it isn't installed. */
 	installable: boolean;
 	error?: string;
 }
 
-/** The wake scopes a server advertises in `server.push.wake` (§4.7), ours or third-party (`ext:`). */
+/** The wake scopes a server advertises in `server.push.wake` (§4.9), ours or third-party (`ext:`). */
 export function offeredWake(push: unknown): string[] {
 	const wake = push && typeof push === 'object' ? (push as { wake?: unknown }).wake : undefined;
 	return Array.isArray(wake) ? wake.filter((scope): scope is string => typeof scope === 'string' && scope !== '') : [];
@@ -206,7 +206,7 @@ export class WebPushSync {
 
 	/**
 	 * Subscribes with the server's key and registers the subscription for the
-	 * account `userId` on `client`'s server, waking for `wake` (§4.7; undefined: the server's defaults). `current`
+	 * account `userId` on `client`'s server, waking for `wake` (§4.9; undefined: the server's defaults). `current`
 	 * says whether that is still the account signed in there. Resolves whether
 	 * it registered; rejects if the browser couldn't subscribe.
 	 */

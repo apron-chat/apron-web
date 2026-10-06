@@ -3,7 +3,7 @@ import type { Presence } from '$lib/design/components/types';
 import { isPaused, type PausedUntil } from './pause';
 
 /**
- * The statuses you can choose with `me` (§4.11), as the picker lists them:
+ * The statuses you can choose with `me` (§4.5), as the picker lists them:
  * `online` (the default: others see online, idle or offline) and `""`
  * (none) every server takes; `dnd` and `invisible` are optional, offered
  * only where `server.status` lists them (§3.1). A server may still answer
@@ -16,7 +16,7 @@ export const STATUS_CHOICES = [
 	{ value: '', label: 'None', hint: 'Show no status' }
 ] as const;
 
-/** The optional ones (§4.11): a server accepts those `server.status` lists. */
+/** The optional ones (§4.5): a server accepts those `server.status` lists. */
 export const OPTIONAL_STATUSES: readonly string[] = ['dnd', 'invisible'];
 
 /** A chosen status in words, as the picker names it: "Online", "None", or an unknown value as itself. */
@@ -32,7 +32,7 @@ export function ownStatusLabel(status: string | undefined): string | undefined {
 
 /**
  * Whether this page stays quiet (no desktop notifications, chime or title
- * flash): your notifications are paused (§4.11 `mute`), or your status is
+ * flash): your notifications are paused (§4.5 `mute`), or your status is
  * `dnd`, which silences them as `mute` does.
  */
 export function pageSilenced(pausedUntil: PausedUntil | undefined, status: unknown, now = Date.now()): boolean {

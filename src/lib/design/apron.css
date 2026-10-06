@@ -27,7 +27,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-avatar-sm { width: var(--avatar-sm); height: var(--avatar-sm); font-size: 9px; }
 .ap-avatar-lg { width: var(--avatar-lg); height: var(--avatar-lg); font-size: 18px; }
 
-/* StatusDot — a user's status (§4.11). Shape says it as well as color: online a dot, idle a crescent, dnd a dot with a
+/* StatusDot — a user's status (§4.5). Shape says it as well as color: online a dot, idle a crescent, dnd a dot with a
    bar, offline a hollow ring; no status, nothing. Its cut-outs are masks, so whatever is behind shows through. */
 .ap-presence { --presence-d: 8px; display: inline-block; flex: none; width: var(--presence-d); height: var(--presence-d); border-radius: var(--radius-full); background: var(--presence-color); vertical-align: middle; }
 .ap-presence-sm { --presence-d: 7px; }
@@ -36,7 +36,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-presence-idle { --presence-color: var(--presence-idle); -webkit-mask: radial-gradient(circle at 18% 18%, transparent calc(var(--presence-d) * .36), #000 calc(var(--presence-d) * .36 + .5px)); mask: radial-gradient(circle at 18% 18%, transparent calc(var(--presence-d) * .36), #000 calc(var(--presence-d) * .36 + .5px)); }
 .ap-presence-dnd { --presence-color: var(--presence-dnd); -webkit-mask: linear-gradient(#000 0 0) center / 62% 24% no-repeat, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) center / 62% 24% no-repeat exclude, linear-gradient(#000 0 0); }
 .ap-presence-offline, .ap-presence-invisible { --presence-color: var(--presence-offline); -webkit-mask: radial-gradient(circle, transparent calc(var(--presence-d) * .25), #000 calc(var(--presence-d) * .25 + .5px)); mask: radial-gradient(circle, transparent calc(var(--presence-d) * .25), #000 calc(var(--presence-d) * .25 + .5px)); }
-/* A status this client doesn't know (§4.11): a placeholder, a ring broken into four dashes. */
+/* A status this client doesn't know (§4.5): a placeholder, a ring broken into four dashes. */
 .ap-presence-unknown { --presence-color: var(--presence-unknown); -webkit-mask: radial-gradient(circle, transparent calc(var(--presence-d) * .25), #000 calc(var(--presence-d) * .25 + .5px)), repeating-conic-gradient(from 22.5deg, #000 0 45deg, transparent 45deg 90deg); -webkit-mask-composite: source-in; mask: radial-gradient(circle, transparent calc(var(--presence-d) * .25), #000 calc(var(--presence-d) * .25 + .5px)) intersect, repeating-conic-gradient(from 22.5deg, #000 0 45deg, transparent 45deg 90deg); }
 /* On an avatar: the dot sits on the bottom-right corner, and a gap around it is cut out of the avatar, so it reads on
    any picture and any ground (a hovered row, the active one) without a ring painted in one surface's color. */

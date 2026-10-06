@@ -24,7 +24,7 @@ export interface TimelineState {
 	order: readonly string[];
 	/**
 	 * Aggregated reactions per `message_id`, present only for messages that are
-	 * not tombstones and have at least one non-empty set (§4.5).
+	 * not tombstones and have at least one non-empty set (§4.7).
 	 */
 	reactions: Readonly<Record<string, ReactionSummary[]>>;
 	/**
@@ -455,7 +455,7 @@ export function emptyRecords(): DecodedRecords {
 }
 
 /**
- * Decode every record in a history result (§4.1): room records, message
+ * Decode every record in a history result (§4.2): room records, message
  * snapshots, reaction sets, memberships, and embedded snapshots. A missing
  * array is empty. Records are not filtered by the requested room: a move
  * snapshot carries its destination `room_id`.

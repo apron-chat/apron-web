@@ -1,5 +1,5 @@
 /**
- * What the composer does with its text (PROTOCOL.md §4.8). With capability `command`,
+ * What the composer does with its text (PROTOCOL.md §4.1). With capability `command`,
  * text that starts with one `/` is a command: `/nick`, `/join`, `/leave`,
  * `/topic`, `/kick` and `/invite` map to the requests they spell (all but the
  * first need capability `rooms`), and anything else goes to the server as a

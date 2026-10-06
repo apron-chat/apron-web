@@ -292,7 +292,7 @@ describe('rooms by request (cap rooms)', () => {
 			socket = FakeSocket.latest();
 		}
 
-		/** Answers the latest `status` request: `{}` (§4.11), or an error. */
+		/** Answers the latest `status` request: `{}` (§4.5), or an error. */
 		async function answer(error?: Record<string, unknown>): Promise<void> {
 			const { id } = socket.request('status');
 			socket.receive(error ? { id, error } : { id, result: {} });
@@ -409,7 +409,7 @@ describe('rooms by request (cap rooms)', () => {
 			expect(statuses()).toEqual([{ idle: true }]);
 			vi.advanceTimersByTime(4_999);
 			expect(statuses()).toEqual([{ idle: true }]);
-			// Nothing changed on the server (§4.11), and the page is attended, as the connection started: nothing to send.
+			// Nothing changed on the server (§4.5), and the page is attended, as the connection started: nothing to send.
 			vi.advanceTimersByTime(1);
 			expect(statuses()).toEqual([{ idle: true }]);
 			// Refused again while still away: after the delay, the same state goes with a new id.
@@ -461,7 +461,7 @@ describe('rooms by request (cap rooms)', () => {
 			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
 		});
 
-		it('keeps a room\'s mute from the server\'s status for it (§4.11), joined or not', async () => {
+		it('keeps a room\'s mute from the server\'s status for it (§4.5), joined or not', async () => {
 			socket.open();
 			socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 			await socket.reply('auth', { you: { user_id: 'guest_1' } });
@@ -510,7 +510,7 @@ describe('rooms by request (cap rooms)', () => {
 			expect(statuses()).toEqual([{ idle: true }]);
 		});
 
-		it('pauses notifications with mute, and takes the server\'s status as the word on it (§4.11)', async () => {
+		it('pauses notifications with mute, and takes the server\'s status as the word on it (§4.5)', async () => {
 			await greet(['rooms', 'status'], { user_id: 'guest_1' }, ['token', 'guest']);
 			// A guest can't pause: this sign-in is a guest's.
 			client.setMute(true);
@@ -534,7 +534,7 @@ describe('rooms by request (cap rooms)', () => {
 			// Another of your connections paused: the server sends it here too, and this one takes it as its own.
 			socket.receive({ method: 'status', params: { mute: true } });
 			expect(snapshot.mutedUntil).toBe(true);
-			// `you` no longer says anything about mutes (§4.11): a `mute` in it is ignored.
+			// `you` no longer says anything about mutes (§4.5): a `mute` in it is ignored.
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', status: 'online' } } });
 			expect(snapshot.mutedUntil).toBe(true);
@@ -551,7 +551,7 @@ describe('rooms by request (cap rooms)', () => {
 			expect(snapshot.mutedUntil).toBeUndefined();
 		});
 
-		it('sends mute as a request: the echo sets it before the {} result, and an error changes nothing (§4.11)', async () => {
+		it('sends mute as a request: the echo sets it before the {} result, and an error changes nothing (§4.5)', async () => {
 			await greet(['rooms', 'status'], { user_id: 'guest_1' }, ['token', 'guest']);
 			// A guest can't pause: nothing is sent, and the ask is refused.
 			await expect(client.setMute(true)).rejects.toThrow();
@@ -563,7 +563,7 @@ describe('rooms by request (cap rooms)', () => {
 			const paused = client.setMute(3600).then(() => (settled = 'ok'), (cause: Error) => (settled = cause.message));
 			const request = socket.request('status');
 			expect(request).toEqual({ method: 'status', id: expect.any(String), params: { mute: 3600 } });
-			// The sender's own connection gets the echo too, before the result (§1, §4.11): that sets it.
+			// The sender's own connection gets the echo too, before the result (§1, §4.5): that sets it.
 			socket.receive({ method: 'status', params: { mute: 3600 } });
 			const until = Date.now() + 3_600_000;
 			expect(snapshot.mutedUntil).toBe(until);
@@ -602,7 +602,7 @@ describe('rooms by request (cap rooms)', () => {
 			expect(snapshot.mutedUntil).toBe(Date.now() + 600_000);
 			vi.advanceTimersByTime(600_000);
 			expect(snapshot.mutedUntil).toBeUndefined();
-			// A server without timed mutes takes seconds as `true` (§4.11), and says so.
+			// A server without timed mutes takes seconds as `true` (§4.5), and says so.
 			client.setMute(60);
 			socket.receive({ method: 'status', params: { mute: true } });
 			expect(snapshot.mutedUntil).toBe(true);
@@ -613,7 +613,7 @@ describe('rooms by request (cap rooms)', () => {
 			expect(snapshot.mutedUntil).toBeUndefined();
 		});
 
-		it('starts each auth unmuted and takes the mutes in effect from the status frames after it (§4.11)', async () => {
+		it('starts each auth unmuted and takes the mutes in effect from the status frames after it (§4.5)', async () => {
 			await greet(['rooms', 'status'], { user_id: 'guest_1' }, ['token', 'guest']);
 			client.useToken('apron_token');
 			vi.advanceTimersByTime(0);
@@ -656,7 +656,7 @@ describe('rooms by request (cap rooms)', () => {
 			socket.open();
 			socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: ['rooms', 'status'] } });
 			await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
-			// Others' statuses may come among the mutes (§4.11).
+			// Others' statuses may come among the mutes (§4.5).
 			socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'online' } } });
 			socket.receive({ method: 'status', params: { mute: 600 } });
 			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
@@ -683,7 +683,7 @@ describe('rooms by request (cap rooms)', () => {
 			expect(snapshot.mutedUntil).toBeUndefined();
 		});
 
-		it('sets your status with me, and shows what the server kept (§4.11)', async () => {
+		it('sets your status with me, and shows what the server kept (§4.5)', async () => {
 			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', status: 'online' });
 			const asked = client.setStatus('dnd');
 			const request = socket.request('me');
@@ -704,7 +704,7 @@ describe('rooms by request (cap rooms)', () => {
 
 		it('keeps your chosen status when others\' view of you says otherwise', async () => {
 			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada', status: 'invisible' });
-			// Others see you offline while you are invisible (§4.11); that view never replaces your choice.
+			// Others see you offline while you are invisible (§4.5); that view never replaces your choice.
 			socket.receive({ method: 'user', params: { new: { user_id: 'ada', name: 'Ada', status: 'offline' } } });
 			socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', title: 'Ops', members: [{ user_id: 'ada', status: 'offline' }, { user_id: 'bo', status: 'idle' }] }] } });
 			expect(snapshot.you?.status).toBe('invisible');

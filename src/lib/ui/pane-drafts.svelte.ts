@@ -2,7 +2,7 @@ import type { UploadFile } from '$lib/protocol/client';
 
 /**
  * A file attached to a draft but not sent yet (capability `embed:upload`,
- * §4.6.4): it goes out as an `upload` embed with the draft's text.
+ * §4.8.4): it goes out as an `upload` embed with the draft's text.
  */
 export interface StagedFile {
 	/** Local to this page, for removing it before sending. */

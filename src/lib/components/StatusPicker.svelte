@@ -7,14 +7,14 @@
 
 	interface Props {
 		/**
-		 * Your `status` as `you` shows it (§4.11): the one you chose, or the one
+		 * Your `status` as `you` shows it (§4.5): the one you chose, or the one
 		 * the server put in its place. Absent means the default, `online`.
 		 */
 		status?: string;
 		/** Sets it with `me`; resolves with the `status` the server kept. */
 		onchoose: (status: string) => Promise<string | undefined>;
 		/**
-		 * `server.status` (§3.1, §4.11): the optional statuses this server
+		 * `server.status` (§3.1, §4.5): the optional statuses this server
 		 * accepts, such as `dnd` and `invisible`. Absent: none.
 		 */
 		accepted?: readonly string[];

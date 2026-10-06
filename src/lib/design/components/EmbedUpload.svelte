@@ -1,5 +1,5 @@
 <script lang="ts">
-	/* upload (§4.6.4, writes §4.6.3): pending while url is absent; og.video / og.audio / og.image preview; else a file card */
+	/* upload (§4.8.4, writes §4.8.3): pending while url is absent; og.video / og.audio / og.image preview; else a file card */
 	import FileGlyph from './FileGlyph.svelte';
 	import type { EmbedProps } from './types';
 	import { ogRatio, safeHttp } from './util';

@@ -3,7 +3,7 @@
 	import { emailLinkPrompt } from '$lib/ui/email-link';
 
 	interface Props {
-		/** The emailed link the page was opened with (§4.10). */
+		/** The emailed link the page was opened with (§4.11). */
 		link: EmailLink;
 		/**
 		 * The server the page is using, who is signed in there (a registered
@@ -26,7 +26,7 @@
 <!--
 	An emailed link is a credential that someone else may have crafted or forwarded, so it is never used
 	without asking: the question names the server, and says what continuing replaces. The link carries no
-	address (§4.10), so it can't say which account it signs in to.
+	address (§4.11), so it can't say which account it signs in to.
 -->
 <dialog class="email-link" bind:this={dialog} aria-labelledby="email-link-title" data-testid="email-link-dialog" oncancel={(event) => { event.preventDefault(); oncancel(); }}>
 	<form method="dialog" onsubmit={(event) => { event.preventDefault(); onconfirm(); }}>

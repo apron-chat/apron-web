@@ -28,7 +28,7 @@
 		onretry?: () => void;
 		/** `log_id !== message_id`: the snapshot is not the creation. */
 		edited?: boolean;
-		/** Tombstone (§4.2): body and reactions hidden. */
+		/** Tombstone (§4.4): body and reactions hidden. */
 		deleted?: boolean;
 		/** Render as a system message. Defaults to true when `sender.user_id` starts with "~" (Appendix A.1). */
 		system?: boolean;

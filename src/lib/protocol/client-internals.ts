@@ -85,7 +85,7 @@ interface RecoveryState {
 	/**
 	 * Fixed H for the whole recovery. A recovery sent right behind `auth`,
 	 * before any room record is known, starts without it and takes it from its
-	 * first page's `latest_log_id` (§4.1 recovery, step 1).
+	 * first page's `latest_log_id` (§4.2 recovery, step 1).
 	 */
 	head?: string;
 	/** Next position to request; undefined means from the start of the log. */
@@ -126,23 +126,23 @@ export type ValidHistoryResponse = JsonObject & {
 	history_log_id: string | null;
 };
 
-/** A valid `mute` (§4.11): `true` until changed, `false` for none, or seconds (`0` is `false`). */
+/** A valid `mute` (§4.5): `true` until changed, `false` for none, or seconds (`0` is `false`). */
 export function isMuteValue(value: unknown): value is number | boolean {
 	return typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
 }
 
-/** A push registration's key (§4.7): it belongs to its user and `url`. */
+/** A push registration's key (§4.9): it belongs to its user and `url`. */
 export function pushKey(url: string, user: string): string {
 	return JSON.stringify([user, url]);
 }
 
-/** When a `mute` (§4.11) ends: epoch milliseconds for seconds, `true` until resumed, undefined for `false` or `0`. */
+/** When a `mute` (§4.5) ends: epoch milliseconds for seconds, `true` until resumed, undefined for `false` or `0`. */
 export function muteEnd(mute: number | boolean | undefined, now = Date.now()): number | true | undefined {
 	if (mute === true) return true;
 	return typeof mute === 'number' && mute > 0 ? now + mute * 1000 : undefined;
 }
 
-/** How long nobody attends a connection before it reports `idle` (§4.11: about 30 seconds). */
+/** How long nobody attends a connection before it reports `idle` (§4.5: about 30 seconds). */
 export const IDLE_AFTER_MS = 30_000;
 /** The longest `setTimeout` delay browsers keep. */
 export const MAX_TIMER_MS = 2 ** 31 - 1;
@@ -173,7 +173,7 @@ export const MAX_UNANSWERED_PINGS = 1;
 export const STABLE_CONNECTION_MS = 30_000;
 /**
  * How long after a sign-in's result the previous mutes stand at most while
- * the server's `status` frames bring those in effect (§4.11), when no other
+ * the server's `status` frames bring those in effect (§4.5), when no other
  * frame follows them sooner.
  */
 export const MUTES_SETTLE_MS = 2_000;
@@ -218,7 +218,7 @@ export function maxDefined(a: string | undefined, b: string | undefined): string
 	return compareLogIds(a, b) >= 0 ? a : b;
 }
 
-/** A message's client fields (§4.2), as a save would submit them. */
+/** A message's client fields (§4.4), as a save would submit them. */
 export function messageClientFields(record: MessageRecord): JsonObject {
 	const fields: JsonObject = { room_id: record.room_id };
 	if (record.body !== undefined) fields.body = record.body;
@@ -294,12 +294,12 @@ export function isEmbedded(live: LiveRecord): boolean {
 	return live.kind === 'message' && live.embedded === true;
 }
 
-/** A forward page; without `before` (a recovery that has no head yet) it runs to the end of the log (§4.1). */
+/** A forward page; without `before` (a recovery that has no head yet) it runs to the end of the log (§4.2). */
 export function historyParams(roomId: string, after: string | undefined, before: string | undefined): JsonObject {
 	return { room_id: roomId, after: after ?? FIRST_LOG_ID, ...(before !== undefined ? { before } : {}), limit: HISTORY_PAGE_SIZE };
 }
 
-/** Record arrays that a history page may omit when empty (§4.1). */
+/** Record arrays that a history page may omit when empty (§4.2). */
 const HISTORY_ARRAYS = ['rooms', 'messages', 'reactions', 'memberships'];
 
 export function validHistoryMetadata(result: JsonObject): result is ValidHistoryResponse {

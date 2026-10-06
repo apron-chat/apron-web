@@ -1,7 +1,7 @@
 /**
  * What the page and the service worker share about push, in IndexedDB (the
  * service worker can't read localStorage): the `push_id`s of the accounts
- * push is on for, so a push for any other is dropped (§4.7), and the newest
+ * push is on for, so a push for any other is dropped (§4.9), and the newest
  * message each notification group has notified about, so a late push or
  * page notification never notifies about it again.
  */

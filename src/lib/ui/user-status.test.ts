@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { byStatus, chosenStatusLabel, ownStatusLabel, pageSilenced, STATUS_CHOICES } from './user-status';
 
 describe('STATUS_CHOICES', () => {
-	it('offers online, dnd, invisible and none (§4.11), with no durations', () => {
+	it('offers online, dnd, invisible and none (§4.5), with no durations', () => {
 		expect(STATUS_CHOICES.map((choice) => choice.value)).toEqual(['online', 'dnd', 'invisible', '']);
 	});
 });
@@ -27,7 +27,7 @@ describe('ownStatusLabel', () => {
 
 describe('pageSilenced', () => {
 	const now = 1_700_000_000_000;
-	it('is quiet while paused, or while your status is dnd (§4.11: dnd silences as mute does)', () => {
+	it('is quiet while paused, or while your status is dnd (§4.5: dnd silences as mute does)', () => {
 		expect(pageSilenced(undefined, 'online', now)).toBe(false);
 		expect(pageSilenced(true, 'online', now)).toBe(true);
 		expect(pageSilenced(now + 1000, undefined, now)).toBe(true);

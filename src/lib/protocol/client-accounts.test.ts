@@ -8,7 +8,7 @@ import { requestPasskey } from './webauthn';
 vi.mock('./webauthn', () => ({ requestPasskey: vi.fn(), signalPasskeyLabel: vi.fn() }));
 
 /**
- * How a session's ways back in (§3.2, §4.9, §4.10) survive adds, reconnects,
+ * How a session's ways back in (§3.2, §4.10, §4.11) survive adds, reconnects,
  * and sign-in codes asked for while signed in.
  */
 describe('accounts and their ways back in', () => {
@@ -40,7 +40,7 @@ describe('accounts and their ways back in', () => {
 	}
 
 	/**
-	 * Signs in by email (§4.10): proposes on a connection of its own, greeted
+	 * Signs in by email (§4.11): proposes on a connection of its own, greeted
 	 * by a server with these schemes, and approves there; the client carries
 	 * on with that connection.
 	 */
@@ -390,7 +390,7 @@ describe('accounts and their ways back in', () => {
 });
 
 /**
- * Mutes across `auth` (§4.11): a sign-in starts unmuted and takes the mutes
+ * Mutes across `auth` (§4.5): a sign-in starts unmuted and takes the mutes
  * the server sends after its result; an `auth` that adds a passkey or an
  * address to the signed-in connection is no sign-in, and the mutes stand.
  */
@@ -485,7 +485,7 @@ describe('mutes, statuses and sign-ins', () => {
 		const socket = await signedInMuted(['webauthn', 'token', 'guest'], { user_id: 'ada' }, 'st_ada');
 		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'idle' } } });
 		await passkey(socket, 'login', 'ada');
-		// The server sends no mutes after it (§4.11): nothing to wait for, and nothing is reset.
+		// The server sends no mutes after it (§4.5): nothing to wait for, and nothing is reset.
 		socket.receive({ method: 'pong' });
 		vi.advanceTimersByTime(MUTES_SETTLE_MS);
 		expect([snapshot.mutedUntil, roomMute('general')]).toEqual([true, true]);
