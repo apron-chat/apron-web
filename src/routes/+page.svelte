@@ -396,7 +396,7 @@
 	// The client keeps it across connections and reports it on each.
 	$effect(() => {
 		const away = presence.away;
-		if (client) untrack(() => client?.setAway(away));
+		if (client) untrack(() => client?.setIdle(away));
 	});
 
 	$effect(() => {

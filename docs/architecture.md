@@ -142,7 +142,7 @@ the usual reconnect. `serverSettings` reads extension `ext:settings`
 `guest_posting: false` a guest's snapshot is `readOnly`, and with
 `read_cursors: false` the client moves your read cursor locally without
 sending it.
-`setAway(away)` reports attendance with `status` requests `{idle}` (§4.5,
+`setIdle(away)` reports attendance with `status` requests `{idle}` (§4.5,
 capability `status`) through `syncIdle`, which sends nothing until the
 connection is signed in (`handleAuth` calls it after the result; a replacing
 server frame while signed in calls it too). `idleReport` holds what the

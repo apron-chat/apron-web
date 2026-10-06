@@ -1442,7 +1442,7 @@ export class ChatClient {
 	 * becoming attended at once. Only `idle: false` ends it: sending a
 	 * message doesn't.
 	 */
-	setAway(away: boolean): void {
+	setIdle(away: boolean): void {
 		this.away = away;
 		if (away) {
 			if (this.idle || this.idleTimer) return;
