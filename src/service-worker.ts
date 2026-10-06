@@ -5,7 +5,7 @@
 import { base, build, files, prerendered, version } from '$service-worker';
 import { setAppBadge, type BadgeNavigator } from '$lib/ui/notifications';
 import { loadEnabledPushIds, loadShownMarks, markShown } from '$lib/ui/push-store';
-import { askPushId, handleClick, handlePush, isNewerMessage } from '$lib/ui/sw-handlers';
+import { anyWindowVisible, appWindows, askPushId, handleClick, handlePush, isNewerMessage } from '$lib/ui/sw-handlers';
 
 /**
  * Keeps each deploy's app files cached so the app opens fast, still opens
@@ -67,7 +67,7 @@ sw.addEventListener('push', (event) => {
 		loadMarks: loadShownMarks,
 		markShown: (group, messageId) => markShown(group, messageId, isNewerMessage),
 		setBadge: (unread) => setAppBadge(sw.navigator as BadgeNavigator, unread),
-		pageVisible: async () => (await sw.clients.matchAll({ type: 'window' })).some((tab) => tab.visibilityState === 'visible'),
+		pageVisible: () => anyWindowVisible(sw.clients),
 		icon: `${base}/icon-192.png`
 	}));
 });
@@ -75,7 +75,7 @@ sw.addEventListener('push', (event) => {
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
 	event.waitUntil(handleClick(event.notification.data, {
-		tabs: () => sw.clients.matchAll({ type: 'window', includeUncontrolled: true }),
+		tabs: () => appWindows<WindowClient>(sw.clients),
 		openWindow: (url) => sw.clients.openWindow(url),
 		askPushId,
 		page: APP_PAGE

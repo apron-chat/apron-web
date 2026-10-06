@@ -245,17 +245,23 @@ function again(notification: VisibleNotification): { title: string; options: Sho
 /**
  * Plans a push (`readPush`; undefined when it can't be read). A push for a
  * `push_id` not among `enabled` (when known) is dropped (§4.7), and doesn't
- * set the badge. A new message shows and closes its room's older ones. The
+ * set the badge; when the list couldn't be read (`unreadable`), a push with a
+ * `push_id` may be any account's, so it shows only `QUIET_PUSH`, without its
+ * preview or the badge. A new message shows and closes its room's older ones. The
  * same message again (an edit, say) replaces its notification quietly,
  * keeping its title. A message the room already notified about and that was
- * dismissed, or one older than the room's newest, doesn't notify again.
+ * dismissed doesn't notify again, and one older than the room's newest never
+ * shows: with nothing showing, `QUIET_PUSH` stands in.
  *
  * Every push but a badge push (no `message`, never shown, §4.7) shows
  * something, as browsers require: what is showing, shown again as it is
  * (the room's newest, else any), else the message quietly, else `QUIET_PUSH`.
  */
-export function planPush(push: PushPayload | undefined, visible: readonly VisibleNotification[], known: { enabled?: readonly string[]; marks?: Record<string, string> } = {}): PushPlan {
-	const dropped = push?.pushId !== undefined && known.enabled !== undefined && !known.enabled.includes(push.pushId);
+export function planPush(push: PushPayload | undefined, visible: readonly VisibleNotification[], known: { enabled?: readonly string[] | 'unreadable'; marks?: Record<string, string> } = {}): PushPlan {
+	const enabled = known.enabled;
+	// Fail closed: whose a push is can't be told without the list.
+	if (push?.pushId !== undefined && enabled === 'unreadable') return push.notification || push.unreadable ? { show: QUIET_PUSH } : {};
+	const dropped = push?.pushId !== undefined && Array.isArray(enabled) && !enabled.includes(push.pushId);
 	const plan: PushPlan = !dropped && push?.unread !== undefined ? { badge: push.unread } : {};
 	const quietly = (preferred?: VisibleNotification) => {
 		const showing = preferred ?? visible[0];
@@ -271,7 +277,7 @@ export function planPush(push: PushPayload | undefined, visible: readonly Visibl
 	if (order > 0) return { ...plan, show: notification, notified: place };
 	const same = visible.find((shown) => shown.tag === notification.options.tag);
 	if (order === 0 && same) return { ...plan, show: { title: same.title, options: { ...notification.options, renotify: false, silent: true } } };
-	if (!visible.length) return { ...plan, show: { title: notification.title, options: { ...notification.options, renotify: false, silent: true } } };
+	if (!visible.length) return { ...plan, show: order < 0 ? QUIET_PUSH : { title: notification.title, options: { ...notification.options, renotify: false, silent: true } } };
 	return { ...plan, show: quietly(visible.find((shown) => placeOf(shown.data)?.group === place.group && placeOf(shown.data)?.messageId === newest)) };
 }
 

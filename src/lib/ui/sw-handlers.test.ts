@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { messageNotificationTag, notificationGroup, PUSH_CLICK, NOTIFICATION_CLICK, QUIET_PUSH, type ShowNotificationOptions } from './notifications';
 import { withShown } from './push-store';
-import { handleClick, handlePush, isNewerMessage, type PushContext, type Tab } from './sw-handlers';
+import { anyWindowVisible, appWindows, handleClick, handlePush, isNewerMessage, type PushContext, type Tab } from './sw-handlers';
 
 /** A service worker registration's notifications: one per tag, a newer one with a tag replacing the older. */
 function fakeRegistration() {
@@ -81,6 +81,22 @@ describe('the push handler', () => {
 		expect(registration.list.map((entry) => entry.tag)).toEqual([QUIET_PUSH.options.tag]);
 	});
 
+	it('shows only the quiet stand-in, without the badge, when the enabled accounts can\'t be read', async () => {
+		const { value, registration, setBadge } = context({ loadEnabled: async () => 'unreadable' });
+		await registration.showNotification('Bob · General', { tag: messageNotificationTag('a1', '2'), body: 'message 2', data: { pushId: 'a1', messageId: '2', group: 'a1:general' } });
+		await handlePush(payload('5', { unread: 7 }), value);
+		expect(setBadge).not.toHaveBeenCalled();
+		expect(registration.showNotification).toHaveBeenLastCalledWith(QUIET_PUSH.title, expect.objectContaining(QUIET_PUSH.options));
+		expect(registration.list.some((entry) => entry.body === 'message 5')).toBe(false);
+	});
+
+	it('shows the quiet stand-in, not an older message, when the room\'s newest was dismissed', async () => {
+		const { value, registration } = context();
+		await value.markShown('a1:general', '9');
+		await handlePush(payload('8'), value);
+		expect(registration.list.map((entry) => entry.tag)).toEqual([QUIET_PUSH.options.tag]);
+	});
+
 	it('leaves the badge to a page in view', async () => {
 		const { value, setBadge } = context({ pageVisible: async () => true });
 		await handlePush(() => ({ push_id: 'a1', unread: 3 }), value);
@@ -137,6 +153,17 @@ describe('the notification click handler', () => {
 		await handleClick(data, c);
 		expect(second.postMessage).toHaveBeenCalledWith({ type: NOTIFICATION_CLICK, target: data });
 		expect(first.focus).toHaveBeenCalled();
+	});
+});
+
+describe('the app\'s windows', () => {
+	it('include those the service worker doesn\'t control yet', async () => {
+		const matchAll = vi.fn(async () => [{ visibilityState: 'hidden' as const }, { visibilityState: 'visible' as const }]);
+		expect(await anyWindowVisible({ matchAll })).toBe(true);
+		expect(matchAll).toHaveBeenCalledWith({ type: 'window', includeUncontrolled: true });
+		await appWindows({ matchAll });
+		expect(matchAll).toHaveBeenLastCalledWith({ type: 'window', includeUncontrolled: true });
+		expect(await anyWindowVisible({ matchAll: async () => [{ visibilityState: 'hidden' as const }] })).toBe(false);
 	});
 });
 

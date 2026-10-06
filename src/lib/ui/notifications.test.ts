@@ -243,6 +243,16 @@ describe('push notifications', () => {
 			expect(planPush(push('8'), []).show?.options.tag).toBe('apron:a1:8');
 		});
 
+		it('fails closed when the enabled accounts couldn\'t be read: only the quiet stand-in, no preview, no badge', () => {
+			expect(planPush(push('8', 'general', { unread: 9 }), [], { enabled: 'unreadable' })).toEqual({ show: QUIET_PUSH });
+			expect(planPush(push('8', 'general', { unread: 9 }), [showing('7')], { enabled: 'unreadable' })).toEqual({ show: QUIET_PUSH });
+			expect(planPush(readPush({ push_id: 'a1', unread: 4 }), [], { enabled: 'unreadable' })).toEqual({});
+		});
+
+		it('shows the quiet stand-in, never an older message, when nothing is showing', () => {
+			expect(planPush(push('6'), [], { marks: { 'a1:general': '7' } })).toEqual({ show: QUIET_PUSH });
+		});
+
 		it('never shows a notification for a badge push, only sets the badge', () => {
 			expect(planPush(readPush({ push_id: 'a1', unread: 0 }), [], { enabled: ['a1'] })).toEqual({ badge: 0 });
 			expect(planPush(readPush({ push_id: 'a1', unread: 4 }), [other])).toEqual({ badge: 4 });

@@ -34,14 +34,24 @@ async function run<T>(mode: IDBTransactionMode, step: (store: IDBObjectStore) =>
 	}
 }
 
-/** The enabled `push_id`s; undefined when unknown (never saved, or no IndexedDB). */
-export async function loadEnabledPushIds(): Promise<string[] | undefined> {
+/** The enabled `push_id`s as `loadEnabledPushIds` reads them: undefined when never saved, `unreadable` when the read failed. */
+export type EnabledPushIds = string[] | undefined | 'unreadable';
+
+/**
+ * The enabled `push_id`s; undefined when never saved (before the page first
+ * saved them), and `unreadable` when IndexedDB failed or holds something
+ * else, which the service worker must not take for "never saved": it can't
+ * tell then whose a push is.
+ */
+export async function loadEnabledPushIds(): Promise<EnabledPushIds> {
+	let value: unknown;
 	try {
-		const value: unknown = await run('readonly', (store) => store.get(ENABLED));
-		return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : undefined;
+		value = await run('readonly', (store) => store.get(ENABLED));
 	} catch {
-		return undefined;
+		return 'unreadable';
 	}
+	if (value === undefined) return undefined;
+	return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : 'unreadable';
 }
 
 /** Writes of the enabled `push_id`s, one after another, so an older list never lands after a newer one. */

@@ -358,9 +358,14 @@ dismissed (remembered in IndexedDB), it doesn't notify again. Browsers expect ea
 show a notification, and WebKit revokes subscriptions whose pushes don't, so
 every push but a badge push shows one: a push with nothing new, one for an
 account push isn't on for here, or one that can't be read shows again, as it
-is and silently, what is already showing, else the message quietly, else
-"Open Apron to catch up". A dropped push leaves the badge alone, and so does
-the service worker while a page is in view. A click
+is and silently, what is already showing, else the message quietly (never
+one older than the room's newest), else "Open Apron to catch up". If the
+service worker can't read the accounts push is on for from IndexedDB (as
+opposed to their never having been saved), a push for an account shows only
+"Open Apron to catch up", with no preview and no badge, since it may be any
+account's. A dropped push leaves the badge alone, and so does
+the service worker while a page of the app is in view, a tab it doesn't
+control yet included (as with clicks). A click
 on a pushed notification, or on the page's when its tab has gone, asks the
 open tabs for their `push_id`, and the tab signed in to that account opens the
 room. With no such tab, a new one opens at it, on that account's server if

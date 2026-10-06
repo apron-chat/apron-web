@@ -16,8 +16,8 @@ export interface PushContext {
 		showNotification(title: string, options: ShowNotificationOptions): Promise<void>;
 		getNotifications(): Promise<Array<Notification | (Pick<Notification, 'title' | 'body' | 'tag' | 'data' | 'icon' | 'close'>)>>;
 	};
-	/** The enabled accounts' `push_id`s, undefined when unknown. */
-	loadEnabled(): Promise<string[] | undefined>;
+	/** The enabled accounts' `push_id`s: undefined when never saved, `unreadable` when the read failed. */
+	loadEnabled(): Promise<string[] | undefined | 'unreadable'>;
 	/** The newest message each group notified about. */
 	loadMarks(): Promise<Record<string, string>>;
 	markShown(group: string, messageId: string): Promise<void>;
@@ -36,7 +36,7 @@ export async function handlePush(payload: () => unknown, context: PushContext): 
 		push = undefined;
 	}
 	const [visible, enabled, marks] = await Promise.all([context.registration.getNotifications(), context.loadEnabled(), context.loadMarks()]);
-	const plan = planPush(push, visible, { ...(enabled ? { enabled } : {}), marks });
+	const plan = planPush(push, visible, { ...(enabled !== undefined ? { enabled } : {}), marks });
 	if (plan.badge !== undefined && !(await context.pageVisible())) await context.setBadge(plan.badge);
 	if (!plan.show) return;
 	await context.registration.showNotification(plan.show.title, { icon: context.icon, ...plan.show.options });
@@ -44,6 +44,25 @@ export async function handlePush(payload: () => unknown, context: PushContext): 
 		closeOlderInGroup(await context.registration.getNotifications(), plan.notified.group, plan.notified.messageId);
 		await context.markShown(plan.notified.group, plan.notified.messageId);
 	}
+}
+
+/** What `appWindows` needs of the service worker's `clients`. */
+interface WindowClients<T> {
+	matchAll(options: { type: 'window'; includeUncontrolled: true }): Promise<readonly T[]>;
+}
+
+/**
+ * The app's windows, those this service worker doesn't control yet
+ * included: a tab opened before it took over (the first visit, a hard reload)
+ * is still the app's.
+ */
+export function appWindows<T>(clients: WindowClients<T>): Promise<readonly T[]> {
+	return clients.matchAll({ type: 'window', includeUncontrolled: true });
+}
+
+/** A page of the app is in view (`appWindows`). */
+export async function anyWindowVisible(clients: WindowClients<{ visibilityState: DocumentVisibilityState }>): Promise<boolean> {
+	return (await appWindows(clients)).some((tab) => tab.visibilityState === 'visible');
 }
 
 /** A window of the app, as the click handler uses it. */
