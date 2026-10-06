@@ -33,6 +33,12 @@ export class PushSettings {
 	owner = $state<WebPushOwner | undefined>();
 	/** Why subscribing failed, until it works. */
 	error = $state<string | undefined>();
+	/**
+	 * The `push_id` of the account `follow` was last given, for the page to
+	 * read in a `$derived`: making one writes storage, which a derivation
+	 * mustn't do.
+	 */
+	accountPushId = $state<string | undefined>();
 	readonly sync: WebPushSync;
 	private readonly saveEnabledIds: (ids: string[]) => Promise<void>;
 	private readonly setBadge: (unread: number) => void;
@@ -72,9 +78,18 @@ export class PushSettings {
 		return this.isOn(account) ? pushHeldBy(this.owner, account, key, this.accounts) : undefined;
 	}
 
-	/** The account's `push_id`. */
+	/** The account's `push_id`, made and kept the first time: not for a derivation. */
 	pushId(account: string): string {
 		return this.pushIdOf(account);
+	}
+
+	/**
+	 * Follows the account signed in (`webPushAccount`, undefined for none):
+	 * `accountPushId` becomes its `push_id`, made and kept the first time.
+	 * Call it from an effect, not a derivation.
+	 */
+	follow(account: string | undefined): void {
+		this.accountPushId = account === undefined ? undefined : this.pushIdOf(account);
 	}
 
 	/**

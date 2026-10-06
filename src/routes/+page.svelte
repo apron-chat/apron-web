@@ -152,7 +152,7 @@
 	/** Chromium's offer to install Apron, kept for the push setting's Install app button. */
 	let installPrompt = $state<InstallPromptEvent | undefined>();
 	/** The account's `push_id` (§4.7): it names the account in pushed payloads and in message notifications. */
-	let accountPushId = $derived(pushAccount ? pushSettings.pushId(pushAccount) : undefined);
+	let accountPushId = $derived(pushSettings.accountPushId);
 	/** A pushed room to open once it is listed, if its `push_id` is this account's. */
 	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
 	/** How long a pushed room waits for its account and rooms before it is dropped. */
@@ -325,6 +325,12 @@
 
 	$effect(() => {
 		unread.observe(session.rooms, session.you, paneRoom?.id, latestVisible && presence.visible);
+	});
+
+	// The account's `push_id`, made and kept in storage the first time: here, not in a derivation.
+	$effect(() => {
+		const account = pushAccount;
+		untrack(() => pushSettings.follow(account));
 	});
 
 	// While push is on for this account (§4.7), keep this browser subscribed with the server's

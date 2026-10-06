@@ -1,3 +1,4 @@
+import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PushRegistration } from '$lib/protocol/client';
 import { PushSettings, type PushSettingsClient } from './push-settings.svelte';
@@ -153,5 +154,31 @@ describe('push settings', () => {
 		const { settings } = tab(browser);
 		await settings.turnOn(fakeClient(), 'ada', 'K1', undefined, true);
 		expect(request.mock.calls.map((call) => call[0])).toContain('apron-push');
+	});
+});
+
+describe('the account\'s push_id', () => {
+	it('is made and kept by follow, from an effect, so a derivation only reads it', () => {
+		const made = vi.fn((account: string) => `id-${account}`);
+		const settings = new PushSettings({ pushIdOf: made, saveEnabledIds: async () => undefined });
+		let derived: string | undefined;
+		const stop = $effect.root(() => {
+			const read = $derived(settings.accountPushId);
+			$effect(() => {
+				derived = read;
+			});
+		});
+		flushSync();
+		expect(derived).toBeUndefined();
+		expect(made).not.toHaveBeenCalled();
+		settings.follow('wss://a/\nada');
+		flushSync();
+		expect(made).toHaveBeenCalledTimes(1);
+		expect(derived).toBe('id-wss://a/\nada');
+		settings.follow(undefined);
+		flushSync();
+		expect(derived).toBeUndefined();
+		expect(made).toHaveBeenCalledTimes(1);
+		stop();
 	});
 });
