@@ -1,22 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, type ClientSnapshot } from './client';
 import { FakeSocket } from './fake-socket';
-import { STATUS_KEEP_MS } from './client-internals';
 
-/** Kept statuses across reconnects (§4.11): kept after a short one, dropped after one over 60 seconds. */
-describe('kept statuses across reconnects', () => {
+/**
+ * Kept statuses across sign-ins (§4.11): dropped at each one, however short
+ * the reconnect, and taken again from what the server sends, `room_list` and
+ * `room_update` included.
+ */
+describe('kept statuses and sign-ins', () => {
 	let client: ChatClient;
 	let snapshot: ClientSnapshot;
 	let socket: FakeSocket;
-	/** The client's clock, apart from the timers that pace its reconnects. */
-	let clock: number;
 
 	beforeEach(() => {
 		vi.useFakeTimers();
 		FakeSocket.instances = [];
 		vi.stubGlobal('WebSocket', FakeSocket);
-		clock = 1_000_000;
-		client = ChatClient.fromOptions({ serverUrl: 'ws://fake.test/', now: () => clock, onChange: (next) => (snapshot = next) });
+		client = ChatClient.fromOptions({ serverUrl: 'ws://fake.test/', onChange: (next) => (snapshot = next) });
 		client.start();
 		socket = FakeSocket.latest();
 	});
@@ -27,56 +27,62 @@ describe('kept statuses across reconnects', () => {
 		vi.useRealTimers();
 	});
 
-	async function greet(you: Record<string, unknown>, members: Record<string, unknown>[]): Promise<void> {
+	function hello(): void {
 		socket.open();
 		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+	}
+
+	async function greet(you: Record<string, unknown>, members: Record<string, unknown>[]): Promise<void> {
+		hello();
 		await socket.reply('auth', { you });
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', members }] });
 	}
 
-	/** The connection drops; `offlineMs` later (by the client's clock) the next one is authenticated. */
-	async function reconnectAfter(offlineMs: number, you: Record<string, unknown>, members: Record<string, unknown>[]): Promise<void> {
+	/** The connection drops, and the next one opens a moment later. */
+	function reconnect(): void {
 		socket.drop();
-		clock += offlineMs;
 		vi.advanceTimersByTime(5_000);
 		socket = FakeSocket.latest();
-		await greet(you, members);
 	}
 
 	const statusOf = (userId: string) => snapshot.users[userId]?.status;
-	const members = [{ user_id: 'ada', name: 'Ada' }, { user_id: 'bo', name: 'Bo' }, { user_id: 'cy', name: 'Cy' }];
+	const seen = [{ user_id: 'ada', status: 'online' }, { user_id: 'bo', status: 'idle' }, { user_id: 'cy', status: 'dnd' }];
 
-	it('keeps other users\' statuses after a reconnect of 60 seconds or less', async () => {
-		await greet({ user_id: 'ada', status: 'online' }, [{ user_id: 'ada', status: 'online' }, { user_id: 'bo', status: 'idle' }, { user_id: 'cy', status: 'dnd' }]);
-		await reconnectAfter(STATUS_KEEP_MS, { user_id: 'ada' }, members);
+	it('keeps other users\' statuses through a lost connection, until the next sign-in', async () => {
+		await greet({ user_id: 'ada', status: 'online' }, seen);
+		socket.drop();
 		expect([statusOf('ada'), statusOf('bo'), statusOf('cy')]).toEqual(['online', 'idle', 'dnd']);
 	});
 
-	it('drops them after a longer one, so those users have no status (not offline) until the server sends it again', async () => {
-		await greet({ user_id: 'ada', status: 'online' }, [{ user_id: 'ada', status: 'online' }, { user_id: 'bo', status: 'idle' }, { user_id: 'cy', status: 'dnd' }]);
-		await reconnectAfter(STATUS_KEEP_MS + 1, { user_id: 'ada', status: 'idle' }, members);
+	it('drops them at each sign-in, after however short a reconnect, so those users have no status (not offline) until the server sends it again', async () => {
+		await greet({ user_id: 'ada', status: 'online' }, seen);
+		reconnect();
+		hello();
+		await socket.reply('auth', { you: { user_id: 'ada', status: 'dnd' } });
 		// Your own comes from the auth's `you`.
-		expect(statusOf('ada')).toBe('idle');
-		expect(snapshot.users.bo).toEqual({ user_id: 'bo', name: 'Bo' });
+		expect(statusOf('ada')).toBe('dnd');
+		expect(snapshot.users.bo).toEqual({ user_id: 'bo' });
 		expect(Object.hasOwn(snapshot.users.cy, 'status')).toBe(false);
-		// After `auth` the server sends connected users' statuses again (§4.11); a user who isn't connected stays unknown.
+		// After the result the server sends connected users' statuses again (§4.11).
 		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'online' } } });
 		expect(statusOf('bo')).toBe('online');
 		expect(statusOf('cy')).toBeUndefined();
 	});
 
-	it('times the disconnection from the drop to the next authentication, not the reconnect attempt', async () => {
-		await greet({ user_id: 'ada' }, [{ user_id: 'bo', status: 'idle' }]);
-		socket.drop();
-		clock += 30_000;
-		vi.advanceTimersByTime(5_000);
-		socket = FakeSocket.latest();
-		socket.open();
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms', 'status'] } });
-		// Authentication takes another 31 seconds: over 60 in all.
-		clock += 31_000;
+	it('applies the statuses room_list and room_update carry, offline and none included', async () => {
+		await greet({ user_id: 'ada', status: 'online' }, [
+			{ user_id: 'ada', status: 'online' }, { user_id: 'bo', status: 'offline' }, { user_id: 'cy', status: '' }, { user_id: 'di', status: 'idle' }
+		]);
+		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual(['offline', '', 'idle']);
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', title: 'Ops', members: [{ user_id: 'bo', status: 'online' }, { user_id: 'di', status: 'offline' }] }], users: [{ user_id: 'cy', status: 'dnd' }] } });
+		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual(['online', 'dnd', 'offline']);
+		// A reconnect's listing brings them back after the sign-in drops them.
+		reconnect();
+		hello();
 		await socket.reply('auth', { you: { user_id: 'ada' } });
-		expect(statusOf('bo')).toBeUndefined();
+		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual([undefined, undefined, undefined]);
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', members: [{ user_id: 'bo', status: 'offline' }, { user_id: 'cy', status: '' }] }] });
+		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual(['offline', '', undefined]);
 	});
 });
 

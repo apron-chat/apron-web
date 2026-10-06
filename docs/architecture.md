@@ -158,18 +158,22 @@ returns a promise that resolves on `{}` and rejects with the server's error
 nothing else: only a `status` notification from the server (`handleStatus`),
 which reaches the sending connection too, before the result,
 sets the snapshot's `mutedUntil`, or a room's with its `room_id`, which
-timers clear when they run out. Each sign-in resets them in `handleAuth`,
-and the `status` frames after its result bring back those in effect; a lost
-connection keeps them until then. An `auth` that adds to the signed-in
-connection isn't a sign-in: a passkey registered while authenticated, a
-guest's included, passes `added`, and an added address's `{}` result never
-reaches `handleAuth`. `handleServer` keeps `server.status`, the optional
+timers clear when they run out. A sign-in, in `handleAuth`, is an `auth`
+as a user the connection isn't already signed in as: an `auth` that adds to
+the signed-in connection isn't one (a passkey registered while
+authenticated, a guest's included, passes `added`, and an added address's
+`{}` result never reaches `handleAuth`), nor is a repeat `auth` as the same
+user. Each sign-in starts from no mutes: `gatherMutes` collects the `status`
+frames after its result in `incomingMutes`, while the kept mutes still
+show, and `settleMutes` swaps them in at the first frame after them other
+than `status` or `user` (or after `MUTES_SETTLE_MS`), so a pause doesn't
+flicker off in between; a lost connection keeps the mutes until then. `handleServer` keeps `server.status`, the optional
 statuses the server accepts, as strings. Kept
-users' `status` values outlast a reconnect of up to `STATUS_KEEP_MS` (60
-seconds, from the drop to the next `auth`, timed by the client's `now`
-clock); after a longer one `dropStaleStatuses` removes all but your own,
-which the `auth` result's `you` gives, so they show none until the server
-sends them again.
+users' `status` values outlast a lost connection, and each sign-in drops
+them (`dropKeptStatuses`), all but your own, which the `auth` result's `you`
+gives, so they show none until the server sends them again: as `user`
+notifications after the result, and in the current user objects of
+`room_list` and `room_update`, which carry `offline` and `""` too.
 `setPushRegistration(params, userId)` keeps the `push_register` params (§4.7)
 and sends them after each `auth` as that account while `server.push` offers
 their `kind`. A replaced or cleared registration is unregistered, after the

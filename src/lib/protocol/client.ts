@@ -63,6 +63,7 @@ import {
 	IDLE_AFTER_MS,
 	MAX_TIMER_MS,
 	isMuteValue,
+	muteEnd,
 	MAX_TYPING_S,
 	MAX_UNANSWERED_PINGS,
 	NO_NOTICES,
@@ -72,8 +73,8 @@ import {
 	REQUEST_TIMEOUT_MS,
 	RETRY_AFTER_MAX_MS,
 	ROOM_LIST_REUSE_MS,
+	MUTES_SETTLE_MS,
 	STABLE_CONNECTION_MS,
-	STATUS_KEEP_MS,
 	THREAD_PAGE_SIZE,
 	TYPING_REFRESH_MS,
 	TYPING_TIMEOUT_S,
@@ -203,6 +204,13 @@ export class ChatClient {
 	/** Rooms whose notifications you paused (§4.11 `mute` with `room_id`), as the server's last `status` for each said: until then, or `true`. */
 	private readonly roomMutes = new Map<string, number | true>();
 	private muteTimer: ReturnType<typeof setTimeout> | undefined;
+	/**
+	 * After a sign-in's result, the mutes its `status` frames bring (§4.11),
+	 * gathered until the first frame after them; the kept ones show meanwhile.
+	 * `mutesSettleTimer` bounds the wait.
+	 */
+	private incomingMutes: { mute?: number | true; rooms: Map<string, number | true | undefined> } | undefined;
+	private mutesSettleTimer: ReturnType<typeof setTimeout> | undefined;
 	/**
 	 * What `push_register` sends on each connection (§4.7), for the account
 	 * `pushUser`; `pushSent` is whether this connection has.
@@ -1498,18 +1506,58 @@ export class ChatClient {
 	 */
 	private handleStatus(params: JsonObject | undefined): void {
 		if (!params || !isMuteValue(params.mute)) return;
+		if (params.room_id !== undefined && typeof params.room_id !== 'string') return;
+		const gathering = this.incomingMutes;
+		if (gathering) {
+			// After a sign-in: one of the mutes in effect, taken with the rest once they have all come.
+			if (params.room_id === undefined) gathering.mute = muteEnd(params.mute);
+			else gathering.rooms.set(params.room_id, muteEnd(params.mute));
+			return;
+		}
 		if (params.room_id === undefined) this.applyMute(params.mute);
-		else if (typeof params.room_id === 'string') this.applyRoomMute(params.room_id, params.mute);
-		else return;
+		else this.applyRoomMute(params.room_id, params.mute);
 		this.emit();
 	}
 
 	/**
 	 * Each sign-in starts from no mutes: after its result the server sends
 	 * every mute in effect as a `status`, and any scope it doesn't send is
-	 * unmuted (§4.11). An `auth` that adds a passkey or address isn't a sign-in.
+	 * unmuted (§4.11). Those are gathered here, and the previous mutes stand
+	 * until the first frame after them (`settleMutes`), so a pause in effect
+	 * before and after doesn't flicker off between the result and its
+	 * `status` frames. A frame that never comes is waited for
+	 * `MUTES_SETTLE_MS` at most.
 	 */
+	private gatherMutes(): void {
+		this.clearIncomingMutes();
+		this.incomingMutes = { rooms: new Map() };
+		this.mutesSettleTimer = setTimeout(() => {
+			this.mutesSettleTimer = undefined;
+			this.settleMutes();
+		}, MUTES_SETTLE_MS);
+	}
+
+	/** The mutes gathered after a sign-in replace the previous ones: any scope not sent is unmuted. */
+	private settleMutes(): void {
+		const incoming = this.incomingMutes;
+		if (!incoming) return;
+		this.clearIncomingMutes();
+		this.setMutedUntil(incoming.mute);
+		this.roomMutes.clear();
+		for (const [roomId, until] of incoming.rooms) if (until !== undefined) this.roomMutes.set(roomId, until);
+		this.scheduleRoomUnmutes();
+		this.emit();
+	}
+
+	private clearIncomingMutes(): void {
+		if (this.mutesSettleTimer) clearTimeout(this.mutesSettleTimer);
+		this.mutesSettleTimer = undefined;
+		this.incomingMutes = undefined;
+	}
+
+	/** No mutes at all: signed out, or switched servers. */
 	private resetMutes(): void {
+		this.clearIncomingMutes();
 		this.applyMute(false);
 		this.roomMutes.clear();
 		this.scheduleRoomUnmutes();
@@ -1517,23 +1565,21 @@ export class ChatClient {
 
 	/** Takes your unscoped `mute` (§4.11): seconds left, `true`, or `false` (or `0`, or undefined) when not paused. */
 	private applyMute(mute: number | boolean | undefined): void {
+		this.setMutedUntil(muteEnd(mute));
+	}
+
+	private setMutedUntil(until: number | true | undefined): void {
 		if (this.muteTimer) clearTimeout(this.muteTimer);
 		this.muteTimer = undefined;
-		if (mute === true) {
-			this.mutedUntil = true;
-		} else if (typeof mute === 'number' && mute > 0) {
-			this.mutedUntil = Date.now() + mute * 1000;
-			this.scheduleUnmute();
-		} else {
-			this.mutedUntil = undefined;
-		}
+		this.mutedUntil = until;
+		this.scheduleUnmute();
 	}
 
 	/** A room's `mute` (§4.11): seconds left, `true`, or `false` (or `0`) to end it. It applies whether or not the room is joined. */
 	private applyRoomMute(roomId: string, mute: number | boolean): void {
-		if (mute === true) this.roomMutes.set(roomId, true);
-		else if (typeof mute === 'number' && mute > 0) this.roomMutes.set(roomId, Date.now() + mute * 1000);
-		else this.roomMutes.delete(roomId);
+		const until = muteEnd(mute);
+		if (until === undefined) this.roomMutes.delete(roomId);
+		else this.roomMutes.set(roomId, until);
 		this.scheduleRoomUnmutes();
 	}
 
@@ -2238,6 +2284,9 @@ export class ChatClient {
 		}
 		if (!isJsonObject(value)) return;
 		const frame = value as WireFrame;
+		// The mutes a sign-in's `status` frames bring are all in by the first frame after them
+		// other than a `user`, which the server may send among them with others' statuses (§4.11).
+		if (this.incomingMutes && frame.method !== 'status' && frame.method !== 'user') this.settleMutes();
 		switch (frame.method) {
 			case 'server':
 				this.handleServer(frame.params);
@@ -2421,13 +2470,18 @@ export class ChatClient {
 			this.emit();
 			return false;
 		}
+		// A sign-in signs the connection in as a user it isn't already signed in
+		// as (§4.11). A passkey added on this signed-in connection (`added`) is
+		// not one, nor is a repeat `auth` as the same user: the server sends no
+		// mutes or statuses after those, and what is kept stands. (An added
+		// address never comes here: its result is `{}`.)
+		const signIn = !added && !(this.authenticated && this.you?.user_id === identity.user_id);
 		// Each sign-in starts unmuted: the server's `status` frames that follow
-		// the result bring back the mutes in effect (§4.11). A passkey added on
-		// this signed-in connection (`added`) is not a sign-in: the server sends
-		// no mutes after it, and those in effect stand. (An added address never
-		// comes here: its result is `{}`.)
-		if (!added) this.resetMutes();
+		// the result bring back the mutes in effect (§4.11), gathered until the
+		// first frame after them, while the previous mutes still show.
+		if (signIn) this.gatherMutes();
 		this.setYou(identity as Identity);
+		if (signIn) this.dropKeptStatuses();
 		if (signedIn && added && this.registeredSession) {
 			// Added to the account (§4.9, §4.10): another way back in, not how this session signed in,
 			// and never a reason to drop its token. A session kept before sign-in methods were
@@ -2474,7 +2528,6 @@ export class ChatClient {
 			this.stableTimer = undefined;
 			if (this.socket === stableSocket && this.authenticated) this.reconnectAttempt = 0;
 		}, STABLE_CONNECTION_MS);
-		this.dropStaleStatuses();
 		this.disconnectedAt = undefined;
 		// A reconnect keeps each room's records, and a server with capability `history`
 		// fills the gap through recovery; only a session-only scrollback (§4
@@ -2635,14 +2688,13 @@ export class ChatClient {
 	}
 
 	/**
-	 * Back after a disconnection longer than `STATUS_KEEP_MS` (§4.11): the
-	 * other users' kept `status` values are stale, so they are dropped, and
-	 * those users show no status (not `offline`) until the server sends it
-	 * again, as it does for connected users after `auth`.
-	 * Your own comes from this `auth`'s `you`. A shorter one keeps them.
+	 * At each sign-in (§4.11) the other users' kept `status` values are
+	 * dropped: those users show no status (not `offline`) until the server
+	 * sends it again, as it does after the result for each connected user who
+	 * shares a room, and as `room_list` and `room_update` carry it. Your own
+	 * comes from this `auth`'s `you`.
 	 */
-	private dropStaleStatuses(): void {
-		if (this.disconnectedAt === undefined || this.now() - this.disconnectedAt <= STATUS_KEEP_MS) return;
+	private dropKeptStatuses(): void {
 		for (const [userId, user] of this.users) {
 			if (userId === this.you?.user_id || !Object.hasOwn(user, 'status')) continue;
 			const { status: _dropped, ...rest } = user;
@@ -3329,6 +3381,8 @@ export class ChatClient {
 		this.directory = undefined;
 		this.threadDirectory.clear();
 		this.clearIdleRetry();
+		// Mutes gathered from a sign-in cut short: the kept ones stand until the next.
+		this.clearIncomingMutes();
 		this.pushError = undefined;
 		this.memberChangesUnsupported = false;
 	}

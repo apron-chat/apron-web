@@ -89,11 +89,11 @@ describe('MemberListSidebar', () => {
 		expect(rows[1].querySelector('button')?.title).toBe('@ada · Invisible · others see you as offline');
 	});
 
-	it('shows no dot for a cleared status, or one dropped after a long reconnect, and the dot again once the server sends it', () => {
+	it('shows no dot for a cleared status, or one dropped at a sign-in, and the dot again once the server sends it', () => {
 		const statuses = (rows: HTMLLIElement[]) => rows.map((row) => [row.dataset.user, row.dataset.status ?? '', row.querySelector('.ap-presence') !== null]);
 		const before = render([ada, { user_id: 'bo', name: 'Bo', status: 'idle' }, { user_id: 'cy', name: 'Cy', status: '' }]);
 		expect(statuses(before)).toEqual([['ada', 'online', true], ['bo', 'idle', true], ['cy', '', false]]);
-		// Back after more than 60 seconds: the client dropped Bo's kept status (§4.11). Unknown, not offline.
+		// Signed in again: the client dropped Bo's kept status (§4.11). Unknown, not offline.
 		const snapshotWith = (bo: Identity) => ({ ...blankSnapshot(), authenticated: true, you: ada, users: { ada, bo, cy: { user_id: 'cy', name: 'Cy' } }, recordedUsers: {}, userAliases: {} });
 		directory.apply(snapshotWith({ user_id: 'bo', name: 'Bo' }), undefined);
 		flushSync();

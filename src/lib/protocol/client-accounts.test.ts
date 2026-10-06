@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, type ClientSnapshot } from './client';
-import { REQUEST_TIMEOUT_MS } from './client-internals';
+import { MUTES_SETTLE_MS, REQUEST_TIMEOUT_MS } from './client-internals';
 import { EMAIL_PROPOSAL_MS } from './email-connection';
 import { FakeSocket, settle } from './fake-socket';
 import { requestPasskey } from './webauthn';
@@ -394,7 +394,7 @@ describe('accounts and their ways back in', () => {
  * the server sends after its result; an `auth` that adds a passkey or an
  * address to the signed-in connection is no sign-in, and the mutes stand.
  */
-describe('mutes and sign-ins', () => {
+describe('mutes, statuses and sign-ins', () => {
 	let client: ChatClient;
 	let snapshot: ClientSnapshot;
 	const latest = () => FakeSocket.latest();
@@ -465,9 +465,30 @@ describe('mutes and sign-ins', () => {
 	it('starts a passkey sign-in on a signed-in connection unmuted, and applies the status frames after its result', async () => {
 		const socket = await signedInMuted(['webauthn', 'guest'], { user_id: 'guest_1' });
 		await passkey(socket, 'login', 'ada');
-		expect([snapshot.mutedUntil, roomMute('general')]).toEqual([undefined, undefined]);
+		// The kept mutes show until the status frames after the result are in: no flicker.
+		expect([snapshot.mutedUntil, roomMute('general')]).toEqual([true, true]);
 		socket.receive({ method: 'status', params: { room_id: 'general', mute: 600 } });
+		expect([snapshot.mutedUntil, roomMute('general')]).toEqual([true, true]);
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
 		expect(snapshot.mutedUntil).toBeUndefined();
 		expect(roomMute('general')).toBe(Date.now() + 600_000);
+	});
+
+	it('drops other users\' kept statuses at a sign-in as another user on the connection', async () => {
+		const socket = await signedInMuted(['webauthn', 'guest'], { user_id: 'guest_1' });
+		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'idle' } } });
+		await passkey(socket, 'login', 'ada');
+		expect(snapshot.users.bo.status).toBeUndefined();
+	});
+
+	it('keeps the mutes and statuses on a repeat auth as the user the connection is signed in as: no sign-in', async () => {
+		const socket = await signedInMuted(['webauthn', 'token', 'guest'], { user_id: 'ada' }, 'st_ada');
+		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'idle' } } });
+		await passkey(socket, 'login', 'ada');
+		// The server sends no mutes after it (§4.11): nothing to wait for, and nothing is reset.
+		socket.receive({ method: 'pong' });
+		vi.advanceTimersByTime(MUTES_SETTLE_MS);
+		expect([snapshot.mutedUntil, roomMute('general')]).toEqual([true, true]);
+		expect(snapshot.users.bo.status).toBe('idle');
 	});
 });

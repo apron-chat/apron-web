@@ -156,10 +156,14 @@ hollow ring others see, its tooltip "Invisible · others see you as offline"),
 or no dot for none. Others' view of you (`offline` while you are invisible,
 `idle`) arrives in `new` user objects and room `members`, and never replaces
 your own. Pausing notifications doesn't change your status: a pause is
-private. Statuses are kept across a reconnect of 60 seconds or less,
-measured from the drop to the next `auth`; after a longer one the client
-drops the others' kept statuses, so they show no dot until the server sends
-them again, as it does after a sign-in.
+private. A lost connection keeps the others' statuses, but each sign-in
+drops them, however short the reconnect, so they show no dot until the
+server sends them again: after the sign-in's result for each connected user
+who shares a room, and in the room `members` and `users` of `room_list` and
+`room_update`, which carry `offline` and `""` too (a ring, and no dot). A
+sign-in is an `auth` as a user the connection isn't already signed in as: a
+repeat `auth` as the same user, or adding a passkey or an email address,
+keeps them.
 
 Mentions follow the `@user_id` convention ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-mention-text)). Typing `@` in the
 composer opens the mention picker over the room's members (from the room's
@@ -255,10 +259,14 @@ not sent again on its own. So the row shows the pause the server kept, a shorter
 one or none, and focus moves to **Resume** (or back to **Pause…**) once it
 arrives; a pause set in another tab or on another device shows here too.
 Each sign-in starts unmuted, and after its result the server sends every
-mute in effect; any it doesn't send is off. Adding a passkey or an email
-address to the signed-in connection isn't a sign-in, a guest's included: the
-mutes stand. A lost connection keeps the pause until then,
-so it doesn't flicker off while reconnecting. The client works out when the
+mute in effect; any it doesn't send is off. The client gathers those and
+keeps showing the mutes it had until the first other frame after them (or
+two seconds, if none comes), then takes the gathered ones in one step, so a
+pause in effect before and after doesn't flicker off in between. Adding a
+passkey or an email address to the signed-in connection isn't a sign-in, a
+guest's included, nor is a repeat `auth` as the user the connection is
+already signed in as: the mutes stand. A lost connection keeps the pause
+until the next sign-in, so it doesn't flicker off while reconnecting. The client works out when the
 pause ends as it arrives, and resumes on its own then. While paused, the row
 reads "Paused until 14:30" (or "until tomorrow 9:00", "until you resume"),
 the profile bar's gear carries a small bell-off badge, and nothing notifies

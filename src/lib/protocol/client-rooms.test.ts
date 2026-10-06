@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, DEFAULT_ROOM_ID, IDLE_AFTER_MS, type ClientSnapshot } from './client';
 import { FakeSocket, settle } from './fake-socket';
+import { MUTES_SETTLE_MS } from './client-internals';
 
 /** Operations whose outcome a test does not await still settle when the client stops. */
 function quiet(value: { promise: Promise<unknown> } | undefined): void {
@@ -614,13 +615,56 @@ describe('rooms by request (cap rooms)', () => {
 			// Until the new auth, the kept mutes still apply.
 			expect(snapshot.mutedUntil).toBe(true);
 			await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
-			// The auth starts from none; any scope not sent after it is unmuted.
-			expect(snapshot.mutedUntil).toBeUndefined();
+			// The auth starts from none, but the kept mutes show until its status frames are in.
+			expect(snapshot.mutedUntil).toBe(true);
 			socket.receive({ method: 'status', params: { room_id: 'general', mute: 1800 } });
+			expect(snapshot.mutedUntil).toBe(true);
+			// The first other frame after them: any scope not sent is unmuted.
 			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }, { room_id: 'random', title: 'Random' }] });
 			expect(snapshot.mutedUntil).toBeUndefined();
 			expect(roomMute('general')).toBe(Date.now() + 1_800_000);
 			expect(roomMute('random')).toBeUndefined();
+		});
+
+		it('doesn\'t flicker a pause off between a sign-in\'s result and its status frames', async () => {
+			await greet(['rooms', 'status'], { user_id: 'guest_1' }, ['token', 'guest']);
+			client.useToken('apron_token');
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada' }, ['token', 'guest']);
+			socket.receive({ method: 'status', params: { mute: true } });
+			expect(snapshot.mutedUntil).toBe(true);
+			reconnect();
+			const shown: unknown[] = [];
+			const stop = client.subscribe((next) => shown.push(next.mutedUntil));
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: ['rooms', 'status'] } });
+			await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+			// Others' statuses may come among the mutes (§4.11).
+			socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'online' } } });
+			socket.receive({ method: 'status', params: { mute: 600 } });
+			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
+			stop();
+			// Paused all along: until resumed, then for the 600 seconds the server sent.
+			expect(shown.length).toBeGreaterThan(0);
+			expect(shown.every((until) => until !== undefined)).toBe(true);
+			expect(snapshot.mutedUntil).toBe(Date.now() + 600_000);
+		});
+
+		it('takes the gathered mutes after a while when no other frame follows them', async () => {
+			await greet(['rooms', 'status'], { user_id: 'guest_1' }, ['token', 'guest']);
+			client.useToken('apron_token');
+			vi.advanceTimersByTime(0);
+			socket = FakeSocket.latest();
+			await greet(['rooms', 'status'], { user_id: 'ada', name: 'Ada' }, ['token', 'guest']);
+			socket.receive({ method: 'status', params: { mute: true } });
+			reconnect();
+			socket.open();
+			socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: ['rooms', 'status'] } });
+			await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+			expect(snapshot.mutedUntil).toBe(true);
+			vi.advanceTimersByTime(MUTES_SETTLE_MS);
+			expect(snapshot.mutedUntil).toBeUndefined();
 		});
 
 		it('sets your status with me, and shows what the server kept (§4.11)', async () => {

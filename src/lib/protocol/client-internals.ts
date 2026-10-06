@@ -131,6 +131,12 @@ export function isMuteValue(value: unknown): value is number | boolean {
 	return typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
 }
 
+/** When a `mute` (§4.11) ends: epoch milliseconds for seconds, `true` until resumed, undefined for `false` or `0`. */
+export function muteEnd(mute: number | boolean | undefined, now = Date.now()): number | true | undefined {
+	if (mute === true) return true;
+	return typeof mute === 'number' && mute > 0 ? now + mute * 1000 : undefined;
+}
+
 /** How long nobody attends a connection before it reports `idle` (§4.11: about 30 seconds). */
 export const IDLE_AFTER_MS = 30_000;
 /** The longest `setTimeout` delay browsers keep. */
@@ -161,12 +167,11 @@ export const MAX_UNANSWERED_PINGS = 1;
  */
 export const STABLE_CONNECTION_MS = 30_000;
 /**
- * How long a reconnect may take and keep other users' kept `status` values
- * (§4.11): from when the previous connection dropped to when the new one is
- * authenticated. Longer, they are dropped, so those users show no status
- * until the server sends it again.
+ * How long after a sign-in's result the previous mutes stand at most while
+ * the server's `status` frames bring those in effect (§4.11), when no other
+ * frame follows them sooner.
  */
-export const STATUS_KEEP_MS = 60_000;
+export const MUTES_SETTLE_MS = 2_000;
 /** How long a `room_list` result is reused for the same parent unless the caller asks for fresher. */
 export const ROOM_LIST_REUSE_MS = 10_000;
 const MAX_HISTORY_BUFFER_ENTRIES = 1_000;
