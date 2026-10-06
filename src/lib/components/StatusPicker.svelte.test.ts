@@ -35,18 +35,20 @@ async function pick(label: string): Promise<void> {
  * The picker as the profile bar mounts it: `status` follows what `onchoose`
  * resolves with, like `you` does. `accepted` is `server.status`; null leaves it out.
  */
-function render(initial: string | undefined, answer: (asked: string) => string | undefined | Error, accepted: string[] | null = ['dnd', 'invisible']) {
-	const props = $state<{ status?: string; accepted?: string[]; unsupported: string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void }>({
+function render(initial: string | undefined, answer: (asked: string) => string | undefined | Error | Promise<string | undefined>, accepted: string[] | null = ['dnd', 'invisible']) {
+	const props = $state<{ status?: string; accepted?: string[]; unsupported: string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void; onannounce: (text: string | undefined) => void; announced: Array<string | undefined> }>({
 		status: initial,
 		...(accepted ? { accepted } : {}),
 		unsupported: [],
 		onchoose: vi.fn(async (asked: string) => {
-			const kept = answer(asked);
+			const kept = await answer(asked);
 			if (kept instanceof Error) throw kept;
 			props.status = kept;
 			return kept;
 		}),
-		onunsupported: (status) => props.unsupported.push(status)
+		onunsupported: (status) => props.unsupported.push(status),
+		onannounce: (text) => props.announced.push(text),
+		announced: []
 	});
 	instance = mount(StatusPicker, { target: document.body, props });
 	flushSync();
@@ -149,4 +151,36 @@ describe('StatusPicker', () => {
 		await open();
 		expect(radios().every((item) => item.getAttribute('aria-checked') === 'false')).toBe(true);
 	});
+
+	it('keeps focus on the button while the choice is saved, and after', async () => {
+		let reply!: (kept: string) => void;
+		render('online', () => new Promise<string>((resolve) => (reply = resolve)));
+		await open();
+		radios().find((item) => item.querySelector('.ap-menu-label')?.textContent === 'Do not disturb')!.click();
+		flushSync();
+		await tick();
+		// Saving: the button says so and can't open, but isn't disabled, which would drop focus.
+		expect(trigger().textContent).toBe('Saving…');
+		expect(trigger().disabled).toBe(false);
+		expect(trigger().getAttribute('aria-disabled')).toBe('true');
+		expect(document.activeElement).toBe(trigger());
+		reply('dnd');
+		await tick();
+		await tick();
+		flushSync();
+		expect(trigger().textContent).toBe('Do not disturb');
+		expect(trigger().hasAttribute('aria-disabled')).toBe(false);
+		expect(document.activeElement).toBe(trigger());
+	});
+
+	it('says the server\'s answer through the dialog\'s live region, not one of its own', async () => {
+		const props = render('online', (asked) => (asked === 'invisible' ? '' : asked));
+		await pick('Invisible');
+		expect(props.announced.at(-1)).toBe('This server doesn’t offer Invisible. Your status is None.');
+		expect(document.querySelector('.ap-status-pick [role="status"], .ap-status-pick [aria-live]')).toBeNull();
+		// A choice that works clears it.
+		await pick('Online');
+		expect(props.announced.at(-1)).toBeUndefined();
+	});
 });
+

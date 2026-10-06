@@ -48,8 +48,10 @@ and what the server answered for a status) and `MenuButton` (Status, in
 `StatusPicker`, as a picker with `selected` and a `lead` dot per choice,
 offering Online and None, and `dnd` and `invisible` where `accepted`
 (`server.status`, which `ProfileBar` passes from the server frame) lists them
-and the server hasn't answered something else for them (`unsupported`); and
-Pause…, in `PauseNotifications`) as they are, and `pause.ts` words and times
+and the server hasn't answered something else for them (`unsupported`),
+`busy` while the choice is saved, which keeps focus where `disabled` would
+drop it; `onannounce` hands the server's answer to the dialog's live region;
+and Pause…, in `PauseNotifications`) as they are, and `pause.ts` words and times
 the pause. Its status notes are read through one
 live region, and switches and checkboxes that can't change stay focusable with
 `aria-disabled`, referring to the note that says why.

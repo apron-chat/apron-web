@@ -18,6 +18,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: 15px; line-height: 2
 .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
 .ap-btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
 .ap-btn:disabled { cursor: default; opacity: .45; }
+.ap-btn[aria-busy='true'] { cursor: progress; }
 .ap-link { font: inherit; background: none; border: 0; padding: 0; color: var(--denim); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
 /* Avatar */

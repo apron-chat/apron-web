@@ -96,9 +96,11 @@
 	 * themselves.
 	 */
 	let announcement = $state('');
+	/** What the server answered for a status choice, when it isn't what was asked (`StatusPicker`). */
+	let statusAnswer = $state<string | undefined>();
 	let announced: Record<string, string | undefined> | undefined;
 	$effect(() => {
-		const now: Record<string, string | undefined> = { desktop: desktopNote.text, test: testNote?.text, push: pushNote?.text, pause: pauseNote };
+		const now: Record<string, string | undefined> = { desktop: desktopNote.text, test: testNote?.text, push: pushNote?.text, pause: pauseNote, status: statusAnswer };
 		const before = announced;
 		announced = now;
 		if (!before) return;
@@ -220,7 +222,7 @@
 				<p class="ap-profedit-hint">Choose when Apron can interrupt you.</p>
 				<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
 				{#if status}
-					<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} disabled={status.disabled} />
+					<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} onannounce={(text) => (statusAnswer = text)} disabled={status.disabled} />
 				{/if}
 				{#if pause}
 					<PauseNotifications until={pause.until} {onpause} {onresume} />

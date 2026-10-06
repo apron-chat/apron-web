@@ -237,7 +237,9 @@ the menu, checked, even when it isn't listed. Choosing one sends `me`
 `{status}` (`""` for None); there are no durations. A server may still answer
 another value: `you` in the result is the status in effect, the row shows it,
 and a callout says what the server answered ("This server doesn't offer
-Invisible. Your status is None."); for the rest of the session the menu stops
+Invisible. Your status is None."), which the dialog's one live region reads
+out too; while a choice is being saved the button reads "Saving…" and can't
+open, but keeps keyboard focus (`aria-disabled`, not disabled); for the rest of the session the menu stops
 offering a value the server answered something else for. A value the client doesn't know
 (one the server set) shows as itself, quoted, with nothing checked. Do not
 disturb silences this page as a pause does: no desktop notifications, chime
@@ -247,7 +249,8 @@ Below it, a signed-in account (not a guest) gets **Pause notifications**, a
 private mute nobody else sees. **Pause…** opens a menu: For 1 hour, For 8
 hours, Until tomorrow (the next 9:00; "Until this morning" before 9:00) and
 Until I resume, each showing when it would end. The menu opens from the
-keyboard with the arrow keys too. Choosing one sends a `status` request
+keyboard with the arrow keys too; its items are out of the tab order, so Tab
+closes it with focus back on the button and moves on from there. Choosing one sends a `status` request
 `{mute}` with the seconds until then, or `true`, and **Resume** sends
 `{mute: false}`. Neither changes anything here by itself: the server sends
 each change to your mutes back to all your connections, this one included,

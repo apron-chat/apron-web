@@ -83,4 +83,41 @@ describe('MenuButton', () => {
 		radios[2].click();
 		expect(onselect).toHaveBeenCalledWith('resume');
 	});
+
+	it('keeps its items out of the tab order, and on Tab closes with focus back on the button, to move on from there', async () => {
+		const { trigger } = render();
+		trigger.click();
+		flushSync();
+		await tick();
+		expect(items().map((item) => item.tabIndex)).toEqual([-1, -1, -1]);
+		key(items()[1], 'ArrowDown');
+		key(items()[2], 'Tab');
+		flushSync();
+		expect(items()).toEqual([]);
+		expect(trigger.getAttribute('aria-expanded')).toBe('false');
+		expect(document.activeElement).toBe(trigger);
+	});
+
+	it('while busy, keeps focus and stays closed instead of being disabled', async () => {
+		const props = $state({ label: 'Saving…', choices, onselect: vi.fn(), busy: true });
+		instance = mount(MenuButton, { target: document.body, props });
+		flushSync();
+		const trigger = document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
+		trigger.focus();
+		expect(trigger.disabled).toBe(false);
+		expect(trigger.getAttribute('aria-disabled')).toBe('true');
+		trigger.click();
+		key(trigger, 'ArrowDown');
+		flushSync();
+		await tick();
+		expect(items()).toEqual([]);
+		expect(document.activeElement).toBe(trigger);
+		props.busy = false;
+		flushSync();
+		expect(trigger.hasAttribute('aria-disabled')).toBe(false);
+		trigger.click();
+		flushSync();
+		await tick();
+		expect(items()).toHaveLength(3);
+	});
 });
