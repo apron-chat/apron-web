@@ -3,9 +3,9 @@ import MarkdownIt from 'markdown-it';
 
 /**
  * A body's `markdown` format is CommonMark (§3.5). This renders CommonMark
- * with three extensions beyond it: GitHub tables and strikethrough, and
- * `breaks: true`, so a typed line break is meant: soft breaks render as
- * `<br>`, not as a space. Raw HTML in a message is shown as text, never
+ * with the extensions §3.5 allows: GitHub tables and strikethrough, and
+ * `breaks: true`, so a typed line break is meant: soft breaks render as hard
+ * breaks (`<br>`), not as a space. Raw HTML in a message is shown as text, never
  * markup (`html: false`, §3.5), and links with unsafe schemes (`javascript:`,
  * `data:` other than images, ...) are not linked.
  */
