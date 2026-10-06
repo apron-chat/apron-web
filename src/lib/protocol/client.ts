@@ -336,7 +336,10 @@ export class ChatClient {
 	private displayName = '';
 	/** The `me` request `handleAuth` sent for `displayName`, if any. */
 	private authNameRequest?: OperationHandle;
-	/** A name the server denied (a guest on a server that only lets registered users rename): not resent on reconnect. */
+	/**
+	 * A name the server refused (a guest on a server that only lets registered
+	 * users rename, or a value it rejects): not resent on reconnect.
+	 */
 	private declinedName?: string;
 	private status: ConnectionStatus = 'idle';
 	private error?: string;
@@ -439,8 +442,10 @@ export class ChatClient {
 				this.emit();
 			})
 			.catch((cause: Error & { code?: number }) => {
-				// A name is advisory; a server may decline it without affecting the session.
-				if (cause.code === -32001) this.declinedName = name;
+				// A name is advisory; a server may decline it without affecting the session:
+				// `denied` when the user may not rename, `invalid_params` or `too_large` when it
+				// rejects the value (§1.1). Either way the same name would be refused again.
+				if (cause.code === -32001 || cause.code === -32602 || cause.code === -32003) this.declinedName = name;
 			});
 		return request;
 	}

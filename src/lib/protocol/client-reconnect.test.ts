@@ -840,9 +840,17 @@ describe('display name on connect', () => {
 		await latest().greet();
 		expect(latest()).not.toBe(first);
 		expect(renames(latest())).toBe(0);
-		// Choosing a new name sends it again.
+		// Choosing a new name sends it again; a rejected value (§1.1) isn't resent either.
 		client.setDisplayName('Dee');
 		expect(renames(latest())).toBe(1);
+		const second = latest();
+		second.receive({ id: second.request('me').id, error: { code: -32602, message: 'Names are at most 32 characters' } });
+		await Promise.resolve();
+		second.drop();
+		vi.advanceTimersByTime(5_000);
+		await latest().greet();
+		expect(latest()).not.toBe(second);
+		expect(renames(latest())).toBe(0);
 		client.stop();
 	});
 
