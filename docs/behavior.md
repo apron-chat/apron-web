@@ -309,10 +309,15 @@ Subscribing and unsubscribing run one at a time, across tabs too under the
 `apron-push` Web Lock where the browser has one, and a step that finishes
 after push was turned off, or after the tab moved to another server or
 account, registers nothing; waiting for the service worker gives up after 10
-seconds. A replaced registration is unregistered, after the next `auth` if not
-at once, and while push is off for the account signed in, this browser's
-endpoint is unregistered after each `auth`, in case an earlier unregister was
-missed. Signing out unregisters, and once it has worked turns push off for
+seconds. A replaced registration is unregistered, after the next `auth` as
+the account it belonged to if not at once (never as another account, whose
+registration of the same endpoint it would remove), and while push is off for
+the account signed in, this browser's endpoint is unregistered after each
+`auth`, in case an earlier unregister was missed; nothing is kept off before
+the page knows the account, so a page load doesn't unregister and then
+register again. Requests for the same endpoint go one at a time, each after
+the last one's reply, so turning push off and straight back on can't apply
+in the wrong order. Signing out unregisters, and once it has worked turns push off for
 that account here even when the server can't be told; a sign-out that fails
 (with requests still pending, say) leaves push on. A registration the server refuses shows its
 message in the setting.

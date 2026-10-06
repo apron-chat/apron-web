@@ -755,6 +755,7 @@ describe('rooms by request (cap rooms)', () => {
 			// The same registration again sends nothing.
 			client.setPushRegistration({ ...webpush, keys: { auth: 'c2Vj', p256dh: 'BPk' }, push_id: 'a1' }, 'ada');
 			expect(sent('push_register')).toHaveLength(1);
+			await socket.reply('push_register', {});
 			// A new subscription (another key) unregisters the old endpoint.
 			const renewed = { ...webpush, url: 'https://push.example/b' };
 			client.setPushRegistration(renewed, 'ada');
@@ -765,6 +766,7 @@ describe('rooms by request (cap rooms)', () => {
 			reconnect();
 			await greet({ webpush: { key: 'BNcR' } });
 			expect(sent('push_register')).toEqual([renewed]);
+			await socket.reply('push_register', {});
 			// Turning push off unregisters.
 			client.setPushRegistration(undefined);
 			expect(sent('push_unregister')).toEqual([{ url: renewed.url }]);
@@ -777,10 +779,13 @@ describe('rooms by request (cap rooms)', () => {
 			expect(sent('push_register')).toEqual([renewed]);
 		});
 
-		it('registers again at once, on the same url, when the wake scopes change', async () => {
+		it('registers again, on the same url, when the wake scopes change, once the last registration is answered', async () => {
 			client.setPushRegistration({ ...webpush, wake: ['mentions', 'replies'] }, 'ada');
 			await signIn({ webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'private'] });
 			client.setPushRegistration({ ...webpush, wake: ['private'] }, 'ada');
+			// One request for a url at a time (§1): the new scopes go after the reply.
+			expect(sent('push_register')).toEqual([{ ...webpush, wake: ['mentions', 'replies'] }]);
+			await socket.reply('push_register', {});
 			expect(sent('push_register')).toEqual([{ ...webpush, wake: ['mentions', 'replies'] }, { ...webpush, wake: ['private'] }]);
 			// The same url: nothing to unregister.
 			expect(sent('push_unregister')).toEqual([]);
@@ -815,6 +820,37 @@ describe('rooms by request (cap rooms)', () => {
 			reconnect();
 			await greet({ webpush: { key: 'BNcR' } });
 			expect(sent('push_unregister')).toEqual([]);
+		});
+
+		it('turns push off then on in order: the register waits for the unregister\'s reply', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn();
+			await socket.reply('push_register', {});
+			const order = () => socket.sent.filter((frame) => frame.method === 'push_unregister' || frame.method === 'push_register').map((frame) => frame.method);
+			client.setPushRegistration(undefined);
+			client.setPushRegistration(webpush, 'ada');
+			expect(order()).toEqual(['push_register', 'push_unregister']);
+			await socket.reply('push_unregister', {});
+			expect(order()).toEqual(['push_register', 'push_unregister', 'push_register']);
+			// Other urls don't wait.
+			client.setPushOff('https://push.example/old');
+			expect(sent('push_unregister')).toEqual([{ url: webpush.url }, { url: 'https://push.example/old' }]);
+		});
+
+		it('sends a queued unregister only as the account it belongs to', async () => {
+			client.setPushRegistration(webpush, 'ada');
+			await signIn();
+			socket.drop();
+			// Turned off while offline: ada's registration is to go after the next auth as ada.
+			client.setPushRegistration(undefined);
+			vi.advanceTimersByTime(5_000);
+			socket = FakeSocket.latest();
+			// Bob signs in instead: unregistering would remove Bob's registration of that url, if any.
+			await greet({ webpush: { key: 'BNcR' } }, 'bob');
+			expect(sent('push_unregister')).toEqual([]);
+			reconnect();
+			await greet({ webpush: { key: 'BNcR' } }, 'ada');
+			expect(sent('push_unregister')).toEqual([{ url: webpush.url }]);
 		});
 
 		it('shows a refused registration, until one succeeds', async () => {

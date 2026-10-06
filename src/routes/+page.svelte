@@ -58,7 +58,7 @@
 	import { pageSilenced } from '$lib/ui/user-status';
 	import { PushSettings } from '$lib/ui/push-settings.svelte';
 	import { inMutedRoom, inNotifyScopes, notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
-	import { accountServer, canOfferInstall, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
+	import { accountServer, canOfferInstall, keepsPushOff, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
 
 	/**
 	 * A thread this viewer created, opened once its `room_update` has arrived;
@@ -341,10 +341,11 @@
 
 	// Turned off, here or in another tab, or for another account now, or the subscription moved to
 	// another server: this one isn't registered, and the browser's endpoint is unregistered after
-	// each `auth`, in case an earlier unregister was missed.
+	// each `auth`, in case an earlier unregister was missed. Not before the account is known: a
+	// page load would unregister, then register again once signed in.
 	$effect(() => {
 		const chat = client;
-		if (!chat || previewMode || (webPushActive && !webPushHeldBy)) return;
+		if (!chat || previewMode || !keepsPushOff(pushAccount, webPushActive, webPushHeldBy)) return;
 		untrack(() => void pushSettings.keepOff(chat));
 	});
 

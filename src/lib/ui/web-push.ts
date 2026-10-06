@@ -31,6 +31,18 @@ export function offeredWake(push: unknown): string[] {
 	return Array.isArray(wake) ? wake.filter((scope): scope is string => typeof scope === 'string' && scope !== '') : [];
 }
 
+/**
+ * Whether the page keeps push off for the account signed in (`account`,
+ * `webPushAccount`): push isn't on for it here, or the subscription is held
+ * by another server (`heldBy`). Before an account is known (a page loading,
+ * a guest) there is nothing to keep off: doing so would unregister the
+ * browser's endpoint only for push to register it again once the account
+ * signs in.
+ */
+export function keepsPushOff(account: string | undefined, active: boolean, heldBy: string | undefined): boolean {
+	return account !== undefined && (!active || heldBy !== undefined);
+}
+
 /** Apron runs as an installed app (a Home Screen or desktop app window). */
 export function isStandalone(): boolean {
 	const nav = globalThis.navigator as (Navigator & { standalone?: boolean }) | undefined;

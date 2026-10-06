@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { webPushKey } from '$lib/protocol/client';
 import type { PushRegistration } from '$lib/protocol/client';
 import { base64url } from '$lib/protocol/webauthn';
-import { accountServer, base64UrlToBytes, canOfferInstall, isStandalone, needsHomeScreen, offeredWake, pushHeldBy, sameServerKey, webPushAccount, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
+import { accountServer, base64UrlToBytes, canOfferInstall, isStandalone, keepsPushOff, needsHomeScreen, offeredWake, pushHeldBy, sameServerKey, webPushAccount, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
 
 describe('web push', () => {
 	it('decodes base64url keys, padded or not, and encodes them back unpadded', () => {
@@ -90,6 +90,18 @@ describe('installing', () => {
 		stubBrowser('Mozilla/5.0 (X11; Linux x86_64) Chrome/140', { displayMode: true });
 		expect(isStandalone()).toBe(true);
 		expect(canOfferInstall(new Event('beforeinstallprompt'))).toBe(false);
+	});
+});
+
+describe('keeping push off', () => {
+	it('keeps it off only for a known account: not while the page loads, before the account signs in', () => {
+		// Loading: no account yet, and push isn't on for it either. Nothing to unregister.
+		expect(keepsPushOff(undefined, false, undefined)).toBe(false);
+		// Signed in, push on here: registered, not kept off.
+		expect(keepsPushOff('wss://a/#ada', true, undefined)).toBe(false);
+		// Off for this account, or held by another server: kept off.
+		expect(keepsPushOff('wss://a/#ada', false, undefined)).toBe(true);
+		expect(keepsPushOff('wss://a/#ada', true, 'b.example')).toBe(true);
 	});
 });
 

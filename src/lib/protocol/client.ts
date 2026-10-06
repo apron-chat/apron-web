@@ -64,6 +64,7 @@ import {
 	MAX_TIMER_MS,
 	isMuteValue,
 	muteEnd,
+	pushKey,
 	MAX_TYPING_S,
 	MAX_UNANSWERED_PINGS,
 	NO_NOTICES,
@@ -219,8 +220,18 @@ export class ChatClient {
 	private pushRegistration: PushRegistration | undefined;
 	private pushUser: string | undefined;
 	private pushSent = false;
-	/** Registration URLs replaced or turned off while they couldn't be unregistered: sent after the next `auth`. */
-	private pushUnregisters = new Set<string>();
+	/**
+	 * Registrations replaced or turned off while they couldn't be
+	 * unregistered, each with the account it belongs to (§4.7): sent after
+	 * the next `auth` as that account, never as another. Keyed by `pushKey`.
+	 */
+	private readonly pushUnregisters = new Map<string, { url: string; user: string }>();
+	/**
+	 * The last push request for each `url` on connection `connection`,
+	 * settled either way: the next for that `url` on that connection waits
+	 * for its reply, so they apply in order (§1).
+	 */
+	private readonly pushChains = new Map<string, { connection: number; settled: Promise<void> }>();
 	/**
 	 * This browser's push endpoint while push is off for the account signed in:
 	 * unregistered after each `auth` (`pushOffSent`), in case an earlier
@@ -1637,11 +1648,14 @@ export class ChatClient {
 		const previous = this.pushRegistration;
 		const user = registration ? userId : undefined;
 		if (canonicalJson(previous) === canonicalJson(registration) && this.pushUser === user) return;
+		const previousUser = this.pushUser;
 		this.pushRegistration = registration;
 		this.pushUser = user;
 		this.pushSent = false;
-		if (registration) this.pushUnregisters.delete(registration.url);
-		if (previous && previous.url !== registration?.url) this.pushUnregisters.add(previous.url);
+		if (registration && user !== undefined) this.pushUnregisters.delete(pushKey(registration.url, user));
+		if (previous && previousUser !== undefined && (previous.url !== registration?.url || previousUser !== user)) {
+			this.pushUnregisters.set(pushKey(previous.url, previousUser), { url: previous.url, user: previousUser });
+		}
 		if (!registration && this.pushError !== undefined) {
 			this.pushError = undefined;
 			this.emit();
@@ -1663,11 +1677,17 @@ export class ChatClient {
 
 	private syncPush(): void {
 		if (!this.pushReady()) return;
-		for (const url of [...this.pushUnregisters]) {
-			this.pushUnregisters.delete(url);
-			this.pushRequest('push_unregister', { url }).catch((cause: Error & { code?: number }) => {
+		for (const [key, entry] of [...this.pushUnregisters]) {
+			// Only as the account it belongs to: as another, it would unregister that one's.
+			if (entry.user !== this.you?.user_id) continue;
+			this.pushUnregisters.delete(key);
+			this.pushRequest('push_unregister', { url: entry.url }, () => this.you?.user_id === entry.user).catch((cause: Error & { code?: number }) => {
 				// Lost with the connection: try again after the next `auth`, unless it is registered again.
-				if (cause.code === undefined && this.pushRegistration?.url !== url) this.pushUnregisters.add(url);
+				const again = this.pushRegistration?.url === entry.url && this.pushUser === entry.user;
+				if (cause.code !== undefined || again) return;
+				this.pushUnregisters.set(key, entry);
+				// One that waited its turn past the end of its connection goes on the next, if that is signed in already.
+				this.syncPush();
 			});
 		}
 		const registration = this.pushRegistration;
@@ -1680,7 +1700,8 @@ export class ChatClient {
 		if (!registration || this.pushSent || !isJsonObject(push) || !Object.hasOwn(push, registration.kind)) return;
 		if (this.you?.user_id !== this.pushUser) return;
 		this.pushSent = true;
-		this.pushRequest('push_register', registration).then(() => {
+		const user = this.pushUser;
+		this.pushRequest('push_register', registration, () => this.pushRegistration === registration && this.you?.user_id === user).then(() => {
 			if (this.pushRegistration !== registration || this.pushError === undefined) return;
 			this.pushError = undefined;
 			this.emit();
@@ -1697,9 +1718,30 @@ export class ChatClient {
 		return this.authenticated && this.registeredSession && isJsonObject(this.server?.push);
 	}
 
-	/** Push is a convenience: a refusal leaves the session as it was. */
-	private pushRequest(method: 'push_register' | 'push_unregister', params: JsonObject): Promise<JsonObject> {
-		return this.enqueueRequest(method, params, { visible: false, allowBeforeAuth: false }).promise;
+	/**
+	 * Push is a convenience: a refusal leaves the session as it was. Requests
+	 * for the same `url` go one at a time, each after the last one's reply
+	 * (§1: a client that needs one applied before another waits for the
+	 * reply), so turning push off and on again can't land in the wrong order.
+	 * One whose turn comes on another connection, or once `still` says it
+	 * no longer applies, isn't sent: it rejects without a `code`, as one lost
+	 * with its connection does.
+	 */
+	private pushRequest(method: 'push_register' | 'push_unregister', params: JsonObject & { url: string }, still: () => boolean = () => true): Promise<JsonObject> {
+		const url = params.url;
+		const connection = this.connectionId;
+		const send = (): Promise<JsonObject> => connection === this.connectionId && this.pushReady() && still()
+			? this.enqueueRequest(method, params, { visible: false, allowBeforeAuth: false }).promise
+			: Promise.reject(new Error('Connection changed; not sent'));
+		// One on an earlier connection was answered or lost with it: nothing to wait for.
+		const before = this.pushChains.get(url);
+		const promise = before?.connection === connection ? before.settled.then(send) : send();
+		const entry = { connection, settled: promise.then(() => undefined, () => undefined) };
+		this.pushChains.set(url, entry);
+		void entry.settled.then(() => {
+			if (this.pushChains.get(url) === entry) this.pushChains.delete(url);
+		});
+		return promise;
 	}
 
 	/**

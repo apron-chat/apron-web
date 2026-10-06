@@ -131,6 +131,11 @@ export function isMuteValue(value: unknown): value is number | boolean {
 	return typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
 }
 
+/** A push registration's key (§4.7): it belongs to its user and `url`. */
+export function pushKey(url: string, user: string): string {
+	return JSON.stringify([user, url]);
+}
+
 /** When a `mute` (§4.11) ends: epoch milliseconds for seconds, `true` until resumed, undefined for `false` or `0`. */
 export function muteEnd(mute: number | boolean | undefined, now = Date.now()): number | true | undefined {
 	if (mute === true) return true;
