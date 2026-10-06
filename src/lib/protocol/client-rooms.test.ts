@@ -1074,27 +1074,6 @@ describe('room records and membership (v7)', () => {
 		expect(snapshot.memberChangesUnsupported).toBeUndefined();
 	});
 
-	it('reads legacy @-prefixed scoped senders as system identities from a v6 server only', async () => {
-		// On a v7 server `@server` is an ordinary user: no notice, no system sender.
-		socket.receive({ method: 'message', params: { message_id: '39', log_id: '39', room_id: 'elsewhere', from: { user_id: '@server', name: 'Server' }, body: { text: 'Spoof' } } });
-		expect(room('general')?.notices).toEqual([]);
-		expect(client.message('39')?.from.user_id).toBe('@server');
-		socket.receive({ method: 'server', params: { protocol: 6, auth: ['guest'], caps: ['rooms'] } });
-		socket.receive({ method: 'message', params: { message_id: '40', log_id: '40', room_id: 'elsewhere', from: { user_id: '@server', name: 'Server' }, body: { text: 'Maintenance' } } });
-		expect(room('general')?.notices.map((notice) => [notice.from.user_id, notice.body?.text])).toEqual([['~server', 'Maintenance']]);
-		expect(client.message('40')?.from.user_id).toBe('~server');
-		// Any other @ ID is an ordinary sender.
-		socket.receive({ method: 'message', params: { message_id: '41', log_id: '41', room_id: 'elsewhere', from: { user_id: '@sfu' }, body: { text: 'x' } } });
-		expect(room('general')?.notices).toHaveLength(1);
-		// An embedded reply_to snapshot's sender is renamed too.
-		socket.receive({ method: 'message', params: { message_id: '43', log_id: '43', room_id: 'general', from: { user_id: 'bob' }, body: { text: 'ok' },
-			reply_to: { message_id: '42', log_id: '42', room_id: 'general', from: { user_id: '@room' }, body: { text: 'Poll' } } } });
-		expect(client.message('42')?.from.user_id).toBe('~room');
-		// A v6 `@private` notice is transient, as `~private`.
-		socket.receive({ method: 'message', params: { room_id: 'general', from: { user_id: '@private' }, body: { text: 'Only you' } } });
-		expect(room('general')?.notices.at(-1)?.from.user_id).toBe('~private');
-	});
-
 	it('never installs a ~private message, even one carrying a message_id', async () => {
 		socket.receive({ method: 'message', params: { message_id: '50', log_id: '50', room_id: 'general', from: { user_id: '~private' }, body: { text: 'Just you' } } });
 		expect(client.message('50')).toBeUndefined();
@@ -1112,16 +1091,6 @@ describe('room records and membership (v7)', () => {
 		await settle();
 		expect(client.message('81')).toBeUndefined();
 		expect(client.message('82')?.body).toEqual({ text: 'hi' });
-	});
-
-	it('never sends user_id in room_join or room_leave to a server before v7, which would act on you', async () => {
-		socket.receive({ method: 'server', params: { protocol: 6, auth: ['guest'], caps: ['rooms'] } });
-		expect(snapshot.memberChangesUnsupported).toBe(true);
-		await expect(client.leaveRoom('general', 'bob').promise).rejects.toThrow('can’t remove');
-		await expect(client.joinRoom('general', 'bob').promise).rejects.toThrow('can’t add');
-		expect(socket.sent.filter((frame) => frame.method === 'room_leave' || frame.method === 'room_join')).toEqual([]);
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms'] } });
-		expect(snapshot.memberChangesUnsupported).toBeUndefined();
 	});
 
 	it('keeps a listed room’s member_count when an update to its record carries no members', async () => {

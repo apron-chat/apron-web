@@ -370,13 +370,9 @@ describe('sign-in', () => {
 		expect(snapshot.server).toMatchObject({ apron: 7, agent: 'aprond/0.9', capabilities: ['rooms', 'history'] });
 		expect(snapshot.capabilities.rooms).toBe(true);
 		expect(auths()[0].params).toEqual({ scheme: 'guest', agent: 'apron-web/0.4' });
-		// A v6 server still says `protocol` and `caps`; what differs for it is gated on the version.
-		latest().receive({ method: 'server', params: { protocol: 6, auth: ['guest'], caps: ['history'] } });
-		expect(snapshot.server).toMatchObject({ apron: 6, capabilities: ['history'] });
-		expect(snapshot.memberChangesUnsupported).toBe(true);
-		// Without a version at all it isn't an Apron server frame.
+		// Without a version it isn't an Apron server frame.
 		latest().receive({ method: 'server', params: { auth: ['guest'], capabilities: [] } });
-		expect(snapshot.server?.apron).toBe(6);
+		expect(snapshot.server?.apron).toBe(7);
 	});
 
 	it('keeps server.welcome from each server frame, which replaces the last', async () => {

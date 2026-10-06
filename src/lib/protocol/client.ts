@@ -21,11 +21,9 @@ import {
 	decodeNotice,
 	decodeReactions,
 	decodeMembership,
-	legacySystemId,
 	privateSender,
 	systemScope,
 	type JsonObject,
-	type JsonValue,
 	type Capability,
 	type Identity,
 	type MessageBody,
@@ -1395,7 +1393,6 @@ export class ChatClient {
 	 * `left`. With `userId`, removes that user instead, as `/kick` does.
 	 */
 	leaveRoom(roomId: string, userId?: string): OperationHandle {
-		// Before v7 a server ignores `user_id` and would remove the caller instead.
 		if (userId !== undefined && this.memberChangesUnsupported) return rejectedHandle('room_leave', new Error('This server can’t remove other people from rooms'));
 		const handle = this.enqueueRequest('room_leave', { room_id: roomId, ...(userId !== undefined ? { user_id: userId } : {}) }, { visible: true, allowBeforeAuth: false });
 		return userId === undefined ? handle : this.noteMemberChange(handle);
@@ -2381,18 +2378,14 @@ export class ChatClient {
 	}
 
 	private handleServer(params: JsonObject | undefined): void {
-		// v6 servers name the version `protocol` and the capabilities `caps`; everything the
-		// client does differently for them is gated on the version read here.
-		const version = typeof params?.apron === 'number' ? params.apron : params?.protocol;
-		const capabilities = Array.isArray(params?.capabilities) ? params.capabilities : params?.caps;
-		if (!params || typeof version !== 'number' || !Array.isArray(params.auth)) return;
+		if (!params || typeof params.apron !== 'number' || !Array.isArray(params.auth)) return;
 		const auth = params.auth.filter(isString);
 		if (!auth.length) return;
 		const previousPing = this.server?.ping;
 		this.server = {
-			apron: version,
+			apron: params.apron,
 			...(typeof params.agent === 'string' ? { agent: params.agent } : {}),
-			capabilities: Array.isArray(capabilities) ? capabilities.filter(isString) : [],
+			capabilities: Array.isArray(params.capabilities) ? params.capabilities.filter(isString) : [],
 			auth,
 			...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
 			...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
@@ -2403,9 +2396,8 @@ export class ChatClient {
 		};
 		// Liveness starts before authentication (§1); a replacing frame may change the interval.
 		if (!this.pingTimer || previousPing !== this.server.ping) this.startPing();
-		// Each frame fully replaces the last (§3.1): features are worth trying again. A server
-		// before v7 would ignore `user_id` in `room_join`/`room_leave` and act on the caller.
-		this.memberChangesUnsupported = version < 7;
+		// Each frame fully replaces the last (§3.1): features are worth trying again.
+		this.memberChangesUnsupported = false;
 		if (this.authenticated || this.authRequested) {
 			// A replacing frame may add capability `status`: attendance goes once signed in (§4.5).
 			this.syncIdle();
@@ -3041,27 +3033,8 @@ export class ChatClient {
 		for (const { from, body, welcome } of this.orphanNotices.splice(0)) this.addNotice(roomId, from, body, welcome);
 	}
 
-	/**
-	 * A message from a server before v7 whose sender is `@server`, `@room` or
-	 * `@private` gets that identity's `~` name (the legacy fallback; see
-	 * `legacySystemId`). Everything else, and every message from a server of v7 or later,
-	 * is left as it is.
-	 */
-	private fromLegacySender(value: unknown): unknown {
-		if (!this.server || this.server.apron >= 7 || !isJsonObject(value)) return value;
-		let next: JsonObject = value;
-		const renamed = isIdentity(value.from) ? legacySystemId(value.from.user_id) : undefined;
-		if (renamed !== undefined) next = { ...next, from: { ...(value.from as Identity), user_id: renamed } };
-		// An embedded `reply_to` snapshot is a message too.
-		if (isJsonObject(value.reply_to)) {
-			const reply = this.fromLegacySender(value.reply_to);
-			if (reply !== value.reply_to) next = { ...next, reply_to: reply as JsonObject };
-		}
-		return next;
-	}
-
 	private handleSnapshot(raw: JsonObject | undefined): void {
-		let params = this.fromLegacySender(raw) as JsonObject | undefined;
+		let params = raw;
 		// `~private` messages are never logged or installed (Appendix A.1), whatever they carry.
 		if (isJsonObject(params) && isIdentity(params.from) && params.from.user_id === '~private' && params.message_id !== undefined) {
 			params = { ...params, message_id: undefined, log_id: undefined };
@@ -3244,7 +3217,7 @@ export class ChatClient {
 	private applyPage(room: RoomState, result: JsonObject): void {
 		// `~private` messages are never installed (Appendix A.1), from history either.
 		const page = Array.isArray(result.messages)
-			? { ...result, messages: result.messages.map((message) => this.fromLegacySender(message) as JsonValue).filter((message) => !(isJsonObject(message) && isIdentity(message.from) && message.from.user_id === '~private')) }
+			? { ...result, messages: result.messages.filter((message) => !(isJsonObject(message) && isIdentity(message.from) && message.from.user_id === '~private')) }
 			: result;
 		const records: DecodedRecords = decodeHistoryRecords(page);
 		for (const record of [...records.rooms, ...records.messages, ...records.embedded, ...records.reactions, ...records.memberships]) this.observeLogId(record.log_id);

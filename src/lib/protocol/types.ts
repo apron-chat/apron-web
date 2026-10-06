@@ -109,10 +109,7 @@ export interface MessageRecord extends JsonObject {
 	ext?: JsonObject;
 }
 
-/**
- * A room record (§3.4) without delivery fields. A v6 server's
- * `intro_message` is not a field of v7 and is dropped like any unknown key.
- */
+/** A room record (§3.4) without delivery fields. */
 export interface RoomRecord extends JsonObject {
 	room_id: string;
 	/** Absent only from servers without capability `history`. */
@@ -199,22 +196,6 @@ export interface RoomDelivery {
 	 * most recently active (§4.3.1).
 	 */
 	member_count?: number;
-}
-
-/**
- * A history page (§4.2). Every array MAY be omitted when empty; clients treat
- * a missing array as empty. An empty slice has neither bound.
- */
-export interface HistoryResult {
-	rooms?: unknown[];
-	messages?: unknown[];
-	reactions?: unknown[];
-	membership?: unknown[];
-	first_log_id?: string;
-	last_log_id?: string;
-	more: boolean;
-	latest_log_id: string;
-	history_log_id: string | null;
 }
 
 /**
@@ -389,20 +370,6 @@ export function isSystemId(userId: string | undefined): boolean {
 /** The scope a system identity states (`~server`, `~room`, `~private`), if it is one of those. */
 export function systemScope(userId: string | undefined): SystemScope | undefined {
 	return userId === undefined ? undefined : SYSTEM_SCOPES.get(userId);
-}
-
-/**
- * Legacy fallback, for servers before protocol v7 only: v6 named the three
- * scoped system identities with `@` (`@server`, `@room`, `@private`); v7 moved
- * them to `~`, and on a v7 server `@server` is an ordinary user. The client
- * rewrites these senders from a v6 server to their `~` names as they arrive
- * (best-effort interop, §3.1). Drop with v6 servers.
- */
-const LEGACY_SYSTEM_IDS = new Map<string, string>([['@server', '~server'], ['@room', '~room'], ['@private', '~private']]);
-
-/** A v6 sender's v7 system identity, or undefined when it is not one of the three. */
-export function legacySystemId(userId: string): string | undefined {
-	return LEGACY_SYSTEM_IDS.get(userId);
 }
 
 /** The sender of notices this client shows only to you, such as a failed command's error (Appendix A.1). */

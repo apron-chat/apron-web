@@ -409,15 +409,6 @@ describe('ChatClient history per room', () => {
 		expect(socket.sent.filter((frame) => frame.method === 'history' && (frame.params as { room_id: string }).room_id === '20')).toHaveLength(1);
 	});
 
-	it('drops a v6 intro_message and installs nothing from it', async () => {
-		socket.receive({ method: 'room_update', params: { joined: [{
-			room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '500', history_log_id: null,
-			intro_message: { message_id: '400', log_id: '400', room_id: 'ops', from: alice, body: { text: 'intro' } }
-		}] } });
-		expect(client.message('400')).toBeUndefined();
-		expect(client.roomRecord('ops')).not.toHaveProperty('intro_message');
-	});
-
 	it('installs an embedded reply_to snapshot below its room bound', async () => {
 		socket.receive({ method: 'message', params: message('20', { reply_to: { message_id: '5', log_id: '5', room_id: 'general', from: alice, body: { text: 'old' } } }) });
 		expect(client.message('5')?.body).toEqual({ text: 'old' });

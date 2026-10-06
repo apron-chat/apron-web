@@ -104,13 +104,11 @@ membership records in `log_id` order for the timeline's join and leave lines;
 each record replaces the stored one only when its `log_id` is greater, so
 overlapping history and live delivery cannot revert newer state, and a move
 snapshot re-homes a message into its new room. Embedded `reply_to`
-snapshots install like any other record; a v6 server's `intro_message` is
-dropped like any unknown key. Room records keep `description` and `private`
+snapshots install like any other record. Room records keep `description` and `private`
 (fixed at creation); a room's `members` from a listing come with its
 `member_count` when the server truncated them, kept until a complete list
 replaces it. `types.ts` also knows the system identities (`~server`, `~room`,
-`~private`); `ChatClient` renames v6's `@server`, `@room` and `@private`
-senders to those, from servers before protocol v7 only. Reactions aggregate
+`~private`). Reactions aggregate
 per message (counts per emoji, who reacted, whether you did) and are hidden on
 tombstones.
 
@@ -207,10 +205,8 @@ updates resubmit `title` and `description` (never `parent_room_id`,
 client does not depend on the notifications a request causes arriving before
 its result, as servers send them.
 `room_join` and `room_leave` take the `room_id`, and a `user_id` to add or
-remove someone else, sent only to servers of protocol 7 and later (an older
-one would act on the caller): the snapshot's `memberChangesUnsupported` is set
-by a `server` frame before v7, and by an `unsupported` reply until the next
-`server` frame. Reactions use the
+remove someone else; an `unsupported` reply sets the snapshot's
+`memberChangesUnsupported` until the next `server` frame. Reactions use the
 `reactions` request (capability `reactions`) with your complete emoji set.
 
 Every successful `auth` result is handled alike: its `you` becomes the
@@ -256,8 +252,5 @@ passkey accept a scheme listed in `auth` or `signup`, and adding an email needs 
 token resume need it in `auth`. The `server` frame ([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame))
 is kept on the snapshot's `server` as sent: `apron` (the version), `capabilities`,
 `agent` (the implementation, for debugging; the UI labels a server by its host,
-never by `agent`), `welcome`, `signup`, `ping` and `ext`. A server before v7 says
-`protocol` and `caps` instead; the client reads those as `apron` and
-`capabilities`, and everything it does differently for such a server is gated
-on that version. Every `auth` the client sends carries `agent: "apron-web/0.4"`
+never by `agent`), `welcome`, `signup`, `ping`, `push`, `status` and `ext`. Every `auth` the client sends carries `agent: "apron-web/0.4"`
 (§3.2).

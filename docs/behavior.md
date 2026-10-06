@@ -101,10 +101,7 @@ as a role; they grant nothing here. Senders whose `user_id` starts with `~`
 the three that state a scope (`~private`, `~room`, `~server`), which render as
 the design system's notice card: left-aligned, and titled by the sender as the
 server names it, `Name (~user_id)`, such as "System message to you (~private)"
-from the Apron example servers. From a server before protocol v7, `@private`,
-`@room` and `@server` senders are read as those three (the client renames them
-to `~` as they arrive); on a server of v7 or later they are ordinary users, and no `@` ID
-is ever special. A `~private` message reaches only the connection it was sent
+from the Apron example servers. No `@` ID is special. A `~private` message reaches only the connection it was sent
 on. Every `~private` message, whatever it carries, and every `message` without
 a `message_id` (such as a command's reply), are transient notices: a dashed card for the session, never stored, and gone on
 reload. A notice sent before authentication, such as a server's welcome
@@ -140,10 +137,8 @@ with their `user_id`, suggesting people the client knows) and each other
 member's remove button removes them (`room_leave` with their `user_id`, after
 a confirm): how members bring people into a private room. Only a `user_id` is
 accepted there, since display names aren't unique. Who may is the server's
-policy; its error shows in the panel. A server before protocol v7, which would
-ignore `user_id` and act on you, gets neither these controls nor such
-requests, and one that answers `unsupported` gets no controls until its next
-`server` frame. A count kept from a truncated listing stays while later records
+policy; its error shows in the panel. A server that answers `unsupported`
+gets no controls until its next `server` frame. A count kept from a truncated listing stays while later records
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
 drag its left border, or click the border to collapse it (the header button
 brings it back, and takes focus when the border collapsed it from the keyboard), and its width and whether it is collapsed are remembered.
@@ -403,9 +398,9 @@ monospace, and **Run** replaces **Send**. `/nick` (a `me` request), `/join`,
 new `description`), and `/kick @user` and `/invite @user` (`room_leave` and
 `room_join` with that `user_id`), with the `rooms` capability, are handled by the
 client. `/kick` with a reason goes to the server, which alone can carry one,
-and so do `/kick` and `/invite` on a server before protocol v7 and once the
-server has answered them `unsupported` (the one that got that answer is sent on
-as a command); anything else goes out
+and so do `/kick` and `/invite` once the server has answered them
+`unsupported` (the one that got that answer is sent on as a command); anything
+else goes out
 as a `command` request with the params a message would have — `room_id`, the
 text as typed, `mentions`, `reply_to`, and attached files as `upload` embeds —
 and is never posted. `/help` lists what the server offers. The server's replies
@@ -463,7 +458,7 @@ shows, since the server may alter or decline it.
 With the `rooms` capability, **Start thread** on a message creates a thread under the
 room titled after the message's first line, with the message's text as its
 `description` (unless the title already says it all), and opens it with the
-composer replying to that message. Threads don't point at a message since v7, so
+composer replying to that message. Threads don't point at a message, so
 the thread's first reply carries the link back as its `reply_to` (the
 convention of the protocol's fixtures): its quote shows the message and jumps
 to it. The message stays in the room, with the thread's card after it. A
