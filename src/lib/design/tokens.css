@@ -29,7 +29,9 @@
 	--presence-online: var(--ok);
 	--presence-idle: var(--warn);
 	--presence-dnd: var(--danger);
-	--presence-offline: var(--line-strong);
+	/* A ring this small needs 3:1 on every ground, hover (--bg-300) included, which --line-strong
+	   falls short of in dark (2.9:1). This gray is 3.4:1 or more on dark grounds and 3.1:1 on light. */
+	--presence-offline: #78788c;
 	--presence-unknown: var(--ink-muted);
 	--shadow-popover: 0 8px 24px rgba(4, 4, 10, 0.6);
 	--shadow-float: 0 2px 8px rgba(4, 4, 10, 0.55);
