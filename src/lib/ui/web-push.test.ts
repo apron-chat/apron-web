@@ -58,7 +58,6 @@ describe('web push', () => {
 		expect(accountServer(ada)).toBe('wss://server.apron.chat/');
 		expect(accountServer('wss://bare/')).toBe('wss://bare/');
 	});
-
 });
 
 describe('installing', () => {

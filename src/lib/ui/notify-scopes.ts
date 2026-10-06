@@ -34,7 +34,7 @@ export function notifyScopesOf(stored: readonly string[] | undefined): NotifySco
 }
 
 /** What the page knows about an arriving message beyond itself. */
-export interface NotifyContext {
+interface NotifyContext {
 	me: Identity | undefined;
 	/** It mentions you (`body.mentions`), or an edit added you. */
 	mentioned: boolean;

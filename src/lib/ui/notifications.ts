@@ -223,10 +223,10 @@ export function readPush(payload: unknown): PushPayload | undefined {
 export const QUIET_PUSH = { title: 'Apron', options: { body: 'Open Apron to catch up.', tag: 'apron:push', renotify: false, silent: true } satisfies ShowNotificationOptions };
 
 /** A notification showing, as the service worker lists it. */
-export type VisibleNotification = Pick<Notification, 'title' | 'body' | 'tag' | 'data' | 'icon'>;
+type VisibleNotification = Pick<Notification, 'title' | 'body' | 'tag' | 'data' | 'icon'>;
 
 /** What to do with a push. */
-export interface PushPlan {
+interface PushPlan {
 	show?: { title: string; options: ShowNotificationOptions };
 	/** After showing, close the group's notifications of older messages, and remember this one. */
 	notified?: { group: string; messageId: string };

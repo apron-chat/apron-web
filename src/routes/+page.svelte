@@ -771,7 +771,6 @@
 		directory.forget();
 	}
 
-
 	async function toggleNotifications(): Promise<void> {
 		if (notificationsActive) {
 			notificationsEnabled = false;
@@ -889,8 +888,6 @@
 		scrubUrl(url.toString());
 		return roomId ? { roomId, ...(id ? { pushId: id } : {}) } : undefined;
 	}
-
-
 
 	/** Pauses notifications everywhere (§4.11 `mute`): seconds from now, or until resumed. */
 	function pauseNotifications(until: PausedUntil): Promise<void> {

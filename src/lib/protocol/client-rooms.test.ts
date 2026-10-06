@@ -894,7 +894,6 @@ describe('rooms by request (cap rooms)', () => {
 			expect(sent('push_register')).toEqual([]);
 		});
 	});
-
 });
 
 describe('the default room (no cap rooms)', () => {

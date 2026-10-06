@@ -11,7 +11,7 @@ export interface PushSettingsClient {
 }
 
 /** What `PushSettings` works with; tests stand in for them. */
-export interface PushSettingsDeps {
+interface PushSettingsDeps {
 	sync?: WebPushSync;
 	/** Keeps the enabled accounts' `push_id`s for the service worker. */
 	saveEnabledIds?: (ids: string[]) => Promise<void>;

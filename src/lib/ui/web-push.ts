@@ -113,7 +113,6 @@ export function accountServer(account: string): string {
 	return at < 0 ? account : account.slice(0, at);
 }
 
-
 /** Whether this browser can subscribe to web push here. */
 export function webPushSupported(): boolean {
 	return Boolean(globalThis.isSecureContext && globalThis.navigator?.serviceWorker && 'PushManager' in globalThis && 'Notification' in globalThis);
@@ -171,7 +170,7 @@ const browserPush: PushBrowser = {
 };
 
 /** What push registers on: `ChatClient`. */
-export interface PushClient {
+interface PushClient {
 	readonly url: string;
 	setPushRegistration(registration: PushRegistration | undefined, userId?: string): void;
 }

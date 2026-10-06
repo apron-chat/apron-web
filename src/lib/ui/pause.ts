@@ -6,7 +6,7 @@
 export type PausedUntil = number | true;
 
 /** A way to pause, as the Pause menu lists it. */
-export interface PauseChoice {
+interface PauseChoice {
 	value: string;
 	label: string;
 	/** When it ends, such as "until 15:42". */

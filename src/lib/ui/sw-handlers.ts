@@ -72,7 +72,7 @@ export interface Tab {
 }
 
 /** What the click handler needs from the service worker. */
-export interface ClickContext<T extends Tab> {
+interface ClickContext<T extends Tab> {
 	tabs(): Promise<readonly T[]>;
 	openWindow(url: string): Promise<unknown>;
 	/** Asks a tab for its account's `push_id`; undefined when it doesn't answer. */
