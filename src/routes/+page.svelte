@@ -1,4 +1,5 @@
 <script lang="ts">
+	import X from '@lucide/svelte/icons/x';
 	import { onMount, tick, untrack } from 'svelte';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
@@ -99,6 +100,8 @@
 
 	const session = new SessionView();
 	const feedback = new FeedbackState();
+	/** The connection error closed from its toast; one that clears and comes back shows again. */
+	let dismissedError = $state<string | undefined>();
 	const mentions = new MentionTracker();
 	/** How many mentions of you have arrived outside the rooms you muted: each new one can alert the tab. */
 	let audibleMentions = $state(0);
@@ -265,6 +268,9 @@
 	let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 
 	let snapshot = $derived(session.snapshot);
+	$effect(() => {
+		if (!snapshot.error) untrack(() => (dismissedError = undefined));
+	});
 	/** The top-level room open in the pane (or behind the open thread). */
 	let activeRoom = $derived(session.activeRoom);
 	/** The active room's threads: the joined ones, then those listed as not joined, which get cards too. */
@@ -2149,17 +2155,24 @@
 	<!-- Kept while shut (hidden), so its border slides with the list's. -->
 	{#if memberListWide}<SidebarHandle layout={memberList} name="member list" oncollapse={() => memberListToggle?.focus()} />{/if}
 
+	<!-- An error stays until closed or the next request; a pending line goes by itself. -->
+	{#snippet close(label: string, onclose: () => void)}
+		<button class="ap-iconbtn toast-close" type="button" aria-label={label} title="Dismiss" onclick={onclose}><X size={14} aria-hidden="true" /></button>
+	{/snippet}
 	{#if feedback.current}
+		{@const error = feedback.current.kind === 'error'}
 		<div class="toast">
-			<StatusBanner tone={feedback.current.kind === 'error' ? 'danger' : 'warn'} role={feedback.current.kind === 'error' ? 'alert' : 'status'}>{feedback.current.text}</StatusBanner>
+			<StatusBanner tone={error ? 'danger' : 'warn'} role={error ? 'alert' : 'status'} action={error ? dismissFeedback : undefined}>{feedback.current.text}</StatusBanner>
 		</div>
 	{/if}
+	{#snippet dismissFeedback()}{@render close('Dismiss', () => feedback.clear())}{/snippet}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
-	{#if snapshot.error && session.connection !== 'reconnecting'}
+	{#if snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting'}
 		<div class="toast toast-right">
-			<StatusBanner tone="danger" role="alert">{snapshot.error}</StatusBanner>
+			<StatusBanner tone="danger" role="alert" action={dismissClientError}>{snapshot.error}</StatusBanner>
 		</div>
 	{/if}
+	{#snippet dismissClientError()}{@render close('Dismiss connection error', () => (dismissedError = snapshot.error))}{/snippet}
 </div>
 {/if}
 
@@ -2237,6 +2250,8 @@
 	.toast { position: fixed; z-index: 10; left: 50%; bottom: calc(var(--space-4) + 64px); transform: translateX(-50%); max-width: min(480px, calc(100% - var(--space-8))); }
 	.toast :global(.ap-status) { box-shadow: var(--shadow-float); }
 	.toast-right { left: auto; right: var(--space-4); transform: none; }
+	/* Smaller than an icon button, so a toast that can be closed is no taller than one that can't. */
+	.toast-close { width: 22px; height: 22px; margin: -2px 0; flex: none; }
 
 	/* Wide screens give an open member list its own column; narrower ones overlay it. */
 	@media (min-width: 960px) {
