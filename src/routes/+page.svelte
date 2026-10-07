@@ -1808,7 +1808,7 @@
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={signedOut}
 	/>
-	<SidebarHandle layout={sidebar} showToggle />
+	<SidebarHandle layout={sidebar} />
 
 	<main class="ap-shell-main" aria-label="Conversation" use:fileDrop={{ enabled: canAttach, onfiles: stageFiles, onactive: (active) => (dropping = active) }}>
 		{#if dropping}
@@ -1827,8 +1827,9 @@
 				editDisabled={!paneReady}
 				canLeave={session.canManageRooms && !session.readOnly && Boolean(paneRoom?.joined)}
 				canJoin={session.canManageRooms && !session.readOnly && Boolean(paneRoom) && !paneRoom?.joined}
+				sidebarOpen={!sidebar.collapsed}
 				{memberListOpen}
-				onback={() => (mobilePane = 'rooms')} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
+				onback={() => (mobilePane = 'rooms')} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onsidebar={() => sidebar.toggle()} onmemberlist={toggleMemberList}
 			/>
 			{#if roomEditorOpen && editTarget}
 				{#key editTarget.id}
@@ -2022,11 +2023,11 @@
 	:global(html), :global(body) { height: 100%; }
 	:global(*), :global(*::before), :global(*::after) { box-sizing: border-box; }
 	:global(button), :global(input), :global(textarea), :global(select) { font: inherit; }
+	/* Collapsing or expanding the rooms list slides its column and fades its contents; a drag follows the pointer instead. */
 	.app { height: 100dvh; min-height: 100%; position: relative; transition: --sidebar-w 260ms ease; }
-	.side-collapsed :global(.ap-shell-side) { border-right: 0; opacity: 0; visibility: hidden; transition: opacity 180ms ease, visibility 0s linear 180ms; }
-	.app:not(.side-collapsed) :global(.ap-shell-side) { opacity: 1; visibility: visible; transition: opacity 180ms ease, visibility 0s; }
-	.side-resizing { transition: none; }
-	.side-resizing :global(.ap-shell-side) { transition: none !important; }
+	.app :global(.ap-shell-side) { transition: opacity 180ms ease, visibility 0s; }
+	.side-collapsed :global(.ap-shell-side) { border-right: 0; opacity: 0; visibility: hidden; transition: opacity 180ms ease, visibility 0s 180ms; }
+	.side-resizing, .side-resizing :global(.ap-shell-side) { transition: none; }
 	.side-resizing, .side-resizing :global(*) { user-select: none; }
 	.banner { padding: var(--space-2) var(--space-4) 0; }
 	/* Over the conversation while files are dragged onto it; drag events pass through to the pane. */
@@ -2050,8 +2051,10 @@
 	.day-float { position: sticky; top: var(--space-2); z-index: 2; height: 0; display: flex; justify-content: center; pointer-events: none; }
 	.day-float span { padding: 3px var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); box-shadow: var(--shadow-float); color: var(--ink); font-size: var(--text-sm); line-height: 16px; font-weight: 500; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity .2s, transform .2s; }
 	.day-float-shown span { opacity: 1; transform: none; }
-	@media (prefers-reduced-motion: reduce) { .day-float span { transition: none; transform: none; } }
-	@media (prefers-reduced-motion: reduce) { .app, .app.side-collapsed :global(.ap-shell-side), .app:not(.side-collapsed) :global(.ap-shell-side) { transition: none; } }
+	@media (prefers-reduced-motion: reduce) {
+		.day-float span { transition: none; transform: none; }
+		.app, .app :global(.ap-shell-side), .side-collapsed :global(.ap-shell-side) { transition: none; }
+	}
 	.toast { position: fixed; z-index: 10; left: 50%; bottom: calc(var(--space-4) + 64px); transform: translateX(-50%); max-width: min(480px, calc(100% - var(--space-8))); }
 	.toast :global(.ap-status) { box-shadow: var(--shadow-float); }
 	.toast-right { left: auto; right: var(--space-4); transform: none; }
@@ -2060,16 +2063,12 @@
 	@media (min-width: 960px) {
 		.app.member-list-open { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--member-list-w); }
 	}
-	@media (min-width: 720px) {
-		.side-collapsed :global(.ap-roomhead) { padding-left: calc(var(--sidebar-toggle-w) + var(--space-4)); }
-	}
 	/* Under 720px it's one pane at a time: rooms, then the room or thread, pushed like pages. */
 	@media (max-width: 719px) {
 		.app { grid-template-columns: minmax(0, 1fr); }
 		.app[data-pane='main'] :global(.ap-shell-side) { display: none; }
 		.app[data-pane='rooms'] .ap-shell-main, .app[data-pane='rooms'] :global(.member-list) { display: none; }
 		.side-collapsed :global(.ap-shell-side) { opacity: 1; visibility: visible; transition: none; }
-		.side-collapsed :global(.ap-roomhead) { padding-left: var(--space-4); }
 		.typing-row { display: none; }
 		.toast-right { right: var(--space-4); left: var(--space-4); max-width: none; }
 	}

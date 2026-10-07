@@ -164,6 +164,14 @@ with the `@user_id` when someone else shows under the same name. The lines
 never count as unread or mention you, and a message after one starts a new
 sender group.
 
+On wide screens the rooms list is a column beside the conversation: drag its
+right border to resize it, and click the border, or the panel button at the
+start of the room title bar, to collapse or expand it. The column slides open
+and shut while its contents fade, with no motion when the system asks for
+reduced motion, and its width and whether it is collapsed are remembered. On
+phones it is a pane of its own instead, which the title bar's back button
+returns to.
+
 The member list button near the end of the room title bar toggles a right-hand
 sidebar, **Members**, listing the open room's or thread's members from its `room_list`
 snapshot, with their role badges. A server may list only the most recently

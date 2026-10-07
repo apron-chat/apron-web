@@ -89,9 +89,9 @@
 	--rail-w: 64px;
 	--rail-tile: 40px;
 	--header-h: 48px;
-	--sidebar-toggle-w: 40px;
 }
 
+/* Registered so a change of width can transition: the rooms list slides open and shut. */
 @property --sidebar-w {
 	syntax: '<length>';
 	inherits: true;

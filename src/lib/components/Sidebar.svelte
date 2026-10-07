@@ -208,7 +208,7 @@
 
 <style>
 	.ap-shell-side { overflow: hidden; }
-	.ap-shell-sidehead { gap: var(--space-2); padding-right: calc(var(--space-4) + var(--sidebar-toggle-w)); }
+	.ap-shell-sidehead { gap: var(--space-2); }
 	.create-room-trigger { width: 28px; padding: 0; justify-content: center; }
 	.backend { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
@@ -220,6 +220,5 @@
 	.more .ap-room-topic { color: var(--denim); }
 	@media (max-width: 719px) {
 		.ap-shell-side { border-right: 0; }
-		.ap-shell-sidehead { padding-right: var(--space-4); }
 	}
 </style>

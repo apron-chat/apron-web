@@ -2,6 +2,8 @@
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogOut from '@lucide/svelte/icons/log-out';
+	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
+	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Users from '@lucide/svelte/icons/users';
 	import type { RoomSnapshot } from '$lib/protocol/client';
@@ -29,6 +31,8 @@
 		canLeave: boolean;
 		/** Offer Join for a thread open without joining it (capability `rooms`). */
 		canJoin?: boolean;
+		/** Whether the rooms list beside the conversation is expanded (wide layouts; phones go back to it instead). */
+		sidebarOpen: boolean;
 		/** Whether the room member list is visible. */
 		memberListOpen: boolean;
 		onback: () => void;
@@ -36,11 +40,12 @@
 		onedit: () => void;
 		onleave: () => void;
 		onjoin?: () => void;
+		onsidebar: () => void;
 		onmemberlist: () => void;
 	}
 	let {
 		room, pane, threadTitle, typing, replyCount, moreReplies = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, onback, onroom, onedit, onleave, onjoin, onmemberlist
+		sidebarOpen, memberListOpen, onback, onroom, onedit, onleave, onjoin, onsidebar, onmemberlist
 	}: Props = $props();
 
 	let memberListToggle = $state<HTMLButtonElement | undefined>();
@@ -66,6 +71,13 @@
 </script>
 
 <header class="ap-roomhead">
+	<!-- At the start of the title bar, as the member list's toggle is at its end. -->
+	<button class={['ap-iconbtn', 'sidebar-toggle', !sidebarOpen && 'closed']} type="button" aria-label={sidebarOpen ? 'Hide rooms' : 'Show rooms'} aria-expanded={sidebarOpen} title={sidebarOpen ? 'Hide rooms' : 'Show rooms'} onclick={onsidebar}>
+		<span class="sidebar-icons" aria-hidden="true">
+			<PanelLeftClose size={18} strokeWidth={1.8} />
+			<PanelLeftOpen size={18} strokeWidth={1.8} />
+		</span>
+	</button>
 	<button class="ap-roomhead-back" type="button" aria-label="Back to rooms" onclick={onback}>‹</button>
 	<div class="ap-roomhead-text">
 		{#if threadTitle !== undefined}
@@ -106,11 +118,21 @@
 <style>
 	.ap-roomhead-back { display: none; }
 	.ap-roomhead-name { max-width: 100%; }
-	.member-list-toggle { flex: none; }
+	.member-list-toggle, .sidebar-toggle { flex: none; }
+	/* The two panel icons cross-fade, sliding the way the list moves. */
+	.sidebar-icons { position: relative; width: 18px; height: 18px; }
+	.sidebar-icons :global(svg) { position: absolute; inset: 0; transition: opacity 140ms ease, transform 180ms ease; }
+	.sidebar-icons :global(svg:last-child) { opacity: 0; transform: translateX(-4px); }
+	.closed .sidebar-icons :global(svg:first-child) { opacity: 0; transform: translateX(4px); }
+	.closed .sidebar-icons :global(svg:last-child) { opacity: 1; transform: none; }
 	/* Typing shows in the header's subtitle only on phones; wide layouts have the row above the composer. */
 	.typing-head { display: none; }
 	@media (max-width: 719px) {
 		.ap-roomhead-back { display: block; }
+		.sidebar-toggle { display: none; }
 		.typing-head { display: block; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.sidebar-icons :global(svg) { transition: none; }
 	}
 </style>
