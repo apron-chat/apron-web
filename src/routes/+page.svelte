@@ -35,7 +35,7 @@
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker, notificationsByRoom } from '$lib/ui/incoming-messages';
 	import { UnreadTracker } from '$lib/ui/unread.svelte';
-	import { isOwn, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
+	import { isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
@@ -1518,10 +1518,22 @@
 
 	/**
 	 * Any message in the open pane can be picked for a move (capability `edit`), anyone's:
-	 * the server decides whose it lets you move.
+	 * the server decides whose it lets you move, and a refusal moves none (MessageSelection.move).
 	 */
 	function canSelect(event: MessageRecord): boolean {
 		return session.canEdit && !event.deleted && event.room_id === paneRoom?.id;
+	}
+
+	/** Whether a picked message is yours, which the server always lets you move. */
+	function ownMessage(id: string): boolean {
+		const event = resolveMessage(id);
+		return event !== undefined && isOwn(event, session.you);
+	}
+
+	/** Whether you may move a picked message to a new thread: yours, or anyone's for an admin or a mod. */
+	function movable(id: string): boolean {
+		const event = resolveMessage(id);
+		return event !== undefined && mayMove(event, session.you);
 	}
 
 	/** What the toolbar offers: only what the server can do, and only on messages this viewer may change. */
@@ -1626,11 +1638,13 @@
 				parentRoomId: roomId,
 				title: (firstId) => threadTitleFor(resolveMessage(firstId)),
 				// Nothing moves out of a private room into a thread others can see.
-				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined
+				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined,
+				own: ownMessage,
+				movable
 			})
-			: await selection.move(client, target);
+			: await selection.move(client, target, ownMessage);
 		if (!result.moved) {
-			if (result.error !== undefined) feedback.error(result.error, 'Some messages could not be moved');
+			if (result.error !== undefined) feedback.error(result.error, selection.current?.denied ? 'Some messages could not be moved' : 'No messages were moved');
 			return;
 		}
 		if (target === 'new') pendingOpen = { room: roomId, thread: result.room };

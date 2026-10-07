@@ -511,15 +511,22 @@ the error.
 open room lists its threads you haven't joined; picking one joins it and opens
 it once its `room_update` arrives.
 
-With the `edit` capability, several of your messages move at a time: shift-click a
+With the `edit` capability, several messages move at a time: shift-click a
 message (or press `x` on it, long-press it on touch, or pick **Select** from its
 More menu) to enter select mode, shift-click another to fill the range, and the
 selection bar replaces the composer with the count, **Move to thread** (or, in a
 thread, back to the room), **New thread** (with the `rooms` capability) and Cancel. A
 move is a save of the message with the destination's `room_id`, one request per
-message; a new thread is created first and the moves follow once the server has
-named it. Denied ones stay selected and the bar says how many didn't move.
-Escape leaves select mode.
+message. Anyone's messages can be picked, and the server decides whose you may
+move (this server: your own, and anyone's for an admin or a mod). A move is all
+or nothing as far as that goes: when the selection holds a message that isn't
+yours, that one is sent first, alone, and if the server refuses it nothing else
+is sent, the selection stays, and the error says no messages were moved. Otherwise
+the rest go together. A new thread is created first and the moves follow once the
+server has named it; it isn't created when the selection holds someone else's
+message and you have neither `admin` nor `mod`, so a refused move never leaves
+an empty thread. Messages refused after the first (say, over a posting limit)
+stay selected and the bar says how many didn't move. Escape leaves select mode.
 
 A reply's quote may point into another room: clicking it opens that room or
 thread, loading the thread's history if needed, and highlights the message.
