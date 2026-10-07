@@ -243,6 +243,11 @@
 	 * remembered for the next visit; the overlay isn't.
 	 */
 	let memberListOpen = $derived(memberListWide ? !memberList.collapsed : memberListOverlay);
+	/** The rooms list's column and the member list's, as the grid sizes them: 0 while shut. */
+	let roomsTrack = $derived(sidebar.collapsed ? 0 : sidebar.width);
+	let membersTrack = $derived(memberListWide && memberListOpen ? memberList.width : 0);
+	/** Side panels slide only once the page is up, so the layout kept from the last visit doesn't animate in. */
+	let slidesReady = $state(false);
 	let composer = $state<Composer | undefined>();
 	let memberListToggle = $state<PanelToggle | undefined>();
 	let messageScroll = $state<HTMLDivElement | undefined>();
@@ -714,6 +719,7 @@
 		passkeyUnavailable = passkeySupportError();
 		sidebar.load();
 		memberList.load();
+		requestAnimationFrame(() => requestAnimationFrame(() => (slidesReady = true)));
 		const memberListMedia = window.matchMedia('(min-width: 960px)');
 		const memberListMediaChange = ({ matches }: { matches: boolean }) => {
 			memberListWide = matches;
@@ -1425,6 +1431,60 @@
 		});
 	}
 
+	/** How long a side panel takes to slide open or shut: --slide-time in the CSS. */
+	const SLIDE_MS = 240;
+	let heldTimeline: { scroller: HTMLElement; width: number; release: () => void } | undefined;
+
+	/**
+	 * While a side panel slides, the conversation's width changes every frame. The timeline takes the width it will
+	 * end at from the start instead, so its messages are laid out once, not re-wrapped on every frame, and the pane
+	 * clips it meanwhile, on a compositor layer of its own (only then: it would hold fixed-position children). It
+	 * lets go when the grid's slide ends, which a slow first frame (that one layout) can put well after the tap.
+	 * `change` is how much wider the conversation is about to be.
+	 */
+	function prepareSlide(change: number): void {
+		const scroller = messageScroll;
+		const pane = scroller?.closest<HTMLElement>('.ap-shell-main');
+		const app = pane?.parentElement;
+		if (!scroller || !pane || !app || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		const from = heldTimeline?.scroller === scroller ? heldTimeline.width : scroller.getBoundingClientRect().width;
+		heldTimeline?.release();
+		const width = from + change;
+		scroller.style.width = `${width}px`;
+		pane.style.overflow = 'clip';
+		pane.style.willChange = 'transform';
+		// Re-wrapped at its new width, the history is taller or shorter: still at the latest message if it was.
+		if (stickToBottom) requestAnimationFrame(() => { if (stickToBottom) scrollToLatest(); });
+		const ended = (event: TransitionEvent) => { if (event.target === app && event.propertyName === 'grid-template-columns') release(); };
+		// Should the slide not run (or its end be missed), letting go later changes nothing: the width is the final one.
+		const fallback = setTimeout(() => release(), SLIDE_MS * 4 + 1000);
+		const release = () => {
+			app.removeEventListener('transitionend', ended);
+			clearTimeout(fallback);
+			if (heldTimeline?.release !== release) return;
+			heldTimeline = undefined;
+			scroller.style.width = '';
+			pane.style.overflow = '';
+			pane.style.willChange = '';
+		};
+		app.addEventListener('transitionend', ended);
+		heldTimeline = { scroller, width, release };
+	}
+
+	// A panel opening or shutting (not a drag, nor the window crossing into or out of the member list's column):
+	// before the DOM changes, the timeline takes its final width for the slide.
+	let lastTracks: { rooms: number; members: number; wide: boolean } | undefined;
+	$effect.pre(() => {
+		const tracks = { rooms: roomsTrack, members: membersTrack, wide: memberListWide };
+		untrack(() => {
+			const before = lastTracks;
+			lastTracks = tracks;
+			if (!before || !slidesReady || before.wide !== tracks.wide || sidebar.resizing || memberList.resizing) return;
+			const change = before.rooms - tracks.rooms + before.members - tracks.members;
+			if (change !== 0) prepareSlide(change);
+		});
+	});
+
 	function toggleMemberList(): void {
 		if (memberListWide) memberList.toggle();
 		else memberListOverlay = !memberListOverlay;
@@ -1848,13 +1908,16 @@
 {:else}
 <div
 	class="app ap-shell ap-shell-norail"
+	class:slides={slidesReady}
 	class:side-collapsed={sidebar.collapsed}
 	class:side-resizing={sidebar.resizing || memberList.resizing}
 	class:member-list-open={memberListOpen}
 	class:member-list-wide={memberListWide}
 	data-pane={mobilePane}
-	style:--sidebar-w="{sidebar.collapsed ? 0 : sidebar.width}px"
+	style:--sidebar-w="{roomsTrack}px"
+	style:--rooms-w="{sidebar.width}px"
 	style:--member-list-w="{memberList.width}px"
+	style:--member-list-track="{membersTrack}px"
 >
 	<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />
 	<Sidebar
@@ -2065,7 +2128,8 @@
 	<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
 	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} onmention={(userId) => composer?.mention(userId)} />
 	<!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
-	{#if memberListWide && (memberListOpen || memberList.resizing)}<SidebarHandle layout={memberList} name="member list" oncollapse={() => memberListToggle?.focus()} />{/if}
+	<!-- Kept while shut (hidden), so its border slides with the list's. -->
+	{#if memberListWide}<SidebarHandle layout={memberList} name="member list" oncollapse={() => memberListToggle?.focus()} />{/if}
 
 	{#if feedback.current}
 		<div class="toast">
@@ -2087,18 +2151,32 @@
 	:global(html), :global(body) { height: 100%; }
 	:global(*), :global(*::before), :global(*::after) { box-sizing: border-box; }
 	:global(button), :global(input), :global(textarea), :global(select) { font: inherit; }
-	/* Collapsing or expanding the rooms list slides its column and fades its contents; a drag follows the pointer instead. */
-	/* --corner: how far a header's content keeps clear of a PanelToggle in the window's corner. */
-	.app { --corner: calc(var(--space-3) + 28px + var(--space-2)); height: 100dvh; min-height: 100%; position: relative; transition: --sidebar-w 260ms ease; }
-	/* The rooms list's toggle sits over its header, then over the room's once it's shut: the room's keeps clear of it as the list slides away. */
+	/*
+	 * --corner: how far a header's content keeps clear of a PanelToggle in the window's corner.
+	 * --slide: how both side panels open and shut. Their grid columns move (the grid's own transition, not an
+	 * inherited variable, so nothing else restyles each frame); each panel's contents keep their width against its
+	 * inner edge, so they ride the moving border rather than squeeze, and fade; the timeline keeps its final width
+	 * meanwhile (prepareSlide). A drag follows the pointer instead.
+	 */
+	.app { --corner: calc(var(--space-3) + 28px + var(--space-2)); --slide-time: 240ms; --slide-ease: cubic-bezier(0.2, 0, 0, 1); height: 100dvh; min-height: 100%; position: relative; overflow: clip; }
+	.slides { transition: grid-template-columns var(--slide-time) var(--slide-ease); }
+	/* The rooms list's toggle sits over its header, then over the room's once it's shut: the room's keeps clear of it. */
 	.app :global(.ap-shell-sidehead) { padding-left: var(--corner); }
-	.app :global(.ap-roomhead) { padding-left: max(var(--space-4), calc(var(--corner) - var(--sidebar-w))); }
+	.side-collapsed :global(.ap-roomhead) { padding-left: var(--corner); }
 	/* With a column of its own, the member list's toggle sits over its header, then over the room's. */
 	.member-list-wide :global(.member-list-head) { padding-right: var(--corner); }
 	.member-list-wide:not(.member-list-open) :global(.ap-roomhead) { padding-right: var(--corner); }
-	.app :global(.ap-shell-side) { transition: opacity 180ms ease, visibility 0s; }
-	.side-collapsed :global(.ap-shell-side) { border-right: 0; opacity: 0; visibility: hidden; transition: opacity 180ms ease, visibility 0s 180ms; }
-	.side-resizing, .side-resizing :global(.ap-shell-side) { transition: none; }
+	.slides :global(.ap-roomhead) { transition: padding var(--slide-time) var(--slide-ease); }
+	/* Each panel's contents keep its open width, against the edge that faces the conversation. */
+	.app :global(.ap-shell-side) { align-items: flex-end; }
+	.app :global(.ap-shell-side > *) { width: calc(var(--rooms-w) - 1px); }
+	.member-list-wide :global(.member-list) { overflow: hidden; align-items: flex-start; }
+	.member-list-wide :global(.member-list > *) { width: calc(var(--member-list-w) - 1px); }
+	/* Shut, a panel fades as it slides, then hides (from the keyboard and screen readers too). */
+	.slides :global(.ap-shell-side), .slides.member-list-wide :global(.member-list) { transition: opacity var(--slide-time) var(--slide-ease), visibility 0s; }
+	.side-collapsed :global(.ap-shell-side), .member-list-wide:not(.member-list-open) :global(.member-list) { opacity: 0; visibility: hidden; }
+	.slides.side-collapsed :global(.ap-shell-side), .slides.member-list-wide:not(.member-list-open) :global(.member-list) { transition: opacity var(--slide-time) var(--slide-ease), visibility 0s var(--slide-time); }
+	.side-resizing, .side-resizing :global(.ap-shell-side), .side-resizing :global(.member-list), .side-resizing :global(.ap-roomhead) { transition: none; }
 	.side-resizing, .side-resizing :global(*) { user-select: none; }
 	.banner { padding: var(--space-2) var(--space-4) 0; }
 	/* Over the conversation while files are dragged onto it; drag events pass through to the pane. */
@@ -2137,7 +2215,7 @@
 	.day-float-shown span { opacity: 1; transform: none; }
 	@media (prefers-reduced-motion: reduce) {
 		.day-float span { transition: none; transform: none; }
-		.app, .app :global(.ap-shell-side), .side-collapsed :global(.ap-shell-side) { transition: none; }
+		.app, .app :global(.ap-shell-side), .app :global(.member-list), .app :global(.ap-roomhead) { transition: none; }
 	}
 	.toast { position: fixed; z-index: 10; left: 50%; bottom: calc(var(--space-4) + 64px); transform: translateX(-50%); max-width: min(480px, calc(100% - var(--space-8))); }
 	.toast :global(.ap-status) { box-shadow: var(--shadow-float); }
@@ -2145,7 +2223,8 @@
 
 	/* Wide screens give an open member list its own column; narrower ones overlay it. */
 	@media (min-width: 960px) {
-		.app.member-list-open { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--member-list-w); }
+		/* Its column is there while shut too, at 0, so it can slide. */
+		.app.member-list-wide { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--member-list-track); }
 	}
 	/* Under 720px it's one pane at a time: rooms, then the room or thread, pushed like pages. */
 	@media (max-width: 719px) {
@@ -2154,9 +2233,11 @@
 		.app > :global(.panel-toggle.left) { display: none; }
 		.app :global(.ap-shell-sidehead) { padding-left: var(--space-4); }
 		.app :global(.ap-roomhead) { padding-left: var(--space-4); }
+		.app :global(.ap-shell-side) { align-items: stretch; }
+		.app :global(.ap-shell-side > *) { width: auto; }
 		.app[data-pane='main'] :global(.ap-shell-side) { display: none; }
 		.app[data-pane='rooms'] .ap-shell-main, .app[data-pane='rooms'] :global(.member-list) { display: none; }
-		.side-collapsed :global(.ap-shell-side) { opacity: 1; visibility: visible; transition: none; }
+		.side-collapsed :global(.ap-shell-side), .slides.side-collapsed :global(.ap-shell-side) { opacity: 1; visibility: visible; transition: none; }
 		.typing-row { display: none; }
 		.toast-right { right: var(--space-4); left: var(--space-4); max-width: none; }
 	}
