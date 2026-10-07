@@ -535,8 +535,8 @@ without a `room_id` until a message names it, plus any room a message arrives
 in, titled by its `room_id`.
 
 Threads are rooms with a `parent_room_id`. The sidebar lists top-level rooms
-and, under the open room, its threads in two groups. First the ones you've joined
-(and one open without joining, while it's open), on a guide line from the room:
+and, under the open room, its threads in two groups. First the ones you've joined,
+on a guide line from the room:
 each title in ink, heavier with unread replies, over a lighter line of preview,
 with a door on hover that leaves it. Then **Other threads · N**, a heading
 that folds like Browse rooms (it stays as you left it, on this device): the
@@ -544,7 +544,8 @@ threads you haven't joined, titles only, since they deliver nothing live
 ([PROTOCOL.md §3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#34-rooms))
 and so have no counts or previews. It shows the three most recently active (the
 server's `room_list` order) and the rest on **N more…**; picking one reads it
-without joining, and **Join** on the row (on hover, or always on touch) joins it
+without joining (it stays in this list, picked out, with its Join showing, also
+while the list is folded or past the first three), and **Join** on the row (on hover, or always on touch) joins it
 and opens it once its `room_update` arrives. Leaving is how a thread is put
 away: it stops counting unread and alerting, moves down to Other threads, and
 does so on every device, since it's a membership; its card stays in the room.

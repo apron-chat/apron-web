@@ -73,9 +73,9 @@
 	let canCreateRoom = $derived(session.canManageRooms && session.ready && !session.readOnly);
 	/** Visible rooms this user hasn't joined (or has left), from the latest `room_list`. */
 	let unjoined = $derived((session.snapshot.directory ?? []).filter((listing) => !listing.joined));
-	/** Threads of the active room this user hasn't joined, once `room_list` has listed them, but for the one open. */
+	/** Threads of the active room this user hasn't joined, once `room_list` has listed them. */
 	// From the same source as the room's thread cards: a held view's listing while it shows, so they change over together.
-	let otherThreads = $derived(canBrowse ? (session.threadSource(session.activeRoomId).directory ?? []).filter((listing) => !listing.joined && listing.id !== activeThread) : []);
+	let otherThreads = $derived(canBrowse ? (session.threadSource(session.activeRoomId).directory ?? []).filter((listing) => !listing.joined) : []);
 
 	/** Changes whenever a room or thread is joined or left. */
 	let joinedKey = $derived(session.rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));

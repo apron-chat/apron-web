@@ -2106,7 +2106,9 @@ export class ChatClient {
 				checkpoint = maxDefined(checkpoint, lastId);
 				room.loadCheckpoint = checkpoint;
 			}
+			// Nothing past the checkpoint (a join that logged nothing, a reconnect to a quiet thread): caught up already.
 			room.loadCheckpoint = maxDefined(checkpoint, head);
+			room.resumed = false;
 		} catch (cause) {
 			if (!stale()) room.recoveryError = cause instanceof Error ? cause.message : 'History failed';
 			throw cause;
