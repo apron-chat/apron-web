@@ -398,10 +398,10 @@
 		status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
 		onclosed={() => preferencesTrigger?.focus()}
 	/>
-	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || 'not signed in'}${ownStatus ? `, ${(ownLabel ?? presenceLabel(ownStatus) ?? '').toLowerCase()}` : ''}. Edit`} onclick={toggle}>
+	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || (session.starting ? 'signing in' : 'not signed in')}${ownStatus ? `, ${(ownLabel ?? presenceLabel(ownStatus) ?? '').toLowerCase()}` : ''}. Edit`} onclick={toggle}>
 		<Avatar name={you?.name || you?.user_id || '?'} id={you?.user_id} src={avatar} status={ownStatus} statusLabel={ownLabel} />
 		<span class="ap-profile-text">
-			<span class="ap-profile-name">{you?.name || you?.user_id || 'Not signed in'}</span>
+			<span class="ap-profile-name">{you?.name || you?.user_id || (session.starting ? 'Signing in…' : 'Not signed in')}</span>
 			<span class="ap-profile-sub">on {backendLabel}{#if wayBack} · add a sign-in{/if}</span>
 		</span>
 		<span class="ap-profile-edit" aria-hidden="true">Edit</span>

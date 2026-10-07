@@ -67,7 +67,8 @@
 	/** Visible rooms this user hasn't joined (or has left), from the latest `room_list`. */
 	let unjoined = $derived((session.snapshot.directory ?? []).filter((listing) => !listing.joined));
 	/** Threads of the active room this user hasn't joined, once `room_list` has listed them. */
-	let unjoinedThreads = $derived(session.activeRoomId ? (session.snapshot.threadDirectory[session.activeRoomId] ?? []).filter((listing) => !listing.joined) : []);
+	// From the same source as the room's thread cards: a held view's listing while it shows, so they change over together.
+	let unjoinedThreads = $derived((session.threadSource(session.activeRoomId).directory ?? []).filter((listing) => !listing.joined));
 
 	/** Changes whenever a room or thread is joined or left. */
 	let joinedKey = $derived(session.rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));
@@ -117,7 +118,9 @@
 				{/if}
 			</div>
 			<div class="ap-sect-body" data-testid="room-list">
-				{#if rooms.length === 0}
+				{#if rooms.length === 0 && session.starting}
+					<div class="placeholder" aria-hidden="true"><span class="ap-skel" style:width="70%"></span><span class="ap-skel" style:width="52%"></span><span class="ap-skel" style:width="61%"></span></div>
+				{:else if rooms.length === 0}
 					<p class="muted">{session.snapshot.status === 'connected' ? 'No rooms yet.' : 'Waiting for rooms…'}</p>
 				{:else}
 					{#each rooms as room (room.id)}
@@ -208,6 +211,8 @@
 	.ap-shell-sidehead { gap: var(--space-2); }
 	.create-room-trigger { width: 28px; padding: 0; justify-content: center; }
 	.backend { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
+	.placeholder .ap-skel { height: 12px; }
 	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
 	.threads { display: flex; flex-direction: column; gap: 2px; }
 	.room-meta { flex: none; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
