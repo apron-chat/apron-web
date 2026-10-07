@@ -67,7 +67,9 @@ live region, and switches and checkboxes that can't change stay focusable with
 `src/routes/+page.svelte` owns the session and the navigation (which room or
 thread is open, per-room drafts) and composes the components. The
 reactive state behind it lives in `src/lib/ui` as small classes — `SessionView`
-(the last authenticated view, held through a reconnect), `MentionTracker`,
+(the last authenticated view, held through a reconnect or primed from this device;
+`starting` while the first rooms aren't listed, `activeRoomHeld` while the open
+room shows its held copy, and the open room's thread cards from the same view), `MentionTracker`,
 `IncomingMessageTracker` (new messages from others, for notifications),
 `AppearanceSettings` (theme and fonts),
 `UnreadTracker`, `MessageSelection`, `FeedbackState`, `SidebarLayout`,
@@ -85,7 +87,12 @@ and `time.ts` read messages, `connection.ts` words the connection state, and
 `email-link.ts` reads and scrubs an emailed sign-in link from the URL and words the question asked before using it,
 `members.ts` reads the `user_id` typed to add a member, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
-Preferences included (on this device only; nothing is synced), and
+Preferences included (on this device only; nothing is synced),
+`session-cache.ts` keeps `SessionView`'s held view in IndexedDB per server, trimmed to
+the last day's messages (`keptView`), which the page primes `SessionView` with
+(`prime`) before the next visit's session is ready: shown as a held view, never
+fed to the unread, mention or notification trackers, and replaced room by room
+as a reconnect's is, and
 `notifications.ts` shows notifications, through `service-worker.ts` where it
 is registered, and words pushed messages for the service worker,
 `notify-scopes.ts` decides which arriving messages the page notifies about from

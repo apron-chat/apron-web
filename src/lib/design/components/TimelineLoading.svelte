@@ -1,0 +1,35 @@
+<script lang="ts">
+	interface Props {
+		/** What is happening, such as "Checking for new messages…" or "Loading messages…". */
+		label: string;
+		/** Placeholder message rows above it, while the timeline has nothing to show yet. */
+		rows?: number;
+	}
+	let { label, rows = 0 }: Props = $props();
+
+	/** Widths that vary like real messages, the same on every render so nothing shimmers into a new shape. */
+	const WIDTHS = [['30%', '78%'], ['22%', '64%'], ['26%', '88%'], ['18%', '52%'], ['28%', '70%'], ['24%', '60%']];
+</script>
+
+{#snippet pill()}
+	<!-- At the foot of the timeline, where new messages will appear; sticky, so it stays in view while reading back. -->
+	<div class="ap-tlstatus" role="status"><span class="ap-tlstatus-pill"><span class="ap-tlstatus-spin" aria-hidden="true"></span>{label}</span></div>
+{/snippet}
+
+{#if rows > 0}
+	<!-- Nothing shown yet: placeholder rows stand at the bottom, where the newest messages will. -->
+	<div class="ap-tlload">
+		<div class="ap-skel-rows" aria-hidden="true">
+			{#each { length: rows } as _, index (index)}
+				{@const [name, text] = WIDTHS[index % WIDTHS.length]}
+				<div class="ap-skel-row">
+					<span class="ap-skel ap-skel-avatar"></span>
+					<span class="ap-skel-lines"><span class="ap-skel ap-skel-name" style:width={name}></span><span class="ap-skel ap-skel-text" style:width={text}></span></span>
+				</div>
+			{/each}
+		</div>
+		{@render pill()}
+	</div>
+{:else}
+	{@render pill()}
+{/if}

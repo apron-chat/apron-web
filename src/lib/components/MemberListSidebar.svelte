@@ -122,7 +122,9 @@
 		{/if}
 	</div>
 	<div class="member-list-body" data-testid="room-member-list">
-		{#if !room}
+		{#if !room && session.starting}
+			<div class="placeholder" aria-hidden="true"><span class="ap-skel" style:width="62%"></span><span class="ap-skel" style:width="48%"></span></div>
+		{:else if !room}
 			<p class="muted">Select a room to see its members.</p>
 		{:else if room.members === undefined}
 			<p class="muted">{session.canManageRooms ? 'Loading members…' : 'Members are unavailable on this server.'}</p>
@@ -177,6 +179,8 @@
 	.member-list-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-body); line-height: 20px; font-weight: 600; }
 	.member-list-count { color: var(--ink-muted); font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
 	.member-list-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2); }
+	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
+	.placeholder .ap-skel { height: 12px; }
 	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
 	.err { color: var(--danger); }
 	.add-toggle { flex: none; margin-left: auto; }

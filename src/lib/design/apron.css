@@ -508,6 +508,23 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 }
 @media (prefers-reduced-motion: reduce) { .ap-viewer[open] { animation: none; } .ap-viewer-btn { transition: none; } }
 
+/* TimelineLoading — at the foot of the timeline while it catches up: a pill, and placeholder rows when there is nothing to show yet */
+/* The space below it is its own padding, not a sticky offset: an offset would pull it up onto the message above. */
+.ap-tlstatus { position: sticky; bottom: 0; z-index: 1; display: flex; justify-content: center; margin-top: var(--space-4); padding-bottom: var(--space-2); pointer-events: none; }
+.ap-tlstatus-pill { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3) var(--space-1) 10px; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); color: var(--ink-muted); font-size: var(--text-sm); line-height: 16px; box-shadow: var(--shadow-float); }
+.ap-tlstatus-spin { width: 12px; height: 12px; box-sizing: border-box; border-radius: var(--radius-full); border: 2px solid color-mix(in srgb, var(--ink-muted) 35%, transparent); border-top-color: var(--accent); animation: ap-spin .8s linear infinite; }
+@keyframes ap-spin { to { transform: rotate(360deg); } }
+.ap-tlload { display: flex; flex-direction: column; justify-content: flex-end; min-height: 100%; box-sizing: border-box; }
+.ap-skel-rows { display: flex; flex-direction: column; gap: var(--space-1); }
+.ap-skel-row { display: flex; gap: var(--space-3); padding: var(--space-2) var(--space-4); }
+.ap-skel { display: block; border-radius: var(--radius-sm); background: var(--bg-300); animation: ap-skel-pulse 1.6s ease-in-out infinite; }
+.ap-skel-avatar { flex: none; width: var(--avatar-md); height: var(--avatar-md); border-radius: var(--radius-full); }
+.ap-skel-lines { flex: 1; display: grid; gap: var(--space-2); align-content: center; }
+.ap-skel-name { height: 11px; }
+.ap-skel-text { height: 10px; }
+@keyframes ap-skel-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .ap-tlstatus-spin { animation-duration: 2.4s; } .ap-skel { animation: none; } }
+
 /* SelectionBar — replaces the composer while messages are being picked */
 .ap-selbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) var(--space-4); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); background: var(--bg-200); border: 1px solid var(--accent); border-radius: var(--radius-lg); font-size: var(--text-ui); line-height: 18px; }
 .ap-selbar .ap-btn { border-radius: calc(var(--radius-lg) - var(--space-2)); }

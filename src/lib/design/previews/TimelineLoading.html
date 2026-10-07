@@ -1,0 +1,17 @@
+<!-- @dsCard group="Timeline" height=360 subtitle="Loading messages with placeholder rows, then checking for new messages under what is already shown" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>TimelineLoading</title></head>
+<body>
+<div id="root" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function pane() { var box = document.createElement('div'); box.style.cssText = 'display:flex;flex-direction:column;height:300px;border:1px solid var(--line);border-radius:10px;background:var(--bg-100);overflow:auto'; root.appendChild(box); return box; }
+  A.render(A.TimelineLoading, pane(), { label: 'Loading messages…', rows: 5 });
+  var shown = pane();
+  shown.innerHTML = '<div style="flex:1"></div><p style="margin:0;padding:8px 16px;color:var(--ink)">Heading out, see you tomorrow!</p>';
+  var foot = document.createElement('div'); shown.appendChild(foot);
+  A.render(A.TimelineLoading, foot, { label: 'Checking for new messages…' });
+</script>
+</body>
+</html>

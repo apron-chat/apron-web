@@ -41,6 +41,8 @@
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, type RecentServer } from '$lib/ui/storage';
+	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
+	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
 	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadLostPrivacy, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
 	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
@@ -83,6 +85,10 @@
 	const REVEAL_CHUNK_ITEMS = 60;
 	/** How long a members listing stays current when the mention picker opens. */
 	const MEMBERS_FRESH_MS = 15_000;
+	/** How long the open room's messages wait for its thread listing, so the cards arrive with them. */
+	const THREADS_WAIT_MS = 3000;
+	/** The shortest gap between keeping the view on this device; leaving the page keeps it at once. */
+	const VIEW_SAVE_MS = 2000;
 	/** The shortest gap between listings made because the pane has no members. */
 	const MEMBERS_RETRY_MS = 10_000;
 	/** A new thread of a private room that the server made visible to others (§4.3.4). */
@@ -244,7 +250,8 @@
 	/** The top-level room open in the pane (or behind the open thread). */
 	let activeRoom = $derived(session.activeRoom);
 	/** The active room's threads: the joined ones, then those listed as not joined, which get cards too. */
-	let threads = $derived(threadEntries(session.rooms, activeRoom?.id, activeRoom ? snapshot.threadDirectory[activeRoom.id] : undefined));
+	let threadSource = $derived(session.threadSource(activeRoom?.id));
+	let threads = $derived(threadEntries(threadSource.rooms, activeRoom?.id, threadSource.directory));
 	let joinedThreads = $derived(threads.filter((entry) => entry.joined));
 	/** The sidebar lists joined threads, and a thread open without joining while it is open. */
 	let listedThreads = $derived(threads.filter((entry) => entry.joined || entry.id === activeThread));
@@ -252,7 +259,52 @@
 	let activeThreadEntry = $derived(activeThread && session.rooms.some((room) => room.id === activeThread) ? threads.find((entry) => entry.id === activeThread) : undefined);
 	let threadRoom = $derived(activeThreadEntry ? session.rooms.find((room) => room.id === activeThreadEntry.id) : undefined);
 	/** The room the pane shows and the composer posts to: the open thread (itself a room), else the room. */
+	/**
+	 * The rooms whose thread listing (`room_list` with their `parent_room_id`) has settled on this connection.
+	 * Until the open room's has, its messages wait with it (a held copy, or placeholders), so the thread cards
+	 * don't arrive on their own afterwards and shift the timeline. Once per room: switching back doesn't wait.
+	 */
+	let threadsListed = $state<readonly string[]>([]);
+	let awaitingThreads = $derived(Boolean(session.ready && session.canManageRooms && session.activeRoomId && !threadsListed.includes(session.activeRoomId)));
+	$effect(() => {
+		if (!session.ready) threadsListed = [];
+	});
+	$effect(() => {
+		const roomId = session.ready && session.canManageRooms ? session.activeRoomId : undefined;
+		if (!roomId || !client || untrack(() => threadsListed.includes(roomId))) return;
+		let current = true;
+		const settle = () => { if (current && !threadsListed.includes(roomId)) threadsListed = [...threadsListed, roomId]; };
+		// The Sidebar asks for the same listing; the client shares one request.
+		untrack(() => client!.listRooms(roomId)).then(settle, settle);
+		// A slow listing holds the room back for this long at most.
+		const cap = setTimeout(settle, THREADS_WAIT_MS);
+		return () => { current = false; clearTimeout(cap); };
+	});
+	$effect(() => session.awaitThreads(awaitingThreads ? session.activeRoomId : undefined));
+
+	/** When the view was last kept on this device: a busy room saves at most once per `VIEW_SAVE_MS`. */
+	let viewSavedAt = 0;
+	function keepView(): void {
+		const view = untrack(() => session.keepable);
+		const you = untrack(() => session.snapshot.you);
+		// Only for a session saved here (a passkey or email account): a guest's next visit is someone new.
+		if (previewMode || !client || !view || !you || !client.keptSessionFor(client.url)) return;
+		viewSavedAt = Date.now();
+		void saveView(client.url, you.user_id, view);
+	}
+	$effect(() => {
+		if (!session.keepable) return;
+		const timer = setTimeout(keepView, Math.max(0, viewSavedAt + VIEW_SAVE_MS - Date.now()));
+		return () => clearTimeout(timer);
+	});
 	let paneRoom = $derived(activeThread ? threadRoom : activeRoom);
+	/**
+	 * The open pane is catching up: its history is recovering or loading, or it shows a copy held from before
+	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
+	 */
+	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || session.showingHeld || (!activeThread && (session.activeRoomHeld || awaitingThreads)))));
+	/** Nothing held to show while the room's threads are listed: placeholders, so its messages and thread cards appear together. */
+	let paneHeldBack = $derived(awaitingThreads && !activeThread && !session.activeRoomHeld);
 	let messages = $derived(timelineMessages(paneRoom));
 	let timeline = $derived(activeThread
 		? buildThreadTimeline({ messages, renames: paneRoom?.renames, notices: paneRoom?.notices })
@@ -318,6 +370,8 @@
 	});
 
 	$effect(() => {
+		// A held view (a reconnect, or one kept on this device) is from before: nothing in it has just arrived.
+		if (session.showingHeld) return;
 		const arrivedMentions = mentions.observe(session.rooms, session.you, paneRoom?.id, latestVisible);
 		const arrivedMessages = incomingMessages.observe(session.rooms, session.you);
 		// A mention in a room you muted (§4.5) doesn't alert the tab either.
@@ -333,6 +387,7 @@
 	});
 
 	$effect(() => {
+		if (session.showingHeld) return;
 		unread.observe(session.rooms, session.you, paneRoom?.id, latestVisible && presence.visible);
 	});
 
@@ -543,7 +598,8 @@
 	// again after a reconnect, which lists it afresh.
 	$effect(() => {
 		const room = threadRoom;
-		if (!client || !room || !session.ready || room.loaded || room.loading || room.recoveryError) return;
+		// A held copy (from before a reconnect or a reload) isn't the live thread: that one loads once it's listed.
+		if (!client || !room || !session.ready || session.showingHeld || room.loaded || room.loading || room.recoveryError) return;
 		untrack(() => loadThread(room.id));
 	});
 
@@ -672,6 +728,13 @@
 			displayName,
 			webSocketFactory
 		);
+		// The view from this device's last visit, while this one signs in and catches up: only for the session
+		// saved here, which is the account it was kept for (a sign-in as anyone else drops it).
+		if (!previewMode && chat.keptSessionFor(chat.url)) {
+			void loadView(chat.url).then((kept) => {
+				if (kept && client === chat) session.prime(kept.view);
+			});
+		}
 		const unsubscribe = chat.subscribe((next) => {
 			serverUrl = chat.url;
 			session.apply(next, chat);
@@ -968,6 +1031,7 @@
 		const chat = client;
 		return () => {
 			if (chat && account) void pushSettings.signedOut(chat, account);
+			if (chat) void clearView(chat.url);
 			session.forget();
 		};
 	}
@@ -1684,7 +1748,7 @@
 </script>
 
 <svelte:window onkeydown={windowKeydown} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
-<svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); }} />
+<svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') keepView(); }} />
 
 <svelte:head>
 	<title>{tabTitle(unread.total, presence.titleFlash)}</title>
@@ -1763,6 +1827,9 @@
 					<TypingDots />
 					<span data-testid="connection-status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
 				</div>
+			{:else if session.starting && session.connection === 'connecting'}
+				<!-- Coming up with a view from before: the timeline's foot says it's checking; a banner would only alarm. -->
+				<span class="sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
 			{:else if session.connection !== 'connected'}
 				<div class="banner">
 					<StatusBanner tone={session.connection === 'connecting' ? 'warn' : 'danger'} testid="connection-status" live>
@@ -1794,7 +1861,10 @@
 				{#if activeThread && activeThreadEntry?.description}
 					<ThreadSummary description={activeThreadEntry.description} onopenroom={openMentionedRoom} />
 				{/if}
-				{#if timeline.length === 0 && !(paneRoom?.recovering || paneRoom?.loading)}
+				<!-- No messages yet: placeholders, not thread cards on their own. -->
+				{#if (messages.length === 0 || paneHeldBack) && paneCatchingUp}
+					<TimelineLoading label={activeThread ? 'Loading replies…' : 'Loading messages…'} rows={activeThread ? 3 : 6} />
+				{:else if timeline.length === 0}
 					<div class="empty">
 						<h2>{activeThread ? 'No replies yet' : 'Nothing here yet'}</h2>
 						<p>{activeThread ? 'Reply below to continue the thread.' : `Start the conversation in ${activeRoom.title}.`}</p>
@@ -1849,6 +1919,7 @@
 							/>
 						{/if}
 					{/each}
+					{#if paneCatchingUp}<TimelineLoading label={activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} />{/if}
 				{/if}
 			</div>
 
@@ -1889,6 +1960,15 @@
 					onmention={() => listMembers(MEMBERS_FRESH_MS)}
 				/>
 			{/if}
+		{:else if session.starting}
+			<!-- Coming up (connecting, signing in, listing rooms): placeholders where the room will be, not "No room open". -->
+			<div class="starting">
+				<header class="ap-roomhead"><span class="ap-skel starting-title" aria-hidden="true"></span></header>
+				<div class="ap-timeline starting-timeline">
+					<span class="sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
+					<TimelineLoading label={session.connection === 'connected' ? 'Loading messages…' : 'Connecting…'} rows={6} />
+				</div>
+			</div>
 		{:else}
 			<div class="empty empty-room">
 				{#if session.connection !== 'connected'}
@@ -1940,6 +2020,9 @@
 	}
 	.reconnect-quiet { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-4) 0; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); }
 	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+	.starting { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+	.starting-title { width: 120px; height: 14px; }
+	.starting-timeline { display: flex; flex-direction: column; }
 	.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; }
 	.empty h2 { margin: 0; font-size: var(--text-title); line-height: 24px; font-weight: 600; color: var(--ink); }
 	.empty p { margin: 0; }

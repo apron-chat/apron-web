@@ -85,9 +85,8 @@
 			<p class="ap-roomhead-sub" data-testid="room-description" title={room.description}>{topic}</p>
 		{/if}
 	</div>
-	{#if pane.recovering || pane.loading}
-		<span class="ap-roomhead-sub" role="status">Loading history…</span>
-	{:else if pane.recoveryError}
+	<!-- Recovering or loading shows at the foot of the timeline (TimelineLoading), where the new messages will appear. -->
+	{#if pane.recoveryError}
 		<span class="ap-roomhead-sub" role="status">History unavailable</span>
 	{/if}
 	{#if canJoin}

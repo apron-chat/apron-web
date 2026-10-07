@@ -41,6 +41,27 @@ lazily loaded file the deploy removed), a notice at the top offers **Reload**
 or **Later**; it never reloads by itself. Drafts live only in memory, so while
 any room or thread has unsent text or files it adds that reloading clears your
 unsent message.
+
+A reload, or opening the app again, picks up where you were. With a session
+saved on this device (a passkey or email account; a guest's isn't kept), the
+page first shows the view kept from last time: the rooms and threads, the open
+room with its messages from the last day (the newest 150 per room), its thread
+cards and members, and who you are. A pill at the foot of the timeline says it's
+checking for new messages, and each room is replaced by the live one once it has
+recovered: what arrived meanwhile comes in under the New divider, and edits,
+deletions and reactions update in place. The kept view is only for showing: it
+never sends a read cursor, notifies, or counts as unread, and the live session
+recovers every room as it would without it. It is kept per server in IndexedDB
+for the account signed in there, dropped after a week, removed on sign-out, and
+dropped as soon as the server signs in as anyone else. Without one (a first
+visit, or a guest), the page shows placeholder rooms, messages and members, with
+"Connecting…" and then "Loading messages…" at the foot of the timeline, instead of
+"Not signed in", "No rooms yet" or "No room open". While the open room or thread
+recovers or loads its history, the same pill says so ("Checking for new
+messages…" under what's already there), and the first time a room is shown on
+a connection its messages wait for its thread listing, for at most three
+seconds, so its thread cards arrive with them instead of shifting the timeline
+afterwards.
 With the `activity` capability, typing is reported as `activity` notifications that ask
 for a 15-second indicator (`typing: 15`) and refresh it at most once every 12
 seconds per room, with one `typing: 0` when typing pauses, to avoid charging a
