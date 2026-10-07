@@ -10,6 +10,11 @@ export interface EmojiPickerRequest {
 	anchor: HTMLElement;
 	/** A picked emoji, as its native text. The picker has closed by then. */
 	onpick: (emoji: string) => void;
+	/**
+	 * What the pick is for, shown above the picker, such as the message a
+	 * reaction goes on: new messages can scroll it away, or the sheet cover it.
+	 */
+	caption?: { lead: string; text: string };
 }
 
 class EmojiPicker {

@@ -26,6 +26,11 @@ export interface EmbedProps {
 	detail?: string;
 	/** upload with og.image: false hides the caption under the picture. */
 	caption?: boolean;
+	/**
+	 * upload with og.image: a plain click (`plainClick`) on the picture calls this instead of following the link,
+	 * to show it full screen in a MediaViewer. Other clicks still open the link in a new tab or window.
+	 */
+	onview?: (event: MouseEvent) => void;
 	/** stream (§4.8.5): `format` plain | markdown | terminal. Live while `url` is set and not `done`. */
 	format?: string;
 	text?: string;
@@ -89,3 +94,19 @@ export type ConnectionState = 'connected' | 'connecting' | 'reconnecting' | 'wai
  * any value this client doesn't know.
  */
 export type Presence = 'online' | 'idle' | 'dnd' | 'offline' | 'invisible' | 'unknown';
+
+/** One image in the MediaViewer. */
+export interface MediaItem {
+	/** The image to show: the full file where it may load, else its preview. */
+	src: string;
+	alt?: string;
+	/** What it is called, such as its file name. */
+	title: string;
+	/** One more line, such as who sent it and when. */
+	detail?: string;
+	/** The original, which Open original opens in a new tab. */
+	href?: string;
+	/** Its size, so the image keeps its shape while it loads. */
+	width?: number;
+	height?: number;
+}

@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import UserMinus from '@lucide/svelte/icons/user-minus';
+	import UserPlus from '@lucide/svelte/icons/user-plus';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { Identity } from '$lib/protocol/types';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -45,14 +47,34 @@
 		return Object.values(session.snapshot.users).filter((user) => !current.has(user.user_id) && !user.user_id.startsWith('~'));
 	});
 	let adding = $state('');
+	/** The add form is open: it opens from the header's button, since most visits are to see who is here. */
+	let addOpen = $state(false);
 	let busy = $state(false);
 	let note = $state<{ text: string; error: boolean } | undefined>();
+	let addToggle = $state<HTMLButtonElement | undefined>();
+	let addInput = $state<HTMLInputElement | undefined>();
+	const uid = $props.id();
 
 	$effect(() => {
 		void room?.id;
 		note = undefined;
 		adding = '';
+		addOpen = false;
 	});
+
+	async function toggleAdd(): Promise<void> {
+		addOpen = !addOpen;
+		if (!addOpen) return;
+		note = undefined;
+		await tick();
+		addInput?.focus();
+	}
+
+	function closeAdd(): void {
+		addOpen = false;
+		adding = '';
+		addToggle?.focus();
+	}
 
 	async function add(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
@@ -67,7 +89,7 @@
 		try {
 			await client.joinRoom(room.id, userId).promise;
 			note = { text: `Added ${directory.name({ user_id: userId })}.`, error: false };
-			adding = '';
+			closeAdd();
 		} catch (cause) {
 			note = { text: cause instanceof Error ? cause.message : 'Unable to add them', error: true };
 		} finally {
@@ -93,8 +115,11 @@
 
 <aside class="member-list" class:open aria-label="Room member list">
 	<div class="member-list-head">
-		<span role="heading" aria-level="2">Member list</span>
+		<span role="heading" aria-level="2">Members</span>
 		{#if total !== undefined}<span class="member-list-count" data-testid="member-count">{total}</span>{/if}
+		{#if changing && room?.members !== undefined}
+			<button bind:this={addToggle} class={['ap-iconbtn', 'add-toggle', addOpen && 'ap-iconbtn-on']} type="button" aria-label="Add a member" title="Add a member" aria-expanded={addOpen} aria-controls={`${uid}-add`} onclick={toggleAdd}><UserPlus size={16} aria-hidden="true" /></button>
+		{/if}
 	</div>
 	<div class="member-list-body" data-testid="room-member-list">
 		{#if !room}
@@ -102,13 +127,16 @@
 		{:else if room.members === undefined}
 			<p class="muted">{session.canManageRooms ? 'Loading members…' : 'Members are unavailable on this server.'}</p>
 		{:else}
-			{#if changing}
-				<form class="add" onsubmit={add} aria-label="Add a member">
-					<input class="ap-field" list="member-candidates" placeholder="Add by @user_id" aria-label="User to add" bind:value={adding} disabled={busy} autocomplete="off" spellcheck="false" />
+			{#if changing && addOpen}
+				<form class="add" id={`${uid}-add`} onsubmit={add} aria-label="Add a member">
+					<label class="add-label" for={`${uid}-user`}>Add a member</label>
+					<div class="add-row">
+						<input id={`${uid}-user`} bind:this={addInput} class="ap-field" list="member-candidates" placeholder="@user_id" bind:value={adding} disabled={busy} autocomplete="off" spellcheck="false" onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); closeAdd(); } }} />
+						<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" disabled={busy || !adding.trim()}>Add</button>
+					</div>
 					<datalist id="member-candidates">
 						{#each candidates as user (user.user_id)}<option value={user.user_id}>{directory.name(user)} (@{user.user_id})</option>{/each}
 					</datalist>
-					<button class="ap-btn ap-btn-sm" type="submit" disabled={busy || !adding.trim()}>Add</button>
 				</form>
 			{/if}
 			{#if note}<p class="muted" class:err={note.error} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}
@@ -146,15 +174,19 @@
 <style>
 	.member-list { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-000); border-left: 1px solid var(--line); }
 	.member-list:not(.open) { display: none; }
-	.member-list-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: 15px; line-height: 20px; font-weight: 600; }
-	.member-list-count { color: var(--ink-muted); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+	.member-list-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-body); line-height: 20px; font-weight: 600; }
+	.member-list-count { color: var(--ink-muted); font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
 	.member-list-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2); }
-	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: 13px; line-height: 18px; }
+	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
 	.err { color: var(--danger); }
-	.add { display: flex; gap: var(--space-2); padding: 0 var(--space-1) var(--space-2); }
-	.add .ap-field { flex: 1; min-width: 0; height: 28px; font-size: 13px; }
+	.add-toggle { flex: none; margin-left: auto; }
+	/* Raised, like a popover in place: the members stay in view below it. */
+	.add { display: grid; gap: var(--space-2); margin: 0 var(--space-1) var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-100); }
+	.add-label { font-size: var(--text-sm); line-height: 16px; font-weight: 600; color: var(--ink); }
+	.add-row { display: flex; gap: var(--space-2); min-width: 0; }
+	.add .ap-field { flex: 1; min-width: 0; height: 28px; font-size: var(--text-ui); }
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-	.member { display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: 13px; line-height: 18px; }
+	.member { display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
 	/* Role badges follow the name, as beside a message's sender; the remove button takes the far right. */
 	.who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 	.who:hover .member-name { text-decoration: underline; }
@@ -164,7 +196,7 @@
 	.member.offline :global(.ap-avatar) { opacity: .6; }
 	.member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.member :global(.ap-roles) { flex: none; flex-wrap: nowrap; }
-	.member-name small { margin-left: 4px; color: var(--ink-muted); font-size: 11px; }
+	.member-name small { margin-left: 4px; color: var(--ink-muted); font-size: var(--text-xs); }
 	/* Remove shows on hover or focus, always on touch screens. */
 	.remove { flex: none; width: 24px; height: 24px; margin-left: auto; opacity: 0; }
 	.member:hover .remove, .member:focus-within .remove { opacity: 1; }

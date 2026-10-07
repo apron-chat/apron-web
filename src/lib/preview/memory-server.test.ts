@@ -24,7 +24,10 @@ describe('in-memory preview protocol', () => {
 		await waitFor(() => client.snapshot().authenticated && client.snapshot().rooms.some((room) => room.id === 'general' && room.loaded));
 
 		const general = client.snapshot().rooms.find((room) => room.id === 'general')!;
-		expect(timelineMessages(general)).toHaveLength(9);
+		expect(timelineMessages(general)).toHaveLength(10);
+		// The last seeded message carries two finished image uploads, for the image viewer.
+		const photos = timelineMessages(general).at(-1)?.body?.embeds ?? [];
+		expect(photos.map((embed) => [embed.kind, embed.og?.image?.url?.startsWith('data:image/jpeg;base64,')])).toEqual([['upload', true], ['upload', true]]);
 		await client.listRooms('general', 0);
 		expect(client.snapshot().rooms.some((room) => room.id === 'thread_deploy')).toBe(true);
 		await client.loadRoom('thread_deploy');

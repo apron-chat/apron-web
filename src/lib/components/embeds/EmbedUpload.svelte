@@ -4,13 +4,18 @@
 	import { embedMedia, safeLink } from '$lib/protocol/embeds';
 	import type { Embed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { mediaViewer } from '$lib/ui/media-viewer.svelte';
+	import { plainClick } from '$lib/design/components/util';
 
 	/**
 	 * A file someone uploaded (capability `embed:upload`, §4.8.4). Pending while
 	 * `url` is absent — with progress on the sender's side — then drawn from
 	 * `og`: a video player, an audio player, an image, or else a file card.
+	 * A plain click on an image opens it full screen; `detail` (who sent it,
+	 * and when) goes under its name there. Other clicks keep the link's own
+	 * behavior: a new tab or window.
 	 */
-	let { embed, upload }: { embed: Embed; upload?: UploadState } = $props();
+	let { embed, upload, detail }: { embed: Embed; upload?: UploadState; detail?: string } = $props();
 	let url = $derived(safeLink(embed.url));
 	let og = $derived(embed.og ?? {});
 	let title = $derived(embed.title || og.title || 'File');
@@ -24,6 +29,12 @@
 	/** og width and height only reserve the aspect ratio (embed-max-w × embed-max-h clamp the box). */
 	function ratio(media: { width?: number; height?: number } | undefined): string | undefined {
 		return media?.width && media.height ? `${media.width} / ${media.height}` : undefined;
+	}
+
+	function view(event: MouseEvent & { currentTarget: HTMLAnchorElement }): void {
+		if (!plainClick(event)) return;
+		event.preventDefault();
+		mediaViewer.show(event.currentTarget);
 	}
 </script>
 
@@ -57,7 +68,9 @@
 	</div>
 {:else if image}
 	<figure class="ap-embed ap-embed-figure">
-		<a href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener"><img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style:aspect-ratio={ratio(og.image)} /></a>
+		<a href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener" aria-haspopup="dialog" title="View {title}"
+			data-viewer-src={image} data-viewer-title={title} data-viewer-alt={og.image?.alt || undefined} data-viewer-detail={detail}
+			data-viewer-width={og.image?.width} data-viewer-height={og.image?.height} onclick={view}><img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style:aspect-ratio={ratio(og.image)} /></a>
 		<figcaption class="ap-embed-caption">{title}</figcaption>
 	</figure>
 {:else}

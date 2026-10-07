@@ -78,3 +78,13 @@ export function presenceLabel(status: string | undefined): string | undefined {
 
 /** A status in words, for tooltips and screen readers. */
 export const PRESENCE_LABELS: Record<Presence, string> = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Offline', invisible: 'Invisible', unknown: 'Unknown status' };
+
+/**
+ * A click a component may take over, such as opening an image in the viewer:
+ * the main button with no modifier. Cmd, Ctrl, Shift and Alt clicks (and the
+ * middle button, which fires `auxclick`) keep a link's own behavior: a new tab,
+ * a new window, a download.
+ */
+export function plainClick(event: MouseEvent): boolean {
+	return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.defaultPrevented;
+}

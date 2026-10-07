@@ -160,6 +160,9 @@
 		onkeydowncapture={keydown}
 		onfocusout={focusout}
 	>
+		{#if request.caption}
+			<p class="caption" data-testid="emoji-picker-caption"><span class="caption-lead">{request.caption.lead}</span> <span class="caption-text">“{request.caption.text}”</span></p>
+		{/if}
 		{#if status !== 'ready'}
 			<p class="status" role="status">{status === 'failed' ? 'Emoji couldn’t load. Close and try again.' : 'Loading emoji…'}</p>
 		{/if}
@@ -170,7 +173,7 @@
 <style>
 	/* A popover: raised ground, hairline, popover shadow, large radius. */
 	.emoji-pop {
-		position: fixed; z-index: 40; box-sizing: border-box; display: flex; overflow: hidden;
+		position: fixed; z-index: 40; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
 		background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover);
 		font-family: var(--font-sans); color: var(--ink);
 	}
@@ -178,16 +181,20 @@
 	/* Narrow screens: a bottom sheet, full width, rounded only where it meets the page. */
 	.sheet { left: 0; right: 0; bottom: 0; border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: env(safe-area-inset-bottom); }
 	.mount { display: flex; flex: 1; min-width: 0; min-height: 0; }
+	/* Which message a pick reacts to, in one line: it may have scrolled away under the picker. */
+	.caption { flex: none; display: flex; gap: var(--space-1); min-width: 0; margin: 0; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); white-space: nowrap; }
+	.caption-lead { flex: none; font-weight: 600; color: var(--ink); }
+	.caption-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 	/* emoji-mart's own custom properties, set from outside its shadow root: app type, radius and neutrals. */
 	.mount :global(em-emoji-picker) {
 		flex: 1; width: 100%; height: 100%; min-height: 0;
 		--border-radius: calc(var(--radius-lg) - 1px);
 		--shadow: none;
 		--font-family: var(--font-sans);
-		--font-size: 15px;
+		--font-size: var(--text-body);
 		--category-icon-size: 18px;
 		--color-border: var(--bg-300);
 		--color-border-over: var(--line-strong);
 	}
-	.status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-4); color: var(--ink-muted); font-size: 13px; line-height: 18px; text-align: center; }
+	.status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-4); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; text-align: center; }
 </style>

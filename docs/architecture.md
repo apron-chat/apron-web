@@ -7,7 +7,11 @@ The UI follows the Apron design system. `src/lib/design/tokens.css` holds its
 color, type, spacing, radius and size tokens as CSS custom properties (dark is
 the reference theme; light follows `prefers-color-scheme`, or `data-theme` on
 the root when Preferences picks one), and
-`src/lib/design/apron.css` is its component stylesheet.
+`src/lib/design/apron.css` is its component stylesheet. Text sizes are the
+`--text-*` scale (caps, xs, sm, ui, field, body, title); only glyphs sized to
+their box, such as avatar initials and emoji, and the connect screen's display
+title keep literal sizes. `npm run design:bundle` copies the scale into
+`bundle.css`, since the design system's `tokens.json` doesn't carry it yet.
 
 This repository is the design system's source. `src/lib/design/components`
 holds its presentational Svelte 5 components (runes, snippets, typed `Props`,
@@ -27,8 +31,12 @@ state and behavior — `ConnectScreen`,
 `Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` and `RoomEditor`, `ThreadCard` and
 `ThreadSummary`, `Message` with its `ReactionBar` and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`) and `StagedFile` (the design system's `Attachments`), `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
-`PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog`,
-`StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
+`PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog` (all three
+the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
+choice submitted with a form a `CheckList`-style row),
+`MediaViewerHost` (the design system's `MediaViewer`, opened by image embeds through
+`media-viewer.svelte.ts`, which reads the open timeline's `data-viewer-*` links), `StatusBanner`, `UpdateNotice` (the design system's `ActionBanner`, which reads whether the page's
+`PaneDrafts` hold anything unsent through `pageDrafts`), `Avatar`. A style change goes in `apron.css`, and reaches the
 design system with the next `npm run design:bundle`. A user's `status` (§4.5)
 is the design system's `StatusDot` on their `Avatar`: online a dot, idle a
 crescent, dnd a barred dot, offline a hollow ring, your own `invisible` the

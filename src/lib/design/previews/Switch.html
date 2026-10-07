@@ -1,0 +1,21 @@
+<!-- @dsCard group="Input" height=120 subtitle="Off, on, and locked with a note saying why" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Switch</title></head>
+<body>
+<div class="ap-stack" id="root" style="max-width:420px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function row(title, props, note) {
+    var box = document.createElement('div');
+    box.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px';
+    box.innerHTML = '<div><strong style="font-size:14px">' + title + '</strong>' + (note ? '<p id="' + props.describedby + '" style="margin:2px 0 0;font-size:13px;color:var(--ink-muted)">' + note + '</p>' : '') + '</div>';
+    root.appendChild(box);
+    var handle = A.render(A.Switch, box, Object.assign({ label: title, onchange: function (on) { handle.set({ checked: on }); } }, props));
+  }
+  row('Desktop notifications', { checked: false });
+  row('Push notifications', { checked: true });
+  row('Push notifications', { checked: false, locked: true, describedby: 'locked-note' }, 'Blocked by your browser. Allow notifications in site settings.');
+</script>
+</body>
+</html>

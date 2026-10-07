@@ -12,11 +12,12 @@
 	 * One entry of `body.embeds` (§4.8), rendered by its `kind`. An
 	 * unknown kind renders from `og`, else as the fallback card — never an error.
 	 */
-	let { embed, upload }: { embed: Embed; upload?: UploadState } = $props();
+	/** `detail`: who sent it and when, for an image shown full screen. */
+	let { embed, upload, detail }: { embed: Embed; upload?: UploadState; detail?: string } = $props();
 </script>
 
 {#if embed.kind === 'upload'}
-	<EmbedUpload {embed} {upload} />
+	<EmbedUpload {embed} {upload} {detail} />
 {:else if embed.kind === 'stream'}
 	<EmbedStream {embed} />
 {:else if embed.kind === 'iframe'}
