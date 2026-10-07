@@ -1517,17 +1517,23 @@
 	// --- Editing ---
 
 	/**
-	 * A message in the open pane can be picked for a move (capability `edit`) when you may
-	 * move it: your own, or anyone's for an admin or a mod. The server still decides each move.
+	 * Any message in the open pane can be picked for a move (capability `edit`), anyone's:
+	 * the server decides whose it lets you move, and a refusal moves none (MessageSelection.move).
 	 */
 	function canSelect(event: MessageRecord): boolean {
-		return session.canEdit && !event.deleted && event.room_id === paneRoom?.id && mayMove(event, session.you);
+		return session.canEdit && !event.deleted && event.room_id === paneRoom?.id;
 	}
 
-	/** Whether a picked message may still be moved: a role may have been taken away since it was picked. */
+	/** Whether a picked message is yours, which the server always lets you move. */
+	function ownMessage(id: string): boolean {
+		const event = resolveMessage(id);
+		return event !== undefined && isOwn(event, session.you);
+	}
+
+	/** Whether you may move a picked message to a new thread: yours, or anyone's for an admin or a mod. */
 	function movable(id: string): boolean {
 		const event = resolveMessage(id);
-		return event !== undefined && canSelect(event);
+		return event !== undefined && mayMove(event, session.you);
 	}
 
 	/** What the toolbar offers: only what the server can do, and only on messages this viewer may change. */
@@ -1633,11 +1639,12 @@
 				title: (firstId) => threadTitleFor(resolveMessage(firstId)),
 				// Nothing moves out of a private room into a thread others can see.
 				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined,
+				own: ownMessage,
 				movable
 			})
-			: await selection.move(client, target, movable);
+			: await selection.move(client, target, ownMessage);
 		if (!result.moved) {
-			if (result.error !== undefined) feedback.error(result.error, 'Some messages could not be moved');
+			if (result.error !== undefined) feedback.error(result.error, selection.current?.denied ? 'Some messages could not be moved' : 'No messages were moved');
 			return;
 		}
 		if (target === 'new') pendingOpen = { room: roomId, thread: result.room };
