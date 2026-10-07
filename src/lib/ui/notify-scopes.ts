@@ -87,8 +87,8 @@ export function pushWake(scopes: readonly string[], offered: readonly string[]):
 	return offered.length ? scopes.filter((scope) => offered.includes(scope)) : undefined;
 }
 
-/** Notes beside checked scopes: while push is on, the ones the server doesn't push are desktop only. */
+/** Notes beside checked scopes: while push is on, the ones the server doesn't push alert only while Apron is open. */
 export function notifyScopeNotes(scopes: readonly string[], offered: readonly string[], pushOn: boolean): Record<string, string> {
 	if (!pushOn || !offered.length) return {};
-	return Object.fromEntries(scopes.filter((scope) => !offered.includes(scope)).map((scope) => [scope, 'Desktop only']));
+	return Object.fromEntries(scopes.filter((scope) => !offered.includes(scope)).map((scope) => [scope, 'Only while open']));
 }

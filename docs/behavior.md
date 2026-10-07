@@ -329,9 +329,23 @@ included: they don't notify, chime or flash the title. It applies whether or
 not the room is joined, and `false` (or `0`) ends it. The client has no
 control for it yet, but follows mutes set elsewhere.
 
-Below it, **Desktop notifications** alerts while Apron is open but hidden or
-unfocused; turning them on asks the browser's permission, and **Send a test
-notification** under it shows a sample through the same browser path. While they're on, a notification replaces the chime (the chime
+Below it, one **Notifications** switch turns notifications on for this device,
+as chat apps have one per device rather than one per way of delivering them.
+Turning it on asks the browser's permission, from that tap, and then turns on
+both of what follows where they work: the page's own notifications, which
+alert while Apron is open but hidden or unfocused, and push for the signed-in
+account, which alerts while it's closed. Turning it off turns both off. It is
+on if either is, so a choice made with the separate Desktop and Push switches
+of earlier versions carries over. The note under it says how far it reaches:
+"On · alerts on this device, even when Apron is closed", or "On · alerts while
+Apron is open." and why not when it's closed (this server doesn't push; sign
+in; add Apron to the Home Screen; this browser can't; this server pushes none
+of the checked choices; not yet). Where push could work here but isn't on for
+this account (another account turned notifications on, or a sign-in since), an
+**Alert when it's closed, too** button turns it on; where another server holds
+this browser's one subscription, **Alert for this server instead** moves it
+here. **Send a test notification** under it shows a sample through the same
+browser path as the page's own. While they're on, a notification replaces the chime (the chime
 still plays if one couldn't be shown), each room keeps one notification that
 the next message replaces (its newest mention, else its newest message), and
 clicking it opens that room or thread. Notifications show through the service
@@ -339,18 +353,18 @@ worker, or from the page where there is none yet. Permission revoked in the
 browser's site settings reads as off.
 
 When the server offers web push (`server.push.webpush` with its VAPID `key`,
-§4.9), Preferences also offers **Push notifications** to a signed-in account
-(not a guest), also while it reconnects. It is per account on each server, off
-until turned on, and turning it on or off in one tab applies in the others.
-Turning it on asks the browser's permission, subscribes this browser with the
+§4.9), push is for a signed-in account (not a guest), also while it
+reconnects. It is per account on each server, off until turned on, and
+turning it on or off in one tab applies in the others. Turning it on (with the
+Notifications switch, or its button) subscribes this browser with the
 server's key (replacing a subscription made with another key), and sends
 `push_register` `{kind: "webpush", url, push_id, keys: {p256dh, auth}, wake}`
 from the subscription after each `auth` as that account. Turning it off sends
 `push_unregister`. This browser has one subscription for all accounts: it goes
 once no account here has push on (also checked on load, for one turned off
 while offline), and accounts on servers with the same key share it. When
-another server, with another key, holds it, the setting says "Push is on for
-another server in this browser (host)", and turning it on there takes it over;
+another server, with another key, holds it, the note names that server's host,
+and **Alert for this server instead** takes it over;
 tabs don't take it back on their own. Its `push_id`s are kept in IndexedDB for
 the service worker, which drops a push for any account push isn't on for.
 Subscribing and unsubscribing run one at a time, across tabs too under the
@@ -373,19 +387,18 @@ that account here even when the server can't be told; a sign-out that fails
 (with requests still pending, say) leaves push on. A registration the server refuses shows its
 message in the setting.
 
-**Push notifications** alerts on this device even when Apron is closed. Its
-`wake` is the checked scopes that `server.push.wake` lists; when the server
-lists none, no `wake` goes and the server's defaults apply. While push is on, a
-checked scope the server doesn't push is marked "Desktop only" beside its
-title. When none of the checked scopes is pushed, push still
+Push's `wake` is the checked scopes that `server.push.wake` lists; when the
+server lists none, no `wake` goes and the server's defaults apply. While push
+is on, a checked scope the server doesn't push is marked "Only while open"
+beside its title. When none of the checked scopes is pushed, push still
 registers, with an empty `wake`, which wakes for nothing, and the setting says
 so. A change to the choice registers again at once, with the same `url`.
 
-On iPhone and iPad Safari outside a Home Screen app, push isn't offered: the
-push setting shows a callout with the steps to add Apron to the Home Screen.
-Where the browser offers to install Apron (Chromium's `beforeinstallprompt`),
-the client holds that offer back and shows **Install app** in the push setting
-only, never elsewhere, and not once Apron runs installed. The web manifest
+On iPhone and iPad Safari outside a Home Screen app, push isn't offered: under
+the Notifications switch, a callout gives the steps to add Apron to the Home
+Screen. Where the browser offers to install Apron (Chromium's
+`beforeinstallprompt`), the client holds that offer back and shows **Install
+app** under the Notifications switch only, never elsewhere, and not once Apron runs installed. The web manifest
 (`static/manifest.webmanifest`) names Apron, its icons, `start_url` and
 `display: standalone`.
 

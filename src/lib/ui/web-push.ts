@@ -18,6 +18,8 @@ export interface WebPushPreference {
 	enabled: boolean;
 	/** On, but this browser's subscription is another server's for now (its host): turning it on here moves it. */
 	heldBy?: string;
+	/** The server offers push, but only to a signed-in account, and this is a guest. */
+	signIn?: boolean;
 	/** The wake scopes the server advertises (§4.9); empty when it lists none. */
 	offered: string[];
 	/** The browser offers to install Apron (`beforeinstallprompt`), and it isn't installed. */
