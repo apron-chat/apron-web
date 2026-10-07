@@ -62,7 +62,11 @@ the gap under the last message, says so ("Checking for new messages…", or repl
 thread). It takes no space, so the timeline doesn't move as it comes and goes,
 and it shows only once a check has taken 400ms, then for at least 600ms and
 until 300ms after the check ends, so a quick check shows nothing and a slow one,
-also one that comes in steps, doesn't flicker. The first time a room is shown on
+also one that comes in steps, doesn't flicker. A short drop of the connection
+uses the same pill, saying "Reconnecting…" until the connection is back and then
+that it's checking, so the way back reads as one quiet line, with everything
+kept on screen; a longer drop, or one that needs you, gets the status banner
+instead. The first time a room is shown on
 a connection its messages wait for its thread listing, for at most three
 seconds, so its thread cards arrive with them instead of shifting the timeline
 afterwards.
