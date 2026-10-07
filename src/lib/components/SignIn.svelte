@@ -7,11 +7,11 @@
 	 * for a sign-in) lands here, so there is one flow to keep right.
 	 */
 	import { onDestroy, untrack, type Snippet } from 'svelte';
-	import { normalizeWebSocketUrl, type ChatClient } from '$lib/protocol/client';
+	import { normalizeWebSocketUrl, serverSettings, type ChatClient } from '$lib/protocol/client';
 	import { offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
 	import { codeStillFor, type SentCode } from '$lib/ui/email-link';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import { passkeyChoice, passkeyMode, signInHint, signInView, type PasskeyMode, type Scheme } from '$lib/ui/sign-in';
+	import { passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, type PasskeyMode, type SignOutHandler, type Scheme } from '$lib/ui/sign-in';
 	import { saveDisplayName, saveServerUrl } from '$lib/ui/storage';
 	import TypingDots from './TypingDots.svelte';
 
@@ -37,8 +37,6 @@
 		canCancel: boolean;
 		/** Preselects a scheme, e.g. when the profile asks to sign in with a passkey. */
 		initialScheme?: Scheme;
-		/** On Passkey, preselects Sign in (the default) or Create account. */
-		initialPasskey?: PasskeyMode;
 		/** Prefills the email field, e.g. after an emailed sign-in link failed. */
 		initialEmail?: string;
 		/** Shows an error to start with, e.g. why an emailed sign-in link failed. */
@@ -51,17 +49,17 @@
 		onconnected: () => void;
 		oncancel: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
-		onsignout: () => void;
+		onsignout: SignOutHandler;
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), busy = $bindable(false), passkeyUnavailable, canCancel,
-		initialScheme, initialPasskey, initialEmail, initialError, header, onconnect, onconnected, oncancel, onsignout
+		initialScheme, initialEmail, initialError, header, onconnect, onconnected, oncancel, onsignout
 	}: Props = $props();
 
 	// The initial choice follows the request or the current session; the segmented control owns it from then on.
 	let scheme = $state<Scheme>(untrack(() => initialScheme ?? (session.snapshot.passkeySession ? 'webauthn' : 'guest')));
 	/** On Passkey, Sign in or Create account: the viewer picks, the panel never guesses. */
-	let passkeyChosen = $state<PasskeyMode>(untrack(() => initialPasskey ?? 'login'));
+	let passkeyChosen = $state<PasskeyMode>('login');
 	/** Waiting for the connection this panel opened to the server in the form. */
 	let pending = $state(false);
 	/** That connection signed in as a guest, which the passkey step can leave as it is. */
@@ -71,13 +69,13 @@
 	let error = $state(untrack(() => initialError ?? ''));
 	/** What to do next, in place of the hint: the browser refused a sheet that followed a connection. */
 	let notice = $state('');
-	/** Email sign-in (§4.10): the address, and the code once the server was asked to send one. */
+	/** Email sign-in (§4.11): the address, and the code once the server was asked to send one. */
 	let email = $state(untrack(() => initialEmail ?? ''));
 	let code = $state('');
 	/**
 	 * The address a code was requested for, and the server that will send it:
 	 * the code field shows while it is set, and the code only ever goes back to
-	 * the connection that proposed it, on that server (§4.10). Changing the
+	 * the connection that proposed it, on that server (§4.11). Changing the
 	 * Server field drops it, and so does that connection closing.
 	 */
 	let codeSent = $state<SentCode | undefined>();
@@ -119,8 +117,8 @@
 	let known = $derived(sameServer ? session.server : undefined);
 	/** Whether the chosen scheme signs in, creates an account, or both (`server.signup`, §3.1); unknown servers get both. */
 	let use = $derived(known ? schemeUse(known, chosen) : { signIn: true, signUp: true });
-	/** The server in the field is the connected one, and its guests only read. */
-	let guestReadOnly = $derived(sameServer && session.server?.ext?.demo?.guest_posting === false);
+	/** The server in the field is the connected one, and its guests only read (`ext:settings`). */
+	let guestReadOnly = $derived(sameServer && !serverSettings(session.server).guest_posting);
 	/** The passkey action a tap runs: the one chosen, where the server lets passkeys do it. */
 	let mode = $derived(passkeyMode(use, passkeyChosen));
 	let view = $derived(signInView({
@@ -301,7 +299,7 @@
 			return;
 		}
 		// Another identity on this backend, or another backend: drop what the page held.
-		if (normalized === client.url) onsignout();
+		if (normalized === client.url) onsignout()();
 		else onconnect();
 		joinedAsGuest = false;
 		const name = inviteToken ? displayName.trim() : '';
@@ -317,7 +315,7 @@
 	}
 
 	/**
-	 * Asks the server in the field for a code (§4.10). The client proposes
+	 * Asks the server in the field for a code (§4.11). The client proposes
 	 * the sign-in on a connection of its own that isn't signed in and keeps it
 	 * open for the code, so neither a session here nor a new server's
 	 * throwaway guest is involved. The server answers the same whether or not
@@ -362,7 +360,7 @@
 		emailBusy = true;
 		try {
 			const switching = sent.url !== client.url;
-			await client.signInWithEmail(code, displayName.trim() || undefined, () => (switching ? onconnect() : onsignout()));
+			await client.signInWithEmail(code, displayName.trim() || undefined, () => (switching ? onconnect() : onsignout()()));
 			codeSent = undefined;
 			code = '';
 			finish();
@@ -405,8 +403,7 @@
 
 	async function signOut(): Promise<void> {
 		try {
-			onsignout();
-			await client.signOut();
+			await signOutThen(client, onsignout);
 			pending = true;
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Unable to sign out';

@@ -1,7 +1,15 @@
 <script lang="ts">
 	import X from '@lucide/svelte/icons/x';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
-	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
+	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
+	import Button from '$lib/design/components/Button.svelte';
+	import Callout from '$lib/design/components/Callout.svelte';
+	import CheckList from '$lib/design/components/CheckList.svelte';
+	import { pausedUntilLabel, type PausedUntil } from '$lib/ui/pause';
+	import PauseNotifications from './PauseNotifications.svelte';
+	import StatusPicker from './StatusPicker.svelte';
+	import { NOTIFY_SCOPES, notifyScopeNotes, pushWake } from '$lib/ui/notify-scopes';
+	import type { WebPushPreference } from '$lib/ui/web-push';
 	import FontFamilyField from './FontFamilyField.svelte';
 
 	type LocalFontAccessWindow = Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> };
@@ -11,16 +19,36 @@
 		notificationsEnabled: boolean;
 		notificationsSupported: boolean;
 		notificationPermission: NotificationPermissionState;
-		notificationScope: NotificationScope;
+		/** What to notify about (`NOTIFY_SCOPES`), for desktop notifications and push alike. */
+		notifyScopes: string[];
 		onnotifications: () => void;
-		onnotificationscope: (scope: NotificationScope) => void;
+		onnotifyscopes: (scopes: string[]) => void;
 		ontestnotifications: () => Promise<NotificationTestResult>;
+		/** Push notifications (§4.9), when the server offers web push. */
+		webPush?: WebPushPreference;
+		onwebpush: () => void;
+		/** Pausing notifications (§4.5 `mute`), on a server with capability `status`: `until` while paused. */
+		pause?: { until?: PausedUntil };
+		onpause: (until: PausedUntil) => Promise<void> | void;
+		onresume: () => Promise<void> | void;
+		/** Chromium's install prompt, from the push setting. */
+		oninstallapp: () => void;
+		/**
+		 * Choosing your `status` (§4.5), on a server with capability `status`:
+		 * `value` as `you` shows it, and the optional ones this server answered
+		 * something else for.
+		 */
+		status?: { value?: string; accepted?: readonly string[]; unsupported: readonly string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void; disabled?: boolean };
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, onclosed }: Props = $props();
+	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onclosed }: Props = $props();
 
 	let preferencesSection = $state<'notifications' | 'appearance'>('notifications');
+	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
+	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
+	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: it wakes for nothing. */
+	let pushesNothing = $derived(pushWake(notifyScopes, webPush?.offered ?? [])?.length === 0);
 	let interfaceFontDraft = $state('');
 	let chatFontDraft = $state('');
 	let monoFontDraft = $state('');
@@ -28,6 +56,57 @@
 	let fontBrowserState = $state<FontBrowserState>('idle');
 	let fontError = $state('');
 	let testNotificationStatus = $state<'idle' | 'sending' | NotificationTestResult>('idle');
+
+	type Note = { text: string; tone?: 'ok' | 'err' };
+	/** What Desktop notifications says under its switch, which the switch refers to. */
+	let desktopNote = $derived.by((): Note => {
+		if (notificationPermission === 'denied') return { text: 'Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.', tone: 'err' };
+		if (!notificationsSupported) return { text: 'Notifications aren’t available here. Use a supported browser over HTTPS or localhost.' };
+		if (notificationsEnabled) return { text: 'On · your selected message types can alert while Apron is inactive.', tone: 'ok' };
+		if (notificationPermission === 'granted') return { text: 'Permission is allowed, but notifications are off.' };
+		return { text: 'Turning this on will ask your browser for permission.' };
+	});
+	let desktopLocked = $derived(!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied'));
+	/** What the test notification did. */
+	let testNote = $derived.by((): Note | undefined => {
+		if (testNotificationStatus === 'sent') return { text: 'Test notification sent. Check your system notification area.', tone: 'ok' };
+		if (testNotificationStatus === 'denied') return { text: 'Permission was denied; allow notifications in your browser’s site settings.', tone: 'err' };
+		if (testNotificationStatus === 'unsupported') return { text: 'Notifications aren’t supported in this browser or connection.' };
+		if (testNotificationStatus === 'error') return { text: 'The browser couldn’t display the test notification.', tone: 'err' };
+		return undefined;
+	});
+	/** What Push notifications says under its switch, which the switch refers to. */
+	let pushNote = $derived.by((): Note | undefined => {
+		if (!webPush) return undefined;
+		if (!webPush.supported) return webPush.homeScreen ? undefined : { text: 'Push notifications aren’t available in this browser.' };
+		if (notificationPermission === 'denied') return { text: 'Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.', tone: 'err' };
+		if (webPush.error) return { text: webPush.error, tone: 'err' };
+		if (webPush.heldBy) return { text: `Push is on for another server in this browser (${webPush.heldBy}). Turn it on to move it here.` };
+		if (webPush.enabled && pushesNothing) return { text: 'On, but this server pushes none of your choices above: push won’t send anything.' };
+		if (webPush.enabled) return { text: 'On · this server can notify this device.', tone: 'ok' };
+		if (notificationPermission !== 'granted') return { text: 'Turning this on will ask your browser for permission.' };
+		return undefined;
+	});
+	let pushLocked = $derived(Boolean(webPush && !webPush.enabled && (!webPush.supported || notificationPermission === 'denied')));
+	let pauseNote = $derived(pause?.until !== undefined ? `Notifications paused ${pausedUntilLabel(pause.until)}.` : pause ? 'Notifications resumed.' : undefined);
+
+	/**
+	 * One live region, always in the page, says each status as it changes:
+	 * notes that come and go are often not read when they are live regions
+	 * themselves.
+	 */
+	let announcement = $state('');
+	/** What the server answered for a status choice, when it isn't what was asked (`StatusPicker`). */
+	let statusAnswer = $state<string | undefined>();
+	let announced: Record<string, string | undefined> | undefined;
+	$effect(() => {
+		const now: Record<string, string | undefined> = { desktop: desktopNote.text, test: testNote?.text, push: pushNote?.text, pause: pauseNote, status: statusAnswer };
+		const before = announced;
+		announced = now;
+		if (!before) return;
+		const changed = Object.keys(now).find((key) => now[key] !== before[key] && now[key] !== undefined);
+		if (changed) announcement = now[changed]!;
+	});
 	let preferencesDialog = $state<HTMLDialogElement | undefined>();
 
 	$effect(() => {
@@ -141,46 +220,63 @@
 			<section class="ap-preferences-content" aria-labelledby="ap-pref-notifications">
 				<h3 id="ap-pref-notifications">Notifications</h3>
 				<p class="ap-profedit-hint">Choose when Apron can interrupt you.</p>
-				<div class="ap-pref-setting">
+				<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
+				{#if status}
+					<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} onannounce={(text) => (statusAnswer = text)} disabled={status.disabled} />
+				{/if}
+				{#if pause}
+					<PauseNotifications until={pause.until} {onpause} {onresume} />
+				{/if}
+				<div class="ap-pref-scopes">
+					<CheckList
+						label="Notify me about"
+						options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
+						value={notifyScopes}
+						min={1}
+						onchange={onnotifyscopes}
+					/>
+					<p class="ap-pref-help">For desktop and push notifications alike. At least one stays on; the switches below turn notifications off.</p>
+				</div>
+				<div class="ap-pref-setting ap-pref-desktop">
 					<div>
 						<strong>Desktop notifications</strong>
-						<p class="ap-profedit-hint">Send selected message alerts when Apron is hidden or unfocused.</p>
-						{#if notificationPermission === 'denied'}
-							<p class="ap-pref-note ap-profedit-err" role="status">Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.</p>
-						{:else if !notificationsSupported}
-							<p class="ap-pref-note" role="status">Notifications aren’t available here. Use a supported browser over HTTPS or localhost.</p>
-						{:else if notificationsEnabled}
-							<p class="ap-pref-note ap-profedit-ok" role="status">On · your selected message types can alert while Apron is inactive.</p>
-						{:else if notificationPermission === 'granted'}
-							<p class="ap-pref-note" role="status">Permission is allowed, but notifications are off.</p>
-						{:else}
-							<p class="ap-pref-note" role="status">Turning this on will ask your browser for permission.</p>
-						{/if}
+						<p class="ap-profedit-hint">Alerts while Apron is open but hidden or unfocused.</p>
+						<p class={['ap-pref-note', desktopNote.tone === 'ok' && 'ap-profedit-ok', desktopNote.tone === 'err' && 'ap-profedit-err']} id="ap-pref-desktop-note">{desktopNote.text}</p>
+						<p class="ap-pref-test">
+							<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={testNotificationStatus === 'sending' || !notificationsSupported || notificationPermission === 'denied'} onclick={sendTestNotification}>{testNotificationStatus === 'sending' ? 'Sending…' : 'Send a test notification'}</button>
+						</p>
+						{#if testNote}<p class={['ap-pref-note', testNote.tone === 'ok' && 'ap-profedit-ok', testNote.tone === 'err' && 'ap-profedit-err']}>{testNote.text}</p>{/if}
 					</div>
-					<button class="ap-pref-switch" class:active={notificationsEnabled} type="button" role="switch" aria-checked={notificationsEnabled} aria-label="Desktop notifications" disabled={!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied')} onclick={onnotifications}><span></span></button>
+					<button class="ap-pref-switch" class:active={notificationsEnabled} type="button" role="switch" aria-checked={notificationsEnabled} aria-label="Desktop notifications" aria-disabled={desktopLocked || undefined} aria-describedby="ap-pref-desktop-note" onclick={() => { if (!desktopLocked) onnotifications(); }}><span></span></button>
 				</div>
-				<label class="ap-pref-fieldlabel" for="ap-notification-scope">What to notify you about</label>
-				<select id="ap-notification-scope" class="ap-field ap-pref-select" value={notificationScope} onchange={(event) => onnotificationscope(event.currentTarget.value as NotificationScope)}>
-					<option value="everything">Everything</option>
-					<option value="mentions">Mentions</option>
-				</select>
-				<p class="ap-pref-help">Applies when Apron is hidden or unfocused.</p>
-				<div class="ap-pref-setting ap-pref-test">
-					<div>
-						<strong>Test notification</strong>
-						<p class="ap-profedit-hint">Send a sample message notification to check browser delivery. This won’t turn notifications on.</p>
-						{#if testNotificationStatus === 'sent'}
-							<p class="ap-pref-note ap-profedit-ok" role="status">Test notification sent. Check your system notification area.</p>
-						{:else if testNotificationStatus === 'denied'}
-							<p class="ap-pref-note ap-profedit-err" role="status">Permission was denied; allow notifications in your browser’s site settings.</p>
-						{:else if testNotificationStatus === 'unsupported'}
-							<p class="ap-pref-note" role="status">Notifications aren’t supported in this browser or connection.</p>
-						{:else if testNotificationStatus === 'error'}
-							<p class="ap-pref-note ap-profedit-err" role="status">The browser couldn’t display the test notification.</p>
-						{/if}
+				{#if webPush}
+					<div class="ap-pref-setting ap-pref-push">
+						<div>
+							<strong>Push notifications</strong>
+							<p class="ap-profedit-hint">Alerts on this device even when Apron is closed.</p>
+							{#if pushNote}<p class={['ap-pref-note', pushNote.tone === 'ok' && 'ap-profedit-ok', pushNote.tone === 'err' && 'ap-profedit-err']} id="ap-pref-push-note">{pushNote.text}</p>{/if}
+						</div>
+						<button class="ap-pref-switch" class:active={webPush.enabled} type="button" role="switch" aria-checked={webPush.enabled} aria-label="Push notifications" aria-disabled={pushLocked || undefined} aria-describedby={pushNote ? 'ap-pref-push-note' : undefined} onclick={() => { if (!pushLocked) onwebpush(); }}><span></span></button>
 					</div>
-					<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={testNotificationStatus === 'sending' || !notificationsSupported || notificationPermission === 'denied'} onclick={sendTestNotification}>{testNotificationStatus === 'sending' ? 'Sending…' : 'Send test'}</button>
-				</div>
+					{#if webPush.homeScreen}
+						<div class="ap-pref-push-more">
+							<Callout title="Add Apron to your Home Screen for push notifications">
+								<ol>
+									<li>Tap Share in Safari.</li>
+									<li>Choose Add to Home Screen.</li>
+									<li>Open Apron from your Home Screen and turn this on there.</li>
+								</ol>
+							</Callout>
+						</div>
+					{:else if webPush.installable}
+						<div class="ap-pref-push-more">
+							<Callout title="Install Apron as an app">
+								<p>It opens in its own window, with its notifications.</p>
+								{#snippet action()}<Button size="sm" variant="primary" label="Install app" onclick={oninstallapp} />{/snippet}
+							</Callout>
+						</div>
+					{/if}
+				{/if}
 			</section>
 		{:else}
 			<section class="ap-preferences-content" aria-labelledby="ap-pref-appearance">
@@ -256,13 +352,17 @@
 	.ap-pref-theme-setting select { flex: none; }
 	.ap-pref-font-setting { display: block; }
 	.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
+	.ap-pref-desktop + .ap-pref-push { border-top: 0; }
+	.ap-pref-setting .ap-pref-test { margin: var(--space-2) 0 0 calc(-1 * var(--space-3)); }
+	.ap-pref-push { border-bottom: 0; }
+	.ap-pref-push-more { max-width: 460px; padding-bottom: var(--space-4); }
+	.ap-pref-scopes { max-width: 460px; padding: var(--space-4) 0; }
 	.ap-pref-switch { flex: none; width: 42px; height: 24px; padding: 3px; display: flex; align-items: center; border: 0; border-radius: 999px; background: var(--bg-300); cursor: pointer; transition: background .15s; }
 	.ap-pref-switch span { width: 18px; height: 18px; border-radius: 50%; background: var(--ink-muted); transition: transform .15s, background .15s; }
 	.ap-pref-switch.active { background: var(--accent-soft); }
 	.ap-pref-switch.active span { background: var(--accent); transform: translateX(18px); }
-	.ap-pref-switch:disabled { opacity: .5; cursor: not-allowed; }
+	.ap-pref-switch:disabled, .ap-pref-switch[aria-disabled='true'] { opacity: .5; cursor: not-allowed; }
 	.ap-pref-note { margin: var(--space-3) 0; color: var(--ink-muted); font-size: 13px; line-height: 19px; }
-	.ap-pref-fieldlabel { display: block; margin: var(--space-4) 0 var(--space-1); color: var(--ink); font-size: 13px; font-weight: 600; }
 	.ap-pref-select { width: min(100%, 320px); }
 	.ap-pref-help { margin: var(--space-1) 0 0; color: var(--ink-muted); font-size: 12px; line-height: 17px; }
 	.ap-font-access-status { margin: var(--space-2) 0 var(--space-1); }

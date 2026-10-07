@@ -1,5 +1,5 @@
 <script lang="ts">
-	/* upload embeds still on the draft (§4.6.4): shown above the Composer, each removable, until the message is sent */
+	/* upload embeds still on the draft (§4.8.4): shown above the Composer, each removable, until the message is sent */
 	import FileGlyph from './FileGlyph.svelte';
 
 	interface Props {

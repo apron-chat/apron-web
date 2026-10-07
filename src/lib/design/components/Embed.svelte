@@ -1,5 +1,5 @@
 <script lang="ts">
-	/* Renders one entry of body.embeds by picking the renderer for its kind (§4.6). An unknown kind is never an error. */
+	/* Renders one entry of body.embeds by picking the renderer for its kind (§4.8). An unknown kind is never an error. */
 	import EmbedCard from './EmbedCard.svelte';
 	import EmbedFallback from './EmbedFallback.svelte';
 	import EmbedFrame from './EmbedFrame.svelte';

@@ -47,13 +47,6 @@ async function ceremony(socket: FakeSocket, you: Record<string, unknown>, timeou
 	await socket.reply('auth', { you });
 }
 
-const deferred = <T>() => {
-	let resolve!: (value: T) => void;
-	let reject!: (reason: unknown) => void;
-	const promise = new Promise<T>((res, rej) => ((resolve = res), (reject = rej)));
-	return { promise, resolve, reject };
-};
-
 describe('passkey ceremonies carry a chosen handle', () => {
 	it('applies a handle a guest could not set once registration signs them in', async () => {
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
@@ -253,7 +246,7 @@ describe('console diagnostics', () => {
 
 describe('a failed session resume never prompts on its own', () => {
 	const key = 'apron.session:ws://fake.test/';
-	const server = { method: 'server', params: { apron: 7, auth: ['webauthn', 'token', 'guest'], capabilities: [] } };
+	const server = { method: 'server', params: { apron: 8, auth: ['webauthn', 'token', 'guest'], capabilities: [] } };
 
 	async function resuming(): Promise<{ client: ChatClient; socket: FakeSocket; auth: { id: string } }> {
 		vi.useFakeTimers();

@@ -1,5 +1,5 @@
 <script lang="ts">
-	/* stream (§4.6.5): live while url is set (the consumer streams GET url into text), finished when text replaces url */
+	/* stream (§4.8.5): live while url is set (the consumer streams GET url into text), finished when text replaces url */
 	import type { EmbedProps } from './types';
 
 	let props: EmbedProps = $props();

@@ -1,5 +1,5 @@
 /**
- * What the composer does with its text (PROTOCOL.md §4.8). With capability `command`,
+ * What the composer does with its text (PROTOCOL.md §4.1). With capability `command`,
  * text that starts with one `/` is a command: `/nick`, `/join`, `/leave`,
  * `/topic`, `/kick` and `/invite` map to the requests they spell (all but the
  * first need capability `rooms`), and anything else goes to the server as a
@@ -29,9 +29,8 @@ const USER_ARGUMENT = /^@?([A-Za-z0-9_.-]+)$/;
 
 /**
  * `caps.members`: adding and removing other members (`room_join` and
- * `room_leave` with `user_id`) is worth trying; before protocol v7, or once
- * the server answered it `unsupported`, `/kick` and `/invite` go to the server
- * as commands instead. `mentions`: the `user_id`s the draft's chips name,
+ * `room_leave` with `user_id`) is worth trying; once the server answered it
+ * `unsupported`, `/kick` and `/invite` go to the server as commands instead. `mentions`: the `user_id`s the draft's chips name,
  * exact where the text is not: in text, a trailing `.` or `-` is not part of
  * an ID (Appendix A.3), so `/kick @al-` names `al` unless a chip says `al-`.
  */

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { passkeyChoice, passkeyMode, signInHint, signInView, type SignInInput } from './sign-in';
+import { describe, expect, it, vi } from 'vitest';
+import { passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, type SignInInput } from './sign-in';
 
 /** Connected to the server in the form as a guest, with passkeys that both sign in and sign up. */
 const guestHere: SignInInput = {
@@ -124,5 +124,21 @@ describe('hints', () => {
 
 	it('warns that guests only read where they do', () => {
 		expect(hint({ scheme: 'guest', guestReadOnly: true })).toMatch(/guests only read here/);
+	});
+});
+
+describe('signOutThen', () => {
+	it('drops the session, push with it, only after signing out worked', async () => {
+		const steps: string[] = [];
+		const client = { signOut: async () => { steps.push('signOut'); } };
+		await signOutThen(client, () => { steps.push('noted'); return () => steps.push('push off'); });
+		expect(steps).toEqual(['noted', 'signOut', 'push off']);
+	});
+
+	it('leaves push on when signing out throws', async () => {
+		const off = vi.fn();
+		const client = { signOut: async () => { throw new Error('Wait for pending requests to finish, then try again'); } };
+		await expect(signOutThen(client, () => off)).rejects.toThrow(/pending requests/);
+		expect(off).not.toHaveBeenCalled();
 	});
 });

@@ -125,4 +125,22 @@ describe('directory', () => {
 		expect(directory.sharesName(impostors.guest_3)).toBe(true);
 		expect(directory.sharesName(impostors.guest_4)).toBe(true);
 	});
+
+	it('reads a status (§4.5) from the kept object only, following renames', () => {
+		const stale = { user_id: 'cy', name: 'Cy', status: 'online' };
+		directory.apply(snapshot([ada, { ...bo, status: 'idle' }, { user_id: 'dee', status: 'away' }], { recordedUsers: { cy: stale, guest_5: { user_id: 'guest_5' } }, userAliases: { guest_5: 'bo' } }), undefined);
+		expect(directory.status(bo)).toBe('idle');
+		// A retired ID reads the identity that replaced it.
+		expect(directory.status({ user_id: 'guest_5' })).toBe('idle');
+		// Passed through as sent: an unknown value is the renderer's to call offline.
+		expect(directory.status({ user_id: 'dee' })).toBe('away');
+		// A status in a recorded object (a `from`) is as of its record, not now.
+		expect(directory.status(stale)).toBeUndefined();
+		// No status kept: none to show.
+		expect(directory.status(ada)).toBeUndefined();
+		expect(directory.status(undefined)).toBeUndefined();
+		// An empty status clears it (§3.3): the same as none.
+		directory.apply(snapshot([{ ...ada, status: '' }]), undefined);
+		expect(directory.status(ada)).toBeUndefined();
+	});
 });

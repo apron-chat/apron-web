@@ -3,14 +3,17 @@
 /// <reference lib="esnext" />
 /// <reference lib="webworker" />
 import { base, build, files, prerendered, version } from '$service-worker';
-import { NOTIFICATION_CLICK } from '$lib/ui/notifications';
+import { setAppBadge, type BadgeNavigator } from '$lib/ui/notifications';
+import { loadEnabledPushIds, loadShownMarks, markShown } from '$lib/ui/push-store';
+import { anyWindowVisible, appWindows, askPushId, handleClick, handlePush, isNewerMessage } from '$lib/ui/sw-handlers';
 
 /**
  * Keeps each deploy's app files cached so the app opens fast, still opens
  * offline, and a tab left open across a deploy can still load its lazy chunks.
  * Only the app's own files and page loads are handled: the WebSocket,
  * uploads, files, streams and every backend's URLs go straight to the network.
- * It also shows message notifications where a page can't show its own.
+ * It also shows message notifications where a page can't show its own, and
+ * the messages the server pushes (§4.9).
  */
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -56,17 +59,25 @@ sw.addEventListener('fetch', (event) => {
 	}
 });
 
-// A notification shown through here (see `showNotification`): bring a tab forward, and
-// tell the tabs, so the one that raised it opens the room.
+// Pushes and clicks on notifications (§4.9): see `sw-handlers.ts`.
+sw.addEventListener('push', (event) => {
+	event.waitUntil(handlePush(() => event.data?.json(), {
+		registration: sw.registration,
+		loadEnabled: loadEnabledPushIds,
+		loadMarks: loadShownMarks,
+		markShown: (group, messageId) => markShown(group, messageId, isNewerMessage),
+		setBadge: (unread) => setAppBadge(sw.navigator as BadgeNavigator, unread),
+		pageVisible: () => anyWindowVisible(sw.clients),
+		icon: `${base}/icon-192.png`
+	}));
+});
+
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
-	event.waitUntil((async () => {
-		const tabs = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
-		if (tabs.length === 0) {
-			await sw.clients.openWindow(APP_PAGE);
-			return;
-		}
-		for (const tab of tabs) tab.postMessage({ type: NOTIFICATION_CLICK, target: event.notification.data });
-		await tabs[0].focus();
-	})());
+	event.waitUntil(handleClick(event.notification.data, {
+		tabs: () => appWindows<WindowClient>(sw.clients),
+		openWindow: (url) => sw.clients.openWindow(url),
+		askPushId,
+		page: APP_PAGE
+	}));
 });

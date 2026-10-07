@@ -23,7 +23,7 @@
 		token?: string;
 		/** `server.welcome` (§3.2): its Markdown, rendered and sanitized by you, shown above the fields. Each `server` frame replaces it. */
 		welcome?: Snippet;
-		/** Email sign-in (§4.10): `bind:email`, and `bind:code` once `codeSent`. */
+		/** Email sign-in (§4.11): `bind:email`, and `bind:code` once `codeSent`. */
 		email?: string;
 		code?: string;
 		/** The server was asked to send a code (an `auth` with `email` and no `token`); the code field shows. */
@@ -36,7 +36,7 @@
 		passkey?: { signIn?: boolean; signUp?: boolean };
 		/** On Passkey, `login` (sign in with a saved passkey; no display name asked) or `register` (a new account, named by the display name). */
 		passkeyMode?: 'login' | 'register';
-		/** A passkey action's tap: run the WebAuthn ceremony (§4.9), connecting first where needed. */
+		/** A passkey action's tap: run the WebAuthn ceremony (§4.10), connecting first where needed. */
 		onpasskey?: (action: 'login' | 'register') => void;
 		/** Shown in place of the hint, e.g. "Connected. Tap again to continue with your passkey." */
 		notice?: string;

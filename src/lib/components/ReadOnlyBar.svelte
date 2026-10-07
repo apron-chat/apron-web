@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
-	 * Stands in for the composer while a guest only reads (the demo worker's
-	 * `ext.demo.guest_posting: false`): says why, and offers the passkey
+	 * Stands in for the composer while a guest only reads (`ext:settings`
+	 * with `guest_posting: false`): says why, and offers the passkey
 	 * sign-in that lifts it. Rooms can still be listed and read, without joining.
 	 */
 	interface Props {

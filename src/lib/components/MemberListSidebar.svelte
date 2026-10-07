@@ -1,10 +1,13 @@
 <script lang="ts">
 	import UserMinus from '@lucide/svelte/icons/user-minus';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
+	import type { Identity } from '$lib/protocol/types';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { userIdToAdd } from '$lib/ui/members';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
+	import { presence, presenceLabel } from '$lib/design/components/util';
+	import { byStatus, ownStatusLabel } from '$lib/ui/user-status';
 	import Avatar from './Avatar.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 
@@ -24,9 +27,14 @@
 	}
 	let { client, session, room, open, canChange }: Props = $props();
 
-	let members = $derived([...(room?.members ?? [])].sort((a, b) =>
+	/** Each member's `status` (§4.5) as kept: yours is the one you chose, as the profile bar shows it. */
+	function statusOf(person: Identity): string | undefined {
+		return directory.status(person);
+	}
+	/** By status (online, idle, dnd, unknown, offline, then none), and by name within each. */
+	let members = $derived(byStatus([...(room?.members ?? [])].sort((a, b) =>
 		directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)
-	));
+	), statusOf));
 	/** A large room's listing may hold only its most recently active members, with the total (§4.3.1). */
 	let total = $derived(room?.members === undefined ? undefined : Math.max(room.memberCount ?? 0, room.members.length));
 	let truncated = $derived(total !== undefined && room?.members !== undefined && total > room.members.length);
@@ -113,11 +121,14 @@
 					{#each members as person (person.user_id)}
 						{@const name = directory.name(person)}
 						{@const me = directory.isMe(person.user_id)}
-						<li class="member" data-user={person.user_id}>
-							<button class="who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={`@${person.user_id}`} onclick={(event) => openProfileFrom(event.currentTarget)}>
-								<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" />
+						{@const status = statusOf(person)}
+						{@const shown = presence(status)}
+						{@const words = (me ? ownStatusLabel(status) : undefined) ?? presenceLabel(status)}
+						<li class="member" class:offline={shown === 'offline' || shown === 'invisible'} data-user={person.user_id} data-status={shown}>
+							<button class="who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => openProfileFrom(event.currentTarget)}>
+								<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" {status} statusLabel={words} />
 								<span class="member-name">
-									{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}
+									{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.toLowerCase()}</span>{/if}
 								</span>
 							</button>
 							<RoleBadges user={person} />
@@ -148,6 +159,9 @@
 	.who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 	.who:hover .member-name { text-decoration: underline; }
 	.who:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+	/* Offline members (§4.5) recede; their ring and name still read. */
+	.member.offline .who { color: var(--ink-muted); }
+	.member.offline :global(.ap-avatar) { opacity: .6; }
 	.member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.member :global(.ap-roles) { flex: none; flex-wrap: nowrap; }
 	.member-name small { margin-left: 4px; color: var(--ink-muted); font-size: 11px; }

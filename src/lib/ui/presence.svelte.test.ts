@@ -41,4 +41,20 @@ describe('PagePresence', () => {
 		expect(playPing).not.toHaveBeenCalled();
 		presence.dispose();
 	});
+
+	it('stays quiet while silenced (paused or do not disturb), and doesn\'t alert for those mentions afterwards', () => {
+		const presence = new PagePresence();
+		presence.blur();
+		presence.noteMentions(1, true, true);
+		expect([presence.attention, presence.titleFlash]).toEqual([false, false]);
+		expect(playPing).not.toHaveBeenCalled();
+		// Silence ends with the same count: nothing new arrived since, so nothing alerts.
+		presence.noteMentions(1, true, false);
+		expect(presence.attention).toBe(false);
+		// The next mention does.
+		presence.noteMentions(2, true, false);
+		expect(presence.attention).toBe(true);
+		expect(playPing).toHaveBeenCalledTimes(1);
+		presence.dispose();
+	});
 });

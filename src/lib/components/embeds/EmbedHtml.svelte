@@ -3,7 +3,7 @@
 	import type { Embed } from '$lib/protocol/types';
 	import EmbedFallback from './EmbedFallback.svelte';
 
-	/** Server-relayed HTML (§4.6), inserted only after the allowlist sanitizer. */
+	/** Server-relayed HTML (§4.8), inserted only after the allowlist sanitizer. */
 	let { embed }: { embed: Embed } = $props();
 	let html = $derived(typeof embed.html === 'string' && DOMPurify.isSupported ? clean(embed.html) : undefined);
 

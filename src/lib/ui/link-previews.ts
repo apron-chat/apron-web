@@ -1,6 +1,6 @@
 /**
  * Link previews the sender builds for links in a message: `link` embeds whose
- * `og` (PROTOCOL.md §4.6.1) describes what the link points to. The server has
+ * `og` (PROTOCOL.md §4.8.1) describes what the link points to. The server has
  * the last word on `og` and may keep, replace, or drop it.
  *
  * Only GitHub is supported: its REST API allows cross-origin reads, so the

@@ -1,0 +1,48 @@
+<!-- @dsCard group="Identity" height=480 subtitle="Online, idle, do not disturb, offline (a hollow ring), unknown (a dashed ring) and no status (nothing), on avatars at 56, 32 and 20px and on their own; your own invisible" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>StatusDot</title></head>
+<body>
+<div class="ap-stack" id="root" style="gap:12px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  // The last: no status at all (a server without capability `status`), which draws nothing.
+  // 'brb' stands for any value this client doesn't know (§4.5): a placeholder whose tooltip carries the value.
+  var STATES = ['online', 'idle', 'dnd', 'offline', 'brb', undefined];
+  var PEOPLE = { online: 'Alice Chen', idle: 'Bob Ito', dnd: 'Cleo Park', offline: 'Dev Rao', brb: 'Fay Lund', undefined: 'Eli Moss' };
+  // A photo stand-in: a busy, saturated picture, where a dot without its cut-out would get lost.
+  var PHOTO = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2f7d5b"/><stop offset=".55" stop-color="#e2b04a"/><stop offset="1" stop-color="#c2344d"/></linearGradient></defs><rect width="56" height="56" fill="url(#g)"/><circle cx="28" cy="22" r="10" fill="#f3e1cf"/><path d="M8 56c2-14 10-20 20-20s18 6 20 20z" fill="#24334f"/></svg>');
+  function row(label, ground) {
+    var r = document.createElement('div');
+    r.style.cssText = 'display:flex;align-items:center;gap:20px;padding:8px 12px;border-radius:10px;background:' + (ground || 'transparent');
+    var l = document.createElement('span'); l.textContent = label; l.style.cssText = 'width:96px;flex:none;font-size:12px;color:var(--ink-muted)';
+    r.appendChild(l); root.appendChild(r); return r;
+  }
+  function cell(r) { var c = document.createElement('span'); c.style.cssText = 'display:inline-grid;place-items:center;min-width:56px'; r.appendChild(c); return c; }
+  ['lg', 'md', 'sm'].forEach(function (size) {
+    var r = row({ lg: 'Profile · 56px', md: 'Message · 32px', sm: 'Member · 20px' }[size]);
+    STATES.forEach(function (s) { A.render(A.Avatar, cell(r), { name: PEOPLE[s], size: size, status: s }); });
+  });
+  var p = row('On a photo');
+  STATES.forEach(function (s) { A.render(A.Avatar, cell(p), { name: PEOPLE[s], src: PHOTO, status: s }); });
+  [['Hovered row', 'var(--bg-300)'], ['Active row', 'var(--accent-soft)']].forEach(function (g) {
+    var h = row(g[0], g[1]);
+    STATES.forEach(function (s) { A.render(A.Avatar, cell(h), { name: PEOPLE[s], size: 'sm', status: s }); });
+  });
+  var w = row('On its own');
+  w.style.flexWrap = 'wrap';
+  STATES.slice(0, 5).forEach(function (s) {
+    var c = document.createElement('span'); c.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink)';
+    w.appendChild(c);
+    A.render(A.StatusDot, c, { status: s, decorative: true });
+    c.appendChild(document.createTextNode({ online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Offline', brb: 'Unknown status: brb' }[s]));
+  });
+  var t = row('Invisible');
+  var tc = document.createElement('span'); tc.style.cssText = 'display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-muted)'; t.appendChild(tc);
+  A.render(A.Avatar, tc, { name: 'Alice Chen', status: 'invisible', statusLabel: 'Invisible · others see you as offline' });
+  tc.appendChild(document.createTextNode('Your own dot while you are invisible: the ring others see, its tooltip “Invisible · others see you as offline”'));
+  var n = row('');
+  n.innerHTML = '<span style="width:96px;flex:none"></span><span style="font-size:12px;line-height:16px;color:var(--ink-muted)">Columns: online · idle · do not disturb · offline (a hollow ring) · unknown (a dashed ring) · no status (nothing)</span>';
+</script>
+</body>
+</html>

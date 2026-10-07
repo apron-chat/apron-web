@@ -1,0 +1,100 @@
+<script lang="ts">
+	import { tick } from 'svelte';
+	import BellOff from '@lucide/svelte/icons/bell-off';
+	import Button from '$lib/design/components/Button.svelte';
+	import Callout from '$lib/design/components/Callout.svelte';
+	import MenuButton from '$lib/design/components/MenuButton.svelte';
+	import { pauseChoices, pausedUntilLabel, type PausedUntil } from '$lib/ui/pause';
+
+	interface Props {
+		/**
+		 * Until when notifications are paused (§4.5 `mute` without `room_id`),
+		 * as the server's `status` said; undefined when not. Pausing and
+		 * resuming only ask: this changes when the server sends the change
+		 * back, perhaps shorter, or not at all.
+		 */
+		until?: PausedUntil;
+		/** Asks to pause; rejects with the server's error when nothing changed. */
+		onpause: (until: PausedUntil) => Promise<void> | void;
+		/** Asks to resume; rejects with the server's error when nothing changed. */
+		onresume: () => Promise<void> | void;
+	}
+	let { until, onpause, onresume }: Props = $props();
+
+	let row = $state<HTMLElement | undefined>();
+	/** The Pause menu's choices, with when each would end, worked out as it opens. */
+	let menuOpen = $state(false);
+	let choices = $derived.by(() => {
+		void menuOpen;
+		return pauseChoices();
+	});
+
+	/** What was asked for here, until the server's echo makes it so: then focus follows. */
+	let asked = $state<'pause' | 'resume' | undefined>();
+
+	/** Pause and Resume replace each other once the echo arrives: focus moves to the one that took its place. */
+	$effect(() => {
+		const now = until !== undefined ? 'pause' : 'resume';
+		if (asked !== now) return;
+		asked = undefined;
+		void tick().then(() => row?.querySelector<HTMLButtonElement>('.ap-pause-action button')?.focus());
+	});
+
+	/** The server refused the last pause or resume (§4.5: nothing changed): why, until the next ask. */
+	let refused = $state<{ action: 'pause' | 'resume'; message: string } | undefined>();
+
+	function ask(action: 'pause' | 'resume', request: () => Promise<void> | void): void {
+		asked = action;
+		refused = undefined;
+		void Promise.resolve()
+			.then(request)
+			.catch((cause: unknown) => {
+				if (asked === action) asked = undefined;
+				refused = { action, message: cause instanceof Error ? cause.message : String(cause) };
+			});
+	}
+
+	function pause(value: string): void {
+		const choice = choices.find((entry) => entry.value === value);
+		if (!choice) return;
+		ask('pause', () => onpause(choice.until));
+	}
+
+	function resume(): void {
+		ask('resume', onresume);
+	}
+</script>
+
+<div class="ap-pref-setting ap-pref-pause" bind:this={row}>
+	<div>
+		<strong>Pause notifications</strong>
+		{#if until !== undefined}
+			<p class="ap-pref-note ap-pref-paused"><BellOff size={14} strokeWidth={1.8} aria-hidden="true" /> Paused {pausedUntilLabel(until)} · no desktop or push notifications on your devices.</p>
+		{:else}
+			<p class="ap-profedit-hint">Silence desktop and push notifications on all your devices for a while. Only you see it.</p>
+		{/if}
+		{#if refused}
+			<div class="ap-pause-refused" role="alert">
+				<Callout title={refused.action === 'pause' ? 'Notifications weren’t paused' : 'Notifications are still paused'}>
+					<p>{refused.message}</p>
+				</Callout>
+			</div>
+		{/if}
+	</div>
+	<div class="ap-pause-action">
+		{#if until !== undefined}
+			<Button size="sm" variant="primary" label="Resume" onclick={resume} />
+		{:else}
+			<MenuButton label="Pause…" bind:open={menuOpen} {choices} onselect={pause} />
+		{/if}
+	</div>
+</div>
+
+<style>
+	.ap-pref-pause { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: 1px solid var(--line); }
+	.ap-pref-pause strong { font-size: 14px; }
+	.ap-pref-pause p { max-width: 420px; margin: var(--space-1) 0 0; }
+	.ap-pref-paused { display: flex; align-items: center; gap: var(--space-1); color: var(--warn); font-size: 13px; line-height: 19px; }
+	.ap-pause-action { flex: none; }
+	.ap-pause-refused { margin-top: var(--space-2); max-width: 420px; }
+</style>

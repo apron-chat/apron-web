@@ -64,13 +64,6 @@ export function sidebarRooms(rooms: readonly RoomSnapshot[]): RoomSnapshot[] {
 	return rooms.filter((room) => room.joined && (room.parentRoomId === undefined || !visible.has(room.parentRoomId)));
 }
 
-/** The top-level room a room belongs to: its parent for a visible thread, else itself. */
-export function homeRoomOf(rooms: readonly RoomSnapshot[], roomId: string): string {
-	const room = rooms.find((candidate) => candidate.id === roomId);
-	const parent = room?.parentRoomId;
-	return parent !== undefined && rooms.some((candidate) => candidate.id === parent) ? parent : roomId;
-}
-
 /** One thread room as a card and sidebar row. */
 export function threadEntry(room: RoomSnapshot): ThreadEntry {
 	const messages = timelineMessages(room);

@@ -4,8 +4,11 @@
 	import { untrack } from 'svelte';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import type { NotificationPermissionState, NotificationScope, NotificationTestResult } from '$lib/ui/notifications';
+	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
+	import type { WebPushPreference } from '$lib/ui/web-push';
+	import type { PausedUntil } from '$lib/ui/pause';
 	import { sidebarRooms, type ThreadEntry } from '$lib/ui/timeline';
+	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import CreateRoomDialog from './CreateRoomDialog.svelte';
 	import ProfileBar from './ProfileBar.svelte';
 
@@ -25,10 +28,20 @@
 		notificationsEnabled: boolean;
 		notificationsSupported: boolean;
 		notificationPermission: NotificationPermissionState;
-		notificationScope: NotificationScope;
+		/** What to notify about (`NOTIFY_SCOPES`), for desktop notifications and push alike. */
+		notifyScopes: string[];
 		onnotifications: () => void;
-		onnotificationscope: (scope: NotificationScope) => void;
+		onnotifyscopes: (scopes: string[]) => void;
 		ontestnotifications: () => Promise<NotificationTestResult>;
+		/** Push notifications (§4.9), when the server offers web push. */
+		webPush?: WebPushPreference;
+		onwebpush: () => void;
+		/** Chromium's install prompt, from the push setting. */
+		oninstallapp: () => void;
+		/** Pausing notifications (§4.5 `mute`), on a server with capability `status`. */
+		pause?: { until?: PausedUntil };
+		onpause: (until: PausedUntil) => Promise<void> | void;
+		onresume: () => Promise<void> | void;
 		onconnect: () => void;
 		onroom: (room: RoomSnapshot) => void;
 		onthread: (thread: string) => void;
@@ -36,11 +49,11 @@
 		onjoin: (roomId: string) => void;
 		/** A room created here, asked for as private or not; it opens once its `room_update` arrives. */
 		oncreateroom: (roomId: string, options: { private: boolean }) => void;
-		onsignout: () => void;
+		onsignout: SignOutHandler;
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
-	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notificationScope, onnotifications, onnotificationscope, ontestnotifications, onconnect, onroom, onthread, onjoin, oncreateroom, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, onroom, onthread, onjoin, oncreateroom, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own. */
 	let rooms = $derived(sidebarRooms(session.rooms));
 	let canBrowse = $derived(session.canManageRooms && session.ready);
@@ -181,7 +194,7 @@
 			</section>
 		{/if}
 	</div>
-	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notificationScope} {onnotifications} {onnotificationscope} {ontestnotifications} {onsignout} {onsignin} />
+	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} />
 </aside>
 
 <CreateRoomDialog {client} bind:open={createOpen} enabled={canCreateRoom} oncreated={oncreateroom} />

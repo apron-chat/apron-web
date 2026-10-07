@@ -1,0 +1,14 @@
+<!-- @dsCard group="Feedback" height=200 subtitle="Steps before a setting works, with an action" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Callout</title></head>
+<body>
+<div class="ap-stack" id="root" style="max-width:420px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  add(A.Callout, { title: 'Install Apron to get push notifications', children: A.html('<ol><li>Tap Share in Safari.</li><li>Choose Add to Home Screen.</li><li>Open Apron from the Home Screen and turn this on there.</li></ol>') });
+  add(A.Callout, { title: 'Install Apron as an app', children: A.html('<p>It opens in its own window, and notifications come from it.</p>'), action: A.part(A.Button, { size: 'sm', variant: 'primary', label: 'Install app' }) });
+</script>
+</body>
+</html>

@@ -9,7 +9,7 @@
 		/** Change notification for callers that can't bind (plain pages); fires after `value` updates. */
 		oninput?: (value: string) => void;
 		onsend?: () => void;
-		/** Cap `embed:upload`: the attach and microphone buttons. Attachments go out as `upload` embeds (§4.6.3). */
+		/** Cap `embed:upload`: the attach and microphone buttons. Attachments go out as `upload` embeds (§4.8.3). */
 		canUpload?: boolean;
 		onattach?: () => void;
 		disabled?: boolean;
@@ -22,7 +22,7 @@
 		recordingTime?: string;
 		/** Set when the main pane shows a thread: posts go to its `room_id` and the placeholder reads "Reply in …". */
 		thread?: { thread: string; name?: string } | null;
-		/** Cap `command` (§4.8): while `value` starts with one "/", a Command tag shows, the field turns monospace and Send reads Run. */
+		/** Cap `command` (§4.1): while `value` starts with one "/", a Command tag shows, the field turns monospace and Send reads Run. */
 		canCommand?: boolean;
 	}
 	let { room, placeholder, value = $bindable(''), oninput, onsend, canUpload, onattach, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand }: Props = $props();

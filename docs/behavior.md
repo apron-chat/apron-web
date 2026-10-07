@@ -10,13 +10,13 @@ The default connection is `VITE_DEFAULT_SERVER_URL` from the build, which
 
 Embed media (`og` images, video and audio) loads from the chat server's origin
 and from the origins in `VITE_TRUSTED_MEDIA_ORIGINS`, which `.env.production`
-sets to `https://media.apron.chat`, the reference server's upload bucket.
+sets to `https://media.apron.chat`, the Cloudflare demo server's upload bucket.
 Streams load from the chat server's origin only. Every link in chat, from
 message text, link cards, uploads and HTML embeds, opens in a new tab.
 
 `/__preview` mounts this same app against a page-local in-memory WebSocket
 server, not the saved, configured, or same-origin backend. It seeds a guest,
-rooms, a thread, people, Markdown examples, and a message moved into the thread,
+rooms, a thread, people, CommonMark examples, and a message moved into the thread,
 and implements the app's protocol
 requests (auth, room listings/history, messages, reactions, room changes,
 profile updates, activity, commands, and ping). Changes last only for the page
@@ -42,25 +42,52 @@ seconds per room, with one `typing: 0` when typing pauses, to avoid charging a
 frame per keystroke. Sending a message sends no `typing: 0`: the message itself
 ends the indicator. Other people's indicators last as long as their `typing`
 asks, or until their next message arrives in that room.
-With the `activity` capability the client also sends `activity` `{away: true}` while
-the tab is hidden or unfocused and `{away: false}` when it is back, so the
-server can push to your other devices instead; it is never shown to anyone.
+With the `status` capability (§4.5), the client tells the server whether
+anyone is attending the tab, so the server can push instead. It sends a
+`status` request (with an `id`) only once signed in, after the `auth`
+result, never before. A connection starts attended, so a focused tab sends
+nothing. One that starts unattended (a hidden or unfocused tab, a tab a push
+notification opened in the background, a reconnect while away) sends
+`{idle: true}` at once, without a wait. After that, the client sends
+`{idle: true}` once the tab has been hidden or unfocused for 30 seconds, and
+`{idle: false}` as soon as it is back. One `idle` request is in flight at a
+time; a change meanwhile goes after the server's `{}`. If the server answers
+`retry_after`, the client sends the tab's state as it is after the delay, not
+the refused one, and nothing if that is what the server already has; another
+error changes nothing, and the next change tries again. A request that
+times out may or may not have applied, so after one the next change sends
+the tab's state even if it is what the server had before. Only
+`{idle: false}` ends idle; a message sent from the tab doesn't. Others never see `idle` itself: while your status is `online`, the
+server folds it into the `status` they see (§4.5): `online` while a
+connection is attended, `idle` while you are connected but none is, and
+`offline` with no connections. After a sign-in's result the server sends the
+`status` others see of each user this one shares a room with, other than
+`offline` and `""`. A server without `status` gets none of this.
 Explicit server URLs keep their path: a bare hostname connects at `/`, while
 servers that require `/ws` should be entered with that suffix.
 
-The client keeps one user object per `user_id` ([PROTOCOL.md §3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)) and merges
-every current object into it field by field — `you`, `user` notifications, and
-room `members` and `users` in `room_list` and `room_update` — so a rename or a
-new avatar shows on earlier messages too. A present field replaces, an empty
-one (`""`, `[]`, `{}`) clears it and is kept as cleared, and a missing one
-changes nothing. Recorded objects, a message's or reaction's `from` and a
+The client keeps one user object per `user_id` ([PROTOCOL.md §3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)), so a
+rename or a new avatar shows on earlier messages too. A complete object — `you`
+in an `auth` or `me` result, and the `users` of `room_list` and `room_update`
+— replaces it: a field it leaves out is gone. Every other current object — the
+`you` and `new` of a `user` notification, and room `members` — merges into it
+field by field: a present field replaces (`null` too, as an ordinary value), an
+empty one (`""`, `[]`, `{}`) clears it and is kept as cleared, and a missing
+one changes nothing. `ext` merges the same way one level down
+([PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext)): each key replaces the kept value, an empty value
+clears that key (kept as cleared), and `"ext": {}` changes nothing. Your own `status` comes only
+from `you`, never from your entry in `users` or `members`. Recorded objects, a message's or reaction's `from` and a
 membership's `user`, describe the user as of their record and never merge. A
 user renders field by field from the kept object, falling back to the
 recorded one the message carries only for fields the kept object lacks, so a
 cleared avatar, name or `roles` stays cleared however stale the message; an
 empty or unknown name shows as the `user_id`. A
 `user` notification with `new` and `old` maps the retired ID to the new
-identity. Message headers show the name with the muted `@user_id` beside it,
+identity: the same account under a new `user_id`, such as a guest that
+becomes a new account. Signing in to an existing account isn't one: others
+see the guest leave (a membership leave, `offline`) and the account arrive,
+two people, the guest's messages staying the guest's, and the connection
+that signed in takes its own identity from the `auth` result or `you`. Message headers show the name with the muted `@user_id` beside it,
 always when another user the client knows of shows under the same name, so no
 one can pass as someone else; a name that is the user's own `user_id` needs no
 handle beside it. Without an avatar, a
@@ -74,10 +101,7 @@ as a role; they grant nothing here. Senders whose `user_id` starts with `~`
 the three that state a scope (`~private`, `~room`, `~server`), which render as
 the design system's notice card: left-aligned, and titled by the sender as the
 server names it, `Name (~user_id)`, such as "System message to you (~private)"
-from the Apron example servers. From a server before protocol v7, `@private`,
-`@room` and `@server` senders are read as those three (the client renames them
-to `~` as they arrive); on a v7 server they are ordinary users, and no `@` ID
-is ever special. A `~private` message reaches only the connection it was sent
+from the Apron example servers. No `@` ID is special. A `~private` message reaches only the connection it was sent
 on. Every `~private` message, whatever it carries, and every `message` without
 a `message_id` (such as a command's reply), are transient notices: a dashed card for the session, never stored, and gone on
 reload. A notice sent before authentication, such as a server's welcome
@@ -113,17 +137,39 @@ with their `user_id`, suggesting people the client knows) and each other
 member's remove button removes them (`room_leave` with their `user_id`, after
 a confirm): how members bring people into a private room. Only a `user_id` is
 accepted there, since display names aren't unique. Who may is the server's
-policy; its error shows in the panel. A server before protocol v7, which would
-ignore `user_id` and act on you, gets neither these controls nor such
-requests, and one that answers `unsupported` gets no controls until its next
-`server` frame. A count kept from a truncated listing stays while later records
+policy; its error shows in the panel. A server that answers `unsupported`
+gets no controls until its next `server` frame. A count kept from a truncated listing stays while later records
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
 drag its left border, or click the border to collapse it (the header button
 brings it back, and takes focus when the border collapsed it from the keyboard), and its width and whether it is collapsed are remembered.
 Dragging either list shut restores its earlier width when it reopens. On
 narrow screens it overlays the conversation, starts closed, and hides with
 the conversation on the phone's rooms pane. It shows no
-typing or connection status.
+typing or connection status. Where the server sends a `status` (§4.5), each
+member's avatar carries a dot cut into its corner: online a filled dot, idle
+a crescent, do not disturb a barred dot, and offline a hollow ring; the
+row's tooltip and screen-reader text say it in words. A value the client
+doesn't know is unknown, not offline: a placeholder, a ring broken into
+dashes, whose tooltip says "Unknown status: brb", and the profile card shows
+the literal value. A member with no status (none sent, or `""`, none) has no
+dot and isn't taken for offline. The list sorts online, idle, do not
+disturb, unknown, offline, then those with no status, by name within each,
+and dims offline members. The client shows what the server sends: others see
+a user's do not disturb only while that user is connected, and offline
+otherwise, which the server works out. Your own row, the profile card and the profile bar
+show the status you chose, from `you`: online, do not disturb, invisible (the
+hollow ring others see, its tooltip "Invisible · others see you as offline"),
+or no dot for none. Others' view of you (`offline` while you are invisible,
+`idle`) arrives in `new` user objects and room `members`, and never replaces
+your own. Pausing notifications doesn't change your status: a pause is
+private. A lost connection keeps the others' statuses, but each sign-in
+drops them, however short the reconnect, so they show no dot until the
+server sends them again: after the sign-in's result for each connected user
+who shares a room, and in the room `members` and `users` of `room_list` and
+`room_update`, which carry `offline` and `""` too (a ring, and no dot). A
+sign-in is an `auth` as a user the connection isn't already signed in as: a
+repeat `auth` as the same user, or adding a passkey or an email address,
+keeps them.
 
 Mentions follow the `@user_id` convention ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-mention-text)). Typing `@` in the
 composer opens the mention picker over the room's members (from the room's
@@ -137,7 +183,10 @@ the same chip once finished, when exactly one person in the room goes by it;
 one ending the draft collapses on send. Chips are always sent as `@user_id`, so
 the field reads by name while the wire stays ID-based, and each chip's `user_id`
 goes in `body.mentions` ([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)): a chip deleted before sending mentions no one,
-and an edit resubmits the message's mentions. A rendered body (plain or Markdown, never inside
+and an edit resubmits the message's mentions. A `markdown` body renders as CommonMark
+([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)) with three extensions beyond it: GitHub tables,
+strikethrough, and a typed line break kept as a break; raw HTML shows as
+text. A rendered body (plain or CommonMark, never inside
 code) shows a known user's `@user_id` as a chip with their current name, a known room's
 `#room_id` as a link showing its title that opens the room (or joins it), and unknown
 IDs as written ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)): `@` names only users. Typing `#` in the composer opens room autocomplete over known
@@ -169,30 +218,189 @@ outside, or tabbing out closes it. Mentions inside a reply's quote only read,
 since the quote is the button that jumps to its message.
 
 A mention that lands while the tab is hidden or unfocused flashes the tab title
-and plays a soft chime. **Preferences** (the gear beside your profile) can turn
-on desktop notifications instead, for mentions or for every message from
-someone else; turning them on asks the browser's permission, and **Send test**
-shows a sample. While they're on, a notification replaces the chime (the chime
+and plays a soft chime. **Preferences** (the gear beside your profile) starts
+its Notifications section with **Notify me about**, one choice for desktop
+notifications and push alike, one line per option: Mentions (messages whose
+`body.mentions` list you, or an edit that adds you), Replies to my messages
+(replies to one of your messages that is loaded here; with the replied-to
+message not loaded, no notification), All messages in private rooms (a private
+room or its threads) and All messages in joined rooms (a joined room or its
+threads). Messages of your own never notify. At
+least one stays checked, mentions and replies until you choose; the switches
+below turn notifications off. The choice is kept per account on each server,
+and for a server's guests together (their `user_id`s change with each
+connection), and applies in other tabs. The earlier device-wide "Everything"
+carries over as every scope.
+
+On a server with the `status` capability, the section starts with
+**Status**, your presence status as others see it (§4.5). Its menu, with a
+dot before each choice and a check on the current one, offers Online
+(automatic: others see online, idle or offline as you come and go) and None
+(no status), and Do not disturb (others see it while you're connected, and
+offline otherwise) and Invisible (others see you offline) only where the
+server frame's `server.status` lists them (§3.1); without `server.status`
+the menu offers just Online and None. A status you already have stays in
+the menu, checked, even when it isn't listed. Choosing one sends `me`
+`{status}` (`""` for None); there are no durations. A server may still answer
+another value: `you` in the result is the status in effect, the row shows it,
+and a callout says what the server answered ("This server doesn't offer
+Invisible. Your status is None."), which the dialog's one live region reads
+out too; while a choice is being saved the button reads "Saving…" and can't
+open, but keeps keyboard focus (`aria-disabled`, not disabled); for the rest of the session the menu stops
+offering a value the server answered something else for. A value the client doesn't know
+(one the server set) shows as itself, quoted, with nothing checked. Do not
+disturb silences this page as a pause does: no desktop notifications, chime
+or title flash, and the server sends no pushes with messages.
+
+Below it, a signed-in account (not a guest) gets **Pause notifications**, a
+private mute nobody else sees. **Pause…** opens a menu: For 1 hour, For 8
+hours, Until tomorrow (the next 9:00; "Until this morning" before 9:00) and
+Until I resume, each showing when it would end. The menu opens from the
+keyboard with the arrow keys too; its items are out of the tab order, so Tab
+closes it with focus back on the button and moves on from there. Choosing one sends a `status` request
+`{mute}` with the seconds until then, or `true`, and **Resume** sends
+`{mute: false}`. Neither changes anything here by itself: the server sends
+each change to your mutes back to all your connections, this one included,
+as a `status` notification (`{mute}` with seconds left, `true` or `false`)
+before the request's `{}` result, and the client takes that as its own
+setting. If the server answers with an error instead, such as `retry_after`,
+nothing changed: the row keeps what it showed and adds a callout with the
+server's message ("Notifications weren't paused", or "Notifications are
+still paused" for a refused **Resume**) until the next ask. A refused mute is
+not sent again on its own. So the row shows the pause the server kept, a shorter
+one or none, and focus moves to **Resume** (or back to **Pause…**) once it
+arrives; a pause set in another tab or on another device shows here too.
+Every notification a sign-in causes comes after its result
+([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), so at each sign-in the client drops the mutes
+it kept, and after the result the server sends every mute in effect, which
+the client applies as it arrives; any it doesn't send is off. Adding a
+passkey or an email address to the signed-in connection isn't a sign-in, a
+guest's included, nor is a repeat `auth` as the user the connection is
+already signed in as: the mutes stand. A lost connection keeps the pause
+until the next sign-in, so it doesn't flicker off while reconnecting. The client works out when the
+pause ends as it arrives, and resumes on its own then. While paused, the row
+reads "Paused until 14:30" (or "until tomorrow 9:00", "until you resume"),
+the profile bar's gear carries a small bell-off badge, and nothing notifies
+here: no desktop notifications, chime or title flash, and mentions that
+arrive meanwhile don't alert once it ends. The server sends no pushes with
+messages.
+
+A `status` with a `room_id` mutes that room and its threads, mentions
+included: they don't notify, chime or flash the title. It applies whether or
+not the room is joined, and `false` (or `0`) ends it. The client has no
+control for it yet, but follows mutes set elsewhere.
+
+Below it, **Desktop notifications** alerts while Apron is open but hidden or
+unfocused; turning them on asks the browser's permission, and **Send a test
+notification** under it shows a sample through the same browser path. While they're on, a notification replaces the chime (the chime
 still plays if one couldn't be shown), each room keeps one notification that
 the next message replaces (its newest mention, else its newest message), and
-clicking it opens that room or thread. Where the page can't show notifications
-itself (Android Chrome) the service worker shows them. Permission revoked in the
-browser's site settings reads as off. **Appearance** picks a light or dark theme
+clicking it opens that room or thread. Notifications show through the service
+worker, or from the page where there is none yet. Permission revoked in the
+browser's site settings reads as off.
+
+When the server offers web push (`server.push.webpush` with its VAPID `key`,
+§4.9), Preferences also offers **Push notifications** to a signed-in account
+(not a guest), also while it reconnects. It is per account on each server, off
+until turned on, and turning it on or off in one tab applies in the others.
+Turning it on asks the browser's permission, subscribes this browser with the
+server's key (replacing a subscription made with another key), and sends
+`push_register` `{kind: "webpush", url, push_id, keys: {p256dh, auth}, wake}`
+from the subscription after each `auth` as that account. Turning it off sends
+`push_unregister`. This browser has one subscription for all accounts: it goes
+once no account here has push on (also checked on load, for one turned off
+while offline), and accounts on servers with the same key share it. When
+another server, with another key, holds it, the setting says "Push is on for
+another server in this browser (host)", and turning it on there takes it over;
+tabs don't take it back on their own. Its `push_id`s are kept in IndexedDB for
+the service worker, which drops a push for any account push isn't on for.
+Subscribing and unsubscribing run one at a time, across tabs too under the
+`apron-push` Web Lock where the browser has one, and a step that finishes
+after push was turned off, or after the tab moved to another server or
+account, registers nothing; waiting for the service worker gives up after 10
+seconds. A replaced registration is unregistered, after the next `auth` as
+the account it belonged to if not at once (never as another account, whose
+registration of the same endpoint it would remove), and while push is off for
+the account signed in, this browser's endpoint is unregistered after each
+`auth`, in case an earlier unregister was missed; nothing is kept off before
+the page knows the account, so a page load doesn't unregister and then
+register again. Requests for the same endpoint go one at a time, each after
+the last one's reply, so turning push off and straight back on can't apply
+in the wrong order. Signing out unregisters; the connection is replaced before
+the answer can come, so the unregister is kept for that account and sent again
+after its next `auth` (not another account's) until the server answers it.
+Once signing out has worked it turns push off for
+that account here even when the server can't be told; a sign-out that fails
+(with requests still pending, say) leaves push on. A registration the server refuses shows its
+message in the setting.
+
+**Push notifications** alerts on this device even when Apron is closed. Its
+`wake` is the checked scopes that `server.push.wake` lists; when the server
+lists none, no `wake` goes and the server's defaults apply. While push is on, a
+checked scope the server doesn't push is marked "Desktop only" beside its
+title. When none of the checked scopes is pushed, push still
+registers, with an empty `wake`, which wakes for nothing, and the setting says
+so. A change to the choice registers again at once, with the same `url`.
+
+On iPhone and iPad Safari outside a Home Screen app, push isn't offered: the
+push setting shows a callout with the steps to add Apron to the Home Screen.
+Where the browser offers to install Apron (Chromium's `beforeinstallprompt`),
+the client holds that offer back and shows **Install app** in the push setting
+only, never elsewhere, and not once Apron runs installed. The web manifest
+(`static/manifest.webmanifest`) names Apron, its icons, `start_url` and
+`display: standalone`.
+
+`push_id` names the account: 12 random bytes in base64url (16 characters),
+made once per account on each server and kept in `apron.pushIds`, so it
+reveals neither. The service worker reads each
+push payload's `push_id`, `unread` and `message`, and shows the `message` as
+its sender and room. A payload without `message` is a badge push: it only sets
+the badge and never shows a notification. This client doesn't ask for those
+on web push, where a push that shows nothing may get the browser's own
+notice. `unread`
+becomes the app badge where the browser has one, cleared at 0; while Apron is
+in view, the badge is the page's own unread count. A message notification, the
+page's or a pushed one, is tagged with the `push_id` and the `message_id`, and
+a room's notifications are ordered by `message_id`: a message older than the
+room's newest notified one doesn't notify, and a new one closes only older
+ones. The same message again replaces its notification quietly (same tag,
+`renotify: false`, silent) while it is showing: a push's with the page's own,
+or an edit that newly mentions you, keeping the pushed one's title. Once
+dismissed (remembered in IndexedDB), it doesn't notify again. Browsers expect each push to
+show a notification, and WebKit revokes subscriptions whose pushes don't, so
+every push but a badge push shows one: a push with nothing new, one for an
+account push isn't on for here, or one that can't be read shows again, as it
+is and silently, what is already showing, else the message quietly (never
+one older than the room's newest), else "Open Apron to catch up". If the
+service worker can't read the accounts push is on for from IndexedDB (as
+opposed to their never having been saved), a push for an account shows only
+"Open Apron to catch up", with no preview and no badge, since it may be any
+account's. A dropped push leaves the badge alone, and so does
+the service worker while a page of the app is in view, a tab it doesn't
+control yet included (as with clicks). A click
+on a pushed notification, or on the page's when its tab has gone, asks the
+open tabs for their `push_id`, and the tab signed in to that account opens the
+room. With no such tab, a new one opens at it, on that account's server if
+push is on for it here. A pushed room that the listed rooms don't include, or
+that isn't open after 30 seconds, is dropped. Browsers without
+push say so; iPhone and iPad Safari say to add Apron to the Home Screen first.
+
+**Appearance** picks a light or dark theme
 over the system's, and an installed font for the interface, messages and code
 (suggested from installed fonts where the browser allows listing them); the
 font choice is marked experimental, to be replaced by a choice of themes. All
 of these stay on this device; settings aren't synced.
 
 With the `command` capability, composer text that starts with one `/` is a command
-([PROTOCOL.md §4.8](https://github.com/shazow/apron/blob/main/PROTOCOL.md#48-command)): the composer shows a **Command** tag, sets the line in
+([PROTOCOL.md §4.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#41-command)): the composer shows a **Command** tag, sets the line in
 monospace, and **Run** replaces **Send**. `/nick` (a `me` request), `/join`,
 `/leave`, `/topic` (`room_join`, `room_leave`, and `room_set` with the room's
 new `description`), and `/kick @user` and `/invite @user` (`room_leave` and
 `room_join` with that `user_id`), with the `rooms` capability, are handled by the
 client. `/kick` with a reason goes to the server, which alone can carry one,
-and so do `/kick` and `/invite` on a server before protocol v7 and once the
-server has answered them `unsupported` (the one that got that answer is sent on
-as a command); anything else goes out
+and so do `/kick` and `/invite` once the server has answered them
+`unsupported` (the one that got that answer is sent on as a command); anything
+else goes out
 as a `command` request with the params a message would have — `room_id`, the
 text as typed, `mentions`, `reply_to`, and attached files as `upload` embeds —
 and is never posted. `/help` lists what the server offers. The server's replies
@@ -203,7 +411,9 @@ Without the capability, `/` text is an ordinary message.
 With the `activity` capability, reading the latest message of a room advances your
 read cursor (`read_message_id`), which the server syncs across your
 connections. Opening a room places a **New** divider above the first message
-after the cursor as it was when you arrived; it stays put while you read.
+after the cursor as it was when you arrived; it stays put while you read. A
+server whose settings say `read_cursors: false` (below) keeps no cursors: the
+cursor still moves here, for the divider, but isn't sent.
 
 With the `rooms` capability, rooms come by request ([PROTOCOL.md §4.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#43-rooms)): right behind
 `auth`, without waiting for its result ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), the client lists
@@ -225,7 +435,7 @@ listed; that listing is also what refreshes their cards, since they deliver
 nothing live. Opening one of those reads it through `history` without joining
 it: its header offers **Join**, and replying joins it first.
 With the `rooms` capability, the **+** beside Rooms in the sidebar creates a room
-from a name and an optional Markdown description (`room_set` with `title` and
+from a name and an optional CommonMark description (`room_set` with `title` and
 `description`); it opens once its `room_update` arrives, and the dialog stays
 open, with the server's error, if creating fails. **Private** asks for
 `private: true` ([PROTOCOL.md §4.3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#434-creating-and-editing)):
@@ -239,7 +449,7 @@ comes back without `private: true` gets the same error, and neither the reply
 composer opens on it nor do selected messages move into it. Private rooms and
 threads show a lock beside their name.
 
-A room's `description` (Markdown by convention) shows as one line of text
+A room's `description` (CommonMark by convention) shows as one line of text
 under its title in the header. With the `rooms` capability the header's **Edit** opens
 a form for the open room's or thread's title and description ("Summary" for a
 thread), saved with one `room_set`; the `room_update` that follows is what
@@ -248,12 +458,12 @@ shows, since the server may alter or decline it.
 With the `rooms` capability, **Start thread** on a message creates a thread under the
 room titled after the message's first line, with the message's text as its
 `description` (unless the title already says it all), and opens it with the
-composer replying to that message. Threads don't point at a message in v7, so
+composer replying to that message. Threads don't point at a message, so
 the thread's first reply carries the link back as its `reply_to` (the
 convention of the protocol's fixtures): its quote shows the message and jumps
 to it. The message stays in the room, with the thread's card after it. A
 thread's description shows as a **Summary** pinned at the top of the thread,
-rendered as Markdown. Threads load their newest page of
+rendered as CommonMark. Threads load their newest page of
 history when opened (50 records); one with older replies opens at its latest
 reply, shows "N+ replies", and loads the page before whenever the reader nears
 the top, keeping what is on screen in place. Drafts are kept per room, threads
@@ -265,7 +475,9 @@ Back leaves the page from the first room opened. A room left since stays put
 for that step, and a thread left since is read without joining.
 
 With the `rooms` capability the header also offers **Leave**, which leaves the room or
-the thread; a thread is a room of its own, so leaving its parent keeps it.
+the thread; a thread is a room of its own, so leaving its parent keeps it. A
+server that keeps you in a room answers `denied`, and its message shows as
+the error.
 **Browse rooms** in the sidebar lists, via `room_list` with
 `filter: "not_joined"`, the most active visible rooms you haven't joined, and
 **More threads…** under the
@@ -306,7 +518,7 @@ the first time the full picker opens. Both stay out of the main bundle, and the
 picker gets its data, English strings and native glyphs passed in, so it never
 fetches from a CDN.
 
-Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#46-embeds-and-avatars)):
+Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](https://github.com/shazow/apron/blob/main/PROTOCOL.md#48-embeds-and-avatars)):
 
 - **Uploads** (capability `embed:upload`): files picked with the paperclip,
   dropped anywhere on the conversation (which shows a "Drop files to attach"
@@ -355,7 +567,7 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.6](ht
 
 With the `edit` capability, each embed on your own messages shows an **(x)** on its
 corner while hovered (always on touch screens), which saves the message without
-that embed ([PROTOCOL.md §4.6.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#462-embed-identity)): it is identified by `embed_id`, or by
+that embed ([PROTOCOL.md §4.8.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#482-embed-identity)): it is identified by `embed_id`, or by
 value on servers that store embeds as given. Removing an upload or stream asks
 first, since the server deletes its content. A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
@@ -370,16 +582,18 @@ base URL, a display name, and a sign-in choice among the schemes the server
 advertises (Guest by default; Passkey, below; Email and Token, further down). Once the server in the field
 has answered, its `server.welcome`
 ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication))
-shows at the top of the form, rendered as Markdown and sanitized like a message.
+shows at the top of the form, rendered as CommonMark and sanitized like a message.
 A server without the `guest` scheme opens this screen by itself once, since
 nothing works before signing in, and so does a session held for a sign-in
 (below) with nothing on screen yet. The server and name
 are stored in local storage, and the last few backends are listed under the
 form. The profile bar at the foot of the sidebar edits your handle, which is
 sent with the protocol `me` request after authentication; the editor shows
-what the server actually kept. With the `command` and `embed:upload` capabilities it
+what the server actually kept. The kept name is the one asked for from then
+on, and the one remembered for the next visit, so a server that normalizes
+names isn't sent `me` again at each reconnect. With the `command` and `embed:upload` capabilities it
 also sets your avatar: a `/avatar` command carrying one `upload` embed
-([PROTOCOL.md §4.6.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#466-avatars)), whose result names the `write_url` the image is written to; the
+([PROTOCOL.md §4.8.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#486-avatars)), whose result names the `write_url` the image is written to; the
 server applies it with a `user` notification. **Remove** sends `me` with
 `avatar: ""`.
 
@@ -387,21 +601,21 @@ The profile editor's Sign-in row offers, where the server's `auth` lists them,
 **Sign in with a passkey**, **Sign in with email** and **Add email** to a
 guest, and **Add passkey**, **Add email** and **Sign out** to a registered
 account. A guest's Add email proposes and approves on the guest's connection,
-which adds the address to the guest's account (§4.10); Sign in with email is a
+which adds the address to the guest's account (§4.11); Sign in with email is a
 sign-in to the address's own account. Adding needs the
 scheme in `auth`, since adding is a way back in and a scheme listed only in
 `signup` doesn't sign in (the spec doesn't say whether servers may allow
-adding such a scheme; this client doesn't offer it). With the Go example, open
+adding such a scheme; this client doesn't offer it). With the Go reference server, open
 `http://localhost:5173` (or `http://localhost:8080` for a static build); other
 deployments need HTTPS and configured RP/frontend origins. A passkey registered
 on a signed-in connection is added to that account
-([PROTOCOL.md §4.9](https://github.com/shazow/apron/blob/main/PROTOCOL.md#49-webauthn-authentication)),
+([PROTOCOL.md §4.10](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-webauthn-authentication)),
 so adding one keeps your guest identity and message ownership; signing in
 restores the identity attached to your chosen passkey. **Add email** asks for
 an address, proposes adding it on this signed-in connection (`auth` with
 `scheme: "email"` and `email`), and approves the proposal with the emailed code
 on this same connection (`scheme: "email"` and `token`, no address), which
-adds the address to the account and answers `{}` (§4.10); a refused code says
+adds the address to the account and answers `{}` (§4.11); a refused code says
 the address may belong to another account. If this connection dropped in
 between, the proposal went with it and the form asks for a new code. Adding doesn't change how
 the session signed in: it is remembered beside it, as another way back in.
@@ -477,17 +691,29 @@ whether its origin and challenge are the expected ones, and the
 authenticator data's flags (user present, user verified, backup), whether
 its RP ID hash matches, and its AAGUID with the provider it names
 (Bitwarden, 1Password, iCloud Keychain…). Servers answer every
-verification failure alike (§4.9 `denied`), so this is where the reason
+verification failure alike (§4.10 `denied`), so this is where the reason
 shows. The connection's own sign-in, as a guest or by a saved session,
 warns too when refused, without the token.
 
-A server may keep guests read-only; the demo worker does, and says so with
-`ext.demo.guest_posting: false`. Signed in as a guest there, the composer gives
+A server may keep guests read-only, and says so with `guest_posting: false`
+in its settings (below). Signed in as a guest there, the composer gives
 way to a bar saying so with a **Sign in** button (it opens the sign-in panel
 on Passkey). Replying, reacting, starting threads, editing rooms and threads,
 adding or removing members, and Join and Leave are hidden; Browse rooms and More threads… offer **Open** instead of
 **Join**, which reads the room through its history without joining it. Other
 servers' denials show as errors as usual.
+
+The client understands `ext:settings`, an extension that the Cloudflare demo
+server defines: a server that advertises it in `capabilities` describes how it runs in its `server`
+frame's `ext.settings`, `{guest_posting?, read_cursors?}`. Both are booleans,
+and a setting left out is `true`; without the capability the client reads
+none of them. `guest_posting: false` keeps guests read-only, as above, and
+the connect screen's Guest hint says so. `read_cursors: false` says the server
+keeps no read cursors, so the client doesn't send `read_message_id`. Other
+extension data (`ext`, [PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext))
+on users, messages and rooms is kept as the server sends it, and the client
+writes `ext` (with `me`, a message, or `room_set`) only to a server with the
+capability `ext`, which keeps it; the app itself writes none.
 
 Passkeys use the browser's native WebAuthn JSON APIs, with no frontend dependency.
 An up-to-date browser is required; unsupported browsers can still chat as guests.
@@ -496,7 +722,7 @@ connection change cancels the active ceremony. Chat requests pause while a
 ceremony is active, preventing edits from crossing an identity change.
 
 With `email` in the server's `auth` or `signup`
-([PROTOCOL.md §4.10](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-email-authentication)),
+([PROTOCOL.md §4.11](https://github.com/shazow/apron/blob/main/PROTOCOL.md#411-email-authentication)),
 the connect screen's **Email** asks for an address and proposes signing in
 with it: `auth` with `scheme: "email"` and `email`, which authenticates nothing
 and answers `{}` whether or not the address has an account. A proposal on a
@@ -527,11 +753,9 @@ which each does. A scheme listed only in `signup` works end to end for joining
 in (a passkey that only signs in is never registered from there).
 
 The email's link is `#token=…`, with an optional `&server=` naming the
-server's `ws:`/`wss:` URL (the suggested convention of §4.10), all
+server's `ws:`/`wss:` URL (the suggested convention of §4.11), all
 `application/x-www-form-urlencoded` in the URL fragment; it carries no address.
-The fragment is read and scrubbed from the address bar before anything else
-(an earlier draft's `#email=…&token=…` is scrubbed too, and its address
-ignored). A link is a credential someone else may have crafted or forwarded,
+The fragment is read and scrubbed from the address bar before anything else. A link is a credential someone else may have crafted or forwarded,
 so it is never used silently: a dialog asks "Sign in to *server* with this
 email link?", says whom it signs out when you are signed in there (or that a
 saved session is kept there, before it has resumed), and warns that a link
@@ -541,7 +765,9 @@ is taken the same way. On confirmation the client opens a fresh connection to
 the link's server (this one unless it names another) that is not signed in,
 presents the token there (`scheme: "email"` and `token`), and carries on with
 that connection once it has worked, as above; only then is a switch to another
-server remembered, and the server listed under Recent. A link never adds an
+server remembered, and the server listed under Recent. On the same server the
+account signed in before is signed out of as **Sign out** does, so push goes
+off for it here. A link never adds an
 address to an account. If it fails (expired, used), nothing changes: the page
 stays on its server, and the connect screen opens on Email, set to the link's
 server, with the reason.
@@ -567,12 +793,12 @@ connection that was refused. If the server has closed that connection
 meanwhile, the passkey tap reconnects in place first, keeping the rooms
 on screen. It never prompts on its own
 and never replaces the session with a guest identity. Signing out clears the stored
-credentials and reconnects as a guest. The Go example's sessions are in memory
-and are lost on backend restart.
+credentials and reconnects as a guest. The Go reference server keeps unexpired
+sessions across restarts unless it runs with `--store memory`.
 
-The WebAuthn exchange follows [§4.9 of the protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md#49-webauthn-authentication):
+The WebAuthn exchange follows [§4.10 of the protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-webauthn-authentication):
 both registration and login use `action` plus `step: "begin"` or
 `step: "finish"`, with the server's `challenge_id` and `public_key` and the
 browser's standard JSON credential representation. The implementation details
-for the Go example are documented in
-[`servers/go/README.md`](https://github.com/shazow/apron/blob/main/servers/go/README.md#example-webauthn-exchange).
+for the Go reference server are documented in its
+[`SERVER.md`](https://github.com/apron-chat/apron-server-go/blob/main/SERVER.md#example-webauthn-exchange).

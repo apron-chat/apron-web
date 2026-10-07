@@ -3,10 +3,11 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, webPushKey, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
+	import { isJsonObject } from '$lib/protocol/types';
 	import Composer from '$lib/components/Composer.svelte';
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
 	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
@@ -39,7 +40,7 @@
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationScope, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationScope, saveNotificationsEnabled, saveSidebarPrefs, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, type RecentServer } from '$lib/ui/storage';
 	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadLostPrivacy, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
 	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
@@ -51,8 +52,13 @@
 	import { PaneDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { notificationClickTarget, notificationPermission, requestNotificationPermission, showNotification, type NotificationPermissionState, type NotificationScope, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { setAppBadge, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
+	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
+	import { pageSilenced } from '$lib/ui/user-status';
+	import { PushSettings } from '$lib/ui/push-settings.svelte';
+	import { inMutedRoom, inNotifyScopes, notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
+	import { accountServer, canOfferInstall, keepsPushOff, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
 
 	/**
 	 * A thread this viewer created, opened once its `room_update` has arrived;
@@ -85,6 +91,8 @@
 	const session = new SessionView();
 	const feedback = new FeedbackState();
 	const mentions = new MentionTracker();
+	/** How many mentions of you have arrived outside the rooms you muted: each new one can alert the tab. */
+	let audibleMentions = $state(0);
 	const incomingMessages = new IncomingMessageTracker();
 	const unread = new UnreadTracker();
 	const presence = new PagePresence();
@@ -92,10 +100,63 @@
 	const drafts = new PaneDrafts();
 	const reveal = new ProgressiveReveal(REVEAL_CHUNK_ITEMS, () => messageScroll, keepPlace);
 	let notificationsEnabled = $state(false);
-	let notificationScope = $state<NotificationScope>('mentions');
 	let notificationState = $state<NotificationPermissionState>(notificationPermission());
 	/** On, and still allowed: the browser's permission can be revoked or reset behind the setting. */
 	let notificationsActive = $derived(notificationsEnabled && notificationState === 'granted');
+	/** The server the client is on (`client.url`), kept as page state. */
+	let serverUrl = $state('');
+	/** Push per account (§4.9), and this browser's one subscription between them. */
+	const pushSettings = new PushSettings({ setBadge: (unread) => void setAppBadge(navigator, unread) });
+	/**
+	 * The signed-in account (`webPushAccount`), not a guest: a guest's identity ends with its
+	 * connection, so there is no one to push to. A reconnect keeps it.
+	 */
+	let pushAccount = $derived(session.you && (session.snapshot.passkeySession || session.snapshot.keptSession) ? webPushAccount(serverUrl, session.you.user_id) : undefined);
+	/** The server's VAPID key, offered to a signed-in account. */
+	let webPushServerKey = $derived(pushAccount ? webPushKey(session.server) : undefined);
+	let webPushActive = $derived(pushSettings.isOn(pushAccount) && notificationState === 'granted');
+	/**
+	 * Push is on for this account, but the subscription is another account's, on
+	 * a server with another key, that still has push on: that server's host. It
+	 * moves here only when push is turned on here again, so two tabs don't take
+	 * it back and forth.
+	 */
+	let webPushHeldBy = $derived.by(() => {
+		const server = webPushActive ? pushSettings.heldBy(pushAccount, webPushServerKey) : undefined;
+		return server === undefined ? undefined : backendHost(server) || 'another server';
+	});
+	/** Bumped when a choice of what to notify about is saved, here or in another tab, so it is read again. */
+	let notifyScopesSaved = $state(0);
+	/** Who that choice is kept for: the signed-in account, or this server's guests. */
+	let notifyKey = $derived(notifyAccount(serverUrl, pushAccount ? session.you?.user_id : undefined));
+	/** What to notify about, for desktop notifications and push alike. */
+	let notifyScopes = $derived.by(() => {
+		void notifyScopesSaved;
+		return notifyScopesOf(loadNotifyScopes(notifyKey));
+	});
+	/** The wake scopes the server pushes (§4.9), and the `wake` push sends: the checked ones of them. */
+	let webPushOffered = $derived(offeredWake(session.server?.push));
+	let webPushWake = $derived(pushWake(notifyScopes, webPushOffered));
+	/** Why push doesn't work: the browser couldn't subscribe, or the server refused the registration. */
+	let webPushError = $derived(pushSettings.error ?? session.snapshot.pushError);
+	let webPushAvailable = $state(false);
+	/** Notifications are paused until then (§4.5 `mute`, as the server's `status` says). */
+	let pausedUntil = $derived(session.snapshot.mutedUntil);
+	/**
+	 * This page stays quiet (no desktop notifications, chime or title flash):
+	 * paused, or your status is `dnd`, which silences like a pause (§4.5).
+	 */
+	let silenced = $derived(pageSilenced(pausedUntil, session.you?.status));
+	/** Pausing needs capability `status` and a signed-in account (a guest's `user_id` ends with its connection). */
+	let canPause = $derived(session.server?.capabilities?.includes('status') === true && pushAccount !== undefined);
+	/** Chromium's offer to install Apron, kept for the push setting's Install app button. */
+	let installPrompt = $state<InstallPromptEvent | undefined>();
+	/** The account's `push_id` (§4.9): it names the account in pushed payloads and in message notifications. */
+	let accountPushId = $derived(pushSettings.accountPushId);
+	/** A pushed room to open once it is listed, if its `push_id` is this account's. */
+	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
+	/** How long a pushed room waits for its account and rooms before it is dropped. */
+	const PUSH_ROOM_WAIT_MS = 30_000;
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
 	const tabId = Math.random().toString(36).slice(2);
 	const selection = new MessageSelection();
@@ -124,7 +185,7 @@
 	let editingId = $state<string | undefined>();
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
-	/** An emailed sign-in link this page was opened with (§4.10), until the viewer answers whether to use it. */
+	/** An emailed sign-in link this page was opened with (§4.11), until the viewer answers whether to use it. */
 	let emailLink = $state<EmailLink | undefined>();
 	/** The link is being used: its code goes out as a fresh connection's first `auth`. */
 	let emailLinkBusy = $state(false);
@@ -140,7 +201,7 @@
 	let pendingPrivate = $state(false);
 	/**
 	 * Where the New divider sits in the open pane: after your read cursor as it
-	 * was when the pane opened (§4.4). It stays put while you read.
+	 * was when the pane opened (§4.6). It stays put while you read.
 	 */
 	let newDivider = $state<{ room: string; after?: string; fixed: boolean }>({ room: '', fixed: false });
 	/** Messages a thread is being started from, for the button's "Starting…". */
@@ -250,10 +311,15 @@
 	$effect(() => {
 		const arrivedMentions = mentions.observe(session.rooms, session.you, paneRoom?.id, latestVisible);
 		const arrivedMessages = incomingMessages.observe(session.rooms, session.you);
-		if (!notificationsActive || !presence.away) return;
+		// A mention in a room you muted (§4.5) doesn't alert the tab either.
+		const audible = arrivedMentions.filter((event) => !inMutedRoom(event, session.rooms)).length;
+		if (audible) untrack(() => (audibleMentions += audible));
+		if (!notificationsActive || !presence.away || silenced) return;
 		const mentioned = new Set(arrivedMentions.map((event) => event.message_id));
-		// Everything includes an edit that adds you, which isn't a new message.
-		const selected = notificationScope === 'everything' ? [...arrivedMessages, ...arrivedMentions] : arrivedMentions;
+		// The checked scopes, judged here; an edit that adds you counts as a mention.
+		const context = { me: session.you, rooms: session.rooms };
+		const selected = [...arrivedMessages, ...arrivedMentions]
+			.filter((event) => inNotifyScopes(event, notifyScopes, { ...context, mentioned: mentioned.has(event.message_id) }));
 		for (const event of notificationsByRoom(selected, mentioned)) untrack(() => void notifyMessage(event, mentioned.has(event.message_id)));
 	});
 
@@ -261,17 +327,86 @@
 		unread.observe(session.rooms, session.you, paneRoom?.id, latestVisible && presence.visible);
 	});
 
-	// Nobody is attending a hidden or unfocused tab (§4.4): the server may push instead.
+	// The account's `push_id`, made and kept in storage the first time: here, not in a derivation.
+	$effect(() => {
+		const account = pushAccount;
+		untrack(() => pushSettings.follow(account));
+	});
+
+	// While push is on for this account (§4.9), keep this browser subscribed with the server's
+	// key, which the client registers on each connection.
+	$effect(() => {
+		const chat = client;
+		const key = webPushServerKey;
+		const userId = session.you?.user_id;
+		const wake = webPushWake;
+		if (!chat || !key || !userId || !webPushActive || webPushHeldBy || !session.ready) return;
+		// A new choice of scopes registers again at once: the same `url`, new params.
+		untrack(() => void pushSettings.enable(chat, key, userId, wake, () => session.you?.user_id === userId && webPushActive));
+	});
+
+	// Turned off, here or in another tab, or for another account now, or the subscription moved to
+	// another server: this one isn't registered, and the browser's endpoint is unregistered after
+	// each `auth`, in case an earlier unregister was missed. Not before the account is known: a
+	// page load would unregister, then register again once signed in.
+	$effect(() => {
+		const chat = client;
+		if (!chat || previewMode || !keepsPushOff(pushAccount, webPushActive, webPushHeldBy)) return;
+		untrack(() => void pushSettings.keepOff(chat));
+	});
+
+	// While Apron is in view, the app badge shows its own unread count; away, pushes' `unread` sets it.
+	$effect(() => {
+		const total = unread.total;
+		if (presence.visible && !previewMode) untrack(() => void setAppBadge(navigator, total));
+	});
+
+	// A pushed room still waiting after a while (its account never came, its rooms never listed) goes.
+	$effect(() => {
+		const pending = pushRoom;
+		if (!pending) return;
+		const timer = setTimeout(() => {
+			if (pushRoom === pending) pushRoom = undefined;
+		}, PUSH_ROOM_WAIT_MS);
+		return () => clearTimeout(timer);
+	});
+
+	// A pushed room opens once it is listed, a thread under its room, if it was pushed for this
+	// account; once the rooms are listed without it, it goes.
+	$effect(() => {
+		const pending = pushRoom;
+		if (!pending) return;
+		const route = pushRoute(pending, accountPushId);
+		if (route === 'wait') return;
+		if (route === 'ignore') {
+			pushRoom = undefined;
+			return;
+		}
+		if (!session.ready) return;
+		const room = session.rooms.find((candidate) => candidate.id === pending.roomId);
+		if (!room) {
+			if (session.snapshot.roomsListed) pushRoom = undefined;
+			return;
+		}
+		pushRoom = undefined;
+		untrack(() => openDestination(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined));
+	});
+
+	// Nobody is attending a hidden or unfocused tab (§4.5 `idle`): the server may push instead.
+	// The client keeps it across connections and reports it on each.
 	$effect(() => {
 		const away = presence.away;
-		if (client && session.ready) untrack(() => client?.setAway(away));
+		if (client) untrack(() => client?.setIdle(away));
 	});
 
 	$effect(() => {
-		const arrived = mentions.arrived;
+		const arrived = audibleMentions;
+		// Paused (§4.5 `mute`) or do not disturb: no client notifications, so no chime or title flash
+		// either, and the mentions that arrive meanwhile don't alert once it ends.
+		const quiet = silenced;
 		// A notification chimes instead; `notifyMessage` chimes if it couldn't show one.
 		const playSound = !notificationsActive;
-		untrack(() => presence.noteMentions(arrived, playSound));
+		untrack(() => presence.noteMentions(arrived, playSound, quiet));
 	});
 
 	// The New divider is placed once per visit, from the read cursor the server kept.
@@ -478,8 +613,26 @@
 		displayName = previewMode ? 'Preview User' : loadDisplayName();
 		recentServers = previewMode ? [] : loadRecentServers();
 		notificationsEnabled = loadNotificationsEnabled();
-		notificationScope = loadNotificationScope();
 		notificationState = notificationPermission();
+		if (!previewMode) pushSettings.load();
+		webPushAvailable = webPushSupported();
+		// Push turned on or off in another tab applies here too.
+		const storageChanged = (event: StorageEvent) => {
+			if (previewMode) return;
+			pushSettings.storageChanged(event.key);
+			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
+		};
+		window.addEventListener('storage', storageChanged);
+		// Chromium offers to install Apron: kept quiet, for the push setting to offer.
+		const installOffered = (event: Event) => {
+			event.preventDefault();
+			installPrompt = event as InstallPromptEvent;
+		};
+		const installed = () => (installPrompt = undefined);
+		window.addEventListener('beforeinstallprompt', installOffered);
+		window.addEventListener('appinstalled', installed);
+		// A push notification clicked with no tab open opens one at its room.
+		const pushed = previewMode ? undefined : takePushRoom();
 		const worker = navigator.serviceWorker;
 		worker?.addEventListener('message', notificationClicked);
 		let permission: PermissionStatus | undefined;
@@ -493,14 +646,19 @@
 			webSocketFactory
 		);
 		const unsubscribe = chat.subscribe((next) => {
+			serverUrl = chat.url;
 			session.apply(next, chat);
 			directory.apply(next, serverOrigin(chat.url));
 		});
 		chat.start();
 		client = chat;
+		if (pushed) void followPush(chat, pushed);
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
+			window.removeEventListener('storage', storageChanged);
+			window.removeEventListener('beforeinstallprompt', installOffered);
+			window.removeEventListener('appinstalled', installed);
 			if (typingTimer) clearTimeout(typingTimer);
 			if (highlightTimer) clearTimeout(highlightTimer);
 			reveal.stop();
@@ -520,7 +678,7 @@
 
 	/**
 	 * The viewer confirmed an emailed link, having been shown its server
-	 * (§4.10: a link's token is presented on a connection that is not signed
+	 * (§4.11: a link's token is presented on a connection that is not signed
 	 * in, once the user has confirmed): the client presents its token on a
 	 * fresh connection to the server it names, and carries on with that
 	 * connection once it has worked, when the page lets go of the view it held.
@@ -536,8 +694,9 @@
 		emailLinkBusy = true;
 		feedback.pending('Signing in…');
 		void runEmailLink(link, chat, {
-			// Another account from here on: the view held for the current one goes.
-			beforeSwitch: (switched) => (switched ? leaveBackend() : session.forget()),
+			// Another account from here on: the view held for the current one goes, and on this
+			// server it is signed out of, push going off for it as a sign-out does.
+			beforeSwitch: (switched) => (switched ? leaveBackend() : signedOut()()),
 			onSignedIn: (server, switched) => {
 				feedback.clear();
 				emailLinkFailure = undefined;
@@ -607,13 +766,9 @@
 		selection.cancel();
 		mentions.reset();
 		incomingMessages.reset();
+		pushRoom = undefined;
 		session.forget();
 		directory.forget();
-	}
-
-	function updateNotificationScope(scope: NotificationScope): void {
-		notificationScope = scope;
-		saveNotificationScope(scope);
 	}
 
 	async function toggleNotifications(): Promise<void> {
@@ -653,14 +808,17 @@
 	async function notifyMessage(event: MessageRecord, mention: boolean): Promise<void> {
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
 		if (!room || !client) return;
-		const text = event.body?.text?.replace(/\s+/g, ' ').trim() ?? '';
-		const body = text.length > 180 ? `${text.slice(0, 179)}…` : text;
-		const target: NotificationTarget = { tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}) };
+		const body = notificationBody(event.body?.text);
+		const id = accountPushId;
+		const target: NotificationTarget = {
+			tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}),
+			...(id ? { pushId: id, messageId: event.message_id, group: notificationGroup(id, room.id) } : {})
+		};
 		const shown = await showNotification(`${senderName(event)} · ${room.title}`, {
 			body: body || 'New message',
-			// One per room: a newer message replaces it and alerts again.
-			tag: `apron:${client.url}:${room.id}`,
-			renotify: true,
+			// One per message, shared with the server's push of it (§4.9), which replaces it quietly;
+			// a newer message in the room closes it. Without a `push_id`, one per room.
+			...(id ? { tag: messageNotificationTag(id, event.message_id), renotify: false } : { tag: `apron:${client.url}:${room.id}`, renotify: true }),
 			data: target
 		}, () => openNotificationTarget(target));
 		if (!shown && mention) playPing();
@@ -671,10 +829,118 @@
 		if (target.tab === tabId && target.server === client?.url) openDestination(target.roomId, target.threadId);
 	}
 
-	/** The service worker relays a click on a notification it showed to every tab. */
+	/**
+	 * The service worker relays a click on a notification it showed to the
+	 * tabs, and asks each which account it is signed in to.
+	 */
 	function notificationClicked(event: MessageEvent): void {
+		if (isJsonObject(event.data) && event.data.type === PUSH_ID_QUERY) {
+			event.ports[0]?.postMessage({ pushId: accountPushId });
+			return;
+		}
 		const target = notificationClickTarget(event.data);
 		if (target) openNotificationTarget(target);
+		const pushed = pushClickTarget(event.data);
+		if (pushed) openPushedRoom(pushed);
+	}
+
+	/** A push notification's room opens in a tab signed in to the account its `push_id` names. */
+	function openPushedRoom(target: Pick<PushTarget, 'roomId' | 'pushId'>): void {
+		window.focus();
+		pushRoom = target;
+	}
+
+	/**
+	 * A tab opened for a push notification goes to the server of the account it
+	 * was pushed for, if push is on for that account here and it isn't the
+	 * remembered server, as the connect screen would.
+	 */
+	async function followPush(chat: ChatClient, target: Pick<PushTarget, 'roomId' | 'pushId'>): Promise<void> {
+		const id = target.pushId;
+		if (id !== undefined) {
+			for (const account of pushSettings.accounts) {
+				if (pushSettings.pushId(account) !== id) continue;
+				const server = accountServer(account);
+				if (server && server !== chat.url) {
+					leaveBackend();
+					serverInput = server;
+					saveServerUrl(server);
+					chat.setUrl(server);
+				}
+				break;
+			}
+		}
+		openPushedRoom(target);
+	}
+
+	/** Takes, and scrubs from the address bar, the room and `push_id` of a push notification this tab was opened for. */
+	function takePushRoom(): Pick<PushTarget, 'roomId' | 'pushId'> | undefined {
+		const url = new URL(window.location.href);
+		const roomId = url.searchParams.get(PUSH_ROOM_PARAM) ?? undefined;
+		const id = url.searchParams.get(PUSH_ID_PARAM) || undefined;
+		if (roomId === undefined) return undefined;
+		url.searchParams.delete(PUSH_ROOM_PARAM);
+		url.searchParams.delete(PUSH_ID_PARAM);
+		scrubUrl(url.toString());
+		return roomId ? { roomId, ...(id ? { pushId: id } : {}) } : undefined;
+	}
+
+	/** Pauses notifications everywhere (§4.5 `mute`): seconds from now, or until resumed. */
+	function pauseNotifications(until: PausedUntil): Promise<void> {
+		return client?.setMute(muteFor(until)) ?? Promise.resolve();
+	}
+
+	/** What to notify about, kept per account; push registers again with the new `wake` at once. */
+	function setNotifyScopes(scopes: string[]): void {
+		if (!scopes.length) return;
+		saveNotifyScopes(notifyKey, scopes);
+		notifyScopesSaved += 1;
+	}
+
+	/** Chromium's install prompt, from the push setting's Install app button: offered once. */
+	async function installApp(): Promise<void> {
+		const prompt = installPrompt;
+		installPrompt = undefined;
+		await prompt?.prompt().catch(() => undefined);
+	}
+
+	/**
+	 * Push is opt-in per account. Turning it on asks for notification
+	 * permission first, from this tap, and takes the browser's subscription
+	 * over from another server holding it. Turning it off unregisters this
+	 * device (see `PushSettings.turnOff`).
+	 */
+	async function toggleWebPush(): Promise<void> {
+		const chat = client;
+		const account = pushAccount;
+		const key = webPushServerKey;
+		const userId = session.you?.user_id;
+		if (!chat || !account || !userId) return;
+		if (webPushActive && webPushHeldBy) {
+			if (key) await pushSettings.enable(chat, key, userId, webPushWake);
+			return;
+		}
+		if (webPushActive) {
+			await pushSettings.turnOff(chat, account);
+			return;
+		}
+		if (notificationState !== 'granted') notificationState = await requestNotificationPermission();
+		if (notificationState === 'granted') await pushSettings.turnOn(chat, userId, key, webPushWake, session.ready);
+	}
+
+	/**
+	 * Signing out: notes the account push is on for while `you` still names
+	 * it, and returns what to do once the session is gone: push goes off for
+	 * that account here, so its previews stop even if the server can't be
+	 * told. A sign-out that fails never calls it, so push stays on.
+	 */
+	function signedOut(): () => void {
+		const account = pushAccount;
+		const chat = client;
+		return () => {
+			if (chat && account) void pushSettings.signedOut(chat, account);
+			session.forget();
+		};
 	}
 
 	function connected(): void {
@@ -791,7 +1057,7 @@
 		chooseThread(thread);
 	}
 
-	/** Loads a thread's history (§4.1); a failure the client recorded is reported once. */
+	/** Loads a thread's history (§4.2); a failure the client recorded is reported once. */
 	function loadThread(roomId: string): void {
 		client?.loadRoom(roomId).catch((cause: unknown) => {
 			if (session.rooms.find((room) => room.id === roomId)?.recoveryError) feedback.error(cause, 'Unable to load thread');
@@ -821,8 +1087,8 @@
 
 	/**
 	 * Sends the composer's text: a message with the draft's mentions (§3.5) and
-	 * previews of its GitHub links as `link` embeds (§4.6.1), or
-	 * with capability `command` a command (§4.8), which `/nick`, `/join`, `/leave`,
+	 * previews of its GitHub links as `link` embeds (§4.8.1), or
+	 * with capability `command` a command (§4.1), which `/nick`, `/join`, `/leave`,
 	 * `/topic`, `/kick` and `/invite` turn into the requests they spell. A
 	 * command's failure shows as a local notice in the pane, where its replies
 	 * land too.
@@ -884,7 +1150,7 @@
 				chat.updateRoom(roomId, { description: action.description }).promise.catch(failed);
 			} else {
 				// `/kick @user` and `/invite @user` as `room_leave`/`room_join` with `user_id` (§4.3.2). A server
-				// that answers `unsupported` may still have the command itself (§4.8): it gets the text as typed.
+				// that answers `unsupported` may still have the command itself (§4.1): it gets the text as typed.
 				const change = action.kind === 'kick' ? chat.leaveRoom(roomId, action.user) : chat.joinRoom(roomId, action.user);
 				change.promise.catch((cause: Error & { code?: number }) => {
 					if (cause.code === UNSUPPORTED) chat.command(roomId, draft, options).promise.catch(failed);
@@ -936,7 +1202,7 @@
 	 * Sends the draft with its staged files as upload embeds, with whatever is
 	 * in the composer as the text; each file is written to the URL the server
 	 * hands back, and the message shows it pending until then. A command
-	 * takes them as arguments instead (§4.8). A failed send gives the draft
+	 * takes them as arguments instead (§4.1). A failed send gives the draft
 	 * back, files and all.
 	 */
 	async function sendFiles(): Promise<void> {
@@ -1016,7 +1282,7 @@
 
 	/**
 	 * Opens a listed room or thread without joining it, read through its
-	 * history (§4.1), for a guest on a server whose guests only read.
+	 * history (§4.2), for a guest on a server whose guests only read.
 	 */
 	function openWithoutJoining(roomId: string): void {
 		if (!client || !client.viewRoom(roomId)) return;
@@ -1041,7 +1307,7 @@
 	}
 
 	/**
-	 * Posting needs no membership (§4.3.5), but a poster who hasn't joined
+	 * Posting needs no membership (§4.3.2), but a poster who hasn't joined
 	 * doesn't receive the broadcast: a reply in a thread read without joining
 	 * joins it first, so the reply and what follows arrive.
 	 */
@@ -1400,7 +1666,7 @@
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
 		canCancel={session.rooms.length > 0 || session.ready} initialScheme={connectScheme}
 		initialError={emailLinkFailure?.error}
-		onconnect={leaveBackend} onconnected={connected} oncancel={() => (connectOpen = false)} onsignout={() => session.forget()}
+		onconnect={leaveBackend} onconnected={connected} oncancel={() => (connectOpen = false)} onsignout={signedOut}
 	/>
 {:else}
 <div
@@ -1414,9 +1680,11 @@
 >
 	<Sidebar
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
-		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notificationScope={notificationScope} onnotifications={toggleNotifications} onnotificationscope={updateNotificationScope} ontestnotifications={testNotifications}
+		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
+		webPush={webPushServerKey ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError ? { error: webPushError } : {}) } : undefined} onwebpush={toggleWebPush} oninstallapp={installApp}
+		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
-		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={() => session.forget()}
+		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={signedOut}
 	/>
 	<SidebarHandle layout={sidebar} />
 
@@ -1436,7 +1704,7 @@
 				canEdit={canEditPane}
 				editorOpen={roomEditorOpen}
 				editDisabled={!paneReady}
-				canLeave={session.canLeaveRooms && !session.readOnly && Boolean(paneRoom?.joined)}
+				canLeave={session.canManageRooms && !session.readOnly && Boolean(paneRoom?.joined)}
 				canJoin={session.canManageRooms && !session.readOnly && Boolean(paneRoom) && !paneRoom?.joined}
 				{memberListOpen}
 				onback={() => (mobilePane = 'rooms')} onroom={backToRoom} onedit={() => (roomEditorOpen = !roomEditorOpen)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}

@@ -9,7 +9,7 @@ export class PagePresence {
 	visible = $state(typeof document === 'undefined' || document.visibilityState === 'visible');
 	/** Whether this window has focus: a mention while it doesn't alerts the tab. */
 	focused = $state(typeof document === 'undefined' || document.hasFocus());
-	/** Nobody is attending a hidden or unfocused tab (§4.4): the server may push instead. */
+	/** Nobody is attending a hidden or unfocused tab (§4.5 `idle`): the server may push instead. */
 	away = $derived(!(this.visible && this.focused));
 	/** A mention arrived while you were away. */
 	attention = $state(false);
@@ -33,11 +33,15 @@ export class PagePresence {
 		if (!this.away) this.setAttention(false);
 	}
 
-	/** Each mention that lands (by the running count) while you're away flags the tab, and can chime. */
-	noteMentions(arrived: number, playSound = true): void {
+	/**
+	 * Each mention that lands (by the running count) while you're away flags
+	 * the tab, and can chime. While `silenced` (paused, or do not disturb,
+	 * §4.5) it is counted and nothing else: it doesn't alert later either.
+	 */
+	noteMentions(arrived: number, playSound = true, silenced = false): void {
 		if (arrived === this.alerted) return;
 		this.alerted = arrived;
-		if (!this.away) return;
+		if (silenced || !this.away) return;
 		this.setAttention(true);
 		if (playSound) playPing();
 	}

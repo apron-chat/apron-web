@@ -91,7 +91,7 @@ describe('transport reconnects', () => {
 
 	/** Replaces the server frame, advertising capability `activity`. */
 	function advertiseActivity(socket = latest()): void {
-		socket.receive({ method: 'server', params: { apron: 7, agent: 'fake', auth: ['guest'], capabilities: ['activity'] } });
+		socket.receive({ method: 'server', params: { apron: 8, agent: 'fake', auth: ['guest'], capabilities: ['activity'] } });
 	}
 
 	it('bounds typing traffic while refreshing it before expiry', () => {
@@ -294,7 +294,7 @@ describe('persisted session tokens', () => {
 		const elsewhere = new ChatClient('ws://other.test/');
 		elsewhere.start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['webauthn', 'token', 'guest'], capabilities: [] } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['webauthn', 'token', 'guest'], capabilities: [] } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'guest' }));
 		elsewhere.stop();
 	});
@@ -341,7 +341,7 @@ describe('persisted session tokens', () => {
 		vi.advanceTimersByTime(0);
 		const socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['token', 'guest'], capabilities: [] } });
+		socket.receive({ method: 'server', params: { apron: 8, auth: ['token', 'guest'], capabilities: [] } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'apron_bot_revoked' }));
 		const auth = socket.sent.find((frame) => frame.method === 'auth')!;
 		socket.receive({ id: auth.id, error: { code: -32001, message: 'Invalid bot token' } });
@@ -352,28 +352,29 @@ describe('persisted session tokens', () => {
 		client.stop();
 	});
 
-	it('reads only as a guest where the server says guests only read, until a sign-in', async () => {
-		const readOnlyExt = { demo: { guest_posting: false } };
+	it('reads only as a guest where the server says guests only read (ext:settings), until a sign-in', async () => {
+		const readOnly = { settings: { guest_posting: false } };
 		const guest = new ChatClient('ws://fake.test/');
 		guest.subscribe((next) => (snapshot = next));
 		guest.start();
-		await latest().greet([], { auth: ['webauthn', 'token', 'guest'], ext: readOnlyExt });
+		await latest().greet(['ext:settings'], { auth: ['webauthn', 'token', 'guest'], ext: readOnly });
 		expect(snapshot.readOnly).toBe(true);
 		guest.stop();
 
-		// A signed-in session writes; so does a guest where guests may post, or where nothing is said.
+		// A signed-in session writes; so does a guest where guests may post, where nothing is said,
+		// or where the server sends settings without advertising `ext:settings`.
 		const signedIn = new ChatClient('ws://fake.test/');
 		signedIn.subscribe((next) => (snapshot = next));
 		signedIn.start();
-		await latest().greet([], { auth: ['webauthn', 'token', 'guest'], ext: readOnlyExt, token: 'session-3' });
+		await latest().greet(['ext:settings'], { auth: ['webauthn', 'token', 'guest'], ext: readOnly, token: 'session-3' });
 		expect(snapshot.readOnly).toBe(false);
 		signedIn.stop();
-		for (const ext of [{ demo: { guest_posting: true } }, undefined]) {
+		for (const [caps, ext] of [[['ext:settings'], { settings: { guest_posting: true } }], [['ext:settings'], { settings: {} }], [['ext:settings'], undefined], [[], readOnly]] as const) {
 			storage.clear();
 			const open = new ChatClient('ws://fake.test/');
 			open.subscribe((next) => (snapshot = next));
 			open.start();
-			await latest().greet([], { ...(ext ? { ext } : {}) });
+			await latest().greet([...caps], { ...(ext ? { ext } : {}) });
 			expect(snapshot.readOnly).toBe(false);
 			open.stop();
 		}
@@ -385,7 +386,7 @@ describe('persisted session tokens', () => {
 		client.subscribe((next) => (snapshot = next));
 		client.start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['webauthn', 'token', 'guest'], capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['webauthn', 'token', 'guest'], capabilities: ['rooms'] } });
 		latest().receive({ method: 'message', params: { from: { user_id: '~private' }, body: { text: 'Guests can read along.' } } });
 		const auth = latest().sent.find((frame) => frame.method === 'auth')!;
 		latest().receive({ id: auth.id, result: { you: { user_id: 'u_1', name: 'Ada' }, token: 'session-4' } });
@@ -412,7 +413,7 @@ describe('persisted session tokens', () => {
 		client.subscribe((next) => (snapshot = next));
 		client.start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['webauthn', 'token', 'guest'], capabilities: [] } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['webauthn', 'token', 'guest'], capabilities: [] } });
 		const auth = latest().sent.find((frame) => frame.method === 'auth')!;
 		expect(auth.params).toEqual(expect.objectContaining({ scheme: 'token', token: 'stale' }));
 		latest().receive({ id: auth.id, error: { code: -32001, message: 'Session expired; sign in with your passkey' } });
@@ -603,7 +604,7 @@ describe('reconnect divider', () => {
 		const joinedRooms = () => snapshot.rooms.map((candidate) => candidate.id);
 		// A registered session: the server hands a token, so the next connection resumes the identity.
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await latest().reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'secret' });
 		await latest().reply('room_list', { joined: [room, ops], users: [] });
 		await latest().reply('history', { more: false, latest_log_id: '32', history_log_id: '30' });
@@ -616,7 +617,7 @@ describe('reconnect divider', () => {
 		vi.advanceTimersByTime(5_000);
 		const socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		expect(socket.request('auth').params).toMatchObject({ scheme: 'token', token: 'secret' });
 		// The least checkpoint of the kept rooms: everything up to it is here.
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true, latest_log_id: '12' });
@@ -634,7 +635,7 @@ describe('reconnect divider', () => {
 
 	it('keeps every kept room the changes since leave out, and relists a new identity in full', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await latest().reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'secret' });
 		await latest().reply('room_list', { joined: [room], users: [] });
 		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
@@ -642,7 +643,7 @@ describe('reconnect divider', () => {
 		vi.advanceTimersByTime(5_000);
 		let socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
 		// Nothing changed: an empty listing with left keeps general as it was.
 		await socket.reply('room_list', { joined: [], left: [], users: [] });
@@ -655,7 +656,7 @@ describe('reconnect divider', () => {
 		vi.advanceTimersByTime(5_000);
 		socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 7, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		expect(socket.request('room_list').params).toMatchObject({ latest_log_id: '12' });
 		await socket.reply('auth', { you: { user_id: 'bob', name: 'Bob' } });
 		const delta = socket.request('room_list');
@@ -702,7 +703,7 @@ describe('liveness pings', () => {
 		const send = first.send.bind(first);
 		first.send = (data: string) => { raw.push(data); send(data); };
 		first.open();
-		first.receive({ method: 'server', params: { apron: 7, auth: ['token'], capabilities: [], ping: 30 } });
+		first.receive({ method: 'server', params: { apron: 8, auth: ['token'], capabilities: [], ping: 30 } });
 		// No guest scheme and no token: the client never authenticates, and still pings (§1).
 		expect(pings(first)).toBe(0);
 		vi.advanceTimersByTime(30_000);
@@ -725,13 +726,13 @@ describe('liveness pings', () => {
 		client.start();
 		const first = latest();
 		first.open();
-		first.receive({ method: 'server', params: { apron: 7, auth: ['token'], capabilities: [], ping: 30 } });
+		first.receive({ method: 'server', params: { apron: 8, auth: ['token'], capabilities: [], ping: 30 } });
 		client.restart();
 		vi.advanceTimersByTime(0);
 		const second = latest();
 		expect(second).not.toBe(first);
 		second.open();
-		second.receive({ method: 'server', params: { apron: 7, auth: ['token'], capabilities: [], ping: 30 } });
+		second.receive({ method: 'server', params: { apron: 8, auth: ['token'], capabilities: [], ping: 30 } });
 		vi.advanceTimersByTime(30_000);
 		expect(pings(second)).toBe(1);
 		expect(pings(first)).toBe(0);
@@ -785,10 +786,10 @@ describe('liveness pings', () => {
 		const client = new ChatClient('ws://fake.test/');
 		client.start();
 		await latest().greet([], { ping: 30 });
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms'], ping: 10 } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms'], ping: 10 } });
 		vi.advanceTimersByTime(10_000);
 		expect(pings(latest())).toBe(1);
-		latest().receive({ method: 'server', params: { apron: 7, auth: ['guest'], capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms'] } });
 		vi.advanceTimersByTime(300_000);
 		expect(pings(latest())).toBe(1);
 		client.stop();
@@ -840,9 +841,43 @@ describe('display name on connect', () => {
 		await latest().greet();
 		expect(latest()).not.toBe(first);
 		expect(renames(latest())).toBe(0);
-		// Choosing a new name sends it again.
+		// Choosing a new name sends it again; a rejected value (§1.1) isn't resent either.
 		client.setDisplayName('Dee');
 		expect(renames(latest())).toBe(1);
+		const second = latest();
+		second.receive({ id: second.request('me').id, error: { code: -32602, message: 'Names are at most 32 characters' } });
+		await Promise.resolve();
+		second.drop();
+		vi.advanceTimersByTime(5_000);
+		await latest().greet();
+		expect(latest()).not.toBe(second);
+		expect(renames(latest())).toBe(0);
+		client.stop();
+	});
+
+	it('asks for the name the server kept, so a normalized one is not sent again at each reconnect', async () => {
+		const client = new ChatClient('ws://fake.test/', 'Dana ');
+		client.start();
+		await latest().greet();
+		const first = latest();
+		expect(first.request('me').params).toEqual({ name: 'Dana' });
+		// The server normalizes the name it keeps (§1.1).
+		await first.reply('me', { you: { user_id: 'guest_1', name: 'dana' } });
+		first.drop();
+		vi.advanceTimersByTime(5_000);
+		await latest().greet(undefined, { you: { user_id: 'guest_1', name: 'dana' } });
+		expect(latest()).not.toBe(first);
+		expect(renames(latest())).toBe(0);
+		// So does a rename through the profile.
+		const profile = client.updateProfile({ name: 'Dee Dee' });
+		await latest().reply('me', { you: { user_id: 'guest_1', name: 'Dee' } });
+		await profile;
+		const second = latest();
+		second.drop();
+		vi.advanceTimersByTime(5_000);
+		await latest().greet(undefined, { you: { user_id: 'guest_1', name: 'Dee' } });
+		expect(latest()).not.toBe(second);
+		expect(renames(latest())).toBe(0);
 		client.stop();
 	});
 });

@@ -41,12 +41,27 @@ function part<P extends Props>(C: Component<P>, props: P = {} as P): Snippet {
 	}));
 }
 
+/**
+ * A snippet prop that takes arguments and renders another component with
+ * props made from them, such as MenuButton's `lead`:
+ * `Apron.partOf(Apron.StatusDot, function (value) { return { status: value }; })`.
+ */
+function partOf<P extends Props>(C: Component<P>, propsOf: (...args: unknown[]) => P): Snippet<unknown[]> {
+	return createRawSnippet((...args: Array<() => unknown>) => ({
+		render: () => '<span style="display:contents"></span>',
+		setup(el) {
+			const instance = mount(C, { target: el, props: propsOf(...args.map((arg) => arg())) });
+			return () => unmount(instance);
+		}
+	}));
+}
+
 /** Several snippets in a row, for one snippet prop. */
 function parts(...snippets: Snippet[]): Snippet {
 	return part(SnippetHost, { snippets });
 }
 
-const Apron = { ...components, render, html, part, parts, mount, unmount };
+const Apron = { ...components, render, html, part, partOf, parts, mount, unmount };
 
 declare global {
 	interface Window {

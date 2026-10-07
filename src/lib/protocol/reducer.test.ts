@@ -108,7 +108,6 @@ describe('wire decoding', () => {
 	it('separates room delivery fields from the record', () => {
 		const decoded = decodeRoom({
 			room_id: 't', log_id: '5', parent_room_id: 'general', private: true, title: 'Deploy', description: 'Why the *4pm* deploy failed', future: 1,
-			intro_message: { message_id: '3', log_id: '4', room_id: 'general', from: { user_id: 'bob' }, body: { text: 'Deploy?' } },
 			latest_log_id: '9', history_log_id: null, members: [{ user_id: 'bob' }], member_count: 40
 		})!;
 		expect(JSON.parse(JSON.stringify(decoded.record))).toEqual({ room_id: 't', log_id: '5', parent_room_id: 'general', private: true, title: 'Deploy', description: 'Why the *4pm* deploy failed' });

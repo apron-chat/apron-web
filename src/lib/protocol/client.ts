@@ -21,11 +21,9 @@ import {
 	decodeNotice,
 	decodeReactions,
 	decodeMembership,
-	legacySystemId,
 	privateSender,
 	systemScope,
 	type JsonObject,
-	type JsonValue,
 	type Capability,
 	type Identity,
 	type MessageBody,
@@ -33,7 +31,6 @@ import {
 	type MessageRecord,
 	type RoomRecord,
 	type ServerParams,
-	type ServerExt,
 	type RoomDelivery,
 	type RpcError,
 	type WireFrame
@@ -49,6 +46,7 @@ import {
 	type MessageResult,
 	type Notice,
 	type OperationHandle,
+	type PushRegistration,
 	type RoomListing,
 	type RoomPatch,
 	type RoomResult,
@@ -59,6 +57,11 @@ import {
 } from './client-types';
 import {
 	FIRST_LOG_ID,
+	IDLE_AFTER_MS,
+	MAX_TIMER_MS,
+	isMuteValue,
+	muteEnd,
+	pushKey,
 	MAX_TYPING_S,
 	MAX_UNANSWERED_PINGS,
 	NO_NOTICES,
@@ -83,6 +86,7 @@ import {
 	makeRequestId,
 	maxDefined,
 	mergeIdentity,
+	replaceIdentity,
 	messageClientFields,
 	newRoomState,
 	reconnectDelay,
@@ -104,11 +108,11 @@ import {
 	type TypingState,
 	type ValidHistoryResponse
 } from './client-internals';
-import { capabilitiesOf } from './client-views';
+import { capabilitiesOf, serverSettings } from './client-views';
 
 export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
-export { recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
+export { IDLE_AFTER_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
 export {
 	canEdit,
 	canManageRooms,
@@ -119,13 +123,15 @@ export {
 	findMessage,
 	hasHistory,
 	normalizeWebSocketUrl,
+	serverSettings,
 	timelineMessages,
 	topLevelRooms,
-	userIn
+	userIn,
+	webPushKey
 } from './client-views';
 
 /**
- * A browser-only Apron protocol v7 session; instantiate one per mounted UI.
+ * A browser-only Apron protocol v8 session; instantiate one per mounted UI.
  *
  * State model: one store of room records, message snapshots, reaction sets,
  * and memberships shared by every room (PROTOCOL.md §2), projected per visible
@@ -159,7 +165,7 @@ export class ChatClient {
 	private readonly userAliases = new Map<string, string>();
 	/** The greatest `log_id` this client has received: where a notice sits in its room's timeline. */
 	private greatestLogId?: string;
-	/** Read cursors per room, per user (§4.4). */
+	/** Read cursors per room, per user (§4.6). */
 	private readonly reads = new Map<string, Map<string, string>>();
 	private readonly uploads = new Map<string, UploadState>();
 	/** A 415 on a file that isn't an image: this server takes images only. */
@@ -173,9 +179,61 @@ export class ChatClient {
 	/** Notices that arrived before there was a room to show them in; the first room shown takes them. */
 	private orphanNotices: Array<{ from: Identity; body?: MessageBody; welcome?: boolean }> = [];
 	private noticeCount = 0;
-	/** Nobody is attending this connection (§4.4); `awaySent` is what the server was last told on it. */
+	/**
+	 * Nobody is attending this connection (§4.5 `idle`): `away` as the page
+	 * says, `idle` once that has lasted `IDLE_AFTER_MS` (`idleTimer` runs
+	 * meanwhile), or at once on a connection that starts away.
+	 */
 	private away = false;
-	private awaySent = false;
+	private idle = false;
+	private idleTimer: ReturnType<typeof setTimeout> | undefined;
+	/**
+	 * What the server takes `idle` to be on connection `connection`: each
+	 * starts attended (`applied: false`); undefined once a request went
+	 * unanswered, which the server may or may not have applied. `sending` is
+	 * the `status` request in flight, one at a time; `retry` waits out a
+	 * `retry_after` before the current state goes again.
+	 */
+	private idleReport: { connection: number; applied: boolean | undefined; sending?: boolean; retry?: ReturnType<typeof setTimeout> } | undefined;
+	/**
+	 * Your notifications are paused until (§4.5 `mute` without `room_id`), as
+	 * the server's last `status` said: epoch milliseconds, or `true`;
+	 * `muteTimer` ends it.
+	 */
+	private mutedUntil: number | true | undefined;
+	/** Rooms whose notifications you paused (§4.5 `mute` with `room_id`), as the server's last `status` for each said: until then, or `true`. */
+	private readonly roomMutes = new Map<string, number | true>();
+	private muteTimer: ReturnType<typeof setTimeout> | undefined;
+	/**
+	 * What `push_register` sends on each connection (§4.9), for the account
+	 * `pushUser`; `pushSent` is whether this connection has.
+	 */
+	private pushRegistration: PushRegistration | undefined;
+	private pushUser: string | undefined;
+	private pushSent = false;
+	/**
+	 * Registrations replaced or turned off while they couldn't be
+	 * unregistered, each with the account it belongs to (§4.9): sent after
+	 * the next `auth` as that account, never as another. Keyed by `pushKey`.
+	 */
+	private readonly pushUnregisters = new Map<string, { url: string; user: string }>();
+	/**
+	 * The last push request for each `url` on connection `connection`,
+	 * settled either way: the next for that `url` on that connection waits
+	 * for its reply, so they apply in order (§1).
+	 */
+	private readonly pushChains = new Map<string, { connection: number; settled: Promise<void> }>();
+	/**
+	 * This browser's push endpoint while push is off for the account signed in:
+	 * unregistered after each `auth` (`pushOffSent`), in case an earlier
+	 * unregister never arrived (§4.9: an unknown `url` succeeds).
+	 */
+	private pushOffUrl: string | undefined;
+	private pushOffSent = false;
+	/** Why the server refused the last `push_register`, until one succeeds. */
+	private pushError: string | undefined;
+	/** Ends the earliest room pause, then the next. */
+	private roomMuteTimer: ReturnType<typeof setTimeout> | undefined;
 	/** The `room_id` of the server's default room once known (without capability `rooms`). */
 	private defaultRoom?: string;
 	/** Messages this client posted without `room_id`: their broadcast names the default room. */
@@ -184,7 +242,7 @@ export class ChatClient {
 	 * Rooms kept from a lost connection with their records, floors and
 	 * checkpoints. Hidden until joined again on the next connection, when
 	 * recovery resumes from the checkpoint instead of paging all retained
-	 * history (§4.1).
+	 * history (§4.2).
 	 */
 	private readonly retainedRooms = new Map<string, RoomState>();
 	/**
@@ -231,7 +289,7 @@ export class ChatClient {
 	/** A tap started a passkey ceremony, which is waiting for its turn (`readyToSignIn`): busy from the tap on. */
 	private passkeyStarting?: AbortController;
 	/**
-	 * An email sign-in proposal (§4.10) waiting for its code, on a connection
+	 * An email sign-in proposal (§4.11) waiting for its code, on a connection
 	 * of its own that is not signed in (see `requestEmailCode`).
 	 */
 	private emailProposal?: { connection: EmailConnection; email: string; proposed: boolean };
@@ -256,7 +314,7 @@ export class ChatClient {
 	 * passkey or an email to (§3.2).
 	 */
 	private signedInWith?: SignInMethod;
-	/** Ways back into the account this browser added to it since (§4.9, §4.10), kept beside the token. */
+	/** Ways back into the account this browser added to it since (§4.10, §4.11), kept beside the token. */
 	private addedMethods = new Set<SignInMethod>();
 	/** This browser has signed in here with a passkey: how a session kept from before sign-in methods were remembered is read. */
 	private passkeyHint = false;
@@ -276,7 +334,10 @@ export class ChatClient {
 	private displayName = '';
 	/** The `me` request `handleAuth` sent for `displayName`, if any. */
 	private authNameRequest?: OperationHandle;
-	/** A name the server denied (a guest on a server that only lets registered users rename): not resent on reconnect. */
+	/**
+	 * A name the server refused (a guest on a server that only lets registered
+	 * users rename, or a value it rejects): not resent on reconnect.
+	 */
 	private declinedName?: string;
 	private status: ConnectionStatus = 'idle';
 	private error?: string;
@@ -295,7 +356,7 @@ export class ChatClient {
 	private connectionProbe?: AbortController;
 	private disconnectedAt?: number;
 
-	constructor(private serverUrl: string, displayName = '', webSocketFactory: WebSocketFactory = (url) => new WebSocket(url)) {
+	constructor(private serverUrl: string, displayName = '', webSocketFactory: WebSocketFactory = (url) => new WebSocket(url), private readonly now: () => number = () => Date.now()) {
 		this.webSocketFactory = webSocketFactory;
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
@@ -303,7 +364,7 @@ export class ChatClient {
 	}
 
 	static fromOptions(options: ChatClientOptions): ChatClient {
-		const client = new ChatClient(options.serverUrl, options.displayName, options.webSocketFactory);
+		const client = new ChatClient(options.serverUrl, options.displayName, options.webSocketFactory, options.now);
 		if (options.onChange) client.subscribe(options.onChange);
 		return client;
 	}
@@ -330,6 +391,10 @@ export class ChatClient {
 		this.retryAfterUntil = 0;
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
+		// A registration belongs to the server it was made for.
+		this.pushRegistration = undefined;
+		this.pushUser = undefined;
+		this.pushUnregisters.clear();
 		this.resetSession('Server URL changed; pending requests were cancelled');
 		// After the reset, which forgets the old server's session: this server's own comes back.
 		this.loadStoredSession();
@@ -348,6 +413,17 @@ export class ChatClient {
 		return undefined;
 	}
 
+	/**
+	 * After a `me` that set the name, the name the server kept is the one to
+	 * ask for (§1.1: servers may normalize what clients send): a server that
+	 * normalizes it then gets no `me` again at each reconnect (`handleAuth`
+	 * sends one only when `you.name` differs). Not when another name was
+	 * asked for meanwhile: that one stands.
+	 */
+	private adoptName(you: Identity, sent: string): void {
+		if (this.displayName === sent) this.displayName = typeof you.name === 'string' ? you.name : '';
+	}
+
 	private sendName(): OperationHandle {
 		const name = this.displayName;
 		const request = this.enqueueRequest('me', { name }, {
@@ -356,13 +432,18 @@ export class ChatClient {
 		});
 		request.promise
 			.then((result) => {
-				if (isJsonObject(result.you) && typeof result.you.user_id === 'string') this.setYou(result.you as Identity);
+				if (isIdentity(result.you)) {
+					this.setYou(cloneJson(result.you), true);
+					this.adoptName(result.you, name);
+				}
 				if (this.declinedName === name) this.declinedName = undefined;
 				this.emit();
 			})
 			.catch((cause: Error & { code?: number }) => {
-				// A name is advisory; a server may decline it without affecting the session.
-				if (cause.code === -32001) this.declinedName = name;
+				// A name is advisory; a server may decline it without affecting the session:
+				// `denied` when the user may not rename, `invalid_params` or `too_large` when it
+				// rejects the value (§1.1). Either way the same name would be refused again.
+				if (cause.code === -32001 || cause.code === -32602 || cause.code === -32003) this.declinedName = name;
 			});
 		return request;
 	}
@@ -385,6 +466,12 @@ export class ChatClient {
 		this.reconnectTimer = undefined;
 		this.stopWaitingForPresence();
 		this.clearStableTimer();
+		this.clearIdleTimer();
+		this.clearIdleRetry();
+		if (this.muteTimer) clearTimeout(this.muteTimer);
+		this.muteTimer = undefined;
+		if (this.roomMuteTimer) clearTimeout(this.roomMuteTimer);
+		this.roomMuteTimer = undefined;
 		const socket = this.socket;
 		this.socket = undefined;
 		this.authenticated = false;
@@ -454,7 +541,7 @@ export class ChatClient {
 			this.clearTransientRequests();
 			if (socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'retrying');
 		}
-		this.disconnectedAt ??= Date.now();
+		this.disconnectedAt ??= this.now();
 		this.error = undefined;
 		this.connectNow();
 	}
@@ -488,7 +575,10 @@ export class ChatClient {
 			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith, signInMethods: [this.signedInWith, ...[...this.addedMethods].filter((method) => method !== this.signedInWith)] } : {}),
 			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
 			...(this.passkeyAbort ? { passkeyBusy: !this.addingEmail } : {}),
-			readOnly: this.authenticated && !this.registeredSession && this.server?.ext?.demo?.guest_posting === false,
+			readOnly: this.authenticated && !this.registeredSession && !serverSettings(this.server).guest_posting,
+			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
+			...(this.mutedUntil !== undefined ? { mutedUntil: this.mutedUntil } : {}),
+			...(this.pushError !== undefined ? { pushError: this.pushError } : {}),
 			error: this.error,
 			server: this.server,
 			capabilities: capabilitiesOf(this.server),
@@ -509,6 +599,7 @@ export class ChatClient {
 					...(record ? { record } : {}),
 					...(thread ? { parentRoomId: record!.parent_room_id } : {}),
 					...(record?.private === true ? { private: true } : {}),
+					...(this.roomMutedUntil(room.id) !== undefined ? { mutedUntil: this.roomMutedUntil(room.id) } : {}),
 					...(this.store.firstRoomLogId(room.id) !== undefined ? { firstRecordLogId: this.store.firstRoomLogId(room.id) } : {}),
 					...(typeof record?.description === 'string' && record.description ? { description: record.description } : {}),
 					...(record && isJsonObject(record.ext) ? { ext: record.ext } : {}),
@@ -586,7 +677,7 @@ export class ChatClient {
 	/**
 	 * Runs one passkey ceremony, started by the user's tap: `login` signs in
 	 * with a passkey the browser offers in its sheet, `register` creates an
-	 * account with a new passkey, or adds one to the signed-in account (§4.9).
+	 * account with a new passkey, or adds one to the signed-in account (§4.10).
 	 * Works on the connection to this server whether or not it is signed in
 	 * (a guest, or held for a sign-in). A `name` is the requested display name
 	 * (§3.2): it goes along with `begin` and labels a new passkey, and becomes
@@ -650,7 +741,7 @@ export class ChatClient {
 
 	/**
 	 * Proposes signing in with `email` on the server at `url` (this client's
-	 * by default), which then emails a code (§4.10). The proposal goes on a
+	 * by default), which then emails a code (§4.11). The proposal goes on a
 	 * connection of its own that is not signed in, since one on a signed-in
 	 * connection (a guest's too) proposes adding the address instead, and
 	 * that connection stays open for `signInWithEmail`: a short code works
@@ -696,7 +787,7 @@ export class ChatClient {
 
 	/**
 	 * Signs in with the code emailed for the open proposal (`requestEmailCode`,
-	 * §4.10), approving it on the connection that proposed it. That
+	 * §4.11), approving it on the connection that proposed it. That
 	 * connection, now signed in, becomes this client's connection, on the
 	 * proposal's server; the identity the result names replaces any before,
 	 * and the bearer `token` in it resumes the session on later connections
@@ -714,7 +805,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Signs in with the token from an emailed link (§4.10), which the viewer
+	 * Signs in with the token from an emailed link (§4.11), which the viewer
 	 * has confirmed: it is presented on a fresh connection to `url` (this
 	 * client's server by default) that is not signed in, which then becomes
 	 * this client's connection as with `signInWithEmail`. A refused link
@@ -839,7 +930,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Proposes adding `email` to the signed-in account (§4.10), guests
+	 * Proposes adding `email` to the signed-in account (§4.11), guests
 	 * included: on this connection, which is signed in, a proposal adds
 	 * rather than signs in. `addEmail` approves it, on this same connection.
 	 */
@@ -855,7 +946,7 @@ export class ChatClient {
 
 	/**
 	 * Adds the address proposed with `requestEmailCodeToAdd` to the signed-in
-	 * account (§4.10), approving the proposal with the emailed code on the
+	 * account (§4.11), approving the proposal with the emailed code on the
 	 * connection that made it. The result is `{}`: the identity is unchanged,
 	 * and the address is one more way back into the account. Only an explicit
 	 * action does this; an emailed link always signs in.
@@ -922,8 +1013,10 @@ export class ChatClient {
 		// Signing in again on this connection: an address proposed for the account it was is not approved for this one.
 		if (action === 'login') this.addProposalConnection = undefined;
 		if (name) this.displayName = name;
-		// A passkey registered on a registered session is added to it (§4.9), not a new way it signed in.
-		const adding = action === 'register' && this.registeredSession && this.authenticated;
+		// A passkey registered on a signed-in connection, a guest's included, is added to that
+		// account (§4.10): not a sign-in (§3.2), so its mutes stand (§4.5). For a registered session it
+		// is another way back in, not a new way it signed in; a guest's account becomes registered.
+		const adding = action === 'register' && this.authenticated;
 		if (!this.handleAuth(result, 'webauthn', adding)) throw new Error('Server authentication response did not include an identity');
 		if (action === 'login') this.relabelPasskey(begun.publicKey, credential);
 		return this.authNameRequest;
@@ -974,7 +1067,28 @@ export class ChatClient {
 	}
 
 	async signOut(): Promise<void> {
-		if (this.passkeyAbort || this.passkeyStarting || this.requests.size) throw new Error('Wait for pending requests to finish, then try again');
+		// Push requests run in the background and never hold up signing out.
+		const pending = [...this.requests.values()].some((request) => request.method !== 'push_register' && request.method !== 'push_unregister');
+		if (this.passkeyAbort || this.passkeyStarting || pending) throw new Error('Wait for pending requests to finish, then try again');
+		// This device stops receiving the account's pushes (§4.9). The connection
+		// is replaced at once, before the answer can come: the unregister stays
+		// queued for its account until answered, and goes again after that
+		// account's next `auth` (never another's), so the server is sure to drop it.
+		const registration = this.pushRegistration;
+		const user = this.pushUser;
+		this.pushRegistration = undefined;
+		this.pushUser = undefined;
+		if (registration && user !== undefined) {
+			const key = pushKey(registration.url, user);
+			const entry = { url: registration.url, user };
+			this.pushUnregisters.set(key, entry);
+			// Sent now, not after a registration in flight: there is no time to wait for its reply.
+			if (this.pushReady() && this.you?.user_id === user) {
+				this.enqueueRequest('push_unregister', { url: entry.url }, { visible: false, allowBeforeAuth: false }).promise.then(() => true, (cause: Error & { code?: number }) => cause.code !== undefined).then((answered) => {
+					if (answered && this.pushUnregisters.get(key) === entry) this.pushUnregisters.delete(key);
+				});
+			}
+		}
 		this.sessionToken = undefined;
 		this.storeSession(undefined);
 		this.noteSignIn(undefined);
@@ -1018,10 +1132,9 @@ export class ChatClient {
 	 */
 	send(room: string, text: string, format: MessageFormat = 'plain', options: SendOptions = {}): OperationHandle<MessageResult> {
 		if (!text && !options.embeds?.length) return rejectedHandle('message', new Error('Nothing to send'));
-		// The message ends this user's typing indicator for everyone (§4.4), and
-		// any `away`, so no `typing: 0` needs to follow it.
+		// The message ends this user's typing indicator for everyone (§4.6), so no
+		// `typing: 0` needs to follow it. It doesn't end `idle` (§4.5): only `idle: false` does.
 		this.sentTypingAt.delete(room);
-		this.awaySent = false;
 		const handle = this.enqueueRequest<MessageResult>('message', this.messageParams(room, text, format, options), { visible: true, allowBeforeAuth: false });
 		if (room === DEFAULT_ROOM_ID) {
 			handle.promise.then((result) => {
@@ -1034,7 +1147,10 @@ export class ChatClient {
 		return handle;
 	}
 
-	/** The params of a new message or a command: `room_id`, `body`, bare `reply_to`, `ext` (§3.5, §4.8). */
+	/**
+	 * The params of a new message or a command: `room_id`, `body`, bare
+	 * `reply_to`, and `ext` where the server keeps it (§3.5, §4.1, §4.12).
+	 */
 	private messageParams(room: string, text: string, format: MessageFormat | undefined, options: SendOptions): JsonObject {
 		const body: JsonObject = { text, ...(format ? { format } : {}) };
 		if (options.embeds && options.embeds.length > 0) body.embeds = options.embeds;
@@ -1044,19 +1160,18 @@ export class ChatClient {
 			...(room !== DEFAULT_ROOM_ID ? { room_id: room } : {}),
 			body,
 			...(options.replyTo !== undefined ? { reply_to: { message_id: options.replyTo } } : {}),
-			...(options.ext !== undefined ? { ext: options.ext } : {})
+			...(options.ext !== undefined && this.hasCap('ext') ? { ext: options.ext } : {})
 		};
 	}
 
 	/**
-	 * Sends a `command` (capability `command`, §4.8): `text` is the command line as
+	 * Sends a `command` (capability `command`, §4.1): `text` is the command line as
 	 * typed, slash included, with the params a message would have; mentions,
 	 * `replyTo`, and embeds are arguments. Nothing is posted: the result is
 	 * `{}` (or `embeds` with write URLs), replies come as notices, and effects
 	 * as the frames they cause. A failure rejects with the server's message.
 	 */
 	command(room: string, text: string, options: Omit<SendOptions, 'ext'> = {}): OperationHandle {
-		this.awaySent = false;
 		return this.enqueueRequest('command', this.messageParams(room, text, undefined, options), { visible: true, allowBeforeAuth: false });
 	}
 
@@ -1070,9 +1185,11 @@ export class ChatClient {
 	}
 
 	/**
-	 * Saves a message (capability `edit`, §4.2) from its latest stored snapshot:
-	 * every client field (`room_id`, `body`, bare `reply_to`, `ext`) is
-	 * resubmitted unless the patch changes it. `deleted: true` omits `body`.
+	 * Saves a message (capability `edit`, §4.4) from its latest stored snapshot:
+	 * every client field (`room_id`, `body`, bare `reply_to`) is resubmitted
+	 * unless the patch changes it. `ext` is not: a save merges it (§4.12), so
+	 * only the patch's keys go, and an empty value clears one, and only to a
+	 * server with capability `ext`. `deleted: true` omits `body` and `ext`.
 	 */
 	saveMessage(messageId: string, patch: MessagePatch = {}): OperationHandle<MessageResult> {
 		const current = this.messageBase(messageId);
@@ -1091,11 +1208,7 @@ export class ChatClient {
 		} else if (patch.reply_to !== null) {
 			params.reply_to = { message_id: patch.reply_to };
 		}
-		if (patch.ext === undefined) {
-			if (current.ext !== undefined) params.ext = current.ext;
-		} else if (patch.ext !== null) {
-			params.ext = patch.ext;
-		}
+		if (patch.ext !== undefined && !params.deleted && this.hasCap('ext')) params.ext = patch.ext;
 		const handle = this.enqueueRequest<MessageResult>('message', params, { visible: true, allowBeforeAuth: false });
 		const { message_id: _id, ...state } = params;
 		this.trackSave(this.pendingMessageSaves, messageId, handle, state, () => this.store.message(messageId)?.log_id);
@@ -1131,11 +1244,17 @@ export class ChatClient {
 		});
 	}
 
-	/** Settle a pending save when a newer record arrives that matches it, or after its result. */
+	/**
+	 * Settle a pending save when a newer record arrives that matches it, or
+	 * after its result. `ext` is left out of the comparison: the save merged
+	 * it into whatever the record had (§4.12).
+	 */
 	private settleSave(pending: Map<string, PendingSave>, key: string, fields: JsonObject): void {
 		const entry = pending.get(key);
 		if (!entry) return;
-		if (entry.confirmed || canonicalJson(fields) === canonicalJson(entry.state)) pending.delete(key);
+		const { ext: _merged, ...state } = entry.state;
+		const { ext: _kept, ...record } = fields;
+		if (entry.confirmed || canonicalJson(record) === canonicalJson(state)) pending.delete(key);
 	}
 
 	private installMessage(record: MessageRecord): void {
@@ -1154,7 +1273,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Saves the message without one embed (§4.6.2): the one with `embed_id`,
+	 * Saves the message without one embed (§4.8.2): the one with `embed_id`,
 	 * or for a server that stores embeds as given, the first equal to `embed`.
 	 * The server SHOULD delete content it hosted for it.
 	 */
@@ -1187,7 +1306,7 @@ export class ChatClient {
 
 	/**
 	 * Sets your complete emoji set on a message (capability `reactions`,
-	 * §4.5); `[]` clears it. The result is `{}`; the broadcast carries the state.
+	 * §4.7); `[]` clears it. The result is `{}`; the broadcast carries the state.
 	 */
 	react(messageId: string, emojis: string[]): OperationHandle {
 		const request = this.enqueueRequest('reactions', { message_id: messageId, emojis: [...emojis] }, {
@@ -1230,25 +1349,28 @@ export class ChatClient {
 		if (options.private === true) params.private = true;
 		if (options.title !== undefined) params.title = options.title;
 		if (options.description !== undefined) params.description = options.description;
-		if (options.ext !== undefined) params.ext = options.ext;
+		if (options.ext !== undefined && this.hasCap('ext')) params.ext = options.ext;
 		return this.enqueueRequest<RoomResult>('room_set', params, { visible: true, allowBeforeAuth: false });
 	}
 
 	/**
 	 * Updates a room's client fields with `room_set` (§4.3.4) from its latest
-	 * record with the patch applied, resubmitting `title`, `description`, and
-	 * `ext`: omitted fields are cleared. `parent_room_id` and `private` are
-	 * fixed at creation and never sent.
+	 * record with the patch applied, resubmitting `title` and `description`:
+	 * omitted fields are cleared, so `null` clears one. `ext` is not
+	 * resubmitted: `room_set` merges it (§4.12), so only the patch's keys go,
+	 * and an empty value clears one, and only to a server with capability
+	 * `ext`. `parent_room_id` and `private` are fixed at creation and never sent.
 	 */
 	updateRoom(roomId: string, patch: RoomPatch): OperationHandle<RoomResult> {
 		// Build on the latest submitted update while one is unconfirmed.
 		const stored = this.store.room(roomId);
 		const current = this.pendingRoomSaves.get(roomId)?.state ?? (stored ? roomClientFields(stored) : {});
 		const params: JsonObject = { room_id: roomId };
-		for (const key of ['title', 'description', 'ext'] as const) {
+		for (const key of ['title', 'description'] as const) {
 			const value = patch[key] === undefined ? current[key] : patch[key];
 			if (value !== undefined && value !== null) params[key] = value;
 		}
+		if (patch.ext !== undefined && this.hasCap('ext')) params.ext = patch.ext;
 		const handle = this.enqueueRequest<RoomResult>('room_set', params, { visible: true, allowBeforeAuth: false });
 		const { room_id: _id, ...state } = params;
 		this.trackSave(this.pendingRoomSaves, roomId, handle, state, () => this.store.room(roomId)?.log_id);
@@ -1271,7 +1393,6 @@ export class ChatClient {
 	 * `left`. With `userId`, removes that user instead, as `/kick` does.
 	 */
 	leaveRoom(roomId: string, userId?: string): OperationHandle {
-		// Before v7 a server ignores `user_id` and would remove the caller instead.
 		if (userId !== undefined && this.memberChangesUnsupported) return rejectedHandle('room_leave', new Error('This server can’t remove other people from rooms'));
 		const handle = this.enqueueRequest('room_leave', { room_id: roomId, ...(userId !== undefined ? { user_id: userId } : {}) }, { visible: true, allowBeforeAuth: false });
 		return userId === undefined ? handle : this.noteMemberChange(handle);
@@ -1293,7 +1414,7 @@ export class ChatClient {
 
 	/**
 	 * Reports typing in a room as an `activity` notification (capability `activity`,
-	 * §4.4): `typing` seconds while active, `0` to stop. Sends nothing
+	 * §4.6): `typing` seconds while active, `0` to stop. Sends nothing
 	 * to a server without the capability.
 	 */
 	sendTyping(room: string, active: boolean): void {
@@ -1310,30 +1431,312 @@ export class ChatClient {
 			this.sentTypingAt.delete(room);
 		}
 		this.sendFrame({ method: 'activity', params: { room_id: room, typing: active ? TYPING_TIMEOUT_S : 0 } });
-		// Typing ends `away` on the server (§4.4).
-		this.awaySent = false;
 	}
 
 	/**
-	 * Tells the server whether anyone is attending this connection (capability
-	 * `activity`, §4.4): `true` while the tab is hidden or unfocused, `false`
-	 * once it is back. Sent only when it changes, and again on each connection
-	 * that starts while away.
+	 * Tells a server with capability `status` whether anyone is attending this
+	 * connection (§4.5 `idle`), as the tab is hidden or unfocused (`away`) or
+	 * back. A connection starts attended, so an attended one sends nothing.
+	 * Once signed in, one that starts away reports `idle: true` at once;
+	 * after that, becoming idle goes once it has lasted `IDLE_AFTER_MS`, and
+	 * becoming attended at once. Only `idle: false` ends it: sending a
+	 * message doesn't.
 	 */
-	setAway(away: boolean): void {
+	setIdle(away: boolean): void {
 		this.away = away;
-		this.syncAway();
+		if (away) {
+			if (this.idle || this.idleTimer) return;
+			this.idleTimer = setTimeout(() => {
+				this.idleTimer = undefined;
+				this.idle = true;
+				this.syncIdle();
+			}, IDLE_AFTER_MS);
+			return;
+		}
+		this.clearIdleTimer();
+		this.idle = false;
+		this.syncIdle();
 	}
 
-	private syncAway(): void {
-		if (!this.authenticated || !this.hasCap('activity') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
-		if (this.away === this.awaySent) return;
-		this.awaySent = this.away;
-		this.sendFrame({ method: 'activity', params: { away: this.away } });
+	private clearIdleTimer(): void {
+		if (this.idleTimer) clearTimeout(this.idleTimer);
+		this.idleTimer = undefined;
 	}
 
 	/**
-	 * Advances your read cursor in a room (capability `activity`, §4.4) to a
+	 * Sends `idle` when the server's view of this connection differs from the
+	 * page's, as a `status` request (§4.5), never before sign-in. One goes at
+	 * a time, so they apply in order (§1); a change meanwhile goes after the
+	 * reply. On `retry_after` the current state, not the refused one, goes
+	 * after the delay; another error changes nothing, and the next change
+	 * tries again. A request with no answer (timed out) may have been
+	 * applied or not, so the next sync sends the current state whatever it is.
+	 */
+	private syncIdle(): void {
+		if (!this.authenticated || !this.hasCap('status') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+		const connection = this.connectionId;
+		if (this.idleReport?.connection !== connection) {
+			this.clearIdleRetry();
+			// A connection starts attended (§4.5); one that starts away is idle at once, without the wait.
+			this.idleReport = { connection, applied: false };
+			if (this.away && !this.idle) {
+				this.clearIdleTimer();
+				this.idle = true;
+			}
+		}
+		const report = this.idleReport;
+		if (report.sending || report.retry || report.applied === this.idle) return;
+		const idle = this.idle;
+		report.sending = true;
+		this.enqueueRequest('status', { idle }, { visible: false, allowBeforeAuth: false }).promise.then(() => {
+			if (this.idleReport !== report) return;
+			report.sending = false;
+			report.applied = idle;
+			this.syncIdle();
+		}, (cause: unknown) => {
+			if (this.idleReport !== report) return;
+			report.sending = false;
+			const { code, retryAfterMs: wait } = cause as Error & { code?: number; retryAfterMs?: number };
+			if (code === undefined) report.applied = undefined;
+			if (wait === undefined) return;
+			report.retry = setTimeout(() => {
+				report.retry = undefined;
+				if (this.idleReport === report) this.syncIdle();
+			}, wait);
+		});
+	}
+
+	private clearIdleRetry(): void {
+		if (this.idleReport?.retry) clearTimeout(this.idleReport.retry);
+		this.idleReport = undefined;
+	}
+
+	/**
+	 * Asks to pause your notifications everywhere (§4.5 `mute`): for `mute`
+	 * seconds, until resumed (`true`), or to resume them (`false`), with a
+	 * `status` request. Nothing changes here until the server sends the
+	 * change back as a `status` notification to each of your connections,
+	 * this one included, before its `{}` result: the pause is whatever that
+	 * says, so one the server didn't apply never shows. Rejects with the
+	 * server's error, such as `retry_after`, when nothing changed. Needs
+	 * capability `status` and a signed-in account.
+	 */
+	setMute(mute: number | boolean): Promise<void> {
+		const promise = !this.authenticated || !this.registeredSession || !this.hasCap('status')
+			? Promise.reject(new Error('Sign in to pause notifications'))
+			: this.enqueueRequest('status', { mute }, { visible: false, allowBeforeAuth: false }).promise.then(() => undefined);
+		// A caller that doesn't wait for the answer leaves no unhandled rejection.
+		promise.catch(() => undefined);
+		return promise;
+	}
+
+	/**
+	 * Sets your `status` with `me` (§3.3, §4.5): `online` (the default),
+	 * `""` (none), or the optional `dnd` or `invisible`. The server MAY
+	 * decline or alter it; resolves with the `you` it kept, whose `status`
+	 * is the one in effect. Needs capability `status`.
+	 */
+	setStatus(status: string): Promise<Identity> {
+		if (!this.hasCap('status')) return Promise.reject(new Error('This server has no status'));
+		return this.updateProfile({ status });
+	}
+
+	/**
+	 * A `status` from the server (§4.5): a change to one of your mutes, sent
+	 * to each of your connections, or, after a sign-in's result, one of the
+	 * mutes in effect. The client takes it as its own setting: `mute` without
+	 * `room_id` pauses everything, with one that room and its threads.
+	 * Servers never send `idle`; an invalid `mute` is ignored.
+	 */
+	private handleStatus(params: JsonObject | undefined): void {
+		if (!params || !isMuteValue(params.mute)) return;
+		if (params.room_id !== undefined && typeof params.room_id !== 'string') return;
+		if (params.room_id === undefined) this.applyMute(params.mute);
+		else this.applyRoomMute(params.room_id, params.mute);
+		this.emit();
+	}
+
+	/**
+	 * No mutes at all: at each sign-in, whose `status` notifications after
+	 * its result bring back those in effect (§4.5), and when signed out or
+	 * switching servers.
+	 */
+	private resetMutes(): void {
+		this.applyMute(false);
+		this.roomMutes.clear();
+		this.scheduleRoomUnmutes();
+	}
+
+	/** Takes your unscoped `mute` (§4.5): seconds left, `true`, or `false` (or `0`, or undefined) when not paused. */
+	private applyMute(mute: number | boolean | undefined): void {
+		this.setMutedUntil(muteEnd(mute));
+	}
+
+	private setMutedUntil(until: number | true | undefined): void {
+		if (this.muteTimer) clearTimeout(this.muteTimer);
+		this.muteTimer = undefined;
+		this.mutedUntil = until;
+		this.scheduleUnmute();
+	}
+
+	/** A room's `mute` (§4.5): seconds left, `true`, or `false` (or `0`) to end it. It applies whether or not the room is joined. */
+	private applyRoomMute(roomId: string, mute: number | boolean): void {
+		const until = muteEnd(mute);
+		if (until === undefined) this.roomMutes.delete(roomId);
+		else this.roomMutes.set(roomId, until);
+		this.scheduleRoomUnmutes();
+	}
+
+	/** At the end of the earliest room pause, the rooms show unpaused here without a word from the server. */
+	private scheduleRoomUnmutes(): void {
+		if (this.roomMuteTimer) clearTimeout(this.roomMuteTimer);
+		this.roomMuteTimer = undefined;
+		const now = Date.now();
+		const ends = [...this.roomMutes.values()].filter((until): until is number => until !== true && until > now);
+		if (!ends.length) return;
+		this.roomMuteTimer = setTimeout(() => {
+			this.roomMuteTimer = undefined;
+			for (const [roomId, until] of this.roomMutes) if (until !== true && until <= Date.now()) this.roomMutes.delete(roomId);
+			this.scheduleRoomUnmutes();
+			this.emit();
+		}, Math.min(Math.min(...ends) - now, MAX_TIMER_MS));
+	}
+
+	/** When a room's pause ends, if it is paused now. */
+	private roomMutedUntil(roomId: string): number | true | undefined {
+		const until = this.roomMutes.get(roomId);
+		return until === true || (until !== undefined && until > Date.now()) ? until : undefined;
+	}
+
+	/** At the end of a pause, notifications resume here without a word from the server. */
+	private scheduleUnmute(): void {
+		const until = this.mutedUntil;
+		if (typeof until !== 'number') return;
+		// Timers can't wait longer than about 24 days: wait in steps.
+		const wait = Math.min(until - Date.now(), MAX_TIMER_MS);
+		this.muteTimer = setTimeout(() => {
+			this.muteTimer = undefined;
+			if (this.mutedUntil !== until) return;
+			if (Date.now() < until) {
+				this.scheduleUnmute();
+				return;
+			}
+			this.mutedUntil = undefined;
+			this.emit();
+		}, Math.max(0, wait));
+	}
+
+	/**
+	 * Registers this device for push (§4.9) for the account `userId`:
+	 * `push_register` goes out once that account is signed in, and again on
+	 * each connection, while the server advertises the registration's `kind`.
+	 * A registration that replaces another with another `url`, or none,
+	 * unregisters the previous `url` with `push_unregister`, after the next
+	 * `auth` if it can't now. Switching servers forgets it; signing out
+	 * unregisters it, again after that account's next `auth` if unanswered.
+	 */
+	setPushRegistration(registration: PushRegistration | undefined, userId?: string): void {
+		const previous = this.pushRegistration;
+		const user = registration ? userId : undefined;
+		if (canonicalJson(previous) === canonicalJson(registration) && this.pushUser === user) return;
+		const previousUser = this.pushUser;
+		this.pushRegistration = registration;
+		this.pushUser = user;
+		this.pushSent = false;
+		if (registration && user !== undefined) this.pushUnregisters.delete(pushKey(registration.url, user));
+		if (previous && previousUser !== undefined && (previous.url !== registration?.url || previousUser !== user)) {
+			this.pushUnregisters.set(pushKey(previous.url, previousUser), { url: previous.url, user: previousUser });
+		}
+		if (!registration && this.pushError !== undefined) {
+			this.pushError = undefined;
+			this.emit();
+		}
+		this.syncPush();
+	}
+
+	/**
+	 * While push is off for the account signed in here, this browser's push
+	 * endpoint (`url`) is unregistered after each `auth`, so a registration an
+	 * earlier unregister missed goes too. Undefined stops it.
+	 */
+	setPushOff(url: string | undefined): void {
+		if (url === this.pushOffUrl) return;
+		this.pushOffUrl = url;
+		this.pushOffSent = false;
+		this.syncPush();
+	}
+
+	private syncPush(): void {
+		if (!this.pushReady()) return;
+		for (const [key, entry] of [...this.pushUnregisters]) {
+			// Only as the account it belongs to: as another, it would unregister that one's.
+			if (entry.user !== this.you?.user_id) continue;
+			this.pushUnregisters.delete(key);
+			this.pushRequest('push_unregister', { url: entry.url }, () => this.you?.user_id === entry.user).catch((cause: Error & { code?: number }) => {
+				// Lost with the connection: try again after the next `auth`, unless it is registered again.
+				const again = this.pushRegistration?.url === entry.url && this.pushUser === entry.user;
+				if (cause.code !== undefined || again) return;
+				this.pushUnregisters.set(key, entry);
+				// One that waited its turn past the end of its connection goes on the next, if that is signed in already.
+				this.syncPush();
+			});
+		}
+		const registration = this.pushRegistration;
+		const off = this.pushOffUrl;
+		if (off !== undefined && !this.pushOffSent && registration?.url !== off) {
+			this.pushOffSent = true;
+			this.pushRequest('push_unregister', { url: off }).catch(() => undefined);
+		}
+		const push = this.server?.push;
+		if (!registration || this.pushSent || !isJsonObject(push) || !Object.hasOwn(push, registration.kind)) return;
+		if (this.you?.user_id !== this.pushUser) return;
+		this.pushSent = true;
+		const user = this.pushUser;
+		this.pushRequest('push_register', registration, () => this.pushRegistration === registration && this.you?.user_id === user).then(() => {
+			if (this.pushRegistration !== registration || this.pushError === undefined) return;
+			this.pushError = undefined;
+			this.emit();
+		}, (cause: Error & { code?: number }) => {
+			// Lost with the connection, it goes again after the next `auth`; a refusal is the user's to see.
+			if (cause.code === undefined || this.pushRegistration !== registration) return;
+			this.pushError = cause.message || 'The server refused push notifications for this device.';
+			this.emit();
+		});
+	}
+
+	/** Signed in to an account (not a guest) on a server whose `server.push` enables push (§4.9). */
+	private pushReady(): boolean {
+		return this.authenticated && this.registeredSession && isJsonObject(this.server?.push);
+	}
+
+	/**
+	 * Push is a convenience: a refusal leaves the session as it was. Requests
+	 * for the same `url` go one at a time, each after the last one's reply
+	 * (§1: a client that needs one applied before another waits for the
+	 * reply), so turning push off and on again can't land in the wrong order.
+	 * One whose turn comes on another connection, or once `still` says it
+	 * no longer applies, isn't sent: it rejects without a `code`, as one lost
+	 * with its connection does.
+	 */
+	private pushRequest(method: 'push_register' | 'push_unregister', params: JsonObject & { url: string }, still: () => boolean = () => true): Promise<JsonObject> {
+		const url = params.url;
+		const connection = this.connectionId;
+		const send = (): Promise<JsonObject> => connection === this.connectionId && this.pushReady() && still()
+			? this.enqueueRequest(method, params, { visible: false, allowBeforeAuth: false }).promise
+			: Promise.reject(new Error('Connection changed; not sent'));
+		// One on an earlier connection was answered or lost with it: nothing to wait for.
+		const before = this.pushChains.get(url);
+		const promise = before?.connection === connection ? before.settled.then(send) : send();
+		const entry = { connection, settled: promise.then(() => undefined, () => undefined) };
+		this.pushChains.set(url, entry);
+		void entry.settled.then(() => {
+			if (this.pushChains.get(url) === entry) this.pushChains.delete(url);
+		});
+		return promise;
+	}
+
+	/**
+	 * Advances your read cursor in a room (capability `activity`, §4.6) to a
 	 * message, if that is further than the cursor already is. The server
 	 * syncs it to your other connections.
 	 */
@@ -1343,11 +1746,9 @@ export class ChatClient {
 		if (current !== undefined && compareLogIds(messageId, current) <= 0) return;
 		this.setReadCursor(roomId, this.you!.user_id, messageId);
 		// The cursor still moves here (it places the New divider); a server that
-		// keeps no read cursors would only be charged a frame for it.
-		if (this.server?.ext?.demo?.read_cursors !== false) {
+		// keeps no read cursors (`ext:settings`) would only be charged a frame for it.
+		if (serverSettings(this.server).read_cursors) {
 			this.sendFrame({ method: 'activity', params: { room_id: roomId, read_message_id: messageId } });
-			// A read cursor ends `away` on the server (§4.4).
-			this.awaySent = false;
 		}
 		this.emit();
 	}
@@ -1517,7 +1918,7 @@ export class ChatClient {
 
 	/**
 	 * A room's `members`, complete (§4.3.1, §4.3.3): current user objects,
-	 * merged into the kept ones, that start its member list as of the room's
+	 * possibly partial, merged into the kept ones, that start its member list as of the room's
 	 * `latest_log_id` in the same frame.
 	 */
 	private noteMembers(roomId: string, delivery: RoomDelivery): void {
@@ -1529,9 +1930,9 @@ export class ChatClient {
 		this.store.seedMembers(roomId, delivery.members, delivery.latest_log_id);
 	}
 
-	/** A frame's `users` (§3.3): complete current user objects. */
+	/** A frame's `users` (§3.3): complete current user objects, which replace the kept ones. */
 	private noteUsers(users: unknown): void {
-		for (const user of Array.isArray(users) ? users : []) if (isIdentity(user)) this.noteUser(cloneJson(user));
+		for (const user of Array.isArray(users) ? users : []) if (isIdentity(user)) this.noteUser(cloneJson(user), { complete: true });
 	}
 
 	/** Membership changed: listings of rooms and threads to join are stale. */
@@ -1545,14 +1946,20 @@ export class ChatClient {
 
 	/**
 	 * Updates your profile with `me` (§3.3): given fields replace the current
-	 * ones and `""` (or `{}` for `ext`) removes one. Resolves with the `you`
-	 * the server kept, which may differ from what was asked.
+	 * ones, `""` clears one, and omitted ones stay. `ext` merges by its keys
+	 * (§4.12): each given key replaces its value, a key with an empty value
+	 * (`""`, `[]`, `{}`) is removed, and keys left out stay; it goes only to
+	 * a server with capability `ext`. Resolves with the `you` the server
+	 * kept, which may differ from what was asked.
 	 */
-	updateProfile(patch: { name?: string; avatar?: string; ext?: JsonObject }): Promise<Identity> {
+	updateProfile(patch: { name?: string; avatar?: string; ext?: JsonObject; status?: string }): Promise<Identity> {
 		if (patch.name !== undefined) this.displayName = patch.name.trim();
-		return this.enqueueRequest('me', { ...patch }, { visible: true, allowBeforeAuth: false }).promise.then((result) => {
+		const { ext, ...fields } = patch;
+		const params: JsonObject = { ...fields, ...(ext !== undefined && this.hasCap('ext') ? { ext } : {}) };
+		return this.enqueueRequest('me', params, { visible: true, allowBeforeAuth: false }).promise.then((result) => {
 			if (!isIdentity(result.you)) throw new Error('The server did not return your profile');
-			this.setYou(cloneJson(result.you));
+			this.setYou(cloneJson(result.you), true);
+			if (patch.name !== undefined) this.adoptName(result.you, patch.name.trim());
 			this.emit();
 			return this.you!;
 		});
@@ -1560,7 +1967,7 @@ export class ChatClient {
 
 	/**
 	 * Posts a message with files attached as `upload` embeds (capability
-	 * `embed:upload`, §4.6.4): the message goes out with one pending embed
+	 * `embed:upload`, §4.8.4): the message goes out with one pending embed
 	 * per file, then each file is written to the `write_url` the result lists.
 	 * `sent` settles with the message result; `uploaded` when every write has
 	 * finished. Progress and failures appear in the snapshot's `uploads`.
@@ -1571,14 +1978,14 @@ export class ChatClient {
 		const files = attached.map((item) => (item instanceof File ? { file: item } : item));
 		const uploads: Embed[] = files.map(({ file }) => ({ kind: 'upload', ...(file.name ? { title: file.name } : {}) }));
 		const embeds = [...(options.embeds ?? []), ...uploads];
-		// A command takes embeds as arguments, and its result lists their write URLs too (§4.6.3, §4.8).
+		// A command takes embeds as arguments, and its result lists their write URLs too (§4.8.3, §4.1).
 		const handle: OperationHandle = command ? this.command(room, text, { ...options, embeds }) : this.send(room, text, format, { ...options, embeds });
 		const uploaded = handle.promise.then((result) => this.writeUploads(result, files));
 		return { sent: handle.promise, uploaded };
 	}
 
 	/**
-	 * Uploads an image as your avatar (§4.6.6, capabilities `command` and
+	 * Uploads an image as your avatar (§4.8.6, capabilities `command` and
 	 * `embed:upload`): a `/avatar` command with one upload embed, then the file
 	 * written to the result's `write_url`. The server sets `avatar` and sends a
 	 * `user` notification once the image is written.
@@ -1623,7 +2030,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Loads a room's history (§4.1). Threads and rooms opened without joining
+	 * Loads a room's history (§4.2). Threads and rooms opened without joining
 	 * never recover automatically: call this when one is opened. It loads the
 	 * newest page the first time, and afterwards pages from the previous load's
 	 * checkpoint up to the head known at the call, resolving after the last
@@ -1719,7 +2126,7 @@ export class ChatClient {
 
 	/**
 	 * Loads the page of a thread's history just before what is loaded, when a
-	 * newest-first load left older records (§4.1, backward paging).
+	 * newest-first load left older records (§4.2, backward paging).
 	 */
 	async loadOlder(roomId: string): Promise<void> {
 		const room = this.rooms.get(roomId);
@@ -1760,7 +2167,7 @@ export class ChatClient {
 
 	/**
 	 * Opens a room the user has not joined, such as a thread from its card,
-	 * without joining it: reading needs no membership (§4.1), and joining would
+	 * without joining it: reading needs no membership (§4.2), and joining would
 	 * log a membership for everyone (§4.3.2). It shows in the snapshot with
 	 * `joined: false` and loads with `loadRoom`, but nothing about it arrives live
 	 * until it is joined, so its head moves only when a listing (`listRooms`
@@ -1855,7 +2262,7 @@ export class ChatClient {
 			// disconnectedAt.
 			this.suspendProtocolView('Connection closed');
 			if (this.running) {
-				this.disconnectedAt ??= Date.now();
+				this.disconnectedAt ??= this.now();
 				this.status = 'reconnecting';
 				if (opened) this.scheduleReconnect();
 				else void this.diagnoseConnection(id);
@@ -1941,6 +2348,9 @@ export class ChatClient {
 			case 'pong':
 				this.unansweredPings = 0;
 				return;
+			case 'status':
+				this.handleStatus(frame.params);
+				return;
 		}
 		if (frame.method !== undefined) return;
 		if (typeof frame.id === 'string' && (frame.result !== undefined || frame.error !== undefined)) {
@@ -1968,30 +2378,30 @@ export class ChatClient {
 	}
 
 	private handleServer(params: JsonObject | undefined): void {
-		// v6 servers name the version `protocol` and the capabilities `caps`; everything the
-		// client does differently for them is gated on the version read here.
-		const version = typeof params?.apron === 'number' ? params.apron : params?.protocol;
-		const capabilities = Array.isArray(params?.capabilities) ? params.capabilities : params?.caps;
-		if (!params || typeof version !== 'number' || !Array.isArray(params.auth)) return;
+		if (!params || typeof params.apron !== 'number' || !Array.isArray(params.auth)) return;
 		const auth = params.auth.filter(isString);
 		if (!auth.length) return;
 		const previousPing = this.server?.ping;
 		this.server = {
-			apron: version,
+			apron: params.apron,
 			...(typeof params.agent === 'string' ? { agent: params.agent } : {}),
-			capabilities: Array.isArray(capabilities) ? capabilities.filter(isString) : [],
+			capabilities: Array.isArray(params.capabilities) ? params.capabilities.filter(isString) : [],
 			auth,
 			...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
 			...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
-			...(isJsonObject(params.ext) ? { ext: params.ext as ServerExt } : {}),
+			...(isJsonObject(params.ext) ? { ext: params.ext } : {}),
+			...(isJsonObject(params.push) ? { push: params.push } : {}),
+			...(Array.isArray(params.status) ? { status: params.status.filter(isString) } : {}),
 			...(typeof params.ping === 'number' && Number.isFinite(params.ping) && params.ping > 0 ? { ping: params.ping } : {})
 		};
 		// Liveness starts before authentication (§1); a replacing frame may change the interval.
 		if (!this.pingTimer || previousPing !== this.server.ping) this.startPing();
-		// Each frame fully replaces the last (§3.1): features are worth trying again. A server
-		// before v7 would ignore `user_id` in `room_join`/`room_leave` and act on the caller.
-		this.memberChangesUnsupported = version < 7;
+		// Each frame fully replaces the last (§3.1): features are worth trying again.
+		this.memberChangesUnsupported = false;
 		if (this.authenticated || this.authRequested) {
+			// A replacing frame may add capability `status`: attendance goes once signed in (§4.5).
+			this.syncIdle();
+			this.syncPush();
 			this.emit();
 			return;
 		}
@@ -2094,9 +2504,21 @@ export class ChatClient {
 			this.emit();
 			return false;
 		}
-		this.setYou(identity as Identity);
+		// A sign-in signs the connection in as a user it isn't already signed in
+		// as (§3.2). A passkey added on this signed-in connection (`added`) is
+		// not one, nor is a repeat `auth` as the same user: the server sends no
+		// mutes or statuses after those, and what is kept stands. (An added
+		// address never comes here: its result is `{}`.)
+		const signIn = !added && !(this.authenticated && this.you?.user_id === identity.user_id);
+		// Every notification a sign-in causes comes after its result (§3.2). So
+		// at each sign-in the kept mutes and statuses go, and the `status` and
+		// `user` notifications that follow bring back those in effect, applied
+		// as they arrive like any other (§4.5).
+		if (signIn) this.resetMutes();
+		this.setYou(cloneJson(identity as Identity), true);
+		if (signIn) this.dropKeptStatuses();
 		if (signedIn && added && this.registeredSession) {
-			// Added to the account (§4.9, §4.10): another way back in, not how this session signed in,
+			// Added to the account (§4.10, §4.11): another way back in, not how this session signed in,
 			// and never a reason to drop its token. A session kept before sign-in methods were
 			// remembered gets the same guess as a resume.
 			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
@@ -2165,8 +2587,10 @@ export class ChatClient {
 		} else if (!this.rooms.size) {
 			this.showDefaultRoom();
 		}
-		this.awaySent = false;
-		this.syncAway();
+		this.syncIdle();
+		this.pushSent = false;
+		this.pushOffSent = false;
+		this.syncPush();
 		this.emit();
 		return true;
 	}
@@ -2176,7 +2600,7 @@ export class ChatClient {
 	 * the last connection: those opened without joining come back as they
 	 * were, and joined ones wait, hidden, for the listing to say whether they
 	 * still are, while their recovery (capability `history`) already pages forward
-	 * from their checkpoints (§4.1). `sameIdentity`: this sign-in resumes the
+	 * from their checkpoints (§4.2). `sameIdentity`: this sign-in resumes the
 	 * kept rooms' identity, so the listing may ask only for what changed since
 	 * the rooms' checkpoints (§4.3.1).
 	 */
@@ -2248,11 +2672,16 @@ export class ChatClient {
 		this.pingTimer = undefined;
 	}
 
-	private setYou(identity: Identity): void {
+	/**
+	 * Takes this connection's identity: `complete` for the `you` of an `auth`
+	 * or `me` result, which replaces the kept object, or else a `user`
+	 * notification's, which merges into it (§3.3).
+	 */
+	private setYou(identity: Identity, complete: boolean): void {
 		const changed = this.you?.user_id !== identity.user_id;
-		// A pending address addition belongs to the account that proposed it (§4.10): another identity needs a new code.
+		// A pending address addition belongs to the account that proposed it (§4.11): another identity needs a new code.
 		if (changed) this.addProposalConnection = undefined;
-		this.you = this.noteUser(identity);
+		this.you = this.noteUser(identity, { own: true, complete });
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
 	}
@@ -2268,7 +2697,7 @@ export class ChatClient {
 		if (!params) return;
 		if (isIdentity(params.you)) {
 			const previous = this.you?.user_id;
-			this.setYou(cloneJson(params.you));
+			this.setYou(cloneJson(params.you), false);
 			// The connection now acts as another identity, with its own rooms (§3.3).
 			if (previous !== undefined && previous !== params.you.user_id && this.authenticated && this.hasCap('rooms')) this.listJoinedRooms();
 		} else if (isIdentity(params.new)) {
@@ -2299,15 +2728,43 @@ export class ChatClient {
 	}
 
 	/**
-	 * Merges a current user object (`you`, `new`, room `members` and `users`)
-	 * into the one kept for its `user_id` (§3.3), field by field: a present
-	 * field replaces, an empty one (`""`, `{}`) removes, and a missing one is
-	 * left alone. Returns the kept object, which is replaced only when it
-	 * changes.
+	 * At each sign-in (§3.2, §4.5) the other users' kept `status` values are
+	 * dropped: those users show no status (not `offline`) until the server
+	 * sends it again, as it does after the result for each connected user who
+	 * shares a room, and as `room_list` and `room_update` carry it. Your own
+	 * comes from this `auth`'s `you`.
 	 */
-	private noteUser(identity: Identity): Identity {
+	private dropKeptStatuses(): void {
+		for (const [userId, user] of this.users) {
+			if (userId === this.you?.user_id || !Object.hasOwn(user, 'status')) continue;
+			const { status: _dropped, ...rest } = user;
+			this.users.set(userId, rest);
+		}
+	}
+
+	/**
+	 * Takes a current user object into the one kept for its `user_id` (§3.3).
+	 * A `complete` one (`you` in an `auth` or `me` result, a listing's
+	 * `users`) replaces the kept object. Any other (`you` and `new` in a
+	 * `user` notification, a room's `members`) merges into it field by field:
+	 * a present field replaces, an empty one (`""`, `[]`, `{}`) clears, `ext`
+	 * merges by its keys, and a missing one is left alone. Returns the kept
+	 * object, which is replaced only when it changes.
+	 *
+	 * `own` is a `you` (§3.2, §3.3): its `status` is the one you chose
+	 * (§4.5). Others' view of you, in a `new`, a room's `members` or a
+	 * listing's `users`, carries the status they see (`offline` while you are
+	 * invisible, `idle`), so its `status` never replaces yours.
+	 */
+	private noteUser(identity: Identity, { own = false, complete = false }: { own?: boolean; complete?: boolean } = {}): Identity {
 		const current = this.users.get(identity.user_id);
-		const merged = mergeIdentity(current, identity);
+		if (!own && identity.user_id === this.you?.user_id) {
+			const { status: _seen, ...rest } = identity;
+			identity = rest as Identity;
+			// A complete object of yours still keeps the status `you` set.
+			if (complete && current && Object.hasOwn(current, 'status')) identity.status = current.status;
+		}
+		const merged = complete ? replaceIdentity(current, identity) : mergeIdentity(current, identity);
 		if (merged !== current) this.users.set(identity.user_id, merged);
 		if (this.you?.user_id === identity.user_id) this.you = merged;
 		return merged;
@@ -2407,7 +2864,7 @@ export class ChatClient {
 	 * as `kind` (a joined room's, or one opened without joining), or turning a
 	 * room viewed or kept from the last connection into a joined one: installs
 	 * the record, takes its delivery fields, and starts or resumes its
-	 * automatic recovery (§4.1).
+	 * automatic recovery (§4.2).
 	 */
 	private showRoom(decoded: { record: RoomRecord; delivery: RoomDelivery }, kind?: 'joined'): void {
 		const roomId = decoded.record.room_id;
@@ -2576,27 +3033,8 @@ export class ChatClient {
 		for (const { from, body, welcome } of this.orphanNotices.splice(0)) this.addNotice(roomId, from, body, welcome);
 	}
 
-	/**
-	 * A message from a server before v7 whose sender is `@server`, `@room` or
-	 * `@private` gets that identity's `~` name (the legacy fallback; see
-	 * `legacySystemId`). Everything else, and every message from a v7 server,
-	 * is left as it is.
-	 */
-	private fromLegacySender(value: unknown): unknown {
-		if (!this.server || this.server.apron >= 7 || !isJsonObject(value)) return value;
-		let next: JsonObject = value;
-		const renamed = isIdentity(value.from) ? legacySystemId(value.from.user_id) : undefined;
-		if (renamed !== undefined) next = { ...next, from: { ...(value.from as Identity), user_id: renamed } };
-		// An embedded `reply_to` snapshot is a message too.
-		if (isJsonObject(value.reply_to)) {
-			const reply = this.fromLegacySender(value.reply_to);
-			if (reply !== value.reply_to) next = { ...next, reply_to: reply as JsonObject };
-		}
-		return next;
-	}
-
 	private handleSnapshot(raw: JsonObject | undefined): void {
-		let params = this.fromLegacySender(raw) as JsonObject | undefined;
+		let params = raw;
 		// `~private` messages are never logged or installed (Appendix A.1), whatever they carry.
 		if (isJsonObject(params) && isIdentity(params.from) && params.from.user_id === '~private' && params.message_id !== undefined) {
 			params = { ...params, message_id: undefined, log_id: undefined };
@@ -2622,7 +3060,7 @@ export class ChatClient {
 		this.showMessageRoom(record.room_id);
 		// A room shown for its messages has no record to say where its log
 		// ends: its first message on a connection does, and it recovers up to
-		// that (§4.1), buffering the message meanwhile.
+		// that (§4.2), buffering the message meanwhile.
 		const room = this.rooms.get(record.room_id);
 		if (room && !this.store.room(room.id) && room.recoveredOn !== this.connectionId && isLogId(record.log_id)) {
 			room.recoveredOn = this.connectionId;
@@ -2631,7 +3069,7 @@ export class ChatClient {
 		}
 		this.acceptLiveMessage(record, true);
 		for (const embedded of decoded.embedded) this.acceptLiveMessage(embedded, false);
-		// A new message from a user ends their typing indicator in that room (§4.4).
+		// A new message from a user ends their typing indicator in that room (§4.6).
 		if (record.log_id === record.message_id) {
 			this.removeTyping(record.room_id, record.from.user_id);
 			// A server-wide notice reaches every user, joined to its room or not
@@ -2750,7 +3188,7 @@ export class ChatClient {
 			this.abortRecovery(room, 'Invalid history response');
 			return;
 		}
-		// A recovery started without a head takes the first page's (§4.1).
+		// A recovery started without a head takes the first page's (§4.2).
 		recovery.head ??= result.latest_log_id;
 		this.observeHistoryResponse(room, result);
 		if (room.recovery !== recovery || recovery.generation !== generation) return;
@@ -2779,7 +3217,7 @@ export class ChatClient {
 	private applyPage(room: RoomState, result: JsonObject): void {
 		// `~private` messages are never installed (Appendix A.1), from history either.
 		const page = Array.isArray(result.messages)
-			? { ...result, messages: result.messages.map((message) => this.fromLegacySender(message) as JsonValue).filter((message) => !(isJsonObject(message) && isIdentity(message.from) && message.from.user_id === '~private')) }
+			? { ...result, messages: result.messages.filter((message) => !(isJsonObject(message) && isIdentity(message.from) && message.from.user_id === '~private')) }
 			: result;
 		const records: DecodedRecords = decodeHistoryRecords(page);
 		for (const record of [...records.rooms, ...records.messages, ...records.embedded, ...records.reactions, ...records.memberships]) this.observeLogId(record.log_id);
@@ -2898,7 +3336,7 @@ export class ChatClient {
 	/**
 	 * After a lost connection: hide every room until the next connection
 	 * lists it as joined, but keep its records, floor and checkpoint so it resumes
-	 * from there (§4.1 recovery from `C + 1`). Everything else scoped to
+	 * from there (§4.2 recovery from `C + 1`). Everything else scoped to
 	 * the connection is forgotten as in `discardProtocolView`.
 	 */
 	private suspendProtocolView(reason: string): void {
@@ -2946,9 +3384,15 @@ export class ChatClient {
 		this.defaultPosts.clear();
 		this.joinedComplete = false;
 		this.keptUserId = undefined;
+		this.resetMutes();
 		this.forgetConnectionState();
 	}
 
+	/**
+	 * Forgets what belonged to the connection. Your mutes stay through a lost
+	 * connection, so a pause doesn't flicker off while reconnecting: the next
+	 * sign-in resets them and the server sends those in effect (§4.5).
+	 */
 	private forgetConnectionState(): void {
 		this.reactionIntents.clear();
 		this.pendingMessageSaves.clear();
@@ -2961,7 +3405,8 @@ export class ChatClient {
 		this.joinedListing = undefined;
 		this.directory = undefined;
 		this.threadDirectory.clear();
-		this.awaySent = false;
+		this.clearIdleRetry();
+		this.pushError = undefined;
 		this.memberChangesUnsupported = false;
 	}
 
@@ -2972,7 +3417,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * An `activity` broadcast (§4.4): present fields change the user's
+	 * An `activity` broadcast (§4.6): present fields change the user's
 	 * transient state, absent ones leave it. `typing` seconds show or refresh
 	 * the indicator, `0` removes it. `read_message_id` moves that user's read
 	 * cursor forward; yours places the New divider.
@@ -3132,7 +3577,7 @@ export class ChatClient {
 	private handleConnectionFailure(id: number, message: string): void {
 		if (id !== this.connectionId) return;
 		this.error = message;
-		if (this.running) this.disconnectedAt ??= Date.now();
+		if (this.running) this.disconnectedAt ??= this.now();
 		this.status = this.running ? 'reconnecting' : 'offline';
 		if (this.running) this.scheduleReconnect();
 		this.emit();
@@ -3316,7 +3761,7 @@ function readMethods(value: string | null): SignInMethod[] {
 	return (value ?? '').split(',').filter((method): method is SignInMethod => method === 'webauthn' || method === 'email' || method === 'token');
 }
 
-/** A passkey challenge the server issued (`begin`, §4.9). */
+/** A passkey challenge the server issued (`begin`, §4.10). */
 interface PasskeyChallenge {
 	challengeId: string;
 	options: JsonObject;

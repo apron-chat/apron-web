@@ -85,7 +85,7 @@ interface RecoveryState {
 	/**
 	 * Fixed H for the whole recovery. A recovery sent right behind `auth`,
 	 * before any room record is known, starts without it and takes it from its
-	 * first page's `latest_log_id` (§4.1 recovery, step 1).
+	 * first page's `latest_log_id` (§4.2 recovery, step 1).
 	 */
 	head?: string;
 	/** Next position to request; undefined means from the start of the log. */
@@ -126,6 +126,26 @@ export type ValidHistoryResponse = JsonObject & {
 	history_log_id: string | null;
 };
 
+/** A valid `mute` (§4.5): `true` until changed, `false` for none, or seconds (`0` is `false`). */
+export function isMuteValue(value: unknown): value is number | boolean {
+	return typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+}
+
+/** A push registration's key (§4.9): it belongs to its user and `url`. */
+export function pushKey(url: string, user: string): string {
+	return JSON.stringify([user, url]);
+}
+
+/** When a `mute` (§4.5) ends: epoch milliseconds for seconds, `true` until resumed, undefined for `false` or `0`. */
+export function muteEnd(mute: number | boolean | undefined, now = Date.now()): number | true | undefined {
+	if (mute === true) return true;
+	return typeof mute === 'number' && mute > 0 ? now + mute * 1000 : undefined;
+}
+
+/** How long nobody attends a connection before it reports `idle` (§4.5: about 30 seconds). */
+export const IDLE_AFTER_MS = 30_000;
+/** The longest `setTimeout` delay browsers keep. */
+export const MAX_TIMER_MS = 2 ** 31 - 1;
 export const REQUEST_TIMEOUT_MS = 20_000;
 /** This implementation and its version, sent as `agent` with `auth` (§3.2), for the server's debugging. */
 export const AGENT = 'apron-web/0.4';
@@ -192,25 +212,28 @@ export function maxDefined(a: string | undefined, b: string | undefined): string
 	return compareLogIds(a, b) >= 0 ? a : b;
 }
 
-/** A message's client fields (§4.2), as a save would submit them. */
+/**
+ * A message's client fields (§4.4), as a save would submit them. Not `ext`:
+ * a save merges it (§4.12), so what the server keeps stays without sending it
+ * back, and another client's change to it is never undone.
+ */
 export function messageClientFields(record: MessageRecord): JsonObject {
 	const fields: JsonObject = { room_id: record.room_id };
 	if (record.body !== undefined) fields.body = record.body;
 	if (record.reply_to) fields.reply_to = { message_id: record.reply_to.message_id };
 	if (record.deleted === true) fields.deleted = true;
-	if (record.ext !== undefined) fields.ext = record.ext;
 	return fields;
 }
 
 /**
  * A room's client fields as an update would submit them (§4.3.4): all but
- * `parent_room_id` and `private`, which are fixed at creation.
+ * `parent_room_id` and `private`, which are fixed at creation, and `ext`,
+ * which `room_set` merges (§4.12).
  */
 export function roomClientFields(record: RoomRecord): JsonObject {
 	const fields: JsonObject = {};
 	if (record.title !== undefined) fields.title = record.title;
 	if (record.description !== undefined) fields.description = record.description;
-	if (record.ext !== undefined) fields.ext = record.ext;
 	return fields;
 }
 
@@ -234,13 +257,52 @@ export function roomTitle(roomId: string, record: RoomRecord | undefined): strin
 	return roomId;
 }
 
+/** An empty value (§3.3): `""`, `[]`, or `{}`, which clears what it replaces. */
+function isEmptyValue(value: unknown): boolean {
+	if (value === '') return true;
+	if (Array.isArray(value)) return value.length === 0;
+	return isJsonObject(value) && Object.keys(value).length === 0;
+}
+
 /**
- * One user object merged into the kept one (§3.3): each field it carries
- * replaces the kept value, and a missing (or `null`) field leaves it. An
- * empty value (`""`, `[]`, `{}`) means the field was cleared, and is kept as
- * such rather than dropped, so rendering never falls back to a stale
- * recorded object for it (see `userIn`). Returns `current` itself when
- * nothing changes.
+ * A write's `ext` merged one level deep into what is stored (§4.12), as a
+ * server does: each key that `incoming` carries replaces the kept value, an
+ * empty value (`""`, `[]`, `{}`) removes that key, and keys it leaves out
+ * stay. `"ext": {}` changes nothing. The value under a key is replaced whole;
+ * `null` is an ordinary value. Returns `kept` itself when nothing changes.
+ * (A client's kept user object keeps a cleared key as its empty value
+ * instead: see `mergeIdentity`.)
+ */
+export function mergeExt(kept: JsonObject | undefined, incoming: JsonObject): JsonObject | undefined {
+	let next: JsonObject | undefined;
+	for (const key of Object.keys(incoming)) {
+		const value = incoming[key];
+		if (value === undefined) continue;
+		const base = next ?? kept;
+		if (isEmptyValue(value)) {
+			if (!base || !Object.hasOwn(base, key)) continue;
+			next ??= Object.assign(Object.create(null), kept) as JsonObject;
+			delete next[key];
+		} else if (!base || !Object.hasOwn(base, key) || canonicalJson(base[key]) !== canonicalJson(value)) {
+			next ??= Object.assign(Object.create(null), kept) as JsonObject;
+			next[key] = cloneJson(value);
+		}
+	}
+	if (next && !Object.keys(next).length) return undefined;
+	return next ?? kept;
+}
+
+/**
+ * A partial current user object (a `user` notification's `you` or `new`, a
+ * room's `members`) merged into the kept one (§3.3): each field it carries
+ * replaces the kept value, and fields it leaves out stay. `null` is an
+ * ordinary value. An empty value (`""`, `[]`, `{}`) means the field was
+ * cleared, and is kept as such rather than dropped, so rendering never falls
+ * back to a stale recorded object for it (see `userIn`). `ext` merges the
+ * same way one level down (§4.12): each key it carries replaces the kept
+ * value, a cleared one kept as its empty value, and keys it leaves out stay,
+ * so `"ext": {}` changes nothing. Returns `current` itself when nothing
+ * changes.
  */
 export function mergeIdentity(current: Identity | undefined, incoming: Identity): Identity {
 	const next: JsonObject = Object.create(null);
@@ -250,13 +312,42 @@ export function mergeIdentity(current: Identity | undefined, incoming: Identity)
 	for (const key of Object.keys(incoming)) {
 		if (key === 'user_id') continue;
 		const value = incoming[key];
-		if (value === undefined || value === null) continue;
+		if (value === undefined) continue;
+		if (key === 'ext' && isJsonObject(value)) {
+			const kept = isJsonObject(next.ext) ? next.ext : undefined;
+			let ext: JsonObject | undefined;
+			for (const extKey of Object.keys(value)) {
+				const extValue = value[extKey];
+				if (extValue === undefined) continue;
+				const base = ext ?? kept;
+				if (base && Object.hasOwn(base, extKey) && canonicalJson(base[extKey]) === canonicalJson(extValue)) continue;
+				ext ??= Object.assign(Object.create(null), kept) as JsonObject;
+				ext[extKey] = cloneJson(extValue);
+			}
+			if (ext) {
+				next.ext = ext;
+				changed = true;
+			}
+			continue;
+		}
 		if (!Object.hasOwn(next, key) || canonicalJson(next[key]) !== canonicalJson(value)) {
 			next[key] = cloneJson(value);
 			changed = true;
 		}
 	}
 	return changed ? next as Identity : current!;
+}
+
+/**
+ * A complete user object (`you` in an `auth` or `me` result, a listing's
+ * `users`, §3.3) in place of the kept one: fields it leaves out are gone.
+ * Returns `current` itself when the two are equal.
+ */
+export function replaceIdentity(current: Identity | undefined, incoming: Identity): Identity {
+	if (current && canonicalJson(current) === canonicalJson(incoming)) return current;
+	const next: JsonObject = Object.create(null);
+	for (const key of Object.keys(incoming)) if (incoming[key] !== undefined) next[key] = cloneJson(incoming[key]);
+	return next as Identity;
 }
 
 export function sameEmojiSet(left: readonly string[], right: readonly string[]): boolean {
@@ -268,12 +359,12 @@ export function isEmbedded(live: LiveRecord): boolean {
 	return live.kind === 'message' && live.embedded === true;
 }
 
-/** A forward page; without `before` (a recovery that has no head yet) it runs to the end of the log (§4.1). */
+/** A forward page; without `before` (a recovery that has no head yet) it runs to the end of the log (§4.2). */
 export function historyParams(roomId: string, after: string | undefined, before: string | undefined): JsonObject {
 	return { room_id: roomId, after: after ?? FIRST_LOG_ID, ...(before !== undefined ? { before } : {}), limit: HISTORY_PAGE_SIZE };
 }
 
-/** Record arrays that a history page may omit when empty (§4.1). */
+/** Record arrays that a history page may omit when empty (§4.2). */
 const HISTORY_ARRAYS = ['rooms', 'messages', 'reactions', 'memberships'];
 
 export function validHistoryMetadata(result: JsonObject): result is ValidHistoryResponse {

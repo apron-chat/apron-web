@@ -68,7 +68,7 @@ export function wayBackNudge(server: Pick<ServerParams, 'auth'> | undefined, met
 	return signsIn;
 }
 
-/** What went wrong adding an address (§4.10), in words: `denied` is usually an address that has an account already. */
+/** What went wrong adding an address (§4.11), in words: `denied` is usually an address that has an account already. */
 export function addEmailError(cause: unknown): string {
 	const code = (cause as { code?: number } | undefined)?.code;
 	if (code === -32001) return 'That code was refused: it may be wrong or expired, or the address may belong to another account. Ask for a new code, or sign in with that address instead.';

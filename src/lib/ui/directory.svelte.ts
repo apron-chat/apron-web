@@ -82,6 +82,17 @@ class Directory {
 	}
 
 	/**
+	 * A user's `status` (§4.5), from the kept current object only: a recorded
+	 * one (a `from`) is as of its record, not now. Undefined when the server
+	 * sends none, or cleared it with `""` (§3.3), so nothing is shown.
+	 */
+	status(from: Identity | undefined): string | undefined {
+		const id = this.person(from)?.user_id;
+		const status = id === undefined ? undefined : this.users.users[id]?.status;
+		return typeof status === 'string' && status !== '' ? status : undefined;
+	}
+
+	/**
 	 * Whether another known `user_id` shows under the same display name, so
 	 * this one must show its `@user_id` beside it (§3.3): no one passes as
 	 * someone else. A name that is the user's own `user_id` already says who

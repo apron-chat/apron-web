@@ -66,14 +66,16 @@ export interface RoomSnapshot {
 	 * Fixed at creation; absent means an ordinary room.
 	 */
 	private?: boolean;
-	/** What the room is about (§3.4), Markdown by convention; absent when empty. */
+	/** Your notifications from this room and its threads are paused until then (§4.5 `mute` with its `room_id`): epoch milliseconds, or `true`. Absent when not. */
+	mutedUntil?: number | true;
+	/** What the room is about (§3.4), CommonMark by convention; absent when empty. */
 	description?: string;
 	/**
 	 * The least `log_id` of this room's records seen: where a thread's card
 	 * stays put in its parent's feed while edits give the record new `log_id`s.
 	 */
 	firstRecordLogId?: string;
-	/** Opaque extension data from the room record. */
+	/** Extension data from the room record (§4.12). */
 	ext?: JsonObject;
 	/** Title changes seen in the room's log, ascending (absent when none). */
 	renames?: RoomRename[];
@@ -106,7 +108,7 @@ export interface RoomSnapshot {
 	olderAvailable?: boolean;
 	/** A `loadOlder` request is in flight. */
 	loadingOlder?: boolean;
-	/** Your read cursor in this room (§4.4), as the server last reported or you advanced it. */
+	/** Your read cursor in this room (§4.6), as the server last reported or you advanced it. */
 	readMessageId?: string;
 	/**
 	 * The room's members (§4.3.2): started from a complete `members` listing
@@ -149,7 +151,7 @@ export interface RoomListing {
 /** The room a client posts to without naming one: the server's default room (§3.5), before its `room_id` is known. */
 export const DEFAULT_ROOM_ID = '';
 
-/** A file this client is writing to an embed's `write_url` (§4.6.3). */
+/** A file this client is writing to an embed's `write_url` (§4.8.3). */
 export interface UploadState {
 	name: string;
 	/** An image's dimensions as sent, shown while pending; the server fills in `og` once written. */
@@ -176,7 +178,7 @@ export interface PendingOperation {
 	createdAt: number;
 }
 
-/** A typing indicator shown for another user (§4.4). */
+/** A typing indicator shown for another user (§4.6). */
 export interface TypingSnapshot {
 	room: string;
 	from: Identity;
@@ -196,7 +198,7 @@ export interface ClientSnapshot {
 	 * is its only way back in here, worth adding a passkey or email to (§3.2).
 	 */
 	signedInWith?: 'webauthn' | 'email' | 'token';
-	/** How this browser can get back into the account: how it signed in, then what it added (§4.9, §4.10). */
+	/** How this browser can get back into the account: how it signed in, then what it added (§4.10, §4.11). */
 	signInMethods?: Array<'webauthn' | 'email' | 'token'>;
 	/**
 	 * A registered session is kept for this server (a token to resume with),
@@ -206,17 +208,27 @@ export interface ClientSnapshot {
 	/** The sign-in guard is held by a passkey ceremony (true) or an email step (false). */
 	passkeyBusy?: boolean;
 	/**
-	 * An email sign-in proposal waiting for its code (§4.10): the address,
+	 * An email sign-in proposal waiting for its code (§4.11): the address,
 	 * and the server whose connection proposed it and alone takes the code.
 	 * Gone once used, replaced, or closed (by the server, or on expiry).
 	 */
 	emailCode?: { email: string; url: string };
 	/**
-	 * Signed in as a guest on a server whose guests only read (the demo
-	 * worker's `ext.demo.guest_posting: false`): posting, reacting, and room
-	 * changes are denied until the user signs in.
+	 * Signed in as a guest on a server whose guests only read
+	 * (`ext:settings` with `guest_posting: false`): posting, reacting, and
+	 * room changes are denied until the user signs in.
 	 */
 	readOnly?: boolean;
+	/**
+	 * Your notifications are paused (§4.5 `mute` without `room_id`, from the
+	 * server's `status`) until then, in epoch milliseconds, or `true` until
+	 * resumed. Absent when not.
+	 */
+	mutedUntil?: number | true;
+	/** The server refused this device's `push_register` (§4.9): its message, until one succeeds. */
+	pushError?: string;
+	/** This connection's rooms are listed: joined ones (capability `rooms`), else the default room. */
+	roomsListed?: boolean;
 	error?: string;
 	server?: ServerParams;
 	/** Which optional features the current `server` frame advertises (§4). */
@@ -283,6 +295,16 @@ export interface ClientSnapshot {
 	disconnectedAt?: number;
 }
 
+/**
+ * The params of `push_register` (§4.9): `kind` is a key of `server.push`,
+ * `url` identifies the registration, `push_id` names it in payloads, and the
+ * rest is specific to the kind, such as a web push subscription's `keys`.
+ */
+export interface PushRegistration extends JsonObject {
+	kind: string;
+	url: string;
+}
+
 export interface OperationHandle<T extends JsonObject = JsonObject> {
 	id: string;
 	promise: Promise<T>;
@@ -302,19 +324,25 @@ export interface SendOptions {
 	embeds?: Embed[];
 	/** The `user_id`s the message mentions (§3.5), sent as `body.mentions`. */
 	mentions?: string[];
+	/** Extension data (§4.12), sent only to a server with capability `ext`. */
 	ext?: JsonObject;
 }
 
 /**
  * Changes to a saved message. Absent keys keep the latest snapshot's value;
- * `null` removes `reply_to` or `ext`. Saves always resubmit every client field
- * (§4.2).
+ * `null` removes `reply_to`. Saves resubmit every client field (§4.4) except
+ * `ext`, which the server merges (§4.12).
  */
 export interface MessagePatch {
 	room_id?: string;
 	body?: MessageBody;
 	reply_to?: string | null;
-	ext?: JsonObject | null;
+	/**
+	 * `ext` keys to change: each replaces its value, a key with an empty value
+	 * (`""`, `[]`, `{}`) is removed, and keys left out stay (§4.12). Sent only
+	 * to a server with capability `ext`.
+	 */
+	ext?: JsonObject;
 	deleted?: true;
 }
 
@@ -324,19 +352,26 @@ export interface CreateRoomOptions {
 	/** Visible only to its members (§4.3.4); fixed at creation. */
 	private?: boolean;
 	title?: string;
-	/** What the room is about, Markdown by convention (§3.4). */
+	/** What the room is about, CommonMark by convention (§3.4). */
 	description?: string;
+	/** Extension data (§4.12), sent only to a server with capability `ext`. */
 	ext?: JsonObject;
 }
 
 /**
  * Changes to a room's client fields. Absent keys keep the latest record's
- * value; `null` clears. `parent_room_id` and `private` are fixed at creation.
+ * value; `null` clears `title` or `description`. `parent_room_id` and
+ * `private` are fixed at creation.
  */
 export interface RoomPatch {
 	title?: string | null;
 	description?: string | null;
-	ext?: JsonObject | null;
+	/**
+	 * `ext` keys to change: each replaces its value, a key with an empty value
+	 * (`""`, `[]`, `{}`) is removed, and keys left out stay (§4.12). Sent only
+	 * to a server with capability `ext`.
+	 */
+	ext?: JsonObject;
 }
 
 export type WebSocketFactory = (url: string) => WebSocket;
@@ -346,4 +381,6 @@ export interface ChatClientOptions {
 	displayName?: string;
 	webSocketFactory?: WebSocketFactory;
 	onChange?: (snapshot: ClientSnapshot) => void;
+	/** The clock that times disconnections (epoch milliseconds); `Date.now` by default. */
+	now?: () => number;
 }
