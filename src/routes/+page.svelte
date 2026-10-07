@@ -2210,7 +2210,7 @@
 		.app:not(.side-collapsed) .notify-inline { display: none; }
 	}
 	/* A zero-height sticky row, so the pill floats over the timeline without taking space. */
-	.day-float { position: sticky; top: var(--space-2); z-index: 2; height: 0; display: flex; justify-content: center; pointer-events: none; }
+	.day-float { position: sticky; top: var(--space-2); z-index: 2; height: 0; display: flex; align-items: flex-start; justify-content: center; pointer-events: none; }
 	.day-float span { padding: 3px var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); box-shadow: var(--shadow-float); color: var(--ink); font-size: var(--text-sm); line-height: 16px; font-weight: 500; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity .2s, transform .2s; }
 	.day-float-shown span { opacity: 1; transform: none; }
 	@media (prefers-reduced-motion: reduce) {
