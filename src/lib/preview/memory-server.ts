@@ -1,6 +1,7 @@
 import { mergeExt } from '$lib/protocol/client-internals';
 import type { WebSocketFactory } from '$lib/protocol/client-types';
 import { isJsonObject, type JsonObject, type WireFrame } from '$lib/protocol/types';
+import { DAWN, DUSK } from './preview-images';
 
 export type PreviewRoom = {
 	room_id: string;
@@ -36,7 +37,17 @@ const people: Record<string, { user_id: string; name: string; avatar?: string; r
 };
 
 const roomId = 'general';
-const seed = [
+
+/**
+ * Two finished image uploads (§4.8.4), shaped as a server sends them: `og.image` is the file itself. The
+ * preview has no file server, so the images are data URLs and `url` (what a Cmd-click opens) goes nowhere.
+ */
+const photos = [
+	{ kind: 'upload', embed_id: 'preview-dusk', url: 'https://apron-preview.invalid/files/dusk-over-the-ridge.jpg', title: 'dusk-over-the-ridge.jpg', og: { image: { url: DUSK.url, type: 'image/jpeg', width: DUSK.width, height: DUSK.height, alt: 'Layered purple hills under an orange dusk sky, the sun low' } } },
+	{ kind: 'upload', embed_id: 'preview-dawn', url: 'https://apron-preview.invalid/files/first-light.jpg', title: 'first-light.jpg', og: { image: { url: DAWN.url, type: 'image/jpeg', width: DAWN.width, height: DAWN.height, alt: 'Blue ridges fading into a pale morning sky' } } }
+];
+
+const seed: { id: string; from: string; text: string; embeds?: JsonObject[] }[] = [
 	{ id: '1710000000001', from: 'ada', text: 'Welcome to Apron! This is the full app running against an in-memory protocol server.' },
 	{ id: '1710000000002', from: 'grace', text: 'Try **markdown**, emoji :wave:, and mentioning @ada.' },
 	{ id: '1710000000003', from: 'linus', text: 'This message started in #general; it now lives in the Deploy checklist thread.' },
@@ -45,7 +56,8 @@ const seed = [
 	{ id: '1710000000009', from: 'grace', text: 'Inline `code`, [a titled link](https://example.com "Example") and an autolink: <https://example.com>.\nBare URLs work too: https://example.com. Mention @margaret or jump to #thread_deploy.' },
 	{ id: '1710000000010', from: 'linus', text: '> Blockquotes support **inline formatting**.\n>\n> And multiple paragraphs.\n\n- Unordered list\n  - Nested item\n  - Another nested item\n- Final item\n\n1. Ordered list\n2. Second item' },
 	{ id: '1710000000014', from: 'margaret', text: '```ts\nconst preview = "markdown";\nconsole.log(preview);\n```\n\n    Indented code blocks work too.\n\n---\n\nA hard line break  \nkeeps both lines in one paragraph.' },
-	{ id: '1710000000015', from: 'ada', text: '| Feature | Example |\n| :-- | --: |\n| Strong | **bold** |\n| Inline code | `const x = 1` |\n| Room link | #engineering |\n\nRaw HTML is shown as text: <b>not bold</b>.' }
+	{ id: '1710000000015', from: 'ada', text: '| Feature | Example |\n| :-- | --: |\n| Strong | **bold** |\n| Inline code | `const x = 1` |\n| Room link | #engineering |\n\nRaw HTML is shown as text: <b>not bold</b>.' },
+	{ id: '1710000000016', from: 'grace', text: 'Two from the ridge last week. Click one to see it full screen; ← and → page between them.', embeds: photos },
 ];
 
 /** A write's `ext` merged into what is kept (§4.12); a write that leaves it out keeps it. */
@@ -66,7 +78,7 @@ export class MemoryProtocolServer {
 		for (const item of seed) {
 			const message = {
 				message_id: item.id, log_id: item.id, room_id: roomId,
-				from: { ...people[item.from] }, body: { text: item.text, format: 'markdown' }
+				from: { ...people[item.from] }, body: { text: item.text, format: 'markdown', ...(item.embeds ? { embeds: item.embeds } : {}) }
 			};
 			general.messages.push(message);
 			general.log_id = Number(item.id);

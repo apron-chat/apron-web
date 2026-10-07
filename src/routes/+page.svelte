@@ -49,7 +49,7 @@
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
 	import { linkPreviews } from '$lib/ui/link-previews';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
-	import { PaneDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
+	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
 	import { setAppBadge, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
@@ -98,6 +98,13 @@
 	const presence = new PagePresence();
 	const floatingDay = new FloatingDay();
 	const drafts = new PaneDrafts();
+	// The update notice, in the layout, says when reloading would lose a draft.
+	$effect(() => {
+		pageDrafts.current = drafts;
+		return () => {
+			if (pageDrafts.current === drafts) pageDrafts.current = undefined;
+		};
+	});
 	const reveal = new ProgressiveReveal(REVEAL_CHUNK_ITEMS, () => messageScroll, keepPlace);
 	let notificationsEnabled = $state(false);
 	let notificationState = $state<NotificationPermissionState>(notificationPermission());

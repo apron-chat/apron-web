@@ -106,8 +106,23 @@ export class PaneDrafts {
 		return true;
 	}
 
+	/**
+	 * Some draft has text or files that reloading would lose: the open pane's,
+	 * or one kept for another. Reactive through the open pane's, which every
+	 * kept draft passes through.
+	 */
+	get unsent(): boolean {
+		if (this.text.trim() || this.files.length) return true;
+		for (const [key, text] of this.texts) if (key !== this.key && text.trim()) return true;
+		for (const [key, files] of this.staged) if (key !== this.key && files.length) return true;
+		return false;
+	}
+
 	/** The open pane's draft has something in it. */
 	private busy(): boolean {
 		return Boolean(this.text || this.reply || this.files.length);
 	}
 }
+
+/** The page's drafts, for what sits outside the page: the update notice says when reloading would lose one. */
+export const pageDrafts = $state<{ current?: PaneDrafts }>({});

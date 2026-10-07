@@ -77,4 +77,25 @@ describe('PaneDrafts', () => {
 		expect(drafts.restore('lobby', 'caption', undefined, files)).toBe(false);
 		expect([drafts.text, drafts.files.map(({ id }) => id)]).toEqual(['', ['b']]);
 	});
+
+	it('says when reloading would lose a draft: text or files, in the open pane or a kept one', () => {
+		const drafts = new PaneDrafts();
+		expect(drafts.unsent).toBe(false);
+		drafts.open('lobby');
+		drafts.text = '   ';
+		drafts.setReply('m1');
+		expect(drafts.unsent).toBe(false);
+		drafts.text = 'hello';
+		expect(drafts.unsent).toBe(true);
+		drafts.open('thread');
+		expect(drafts.unsent).toBe(true);
+		drafts.open('lobby');
+		drafts.clear('lobby');
+		expect(drafts.unsent).toBe(false);
+		drafts.stage([staged('a')]);
+		drafts.open('thread');
+		expect(drafts.unsent).toBe(true);
+		drafts.unstage('a');
+		expect(drafts.unsent).toBe(false);
+	});
 });

@@ -34,7 +34,9 @@ state and behavior — `ConnectScreen`,
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog` (all three
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
 choice submitted with a form a `CheckList`-style row),
-`StatusBanner`, `Avatar`. A style change goes in `apron.css`, and reaches the
+`MediaViewerHost` (the design system's `MediaViewer`, opened by image embeds through
+`media-viewer.svelte.ts`, which reads the open timeline's `data-viewer-*` links), `StatusBanner`, `UpdateNotice` (the design system's `ActionBanner`, which reads whether the page's
+`PaneDrafts` hold anything unsent through `pageDrafts`), `Avatar`. A style change goes in `apron.css`, and reaches the
 design system with the next `npm run design:bundle`. A user's `status` (§4.5)
 is the design system's `StatusDot` on their `Avatar`: online a dot, idle a
 crescent, dnd a barred dot, offline a hollow ring, your own `invisible` the
