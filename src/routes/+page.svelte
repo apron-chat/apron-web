@@ -398,7 +398,7 @@
 	// The client keeps it across connections and reports it on each.
 	$effect(() => {
 		const idle = presence.idle;
-		if (client) untrack(() => client?.setIdle(idle));
+		if (client) untrack(() => client?.setIdle(idle, presence.inputAt));
 	});
 
 	$effect(() => {

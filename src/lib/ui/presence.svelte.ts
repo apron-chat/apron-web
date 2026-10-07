@@ -43,12 +43,25 @@ export class PagePresence {
 	private alerted = 0;
 	private flashTimer: ReturnType<typeof setInterval> | undefined;
 	private idleTimer: ReturnType<typeof setTimeout> | undefined;
-	private inputAt = Number.NEGATIVE_INFINITY;
+	private lastInput: number | undefined;
 	private readonly handheld: boolean;
 
 	constructor(options: { handheld?: boolean } = {}) {
 		this.handheld = options.handheld ?? handheld();
-		if (!this.idle && typeof document !== 'undefined') this.waitForIdle();
+		// A page that loads in view is attended from then.
+		if (!this.idle && typeof document !== 'undefined') {
+			this.lastInput = Date.now();
+			this.waitForIdle();
+		}
+	}
+
+	/**
+	 * When someone last used this page (epoch milliseconds, to the second),
+	 * so an idle report can say how long ago (§4.5); undefined for a page
+	 * loaded hidden and not used since.
+	 */
+	get inputAt(): number | undefined {
+		return this.lastInput;
 	}
 
 	focus(): void {
@@ -80,8 +93,8 @@ export class PagePresence {
 			if (!this.away) this.setAttention(false);
 		}
 		const now = Date.now();
-		if (!this.idle && now - this.inputAt < INPUT_THROTTLE_MS) return;
-		this.inputAt = now;
+		if (!this.idle && this.lastInput !== undefined && now - this.lastInput < INPUT_THROTTLE_MS) return;
+		this.lastInput = now;
 		this.idle = false;
 		this.waitForIdle();
 	}

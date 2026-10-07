@@ -54,9 +54,13 @@ phone or tablet, where that is the app going to the background, is idle at
 once. A connection starts attended, so a tab in use sends nothing. One that
 starts idle (a tab loaded hidden and not used since, such as one a push
 notification opened in the background, or a reconnect after five minutes
-without input) sends `{idle: true}` at once. After that, the client sends
-`{idle: true}` when the tab becomes idle and `{idle: false}` as soon as it is
-used again. One `idle` request is in flight at a time; a change meanwhile goes
+without input) reports idle at once. After that, the client reports idle when
+the tab becomes idle and sends `{idle: false}` as soon as it is used again.
+Idle goes as the whole seconds since the tab was last used (`{idle: 300}`
+after five minutes), worked out as the request goes, so the server can push
+mentions that came after you left (a tab loaded hidden and never used sends
+`{idle: true}`). A server that refuses the seconds as `invalid_params` gets
+`{idle: true}` instead, at once and for the rest of that connection. One `idle` request is in flight at a time; a change meanwhile goes
 after the server's `{}`. If the server answers `retry_after`, the client sends
 the tab's state as it is after the delay, not the refused one, and nothing if
 that is what the server already has. After another error, or no answer, it

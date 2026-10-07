@@ -142,7 +142,7 @@ the usual reconnect. `serverSettings` reads extension `ext:settings`
 `guest_posting: false` a guest's snapshot is `readOnly`, and with
 `read_cursors: false` the client moves your read cursor locally without
 sending it.
-`setIdle(idle)` reports attendance, as `PagePresence.idle` decides it (no
+`setIdle(idle, inputAt)` reports attendance, as `PagePresence.idle` decides it (no
 input for `IDLE_AFTER_MS`, hidden on a handheld, or loaded hidden and unused;
 the page's captured `keydown`, `pointerdown`, `pointermove`, `wheel` and
 `touchmove` call `PagePresence.input`), with `status` requests `{idle}` (§4.5,
@@ -150,7 +150,10 @@ capability `status`) through `syncIdle`, which sends nothing until the
 connection is signed in (`handleAuth` calls it after the result; a replacing
 server frame while signed in calls it too). `idleReport` holds what the
 server has for the current connection: each starts attended, so an attended
-start sends nothing, and one on an idle page says so at once. One request is
+start sends nothing, and one on an idle page says so at once. Idle goes as
+the whole seconds since `inputAt` (`PagePresence.inputAt`), or `true` where it
+is unknown or the server refused the seconds (`invalid_params`, after which
+that connection's report says `true`). One request is
 in flight at a time and the latest state follows its `{}`; a `retry_after`
 error waits out the delay and then syncs the current state, and any other
 error or a timeout does the same after a backoff from `IDLE_RETRY_MS`,

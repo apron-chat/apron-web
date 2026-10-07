@@ -72,6 +72,9 @@ describe('PagePresence', () => {
 		it('goes idle after IDLE_AFTER_MS without input, and any input ends it at once', () => {
 			const presence = new PagePresence({ handheld: false });
 			expect(presence.idle).toBe(false);
+			// Loaded in view: attended from then.
+			const loaded = Date.now();
+			expect(presence.inputAt).toBe(loaded);
 			vi.advanceTimersByTime(IDLE_AFTER_MS - 1);
 			expect(presence.idle).toBe(false);
 			// Input restarts the wait.
@@ -80,6 +83,8 @@ describe('PagePresence', () => {
 			expect(presence.idle).toBe(false);
 			vi.advanceTimersByTime(1);
 			expect(presence.idle).toBe(true);
+			// When it was last used, for the idle report's seconds.
+			expect(Date.now() - presence.inputAt!).toBe(IDLE_AFTER_MS);
 			presence.input();
 			expect(presence.idle).toBe(false);
 			presence.dispose();
@@ -136,8 +141,11 @@ describe('PagePresence', () => {
 			setVisibility('hidden');
 			const presence = new PagePresence({ handheld: false });
 			expect(presence.idle).toBe(true);
+			// Never used: how long it has gone unused isn't known.
+			expect(presence.inputAt).toBeUndefined();
 			presence.input(true);
 			expect(presence.idle).toBe(false);
+			expect(presence.inputAt).toBe(Date.now());
 			presence.dispose();
 		});
 	});

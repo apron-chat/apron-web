@@ -180,17 +180,19 @@ export class ChatClient {
 	/** Notices that arrived before there was a room to show them in; the first room shown takes them. */
 	private orphanNotices: Array<{ from: Identity; body?: MessageBody; welcome?: boolean }> = [];
 	private noticeCount = 0;
-	/** Nobody is attending this page (§4.5 `idle`), as the page says (setIdle). */
+	/** Nobody is attending this page (§4.5 `idle`), as the page says (setIdle), and when it was last used, if known. */
 	private idle = false;
+	private idleInputAt: number | undefined;
 	/**
 	 * What the server takes `idle` to be on connection `connection`: each
 	 * starts attended (`applied: false`); undefined once a request went
 	 * unanswered, which the server may or may not have applied. `sending` is
 	 * the `status` request in flight, one at a time; `retry` waits out a
 	 * `retry_after`, or a backoff after another failure (`failures` in a
-	 * row), before the current state goes again.
+	 * row), before the current state goes again. `boolean` once the server
+	 * refused `idle` as seconds: it gets `true` instead.
 	 */
-	private idleReport: { connection: number; applied: boolean | undefined; sending?: boolean; retry?: ReturnType<typeof setTimeout>; failures?: number } | undefined;
+	private idleReport: { connection: number; applied: boolean | undefined; sending?: boolean; retry?: ReturnType<typeof setTimeout>; failures?: number; boolean?: boolean } | undefined;
 	/**
 	 * Your notifications are paused until (§4.5 `mute` without `room_id`), as
 	 * the server's last `status` said: epoch milliseconds, or `true`;
@@ -1431,12 +1433,15 @@ export class ChatClient {
 	/**
 	 * Tells a server with capability `status` whether anyone is attending
 	 * this page (§4.5 `idle`), as the page decides it (PagePresence: no input
-	 * for a while). A connection starts attended, so an attended one sends
-	 * nothing; once signed in, one that starts idle reports `idle: true` at
-	 * once. Kept across connections.
+	 * for a while), and when it was last used (`inputAt`, epoch milliseconds).
+	 * Idle goes as the whole seconds since then, so the server can push what
+	 * came after you left; `true` where that isn't known. A connection starts
+	 * attended, so an attended one sends nothing; once signed in, one that
+	 * starts idle reports it at once. Kept across connections.
 	 */
-	setIdle(idle: boolean): void {
+	setIdle(idle: boolean, inputAt?: number): void {
 		this.idle = idle;
+		this.idleInputAt = inputAt;
 		this.syncIdle();
 	}
 
@@ -1461,8 +1466,10 @@ export class ChatClient {
 		const report = this.idleReport;
 		if (report.sending || report.retry || report.applied === this.idle) return;
 		const idle = this.idle;
+		// Seconds since the page was last used, worked out as it goes (§4.5); `true` where unknown or refused.
+		const seconds = idle && this.idleInputAt !== undefined && !report.boolean ? Math.max(0, Math.floor((Date.now() - this.idleInputAt) / 1000)) : undefined;
 		report.sending = true;
-		this.enqueueRequest('status', { idle }, { visible: false, allowBeforeAuth: false }).promise.then(() => {
+		this.enqueueRequest('status', { idle: seconds ?? idle }, { visible: false, allowBeforeAuth: false }).promise.then(() => {
 			if (this.idleReport !== report) return;
 			report.sending = false;
 			report.applied = idle;
@@ -1472,6 +1479,12 @@ export class ChatClient {
 			if (this.idleReport !== report) return;
 			report.sending = false;
 			const { code, retryAfterMs } = cause as Error & { code?: number; retryAfterMs?: number };
+			// A server that takes `idle` only as a boolean refuses the seconds and applies nothing: say `true` at once.
+			if (code === -32602 && seconds !== undefined) {
+				report.boolean = true;
+				this.syncIdle();
+				return;
+			}
 			if (code === undefined) report.applied = undefined;
 			let wait = retryAfterMs;
 			if (wait === undefined) {

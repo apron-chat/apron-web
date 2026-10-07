@@ -335,6 +335,25 @@ describe('rooms by request (cap rooms)', () => {
 			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
 		});
 
+		it('reports how long the page has gone unused as whole seconds, and true to a server that refuses them', async () => {
+			await greet();
+			client.setIdle(true, Date.now() - 300_500);
+			expect(statuses()).toEqual([{ idle: 300 }]);
+			await answer();
+			client.setIdle(false);
+			await answer();
+			// Worked out when it goes: a refused request's retry says the time since then.
+			client.setIdle(true, Date.now() - 1_000);
+			await answer({ code: -32602, message: 'idle must be a boolean' });
+			expect(statuses()).toEqual([{ idle: 300 }, { idle: false }, { idle: 1 }, { idle: true }]);
+			await answer();
+			// The rest of this connection says only true.
+			client.setIdle(false);
+			await answer();
+			client.setIdle(true, Date.now());
+			expect(statuses().at(-1)).toEqual({ idle: true });
+		});
+
 		it('stays idle after a message: only idle: false ends it', async () => {
 			await greet();
 			client.setIdle(true);
