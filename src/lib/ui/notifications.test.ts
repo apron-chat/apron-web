@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId, type ShowNotificationOptions } from './notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId, type ShowNotificationOptions } from './notifications';
 
 /** A service worker registration's notifications: one per tag, a newer one with a tag replacing the older. */
 function fakeRegistration() {
@@ -101,6 +101,44 @@ describe('showing notifications', () => {
 		stubPermission('granted', () => { throw new TypeError('Illegal constructor'); });
 		vi.stubGlobal('navigator', { serviceWorker: { getRegistration: async () => undefined } });
 		expect(await showNotification('t', {}, () => undefined)).toBe(false);
+	});
+
+	it('closes a room\'s notifications on this device once it is read, up to the message read', async () => {
+		stubPermission('granted', () => undefined);
+		const registration = fakeRegistration();
+		vi.stubGlobal('navigator', { serviceWorker: { getRegistration: async () => registration } });
+		await registration.showNotification('ada · General', messageOptions('100'));
+		await registration.showNotification('ada · General', messageOptions('102'));
+		await registration.showNotification('bo · Ops', messageOptions('101', 'ops'));
+		await registration.showNotification('Apron', { tag: 'apron:test' });
+		await closeReadNotifications({ group: notificationGroup('a1', 'general') }, '101');
+		// A newer message in the room, another room, and anything else stay.
+		expect(registration.list.map((entry) => entry.tag)).toEqual(['apron:a1:102', 'apron:a1:101', 'apron:test']);
+		await closeReadNotifications({ group: notificationGroup('a1', 'general') }, '102');
+		expect(registration.list.map((entry) => entry.tag)).toEqual(['apron:a1:101', 'apron:test']);
+		// Without a push_id, a room's one notification goes by its tag.
+		await registration.showNotification('ada · General', { tag: 'apron:wss://chat.example/:general' });
+		await closeReadNotifications({ tag: 'apron:wss://chat.example/:general' }, '103');
+		expect(registration.list.map((entry) => entry.tag)).toEqual(['apron:a1:101', 'apron:test']);
+	});
+
+	it('closes the page\'s own notification of a read room where there is no service worker', async () => {
+		const closed = vi.fn();
+		const Page = vi.fn(function (this: { tag?: string; data?: unknown; close: () => void; onclose?: () => void }, _title: string, options: ShowNotificationOptions) {
+			this.tag = options.tag;
+			this.data = options.data;
+			this.close = () => { closed(); this.onclose?.(); };
+		});
+		vi.stubGlobal('Notification', Object.assign(Page, { permission: 'granted' }));
+		vi.stubGlobal('isSecureContext', true);
+		expect(await showNotification('ada · General', messageOptions('100'), () => undefined)).toBe(true);
+		expect(await showNotification('ada · General', { tag: 'apron:wss://chat.example/:ops' }, () => undefined)).toBe(true);
+		await closeReadNotifications({ group: notificationGroup('a1', 'general') }, '99');
+		expect(closed).not.toHaveBeenCalled();
+		await closeReadNotifications({ group: notificationGroup('a1', 'general') }, '100');
+		expect(closed).toHaveBeenCalledOnce();
+		await closeReadNotifications({ tag: 'apron:wss://chat.example/:ops' }, '5');
+		expect(closed).toHaveBeenCalledTimes(2);
 	});
 
 	it('reads a click target the service worker posted, and nothing else', () => {

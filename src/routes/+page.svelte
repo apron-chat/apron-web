@@ -52,7 +52,7 @@
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { setAppBadge, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
@@ -232,6 +232,8 @@
 	let latestVisible = $state(true);
 	let seenCount = $state(0);
 	let typingTimer: ReturnType<typeof setTimeout> | undefined;
+	/** The last read whose notifications were closed (account, server, room, message), so each closes once. */
+	let closedThrough: string | undefined;
 	/** Numbers staged files, so each can be taken off its draft. */
 	let stagedCount = 0;
 	/** Where the last scroll event, or automatic scroll to the latest item, left the list. */
@@ -399,11 +401,11 @@
 		untrack(() => openDestination(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined));
 	});
 
-	// Nobody is attending a hidden or unfocused tab (§4.5 `idle`): the server may push instead.
+	// Nobody has used this page for a while (§4.5 `idle`): the server may push instead.
 	// The client keeps it across connections and reports it on each.
 	$effect(() => {
-		const away = presence.away;
-		if (client) untrack(() => client?.setIdle(away));
+		const idle = presence.idle;
+		if (client) untrack(() => client?.setIdle(idle, presence.inputAt));
 	});
 
 	$effect(() => {
@@ -430,7 +432,18 @@
 		const last = messages[messages.length - 1];
 		// Only once this pane's divider is in place: advancing first would hide what was new.
 		if (!client || !room || !last || !latestVisible || !presence.visible || !room.loaded || !session.ready || newDivider.room !== room.id || !newDivider.fixed) return;
-		untrack(() => client?.markRead(room.id, last.message_id));
+		const looking = !presence.away;
+		untrack(() => {
+			client?.markRead(room.id, last.message_id);
+			// What you just read here no longer needs its notifications on this device. Only once
+			// you're looking (focused too): an unfocused window shows its own desktop notification
+			// of what arrives, which must stay until you come back.
+			if (!looking) return;
+			const read = `${accountPushId ?? ''}:${client?.url}:${room.id}:${last.message_id}`;
+			if (read === closedThrough || !client) return;
+			closedThrough = read;
+			void closeReadNotifications(accountPushId ? { group: notificationGroup(accountPushId, room.id) } : { tag: `apron:${client.url}:${room.id}` }, last.message_id);
+		});
 	});
 
 	// Members for the mention picker come with each joined room's listing and stay current by
@@ -630,6 +643,13 @@
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 		};
 		window.addEventListener('storage', storageChanged);
+		// Any input on the page means someone is attending it (§4.5 `idle`). Captured, so a
+		// handler that stops an event's propagation doesn't hide it.
+		const inputOptions = { capture: true, passive: true };
+		const pressed = () => presence.input(true);
+		const moved = () => presence.input();
+		for (const type of ['keydown', 'pointerdown'] as const) window.addEventListener(type, pressed, inputOptions);
+		for (const type of ['pointermove', 'wheel', 'touchmove'] as const) window.addEventListener(type, moved, inputOptions);
 		// Chromium offers to install Apron: kept quiet, for the push setting to offer.
 		const installOffered = (event: Event) => {
 			event.preventDefault();
@@ -664,6 +684,8 @@
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
 			window.removeEventListener('storage', storageChanged);
+			for (const type of ['keydown', 'pointerdown'] as const) window.removeEventListener(type, pressed, inputOptions);
+			for (const type of ['pointermove', 'wheel', 'touchmove'] as const) window.removeEventListener(type, moved, inputOptions);
 			window.removeEventListener('beforeinstallprompt', installOffered);
 			window.removeEventListener('appinstalled', installed);
 			if (typingTimer) clearTimeout(typingTimer);

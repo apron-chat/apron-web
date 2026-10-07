@@ -142,8 +142,9 @@ export function muteEnd(mute: number | boolean | undefined, now = Date.now()): n
 	return typeof mute === 'number' && mute > 0 ? now + mute * 1000 : undefined;
 }
 
-/** How long nobody attends a connection before it reports `idle` (§4.5: about 30 seconds). */
-export const IDLE_AFTER_MS = 30_000;
+/** The first wait before an `idle` request that failed goes again; it doubles with each failure, to IDLE_RETRY_MAX_MS. */
+export const IDLE_RETRY_MS = 5_000;
+export const IDLE_RETRY_MAX_MS = 5 * 60_000;
 /** The longest `setTimeout` delay browsers keep. */
 export const MAX_TIMER_MS = 2 ** 31 - 1;
 export const REQUEST_TIMEOUT_MS = 20_000;

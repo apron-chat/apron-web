@@ -50,19 +50,30 @@ asks, or until their next message arrives in that room.
 With the `status` capability (§4.5), the client tells the server whether
 anyone is attending the tab, so the server can push instead. It sends a
 `status` request (with an `id`) only once signed in, after the `auth`
-result, never before. A connection starts attended, so a focused tab sends
-nothing. One that starts unattended (a hidden or unfocused tab, a tab a push
-notification opened in the background, a reconnect while away) sends
-`{idle: true}` at once, without a wait. After that, the client sends
-`{idle: true}` once the tab has been hidden or unfocused for 30 seconds, and
-`{idle: false}` as soon as it is back. One `idle` request is in flight at a
-time; a change meanwhile goes after the server's `{}`. If the server answers
-`retry_after`, the client sends the tab's state as it is after the delay, not
-the refused one, and nothing if that is what the server already has; another
-error changes nothing, and the next change tries again. A request that
-times out may or may not have applied, so after one the next change sends
-the tab's state even if it is what the server had before. Only
-`{idle: false}` ends idle; a message sent from the tab doesn't. Others never see `idle` itself: while your status is `online`, the
+result, never before. As other chat apps do, the tab is idle after five
+minutes without input in it (a key, a click or tap, a pointer move, a
+scroll), and any input, or coming back to the window or tab, ends it at once.
+Losing focus alone doesn't make it idle, since a window on another monitor is
+still read; it only makes the tab alert for mentions. A tab hidden on a
+phone or tablet, where that is the app going to the background, is idle at
+once. A connection starts attended, so a tab in use sends nothing. One that
+starts idle (a tab loaded hidden and not used since, such as one a push
+notification opened in the background, or a reconnect after five minutes
+without input) reports idle at once. After that, the client reports idle when
+the tab becomes idle and sends `{idle: false}` as soon as it is used again.
+Idle goes as the whole seconds since the tab was last used (`{idle: 300}`
+after five minutes), worked out as the request goes, so the server can push
+mentions that came after you left (a tab loaded hidden and never used sends
+`{idle: true}`). A server that refuses the seconds as `invalid_params` gets
+`{idle: true}` instead, at once and for the rest of that connection. One `idle` request is in flight at a time; a change meanwhile goes
+after the server's `{}`. If the server answers `retry_after`, the client sends
+the tab's state as it is after the delay, not the refused one, and nothing if
+that is what the server already has. After another error, or no answer, it
+does the same after 5 seconds, doubling with each failure in a row up to five
+minutes, so a tab in use is never left idle. A request that times out may or
+may not have applied, so after one the tab's state goes even if it is what
+the server had before. Typing and sending go through the input that ends
+idle; the `activity` and `message` frames themselves don't carry it. Others never see `idle` itself: while your status is `online`, the
 server folds it into the `status` they see (§4.5): `online` while a
 connection is attended, `idle` while you are connected but none is, and
 `offline` with no connections. After a sign-in's result the server sends the
@@ -373,7 +384,14 @@ room's newest notified one doesn't notify, and a new one closes only older
 ones. The same message again replaces its notification quietly (same tag,
 `renotify: false`, silent) while it is showing: a push's with the page's own,
 or an edit that newly mentions you, keeping the pushed one's title. Once
-dismissed (remembered in IndexedDB), it doesn't notify again. Browsers expect each push to
+dismissed (remembered in IndexedDB), it doesn't notify again. Reading a room
+here (its latest message in view, as moves your read cursor, in a window
+that is focused, not only visible) closes that room's notifications on this
+device up to what you read, pushed or the page's own, as chat apps clear
+what you've seen; a window behind another, which notifies of what arrives,
+leaves its notifications until you come back to it. Notifications on your other
+devices stay: web push can't close them without showing something, which
+browsers require of every push. Browsers expect each push to
 show a notification, and WebKit revokes subscriptions whose pushes don't, so
 every push but a badge push shows one: a push with nothing new, one for an
 account push isn't on for here, or one that can't be read shows again, as it
