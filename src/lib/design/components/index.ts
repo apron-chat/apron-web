@@ -18,6 +18,7 @@ export { default as Composer } from './Composer.svelte';
 export { default as Attachments } from './Attachments.svelte';
 export { default as RoomItem } from './RoomItem.svelte';
 export { default as StatusBanner } from './StatusBanner.svelte';
+export { default as ActionBanner } from './ActionBanner.svelte';
 export { default as MessageActions } from './MessageActions.svelte';
 export { default as JumpBar } from './JumpBar.svelte';
 export { default as RoomHeader } from './RoomHeader.svelte';

@@ -236,6 +236,15 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-status-ok { background: var(--ok); }
 .ap-status-warn { background: var(--warn); }
 .ap-status-danger { background: var(--danger); }
+/* ActionBanner — a floating notice that offers one thing to do (a new version: Reload), on the accent */
+.ap-banner { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
+.ap-banner-icon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-full); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.ap-banner-text { flex: 1; min-width: 0; display: grid; }
+.ap-banner-title { font-weight: 600; }
+.ap-banner-detail { font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); }
+.ap-banner-actions { flex: none; display: flex; gap: var(--space-1); }
+.ap-banner .ap-btn-ghost { color: var(--ink-muted); }
+.ap-banner .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
 
 /* MessageActions — floating toolbar on message hover/focus */
 .ap-actions { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); box-shadow: var(--shadow-float); }

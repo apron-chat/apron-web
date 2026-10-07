@@ -36,6 +36,11 @@ with jitter. An explicit server retry window takes precedence, including a
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.
+When a newer version of the client is deployed (SvelteKit's version poll, or a
+lazily loaded file the deploy removed), a notice at the top offers **Reload**
+or **Later**; it never reloads by itself. Drafts live only in memory, so while
+any room or thread has unsent text or files it adds that reloading clears your
+unsent message.
 With the `activity` capability, typing is reported as `activity` notifications that ask
 for a 15-second indicator (`typing: 15`) and refresh it at most once every 12
 seconds per room, with one `typing: 0` when typing pauses, to avoid charging a
