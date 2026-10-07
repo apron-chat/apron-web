@@ -7,7 +7,7 @@
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
-	import { sidebarRooms, type ThreadEntry } from '$lib/ui/timeline';
+	import { sidebarRooms, threadPreview, type ThreadEntry } from '$lib/ui/timeline';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import CreateRoomDialog from './CreateRoomDialog.svelte';
 	import ProfileBar from './ProfileBar.svelte';
@@ -138,8 +138,12 @@
 								{#each threads as entry (entry.id)}
 									{@const open = activeThread === entry.id}
 									{@const replies = open ? 0 : (unread[entry.id] ?? 0)}
+									{@const preview = threadPreview(entry)}
 									<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
-										<span class="ap-room-text"><span class="ap-room-name">{entry.title}{#if entry.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span></span>
+										<span class="ap-room-text">
+											<span class="ap-room-name">{entry.title}{#if entry.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
+											{#if preview}<span class="ap-room-topic" data-testid="thread-list-preview">{preview.label ? `${preview.label}: ` : ''}{preview.text.replace(/\s+/g, ' ')}</span>{/if}
+										</span>
 										{#if mentions[entry.id] && !open}
 											{@const count = mentions[entry.id]}
 											<span class="ap-count ap-count-at" data-testid="thread-mentions" aria-label={`${count} ${count === 1 ? 'mention' : 'mentions'}`}>@{count > 1 ? count : ''}</span>
