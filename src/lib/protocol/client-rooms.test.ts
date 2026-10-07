@@ -692,7 +692,8 @@ describe('rooms by request (cap rooms)', () => {
 			// A lost connection keeps them until the next sign-in.
 			expect([snapshot.mutedUntil, snapshot.users.bo.status]).toEqual([true, 'idle']);
 			await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada', status: 'online' } });
-			expect([snapshot.mutedUntil, snapshot.users.bo.status, snapshot.users.cy.status]).toEqual([undefined, undefined, undefined]);
+			// The mutes go at once; resuming as Ada, the others' statuses still show until her rooms are listed.
+			expect([snapshot.mutedUntil, snapshot.users.bo.status, snapshot.users.cy.status]).toEqual([undefined, 'idle', 'dnd']);
 			expect(snapshot.users.bo.name).toBe('Bo');
 			// The room the sign-in joined, others' statuses and the mutes, among other frames.
 			socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'general', title: 'General', members: [{ user_id: 'ada' }, { user_id: 'bo' }] }], memberships: [{ log_id: '91', room_id: 'general', members: [{ user: { user_id: 'ada', name: 'Ada' }, joined: true }] }] } });
@@ -702,8 +703,10 @@ describe('rooms by request (cap rooms)', () => {
 			socket.receive({ method: 'status', params: { room_id: 'general', mute: true } });
 			expect(snapshot.rooms.find((room) => room.id === 'general')?.mutedUntil).toBe(true);
 			expect(snapshot.mutedUntil).toBe(Date.now() + 600_000);
-			expect([snapshot.users.bo.status, snapshot.users.cy.status, snapshot.you?.status]).toEqual(['online', undefined, 'online']);
+			expect([snapshot.users.bo.status, snapshot.users.cy.status, snapshot.you?.status]).toEqual(['online', 'dnd', 'online']);
 			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
+			// Listed: Cy's status wasn't sent again, so it is no longer known.
+			expect([snapshot.users.bo.status, snapshot.users.cy.status]).toEqual(['online', undefined]);
 			expect(snapshot.rooms.find((room) => room.id === 'general')?.mutedUntil).toBe(true);
 			expect(snapshot.mutedUntil).toBe(Date.now() + 600_000);
 		});

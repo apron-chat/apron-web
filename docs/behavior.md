@@ -224,11 +224,17 @@ hollow ring others see, its tooltip "Invisible · others see you as offline"),
 or no dot for none. Others' view of you (`offline` while you are invisible,
 `idle`) arrives in `new` user objects and room `members`, and never replaces
 your own. Pausing notifications doesn't change your status: a pause is
-private. A lost connection keeps the others' statuses, but each sign-in
-drops them, however short the reconnect, so they show no dot until the
-server sends them again: after the sign-in's result for each connected user
-who shares a room, and in the room `members` and `users` of `room_list` and
-`room_update`, which carry `offline` and `""` too (a ring, and no dot). A
+private. A lost connection keeps the others' statuses, and each sign-in
+drops them, however short the reconnect; the server sends them again after
+the sign-in's result for each connected user who shares a room, and in the
+room `members` and `users` of `room_list` and `room_update`, which carry
+`offline` and `""` too (a ring, and no dot). Signing in again as the same user
+after a lost connection (a resume), the ones from before still show until the
+joined `room_list` arrives, each replaced as a fresh one comes, so the member
+list doesn't grey out and reorder meanwhile. Then any the server didn't send
+again show no dot, except an `offline` or `""`, which stays: the server sends
+every other status, so its silence means one of those. A sign-in as someone
+else drops them at once. A
 sign-in is an `auth` as a user the connection isn't already signed in as: a
 repeat `auth` as the same user, or adding a passkey or an email address,
 keeps them.

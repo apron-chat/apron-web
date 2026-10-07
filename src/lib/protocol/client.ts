@@ -251,6 +251,13 @@ export class ChatClient {
 	private joinedComplete = false;
 	/** The identity whose joined rooms are kept from the last connection. */
 	private keptUserId?: string;
+	/** Who was signed in on the connection that was lost: signing in as them again is a resume. */
+	private resumingUserId?: string;
+	/**
+	 * Others' statuses from before a resume's sign-in (§4.5), still shown until its joined listing
+	 * arrives, so a reconnect doesn't grey everyone out and reorder the member list in the meantime.
+	 */
+	private heldStatuses?: Map<string, string>;
 	private directory?: RoomListing[];
 	private readonly threadDirectory = new Map<string, RoomListing[]>();
 	/**
@@ -627,7 +634,7 @@ export class ChatClient {
 					createdAt
 				})),
 			typing: [...this.typing.values()].map(({ room, from }) => ({ room, from })),
-			users: Object.fromEntries(this.users),
+			users: this.usersWithHeldStatuses(),
 			recordedUsers: Object.fromEntries([...this.recordedUsers].map(([id, entry]) => [id, entry.identity])),
 			userAliases: Object.fromEntries(this.userAliases),
 			uploads: Object.fromEntries(this.uploads),
@@ -1837,10 +1844,12 @@ export class ChatClient {
 			}
 			this.applyRoomList(result, true);
 			this.joinedComplete = true;
+			this.settleHeldStatuses();
 			this.emit();
 		}, (cause: Error) => {
 			if (socket !== this.socket || this.joinedListing !== listing) return;
 			this.joinedListing = undefined;
+			this.settleHeldStatuses();
 			// Behind a failed `auth` the listing likely failed too; that failure speaks for itself.
 			if (this.authenticated) this.error = `Unable to list your rooms: ${cause.message}`;
 			this.emit();
@@ -2510,7 +2519,8 @@ export class ChatClient {
 		// as they arrive like any other (§4.5).
 		if (signIn) this.resetMutes();
 		this.setYou(cloneJson(identity as Identity), true);
-		if (signIn) this.dropKeptStatuses();
+		if (signIn) this.dropKeptStatuses(identity.user_id === this.resumingUserId);
+		this.resumingUserId = undefined;
 		if (signedIn && added && this.registeredSession) {
 			// Added to the account (§4.10, §4.11): another way back in, not how this session signed in,
 			// and never a reason to drop its token. A session kept before sign-in methods were
@@ -2728,12 +2738,45 @@ export class ChatClient {
 	 * shares a room, and as `room_list` and `room_update` carry it. Your own
 	 * comes from this `auth`'s `you`.
 	 */
-	private dropKeptStatuses(): void {
+	/**
+	 * At a sign-in, the kept statuses go (§4.5). Resuming as the same user (`hold`), they still show until
+	 * the joined listing arrives (`settleHeldStatuses`), with the fresh ones in place as they come.
+	 */
+	private dropKeptStatuses(hold = false): void {
+		const held = new Map<string, string>();
 		for (const [userId, user] of this.users) {
 			if (userId === this.you?.user_id || !Object.hasOwn(user, 'status')) continue;
-			const { status: _dropped, ...rest } = user;
+			const { status, ...rest } = user;
+			if (typeof status === 'string') held.set(userId, status);
 			this.users.set(userId, rest);
 		}
+		this.heldStatuses = hold && held.size ? held : undefined;
+	}
+
+	/**
+	 * The resume's joined listing has arrived, or won't: the held statuses stop showing. A user the
+	 * server said nothing of since the sign-in keeps an `offline` or `""` it had, which is what that
+	 * silence means (§4.5: the server sends every other status); any other goes, unknown.
+	 */
+	private settleHeldStatuses(): void {
+		const held = this.heldStatuses;
+		if (!held) return;
+		this.heldStatuses = undefined;
+		for (const [userId, status] of held) {
+			const user = this.users.get(userId);
+			if (user && !Object.hasOwn(user, 'status') && (status === 'offline' || status === '')) this.users.set(userId, { ...user, status });
+		}
+	}
+
+	/** The kept users, with a held status for each one that has none of its own yet. */
+	private usersWithHeldStatuses(): Record<string, Identity> {
+		const users = Object.fromEntries(this.users);
+		if (!this.heldStatuses) return users;
+		for (const [userId, status] of this.heldStatuses) {
+			const user = users[userId];
+			if (user && !Object.hasOwn(user, 'status')) users[userId] = { ...user, status };
+		}
+		return users;
 	}
 
 	/**
@@ -3341,6 +3384,9 @@ export class ChatClient {
 		this.rooms.clear();
 		// The kept joined rooms stand for this identity's whole set only if its listing arrived.
 		this.keptUserId = this.joinedComplete ? this.you?.user_id : undefined;
+		this.resumingUserId = this.you?.user_id ?? this.resumingUserId;
+		// Lost again before the resume's listing: what was held is still the last word, to hold again.
+		for (const [userId, user] of Object.entries(this.heldStatuses ? this.usersWithHeldStatuses() : {})) this.users.set(userId, user);
 		this.forgetConnectionState();
 	}
 
@@ -3378,6 +3424,7 @@ export class ChatClient {
 		this.defaultPosts.clear();
 		this.joinedComplete = false;
 		this.keptUserId = undefined;
+		this.resumingUserId = undefined;
 		this.resetMutes();
 		this.forgetConnectionState();
 	}
@@ -3400,6 +3447,7 @@ export class ChatClient {
 		this.directory = undefined;
 		this.threadDirectory.clear();
 		this.clearIdleRetry();
+		this.heldStatuses = undefined;
 		this.pushError = undefined;
 		this.memberChangesUnsupported = false;
 	}
