@@ -168,9 +168,8 @@ On wide screens the rooms list is a column beside the conversation: drag its
 right border to resize it, and click the border, or the panel button in the
 window's top-left corner, to collapse or expand it. The button stays in that
 corner, over the list's header while it is open and over the room's once it
-is shut, so the same spot opens and shuts it, with or without a room open. The column slides open
-and shut while its contents fade, with no motion when the system asks for
-reduced motion, and its width and whether it is collapsed are remembered. On
+is shut, so the same spot opens and shuts it, with or without a room open. Its width and whether
+it is collapsed are remembered. On
 phones it is a pane of its own instead, which the title bar's back button
 returns to.
 
@@ -192,8 +191,20 @@ gets no controls until its next `server` frame. A count kept from a truncated li
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
 drag its left border, or click the border to collapse it (the corner button
 brings it back, and takes focus when the border collapsed it from the keyboard), and its width and whether it is collapsed are remembered.
-Dragging either list shut restores its earlier width when it reopens. On
-narrow screens it overlays the conversation, starts closed, is toggled by a
+Dragging either list shut restores its earlier width when it reopens.
+
+Both lists open and shut the same way, in 240ms: the column slides, its
+contents keep their width against the edge facing the conversation (so they
+ride the moving border rather than squeeze), and fade; below 960px the member
+list's overlay slides in from the right edge instead. Each frame moves the
+grid's columns only, nothing else's style; the timeline takes its final width
+when the slide starts and keeps it until the slide ends, so its messages are
+laid out once rather than re-wrapped on every frame (it stays at the latest
+message if it was there), while the conversation sits on a compositor layer of
+its own. The layout kept from the last visit shows without sliding in, a drag
+follows the pointer with no slide, and there is no motion at all when the
+system asks for reduced motion. On
+narrow screens the member list overlays the conversation, starts closed, is toggled by a
 button near the end of the room title bar instead, and hides with
 the conversation on the phone's rooms pane. It shows no
 typing or connection status. Where the server sends a `status` (§4.5), each

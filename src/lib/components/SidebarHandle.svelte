@@ -6,7 +6,7 @@
 	 * border, which sits in the main pane's column so a collapsed sidebar (0px)
 	 * still leaves a border to grab, or the member list's left border, inside
 	 * the list so it never covers the conversation's scrollbar (and so, once
-	 * collapsed, the list reopens from the room header instead).
+	 * collapsed, the list reopens from its corner toggle instead).
 	 */
 	interface Props {
 		layout: SidebarLayout;
@@ -38,15 +38,25 @@
 ></button>
 
 <style>
-	/* Placed by --sidebar-w, so the border slides with the rooms list as it opens and shuts, and rests at the window's edge once collapsed. */
+	/*
+	 * Placed by its panel's column (--sidebar-w, --member-list-track), moving on the panels' slide (--slide-time,
+	 * once the page allows slides), so the border goes with the list as it opens and shuts.
+	 */
 	.handle { position: absolute; top: 0; bottom: 0; left: max(0px, calc(var(--sidebar-w) - 4px)); width: 9px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; z-index: 4; cursor: col-resize; touch-action: none; }
 	.handle::after { content: ''; position: absolute; top: 0; bottom: 0; left: min(4px, var(--sidebar-w)); width: 1px; background: var(--line); }
 	.handle:hover::after, .handle:focus-visible::after, .resizing::after { left: 3px; width: 3px; background: var(--denim); }
 	.handle:focus-visible { outline: none; }
 	.collapsed { cursor: e-resize; }
-	.right { left: auto; right: calc(var(--member-list-w) - 9px); }
+	:global(.slides) .handle { transition: left var(--slide-time) var(--slide-ease), right var(--slide-time) var(--slide-ease); }
+	:global(.slides) .resizing { transition: none; }
+	.right { left: auto; right: calc(var(--member-list-track, var(--member-list-w)) - 9px); }
 	.right::after, .right:hover::after, .right:focus-visible::after, .right.resizing::after { left: 0; }
-	.right.collapsed { right: 0; }
+	/* The member list's, shut: out of reach until it's open again (from its corner toggle). */
+	.right.collapsed { visibility: hidden; }
+	:global(.slides) .right.collapsed { transition: left var(--slide-time) var(--slide-ease), right var(--slide-time) var(--slide-ease), visibility 0s var(--slide-time); }
+	@media (prefers-reduced-motion: reduce) {
+		:global(.slides) .handle { transition: none; }
+	}
 	@media (max-width: 719px) {
 		.handle { display: none; }
 	}
