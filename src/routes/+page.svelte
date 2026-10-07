@@ -112,10 +112,9 @@
 		};
 	});
 	const reveal = new ProgressiveReveal(REVEAL_CHUNK_ITEMS, () => messageScroll, keepPlace);
+	/** Notifications on this device (one setting with push, below): this page's own, while it's open. */
 	let notificationsEnabled = $state(false);
 	let notificationState = $state<NotificationPermissionState>(notificationPermission());
-	/** On, and still allowed: the browser's permission can be revoked or reset behind the setting. */
-	let notificationsActive = $derived(notificationsEnabled && notificationState === 'granted');
 	/** The server the client is on (`client.url`), kept as page state. */
 	let serverUrl = $state('');
 	/** Push per account (§4.9), and this browser's one subscription between them. */
@@ -128,6 +127,13 @@
 	/** The server's VAPID key, offered to a signed-in account. */
 	let webPushServerKey = $derived(pushAccount ? webPushKey(session.server) : undefined);
 	let webPushActive = $derived(pushSettings.isOn(pushAccount) && notificationState === 'granted');
+	/**
+	 * Notifications on this device, one setting: the page's own while Apron is open, and push
+	 * for this account while it's closed. On if either is, so a choice made with the two
+	 * switches before carries over; and only while still allowed, since the browser's
+	 * permission can be revoked or reset behind the setting.
+	 */
+	let notificationsActive = $derived((notificationsEnabled || webPushActive) && notificationState === 'granted');
 	/**
 	 * Push is on for this account, but the subscription is another account's, on
 	 * a server with another key, that still has push on: that server's host. It
@@ -863,17 +869,25 @@
 		directory.forget();
 	}
 
+	/**
+	 * The one Notifications switch. On asks for permission from this tap, then turns on the
+	 * page's notifications and, wherever push works here, push for this account, so Apron
+	 * alerts this device whether it is open or closed. Off turns both off.
+	 */
 	async function toggleNotifications(): Promise<void> {
 		if (notificationsActive) {
 			notificationsEnabled = false;
 			saveNotificationsEnabled(false);
+			const chat = client;
+			const account = pushAccount;
+			if (chat && account && webPushActive) await pushSettings.turnOff(chat, account);
 			return;
 		}
 		notificationState = await requestNotificationPermission();
-		if (notificationState === 'granted') {
-			notificationsEnabled = true;
-			saveNotificationsEnabled(true);
-		}
+		if (notificationState !== 'granted') return;
+		notificationsEnabled = true;
+		saveNotificationsEnabled(true);
+		if (webPushAvailable) await pushHere();
 	}
 
 	/** Permission changes in the browser's site settings, outside the page. */
@@ -997,12 +1011,13 @@
 	}
 
 	/**
-	 * Push is opt-in per account. Turning it on asks for notification
-	 * permission first, from this tap, and takes the browser's subscription
-	 * over from another server holding it. Turning it off unregisters this
-	 * device (see `PushSettings.turnOff`).
+	 * Push for this account (§4.9), so this device is alerted while Apron is closed: with
+	 * the Notifications switch, or its action while notifications are on but push isn't
+	 * here yet (another account turned them on, or a sign-in since). Asks for permission
+	 * first if need be, from this tap, and takes the browser's one subscription over
+	 * from another server holding it. Off goes with the switch (`PushSettings.turnOff`).
 	 */
-	async function toggleWebPush(): Promise<void> {
+	async function pushHere(): Promise<void> {
 		const chat = client;
 		const account = pushAccount;
 		const key = webPushServerKey;
@@ -1012,12 +1027,12 @@
 			if (key) await pushSettings.enable(chat, key, userId, webPushWake);
 			return;
 		}
-		if (webPushActive) {
-			await pushSettings.turnOff(chat, account);
-			return;
-		}
+		if (webPushActive) return;
 		if (notificationState !== 'granted') notificationState = await requestNotificationPermission();
-		if (notificationState === 'granted') await pushSettings.turnOn(chat, userId, key, webPushWake, session.ready);
+		if (notificationState !== 'granted') return;
+		notificationsEnabled = true;
+		saveNotificationsEnabled(true);
+		await pushSettings.turnOn(chat, userId, key, webPushWake, session.ready);
 	}
 
 	/**
@@ -1788,7 +1803,7 @@
 	<Sidebar
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
-		webPush={webPushServerKey ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError ? { error: webPushError } : {}) } : undefined} onwebpush={toggleWebPush} oninstallapp={installApp}
+		webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={signedOut}

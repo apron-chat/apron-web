@@ -18,16 +18,18 @@
 
 	interface Props {
 		open?: boolean;
+		/** Notifications on this device: the one switch, for while Apron is open and, by push, while it's closed. */
 		notificationsEnabled: boolean;
 		notificationsSupported: boolean;
 		notificationPermission: NotificationPermissionState;
-		/** What to notify about (`NOTIFY_SCOPES`), for desktop notifications and push alike. */
+		/** What to notify about (`NOTIFY_SCOPES`), open or closed alike. */
 		notifyScopes: string[];
 		onnotifications: () => void;
 		onnotifyscopes: (scopes: string[]) => void;
 		ontestnotifications: () => Promise<NotificationTestResult>;
-		/** Push notifications (§4.9), when the server offers web push. */
+		/** Push (§4.9), when the server offers web push: how far notifications reach while Apron is closed. */
 		webPush?: WebPushPreference;
+		/** While notifications are on, turns on push here too, or moves it here from another server. */
 		onwebpush: () => void;
 		/** Pausing notifications (§4.5 `mute`), on a server with capability `status`: `until` while paused. */
 		pause?: { until?: PausedUntil };
@@ -60,15 +62,26 @@
 	let testNotificationStatus = $state<'idle' | 'sending' | NotificationTestResult>('idle');
 
 	type Note = { text: string; tone?: 'ok' | 'err' };
-	/** What Desktop notifications says under its switch, which the switch refers to. */
-	let desktopNote = $derived.by((): Note => {
+	/**
+	 * What the Notifications switch says under it, which the switch refers to: whether it
+	 * is on, and how far it reaches, only while Apron is open or while it's closed too
+	 * (push, §4.9), with why not. `action` turns push on here when it could be.
+	 */
+	let notificationsNote = $derived.by((): Note & { action?: string } => {
 		if (notificationPermission === 'denied') return { text: 'Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.', tone: 'err' };
 		if (!notificationsSupported) return { text: 'Notifications aren’t available here. Use a supported browser over HTTPS or localhost.' };
-		if (notificationsEnabled) return { text: 'On · your selected message types can alert while Apron is inactive.', tone: 'ok' };
-		if (notificationPermission === 'granted') return { text: 'Permission is allowed, but notifications are off.' };
-		return { text: 'Turning this on will ask your browser for permission.' };
+		if (!notificationsEnabled) return { text: notificationPermission === 'granted' ? 'Off.' : 'Turning this on will ask your browser for permission.' };
+		const open = 'On · alerts while Apron is open.';
+		if (!webPush) return { text: `${open} This server doesn’t alert when it’s closed.`, tone: 'ok' };
+		if (webPush.signIn) return { text: `${open} Sign in to be alerted when it’s closed, too.`, tone: 'ok' };
+		if (webPush.error) return { text: webPush.error, tone: 'err' };
+		if (!webPush.supported) return { text: webPush.homeScreen ? `${open} To be alerted when it’s closed, add Apron to your Home Screen.` : `${open} This browser can’t alert when it’s closed.`, tone: 'ok' };
+		if (webPush.heldBy) return { text: `${open} When it’s closed, this browser alerts for one server at a time: now ${webPush.heldBy}.`, tone: 'ok', action: 'Alert for this server instead' };
+		if (webPush.enabled && pushesNothing) return { text: `${open} This server sends none of your choices above when it’s closed.`, tone: 'ok' };
+		if (webPush.enabled) return { text: 'On · alerts on this device, even when Apron is closed.', tone: 'ok' };
+		return { text: `${open} Not yet when it’s closed.`, tone: 'ok', action: 'Alert when it’s closed, too' };
 	});
-	let desktopLocked = $derived(!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied'));
+	let notificationsLocked = $derived(!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied'));
 	/** What the test notification did. */
 	let testNote = $derived.by((): Note | undefined => {
 		if (testNotificationStatus === 'sent') return { text: 'Test notification sent. Check your system notification area.', tone: 'ok' };
@@ -77,19 +90,6 @@
 		if (testNotificationStatus === 'error') return { text: 'The browser couldn’t display the test notification.', tone: 'err' };
 		return undefined;
 	});
-	/** What Push notifications says under its switch, which the switch refers to. */
-	let pushNote = $derived.by((): Note | undefined => {
-		if (!webPush) return undefined;
-		if (!webPush.supported) return webPush.homeScreen ? undefined : { text: 'Push notifications aren’t available in this browser.' };
-		if (notificationPermission === 'denied') return { text: 'Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.', tone: 'err' };
-		if (webPush.error) return { text: webPush.error, tone: 'err' };
-		if (webPush.heldBy) return { text: `Push is on for another server in this browser (${webPush.heldBy}). Turn it on to move it here.` };
-		if (webPush.enabled && pushesNothing) return { text: 'On, but this server pushes none of your choices above: push won’t send anything.' };
-		if (webPush.enabled) return { text: 'On · this server can notify this device.', tone: 'ok' };
-		if (notificationPermission !== 'granted') return { text: 'Turning this on will ask your browser for permission.' };
-		return undefined;
-	});
-	let pushLocked = $derived(Boolean(webPush && !webPush.enabled && (!webPush.supported || notificationPermission === 'denied')));
 	let pauseNote = $derived(pause?.until !== undefined ? `Notifications paused ${pausedUntilLabel(pause.until)}.` : pause ? 'Notifications resumed.' : undefined);
 
 	/**
@@ -102,7 +102,7 @@
 	let statusAnswer = $state<string | undefined>();
 	let announced: Record<string, string | undefined> | undefined;
 	$effect(() => {
-		const now: Record<string, string | undefined> = { desktop: desktopNote.text, test: testNote?.text, push: pushNote?.text, pause: pauseNote, status: statusAnswer };
+		const now: Record<string, string | undefined> = { notifications: notificationsNote.text, test: testNote?.text, pause: pauseNote, status: statusAnswer };
 		const before = announced;
 		announced = now;
 		if (!before) return;
@@ -214,47 +214,38 @@
 						min={1}
 						onchange={onnotifyscopes}
 					/>
-					<p class="ap-pref-help">For desktop and push notifications alike. At least one stays on; the switches below turn notifications off.</p>
+					<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch below turns notifications off.</p>
 				</div>
-				<div class="ap-pref-setting ap-pref-desktop">
+				<div class="ap-pref-setting ap-pref-notifications">
 					<div>
-						<strong>Desktop notifications</strong>
-						<p class="ap-profedit-hint">Alerts while Apron is open but hidden or unfocused.</p>
-						<p class={['ap-pref-note', desktopNote.tone === 'ok' && 'ap-profedit-ok', desktopNote.tone === 'err' && 'ap-profedit-err']} id="ap-pref-desktop-note">{desktopNote.text}</p>
+						<strong>Notifications</strong>
+						<p class="ap-profedit-hint">Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can.</p>
+						<p class={['ap-pref-note', notificationsNote.tone === 'ok' && 'ap-profedit-ok', notificationsNote.tone === 'err' && 'ap-profedit-err']} id="ap-pref-notifications-note">{notificationsNote.text}</p>
 						<p class="ap-pref-test">
+							{#if notificationsNote.action}<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" onclick={onwebpush}>{notificationsNote.action}</button>{/if}
 							<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={testNotificationStatus === 'sending' || !notificationsSupported || notificationPermission === 'denied'} onclick={sendTestNotification}>{testNotificationStatus === 'sending' ? 'Sending…' : 'Send a test notification'}</button>
 						</p>
 						{#if testNote}<p class={['ap-pref-note', testNote.tone === 'ok' && 'ap-profedit-ok', testNote.tone === 'err' && 'ap-profedit-err']}>{testNote.text}</p>{/if}
 					</div>
-					<Switch checked={notificationsEnabled} label="Desktop notifications" locked={desktopLocked} describedby="ap-pref-desktop-note" onchange={onnotifications} />
+					<Switch checked={notificationsEnabled} label="Notifications" locked={notificationsLocked} describedby="ap-pref-notifications-note" onchange={onnotifications} />
 				</div>
-				{#if webPush}
-					<div class="ap-pref-setting ap-pref-push">
-						<div>
-							<strong>Push notifications</strong>
-							<p class="ap-profedit-hint">Alerts on this device even when Apron is closed.</p>
-							{#if pushNote}<p class={['ap-pref-note', pushNote.tone === 'ok' && 'ap-profedit-ok', pushNote.tone === 'err' && 'ap-profedit-err']} id="ap-pref-push-note">{pushNote.text}</p>{/if}
-						</div>
-						<Switch checked={webPush.enabled} label="Push notifications" locked={pushLocked} describedby={pushNote ? 'ap-pref-push-note' : undefined} onchange={onwebpush} />
+				{#if webPush?.homeScreen}
+					<div class="ap-pref-push-more">
+						<Callout title="Add Apron to your Home Screen to be alerted when it’s closed">
+							<ol>
+								<li>Tap Share in Safari.</li>
+								<li>Choose Add to Home Screen.</li>
+								<li>Open Apron from your Home Screen and turn notifications on there.</li>
+							</ol>
+						</Callout>
 					</div>
-					{#if webPush.homeScreen}
-						<div class="ap-pref-push-more">
-							<Callout title="Add Apron to your Home Screen for push notifications">
-								<ol>
-									<li>Tap Share in Safari.</li>
-									<li>Choose Add to Home Screen.</li>
-									<li>Open Apron from your Home Screen and turn this on there.</li>
-								</ol>
-							</Callout>
-						</div>
-					{:else if webPush.installable}
-						<div class="ap-pref-push-more">
-							<Callout title="Install Apron as an app">
-								<p>It opens in its own window, with its notifications.</p>
-								{#snippet action()}<Button size="sm" variant="primary" label="Install app" onclick={oninstallapp} />{/snippet}
-							</Callout>
-						</div>
-					{/if}
+				{:else if webPush?.installable}
+					<div class="ap-pref-push-more">
+						<Callout title="Install Apron as an app">
+							<p>It opens in its own window, with its notifications.</p>
+							{#snippet action()}<Button size="sm" variant="primary" label="Install app" onclick={oninstallapp} />{/snippet}
+						</Callout>
+					</div>
 				{/if}
 			</section>
 		{:else}
@@ -326,9 +317,8 @@
 	.ap-pref-theme-setting select { flex: none; }
 	.ap-pref-font-setting { display: block; }
 	.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
-	.ap-pref-desktop + .ap-pref-push { border-top: 0; }
-	.ap-pref-setting .ap-pref-test { margin: var(--space-2) 0 0 calc(-1 * var(--space-3)); }
-	.ap-pref-push { border-bottom: 0; }
+	.ap-pref-setting .ap-pref-test { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-2) 0 0 calc(-1 * var(--space-3)); }
+	.ap-pref-notifications:has(+ .ap-pref-push-more) { border-bottom: 0; }
 	.ap-pref-push-more { max-width: 460px; padding-bottom: var(--space-4); }
 	.ap-pref-scopes { max-width: 460px; padding: var(--space-4) 0; }
 	.ap-pref-note { margin: var(--space-3) 0; color: var(--ink-muted); font-size: var(--text-ui); line-height: 19px; }
