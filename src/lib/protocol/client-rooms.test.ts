@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatClient, DEFAULT_ROOM_ID, IDLE_AFTER_MS, type ClientSnapshot } from './client';
+import { ChatClient, DEFAULT_ROOM_ID, IDLE_RETRY_MS, type ClientSnapshot } from './client';
 import { FakeSocket, settle } from './fake-socket';
 import { REQUEST_TIMEOUT_MS } from './client-internals';
 
@@ -302,10 +302,10 @@ describe('rooms by request (cap rooms)', () => {
 			client.setIdle(true);
 			socket.open();
 			socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['status'] } });
-			// Not signed in yet (§3.2): no status, even for a tab already away.
+			// Not signed in yet (§3.2): no status, even for a page already idle.
 			expect(socket.sent.map((frame) => frame.method)).toEqual(['auth']);
 			await socket.reply('auth', { you: { user_id: 'guest_1' } });
-			// After the result, an unattended start reports idle at once.
+			// After the result, an idle page reports it at once.
 			const request = socket.request('status');
 			expect(request).toEqual({ method: 'status', id: expect.any(String), params: { idle: true } });
 			expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'status']);
@@ -313,42 +313,35 @@ describe('rooms by request (cap rooms)', () => {
 
 		it('sends nothing for a connection that starts attended', async () => {
 			await greet();
-			vi.advanceTimersByTime(IDLE_AFTER_MS * 2);
+			client.setIdle(false);
+			vi.advanceTimersByTime(60_000);
 			expect(statuses()).toEqual([]);
 			// A replacing server frame says nothing either.
 			socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 			expect(statuses()).toEqual([]);
 		});
 
-		it('reports becoming idle only after the wait, and becoming attended at once', async () => {
+		it('reports idle and attended as the page says, at once, and only changes', async () => {
 			await greet();
 			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS - 1);
-			expect(statuses()).toEqual([]);
-			// Back before the wait is over: nothing to say.
-			client.setIdle(false);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
-			expect(statuses()).toEqual([]);
-			client.setIdle(true);
-			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
 			expect(statuses()).toEqual([{ idle: true }]);
 			await answer();
+			client.setIdle(true);
+			expect(statuses()).toEqual([{ idle: true }]);
 			client.setIdle(false);
 			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
 			await answer();
+			client.setIdle(false);
 			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
 		});
 
 		it('stays idle after a message: only idle: false ends it', async () => {
 			await greet();
 			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
 			await answer();
 			client.sendTyping('general', true);
 			client.markRead('general', '1724803200001');
 			client.send('general', 'hi').promise.catch(() => undefined);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
 			expect(statuses()).toEqual([{ idle: true }]);
 			client.setIdle(false);
 			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
@@ -356,11 +349,10 @@ describe('rooms by request (cap rooms)', () => {
 			expect(socket.sent.filter((frame) => frame.method === 'activity' && 'idle' in (frame.params as object))).toEqual([]);
 		});
 
-		it('reports idle at once on a reconnect while unattended, without the wait, and not while attended', async () => {
+		it('reports idle at once on a reconnect while idle, and nothing while attended', async () => {
 			await greet();
 			client.setIdle(true);
-			vi.advanceTimersByTime(1000);
-			expect(statuses()).toEqual([]);
+			await answer();
 			reconnect();
 			await greet();
 			expect(statuses()).toEqual([{ idle: true }]);
@@ -371,36 +363,26 @@ describe('rooms by request (cap rooms)', () => {
 			reconnect();
 			await greet();
 			expect(statuses()).toEqual([]);
-			// Idle after the wait, then a reconnect: idle again at once.
-			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
-			expect(statuses()).toEqual([{ idle: true }]);
-			reconnect();
-			await greet();
-			expect(statuses()).toEqual([{ idle: true }]);
 		});
 
 		it('sends one idle at a time, and the latest state after the reply', async () => {
 			await greet();
 			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
-			// Back and away again while the first is unanswered: nothing more goes yet.
+			// Back and idle again while the first is unanswered: nothing more goes yet.
 			client.setIdle(false);
 			expect(statuses()).toEqual([{ idle: true }]);
 			await answer();
 			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
 			client.setIdle(true);
+			client.setIdle(false);
 			await answer();
-			// The wait runs again before idle goes.
+			// What the server has is what the page says: nothing more goes.
 			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }, { idle: true }]);
 		});
 
 		it('resends the current idle state, not the refused one, after retry_after', async () => {
 			await greet();
 			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
 			// Back meanwhile: the refused idle: true is not what goes again.
 			client.setIdle(false);
 			await answer(tooMany(5));
@@ -410,9 +392,8 @@ describe('rooms by request (cap rooms)', () => {
 			// Nothing changed on the server (§4.5), and the page is attended, as the connection started: nothing to send.
 			vi.advanceTimersByTime(1);
 			expect(statuses()).toEqual([{ idle: true }]);
-			// Refused again while still away: after the delay, the same state goes with a new id.
+			// Refused again while still idle: after the delay, the same state goes with a new id.
 			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
 			const first = socket.request('status').id;
 			await answer(tooMany(2));
 			vi.advanceTimersByTime(2_000);
@@ -428,30 +409,48 @@ describe('rooms by request (cap rooms)', () => {
 			await answer();
 		});
 
-		it('doesn\'t resend idle after another error, until the state changes', async () => {
+		it('tries again after another error, backing off, so a page in use is not left idle', async () => {
 			await greet();
 			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
-			await answer({ code: -32602, message: 'Invalid params' });
-			vi.advanceTimersByTime(60_000);
-			expect(statuses()).toEqual([{ idle: true }]);
-			// Back: the server still takes the connection as attended, so nothing goes.
+			await answer();
 			client.setIdle(false);
-			expect(statuses()).toEqual([{ idle: true }]);
+			await answer({ code: -32603, message: 'Internal error' });
+			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			vi.advanceTimersByTime(IDLE_RETRY_MS - 1);
+			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			vi.advanceTimersByTime(1);
+			expect(statuses()).toEqual([{ idle: true }, { idle: false }, { idle: false }]);
+			// Failing again doubles the wait.
+			await answer({ code: -32603, message: 'Internal error' });
+			vi.advanceTimersByTime(IDLE_RETRY_MS * 2 - 1);
+			expect(statuses()).toHaveLength(3);
+			vi.advanceTimersByTime(1);
+			expect(statuses()).toEqual([{ idle: true }, { idle: false }, { idle: false }, { idle: false }]);
+			await answer();
+			// Applied: nothing more goes, and the next failure starts from the first wait.
+			vi.advanceTimersByTime(60_000);
+			expect(statuses()).toHaveLength(4);
 			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
-			expect(statuses()).toEqual([{ idle: true }, { idle: true }]);
+			await answer({ code: -32603, message: 'Internal error' });
+			vi.advanceTimersByTime(IDLE_RETRY_MS);
+			expect(statuses()).toEqual([{ idle: true }, { idle: false }, { idle: false }, { idle: false }, { idle: true }, { idle: true }]);
+			// Back meanwhile: the current state is what goes.
+			client.setIdle(false);
+			await answer({ code: -32603, message: 'Internal error' });
+			vi.advanceTimersByTime(IDLE_RETRY_MS * 2);
+			expect(statuses()).toEqual([{ idle: true }, { idle: false }, { idle: false }, { idle: false }, { idle: true }, { idle: true }]);
 		});
 
 		it('sends the current idle state after a request that timed out, which the server may have applied', async () => {
 			await greet();
 			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
 			expect(statuses()).toEqual([{ idle: true }]);
-			// No answer: the server may take the connection as idle, or not.
-			await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
-			// Back: attended goes, though the connection started attended.
+			// No answer: the server may take the connection as idle, or not. Back meanwhile.
 			client.setIdle(false);
+			await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+			expect(statuses()).toEqual([{ idle: true }]);
+			// After the backoff, attended goes, though the connection started attended.
+			vi.advanceTimersByTime(IDLE_RETRY_MS);
 			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
 			await answer();
 			// Answered: the server has it, and nothing more goes.
@@ -500,7 +499,6 @@ describe('rooms by request (cap rooms)', () => {
 			socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['activity'], push: { webpush: { key: 'BNcR' } } } });
 			await socket.reply('auth', { you: { user_id: 'guest_1' } });
 			client.setIdle(true);
-			vi.advanceTimersByTime(IDLE_AFTER_MS);
 			client.setMute(true);
 			expect(statuses()).toEqual([]);
 			// A replacing server frame with the capability hears the current state.

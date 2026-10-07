@@ -392,11 +392,11 @@
 		untrack(() => openDestination(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined));
 	});
 
-	// Nobody is attending a hidden or unfocused tab (§4.5 `idle`): the server may push instead.
+	// Nobody has used this page for a while (§4.5 `idle`): the server may push instead.
 	// The client keeps it across connections and reports it on each.
 	$effect(() => {
-		const away = presence.away;
-		if (client) untrack(() => client?.setIdle(away));
+		const idle = presence.idle;
+		if (client) untrack(() => client?.setIdle(idle));
 	});
 
 	$effect(() => {
@@ -623,6 +623,13 @@
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 		};
 		window.addEventListener('storage', storageChanged);
+		// Any input on the page means someone is attending it (§4.5 `idle`). Captured, so a
+		// handler that stops an event's propagation doesn't hide it.
+		const inputOptions = { capture: true, passive: true };
+		const pressed = () => presence.input(true);
+		const moved = () => presence.input();
+		for (const type of ['keydown', 'pointerdown'] as const) window.addEventListener(type, pressed, inputOptions);
+		for (const type of ['pointermove', 'wheel', 'touchmove'] as const) window.addEventListener(type, moved, inputOptions);
 		// Chromium offers to install Apron: kept quiet, for the push setting to offer.
 		const installOffered = (event: Event) => {
 			event.preventDefault();
@@ -657,6 +664,8 @@
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
 			window.removeEventListener('storage', storageChanged);
+			for (const type of ['keydown', 'pointerdown'] as const) window.removeEventListener(type, pressed, inputOptions);
+			for (const type of ['pointermove', 'wheel', 'touchmove'] as const) window.removeEventListener(type, moved, inputOptions);
 			window.removeEventListener('beforeinstallprompt', installOffered);
 			window.removeEventListener('appinstalled', installed);
 			if (typingTimer) clearTimeout(typingTimer);

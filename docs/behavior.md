@@ -45,19 +45,26 @@ asks, or until their next message arrives in that room.
 With the `status` capability (§4.5), the client tells the server whether
 anyone is attending the tab, so the server can push instead. It sends a
 `status` request (with an `id`) only once signed in, after the `auth`
-result, never before. A connection starts attended, so a focused tab sends
-nothing. One that starts unattended (a hidden or unfocused tab, a tab a push
-notification opened in the background, a reconnect while away) sends
-`{idle: true}` at once, without a wait. After that, the client sends
-`{idle: true}` once the tab has been hidden or unfocused for 30 seconds, and
-`{idle: false}` as soon as it is back. One `idle` request is in flight at a
-time; a change meanwhile goes after the server's `{}`. If the server answers
-`retry_after`, the client sends the tab's state as it is after the delay, not
-the refused one, and nothing if that is what the server already has; another
-error changes nothing, and the next change tries again. A request that
-times out may or may not have applied, so after one the next change sends
-the tab's state even if it is what the server had before. Only
-`{idle: false}` ends idle; a message sent from the tab doesn't. Others never see `idle` itself: while your status is `online`, the
+result, never before. As other chat apps do, the tab is idle after five
+minutes without input in it (a key, a click or tap, a pointer move, a
+scroll), and any input, or coming back to the window or tab, ends it at once.
+Losing focus alone doesn't make it idle, since a window on another monitor is
+still read; it only makes the tab alert for mentions. A tab hidden on a
+phone or tablet, where that is the app going to the background, is idle at
+once. A connection starts attended, so a tab in use sends nothing. One that
+starts idle (a tab loaded hidden and not used since, such as one a push
+notification opened in the background, or a reconnect after five minutes
+without input) sends `{idle: true}` at once. After that, the client sends
+`{idle: true}` when the tab becomes idle and `{idle: false}` as soon as it is
+used again. One `idle` request is in flight at a time; a change meanwhile goes
+after the server's `{}`. If the server answers `retry_after`, the client sends
+the tab's state as it is after the delay, not the refused one, and nothing if
+that is what the server already has. After another error, or no answer, it
+does the same after 5 seconds, doubling with each failure in a row up to five
+minutes, so a tab in use is never left idle. A request that times out may or
+may not have applied, so after one the tab's state goes even if it is what
+the server had before. Typing and sending go through the input that ends
+idle; the `activity` and `message` frames themselves don't carry it. Others never see `idle` itself: while your status is `online`, the
 server folds it into the `status` they see (§4.5): `online` while a
 connection is attended, `idle` while you are connected but none is, and
 `offline` with no connections. After a sign-in's result the server sends the

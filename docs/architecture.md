@@ -142,16 +142,19 @@ the usual reconnect. `serverSettings` reads extension `ext:settings`
 `guest_posting: false` a guest's snapshot is `readOnly`, and with
 `read_cursors: false` the client moves your read cursor locally without
 sending it.
-`setIdle(away)` reports attendance with `status` requests `{idle}` (§4.5,
+`setIdle(idle)` reports attendance, as `PagePresence.idle` decides it (no
+input for `IDLE_AFTER_MS`, hidden on a handheld, or loaded hidden and unused;
+the page's captured `keydown`, `pointerdown`, `pointermove`, `wheel` and
+`touchmove` call `PagePresence.input`), with `status` requests `{idle}` (§4.5,
 capability `status`) through `syncIdle`, which sends nothing until the
 connection is signed in (`handleAuth` calls it after the result; a replacing
 server frame while signed in calls it too). `idleReport` holds what the
 server has for the current connection: each starts attended, so an attended
-start sends nothing, and one that starts away is idle at once, without
-`IDLE_AFTER_MS`. Later, idle goes only after `IDLE_AFTER_MS`, attended at
-once. One request is in flight at a time and the latest state follows its
-`{}`; a `retry_after` error waits out the delay and then syncs the current
-state, any other error waits for the next change. `setStatus(status)` sends
+start sends nothing, and one on an idle page says so at once. One request is
+in flight at a time and the latest state follows its `{}`; a `retry_after`
+error waits out the delay and then syncs the current state, and any other
+error or a timeout does the same after a backoff from `IDLE_RETRY_MS`,
+doubling to `IDLE_RETRY_MAX_MS`. `setStatus(status)` sends
 `me` `{status}` and resolves with the `you` the server kept, whose `status`
 is the one in effect. `setMute(mute)` sends a `status` request `{mute}` and
 returns a promise that resolves on `{}` and rejects with the server's error

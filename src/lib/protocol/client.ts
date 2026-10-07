@@ -57,7 +57,8 @@ import {
 } from './client-types';
 import {
 	FIRST_LOG_ID,
-	IDLE_AFTER_MS,
+	IDLE_RETRY_MAX_MS,
+	IDLE_RETRY_MS,
 	MAX_TIMER_MS,
 	isMuteValue,
 	muteEnd,
@@ -112,7 +113,7 @@ import { capabilitiesOf, serverSettings } from './client-views';
 
 export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
-export { IDLE_AFTER_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
+export { IDLE_RETRY_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
 export {
 	canEdit,
 	canManageRooms,
@@ -179,22 +180,17 @@ export class ChatClient {
 	/** Notices that arrived before there was a room to show them in; the first room shown takes them. */
 	private orphanNotices: Array<{ from: Identity; body?: MessageBody; welcome?: boolean }> = [];
 	private noticeCount = 0;
-	/**
-	 * Nobody is attending this connection (§4.5 `idle`): `away` as the page
-	 * says, `idle` once that has lasted `IDLE_AFTER_MS` (`idleTimer` runs
-	 * meanwhile), or at once on a connection that starts away.
-	 */
-	private away = false;
+	/** Nobody is attending this page (§4.5 `idle`), as the page says (setIdle). */
 	private idle = false;
-	private idleTimer: ReturnType<typeof setTimeout> | undefined;
 	/**
 	 * What the server takes `idle` to be on connection `connection`: each
 	 * starts attended (`applied: false`); undefined once a request went
 	 * unanswered, which the server may or may not have applied. `sending` is
 	 * the `status` request in flight, one at a time; `retry` waits out a
-	 * `retry_after` before the current state goes again.
+	 * `retry_after`, or a backoff after another failure (`failures` in a
+	 * row), before the current state goes again.
 	 */
-	private idleReport: { connection: number; applied: boolean | undefined; sending?: boolean; retry?: ReturnType<typeof setTimeout> } | undefined;
+	private idleReport: { connection: number; applied: boolean | undefined; sending?: boolean; retry?: ReturnType<typeof setTimeout>; failures?: number } | undefined;
 	/**
 	 * Your notifications are paused until (§4.5 `mute` without `room_id`), as
 	 * the server's last `status` said: epoch milliseconds, or `true`;
@@ -466,7 +462,6 @@ export class ChatClient {
 		this.reconnectTimer = undefined;
 		this.stopWaitingForPresence();
 		this.clearStableTimer();
-		this.clearIdleTimer();
 		this.clearIdleRetry();
 		if (this.muteTimer) clearTimeout(this.muteTimer);
 		this.muteTimer = undefined;
@@ -1434,33 +1429,15 @@ export class ChatClient {
 	}
 
 	/**
-	 * Tells a server with capability `status` whether anyone is attending this
-	 * connection (§4.5 `idle`), as the tab is hidden or unfocused (`away`) or
-	 * back. A connection starts attended, so an attended one sends nothing.
-	 * Once signed in, one that starts away reports `idle: true` at once;
-	 * after that, becoming idle goes once it has lasted `IDLE_AFTER_MS`, and
-	 * becoming attended at once. Only `idle: false` ends it: sending a
-	 * message doesn't.
+	 * Tells a server with capability `status` whether anyone is attending
+	 * this page (§4.5 `idle`), as the page decides it (PagePresence: no input
+	 * for a while). A connection starts attended, so an attended one sends
+	 * nothing; once signed in, one that starts idle reports `idle: true` at
+	 * once. Kept across connections.
 	 */
-	setIdle(away: boolean): void {
-		this.away = away;
-		if (away) {
-			if (this.idle || this.idleTimer) return;
-			this.idleTimer = setTimeout(() => {
-				this.idleTimer = undefined;
-				this.idle = true;
-				this.syncIdle();
-			}, IDLE_AFTER_MS);
-			return;
-		}
-		this.clearIdleTimer();
-		this.idle = false;
+	setIdle(idle: boolean): void {
+		this.idle = idle;
 		this.syncIdle();
-	}
-
-	private clearIdleTimer(): void {
-		if (this.idleTimer) clearTimeout(this.idleTimer);
-		this.idleTimer = undefined;
 	}
 
 	/**
@@ -1468,21 +1445,18 @@ export class ChatClient {
 	 * page's, as a `status` request (§4.5), never before sign-in. One goes at
 	 * a time, so they apply in order (§1); a change meanwhile goes after the
 	 * reply. On `retry_after` the current state, not the refused one, goes
-	 * after the delay; another error changes nothing, and the next change
-	 * tries again. A request with no answer (timed out) may have been
-	 * applied or not, so the next sync sends the current state whatever it is.
+	 * after the delay; after another error or no answer, after a backoff from
+	 * IDLE_RETRY_MS, so a page that is back and stays in use is not left
+	 * idle. A request with no answer (timed out) may have been applied or
+	 * not, so the next sync sends the current state whatever it is.
 	 */
 	private syncIdle(): void {
 		if (!this.authenticated || !this.hasCap('status') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 		const connection = this.connectionId;
 		if (this.idleReport?.connection !== connection) {
 			this.clearIdleRetry();
-			// A connection starts attended (§4.5); one that starts away is idle at once, without the wait.
+			// A connection starts attended (§4.5): one on an idle page says so at once.
 			this.idleReport = { connection, applied: false };
-			if (this.away && !this.idle) {
-				this.clearIdleTimer();
-				this.idle = true;
-			}
 		}
 		const report = this.idleReport;
 		if (report.sending || report.retry || report.applied === this.idle) return;
@@ -1492,13 +1466,18 @@ export class ChatClient {
 			if (this.idleReport !== report) return;
 			report.sending = false;
 			report.applied = idle;
+			report.failures = 0;
 			this.syncIdle();
 		}, (cause: unknown) => {
 			if (this.idleReport !== report) return;
 			report.sending = false;
-			const { code, retryAfterMs: wait } = cause as Error & { code?: number; retryAfterMs?: number };
+			const { code, retryAfterMs } = cause as Error & { code?: number; retryAfterMs?: number };
 			if (code === undefined) report.applied = undefined;
-			if (wait === undefined) return;
+			let wait = retryAfterMs;
+			if (wait === undefined) {
+				const failures = report.failures = (report.failures ?? 0) + 1;
+				wait = Math.min(IDLE_RETRY_MS * 2 ** (failures - 1), IDLE_RETRY_MAX_MS);
+			}
 			report.retry = setTimeout(() => {
 				report.retry = undefined;
 				if (this.idleReport === report) this.syncIdle();
