@@ -19,6 +19,7 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import SidebarHandle from '$lib/components/SidebarHandle.svelte';
 	import MemberListSidebar from '$lib/components/MemberListSidebar.svelte';
+	import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
 	import StatusBanner from '$lib/components/StatusBanner.svelte';
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
@@ -40,7 +41,7 @@
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
 	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadLostPrivacy, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
@@ -54,7 +55,7 @@
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, offersNotifications, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
@@ -114,6 +115,10 @@
 	const reveal = new ProgressiveReveal(REVEAL_CHUNK_ITEMS, () => messageScroll, keepPlace);
 	/** Notifications on this device (one setting with push, below): this page's own, while it's open. */
 	let notificationsEnabled = $state(false);
+	/** Notifications were turned on or off on this device, or the first-mention offer answered: it isn't made again. */
+	let notificationsChoiceMade = $state(true);
+	/** The first-mention offer to turn notifications on (NotifyPrompt), while it waits for an answer. */
+	let notifyOffer = $state<{ from: string; room: string } | undefined>();
 	let notificationState = $state<NotificationPermissionState>(notificationPermission());
 	/** The server the client is on (`client.url`), kept as page state. */
 	let serverUrl = $state('');
@@ -383,6 +388,13 @@
 		// A mention in a room you muted (§4.5) doesn't alert the tab either.
 		const audible = arrivedMentions.filter((event) => !inMutedRoom(event, session.rooms)).length;
 		if (audible) untrack(() => (audibleMentions += audible));
+		// The first mention you'd hear offers notifications, until they're chosen on this device.
+		const offered = audible > 0 && untrack(() => !notifyOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced }));
+		if (offered) {
+			const first = arrivedMentions.find((event) => !inMutedRoom(event, session.rooms));
+			const room = first && session.rooms.find((candidate) => candidate.id === first.room_id);
+			if (first) untrack(() => (notifyOffer = { from: senderName(first), room: room?.title ?? first.room_id }));
+		}
 		if (!notificationsActive || !presence.away || silenced) return;
 		const mentioned = new Set(arrivedMentions.map((event) => event.message_id));
 		// The checked scopes, judged here; an edit that adds you counts as a mention.
@@ -695,6 +707,7 @@
 		displayName = previewMode ? 'Preview User' : loadDisplayName();
 		recentServers = previewMode ? [] : loadRecentServers();
 		notificationsEnabled = loadNotificationsEnabled();
+		notificationsChoiceMade = notificationsChosen();
 		notificationState = notificationPermission();
 		if (!previewMode) pushSettings.load();
 		webPushAvailable = webPushSupported();
@@ -875,6 +888,9 @@
 	 * alerts this device whether it is open or closed. Off turns both off.
 	 */
 	async function toggleNotifications(): Promise<void> {
+		// Using the switch is the choice the first-mention offer asks for.
+		notificationsChoiceMade = true;
+		notifyOffer = undefined;
 		if (notificationsActive) {
 			notificationsEnabled = false;
 			saveNotificationsEnabled(false);
@@ -888,6 +904,19 @@
 		notificationsEnabled = true;
 		saveNotificationsEnabled(true);
 		if (webPushAvailable) await pushHere();
+	}
+
+	/** The first-mention offer's Turn on: the Notifications switch's, from the same tap. Refused, it stays off, and isn't offered again. */
+	async function acceptNotifyOffer(): Promise<void> {
+		await toggleNotifications();
+		if (!notificationsActive) saveNotificationsEnabled(false);
+	}
+
+	/** The first-mention offer's Not now: off, chosen, and not offered again. */
+	function declineNotifyOffer(): void {
+		notificationsChoiceMade = true;
+		notifyOffer = undefined;
+		saveNotificationsEnabled(false);
 	}
 
 	/** Permission changes in the browser's site settings, outside the page. */
@@ -1809,6 +1838,10 @@
 		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={signedOut}
 	/>
 	<SidebarHandle layout={sidebar} />
+	<!-- The first-mention offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->
+	<div class="notify-anchored" aria-live="polite">
+		{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} pointer onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />{/if}
+	</div>
 
 	<main class="ap-shell-main" aria-label="Conversation" use:fileDrop={{ enabled: canAttach, onfiles: stageFiles, onactive: (active) => (dropping = active) }}>
 		{#if dropping}
@@ -1942,6 +1975,9 @@
 				<JumpBar count={unseenCount} mentions={mentions.unseen.length} onjump={jumpToLatest} onjumpmention={jumpToMention} />
 			{/if}
 
+			<div class="notify-inline" aria-live="polite">
+				{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />{/if}
+			</div>
 			<div class="ap-typing typing-row" aria-live="polite">
 				{#if typingNames.length > 0}
 					<TypingDots />
@@ -2043,6 +2079,19 @@
 	.empty p { margin: 0; }
 	.empty .ap-btn { margin-top: var(--space-2); }
 	.typing-row { min-height: 20px; padding-top: var(--space-1); }
+	/*
+	 * The first-mention offer. Over the rooms list's foot, pointing at the Preferences gear (32px, its center 25px in
+	 * from the list's right edge): its left edge 8px in, or further right on a list wider than it, to reach the gear.
+	 */
+	.notify-anchored { --notify-left: max(var(--space-2), calc(var(--sidebar-w) - 300px - var(--space-2))); position: absolute; z-index: 7; left: var(--notify-left); bottom: calc(var(--header-h) + 10px); width: 300px; max-width: calc(100vw - var(--space-4)); display: none; }
+	.notify-anchored :global(.ap-nudge) { --ap-nudge-tip: calc(var(--sidebar-w) - 30px - var(--notify-left)); }
+	.notify-inline { padding: 0 var(--space-4); }
+	.notify-inline:not(:empty) { padding-top: var(--space-2); }
+	.notify-inline :global(.ap-nudge) { width: auto; }
+	@media (min-width: 720px) {
+		.app:not(.side-collapsed) .notify-anchored { display: block; }
+		.app:not(.side-collapsed) .notify-inline { display: none; }
+	}
 	/* A zero-height sticky row, so the pill floats over the timeline without taking space. */
 	.day-float { position: sticky; top: var(--space-2); z-index: 2; height: 0; display: flex; justify-content: center; pointer-events: none; }
 	.day-float span { padding: 3px var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); box-shadow: var(--shadow-float); color: var(--ink); font-size: var(--text-sm); line-height: 16px; font-weight: 500; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity .2s, transform .2s; }

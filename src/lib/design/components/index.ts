@@ -21,6 +21,7 @@ export { default as Attachments } from './Attachments.svelte';
 export { default as RoomItem } from './RoomItem.svelte';
 export { default as StatusBanner } from './StatusBanner.svelte';
 export { default as ActionBanner } from './ActionBanner.svelte';
+export { default as Nudge } from './Nudge.svelte';
 export { default as MessageActions } from './MessageActions.svelte';
 export { default as JumpBar } from './JumpBar.svelte';
 export { default as RoomHeader } from './RoomHeader.svelte';
