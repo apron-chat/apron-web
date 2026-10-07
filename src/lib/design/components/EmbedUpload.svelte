@@ -2,9 +2,9 @@
 	/* upload (§4.8.4, writes §4.8.3): pending while url is absent; og.video / og.audio / og.image preview; else a file card */
 	import FileGlyph from './FileGlyph.svelte';
 	import type { EmbedProps } from './types';
-	import { ogRatio, safeHttp } from './util';
+	import { ogRatio, plainClick, safeHttp } from './util';
 
-	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, caption }: EmbedProps = $props();
+	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, caption, onview }: EmbedProps = $props();
 	const url = $derived(safeHttp(rawUrl));
 	const title = $derived(rawTitle || og.title || 'File');
 	const pct = $derived(progress != null ? Math.round(progress * 100) : null);
@@ -35,7 +35,7 @@
 	</div>
 {:else if image}
 	<figure class="ap-embed ap-embed-figure">
-		<a href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener"><img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} /></a>
+		<a href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener" aria-haspopup={onview ? 'dialog' : undefined} onclick={(event) => { if (onview && plainClick(event)) { event.preventDefault(); onview(event); } }}><img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} /></a>
 		{#if caption !== false}<figcaption class="ap-embed-caption">{title}</figcaption>{/if}
 	</figure>
 {:else}

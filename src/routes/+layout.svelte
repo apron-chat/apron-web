@@ -5,6 +5,7 @@
 	import '$lib/design/apron.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import EmojiPopover from '$lib/components/EmojiPopover.svelte';
+	import MediaViewerHost from '$lib/components/MediaViewerHost.svelte';
 	import UpdateNotice from '$lib/components/UpdateNotice.svelte';
 
 	let { children } = $props();
@@ -19,4 +20,6 @@
 {@render children()}
 <!-- The one full emoji picker, outside the shell so nothing in it clips the popover. -->
 <EmojiPopover />
+<!-- The one image viewer, full screen over everything. -->
+<MediaViewerHost />
 <UpdateNotice />

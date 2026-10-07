@@ -287,7 +287,7 @@
 				<div class="ap-msg-embeds">
 					{#each embeds as embed, index (embed.embed_id ?? index)}
 						<div class="embed-slot">
-							<Embed {embed} upload={embed.embed_id ? uploads[embed.embed_id] : undefined} />
+							<Embed {embed} upload={embed.embed_id ? uploads[embed.embed_id] : undefined} detail={time ? `${name} · ${time}` : name} />
 							{#if canRemoveEmbeds && !writing(embed)}
 								<EmbedRemove label="Remove embed" onremove={() => onremoveembed(embed)} />
 							{/if}

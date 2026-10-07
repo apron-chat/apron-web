@@ -553,7 +553,13 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   then writes each file to the `write_url` in the result. A failed send gives
   the draft back with its files. The message shows a pending
   card with progress until the server publishes the finished file: an image, a
-  video or audio player from its `og`, or else a file card.
+  video or audio player from its `og`, or else a file card. A plain click (or
+  Enter) on an image opens it full screen in the image viewer: its name, who
+  sent it and when, **Open original** (the file, in a new tab) and **Close**,
+  with ← and → (and the arrow buttons) paging through every image in the open
+  room or thread, oldest first. Escape, Close, or a click beside the image
+  closes it, with focus back on the image last shown. A Cmd, Ctrl, Shift, Alt
+  or middle click keeps the link's own behavior: the file in a new tab or window.
 - **Streams** (capability `embed:stream`): while the embed has a `url` the client reads
   it with a streaming `GET` and shows the text growing under a Live badge;
   when a snapshot carries `text` instead it shows the kept text as Finished.

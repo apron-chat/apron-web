@@ -35,6 +35,13 @@
 	--presence-unknown: var(--ink-muted);
 	--shadow-popover: 0 8px 24px rgba(4, 4, 10, 0.6);
 	--shadow-float: 0 2px 8px rgba(4, 4, 10, 0.55);
+	/* The same in both themes. A modal's backdrop; and the media viewer, dark like a photo viewer whatever the theme. */
+	--scrim: rgba(5, 5, 12, 0.68);
+	--viewer-ground: rgba(8, 8, 14, 0.96);
+	--viewer-ink: #ece9e4;
+	--viewer-ink-muted: #a8a6b2;
+	--viewer-control: rgba(236, 233, 228, 0.1);
+	--viewer-control-hover: rgba(236, 233, 228, 0.18);
 
 	/* Type: system faces only; Apron ships no font files. A font chosen in
 	   Preferences goes in front of the system stack (appearance.svelte.ts). */
