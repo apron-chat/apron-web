@@ -276,6 +276,27 @@ describe('rooms by request (cap rooms)', () => {
 		expect(room('20')?.loaded).toBe(true);
 	});
 
+	it('counts a thread joined with nothing new since its last load as loaded, without asking again', async () => {
+		await authenticate(['rooms', 'history']);
+		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10', members: [{ user_id: 'guest_1' }] }], users: [] });
+		await socket.reply('history', { more: false, latest_log_id: '12', history_log_id: '10' });
+		const threads = client.listRooms('general');
+		await socket.reply('room_list', { not_joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Deploy', latest_log_id: '24', history_log_id: '20' }] });
+		await threads;
+		expect(client.viewRoom('20')).toBe(true);
+		const load = client.loadRoom('20');
+		await socket.reply('history', { messages: [{ message_id: '21', log_id: '21', room_id: '20', from: { user_id: 'bob' }, body: { text: 'first' } }], first_log_id: '21', last_log_id: '24', more: false, latest_log_id: '24', history_log_id: '20' });
+		await load;
+		// A join whose record says the head hasn't moved (no membership logged): there is nothing to catch up on.
+		quiet(client.joinRoom('20'));
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Deploy', latest_log_id: '24', history_log_id: '20', members: [{ user_id: 'bob' }, { user_id: 'guest_1' }] }], users: [] } });
+		const historyRequests = () => socket.sent.filter((frame) => frame.method === 'history').length;
+		const before = historyRequests();
+		await client.loadRoom('20');
+		expect(historyRequests()).toBe(before);
+		expect(room('20')).toMatchObject({ joined: true, loaded: true, loading: false });
+	});
+
 	describe('status', () => {
 		const statuses = () => socket.sent.filter((frame) => frame.method === 'status').map((frame) => frame.params as Record<string, unknown>);
 		async function greet(caps: string[] = ['rooms', 'status'], you: Record<string, unknown> = { user_id: 'guest_1', name: 'Guest' }, auth = ['guest']): Promise<void> {

@@ -541,7 +541,22 @@ without a `room_id` until a message names it, plus any room a message arrives
 in, titled by its `room_id`.
 
 Threads are rooms with a `parent_room_id`. The sidebar lists top-level rooms
-and the open room's joined threads under it; the room feed shows each thread as
+and, under the open room, its threads in two groups. First the ones you've joined,
+on a guide line from the room:
+each title in ink, heavier with unread replies, over a lighter line of preview,
+with a door on hover that leaves it. Then **Other threads · N**, a heading
+that folds like Browse rooms (it stays as you left it, on this device): the
+threads you haven't joined, titles only, since they deliver nothing live
+([PROTOCOL.md §3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#34-rooms))
+and so have no counts or previews. It shows the three most recently active (the
+server's `room_list` order) and the rest on **N more…**; picking one reads it
+without joining (it stays in this list, picked out, with its Join showing, also
+while the list is folded or past the first three), and **Join** on the row (on hover, or always on touch) joins it
+and opens it once its `room_update` arrives. Leaving is how a thread is put
+away: it stops counting unread and alerting, moves down to Other threads, and
+does so on every device, since it's a membership; its card stays in the room.
+The protocol lets a client hide threads, so nothing here is a server limit.
+The room feed shows each thread as
 a card where it was started that previews its description as text (or, without
 one, its latest loaded message), including threads you haven't joined, which `room_list` with the
 room's `parent_room_id` finds whenever the room is opened or its threads are
@@ -549,7 +564,13 @@ listed; that listing is also what refreshes their cards, since they deliver
 nothing live. Opening one of those reads it through `history` without joining
 it: its header offers **Join**, which makes it live and lists it under the room,
 and replying joins it first.
-With the `rooms` capability, the **+** beside Rooms in the sidebar creates a room
+With the `rooms` capability, a **+** on the open room's row starts a thread in it
+without a message to start from: **New thread in General** asks for a name and
+an optional CommonMark **Summary** (`room_set` with `parent_room_id`, `title`
+and `description`), and the thread opens once its `room_update` arrives. There
+is no Private choice, since a thread takes its room's; a thread of a private
+room that comes back without `private: true` gets the error described below.
+The **+** beside Rooms in the sidebar creates a room
 from a name and an optional CommonMark description (`room_set` with `title` and
 `description`); it opens once its `room_update` arrives, and the dialog stays
 open, with the server's error, if creating fails. **Private** asks for
@@ -591,14 +612,14 @@ Back leaves the page from the first room opened. A room left since stays put
 for that step, and a thread left since is read without joining.
 
 With the `rooms` capability the header's ⋯ menu also offers **Leave**, which leaves the room or
-the thread; a thread is a room of its own, so leaving its parent keeps it. A
+the thread after asking; a thread's door in the sidebar leaves it without
+asking, since Join brings it back from the same list. A thread is a room of its
+own, so leaving its parent keeps it. A
 server that keeps you in a room answers `denied`, and its message shows as
 the error.
 **Browse rooms** in the sidebar lists, via `room_list` with
-`filter: "not_joined"`, the most active visible rooms you haven't joined, and
-**More threads…** under the
-open room lists its threads you haven't joined; picking one joins it and opens
-it once its `room_update` arrives.
+`filter: "not_joined"`, the most active visible rooms you haven't joined;
+picking one joins it and opens it once its `room_update` arrives.
 
 With the `edit` capability, several messages move at a time: shift-click a
 message (or press `x` on it, long-press it on touch, or pick **Select** from its
@@ -832,8 +853,9 @@ A server may keep guests read-only, and says so with `guest_posting: false`
 in its settings (below). Signed in as a guest there, the composer gives
 way to a bar saying so with a **Sign in** button (it opens the sign-in panel
 on Passkey). Replying, reacting, starting threads, editing rooms and threads,
-adding or removing members, and Join and Leave are hidden; Browse rooms and More threads… offer **Open** instead of
-**Join**, which reads the room through its history without joining it. Other
+adding or removing members, and Join and Leave are hidden; Browse rooms offers **Open** instead of
+**Join**, which reads the room through its history without joining it, and Other threads
+offers no Join, since picking one already reads it. Other
 servers' denials show as errors as usual.
 
 The client understands `ext:settings`, an extension that the Cloudflare demo

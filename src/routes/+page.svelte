@@ -1518,9 +1518,20 @@
 	function leavePane(): void {
 		if (!client || !paneRoom) return;
 		const leaving = paneRoom;
-		if (!confirm(`Leave ${leaving.title}? You can join it again from Browse rooms.`)) return;
+		const again = leaving.parentRoomId !== undefined ? 'from Other threads under its room' : 'from Browse rooms';
+		if (!confirm(`Leave ${leaving.title}? You can join it again ${again}.`)) return;
 		if (activeThread && activeRoom) backToRoom();
 		feedback.track(client.leaveRoom(leaving.id), 'Leaving…');
+	}
+
+	/**
+	 * Leaves a thread from its row in the sidebar, without asking: it only moves down to Other threads, where
+	 * Join brings it back. Its card stays in the room.
+	 */
+	function leaveThread(thread: string): void {
+		if (!client) return;
+		if (activeThread === thread && activeRoom) backToRoom();
+		feedback.track(client.leaveRoom(thread), 'Leaving…');
 	}
 
 	/** Joins the thread open without joining (capability `rooms`): from then on it delivers live. */
@@ -1926,7 +1937,7 @@
 		webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
-		onroom={chooseRoom} onthread={chooseThread} onjoin={joinRoom} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={signedOut}
+		onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={signedOut}
 	/>
 	<SidebarHandle layout={sidebar} />
 	<!-- The first-mention offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->

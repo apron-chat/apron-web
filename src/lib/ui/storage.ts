@@ -17,6 +17,8 @@ const KEY = {
 	/** Each account's `push_id` (§4.9), by `webPushAccount`: random, made here. */
 	pushIds: 'apron.pushIds',
 	memberList: 'apron.memberList',
+	/** Whether Other threads, the threads you haven't joined under the open room, is folded away. */
+	otherThreads: 'apron.otherThreads',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
 } as const;
@@ -117,6 +119,15 @@ export function loadMemberListPrefs(): Partial<SidebarPrefs> {
 
 export function saveMemberListPrefs(prefs: SidebarPrefs): void {
 	write(KEY.memberList, JSON.stringify(prefs));
+}
+
+/** Other threads is open until it's folded, and stays as it was left. */
+export function loadOtherThreadsOpen(): boolean {
+	return read(KEY.otherThreads) !== 'shut';
+}
+
+export function saveOtherThreadsOpen(open: boolean): void {
+	write(KEY.otherThreads, open ? 'open' : 'shut');
 }
 
 export function loadNotificationsEnabled(): boolean {

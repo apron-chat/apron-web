@@ -7,10 +7,11 @@
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
-	import { sidebarRooms, threadPreview, type ThreadEntry } from '$lib/ui/timeline';
+	import { sidebarRooms, type ThreadEntry } from '$lib/ui/timeline';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import CreateRoomDialog from './CreateRoomDialog.svelte';
 	import ProfileBar from './ProfileBar.svelte';
+	import ThreadList from './ThreadList.svelte';
 
 	interface Props {
 		client: ChatClient;
@@ -45,35 +46,41 @@
 		onconnect: () => void;
 		onroom: (room: RoomSnapshot) => void;
 		onthread: (thread: string) => void;
+		/** Reads a thread of the active room that you haven't joined, without joining it. */
+		onopenthread: (thread: string) => void;
 		/** Join a visible room or thread from `room_list` (capability `rooms`); it opens once its `room_update` arrives. */
 		onjoin: (roomId: string) => void;
-		/** A room created here, asked for as private or not; it opens once its `room_update` arrives. */
+		/** Leave a thread of the active room (capability `rooms`). */
+		onleavethread: (thread: string) => void;
+		/** A room or thread created here, asked for as private or not; it opens once its `room_update` arrives. */
 		oncreateroom: (roomId: string, options: { private: boolean }) => void;
 		onsignout: SignOutHandler;
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
-	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, onroom, onthread, onjoin, oncreateroom, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own. */
 	let rooms = $derived(sidebarRooms(session.rooms));
 	let canBrowse = $derived(session.canManageRooms && session.ready);
 	/** What picking a listed room does: join it, or open it without joining where guests only read. */
 	let action = $derived(session.readOnly ? 'Open' : 'Join');
 	let browseOpen = $state(false);
-	let moreThreadsFor = $state<string | undefined>();
 	let listError = $state('');
 	let createOpen = $state(false);
+	/** The room a thread is being started in, from the + on its row. */
+	let threadParent = $state<{ id: string; title: string; private?: boolean } | undefined>();
+	let threadOpen = $state(false);
 	let canCreateRoom = $derived(session.canManageRooms && session.ready && !session.readOnly);
 	/** Visible rooms this user hasn't joined (or has left), from the latest `room_list`. */
 	let unjoined = $derived((session.snapshot.directory ?? []).filter((listing) => !listing.joined));
 	/** Threads of the active room this user hasn't joined, once `room_list` has listed them. */
 	// From the same source as the room's thread cards: a held view's listing while it shows, so they change over together.
-	let unjoinedThreads = $derived((session.threadSource(session.activeRoomId).directory ?? []).filter((listing) => !listing.joined));
+	let otherThreads = $derived(canBrowse ? (session.threadSource(session.activeRoomId).directory ?? []).filter((listing) => !listing.joined) : []);
 
 	/** Changes whenever a room or thread is joined or left. */
 	let joinedKey = $derived(session.rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));
 
-	// Browse rooms and More threads… show only when there is something to join, so list both in the background
+	// Browse rooms and Other threads show only when there is something to join, so list both in the background
 	// (the rooms, and the active room's threads) whenever the active room or what you've joined changes. Threads
 	// you haven't joined deliver nothing live (§3.4): this listing is also what brings their cards up to date.
 	$effect(() => {
@@ -96,10 +103,9 @@
 		if (browseOpen) list();
 	}
 
-	/** Threads not joined come from `room_list` with `parent_room_id` and `filter: "not_joined"` (§4.3.1). */
-	function showMoreThreads(parentRoomId: string): void {
-		moreThreadsFor = moreThreadsFor === parentRoomId ? undefined : parentRoomId;
-		if (moreThreadsFor) list(parentRoomId);
+	function startThread(room: RoomSnapshot): void {
+		threadParent = { id: room.id, title: room.title, ...(room.private ? { private: true } : {}) };
+		threadOpen = true;
 	}
 
 </script>
@@ -126,51 +132,23 @@
 					{#each rooms as room (room.id)}
 						{@const active = room.id === session.activeRoomId}
 						{@const current = active && !activeThread}
-						<button class="ap-room" class:ap-room-active={current} type="button" data-room={room.id} aria-current={current ? 'page' : undefined} onclick={() => onroom(room)}>
-							<span class="ap-room-text">
-								<span class="ap-room-name">{room.title}{#if room.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
-							</span>
-							{#if mentions[room.id]}
-								{@const count = mentions[room.id]}
-								<span class="ap-count ap-count-at" data-testid="room-mentions" aria-label={`${count} ${count === 1 ? 'mention' : 'mentions'}`}>@{count > 1 ? count : ''}</span>
-							{/if}
-							{#if room.recovering}<span class="room-meta" aria-label="Loading history">…</span>{/if}
-						</button>
-						{#if active}
-							<div class="threads" data-testid="thread-list" role="group" aria-label={`Threads in ${room.title}`}>
-								{#each threads as entry (entry.id)}
-									{@const open = activeThread === entry.id}
-									{@const replies = open ? 0 : (unread[entry.id] ?? 0)}
-									{@const preview = threadPreview(entry)}
-									<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
-										<span class="ap-room-text">
-											<span class="ap-room-name">{entry.title}{#if entry.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
-											{#if preview}<span class="ap-room-topic" data-testid="thread-list-preview">{preview.label ? `${preview.label}: ` : ''}{preview.text.replace(/\s+/g, ' ')}</span>{/if}
-										</span>
-										{#if mentions[entry.id] && !open}
-											{@const count = mentions[entry.id]}
-											<span class="ap-count ap-count-at" data-testid="thread-mentions" aria-label={`${count} ${count === 1 ? 'mention' : 'mentions'}`}>@{count > 1 ? count : ''}</span>
-										{:else if replies > 0}
-											<span class="ap-count ap-count-quiet" data-testid="thread-unread" aria-label={`${replies} unread ${replies === 1 ? 'reply' : 'replies'}`}>{replies > 99 ? '99+' : replies}</span>
-										{/if}
-										{#if entry.count !== undefined}
-											<small class="room-meta" aria-label={`${entry.count} ${entry.count === 1 ? 'message' : 'messages'}`}>{entry.count}</small>
-										{/if}
-									</button>
-								{/each}
-								{#if canBrowse && unjoinedThreads.length > 0}
-									<button class="ap-room ap-room-nested more" type="button" data-testid="more-threads" aria-expanded={moreThreadsFor === room.id} onclick={() => showMoreThreads(room.id)}>
-										<span class="ap-room-text"><span class="ap-room-topic">More threads…</span></span>
-									</button>
-									{#if moreThreadsFor === room.id}
-										{#each unjoinedThreads as listing (listing.id)}
-											<button class="ap-room ap-room-nested" type="button" data-join={listing.id} onclick={() => onjoin(listing.id)}>
-												<span class="ap-room-text"><span class="ap-room-name">{listing.title}</span><span class="ap-room-topic">{action}</span></span>
-											</button>
-										{/each}
-									{/if}
+						<div class="room-row">
+							<button class="ap-room" class:ap-room-active={current} class:can-start={active && canCreateRoom} type="button" data-room={room.id} aria-current={current ? 'page' : undefined} onclick={() => onroom(room)}>
+								<span class="ap-room-text">
+									<span class="ap-room-name">{room.title}{#if room.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
+								</span>
+								{#if mentions[room.id]}
+									{@const count = mentions[room.id]}
+									<span class="ap-count ap-count-at" data-testid="room-mentions" aria-label={`${count} ${count === 1 ? 'mention' : 'mentions'}`}>@{count > 1 ? count : ''}</span>
 								{/if}
-							</div>
+								{#if room.recovering}<span class="room-meta" aria-label="Loading history">…</span>{/if}
+							</button>
+							{#if active && canCreateRoom}
+								<button class="ap-iconbtn new-thread" type="button" data-testid="create-thread" aria-label={`New thread in ${room.title}`} title="New thread" onclick={() => startThread(room)}><Plus size={16} aria-hidden="true" /></button>
+							{/if}
+						</div>
+						{#if active}
+							<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 						{/if}
 					{/each}
 				{/if}
@@ -205,6 +183,7 @@
 </aside>
 
 <CreateRoomDialog {client} bind:open={createOpen} enabled={canCreateRoom} oncreated={oncreateroom} />
+<CreateRoomDialog {client} bind:open={threadOpen} enabled={canCreateRoom && threadParent?.id === session.activeRoomId} parent={threadParent} oncreated={oncreateroom} />
 
 <style>
 	.ap-shell-side { overflow: hidden; }
@@ -214,10 +193,10 @@
 	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 	.placeholder .ap-skel { height: 12px; }
 	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
-	.threads { display: flex; flex-direction: column; gap: 2px; }
 	.room-meta { flex: none; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-	.ap-room-active .room-meta { color: var(--ink); }
-	.more .ap-room-topic { color: var(--denim); }
+	.room-row { position: relative; }
+	.can-start { padding-right: 40px; }
+	.new-thread { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); }
 	@media (max-width: 719px) {
 		.ap-shell-side { border-right: 0; }
 	}
