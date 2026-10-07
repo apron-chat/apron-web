@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import UserMinus from '@lucide/svelte/icons/user-minus';
-	import UserPlus from '@lucide/svelte/icons/user-plus';
+	import Plus from '@lucide/svelte/icons/plus';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { Identity } from '$lib/protocol/types';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -117,9 +117,6 @@
 	<div class="member-list-head">
 		<span role="heading" aria-level="2">Members</span>
 		{#if total !== undefined}<span class="member-list-count" data-testid="member-count">{total}</span>{/if}
-		{#if changing && room?.members !== undefined}
-			<button bind:this={addToggle} class={['ap-iconbtn', 'add-toggle', addOpen && 'ap-iconbtn-on']} type="button" aria-label="Add a member" title="Add a member" aria-expanded={addOpen} aria-controls={`${uid}-add`} onclick={toggleAdd}><UserPlus size={16} aria-hidden="true" /></button>
-		{/if}
 	</div>
 	<div class="member-list-body" data-testid="room-member-list">
 		{#if !room && session.starting}
@@ -129,9 +126,15 @@
 		{:else if room.members === undefined}
 			<p class="muted">{session.canManageRooms ? 'Loading members…' : 'Members are unavailable on this server.'}</p>
 		{:else}
+			{#if changing}
+				<!-- The list's first row, laid out as a member's: its icon over the avatars, its words over the names. -->
+				<button bind:this={addToggle} class="add-toggle" type="button" aria-expanded={addOpen} aria-controls={`${uid}-add`} onclick={toggleAdd}>
+					<span class="add-icon" aria-hidden="true"><Plus size={12} strokeWidth={2.2} /></span>Add member
+				</button>
+			{/if}
 			{#if changing && addOpen}
 				<form class="add" id={`${uid}-add`} onsubmit={add} aria-label="Add a member">
-					<label class="add-label" for={`${uid}-user`}>Add a member</label>
+					<label class="ap-sr" for={`${uid}-user`}>User to add</label>
 					<div class="add-row">
 						<input id={`${uid}-user`} bind:this={addInput} class="ap-field" list="member-candidates" placeholder="@user_id" bind:value={adding} disabled={busy} autocomplete="off" spellcheck="false" onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); closeAdd(); } }} />
 						<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" disabled={busy || !adding.trim()}>Add</button>
@@ -183,10 +186,13 @@
 	.placeholder .ap-skel { height: 12px; }
 	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
 	.err { color: var(--danger); }
-	.add-toggle { flex: none; margin-left: auto; }
+	.add-toggle { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 32px; margin: 0 0 2px; padding: 2px var(--space-1); border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-muted); font: inherit; font-size: var(--text-ui); line-height: 18px; text-align: left; cursor: pointer; }
+	.add-toggle:hover, .add-toggle[aria-expanded='true'] { color: var(--ink); }
+	.add-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+	/* An avatar's size, dashed: a place for someone not here yet. */
+	.add-icon { display: grid; place-items: center; flex: none; width: var(--avatar-sm); height: var(--avatar-sm); border: 1px dashed currentColor; border-radius: var(--radius-full); }
 	/* Raised, like a popover in place: the members stay in view below it. */
 	.add { display: grid; gap: var(--space-2); margin: 0 var(--space-1) var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-100); }
-	.add-label { font-size: var(--text-sm); line-height: 16px; font-weight: 600; color: var(--ink); }
 	.add-row { display: flex; gap: var(--space-2); min-width: 0; }
 	.add .ap-field { flex: 1; min-width: 0; height: 28px; font-size: var(--text-ui); }
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }

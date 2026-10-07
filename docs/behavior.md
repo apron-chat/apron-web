@@ -165,20 +165,23 @@ never count as unread or mention you, and a message after one starts a new
 sender group.
 
 On wide screens the rooms list is a column beside the conversation: drag its
-right border to resize it, and click the border, or the panel button at the
-start of the room title bar, to collapse or expand it. The column slides open
+right border to resize it, and click the border, or the panel button in the
+window's top-left corner, to collapse or expand it. The button stays in that
+corner, over the list's header while it is open and over the room's once it
+is shut, so the same spot opens and shuts it, with or without a room open. The column slides open
 and shut while its contents fade, with no motion when the system asks for
 reduced motion, and its width and whether it is collapsed are remembered. On
 phones it is a pane of its own instead, which the title bar's back button
 returns to.
 
-The member list button near the end of the room title bar toggles a right-hand
+The member list's panel button, in the window's top-right corner, toggles a right-hand
 sidebar, **Members**, listing the open room's or thread's members from its `room_list`
 snapshot, with their role badges. A server may list only the most recently
 active members of a large room, with `member_count`, the number of users who have joined; the list
 then says so, and the count in its header is the total. In a room you have
-joined, with the `rooms` capability, the add button in its header opens **Add a
-member**, which adds someone by `user_id` (`room_join` with their `user_id`,
+joined, with the `rooms` capability, the list's first row, **Add member** (laid
+out as a member's: a dashed circle over the avatars, its words over the names),
+opens a form under it, which adds someone by `user_id` (`room_join` with their `user_id`,
 suggesting people the client knows; the form closes once they are added, or on
 Escape) and each other
 member's remove button removes them (`room_leave` with their `user_id`, after
@@ -187,10 +190,11 @@ accepted there, since display names aren't unique. Who may is the server's
 policy; its error shows in the panel. A server that answers `unsupported`
 gets no controls until its next `server` frame. A count kept from a truncated listing stays while later records
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
-drag its left border, or click the border to collapse it (the header button
+drag its left border, or click the border to collapse it (the corner button
 brings it back, and takes focus when the border collapsed it from the keyboard), and its width and whether it is collapsed are remembered.
 Dragging either list shut restores its earlier width when it reopens. On
-narrow screens it overlays the conversation, starts closed, and hides with
+narrow screens it overlays the conversation, starts closed, is toggled by a
+button near the end of the room title bar instead, and hides with
 the conversation on the phone's rooms pane. It shows no
 typing or connection status. Where the server sends a `status` (§4.5), each
 member's avatar carries a dot cut into its corner: online a filled dot, idle

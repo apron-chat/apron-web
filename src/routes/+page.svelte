@@ -19,6 +19,7 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import SidebarHandle from '$lib/components/SidebarHandle.svelte';
 	import MemberListSidebar from '$lib/components/MemberListSidebar.svelte';
+	import PanelToggle from '$lib/components/PanelToggle.svelte';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
 	import StatusBanner from '$lib/components/StatusBanner.svelte';
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
@@ -238,7 +239,7 @@
 	 */
 	let memberListOpen = $derived(memberListWide ? !memberList.collapsed : memberListOverlay);
 	let composer = $state<Composer | undefined>();
-	let roomHeader = $state<RoomHeader | undefined>();
+	let memberListToggle = $state<PanelToggle | undefined>();
 	let messageScroll = $state<HTMLDivElement | undefined>();
 	let stickToBottom = $state(true);
 	let latestVisible = $state(true);
@@ -1796,10 +1797,12 @@
 	class:side-collapsed={sidebar.collapsed}
 	class:side-resizing={sidebar.resizing || memberList.resizing}
 	class:member-list-open={memberListOpen}
+	class:member-list-wide={memberListWide}
 	data-pane={mobilePane}
 	style:--sidebar-w="{sidebar.collapsed ? 0 : sidebar.width}px"
 	style:--member-list-w="{memberList.width}px"
 >
+	<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />
 	<Sidebar
 		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
@@ -1816,7 +1819,6 @@
 		{/if}
 		{#if activeRoom}
 			<RoomHeader
-				bind:this={roomHeader}
 				room={activeRoom}
 				pane={paneRoom ?? activeRoom}
 				threadTitle={activeThread ? threadTitle(activeThread) : undefined}
@@ -1827,9 +1829,9 @@
 				editDisabled={!paneReady}
 				canLeave={session.canManageRooms && !session.readOnly && Boolean(paneRoom?.joined)}
 				canJoin={session.canManageRooms && !session.readOnly && Boolean(paneRoom) && !paneRoom?.joined}
-				sidebarOpen={!sidebar.collapsed}
 				{memberListOpen}
-				onback={() => (mobilePane = 'rooms')} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onsidebar={() => sidebar.toggle()} onmemberlist={toggleMemberList}
+				memberListToggle={!memberListWide}
+				onback={() => (mobilePane = 'rooms')} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
 			/>
 			{#if roomEditorOpen && editTarget}
 				{#key editTarget.id}
@@ -1998,10 +2000,11 @@
 			</div>
 		{/if}
 	</main>
+	{#if memberListWide}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/if}
 	<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
 	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} onmention={(userId) => composer?.mention(userId)} />
 	<!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
-	{#if memberListWide && (memberListOpen || memberList.resizing)}<SidebarHandle layout={memberList} name="member list" oncollapse={() => roomHeader?.focusMemberListToggle()} />{/if}
+	{#if memberListWide && (memberListOpen || memberList.resizing)}<SidebarHandle layout={memberList} name="member list" oncollapse={() => memberListToggle?.focus()} />{/if}
 
 	{#if feedback.current}
 		<div class="toast">
@@ -2024,7 +2027,14 @@
 	:global(*), :global(*::before), :global(*::after) { box-sizing: border-box; }
 	:global(button), :global(input), :global(textarea), :global(select) { font: inherit; }
 	/* Collapsing or expanding the rooms list slides its column and fades its contents; a drag follows the pointer instead. */
-	.app { height: 100dvh; min-height: 100%; position: relative; transition: --sidebar-w 260ms ease; }
+	/* --corner: how far a header's content keeps clear of a PanelToggle in the window's corner. */
+	.app { --corner: calc(var(--space-3) + 28px + var(--space-2)); height: 100dvh; min-height: 100%; position: relative; transition: --sidebar-w 260ms ease; }
+	/* The rooms list's toggle sits over its header, then over the room's once it's shut: the room's keeps clear of it as the list slides away. */
+	.app :global(.ap-shell-sidehead) { padding-left: var(--corner); }
+	.app :global(.ap-roomhead) { padding-left: max(var(--space-4), calc(var(--corner) - var(--sidebar-w))); }
+	/* With a column of its own, the member list's toggle sits over its header, then over the room's. */
+	.member-list-wide :global(.member-list-head) { padding-right: var(--corner); }
+	.member-list-wide:not(.member-list-open) :global(.ap-roomhead) { padding-right: var(--corner); }
 	.app :global(.ap-shell-side) { transition: opacity 180ms ease, visibility 0s; }
 	.side-collapsed :global(.ap-shell-side) { border-right: 0; opacity: 0; visibility: hidden; transition: opacity 180ms ease, visibility 0s 180ms; }
 	.side-resizing, .side-resizing :global(.ap-shell-side) { transition: none; }
@@ -2066,6 +2076,10 @@
 	/* Under 720px it's one pane at a time: rooms, then the room or thread, pushed like pages. */
 	@media (max-width: 719px) {
 		.app { grid-template-columns: minmax(0, 1fr); }
+		/* Phones go back to the rooms list instead. */
+		.app > :global(.panel-toggle.left) { display: none; }
+		.app :global(.ap-shell-sidehead) { padding-left: var(--space-4); }
+		.app :global(.ap-roomhead) { padding-left: var(--space-4); }
 		.app[data-pane='main'] :global(.ap-shell-side) { display: none; }
 		.app[data-pane='rooms'] .ap-shell-main, .app[data-pane='rooms'] :global(.member-list) { display: none; }
 		.side-collapsed :global(.ap-shell-side) { opacity: 1; visibility: visible; transition: none; }
