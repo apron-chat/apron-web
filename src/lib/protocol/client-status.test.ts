@@ -5,7 +5,8 @@ import { FakeSocket } from './fake-socket';
 /**
  * Kept statuses across sign-ins (§4.5): dropped at each one, however short
  * the reconnect, and taken again from what the server sends, `room_list` and
- * `room_update` included.
+ * `room_update` included. Resuming as the same user, the dropped ones still
+ * show until the joined listing arrives, so nothing greys out meanwhile.
  */
 describe('kept statuses and sign-ins', () => {
 	let client: ChatClient;
@@ -54,19 +55,51 @@ describe('kept statuses and sign-ins', () => {
 		expect([statusOf('ada'), statusOf('bo'), statusOf('cy')]).toEqual(['online', 'idle', 'dnd']);
 	});
 
-	it('drops them at each sign-in, after however short a reconnect, so those users have no status (not offline) until the server sends it again', async () => {
+	it('drops them at each sign-in; resuming, they still show until the joined listing, then those not sent again have no status', async () => {
 		await greet({ user_id: 'ada', status: 'online' }, seen);
 		reconnect();
 		hello();
 		await socket.reply('auth', { you: { user_id: 'ada', status: 'dnd' } });
-		// Your own comes from the auth's `you`.
+		// Your own comes from the auth's `you`; the others' from before still show.
 		expect(statusOf('ada')).toBe('dnd');
-		expect(snapshot.users.bo).toEqual({ user_id: 'bo' });
-		expect(Object.hasOwn(snapshot.users.cy, 'status')).toBe(false);
-		// After the result the server sends connected users' statuses again (§4.5).
+		expect([statusOf('bo'), statusOf('cy')]).toEqual(['idle', 'dnd']);
+		// After the result the server sends connected users' statuses again (§4.5), which show at once.
 		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'online' } } });
+		expect([statusOf('bo'), statusOf('cy')]).toEqual(['online', 'dnd']);
+		// Once the listing is in, a status the server didn't send again is no longer known: not offline.
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', members: [{ user_id: 'ada' }, { user_id: 'bo' }, { user_id: 'cy' }] }] });
 		expect(statusOf('bo')).toBe('online');
-		expect(statusOf('cy')).toBeUndefined();
+		expect(snapshot.users.cy).toEqual({ user_id: 'cy' });
+	});
+
+	it('drops them at once at a sign-in as someone else after a lost connection', async () => {
+		await greet({ user_id: 'ada', status: 'online' }, seen);
+		reconnect();
+		hello();
+		await socket.reply('auth', { you: { user_id: 'eve' } });
+		expect([statusOf('bo'), statusOf('cy')]).toEqual([undefined, undefined]);
+	});
+
+	it('keeps offline and no status through a resume that sends nothing of them, which is what that silence means', async () => {
+		await greet({ user_id: 'ada', status: 'online' }, [{ user_id: 'bo', status: 'offline' }, { user_id: 'cy', status: '' }, { user_id: 'di', status: 'online' }]);
+		reconnect();
+		hello();
+		await socket.reply('auth', { you: { user_id: 'ada' } });
+		// A resume's listing may hold only rooms that changed (§4.3.1): here, none.
+		await socket.reply('room_list', { joined: [] });
+		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual(['offline', '', undefined]);
+	});
+
+	it('holds them again when the connection drops before the resume\'s listing', async () => {
+		await greet({ user_id: 'ada', status: 'online' }, seen);
+		reconnect();
+		hello();
+		await socket.reply('auth', { you: { user_id: 'ada' } });
+		reconnect();
+		expect([statusOf('bo'), statusOf('cy')]).toEqual(['idle', 'dnd']);
+		hello();
+		await socket.reply('auth', { you: { user_id: 'ada' } });
+		expect([statusOf('bo'), statusOf('cy')]).toEqual(['idle', 'dnd']);
 	});
 
 	it('applies the statuses room_list and room_update carry, offline and none included', async () => {
@@ -76,13 +109,13 @@ describe('kept statuses and sign-ins', () => {
 		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual(['offline', '', 'idle']);
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', title: 'Ops', members: [{ user_id: 'bo', status: 'online' }, { user_id: 'di', status: 'offline' }] }], users: [{ user_id: 'cy', status: 'dnd' }] } });
 		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual(['online', 'dnd', 'offline']);
-		// A reconnect's listing brings them back after the sign-in drops them.
+		// A reconnect's listing brings them back after the sign-in drops them; until it does, the ones from before show.
 		reconnect();
 		hello();
 		await socket.reply('auth', { you: { user_id: 'ada' } });
-		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual([undefined, undefined, undefined]);
+		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual(['online', 'dnd', 'offline']);
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', members: [{ user_id: 'bo', status: 'offline' }, { user_id: 'cy', status: '' }] }] });
-		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual(['offline', '', undefined]);
+		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual(['offline', '', 'offline']);
 	});
 });
 
