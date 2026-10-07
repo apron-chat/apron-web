@@ -228,6 +228,12 @@ instead, as mobile chat apps do, since an on-screen keyboard has no
 Shift+Enter; the Send button sends. Where an autocomplete below offers Enter
 to pick, it picks either way.
 
+The timeline is anchored at its bottom edge. When the area below it grows or
+shrinks (the composer taking another line, a reply bar, staged files, the
+typing row), the messages just above the composer stay in view, pushed up
+rather than covered: at the latest message it stays there, and scrolled back,
+the view moves with the edge. Resizing the window keeps the view where it is.
+
 Mentions follow the `@user_id` convention ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-mention-text)). Typing `@` in the
 composer opens the mention picker over the room's members (from the room's
 listing, kept current by the membership records of joins and leaves), or the
