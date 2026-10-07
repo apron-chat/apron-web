@@ -104,6 +104,31 @@ export class MemoryProtocolServer {
 			from: { ...people.linus }, body: { text: 'Engineering room preview. Use #thread_deploy to link to the seeded thread.', format: 'plain' }
 		});
 		engineering.log_id = 1710000000007;
+		// More of general's threads: one joined with news, and three that the guest hasn't joined, which the sidebar
+		// lists apart (room_list `not_joined`, §4.3.1) since they deliver nothing live.
+		const threads: [id: string, title: string, members: string[], description: string | undefined, messages: [string, string, string][]][] = [
+			['thread_cert', 'Expired cert on the runner', ['preview_guest', 'linus', 'margaret'], undefined, [
+				['1710000000020', 'linus', 'The build runner’s cert expired overnight, so every deploy since 2am failed.'],
+				['1710000000021', 'margaret', 'Renewed it by hand. Rotating to the managed one next.']
+			]],
+			['thread_offsite', 'Offsite planning', ['ada', 'margaret'], 'Dates, venue, and who is giving talks.', [
+				['1710000000022', 'ada', 'Leaning towards the second week of May.']
+			]],
+			['thread_logo', 'Logo feedback', ['grace', 'linus'], undefined, [
+				['1710000000023', 'grace', 'The new mark reads well small; the wordmark less so.']
+			]],
+			['thread_oncall', 'On-call rotation', ['ada', 'grace', 'linus'], 'Who covers which week, and swaps.', [
+				['1710000000024', 'linus', 'I can take the week of the 12th.']
+			]]
+		];
+		for (const [id, title, members, description, messages] of threads) {
+			const room = this.makeRoom(id, title, members, 'general');
+			if (description) room.description = description;
+			for (const [n, author, text] of messages) {
+				room.messages.push({ message_id: n, log_id: n, room_id: id, from: { ...people[author] }, body: { text, format: 'plain' } });
+				room.log_id = Number(n);
+			}
+		}
 	}
 
 	factory: WebSocketFactory = (url) => this.createSocket(url);
