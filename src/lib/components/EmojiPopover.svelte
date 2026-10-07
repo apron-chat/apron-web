@@ -184,10 +184,10 @@
 		--border-radius: calc(var(--radius-lg) - 1px);
 		--shadow: none;
 		--font-family: var(--font-sans);
-		--font-size: 15px;
+		--font-size: var(--text-body);
 		--category-icon-size: 18px;
 		--color-border: var(--bg-300);
 		--color-border-over: var(--line-strong);
 	}
-	.status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-4); color: var(--ink-muted); font-size: 13px; line-height: 18px; text-align: center; }
+	.status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-4); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; text-align: center; }
 </style>

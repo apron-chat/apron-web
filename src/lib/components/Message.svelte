@@ -376,5 +376,5 @@
 	.markdown :global(blockquote > :first-child) { margin-top: 0; }
 	.markdown :global(blockquote > :last-child) { margin-bottom: 0; }
 	.edit { display: flex; flex-direction: column; gap: var(--space-2); }
-	.edit-field { height: auto; min-height: 66px; padding: var(--space-2); resize: vertical; font-size: 15px; line-height: 22px; }
+	.edit-field { height: auto; min-height: 66px; padding: var(--space-2); resize: vertical; font-size: var(--text-body); line-height: 22px; }
 </style>

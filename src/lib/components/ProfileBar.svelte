@@ -415,7 +415,7 @@
 <style>
 	.ap-profile { display: flex; align-items: center; gap: var(--space-1); }
 	.add-email { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
-	.add-email .ap-field { flex: 1; min-width: 0; height: 28px; font-size: 13px; }
+	.add-email .ap-field { flex: 1; min-width: 0; height: 28px; font-size: var(--text-ui); }
 	.ap-profile-me { flex: 1; min-width: 0; width: auto; }
 	.ap-profile-settings { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; color: var(--ink-muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; }
 	.ap-profile-settings:hover { color: var(--ink); background: var(--bg-300); }

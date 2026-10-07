@@ -127,13 +127,15 @@ with the `@user_id` when someone else shows under the same name. The lines
 never count as unread or mention you, and a message after one starts a new
 sender group.
 
-The Member list button at the end of the room title bar toggles a right-hand
-sidebar listing the open room's or thread's members from its `room_list`
+The member list button near the end of the room title bar toggles a right-hand
+sidebar, **Members**, listing the open room's or thread's members from its `room_list`
 snapshot, with their role badges. A server may list only the most recently
 active members of a large room, with `member_count`, the number of users who have joined; the list
 then says so, and the count in its header is the total. In a room you have
-joined, with the `rooms` capability, **Add by @user_id** adds someone (`room_join`
-with their `user_id`, suggesting people the client knows) and each other
+joined, with the `rooms` capability, the add button in its header opens **Add a
+member**, which adds someone by `user_id` (`room_join` with their `user_id`,
+suggesting people the client knows; the form closes once they are added, or on
+Escape) and each other
 member's remove button removes them (`room_leave` with their `user_id`, after
 a confirm): how members bring people into a private room. Only a `user_id` is
 accepted there, since display names aren't unique. Who may is the server's
@@ -433,7 +435,8 @@ one, its latest loaded message), including threads you haven't joined, which `ro
 room's `parent_room_id` finds whenever the room is opened or its threads are
 listed; that listing is also what refreshes their cards, since they deliver
 nothing live. Opening one of those reads it through `history` without joining
-it: its header offers **Join**, and replying joins it first.
+it: its header offers **Join**, which makes it live and lists it under the room,
+and replying joins it first.
 With the `rooms` capability, the **+** beside Rooms in the sidebar creates a room
 from a name and an optional CommonMark description (`room_set` with `title` and
 `description`); it opens once its `room_update` arrives, and the dialog stays
@@ -450,7 +453,8 @@ composer opens on it nor do selected messages move into it. Private rooms and
 threads show a lock beside their name.
 
 A room's `description` (CommonMark by convention) shows as one line of text
-under its title in the header. With the `rooms` capability the header's **Edit** opens
+under its title in the header. With the `rooms` capability the header's ⋯ menu
+holds the occasional actions: **Edit room** (or **Edit thread**) opens
 a form for the open room's or thread's title and description ("Summary" for a
 thread), saved with one `room_set`; the `room_update` that follows is what
 shows, since the server may alter or decline it.
@@ -474,7 +478,7 @@ so Back returns to the previous room or thread, and Forward the other way, until
 Back leaves the page from the first room opened. A room left since stays put
 for that step, and a thread left since is read without joining.
 
-With the `rooms` capability the header also offers **Leave**, which leaves the room or
+With the `rooms` capability the header's ⋯ menu also offers **Leave**, which leaves the room or
 the thread; a thread is a room of its own, so leaving its parent keeps it. A
 server that keeps you in a room answers `denied`, and its message shows as
 the error.

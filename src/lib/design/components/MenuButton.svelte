@@ -6,11 +6,17 @@
 		value: string;
 		label: string;
 		hint?: string;
+		/** A `data-testid` for its item. */
+		testid?: string;
 	}
 
 	interface Props {
-		/** The button's text. */
+		/** The button's text; with `icon`, its name for screen readers and its tooltip. */
 		label: string;
+		/** Draws the button as an icon button instead, such as ⋯ for more actions. */
+		icon?: Snippet;
+		/** A `data-testid` for the button. */
+		testid?: string;
 		choices: MenuChoice[];
 		/** Called with the chosen value; the menu closes. */
 		onselect: (value: string) => void;
@@ -34,7 +40,7 @@
 		/** Words for screen readers instead of `label`, such as "Status: Online". */
 		ariaLabel?: string;
 	}
-	let { label, choices, onselect, variant = 'quiet', size = 'sm', placement = 'below', disabled = false, busy = false, open = $bindable(false), selected, lead, ariaLabel }: Props = $props();
+	let { label, icon, testid, choices, onselect, variant = 'quiet', size = 'sm', placement = 'below', disabled = false, busy = false, open = $bindable(false), selected, lead, ariaLabel }: Props = $props();
 
 	let root = $state<HTMLElement | undefined>();
 	let trigger = $state<HTMLButtonElement | undefined>();
@@ -102,13 +108,17 @@
 <svelte:window onpointerdown={outside} />
 
 <div class="ap-menubtn" bind:this={root} onkeydown={keydown} role="presentation">
-	<button bind:this={trigger} type="button" class={['ap-btn', 'ap-btn-' + variant, size === 'sm' && 'ap-btn-sm']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{label}</button>
+	{#if icon}
+		<button bind:this={trigger} type="button" class={['ap-iconbtn', open && 'ap-iconbtn-on']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel ?? label} title={label} data-testid={testid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{@render icon()}</button>
+	{:else}
+		<button bind:this={trigger} type="button" class={['ap-btn', 'ap-btn-' + variant, size === 'sm' && 'ap-btn-sm']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel} data-testid={testid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{label}</button>
+	{/if}
 	{#if open}
 		<ul class={['ap-menu', placement === 'below' && 'ap-menu-below', selected !== undefined && 'ap-menu-pick']} role="menu" aria-label={ariaLabel ?? label}>
 			{#each choices as choice (choice.value)}
 				{@const on = selected !== undefined && choice.value === selected}
 				<li role="none">
-					<button class={['ap-menu-item', on && 'ap-menu-item-on']} type="button" tabindex="-1" role={selected !== undefined ? 'menuitemradio' : 'menuitem'} aria-checked={selected !== undefined ? on : undefined} onclick={() => choose(choice.value)}>
+					<button class={['ap-menu-item', on && 'ap-menu-item-on']} type="button" tabindex="-1" data-testid={choice.testid} role={selected !== undefined ? 'menuitemradio' : 'menuitem'} aria-checked={selected !== undefined ? on : undefined} onclick={() => choose(choice.value)}>
 						<span class="ap-menu-label">{#if lead}<span class="ap-menu-lead">{@render lead(choice.value)}</span>{/if}{choice.label}</span>{#if choice.hint}<span class="ap-menu-hint">{choice.hint}</span>{/if}
 					</button>
 				</li>

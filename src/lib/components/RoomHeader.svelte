@@ -1,8 +1,12 @@
 <script lang="ts">
+	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import Lock from '@lucide/svelte/icons/lock';
+	import LogOut from '@lucide/svelte/icons/log-out';
+	import Pencil from '@lucide/svelte/icons/pencil';
 	import Users from '@lucide/svelte/icons/users';
 	import type { RoomSnapshot } from '$lib/protocol/client';
 	import { markdownText } from '$lib/protocol/markdown';
+	import MenuButton from '$lib/design/components/MenuButton.svelte';
 
 	interface Props {
 		/** The top-level room. */
@@ -17,9 +21,9 @@
 		replyCount?: number;
 		/** Older replies are not loaded yet, so `replyCount` is a lower bound. */
 		moreReplies?: boolean;
-		/** Show Edit for the room, or the open thread (capability `rooms`): its title and description. */
+		/** Offer Edit for the room, or the open thread (capability `rooms`): its title and description. */
 		canEdit: boolean;
-		editorOpen: boolean;
+		/** Join and the actions menu can't be used now, such as while a request is in flight. */
 		editDisabled: boolean;
 		/** Offer Leave for the pane's room or thread (capability `rooms`). */
 		canLeave: boolean;
@@ -35,7 +39,7 @@
 		onmemberlist: () => void;
 	}
 	let {
-		room, pane, threadTitle, typing, replyCount, moreReplies = false, canEdit, editorOpen, editDisabled, canLeave, canJoin = false,
+		room, pane, threadTitle, typing, replyCount, moreReplies = false, canEdit, editDisabled, canLeave, canJoin = false,
 		memberListOpen, onback, onroom, onedit, onleave, onjoin, onmemberlist
 	}: Props = $props();
 
@@ -43,6 +47,17 @@
 	/** The room's description (§3.4) as one line of text under its title; a thread shows its own as a summary instead. */
 	let topic = $derived(threadTitle === undefined && room.description ? markdownText(room.description).split('\n')[0] : '');
 	let thread = $derived(threadTitle !== undefined);
+	let noun = $derived(thread ? 'thread' : 'room');
+	/** The occasional actions, in the ⋯ menu: Join stays a button, since it's what a pane read without joining is for. */
+	let actions = $derived([
+		...(canEdit ? [{ value: 'edit', label: `Edit ${noun}`, testid: 'edit-room' }] : []),
+		...(canLeave ? [{ value: 'leave', label: `Leave ${noun}`, testid: 'leave-room' }] : [])
+	]);
+
+	function act(value: string): void {
+		if (value === 'edit') onedit();
+		else if (value === 'leave') onleave();
+	}
 
 	/** Where focus goes when the member list collapses from under it. */
 	export function focusMemberListToggle(): void {
@@ -75,30 +90,24 @@
 	{:else if pane.recoveryError}
 		<span class="ap-roomhead-sub" role="status">History unavailable</span>
 	{/if}
-	{#if canEdit || canLeave || canJoin}
-		<div class="ap-roomhead-actions">
-			{#if canJoin}
-				<button class="ap-btn ap-btn-sm" type="button" data-testid="join-room" aria-label={threadTitle !== undefined ? 'Join thread' : 'Join room'} disabled={editDisabled} onclick={onjoin}>Join</button>
-			{/if}
-			{#if canEdit}
-				<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" aria-label={thread ? 'Edit thread' : 'Edit room'} aria-expanded={editorOpen} disabled={editDisabled} onclick={onedit}>Edit</button>
-			{/if}
-			{#if canLeave}
-				<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" data-testid="leave-room" aria-label={threadTitle !== undefined ? 'Leave thread' : 'Leave room'} disabled={editDisabled} onclick={onleave}>Leave</button>
-			{/if}
-		</div>
+	{#if canJoin}
+		<button class="ap-btn ap-btn-sm" type="button" data-testid="join-room" aria-label={thread ? 'Join thread' : 'Join room'} title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={editDisabled} onclick={onjoin}>Join</button>
 	{/if}
-	<button bind:this={memberListToggle} class="ap-iconbtn member-list-toggle" class:member-list-toggle-open={memberListOpen} type="button" aria-label={memberListOpen ? 'Hide member list' : 'Show member list'} aria-expanded={memberListOpen} title={memberListOpen ? 'Hide member list' : 'Show member list'} onclick={onmemberlist}>
+	<button bind:this={memberListToggle} class={['ap-iconbtn', 'member-list-toggle', memberListOpen && 'ap-iconbtn-on']} type="button" aria-label={memberListOpen ? 'Hide member list' : 'Show member list'} aria-expanded={memberListOpen} title={memberListOpen ? 'Hide member list' : 'Show member list'} onclick={onmemberlist}>
 		<Users size={18} strokeWidth={1.8} aria-hidden="true" />
 	</button>
+	{#if actions.length > 0}
+		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} testid="room-actions" choices={actions} disabled={editDisabled} onselect={act}>
+			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
+			{#snippet lead(value)}{#if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
+		</MenuButton>
+	{/if}
 </header>
 
 <style>
 	.ap-roomhead-back { display: none; }
 	.ap-roomhead-name { max-width: 100%; }
-	.ap-roomhead-actions { flex: none; }
 	.member-list-toggle { flex: none; }
-	.member-list-toggle-open { color: var(--ink); background: var(--bg-300); }
 	/* Typing shows in the header's subtitle only on phones; wide layouts have the row above the composer. */
 	.typing-head { display: none; }
 	@media (max-width: 719px) {

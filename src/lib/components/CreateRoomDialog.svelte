@@ -1,5 +1,6 @@
 <script lang="ts">
-	import X from '@lucide/svelte/icons/x';
+	import { tick, untrack } from 'svelte';
+	import Dialog from '$lib/design/components/Dialog.svelte';
 	import type { ChatClient } from '$lib/protocol/client';
 
 	interface Props {
@@ -16,7 +17,6 @@
 	}
 	let { client, open = $bindable(false), enabled, oncreated }: Props = $props();
 
-	let dialog = $state<HTMLDialogElement | undefined>();
 	let titleInput = $state<HTMLInputElement | undefined>();
 	let title = $state('');
 	let description = $state('');
@@ -25,25 +25,20 @@
 	let error = $state('');
 
 	$effect(() => {
-		if (!dialog) return;
-		if (open && !enabled) {
-			open = false;
-		} else if (open && !dialog.open) {
+		if (open && !enabled) open = false;
+	});
+
+	/** Each time it opens, the form starts empty, with the name focused. */
+	$effect(() => {
+		if (!open) return;
+		untrack(() => {
 			title = '';
 			description = '';
 			isPrivate = false;
 			error = '';
-			dialog.showModal();
-			titleInput?.focus();
-		} else if (!open && dialog.open) {
-			dialog.close();
-		}
+		});
+		void tick().then(() => titleInput?.focus());
 	});
-
-	/** Escape does nothing while the room is being created, like the disabled buttons. */
-	function cancel(event: Event): void {
-		if (creating) event.preventDefault();
-	}
 
 	async function submit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
@@ -72,36 +67,26 @@
 	}
 </script>
 
-<dialog class="create-room" bind:this={dialog} aria-labelledby="create-room-title" oncancel={cancel} onclose={() => (open = false)}>
-	<form onsubmit={submit}>
-		<header>
-			<h2 id="create-room-title">Create a room</h2>
-			<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" aria-label="Close" disabled={creating} onclick={() => (open = false)}><X size={16} aria-hidden="true" /></button>
-		</header>
-		<label for="create-room-name">Room name</label>
+<!-- Escape, the close button and Cancel do nothing while the room is being created. -->
+<Dialog bind:open title="Create a room" locked={creating} onsubmit={submit}>
+	<label class="ap-fieldlabel" for="create-room-name">Room name
 		<input id="create-room-name" class="ap-field" bind:this={titleInput} bind:value={title} autocomplete="off" required disabled={creating} />
-		<label for="create-room-description">Description <span class="hint">Markdown, optional</span></label>
+	</label>
+	<label class="ap-fieldlabel" for="create-room-description">
+		<span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown, optional</span></span>
 		<textarea id="create-room-description" class="ap-field ap-field-multi" rows="3" bind:value={description} disabled={creating} placeholder="What this room is for."></textarea>
-		<label class="check"><input type="checkbox" bind:checked={isPrivate} disabled={creating} /> Private <span class="hint">Only members see it, and members add others.</span></label>
-		{#if error}<p class="error" role="alert">{error}</p>{/if}
-		<div class="actions">
-			<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={creating} onclick={() => (open = false)}>Cancel</button>
-			<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" disabled={creating}>{creating ? 'Creating…' : 'Create room'}</button>
-		</div>
-	</form>
-</dialog>
+	</label>
+	<label class="ap-choice-item ap-checklist-item" class:ap-choice-on={isPrivate}>
+		<input class="ap-checklist-box" type="checkbox" bind:checked={isPrivate} disabled={creating} />
+		<span class="ap-checklist-label"><span class="ap-choice-title">Private</span><span class="ap-choice-text">Only members see it, and members add others.</span></span>
+	</label>
+	{#if error}<p class="error" role="alert">{error}</p>{/if}
+	{#snippet footer()}
+		<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={creating} onclick={() => (open = false)}>Cancel</button>
+		<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" disabled={creating}>{creating ? 'Creating…' : 'Create room'}</button>
+	{/snippet}
+</Dialog>
 
 <style>
-	/* The same surface and backdrop as PreferencesDialog. */
-	.create-room { width: min(420px, calc(100vw - 32px)); max-width: none; margin: auto; padding: 0; color: var(--ink); background: var(--bg-100); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
-	.create-room::backdrop { background: rgba(5, 5, 12, .68); backdrop-filter: blur(2px); }
-	form { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-6); }
-	header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
-	h2 { margin: 0; font-size: 18px; line-height: 24px; }
-	label { font-size: 13px; font-weight: 600; }
-	.hint { font-weight: 400; color: var(--ink-muted); }
-	.check { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
-	.ap-field { width: 100%; box-sizing: border-box; }
-	.error { margin: 0; color: var(--danger); font-size: 13px; }
-	.actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
+	.error { margin: 0; color: var(--danger); font-size: var(--text-ui); line-height: 18px; }
 </style>

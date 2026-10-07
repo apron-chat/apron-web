@@ -36,5 +36,7 @@ export { default as RoleBadges } from './RoleBadges.svelte';
 export { default as CheckList } from './CheckList.svelte';
 export { default as Callout } from './Callout.svelte';
 export { default as MenuButton } from './MenuButton.svelte';
+export { default as Dialog } from './Dialog.svelte';
+export { default as Switch } from './Switch.svelte';
 export { default as StatusDot } from './StatusDot.svelte';
 export type * from './types';

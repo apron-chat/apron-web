@@ -38,13 +38,13 @@
 		height: 26px; padding: 0 var(--space-2); box-sizing: border-box;
 		border: 1px solid var(--line); border-radius: var(--radius-full);
 		background: var(--bg-200); color: var(--ink-muted);
-		font-size: 13px; line-height: 16px; font-variant-numeric: tabular-nums; cursor: pointer;
+		font-size: var(--text-ui); line-height: 16px; font-variant-numeric: tabular-nums; cursor: pointer;
 		transition: background-color .12s ease, border-color .12s ease, color .12s ease;
 	}
 	.chip:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
 	.chip.mine { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 	.chip:disabled { cursor: default; }
-	.emoji { font-family: var(--font-emoji); font-size: 15px; line-height: 16px; }
+	.emoji { font-family: var(--font-emoji); font-size: var(--text-body); line-height: 16px; }
 	.count { font-weight: 600; }
 	.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 	@media (prefers-reduced-motion: reduce) {
