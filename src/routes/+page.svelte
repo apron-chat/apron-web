@@ -642,6 +642,31 @@
 		});
 	});
 
+	// The timeline is anchored at its bottom edge, as chat apps are: when something in the pane takes more or less
+	// room below it (the composer growing a line, a reply bar, staged files, the typing row), what sat just above the
+	// composer stays there, pushed up rather than covered: at the latest message it stays there, and scrolled back,
+	// the view moves with the edge. Before the frame paints. The window resizing (the pane's own height) is left be.
+	$effect(() => {
+		const scroll = messageScroll;
+		const pane = scroll?.closest<HTMLElement>('.ap-shell-main');
+		if (!scroll || !pane) return;
+		let height = scroll.clientHeight;
+		let paneHeight = pane.clientHeight;
+		const observer = new ResizeObserver(() => {
+			const next = scroll.clientHeight;
+			const change = height - next;
+			const paneChanged = pane.clientHeight !== paneHeight;
+			height = next;
+			paneHeight = pane.clientHeight;
+			if (!change || paneChanged) return;
+			if (stickToBottom) scrollToLatest();
+			else scroll.scrollTop += change;
+		});
+		observer.observe(scroll);
+		observer.observe(pane);
+		return () => observer.disconnect();
+	});
+
 	// Stay pinned to the latest item while the pane fills in: a room's history, its threads'
 	// cards and summaries land over several updates, not all of which change what the effect
 	// above tracks. Follow the rendered content instead.
