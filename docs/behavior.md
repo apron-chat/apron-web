@@ -503,7 +503,11 @@ thread, loading the thread's history if needed, and highlights the message.
 
 With the `reactions` capability, a message's **React** action opens the full emoji
 picker right away, its frequently used row starting from emoji-mart's own
-defaults; a pick toggles your reaction with that emoji. Reactions show as chips under the message: emoji and count,
+defaults; a pick toggles your reaction with that emoji. The pick goes on the
+message it was opened from, whatever arrives meanwhile: the picker names that
+message above itself (“React to Ada” and its first line), since new messages can
+scroll it away or, on a phone, under the sheet, and while the picker is open that
+message keeps its hover highlight and no other message takes one. Reactions show as chips under the message: emoji and count,
 highlighted when one is yours, with a tooltip naming who reacted. Clicking a
 chip toggles your reaction. Tombstones show no reactions.
 

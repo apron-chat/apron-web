@@ -139,7 +139,7 @@
 
 	/** React opens the full picker; a pick toggles that reaction, as a chip does. */
 	function openReact(): void {
-		if (reactButton) emojiPicker.toggle({ anchor: reactButton, onpick: onreact });
+		if (reactButton) emojiPicker.toggle({ anchor: reactButton, onpick: onreact, caption: { lead: `React to ${name}`, text: replySnippet(event) } });
 	}
 
 	function act(action: () => void): void {

@@ -60,6 +60,12 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg:hover .ap-msg-actions, .ap-msg:focus-within .ap-msg-actions, .ap-msg-actions:focus-within { visibility: visible; }
 /* The toolbar stays up while its React button's emoji picker is open. */
 .ap-msg-actions:has([aria-expanded='true']) { visibility: visible; }
+/* While a message's picker or menu is open it keeps its hover look, and the rest don't take it: new messages
+   can scroll another one under a still pointer, which would look like the one being acted on. */
+.ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected):has(.ap-msg-actions [aria-expanded='true']) { background: var(--bg-200); }
+.ap-msg:has(.ap-msg-actions [aria-expanded='true']) .ap-msg-hovertime { visibility: visible; }
+.ap-timeline:has(.ap-msg-actions [aria-expanded='true']) .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected, :has(.ap-msg-actions [aria-expanded='true'])):hover { background: transparent; }
+.ap-timeline:has(.ap-msg-actions [aria-expanded='true']) .ap-msg:not(:has(.ap-msg-actions [aria-expanded='true'])):is(:hover, :focus-within) :is(.ap-msg-actions, .ap-msg-hovertime, .ap-rchip-add) { visibility: hidden; }
 /* select mode: a check column on the left; the whole row toggles */
 .ap-msg-selectable { grid-template-columns: 24px var(--avatar-md) minmax(0, 1fr); cursor: pointer; user-select: none; }
 .ap-msg-selectable.ap-msg-compact { grid-template-columns: 24px 40px minmax(0, 1fr); }
