@@ -210,6 +210,12 @@ sign-in is an `auth` as a user the connection isn't already signed in as: a
 repeat `auth` as the same user, or adding a passkey or an email address,
 keeps them.
 
+In the composer, Enter sends and Shift+Enter starts a new line. On a phone or
+tablet (a touch screen with no pointer that hovers) Enter starts a new line
+instead, as mobile chat apps do, since an on-screen keyboard has no
+Shift+Enter; the Send button sends. Where an autocomplete below offers Enter
+to pick, it picks either way.
+
 Mentions follow the `@user_id` convention ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-mention-text)). Typing `@` in the
 composer opens the mention picker over the room's members (from the room's
 listing, kept current by the membership records of joins and leaves), or the
