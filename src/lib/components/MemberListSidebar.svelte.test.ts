@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, RoomSnapshot } from '$lib/protocol/client';
 import type { Identity } from '$lib/protocol/types';
 import { directory } from '$lib/ui/directory.svelte';
@@ -19,7 +19,7 @@ afterEach(() => {
 const ada: Identity = { user_id: 'ada', name: 'Ada', status: 'online' };
 
 /** The member list of a room whose members carry these statuses, signed in as Ada. */
-function render(users: Identity[], fields: Partial<ClientSnapshot> = {}) {
+function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChange = false) {
 	const snapshot: ClientSnapshot = {
 		...blankSnapshot(),
 		authenticated: true,
@@ -32,7 +32,7 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}) {
 	directory.apply(snapshot, undefined);
 	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })) } as unknown as RoomSnapshot;
 	const session = { snapshot, canManageRooms: true } as unknown as SessionView;
-	instance = mount(MemberListSidebar, { target: document.body, props: { client: undefined, session, room, open: true, canChange: false } });
+	instance = mount(MemberListSidebar, { target: document.body, props: { client: canChange ? ({} as never) : undefined, session, room, open: true, canChange } });
 	flushSync();
 	return [...document.querySelectorAll<HTMLLIElement>('li.member')];
 }
@@ -104,5 +104,30 @@ describe('MemberListSidebar', () => {
 		directory.apply(snapshotWith({ user_id: 'bo', name: 'Bo', status: 'online' }), undefined);
 		flushSync();
 		expect(statuses([...document.querySelectorAll<HTMLLIElement>('li.member')])).toEqual([['ada', 'online', true], ['bo', 'online', true], ['cy', '', false]]);
+	});
+
+	it('starts the list with Add member, laid out as a member: it opens the form under it, and Escape shuts it', async () => {
+		render([ada, { user_id: 'bo', name: 'Bo' }], {}, true);
+		const body = document.querySelector('[data-testid="room-member-list"]')!;
+		const toggle = body.firstElementChild as HTMLButtonElement;
+		expect(toggle.classList.contains('add-toggle')).toBe(true);
+		expect(toggle.textContent?.trim()).toBe('Add member');
+		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+		toggle.click();
+		flushSync();
+		const form = body.querySelector<HTMLFormElement>('form.add')!;
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+		expect(toggle.nextElementSibling).toBe(form);
+		const input = form.querySelector('input')!;
+		await vi.waitFor(() => expect(document.activeElement).toBe(input));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		flushSync();
+		expect(body.querySelector('form.add')).toBeNull();
+		expect(document.activeElement).toBe(toggle);
+	});
+
+	it('offers no Add member to someone who can’t change members', () => {
+		render([ada]);
+		expect(document.querySelector('.add-toggle')).toBeNull();
 	});
 });
