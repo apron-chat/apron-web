@@ -86,7 +86,28 @@ export function closeOlderInGroup(notifications: readonly ShownNotification[], g
 
 const newer = (a: string, b: string) => compareLogIds(a, b) > 0;
 
-/** The page's own notifications, by group, where there is no service worker to list them. */
+/**
+ * Closes a room's notifications on this device once you read it here, as
+ * chat apps clear what you've seen: pushed or the page's own, for messages
+ * up to `messageId`. `room` is the account's group for the room
+ * (`notificationGroup`), or, without a `push_id`, the room's one tag.
+ */
+export async function closeReadNotifications(room: { group: string } | { tag: string }, messageId: string): Promise<void> {
+	const read = (notification: Pick<ShownNotification, 'tag' | 'data'>) => {
+		if ('tag' in room) return notification.tag === room.tag;
+		const place = placeOf(notification.data);
+		return place?.group === room.group && compareLogIds(place.messageId, messageId) <= 0;
+	};
+	const registration = await globalThis.navigator?.serviceWorker?.getRegistration().catch(() => undefined);
+	try {
+		for (const notification of (await registration?.getNotifications()) ?? []) if (read(notification)) notification.close();
+	} catch {
+		// Nothing to list: there is nothing of the worker's to close.
+	}
+	for (const notification of pageNotifications.values()) if (read(notification)) notification.close();
+}
+
+/** The page's own notifications, by group (or tag, without one), where there is no service worker to list them. */
 const pageNotifications = new Map<string, Notification>();
 
 /** What the service worker posts to the app's tabs when one of its notifications is clicked. */
@@ -142,12 +163,14 @@ export async function showNotification(title: string, options: ShowNotificationO
 			onclick();
 			notification.close();
 		};
-		if (group !== undefined && place) {
-			const older = pageNotifications.get(group);
-			if (older) closeOlderInGroup([older], group, place.messageId);
-			pageNotifications.set(group, notification);
+		// Kept by group, or by tag without one (one per room), so a newer message or reading the room can close it.
+		const key = group ?? options.tag;
+		if (key !== undefined) {
+			const older = pageNotifications.get(key);
+			if (older && group !== undefined && place) closeOlderInGroup([older], group, place.messageId);
+			pageNotifications.set(key, notification);
 			notification.onclose = () => {
-				if (pageNotifications.get(group) === notification) pageNotifications.delete(group);
+				if (pageNotifications.get(key) === notification) pageNotifications.delete(key);
 			};
 		}
 		return true;

@@ -52,7 +52,7 @@
 	import { PaneDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { setAppBadge, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
@@ -225,6 +225,8 @@
 	let latestVisible = $state(true);
 	let seenCount = $state(0);
 	let typingTimer: ReturnType<typeof setTimeout> | undefined;
+	/** The last read whose notifications were closed (account, server, room, message), so each closes once. */
+	let closedThrough: string | undefined;
 	/** Numbers staged files, so each can be taken off its draft. */
 	let stagedCount = 0;
 	/** Where the last scroll event, or automatic scroll to the latest item, left the list. */
@@ -423,7 +425,14 @@
 		const last = messages[messages.length - 1];
 		// Only once this pane's divider is in place: advancing first would hide what was new.
 		if (!client || !room || !last || !latestVisible || !presence.visible || !room.loaded || !session.ready || newDivider.room !== room.id || !newDivider.fixed) return;
-		untrack(() => client?.markRead(room.id, last.message_id));
+		untrack(() => {
+			client?.markRead(room.id, last.message_id);
+			// What you just read here no longer needs its notifications on this device.
+			const read = `${accountPushId ?? ''}:${client?.url}:${room.id}:${last.message_id}`;
+			if (read === closedThrough || !client) return;
+			closedThrough = read;
+			void closeReadNotifications(accountPushId ? { group: notificationGroup(accountPushId, room.id) } : { tag: `apron:${client.url}:${room.id}` }, last.message_id);
+		});
 	});
 
 	// Members for the mention picker come with each joined room's listing and stay current by
