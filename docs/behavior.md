@@ -204,7 +204,7 @@ message if it was there), while the conversation sits on a compositor layer of
 its own. The layout kept from the last visit shows without sliding in, a drag
 follows the pointer with no slide, and there is no motion at all when the
 system asks for reduced motion. On
-narrow screens it overlays the conversation, starts closed, is toggled by a
+narrow screens the member list overlays the conversation, starts closed, is toggled by a
 button near the end of the room title bar instead, and hides with
 the conversation on the phone's rooms pane. It shows no
 typing or connection status. Where the server sends a `status` (§4.5), each
