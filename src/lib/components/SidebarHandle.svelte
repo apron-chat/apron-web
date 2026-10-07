@@ -38,12 +38,12 @@
 ></button>
 
 <style>
-	.handle { position: absolute; top: 0; bottom: 0; left: calc(var(--sidebar-w) - 4px); width: 9px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; z-index: 4; cursor: col-resize; touch-action: none; }
-	.handle::after { content: ''; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--line); }
+	/* Placed by --sidebar-w, so the border slides with the rooms list as it opens and shuts, and rests at the window's edge once collapsed. */
+	.handle { position: absolute; top: 0; bottom: 0; left: max(0px, calc(var(--sidebar-w) - 4px)); width: 9px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; z-index: 4; cursor: col-resize; touch-action: none; }
+	.handle::after { content: ''; position: absolute; top: 0; bottom: 0; left: min(4px, var(--sidebar-w)); width: 1px; background: var(--line); }
 	.handle:hover::after, .handle:focus-visible::after, .resizing::after { left: 3px; width: 3px; background: var(--denim); }
 	.handle:focus-visible { outline: none; }
-	.collapsed { left: 0; cursor: e-resize; }
-	.collapsed::after { left: 0; }
+	.collapsed { cursor: e-resize; }
 	.right { left: auto; right: calc(var(--member-list-w) - 9px); }
 	.right::after, .right:hover::after, .right:focus-visible::after, .right.resizing::after { left: 0; }
 	.right.collapsed { right: 0; }

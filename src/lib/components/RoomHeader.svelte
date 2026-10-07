@@ -31,6 +31,12 @@
 		canJoin?: boolean;
 		/** Whether the room member list is visible. */
 		memberListOpen: boolean;
+		/**
+		 * Offer the member list's toggle here, where the list overlays the
+		 * conversation; a member list with a column of its own has its toggle
+		 * in the window's corner instead.
+		 */
+		memberListToggle?: boolean;
 		onback: () => void;
 		onroom: () => void;
 		onedit: () => void;
@@ -40,10 +46,9 @@
 	}
 	let {
 		room, pane, threadTitle, typing, replyCount, moreReplies = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, onback, onroom, onedit, onleave, onjoin, onmemberlist
+		memberListOpen, memberListToggle = true, onback, onroom, onedit, onleave, onjoin, onmemberlist
 	}: Props = $props();
 
-	let memberListToggle = $state<HTMLButtonElement | undefined>();
 	/** The room's description (§3.4) as one line of text under its title; a thread shows its own as a summary instead. */
 	let topic = $derived(threadTitle === undefined && room.description ? markdownText(room.description).split('\n')[0] : '');
 	let thread = $derived(threadTitle !== undefined);
@@ -57,11 +62,6 @@
 	function act(value: string): void {
 		if (value === 'edit') onedit();
 		else if (value === 'leave') onleave();
-	}
-
-	/** Where focus goes when the member list collapses from under it. */
-	export function focusMemberListToggle(): void {
-		memberListToggle?.focus();
 	}
 </script>
 
@@ -92,9 +92,11 @@
 	{#if canJoin}
 		<button class="ap-btn ap-btn-sm" type="button" data-testid="join-room" aria-label={thread ? 'Join thread' : 'Join room'} title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={editDisabled} onclick={onjoin}>Join</button>
 	{/if}
-	<button bind:this={memberListToggle} class={['ap-iconbtn', 'member-list-toggle', memberListOpen && 'ap-iconbtn-on']} type="button" aria-label={memberListOpen ? 'Hide member list' : 'Show member list'} aria-expanded={memberListOpen} title={memberListOpen ? 'Hide member list' : 'Show member list'} onclick={onmemberlist}>
-		<Users size={18} strokeWidth={1.8} aria-hidden="true" />
-	</button>
+	{#if memberListToggle}
+		<button class={['ap-iconbtn', 'member-list-toggle', memberListOpen && 'ap-iconbtn-on']} type="button" aria-label={memberListOpen ? 'Hide member list' : 'Show member list'} aria-expanded={memberListOpen} title={memberListOpen ? 'Hide member list' : 'Show member list'} onclick={onmemberlist}>
+			<Users size={18} strokeWidth={1.8} aria-hidden="true" />
+		</button>
+	{/if}
 	{#if actions.length > 0}
 		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} testid="room-actions" choices={actions} disabled={editDisabled} onselect={act}>
 			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
