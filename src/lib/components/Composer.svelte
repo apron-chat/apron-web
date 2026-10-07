@@ -16,6 +16,7 @@
 	import { findGitHubLinks, linkPreviews } from '$lib/ui/link-previews';
 	import { pastedFiles } from '$lib/ui/file-transfer';
 	import { clockLabel } from '$lib/ui/time';
+	import { enterAction, handheld } from '$lib/ui/handheld';
 	import type { StagedFile as Staged } from '$lib/ui/pane-drafts.svelte';
 	import AutocompletePicker from './AutocompletePicker.svelte';
 	import Avatar from './Avatar.svelte';
@@ -360,6 +361,9 @@
 		roomFound = undefined;
 	}
 
+	/** A phone or tablet, where Enter starts a new line and Send is the button (`enterAction`). */
+	const onHandheld = handheld();
+
 	function send(): void {
 		closeCompletions();
 		dismissedAutocomplete = undefined;
@@ -398,7 +402,7 @@
 		}
 		if (event.key === 'Enter' && !event.isComposing) {
 			event.preventDefault();
-			if (event.shiftKey) document.execCommand('insertText', false, '\n');
+			if (enterAction(event, onHandheld) === 'newline') document.execCommand('insertText', false, '\n');
 			else send();
 		}
 	}

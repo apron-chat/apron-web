@@ -1,4 +1,5 @@
 import { playPing } from './attention';
+import { handheld } from './handheld';
 
 /**
  * How long a page goes without input before nobody is taken to be attending
@@ -10,14 +11,6 @@ export const IDLE_AFTER_MS = 5 * 60_000;
 
 /** Input closer together than this doesn't restart the wait: pointer moves come many a second. */
 const INPUT_THROTTLE_MS = 1_000;
-
-/**
- * A phone or tablet, where a hidden page is an app in the background,
- * which the system may suspend at any moment, as mobile chat apps take it.
- */
-function handheld(): boolean {
-	return typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;
-}
 
 /**
  * Whether the viewer is attending this tab, and the alert for a mention that
