@@ -178,7 +178,8 @@
 
 <style>
 	.member-list { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-000); border-left: 1px solid var(--line); }
-	.member-list:not(.open) { display: none; }
+	/* Shut, it stays in the layout (hidden from everyone) so it can slide: the page moves its column, or below 960px its overlay. */
+	.member-list:not(.open) { visibility: hidden; }
 	.member-list-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-body); line-height: 20px; font-weight: 600; }
 	.member-list-count { color: var(--ink-muted); font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
 	.member-list-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2); }
@@ -211,7 +212,12 @@
 	.remove { flex: none; width: 24px; height: 24px; margin-left: auto; opacity: 0; }
 	.member:hover .remove, .member:focus-within .remove { opacity: 1; }
 	@media (hover: none) { .remove { opacity: 1; } }
+	/* Narrower, it overlays the conversation, sliding in from the right edge as the column does on wide screens. */
 	@media (max-width: 959px) {
-		.member-list.open { display: flex; position: absolute; z-index: 6; top: var(--header-h); right: 0; bottom: 0; width: min(var(--member-list-w, 280px), calc(100vw - 24px)); box-shadow: var(--shadow-float); }
+		.member-list { position: absolute; z-index: 6; top: var(--header-h); right: 0; bottom: 0; width: min(var(--member-list-w, 280px), calc(100vw - 24px)); box-shadow: var(--shadow-float); transition: transform var(--slide-time, 0s) var(--slide-ease, ease), visibility 0s; }
+		.member-list:not(.open) { transform: translateX(calc(100% + 24px)); transition: transform var(--slide-time, 0s) var(--slide-ease, ease), visibility 0s var(--slide-time, 0s); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.member-list, .member-list:not(.open) { transition: none; }
 	}
 </style>
