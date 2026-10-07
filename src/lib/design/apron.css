@@ -230,7 +230,9 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-count { flex: none; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: 20px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* StatusBanner */
-.ap-status { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); font-size: var(--text-ui); line-height: 18px; color: var(--ink); }
+/* Even on both sides; a button at the end (`ap-status-action`) takes the right side closer, its own padding making up the rest. */
+.ap-status { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); font-size: var(--text-ui); line-height: 18px; color: var(--ink); }
+.ap-status-action { padding-right: var(--space-2); }
 .ap-status-text { flex: 1; }
 .ap-status-dot { width: 8px; height: 8px; border-radius: var(--radius-full); flex: none; }
 .ap-status-ok { background: var(--ok); }
