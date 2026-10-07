@@ -425,9 +425,13 @@
 		const last = messages[messages.length - 1];
 		// Only once this pane's divider is in place: advancing first would hide what was new.
 		if (!client || !room || !last || !latestVisible || !presence.visible || !room.loaded || !session.ready || newDivider.room !== room.id || !newDivider.fixed) return;
+		const looking = !presence.away;
 		untrack(() => {
 			client?.markRead(room.id, last.message_id);
-			// What you just read here no longer needs its notifications on this device.
+			// What you just read here no longer needs its notifications on this device. Only once
+			// you're looking (focused too): an unfocused window shows its own desktop notification
+			// of what arrives, which must stay until you come back.
+			if (!looking) return;
 			const read = `${accountPushId ?? ''}:${client?.url}:${room.id}:${last.message_id}`;
 			if (read === closedThrough || !client) return;
 			closedThrough = read;

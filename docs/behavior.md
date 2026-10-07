@@ -374,9 +374,11 @@ ones. The same message again replaces its notification quietly (same tag,
 `renotify: false`, silent) while it is showing: a push's with the page's own,
 or an edit that newly mentions you, keeping the pushed one's title. Once
 dismissed (remembered in IndexedDB), it doesn't notify again. Reading a room
-here (its latest message in view, as moves your read cursor) closes that
-room's notifications on this device up to what you read, pushed or the
-page's own, as chat apps clear what you've seen. Notifications on your other
+here (its latest message in view, as moves your read cursor, in a window
+that is focused, not only visible) closes that room's notifications on this
+device up to what you read, pushed or the page's own, as chat apps clear
+what you've seen; a window behind another, which notifies of what arrives,
+leaves its notifications until you come back to it. Notifications on your other
 devices stay: web push can't close them without showing something, which
 browsers require of every push. Browsers expect each push to
 show a notification, and WebKit revokes subscriptions whose pushes don't, so
