@@ -4,8 +4,13 @@
 		label: string;
 		/** Placeholder message rows above it, while the timeline has nothing to show yet. */
 		rows?: number;
+		/**
+		 * Float instead of taking a line in the timeline, for a check under messages already shown: placed just
+		 * above the composer's row, it rests over the composer's top and moves nothing as it comes and goes.
+		 */
+		float?: boolean;
 	}
-	let { label, rows = 0 }: Props = $props();
+	let { label, rows = 0, float = false }: Props = $props();
 
 	/** Widths that vary like real messages, the same on every render so nothing shimmers into a new shape. */
 	const WIDTHS = [['30%', '78%'], ['22%', '64%'], ['26%', '88%'], ['18%', '52%'], ['28%', '70%'], ['24%', '60%']];
@@ -30,6 +35,9 @@
 		</div>
 		{@render pill()}
 	</div>
+{:else if float}
+	<!-- Zero-height anchor: the pill floats on it, in the gap above the composer, and takes no space. -->
+	<div class="ap-tlstatus-float" role="status"><span class="ap-tlstatus-pill"><span class="ap-tlstatus-spin" aria-hidden="true"></span>{label}</span></div>
 {:else}
 	{@render pill()}
 {/if}

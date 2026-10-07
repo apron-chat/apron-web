@@ -46,8 +46,8 @@ A reload, or opening the app again, picks up where you were. With a session
 saved on this device (a passkey or email account; a guest's isn't kept), the
 page first shows the view kept from last time: the rooms and threads, the open
 room with its messages from the last day (the newest 150 per room), its thread
-cards and members, and who you are. A pill at the foot of the timeline says it's
-checking for new messages, and each room is replaced by the live one once it has
+cards and members, and who you are. While it checks for new messages, a pill
+says so (below), and each room is replaced by the live one once it has
 recovered: what arrived meanwhile comes in under the New divider, and edits,
 deletions and reactions update in place. The kept view is only for showing: it
 never sends a read cursor, notifies, or counts as unread, and the live session
@@ -57,8 +57,12 @@ dropped as soon as the server signs in as anyone else. Without one (a first
 visit, or a guest), the page shows placeholder rooms, messages and members, with
 "Connecting…" and then "Loading messages…" at the foot of the timeline, instead of
 "Not signed in", "No rooms yet" or "No room open". While the open room or thread
-recovers or loads its history, the same pill says so ("Checking for new
-messages…" under what's already there), and the first time a room is shown on
+recovers or loads its history, a pill floating just above the composer, in
+the gap under the last message, says so ("Checking for new messages…", or replies in a
+thread). It takes no space, so the timeline doesn't move as it comes and goes,
+and it shows only once a check has taken 400ms, then for at least 600ms and
+until 300ms after the check ends, so a quick check shows nothing and a slow one,
+also one that comes in steps, doesn't flicker. The first time a room is shown on
 a connection its messages wait for its thread listing, for at most three
 seconds, so its thread cards arrive with them instead of shifting the timeline
 afterwards.

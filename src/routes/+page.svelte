@@ -11,6 +11,7 @@
 	import Composer from '$lib/components/Composer.svelte';
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
 	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
+	import { SettleFlag } from '$lib/ui/settle-flag';
 	import type { Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
 	import Message, { type MessageCaps } from '$lib/components/Message.svelte';
@@ -320,6 +321,11 @@
 	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
 	 */
 	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || session.showingHeld || (!activeThread && (session.activeRoomHeld || awaitingThreads)))));
+	/** `paneCatchingUp` as the floating pill shows it: only once a check outlasts a moment, then for a moment at least. */
+	let checkingShown = $state(false);
+	const checking = new SettleFlag((on) => (checkingShown = on));
+	$effect(() => checking.set(paneCatchingUp));
+	$effect(() => () => checking.dispose());
 	/** Nothing held to show while the room's threads are listed: placeholders, so its messages and thread cards appear together. */
 	let paneHeldBack = $derived(awaitingThreads && !activeThread && !session.activeRoomHeld);
 	let messages = $derived(timelineMessages(paneRoom));
@@ -2058,7 +2064,6 @@
 							/>
 						{/if}
 					{/each}
-					{#if paneCatchingUp}<TimelineLoading label={activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} />{/if}
 				{/if}
 			</div>
 
@@ -2075,6 +2080,8 @@
 					{typingLine(typingNames)}
 				{/if}
 			</div>
+			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
+			{#if checkingShown && timeline.length > 0}<TimelineLoading float label={activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} />{/if}
 
 			{#if selection.active}
 				<SelectionBar
