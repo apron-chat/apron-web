@@ -1,0 +1,16 @@
+<!-- @dsCard group="Feedback" height=420 subtitle="An offer made once: turning on notifications at your first mention, pointing at Preferences, then without a pointer above the composer on a phone" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Nudge</title></head>
+<body>
+<div class="ap-stack" id="root" style="max-width:320px;gap:24px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props) { var box = document.createElement('div'); root.appendChild(box); return A.render(C, box, props || {}); }
+  var bell = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.27 21a2 2 0 0 0 3.46 0"/><path d="M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33"/></svg>';
+  var buttons = '<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button">Not now</button><button class="ap-btn ap-btn-primary ap-btn-sm" type="button">Turn on</button>';
+  add(A.Nudge, { title: 'Get notified when you’re mentioned?', detail: 'Ada mentioned you in General. Apron can alert you on this device, even when it’s closed.', note: 'You can change this any time in Preferences.', icon: A.html(bell), actions: A.html(buttons), pointer: true });
+  add(A.Nudge, { title: 'Get notified when you’re mentioned?', detail: 'Ada mentioned you in General. Apron can alert you on this device while it’s open.', icon: A.html(bell), actions: A.html(buttons) });
+</script>
+</body>
+</html>

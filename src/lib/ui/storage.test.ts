@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadAppearance, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadAppearance, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 
 const values = new Map<string, string>();
@@ -20,7 +20,9 @@ afterEach(() => {
 describe('preference storage', () => {
 	it('keeps notifications off until chosen', () => {
 		expect(loadNotificationsEnabled()).toBe(false);
+		expect(notificationsChosen()).toBe(false);
 		saveNotificationsEnabled(true);
+		expect(notificationsChosen()).toBe(true);
 		expect(loadNotificationsEnabled()).toBe(true);
 		saveNotificationsEnabled(false);
 		expect(loadNotificationsEnabled()).toBe(false);

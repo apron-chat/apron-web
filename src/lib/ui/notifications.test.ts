@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId, type ShowNotificationOptions } from './notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, offersNotifications, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId, type ShowNotificationOptions } from './notifications';
 
 /** A service worker registration's notifications: one per tag, a newer one with a tag replacing the older. */
 function fakeRegistration() {
@@ -342,5 +342,22 @@ describe('push notifications', () => {
 		await setAppBadge({}, 2);
 		await setAppBadge(undefined, 2);
 		await setAppBadge({ setAppBadge: async () => { throw new Error('not allowed'); } }, 2);
+	});
+});
+
+describe('offersNotifications', () => {
+	const fresh = { chosen: false, active: false, permission: 'default' as const, silenced: false };
+
+	it('offers them at a mention until they are chosen on this device', () => {
+		expect(offersNotifications(fresh)).toBe(true);
+		expect(offersNotifications({ ...fresh, permission: 'granted' })).toBe(true);
+		expect(offersNotifications({ ...fresh, chosen: true })).toBe(false);
+	});
+
+	it('not while they are on, blocked or unsupported, or paused or on do not disturb', () => {
+		expect(offersNotifications({ ...fresh, active: true })).toBe(false);
+		expect(offersNotifications({ ...fresh, permission: 'denied' })).toBe(false);
+		expect(offersNotifications({ ...fresh, permission: 'unsupported' })).toBe(false);
+		expect(offersNotifications({ ...fresh, silenced: true })).toBe(false);
 	});
 });

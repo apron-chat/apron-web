@@ -363,7 +363,21 @@ this account (another account turned notifications on, or a sign-in since), an
 **Alert when it's closed, too** button turns it on; where another server holds
 this browser's one subscription, **Alert for this server instead** moves it
 here. **Send a test notification** under it shows a sample through the same
-browser path as the page's own. While they're on, a notification replaces the chime (the chime
+browser path as the page's own.
+
+Until notifications are turned on or off on this device, the first mention
+you'd hear (not in a room you muted, nor while paused or on do not disturb)
+offers them once: a small prompt (the design system's `Nudge`), "Get
+notified when you're mentioned?", saying who mentioned you and where, and how
+far they'd reach (even when Apron is closed, where push works here; else while
+it's open). Its **Turn on** does what the switch does, from the same tap;
+**Not now**, or Escape within it, turns them off. Either answer, or using the
+switch, is the choice, so it isn't offered again on this device, nor once the
+browser blocks notifications. With the rooms list showing, it sits above the
+profile bar, pointing at the Preferences gear where the switch lives, and says
+so; on phones, or with the list collapsed, it sits above the composer. It
+doesn't take focus from what you're typing; a screen reader reads it as it
+appears. While they're on, a notification replaces the chime (the chime
 still plays if one couldn't be shown), each room keeps one notification that
 the next message replaces (its newest mention, else its newest message), and
 clicking it opens that room or thread. Notifications show through the service

@@ -245,6 +245,18 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-banner-actions { flex: none; display: flex; gap: var(--space-1); }
 .ap-banner .ap-btn-ghost { color: var(--ink-muted); }
 .ap-banner .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
+/* Nudge — a small offer made once, when it's useful (turning on notifications at your first mention); it can point at the control that changes it later */
+.ap-nudge { position: relative; display: grid; gap: var(--space-3); width: 300px; max-width: 100%; box-sizing: border-box; padding: var(--space-3); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
+.ap-nudge-pointer::after { content: ''; position: absolute; left: var(--ap-nudge-tip, var(--space-6)); bottom: -6px; width: 10px; height: 10px; background: var(--bg-200); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
+.ap-nudge-top { display: flex; align-items: flex-start; gap: var(--space-3); }
+.ap-nudge-icon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-full); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.ap-nudge-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ap-nudge-title { font-weight: 600; }
+.ap-nudge-detail { font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); }
+.ap-nudge-actions { display: flex; justify-content: flex-end; gap: var(--space-1); }
+.ap-nudge-actions .ap-btn-ghost { color: var(--ink-muted); }
+.ap-nudge-actions .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
+.ap-nudge-note { margin: 0; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); }
 
 /* MessageActions — floating toolbar on message hover/focus */
 .ap-actions { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); box-shadow: var(--shadow-float); }
