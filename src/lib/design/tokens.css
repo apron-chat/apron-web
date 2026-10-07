@@ -46,6 +46,16 @@
 	/* Color emoji faces, in emoji-mart's order, so reactions match its picker (system-ui may carry text-style glyphs). */
 	--font-emoji: 'EmojiMart', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Segoe UI', 'Apple Color Emoji', 'Twemoji Mozilla', 'Noto Color Emoji', 'Android Emoji';
 
+	/* Text sizes: pick one of these, never a fresh number. Glyphs sized to their box (avatar initials,
+	   emoji, the back chevron) and the connect screen's display title are the only literal sizes. */
+	--text-caps: 10px;   /* uppercase labels with letter-spacing: role badges */
+	--text-xs: 11px;     /* the quietest meta: hover and system times, keyboard hints */
+	--text-sm: 12px;     /* meta and hints: timestamps, field labels, room topics */
+	--text-ui: 13px;     /* controls: buttons, menus, member rows, notes */
+	--text-field: 14px;  /* what people type, and dialog copy */
+	--text-body: 15px;   /* messages and running text; room and panel titles */
+	--text-title: 18px;  /* dialog and card titles */
+
 	/* Spacing: the 4px scale. */
 	--space-1: 4px;
 	--space-2: 8px;

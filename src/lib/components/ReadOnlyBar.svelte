@@ -23,5 +23,5 @@
 
 <style>
 	.readonly { align-items: center; }
-	.readonly-text { flex: 1; margin: 0; padding: 3px var(--space-1); font-size: 14px; line-height: 20px; color: var(--ink-muted); }
+	.readonly-text { flex: 1; margin: 0; padding: 3px var(--space-1); font-size: var(--text-field); line-height: 20px; color: var(--ink-muted); }
 </style>

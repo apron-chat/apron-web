@@ -208,9 +208,9 @@
 	.ap-shell-sidehead { gap: var(--space-2); }
 	.create-room-trigger { width: 28px; padding: 0; justify-content: center; }
 	.backend { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: 13px; line-height: 18px; }
+	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
 	.threads { display: flex; flex-direction: column; gap: 2px; }
-	.room-meta { flex: none; font-size: 12px; line-height: 16px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+	.room-meta { flex: none; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 	.ap-room-active .room-meta { color: var(--ink); }
 	.more .ap-room-topic { color: var(--denim); }
 	@media (max-width: 719px) {

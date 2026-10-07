@@ -128,7 +128,7 @@
 <p class="ap-profedit-hint font-hint" id="{id}-hint">{hint}</p>
 
 <style>
-	.field-label { display: block; margin: var(--space-4) 0 var(--space-1); color: var(--ink); font-size: 13px; font-weight: 600; }
+	.field-label { display: block; margin: var(--space-4) 0 var(--space-1); color: var(--ink); font-size: var(--text-ui); font-weight: 600; }
 	.font-hint { margin-top: var(--space-1); }
 	.font-combobox { position: relative; }
 	.font-combobox > input { width: min(100%, 420px); }
@@ -136,5 +136,5 @@
 	.font-load { margin: 0 var(--space-2) var(--space-2); padding: 5px var(--space-2); color: var(--ink); background: var(--bg-300); border: 0; border-radius: var(--radius-sm); cursor: pointer; }
 	.font-option { display: block; width: 100%; padding: 5px var(--space-2); color: var(--ink); text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
 	.font-option:hover, .font-option.active { background: var(--bg-300); }
-	.font-status { margin: 0; padding: var(--space-2); color: var(--ink-muted); font-size: 12px; line-height: 17px; }
+	.font-status { margin: 0; padding: var(--space-2); color: var(--ink-muted); font-size: var(--text-sm); line-height: 17px; }
 </style>

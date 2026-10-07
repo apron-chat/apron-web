@@ -92,9 +92,9 @@
 
 <style>
 	.ap-pref-pause { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: 1px solid var(--line); }
-	.ap-pref-pause strong { font-size: 14px; }
+	.ap-pref-pause strong { font-size: var(--text-field); }
 	.ap-pref-pause p { max-width: 420px; margin: var(--space-1) 0 0; }
-	.ap-pref-paused { display: flex; align-items: center; gap: var(--space-1); color: var(--warn); font-size: 13px; line-height: 19px; }
+	.ap-pref-paused { display: flex; align-items: center; gap: var(--space-1); color: var(--warn); font-size: var(--text-ui); line-height: 19px; }
 	.ap-pause-action { flex: none; }
 	.ap-pause-refused { margin-top: var(--space-2); max-width: 420px; }
 </style>

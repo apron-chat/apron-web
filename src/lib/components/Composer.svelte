@@ -771,7 +771,7 @@
 <style>
 	/* The autocomplete picker anchors to the composer and grows upward. */
 	.wrap { position: relative; }
-	.reply-draft { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-4); font-size: 13px; line-height: 18px; color: var(--ink-muted); }
+	.reply-draft { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-4); font-size: var(--text-ui); line-height: 18px; color: var(--ink-muted); }
 	/* Previews of the draft's links, above the field; each can be removed before sending. */
 	.previews { display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-3) var(--space-4) var(--space-2); }
 	.embed-slot { position: relative; flex: 0 1 320px; min-width: 0; }

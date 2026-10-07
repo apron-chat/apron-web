@@ -120,4 +120,20 @@ describe('MenuButton', () => {
 		await tick();
 		expect(items()).toHaveLength(3);
 	});
+
+	it('draws an icon button named by its label, and marks the items for tests', async () => {
+		const icon = createRawSnippet(() => ({ render: () => '<svg aria-hidden="true"></svg>' }));
+		const actions = [{ value: 'edit', label: 'Edit room', testid: 'edit-room' }, { value: 'leave', label: 'Leave room', testid: 'leave-room' }];
+		instance = mount(MenuButton, { target: document.body, props: { label: 'Room actions', icon, testid: 'room-actions', choices: actions, onselect: vi.fn() } });
+		flushSync();
+		const trigger = document.querySelector<HTMLButtonElement>('[data-testid="room-actions"]')!;
+		expect(trigger.classList.contains('ap-iconbtn')).toBe(true);
+		expect(trigger.getAttribute('aria-label')).toBe('Room actions');
+		expect(trigger.textContent).toBe('');
+		trigger.click();
+		flushSync();
+		await tick();
+		expect(trigger.classList.contains('ap-iconbtn-on')).toBe(true);
+		expect(document.querySelector('[data-testid="leave-room"]')?.textContent).toBe('Leave room');
+	});
 });

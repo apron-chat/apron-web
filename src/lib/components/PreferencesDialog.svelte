@@ -1,10 +1,12 @@
 <script lang="ts">
-	import X from '@lucide/svelte/icons/x';
+	import { untrack } from 'svelte';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import Button from '$lib/design/components/Button.svelte';
 	import Callout from '$lib/design/components/Callout.svelte';
 	import CheckList from '$lib/design/components/CheckList.svelte';
+	import Dialog from '$lib/design/components/Dialog.svelte';
+	import Switch from '$lib/design/components/Switch.svelte';
 	import { pausedUntilLabel, type PausedUntil } from '$lib/ui/pause';
 	import PauseNotifications from './PauseNotifications.svelte';
 	import StatusPicker from './StatusPicker.svelte';
@@ -107,12 +109,10 @@
 		const changed = Object.keys(now).find((key) => now[key] !== before[key] && now[key] !== undefined);
 		if (changed) announcement = now[changed]!;
 	});
-	let preferencesDialog = $state<HTMLDialogElement | undefined>();
-
+	/** Each time it opens, the font drafts start from what is saved, and earlier results clear. */
 	$effect(() => {
-		const dialog = preferencesDialog;
-		if (!dialog) return;
-		if (open && !dialog.open) {
+		if (!open) return;
+		untrack(() => {
 			interfaceFontDraft = appearanceSettings.current.interfaceFont;
 			chatFontDraft = appearanceSettings.current.chatFont;
 			monoFontDraft = appearanceSettings.current.monoFont;
@@ -120,10 +120,7 @@
 			fontBrowserState = typeof window !== 'undefined' && typeof (window as LocalFontAccessWindow).queryLocalFonts === 'function' ? 'idle' : 'unsupported';
 			fontError = '';
 			testNotificationStatus = 'idle';
-			dialog.showModal();
-		} else if (!open && dialog.open) {
-			dialog.close();
-		}
+		});
 	});
 
 	async function sendTestNotification(): Promise<void> {
@@ -185,32 +182,14 @@
 		}
 	}
 
-	function closePreferences(): void {
-		preferencesDialog?.close();
-	}
-
-	/** Whether the press started on the backdrop, so a selection dragged out of the panel doesn't close it. */
-	let pressedBackdrop = false;
-
-	/** A click on the backdrop closes, as the X does: the panel's content fills the dialog, so only the backdrop targets it. */
-	function backdropClick(event: MouseEvent): void {
-		if (event.target === preferencesDialog && pressedBackdrop) closePreferences();
-		pressedBackdrop = false;
-	}
-
 	function preferencesClosed(): void {
-		open = false;
 		localFontFamilies = [];
 		fontBrowserState = 'idle';
 		onclosed?.();
 	}
 </script>
 
-<dialog class="ap-preferences" bind:this={preferencesDialog} aria-labelledby="ap-pref-title" onclose={preferencesClosed} onpointerdown={(event) => (pressedBackdrop = event.target === preferencesDialog)} onclick={backdropClick}>
-	<header class="ap-preferences-head">
-		<div><p>SETTINGS</p><h2 id="ap-pref-title">Preferences</h2></div>
-		<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" aria-label="Close preferences" onclick={closePreferences}><X size={16} aria-hidden="true" /></button>
-	</header>
+<Dialog bind:open title="Preferences" size="lg" closeLabel="Close preferences" backdropCloses flush onclose={preferencesClosed}>
 	<div class="ap-preferences-body">
 		<nav class="ap-preferences-nav" aria-label="Preference sections">
 			<button type="button" aria-current={preferencesSection === 'notifications' ? 'page' : undefined} onclick={() => (preferencesSection = 'notifications')}>Notifications</button>
@@ -247,7 +226,7 @@
 						</p>
 						{#if testNote}<p class={['ap-pref-note', testNote.tone === 'ok' && 'ap-profedit-ok', testNote.tone === 'err' && 'ap-profedit-err']}>{testNote.text}</p>{/if}
 					</div>
-					<button class="ap-pref-switch" class:active={notificationsEnabled} type="button" role="switch" aria-checked={notificationsEnabled} aria-label="Desktop notifications" aria-disabled={desktopLocked || undefined} aria-describedby="ap-pref-desktop-note" onclick={() => { if (!desktopLocked) onnotifications(); }}><span></span></button>
+					<Switch checked={notificationsEnabled} label="Desktop notifications" locked={desktopLocked} describedby="ap-pref-desktop-note" onchange={onnotifications} />
 				</div>
 				{#if webPush}
 					<div class="ap-pref-setting ap-pref-push">
@@ -256,7 +235,7 @@
 							<p class="ap-profedit-hint">Alerts on this device even when Apron is closed.</p>
 							{#if pushNote}<p class={['ap-pref-note', pushNote.tone === 'ok' && 'ap-profedit-ok', pushNote.tone === 'err' && 'ap-profedit-err']} id="ap-pref-push-note">{pushNote.text}</p>{/if}
 						</div>
-						<button class="ap-pref-switch" class:active={webPush.enabled} type="button" role="switch" aria-checked={webPush.enabled} aria-label="Push notifications" aria-disabled={pushLocked || undefined} aria-describedby={pushNote ? 'ap-pref-push-note' : undefined} onclick={() => { if (!pushLocked) onwebpush(); }}><span></span></button>
+						<Switch checked={webPush.enabled} label="Push notifications" locked={pushLocked} describedby={pushNote ? 'ap-pref-push-note' : undefined} onchange={onwebpush} />
 					</div>
 					{#if webPush.homeScreen}
 						<div class="ap-pref-push-more">
@@ -329,26 +308,21 @@
 			</section>
 		{/if}
 	</div>
-</dialog>
+</Dialog>
 
 <style>
-	.ap-preferences { width: min(760px, calc(100vw - 32px)); height: min(560px, calc(100dvh - 32px)); max-width: none; max-height: none; margin: auto; padding: 0; color: var(--ink); background: var(--bg-100); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
-	.ap-preferences::backdrop { background: rgba(5, 5, 12, .68); backdrop-filter: blur(2px); }
-	.ap-preferences-head { height: 76px; display: flex; justify-content: space-between; align-items: center; padding: 0 var(--space-6); border-bottom: 1px solid var(--line); }
-	.ap-preferences-head p { margin: 0 0 2px; color: var(--ink-muted); font-size: 10px; letter-spacing: .12em; }
-	.ap-preferences-head h2 { margin: 0; font-size: 18px; line-height: 24px; }
-	.ap-preferences-body { height: calc(100% - 77px); display: grid; grid-template-columns: 190px minmax(0, 1fr); }
+	.ap-preferences-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr); }
 	.ap-preferences-nav { padding: var(--space-4) var(--space-2); border-right: 1px solid var(--line); }
 	.ap-preferences-nav button { width: 100%; padding: var(--space-2) var(--space-3); color: var(--ink); text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
 	.ap-preferences-nav button[aria-current="page"] { color: var(--ink); background: var(--bg-300); }
 	.ap-preferences-content { padding: var(--space-6); overflow-y: auto; }
-	.ap-preferences-content h3 { margin: 0; font-size: 17px; }
+	.ap-preferences-content h3 { margin: 0; font-size: var(--text-body); line-height: 20px; }
 	.ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
 	.ap-pref-setting { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-	.ap-pref-setting strong { font-size: 14px; }
-	.ap-pref-experimental { display: inline-block; margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: 11px; line-height: 18px; font-weight: 500; vertical-align: 1px; }
+	.ap-pref-setting strong { font-size: var(--text-field); }
+	.ap-pref-experimental { display: inline-block; margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-xs); line-height: 18px; font-weight: 500; vertical-align: 1px; }
 	.ap-pref-setting p { max-width: 420px; margin: var(--space-1) 0 0; }
-	.ap-pref-theme-setting label { color: var(--ink); font-size: 14px; font-weight: 600; cursor: pointer; }
+	.ap-pref-theme-setting label { color: var(--ink); font-size: var(--text-field); font-weight: 600; cursor: pointer; }
 	.ap-pref-theme-setting select { flex: none; }
 	.ap-pref-font-setting { display: block; }
 	.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
@@ -357,19 +331,13 @@
 	.ap-pref-push { border-bottom: 0; }
 	.ap-pref-push-more { max-width: 460px; padding-bottom: var(--space-4); }
 	.ap-pref-scopes { max-width: 460px; padding: var(--space-4) 0; }
-	.ap-pref-switch { flex: none; width: 42px; height: 24px; padding: 3px; display: flex; align-items: center; border: 0; border-radius: 999px; background: var(--bg-300); cursor: pointer; transition: background .15s; }
-	.ap-pref-switch span { width: 18px; height: 18px; border-radius: 50%; background: var(--ink-muted); transition: transform .15s, background .15s; }
-	.ap-pref-switch.active { background: var(--accent-soft); }
-	.ap-pref-switch.active span { background: var(--accent); transform: translateX(18px); }
-	.ap-pref-switch:disabled, .ap-pref-switch[aria-disabled='true'] { opacity: .5; cursor: not-allowed; }
-	.ap-pref-note { margin: var(--space-3) 0; color: var(--ink-muted); font-size: 13px; line-height: 19px; }
+	.ap-pref-note { margin: var(--space-3) 0; color: var(--ink-muted); font-size: var(--text-ui); line-height: 19px; }
 	.ap-pref-select { width: min(100%, 320px); }
-	.ap-pref-help { margin: var(--space-1) 0 0; color: var(--ink-muted); font-size: 12px; line-height: 17px; }
+	.ap-pref-help { margin: var(--space-1) 0 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: 17px; }
 	.ap-font-access-status { margin: var(--space-2) 0 var(--space-1); }
 	.ap-pref-fonts { margin-top: var(--space-4); }
 	.ap-pref-font-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
 	@media (max-width: 560px) {
-		.ap-preferences { height: min(600px, calc(100dvh - 24px)); width: calc(100vw - 24px); }
 		.ap-preferences-body { grid-template-columns: 130px minmax(0, 1fr); }
 		.ap-preferences-content { padding: var(--space-4); }
 	}

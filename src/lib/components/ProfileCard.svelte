@@ -210,13 +210,13 @@
 	.who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 	.names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 	.name-line { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
-	.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; line-height: 22px; font-weight: 600; }
-	.you { flex: none; color: var(--ink-muted); font-size: 12px; }
-	.handle { color: var(--ink-muted); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; user-select: all; }
-	.presence { color: var(--ink-muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
-	.presence .literal { font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
+	.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-title); line-height: 24px; font-weight: 600; }
+	.you { flex: none; color: var(--ink-muted); font-size: var(--text-sm); }
+	.handle { color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; overflow-wrap: anywhere; user-select: all; }
+	.presence { color: var(--ink-muted); font-size: var(--text-sm); line-height: 16px; overflow-wrap: anywhere; }
+	.presence .literal { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
 	.names :global(.ap-roles) { align-self: flex-start; margin: 2px 0 0; }
-	.muted, .warn { margin: 0; font-size: 13px; line-height: 18px; }
+	.muted, .warn { margin: 0; font-size: var(--text-ui); line-height: 18px; }
 	.muted { color: var(--ink-muted); }
 	.warn { padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--bg-300); color: var(--ink); }
 	.err { color: var(--danger); }

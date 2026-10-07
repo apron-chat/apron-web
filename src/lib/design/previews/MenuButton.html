@@ -1,4 +1,4 @@
-<!-- @dsCard group="Actions" height=260 subtitle="Pause notifications: closed, and open with when each choice ends; a status picker, open on the current choice with a dot before each" -->
+<!-- @dsCard group="Actions" height=260 subtitle="Pause notifications: closed, and open with when each choice ends; the room header's actions as an icon button; a status picker, open on the current choice with a dot before each" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>MenuButton</title></head>
@@ -15,6 +15,9 @@
   ];
   add(A.MenuButton, { label: 'Pause…', choices: choices, onselect: function () {} });
   add(A.MenuButton, { label: 'Pause…', choices: choices, open: true, onselect: function () {} });
+  // With `icon`: an icon button whose `label` is its name and tooltip, here the room header's actions menu.
+  add(A.MenuButton, { label: 'Room actions', icon: A.html('<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>'),
+    choices: [{ value: 'edit', label: 'Edit room' }, { value: 'leave', label: 'Leave room' }], open: true, onselect: function () {} });
   // As a picker: `selected` checks the current choice; `lead` draws a StatusDot before each label.
   var statuses = [
     { value: 'online', label: 'Online', hint: 'Automatic' },

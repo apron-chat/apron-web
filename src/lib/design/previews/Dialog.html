@@ -1,0 +1,22 @@
+<!-- @dsCard group="Layout" height=420 subtitle="Create a room: a title and close button, fields in the body, Cancel and the primary action in the footer" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Dialog</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.Dialog, root, {
+    open: true,
+    title: 'Create a room',
+    onsubmit: function (event) { event.preventDefault(); },
+    children: A.html(
+      '<label class="ap-fieldlabel">Room name<input class="ap-field" value="design-review"></label>' +
+      '<label class="ap-fieldlabel"><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown, optional</span></span><textarea class="ap-field ap-field-multi" rows="3" placeholder="What this room is for."></textarea></label>' +
+      '<label class="ap-choice-item ap-checklist-item ap-choice-on"><input class="ap-checklist-box" type="checkbox" checked><span class="ap-checklist-label"><span class="ap-choice-title">Private</span><span class="ap-choice-text">Only members see it, and members add others.</span></span></label>'
+    ),
+    footer: A.html('<span style="display:flex;gap:8px"><button class="ap-btn ap-btn-ghost ap-btn-sm" type="button">Cancel</button><button class="ap-btn ap-btn-primary ap-btn-sm" type="submit">Create room</button></span>')
+  });
+</script>
+</body>
+</html>
