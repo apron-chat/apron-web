@@ -25,7 +25,7 @@
 	const s = $derived(STATUS[state] ?? STATUS.connecting);
 </script>
 
-<div class="ap-status" role="status">
+<div class={['ap-status', action && 'ap-status-action']} role="status">
 	<span class="ap-status-dot ap-status-{s[0]}" aria-hidden="true"></span>
 	<span class="ap-status-text">{#if children}{@render children()}{:else}{message || s[1]}{/if}{#if retryIn != null}<span class="ap-status-retry">{` · Retrying in ${retryIn}s`}</span>{/if}</span>
 	{@render action?.()}

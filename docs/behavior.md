@@ -66,7 +66,12 @@ also one that comes in steps, doesn't flicker. A short drop of the connection
 uses the same pill, saying "Reconnecting…" until the connection is back and then
 that it's checking, so the way back reads as one quiet line, with everything
 kept on screen; a longer drop, or one that needs you, gets the status banner
-instead. The first time a room is shown on
+instead.
+A request that takes more than 600ms says so in a toast above the composer
+("Leaving…"), which goes when it's done; one that fails leaves its error there
+until the next request, or until its × closes it. An error of the connection
+itself shows in the corner, also with a ×; closed, it stays away until it
+clears, and shows again if it comes back. The first time a room is shown on
 a connection its messages wait for its thread listing, for at most three
 seconds, so its thread cards arrive with them instead of shifting the timeline
 afterwards.
