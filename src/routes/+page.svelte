@@ -35,7 +35,7 @@
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker, notificationsByRoom } from '$lib/ui/incoming-messages';
 	import { UnreadTracker } from '$lib/ui/unread.svelte';
-	import { isOwn, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
+	import { isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
@@ -1517,11 +1517,17 @@
 	// --- Editing ---
 
 	/**
-	 * Any message in the open pane can be picked for a move (capability `edit`), anyone's:
-	 * the server decides whose it lets you move.
+	 * A message in the open pane can be picked for a move (capability `edit`) when you may
+	 * move it: your own, or anyone's for an admin or a mod. The server still decides each move.
 	 */
 	function canSelect(event: MessageRecord): boolean {
-		return session.canEdit && !event.deleted && event.room_id === paneRoom?.id;
+		return session.canEdit && !event.deleted && event.room_id === paneRoom?.id && mayMove(event, session.you);
+	}
+
+	/** Whether a picked message may still be moved: a role may have been taken away since it was picked. */
+	function movable(id: string): boolean {
+		const event = resolveMessage(id);
+		return event !== undefined && canSelect(event);
 	}
 
 	/** What the toolbar offers: only what the server can do, and only on messages this viewer may change. */
@@ -1626,9 +1632,10 @@
 				parentRoomId: roomId,
 				title: (firstId) => threadTitleFor(resolveMessage(firstId)),
 				// Nothing moves out of a private room into a thread others can see.
-				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined
+				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined,
+				movable
 			})
-			: await selection.move(client, target);
+			: await selection.move(client, target, movable);
 		if (!result.moved) {
 			if (result.error !== undefined) feedback.error(result.error, 'Some messages could not be moved');
 			return;

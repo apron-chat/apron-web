@@ -20,12 +20,20 @@ export interface NewThreadOptions {
 	title: (firstMessageId: string) => string;
 	/** Checks the thread once it exists, before anything moves into it: an error stops the move. */
 	check?: (roomId: string) => Error | undefined;
+	/** Whether you may move each picked message; see MessageSelection.move. */
+	movable?: (id: string) => boolean;
 }
+
+/** Why a selection with a message you may not move moves none of them. */
+export const NOT_MOVABLE = 'You can only move your own messages, so none were moved';
 
 /**
  * Select mode: entered with one message picked, grown by clicks and ranges,
- * and ended by a move or Cancel. Only IDs the caller offers can be picked; the
- * server still decides each move, and denied messages stay picked for a retry.
+ * and ended by a move or Cancel. Only IDs the caller offers can be picked. A
+ * move is all or nothing as far as permission goes: one picked message you
+ * may not move stops the whole move before anything is sent, so a
+ * conversation is never split between rooms. The server still decides each
+ * move, and messages it refuses (say, over a posting limit) stay picked for a retry.
  */
 export class MessageSelection {
 	current = $state<Selection | undefined>();
@@ -73,12 +81,14 @@ export class MessageSelection {
 
 	/**
 	 * One `message` save per picked message, each moving it to `room` (a
-	 * thread, or a thread's parent room). Denied messages stay selected.
+	 * thread, or a thread's parent room). With `movable`, nothing is sent
+	 * unless every picked message passes it. Denied messages stay selected.
 	 */
-	async move(client: ChatClient, room: string): Promise<MoveResult> {
+	async move(client: ChatClient, room: string, movable?: (id: string) => boolean): Promise<MoveResult> {
 		const current = this.current;
 		if (!current || current.saving || current.ids.length === 0) return { moved: false, error: undefined };
 		const ids = current.ids;
+		if (movable && !ids.every(movable)) return { moved: false, error: new Error(NOT_MOVABLE) };
 		this.current = { ...current, saving: true, denied: undefined };
 		this.menuOpen = false;
 		const results = await Promise.allSettled(ids.map((id) => client.moveMessage(id, room).promise));
@@ -102,6 +112,8 @@ export class MessageSelection {
 		const current = this.current;
 		if (!current || current.saving || current.ids.length === 0) return { moved: false, error: undefined };
 		const first = [...current.ids].sort((a, b) => order.indexOf(a) - order.indexOf(b))[0];
+		// Checked before the thread exists, so a refused move leaves no empty thread behind.
+		if (options.movable && !current.ids.every(options.movable)) return { moved: false, error: new Error(NOT_MOVABLE) };
 		this.current = { ...current, saving: true, denied: undefined };
 		this.menuOpen = false;
 		try {
@@ -110,7 +122,7 @@ export class MessageSelection {
 			const refused = options.check?.(result.room_id);
 			if (refused) throw refused;
 			this.current = { ...current, saving: false };
-			return await this.move(client, result.room_id);
+			return await this.move(client, result.room_id, options.movable);
 		} catch (error) {
 			this.current = { ...current, saving: false };
 			return { moved: false, error };

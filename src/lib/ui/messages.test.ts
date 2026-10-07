@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '$lib/protocol/types';
-import { avatarHue, mentionsMe, mentionsOf, typingLine } from './messages';
+import { avatarHue, mayMove, mentionsMe, mentionsOf, typingLine } from './messages';
 
 describe('avatarHue', () => {
 	it('gives each user_id one stable hue and spreads different IDs apart', () => {
@@ -40,5 +40,17 @@ describe('typingLine', () => {
 		expect(typingLine(['Ada'])).toBe('Ada is typing…');
 		expect(typingLine(['Ada', 'Bo'])).toBe('Ada and Bo are typing…');
 		expect(typingLine(['Ada', 'Bo', 'Cy'])).toBe('Several people are typing…');
+	});
+});
+
+describe('mayMove', () => {
+	const event = (user_id: string) => ({ message_id: '1', log_id: '1', room_id: 'general', from: { user_id } }) as MessageRecord;
+	it('allows your own messages, and anyone\'s for an admin or a mod', () => {
+		expect(mayMove(event('alice'), { user_id: 'alice' })).toBe(true);
+		expect(mayMove(event('bob'), { user_id: 'alice' })).toBe(false);
+		expect(mayMove(event('bob'), { user_id: 'alice', roles: ['helper'] })).toBe(false);
+		expect(mayMove(event('bob'), { user_id: 'alice', roles: ['mod'] })).toBe(true);
+		expect(mayMove(event('bob'), { user_id: 'alice', roles: ['admin'] })).toBe(true);
+		expect(mayMove(event('bob'), undefined)).toBe(false);
 	});
 });
