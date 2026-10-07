@@ -11,6 +11,7 @@
 	import Composer from '$lib/components/Composer.svelte';
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
 	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
+	import { SettleFlag } from '$lib/ui/settle-flag';
 	import type { Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
 	import Message, { type MessageCaps } from '$lib/components/Message.svelte';
@@ -320,6 +321,14 @@
 	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
 	 */
 	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || session.showingHeld || (!activeThread && (session.activeRoomHeld || awaitingThreads)))));
+	/** `paneCatchingUp` or a quiet reconnect, as the floating pill shows it: only once it outlasts a moment, then for a moment at least. */
+	let checkingShown = $state(false);
+	const checking = new SettleFlag((on) => (checkingShown = on));
+	/** A short drop of the connection, kept quiet: everything stays on screen while the socket comes back. */
+	let quietReconnect = $derived(session.connection === 'reconnecting' && !session.reconnectNeedsAttention);
+	// One pill for the whole way back: "Reconnecting…", then checking for what came meanwhile.
+	$effect(() => checking.set(paneCatchingUp || quietReconnect));
+	$effect(() => () => checking.dispose());
 	/** Nothing held to show while the room's threads are listed: placeholders, so its messages and thread cards appear together. */
 	let paneHeldBack = $derived(awaitingThreads && !activeThread && !session.activeRoomHeld);
 	let messages = $derived(timelineMessages(paneRoom));
@@ -1972,11 +1981,8 @@
 			{/if}
 
 			{#if session.connection === 'reconnecting' && !session.reconnectNeedsAttention}
-				<!-- A short blip stays quiet: the room, history, and identity are all kept in place while the socket comes back. -->
-				<div class="reconnect-quiet" role="status">
-					<TypingDots />
-					<span data-testid="connection-status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
-				</div>
+				<!-- A short blip stays quiet: the room, history, and identity are kept in place, and the pill above the composer says it. -->
+				<span class="sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
 			{:else if session.starting && session.connection === 'connecting'}
 				<!-- Coming up with a view from before: the timeline's foot says it's checking; a banner would only alarm. -->
 				<span class="sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
@@ -2069,7 +2075,6 @@
 							/>
 						{/if}
 					{/each}
-					{#if paneCatchingUp}<TimelineLoading label={activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} />{/if}
 				{/if}
 			</div>
 
@@ -2086,6 +2091,8 @@
 					{typingLine(typingNames)}
 				{/if}
 			</div>
+			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
+			{#if checkingShown && timeline.length > 0}<TimelineLoading float label={quietReconnect ? statusLabel(snapshot, session.stalled) : activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} />{/if}
 
 			{#if selection.active}
 				<SelectionBar
@@ -2197,7 +2204,6 @@
 		background: color-mix(in srgb, var(--bg-100) 85%, transparent); color: var(--ink);
 		font-weight: 600; pointer-events: none;
 	}
-	.reconnect-quiet { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-4) 0; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); }
 	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 	.starting { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 	.starting-title { width: 120px; height: 14px; }

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=360 subtitle="Loading messages with placeholder rows, then checking for new messages under what is already shown" -->
+<!-- @dsCard group="Timeline" height=360 subtitle="Loading messages with placeholder rows, then checking for new messages, floating over what is already shown" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>TimelineLoading</title></head>
@@ -8,10 +8,13 @@
   var A = window.Apron, root = document.getElementById('root');
   function pane() { var box = document.createElement('div'); box.style.cssText = 'display:flex;flex-direction:column;height:300px;border:1px solid var(--line);border-radius:10px;background:var(--bg-100);overflow:auto'; root.appendChild(box); return box; }
   A.render(A.TimelineLoading, pane(), { label: 'Loading messages…', rows: 5 });
-  var shown = pane();
-  shown.innerHTML = '<div style="flex:1"></div><p style="margin:0;padding:8px 16px;color:var(--ink)">Heading out, see you tomorrow!</p>';
+  // A timeline with its messages, then the floating pill's anchor just below it, taking no space.
+  var shown = pane(); shown.style.overflow = 'hidden';
+  var list = document.createElement('div'); list.style.cssText = 'flex:1;display:flex;flex-direction:column;justify-content:flex-end;overflow:auto';
+  list.innerHTML = '<p style="margin:0;padding:8px 16px;color:var(--ink)">Shipping the fix tonight.</p><p style="margin:0;padding:8px 16px;color:var(--ink)">Heading out, see you tomorrow!</p>';
+  shown.appendChild(list);
   var foot = document.createElement('div'); shown.appendChild(foot);
-  A.render(A.TimelineLoading, foot, { label: 'Checking for new messages…' });
+  A.render(A.TimelineLoading, foot, { label: 'Checking for new messages…', float: true });
 </script>
 </body>
 </html>
