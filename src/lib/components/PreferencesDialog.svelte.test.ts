@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
+import { appearanceSettings, DEFAULT_APPEARANCE } from '$lib/ui/appearance.svelte';
 import PreferencesDialog from './PreferencesDialog.svelte';
 
 let instance: ReturnType<typeof mount> | undefined;
@@ -111,5 +112,51 @@ describe('PreferencesDialog', () => {
 		await tick();
 		flushSync();
 		expect(live.textContent).toBe('This server doesn’t offer Invisible. Your status is None.');
+	});
+
+	it('applies a premade theme at once, and edited CSS as the custom theme', () => {
+		appearanceSettings.update({ ...DEFAULT_APPEARANCE });
+		instance = mount(PreferencesDialog, { target: document.body, props: notificationProps() });
+		flushSync();
+		[...document.querySelectorAll<HTMLButtonElement>('.ap-preferences-nav button')].find((button) => button.textContent === 'Appearance')!.click();
+		flushSync();
+		const root = document.documentElement;
+		const select = document.querySelector<HTMLSelectElement>('#ap-theme')!;
+		const css = document.querySelector<HTMLTextAreaElement>('#ap-theme-css')!;
+		const apply = document.querySelector<HTMLButtonElement>('.ap-pref-theme-css button[type="submit"]')!;
+
+		select.value = 'ferrous';
+		select.dispatchEvent(new Event('change', { bubbles: true }));
+		flushSync();
+		expect(root.style.getPropertyValue('--font-mono')).toBe('"RecMonoCasual Nerd Font", "Rec Mono Casual", var(--font-mono-system)');
+		expect(css.value).toContain('Recursive Sans Casual Static');
+		expect(apply.disabled).toBe(true);
+
+		// CSS that doesn't read says why, and changes nothing.
+		css.value = '--accent: url(x);';
+		css.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		apply.click();
+		flushSync();
+		expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/url\(\)/);
+		expect(appearanceSettings.current.theme).toBe('ferrous');
+
+		css.value = css.value.replace('url(x)', '#3cb4f2');
+		css.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		apply.click();
+		flushSync();
+		expect(appearanceSettings.current).toEqual({ mode: 'system', theme: 'custom', customCss: '--accent: #3cb4f2;' });
+		expect(select.value).toBe('custom');
+		expect(root.style.getPropertyValue('--accent')).toBe('#3cb4f2');
+		// The previous theme's tokens go.
+		expect(root.style.getPropertyValue('--font-mono')).toBe('');
+		expect(JSON.parse(localStorage.getItem('apron.appearance')!).vars).toEqual([['--accent', '#3cb4f2']]);
+
+		select.value = 'apron';
+		select.dispatchEvent(new Event('change', { bubbles: true }));
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('');
+		appearanceSettings.update({ ...DEFAULT_APPEARANCE });
 	});
 });

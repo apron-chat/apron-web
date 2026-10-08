@@ -95,7 +95,7 @@ describe('preference storage', () => {
 
 	it('round-trips appearance, and reads nothing from a missing or broken entry', () => {
 		expect(loadAppearance()).toBeNull();
-		const preferences = { mode: 'dark', interfaceFont: 'Inter', chatFont: '', monoFont: '' } as const;
+		const preferences = { mode: 'dark', theme: 'custom', customCss: '--font-sans: Inter;', vars: [['--font-sans', 'Inter']] } satisfies Parameters<typeof saveAppearance>[0];
 		saveAppearance(preferences);
 		expect(loadAppearance()).toEqual(preferences);
 		values.set('apron.appearance', '{broken');

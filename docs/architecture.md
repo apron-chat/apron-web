@@ -31,7 +31,7 @@ state and behavior — `ConnectScreen`,
 `Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` and `RoomEditor`, `ThreadCard` and
 `ThreadSummary`, `Message` with its `ReactionBar` and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`) and `StagedFile` (the design system's `Attachments`), `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
-`PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog` (all three
+`PreferencesDialog`, `CreateRoomDialog`, `EmailLinkDialog` (all three
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
 choice submitted with a form a `CheckList`-style row),
 `MediaViewerHost` (the design system's `MediaViewer`, opened by image embeds through
@@ -71,7 +71,7 @@ reactive state behind it lives in `src/lib/ui` as small classes — `SessionView
 `starting` while the first rooms aren't listed, `activeRoomHeld` while the open
 room shows its held copy, and the open room's thread cards from the same view), `MentionTracker`,
 `IncomingMessageTracker` (new messages from others, for notifications),
-`AppearanceSettings` (theme and fonts),
+`AppearanceSettings` (light or dark, and the theme: the premade ones, and reading a custom one's tokens),
 `UnreadTracker`, `MessageSelection`, `FeedbackState`, `SidebarLayout`,
 `PaneDrafts` (the composer's text and reply per room and thread),
 `PagePresence` (whether the tab is attended, and the mention alert),

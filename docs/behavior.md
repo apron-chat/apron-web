@@ -512,11 +512,17 @@ push is on for it here. A pushed room that the listed rooms don't include, or
 that isn't open after 30 seconds, is dropped. Browsers without
 push say so; iPhone and iPad Safari say to add Apron to the Home Screen first.
 
-**Appearance** picks a light or dark theme
-over the system's, and an installed font for the interface, messages and code
-(suggested from installed fonts where the browser allows listing them); the
-font choice is marked experimental, to be replaced by a choice of themes. All
-of these stay on this device; settings aren't synced.
+**Appearance** picks a light or dark mode
+over the system's, and a theme: Apron (the system fonts), Ferrous (Recursive
+Sans Casual and Rec Mono Casual), Newsprint (serif messages), Terminal
+(monospace throughout), or Custom. Under it, the theme's CSS sets the
+interface, message and code fonts as design tokens (`--font-sans`,
+`--font-chat`, `--font-mono`); editing it and applying makes it the custom
+theme, which may set any other token too, in either mode. Only `--token:
+value;` declarations are read, alone or in one `:root` block, and none may
+load anything (`url()`, `@import`), so a theme's fonts must be installed.
+Fonts chosen one by one before themes become a custom theme. All of these stay
+on this device; settings aren't synced.
 
 With the `command` capability, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#41-command)): the composer shows a **Command** tag, sets the line in

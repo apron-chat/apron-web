@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
+	import { appearanceSettings, cssForTheme, parseThemeCss, THEME_CSS_MAX, THEMES, type ThemeId, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import Button from '$lib/design/components/Button.svelte';
 	import Callout from '$lib/design/components/Callout.svelte';
@@ -12,9 +12,6 @@
 	import StatusPicker from './StatusPicker.svelte';
 	import { NOTIFY_SCOPES, notifyScopeNotes, pushWake } from '$lib/ui/notify-scopes';
 	import type { WebPushPreference } from '$lib/ui/web-push';
-	import FontFamilyField from './FontFamilyField.svelte';
-
-	type LocalFontAccessWindow = Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> };
 
 	interface Props {
 		open?: boolean;
@@ -53,12 +50,10 @@
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
 	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: it wakes for nothing. */
 	let pushesNothing = $derived(pushWake(notifyScopes, webPush?.offered ?? [])?.length === 0);
-	let interfaceFontDraft = $state('');
-	let chatFontDraft = $state('');
-	let monoFontDraft = $state('');
-	let localFontFamilies = $state<string[]>([]);
-	let fontBrowserState = $state<FontBrowserState>('idle');
-	let fontError = $state('');
+	/** The theme's CSS as edited; applying it makes it the custom theme. */
+	let themeDraft = $state('');
+	let themeError = $state('');
+	let themeEdited = $derived(themeDraft !== cssForTheme(appearanceSettings.current));
 	let testNotificationStatus = $state<'idle' | 'sending' | NotificationTestResult>('idle');
 
 	type Note = { text: string; tone?: 'ok' | 'err' };
@@ -109,16 +104,12 @@
 		const changed = Object.keys(now).find((key) => now[key] !== before[key] && now[key] !== undefined);
 		if (changed) announcement = now[changed]!;
 	});
-	/** Each time it opens, the font drafts start from what is saved, and earlier results clear. */
+	/** Each time it opens, the theme's CSS starts from what is saved, and earlier results clear. */
 	$effect(() => {
 		if (!open) return;
 		untrack(() => {
-			interfaceFontDraft = appearanceSettings.current.interfaceFont;
-			chatFontDraft = appearanceSettings.current.chatFont;
-			monoFontDraft = appearanceSettings.current.monoFont;
-			localFontFamilies = [];
-			fontBrowserState = typeof window !== 'undefined' && typeof (window as LocalFontAccessWindow).queryLocalFonts === 'function' ? 'idle' : 'unsupported';
-			fontError = '';
+			themeDraft = cssForTheme(appearanceSettings.current);
+			themeError = '';
 			testNotificationStatus = 'idle';
 		});
 	});
@@ -137,54 +128,41 @@
 		appearanceSettings.update({ ...appearanceSettings.current, mode: mode as ThemeMode });
 	}
 
-	function saveFonts(event: SubmitEvent): void {
+	/**
+	 * A premade theme applies at once. Custom applies the saved custom CSS, or,
+	 * the first time, the theme it was chosen from, edits included.
+	 */
+	function chooseTheme(theme: string): void {
+		if (theme !== 'custom' && !THEMES.some((premade) => premade.id === theme)) return;
+		const customCss = theme === 'custom' ? appearanceSettings.current.customCss || themeDraft : appearanceSettings.current.customCss;
+		const { error } = parseThemeCss(customCss);
+		if (theme === 'custom' && error) {
+			themeError = error;
+			return;
+		}
+		appearanceSettings.update({ ...appearanceSettings.current, theme: theme as ThemeId, customCss });
+		themeDraft = cssForTheme(appearanceSettings.current);
+		themeError = '';
+	}
+
+	/** Edited CSS becomes the custom theme, whichever theme it started from. */
+	function applyTheme(event: SubmitEvent): void {
 		event.preventDefault();
-		const interfaceFont = sanitizeFontFamily(interfaceFontDraft);
-		const chatFont = sanitizeFontFamily(chatFontDraft);
-		const monoFont = sanitizeFontFamily(monoFontDraft);
-		if ((interfaceFontDraft.trim() && !interfaceFont) || (chatFontDraft.trim() && !chatFont) || (monoFontDraft.trim() && !monoFont)) {
-			fontError = 'Enter a font family name using letters, numbers, spaces, hyphens, periods, or underscores.';
+		const { error } = parseThemeCss(themeDraft);
+		if (error) {
+			themeError = error;
 			return;
 		}
-		appearanceSettings.update({ ...appearanceSettings.current, interfaceFont, chatFont, monoFont });
-		fontError = '';
+		appearanceSettings.update({ ...appearanceSettings.current, theme: 'custom', customCss: themeDraft });
+		themeError = '';
 	}
 
-	function resetFonts(): void {
-		interfaceFontDraft = '';
-		chatFontDraft = '';
-		monoFontDraft = '';
-		fontError = '';
-		appearanceSettings.update({ ...appearanceSettings.current, interfaceFont: '', chatFont: '', monoFont: '' });
-	}
-
-	/** Called from the font menu’s button so font access has direct user activation. */
-	function loadFontsFromUserAction(): void {
-		if (fontBrowserState === 'error') fontBrowserState = 'idle';
-		if (fontBrowserState === 'idle') void browseLocalFonts();
-	}
-
-	async function browseLocalFonts(): Promise<void> {
-		if (fontBrowserState !== 'idle') return;
-		const queryLocalFonts = (window as LocalFontAccessWindow).queryLocalFonts;
-		if (!queryLocalFonts) {
-			fontBrowserState = 'unsupported';
-			return;
-		}
-		fontBrowserState = 'loading';
-		try {
-			const fonts = await queryLocalFonts.call(window);
-			const families = fonts.map((font) => sanitizeFontFamily(font.family)).filter((family) => family !== '');
-			localFontFamilies = [...new Set(families)].sort((a, b) => a.localeCompare(b));
-			fontBrowserState = localFontFamilies.length ? 'ready' : 'empty';
-		} catch (cause) {
-			fontBrowserState = cause instanceof DOMException && cause.name === 'NotAllowedError' ? 'denied' : 'error';
-		}
+	function discardTheme(): void {
+		themeDraft = cssForTheme(appearanceSettings.current);
+		themeError = '';
 	}
 
 	function preferencesClosed(): void {
-		localFontFamilies = [];
-		fontBrowserState = 'idle';
 		onclosed?.();
 	}
 </script>
@@ -251,10 +229,10 @@
 		{:else}
 			<section class="ap-preferences-content" aria-labelledby="ap-pref-appearance">
 				<h3 id="ap-pref-appearance">Appearance</h3>
-				<p class="ap-profedit-hint">Adjust the theme and reading fonts on this device.</p>
+				<p class="ap-profedit-hint">Adjust light or dark, and the theme, on this device.</p>
 				<div class="ap-pref-setting ap-pref-theme-setting">
 					<div>
-						<label for="ap-theme-mode">Theme</label>
+						<label for="ap-theme-mode">Mode</label>
 						<p class="ap-profedit-hint">System follows your operating system’s light or dark preference.</p>
 					</div>
 					<select id="ap-theme-mode" class="ap-field ap-pref-select" value={appearanceSettings.current.mode} onchange={(event) => setThemeMode(event.currentTarget.value)}>
@@ -263,39 +241,30 @@
 						<option value="dark">Dark</option>
 					</select>
 				</div>
-				<div class="ap-pref-setting ap-pref-font-setting">
-					<div class="ap-pref-font-heading">
-						<strong>Fonts</strong> <span class="ap-pref-experimental">Experimental</span>
-						<p class="ap-profedit-hint">Customize the interface, chat, and monospace fonts on this device. Font choices are an experiment and will be replaced by a choice of themes.</p>
+				<div class="ap-pref-setting ap-pref-theme-setting">
+					<div>
+						<label for="ap-theme">Theme</label>
+						<p class="ap-profedit-hint">Fonts and other design tokens, over either mode. A theme’s fonts need to be installed on this device.</p>
 					</div>
-					<p class="ap-pref-help ap-font-access-status" id="ap-font-access-status" role="status" aria-live="polite">
-						{#if fontBrowserState === 'unsupported'}
-							Installed-font suggestions aren’t supported here; type a font name manually.
-						{:else if fontBrowserState === 'denied'}
-							Font access was denied; allow it in browser site settings or type a font name manually.
-						{:else if fontBrowserState === 'error'}
-							Couldn’t load installed fonts; you can still type a name manually.
-						{:else if fontBrowserState === 'empty'}
-							No font families were available to this site.
-						{:else if fontBrowserState === 'loading'}
-							Loading installed-font suggestions…
-						{:else if fontBrowserState === 'ready'}
-							Type to filter {localFontFamilies.length} installed font families. Only your chosen names are saved.
-						{:else}
-							Click Load installed fonts to request permission and filter suggestions. Manual entry always works.
-						{/if}
-					</p>
-					<form class="ap-pref-fonts" onsubmit={saveFonts}>
-						<FontFamilyField id="ap-interface-font" label="Interface font" placeholder="System UI stack" hint="Applies to the app interface. Leave blank for the browser’s system UI font." bind:value={interfaceFontDraft} fonts={localFontFamilies} fontState={fontBrowserState} fallback="var(--font-sans)" onloadfonts={loadFontsFromUserAction} />
-						<FontFamilyField id="ap-chat-font" label="Chat font" placeholder="Use interface font" hint="Optional font for message text. Leave blank to match the interface." bind:value={chatFontDraft} fonts={localFontFamilies} fontState={fontBrowserState} fallback="var(--font-chat)" onloadfonts={loadFontsFromUserAction} />
-						<FontFamilyField id="ap-mono-font" label="Monospace font" placeholder="System monospace" hint="Used for code, embeds, and command text. Leave blank for the system stack." bind:value={monoFontDraft} fonts={localFontFamilies} fontState={fontBrowserState} fallback="var(--font-mono)" onloadfonts={loadFontsFromUserAction} />
-						{#if fontError}<p class="ap-pref-note ap-profedit-err" role="alert">{fontError}</p>{/if}
-						<div class="ap-pref-font-actions">
-							<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" onclick={resetFonts}>Reset fonts</button>
-							<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit">Apply fonts</button>
-						</div>
-					</form>
+					<select id="ap-theme" class="ap-field ap-pref-select" value={appearanceSettings.current.theme} onchange={(event) => {
+						chooseTheme(event.currentTarget.value);
+						// Custom with CSS that doesn't read stays on the theme before, saying why.
+						event.currentTarget.value = appearanceSettings.current.theme;
+					}}>
+						{#each THEMES as theme (theme.id)}<option value={theme.id}>{theme.name}</option>{/each}
+						<option value="custom">Custom</option>
+					</select>
 				</div>
+				<form class="ap-pref-theme-css" onsubmit={applyTheme}>
+					<label class="ap-pref-css-label" for="ap-theme-css">Theme CSS</label>
+					<p class="ap-pref-help" id="ap-theme-css-hint">Edit the tokens, then apply them as your custom theme. Only <code>--token: value;</code> declarations are read, and nothing loads with <code>url()</code>.</p>
+					<textarea id="ap-theme-css" class="ap-field ap-field-multi ap-field-mono" rows="12" spellcheck="false" autocomplete="off" maxlength={THEME_CSS_MAX} aria-describedby="ap-theme-css-hint" aria-invalid={themeError ? 'true' : undefined} bind:value={themeDraft} oninput={() => (themeError = '')}></textarea>
+					{#if themeError}<p class="ap-pref-note ap-profedit-err" role="alert">{themeError}</p>{/if}
+					<div class="ap-pref-theme-actions">
+						<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={!themeEdited} onclick={discardTheme}>Discard changes</button>
+						<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" disabled={!themeEdited}>{appearanceSettings.current.theme === 'custom' ? 'Apply' : 'Apply as custom theme'}</button>
+					</div>
+				</form>
 			</section>
 		{/if}
 	</div>
@@ -311,12 +280,10 @@
 	.ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
 	.ap-pref-setting { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 	.ap-pref-setting strong { font-size: var(--text-field); }
-	.ap-pref-experimental { display: inline-block; margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-xs); line-height: 18px; font-weight: 500; vertical-align: 1px; }
 	.ap-pref-setting p { max-width: 420px; margin: var(--space-1) 0 0; }
 	.ap-pref-theme-setting label { color: var(--ink); font-size: var(--text-field); font-weight: 600; cursor: pointer; }
 	.ap-pref-theme-setting select { flex: none; }
-	.ap-pref-font-setting { display: block; }
-	.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
+	.ap-pref-theme-setting + .ap-pref-theme-setting { border-top: 0; }
 	.ap-pref-setting .ap-pref-test { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-2) 0 0 calc(-1 * var(--space-3)); }
 	.ap-pref-notifications:has(+ .ap-pref-push-more) { border-bottom: 0; }
 	.ap-pref-push-more { max-width: 460px; padding-bottom: var(--space-4); }
@@ -324,9 +291,12 @@
 	.ap-pref-note { margin: var(--space-3) 0; color: var(--ink-muted); font-size: var(--text-ui); line-height: 19px; }
 	.ap-pref-select { width: min(100%, 320px); }
 	.ap-pref-help { margin: var(--space-1) 0 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: 17px; }
-	.ap-font-access-status { margin: var(--space-2) 0 var(--space-1); }
-	.ap-pref-fonts { margin-top: var(--space-4); }
-	.ap-pref-font-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
+	.ap-pref-theme-css { padding: var(--space-4) 0; }
+	.ap-pref-css-label { color: var(--ink); font-size: var(--text-field); font-weight: 600; }
+	.ap-pref-theme-css .ap-pref-help { max-width: 460px; margin-bottom: var(--space-2); }
+	.ap-pref-theme-css code { font-family: var(--font-mono); }
+	.ap-pref-theme-css textarea { display: block; width: 100%; tab-size: 2; }
+	.ap-pref-theme-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-3); }
 	@media (max-width: 560px) {
 		.ap-preferences-body { grid-template-columns: 130px minmax(0, 1fr); }
 		.ap-preferences-content { padding: var(--space-4); }

@@ -1,6 +1,6 @@
 import { isJsonObject, type JsonObject } from '$lib/protocol/types';
 import { base64url } from '$lib/protocol/webauthn';
-import type { AppearancePreferences } from './appearance.svelte';
+import type { AppearancePreferences, ThemeVars } from './appearance.svelte';
 
 /** Everything this client remembers between visits lives under one prefix. */
 const KEY = {
@@ -283,7 +283,7 @@ export function saveWebPushOwner(owner: WebPushOwner | undefined): void {
 	else write(KEY.webPushOwner, JSON.stringify(owner));
 }
 
-/** The saved theme and fonts as stored; `decodeAppearance` checks them. */
+/** The saved mode and theme as stored; `decodeAppearance` checks them. */
 export function loadAppearance(): unknown {
 	try {
 		return JSON.parse(read(KEY.appearance) ?? 'null');
@@ -292,6 +292,7 @@ export function loadAppearance(): unknown {
 	}
 }
 
-export function saveAppearance(preferences: AppearancePreferences): void {
+/** With the theme's tokens, which app.html sets before the first paint. */
+export function saveAppearance(preferences: AppearancePreferences & { vars: ThemeVars }): void {
 	write(KEY.appearance, JSON.stringify(preferences));
 }
