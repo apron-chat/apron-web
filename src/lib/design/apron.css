@@ -530,8 +530,8 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-tlstatus-spin { width: 12px; height: 12px; box-sizing: border-box; border-radius: var(--radius-full); border: 2px solid color-mix(in srgb, var(--ink-muted) 35%, transparent); border-top-color: var(--accent); animation: ap-spin .8s linear infinite; }
 @keyframes ap-spin { to { transform: rotate(360deg); } }
 .ap-tlstatus-float { position: relative; height: 0; z-index: 2; pointer-events: none; }
-/* Placed right above the composer's row, whose padding is --space-2: the pill rests on the composer's top edge, in the gap under the last message. */
-.ap-tlstatus-float .ap-tlstatus-pill { position: absolute; left: 50%; bottom: calc(-1 * var(--space-2)); transform: translateX(-50%); white-space: nowrap; animation: ap-tlstatus-in .16s ease-out; }
+/* Placed right above the composer's row, whose top margin is --space-2: the pill's foot sits on that margin's top, clear of the composer by the same gap, in the space under the last message. */
+.ap-tlstatus-float .ap-tlstatus-pill { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); white-space: nowrap; animation: ap-tlstatus-in .16s ease-out; }
 @keyframes ap-tlstatus-in { from { opacity: 0; transform: translate(-50%, 4px); } }
 .ap-tlload { display: flex; flex-direction: column; justify-content: flex-end; min-height: 100%; box-sizing: border-box; }
 .ap-skel-rows { display: flex; flex-direction: column; gap: var(--space-1); }
