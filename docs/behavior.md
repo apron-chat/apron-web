@@ -556,8 +556,11 @@ in, titled by its `room_id`.
 Threads are rooms with a `parent_room_id`. The sidebar lists top-level rooms
 and, under the open room, its threads in two groups. First the ones you've joined,
 on a guide line from the room:
-each title in ink, heavier with unread replies, over a lighter line of preview,
-with a door on hover that leaves it. Then **Other threads · N**, a heading
+each title in ink, heavier with unread replies, over up to two lighter lines:
+its Summary (its `description` as text, on one line) behind a text icon, then
+its latest loaded message, the sender's name in ink, behind a reply arrow, in
+ink too with unread replies. Either line shows alone when the thread has only
+that one, and the icon says which it is. A door on hover leaves the thread. Then **Other threads · N**, a heading
 that folds like Browse rooms (it stays as you left it, on this device): the
 threads you haven't joined, titles only, since they deliver nothing live
 ([PROTOCOL.md §3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#34-rooms))

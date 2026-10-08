@@ -3,7 +3,7 @@ import { ProtocolStore, applyRecords, createTimeline, decodeHistoryRecords, time
 import type { RoomSnapshot } from '$lib/protocol/client';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { escapeMarkdown, quoteMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadPreview, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { escapeMarkdown, quoteMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadPreview, threadSummaryText, threadLatest, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
 
@@ -111,6 +111,16 @@ describe('thread grouping', () => {
 		expect(threadPreview({ ...entry, description: undefined, latestMessage: { ...latest, deleted: true } })).toEqual({ label: '', text: 'Message deleted', summary: false });
 		expect(threadPreview({ ...entry, description: undefined, latestMessage: message(1, 'bob', { body: { embeds: [{ kind: 'image' }] } }) })).toMatchObject({ text: 'Attachment' });
 		expect(threadPreview({ ...entry, description: undefined, latestMessage: undefined })).toBeUndefined();
+	});
+
+	it('gives the sidebar both: the summary as text and the latest message with its sender', () => {
+		const latest = message(1000, 'bob', { room_id: 't1', body: { text: 'latest\n  words' } });
+		const entry = threadEntry(room('t1', [latest], { parentRoomId: 'general', description: 'Line **one**\nLine two' }));
+		expect(threadSummaryText(entry)).toBe('Line one\nLine two');
+		expect(threadLatest(entry)).toEqual({ sender: 'Bob', text: 'latest words' });
+		expect(threadSummaryText({ description: undefined })).toBe('');
+		expect(threadLatest({ latestMessage: undefined })).toBeUndefined();
+		expect(threadLatest({ latestMessage: { ...latest, deleted: true } })).toEqual({ sender: '', text: 'Message deleted' });
 	});
 
 	it('titles a new thread after its message’s first line', () => {

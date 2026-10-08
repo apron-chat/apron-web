@@ -225,6 +225,12 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-room-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .ap-room-name, .ap-room-topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-room-topic { font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); }
+/* A thread's preview lines under its title: its summary, then its latest message, each marked by an icon so either reads alone. */
+.ap-room-line { display: flex; align-items: center; gap: 4px; min-width: 0; margin-top: 1px; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); }
+.ap-room-line > svg { flex: none; width: 12px; height: 12px; }
+.ap-room-line-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-room-sender { color: var(--ink); font-weight: 500; }
+.ap-room-unread .ap-room-line-latest { color: var(--ink); }
 /* A private room (§4.3.4): a small lock beside its name, wherever the name shows. */
 .ap-lock { flex: none; display: inline-block; width: 12px; height: 12px; margin-left: 4px; vertical-align: -1px; color: var(--ink-muted); }
 .ap-count { flex: none; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: 20px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
@@ -319,7 +325,9 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-timeline { flex: 1; overflow: auto; padding-bottom: var(--space-2); }
 
 /* Thread rows nested under their room, and the open-thread header breadcrumb */
-.ap-room-nested { padding: 3px var(--space-3) 3px calc(var(--space-3) + var(--space-4)); font-size: var(--text-ui); line-height: 18px; }
+.ap-room-nested { padding: 3px var(--space-3) 3px calc(var(--space-3) + var(--space-4)); font-size: var(--text-ui); line-height: 18px; align-items: flex-start; }
+/* Counts stay beside the title when preview lines follow it. */
+.ap-room-nested .ap-count { margin-top: -1px; }
 .ap-roomrow { position: relative; }
 .ap-room-exit { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: calc(var(--radius-md) - 2px); background: transparent; color: var(--ink-muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease, background-color .12s ease, color .12s ease; }
 .ap-roomrow-nested .ap-room-exit { width: 24px; height: 24px; }
