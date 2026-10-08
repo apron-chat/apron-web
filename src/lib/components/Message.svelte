@@ -279,7 +279,8 @@
 			<ReactionBar {chips} enabled={caps.react} ontoggle={onreact} />
 		{/if}
 	</div>
-	{#if hasActions && engaged}
+	<!-- While editing, the editor has its own Cancel and Save; the toolbar would sit over the sender's name. -->
+	{#if hasActions && engaged && !editing}
 		<div class="ap-msg-actions">
 			<div class="ap-actions" role="toolbar" aria-label="Message actions">
 				{#if event.deleted && caps.removeReply}

@@ -699,7 +699,8 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   **Rename**; on touch a pencil follows the size) turns it into a field holding
   the whole name, extension included and all selected: Enter or clicking away
   keeps the new name, Escape the old one, and an empty name changes nothing.
-  The file is sent under that name, as the embed's `title`. Images start shrinking as soon as they are attached; one that
+  The file is sent under that name, as the embed's `title`. A long name
+  loses its middle rather than its end, so its extension stays in view. Images start shrinking as soon as they are attached; one that
   can't be made small enough comes off again with the reason. Send (with or
   without text) posts the message with one `upload` embed per attached file,
   then writes each file to the `write_url` in the result. A failed send gives
@@ -740,7 +741,8 @@ With the `edit` capability, **Edit** on your own message opens it in place, in
 a box like the composer: its text, with its embeds above it as tiles like a
 draft's files (an upload as its picture, audio with a player, or a file card;
 a link preview, stream or other embed as a card named by its title or
-address). Each tile's (x) leaves that embed out, and an upload's name can be
+address; a file card says what kind of file it is from its name, such as
+"PDF file"). The message's toolbar hides while it is edited. Each tile's (x) leaves that embed out, and an upload's name can be
 changed as on a draft; nothing is sent until **Save changes** (or Enter; on a
 phone or tablet Enter starts a new line), which saves the new text and the
 embed changes in one save: the embeds left out are dropped, and a renamed

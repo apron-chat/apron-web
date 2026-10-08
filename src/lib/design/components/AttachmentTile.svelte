@@ -28,6 +28,10 @@
 	}
 	let { name, detail, kind = 'file', src, onrename, onremove, removeLabel, labelTestid }: Props = $props();
 
+	/** Long names lose their middle, not their end: the last characters, such as the extension, stay in view. */
+	const TAIL = 8;
+	let split = $derived(name.length > TAIL + 4 ? [name.slice(0, -TAIL), name.slice(-TAIL)] : undefined);
+
 	let renaming = $state(false);
 	let draft = $state('');
 	let input = $state<HTMLInputElement | undefined>();
@@ -62,12 +66,20 @@
 	}
 </script>
 
+{#snippet shown(nameClass: string)}
+	{#if split}
+		<span class={[nameClass, 'ap-attachment-split']}><span class="ap-attachment-stem">{split[0]}</span><span class="ap-attachment-tail">{split[1]}</span></span>
+	{:else}
+		<span class={nameClass}>{name}</span>
+	{/if}
+{/snippet}
+
 {#snippet label(nameClass: string, detailClass: string)}
 	{#if renaming}
 		<input class="ap-attachment-input" bind:this={input} bind:value={draft} aria-label="File name" spellcheck="false" onkeydown={keydown} onblur={() => finish(true, false)} />
 	{:else if onrename}
 		<button class="ap-attachment-rename" type="button" bind:this={renameButton} aria-label={`Rename ${name}`} title="Rename" data-testid={labelTestid} onclick={rename}>
-			<span class={nameClass}>{name}</span>
+			{@render shown(nameClass)}
 			<span class={['ap-attachment-meta', detailClass]}>
 				{#if detail}<span class="ap-attachment-detail">{detail}</span>{/if}
 				<span class="ap-attachment-renamehint" aria-hidden="true">
@@ -77,7 +89,7 @@
 		</button>
 	{:else}
 		<span class="ap-attachment-text" data-testid={labelTestid}>
-			<span class={nameClass}>{name}</span>
+			{@render shown(nameClass)}
 			{#if detail}<span class={detailClass}>{detail}</span>{/if}
 		</span>
 	{/if}

@@ -9,7 +9,8 @@ describe('embedTile', () => {
 			.toEqual({ kind: 'image', name: 'dusk.jpg', detail: '640 × 480', src: `${origin}/f/1/thumb`, renamable: true });
 		expect(embedTile({ kind: 'upload', url: `${origin}/f/2`, og: { title: 'memo.ogg', audio: { url: `${origin}/f/2` } } }, origin))
 			.toEqual({ kind: 'audio', name: 'memo.ogg', src: `${origin}/f/2`, renamable: true });
-		expect(embedTile({ kind: 'upload', title: 'notes.txt', url: `${origin}/f/3` }, origin)).toEqual({ kind: 'file', name: 'notes.txt', detail: 'File', renamable: true });
+		expect(embedTile({ kind: 'upload', title: 'notes.txt', url: `${origin}/f/3` }, origin)).toEqual({ kind: 'file', name: 'notes.txt', detail: 'TXT file', renamable: true });
+		expect(embedTile({ kind: 'upload', title: 'renamed notes', url: `${origin}/f/3` }, origin).detail).toBe('File');
 		expect(embedTile({ kind: 'upload', title: 'big.bin' }, origin)).toEqual({ kind: 'file', name: 'big.bin', detail: 'Uploading…', renamable: true });
 	});
 

@@ -639,6 +639,10 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
 .ap-attachment-label { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; padding: 3px var(--space-2) 4px; background: color-mix(in srgb, var(--bg-100) 88%, transparent); backdrop-filter: blur(6px); font-size: var(--text-xs); line-height: 14px; color: var(--ink); }
 .ap-attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .ap-attachment-size { color: var(--ink-muted); }
+/* A long name truncates in its middle, keeping its last characters (the extension) in view */
+.ap-attachment-split { display: flex; min-width: 0; }
+.ap-attachment-stem { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-attachment-tail { flex: none; white-space: pre; }
 /* A file's name is a button that renames it: hovered or focused, its detail line offers Rename; on touch, a pencil sits after the detail */
 .ap-attachment-rename, .ap-attachment-text { display: flex; flex-direction: column; gap: inherit; min-width: 0; width: 100%; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; line-height: inherit; text-align: left; cursor: pointer; }
 .ap-attachment-text { cursor: default; }

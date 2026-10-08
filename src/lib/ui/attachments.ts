@@ -34,7 +34,13 @@ export function embedTile(embed: Embed, origin: string | undefined): EmbedTile {
 		const size = og.image?.width && og.image.height ? `${og.image.width} × ${og.image.height}` : 'Image';
 		return { kind: 'image', name, detail: size, src: image, renamable: true };
 	}
-	return { kind: 'file', name, detail: 'File', renamable: true };
+	return { kind: 'file', name, detail: fileKind(name), renamable: true };
+}
+
+/** What a file is, from its name: "PDF file" for `notes.pdf`, else just "File" (an upload carries no size or type). */
+function fileKind(name: string): string {
+	const extension = /\.([a-z0-9]{1,5})$/i.exec(name)?.[1];
+	return extension ? `${extension.toUpperCase()} file` : 'File';
 }
 
 function kindName(kind: string): string {
