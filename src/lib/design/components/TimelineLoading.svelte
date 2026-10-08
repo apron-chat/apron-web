@@ -6,7 +6,7 @@
 		rows?: number;
 		/**
 		 * Float instead of taking a line in the timeline, for a check under messages already shown: placed just
-		 * above the composer's row, it rests over the composer's top and moves nothing as it comes and goes.
+		 * above the composer's row, it floats a small gap above the composer and moves nothing as it comes and goes.
 		 */
 		float?: boolean;
 	}
