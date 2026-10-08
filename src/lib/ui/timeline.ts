@@ -122,19 +122,31 @@ export function threadEntries(
 	return [...joined, ...unjoined.filter((listing) => !known.has(listing.id)).map(unjoinedThreadEntry)];
 }
 
-/**
- * The preview under a thread's title: up to three lines of its description,
- * as text, when it has one (every card can show it, joined or not), else the
- * newest loaded message as "Dana: text" on one line.
- */
-export function threadPreview(entry: ThreadEntry): { label: string; text: string; summary: boolean } | undefined {
-	const summary = entry.description ? markdownText(entry.description).trim() : '';
-	if (summary) return { label: '', text: summary, summary: true };
+/** A thread's summary (its `description`, §3.4) as text, for a preview; empty without one. */
+export function threadSummaryText(entry: Pick<ThreadEntry, 'description'>): string {
+	return entry.description ? markdownText(entry.description).trim() : '';
+}
+
+/** A thread's newest loaded message as a preview line: its sender, and its text on one line. */
+export function threadLatest(entry: Pick<ThreadEntry, 'latestMessage'>): { sender: string; text: string } | undefined {
 	const event = entry.latestMessage;
 	if (!event) return undefined;
-	if (event.deleted) return { label: '', text: 'Message deleted', summary: false };
+	if (event.deleted) return { sender: '', text: 'Message deleted' };
 	const text = textOf(event).replace(/\s+/g, ' ').trim();
-	return { label: senderName(event), text: text || (embedsOf(event).length ? 'Attachment' : 'Empty message'), summary: false };
+	return { sender: senderName(event), text: text || (embedsOf(event).length ? 'Attachment' : 'Empty message') };
+}
+
+/**
+ * The one preview under a thread's card in its room: up to three lines of its
+ * summary, as text, when it has one (every card can show it, joined or not),
+ * else the newest loaded message as "Dana: text" on one line. The sidebar
+ * shows both, as threadSummaryText and threadLatest.
+ */
+export function threadPreview(entry: ThreadEntry): { label: string; text: string; summary: boolean } | undefined {
+	const summary = threadSummaryText(entry);
+	if (summary) return { label: '', text: summary, summary: true };
+	const latest = threadLatest(entry);
+	return latest ? { label: latest.sender, text: latest.text, summary: false } : undefined;
 }
 
 /** A title for a thread started from a message: its first non-empty line, shortened, else "Thread". */

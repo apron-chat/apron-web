@@ -1,8 +1,10 @@
 <script lang="ts">
+	import CornerDownRight from '@lucide/svelte/icons/corner-down-right';
 	import DoorOpen from '@lucide/svelte/icons/door-open';
 	import Lock from '@lucide/svelte/icons/lock';
+	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import type { RoomListing } from '$lib/protocol/client';
-	import { threadPreview, type ThreadEntry } from '$lib/ui/timeline';
+	import { threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
 	import { loadOtherThreadsOpen, saveOtherThreadsOpen } from '$lib/ui/storage';
 
 	/** How many of the threads you haven't joined show before "N more…". */
@@ -63,12 +65,17 @@
 			{#each joined as entry (entry.id)}
 				{@const open = activeThread === entry.id}
 				{@const replies = open ? 0 : (unread[entry.id] ?? 0)}
-				{@const preview = threadPreview(entry)}
+				{@const summary = threadSummaryText(entry).replace(/\s+/g, ' ')}
+				{@const latest = threadLatest(entry)}
 				<div class={['ap-roomrow', 'ap-roomrow-nested', open && 'ap-roomrow-active']}>
 					<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
 						<span class="ap-room-text">
 							<span class="ap-room-name">{entry.title}{#if entry.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
-							{#if preview}<span class="ap-room-topic" data-testid="thread-list-preview">{preview.label ? `${preview.label}: ` : ''}{preview.text.replace(/\s+/g, ' ')}</span>{/if}
+							<!-- Its summary, then its latest message: both when it has both, each marked so either reads alone. -->
+							{#if summary}<span class="ap-room-line ap-room-line-summary" data-testid="thread-list-summary"><TextAlignStart role="img" aria-label="Summary" /><span class="ap-room-line-text">{summary}</span></span>{/if}
+							{#if latest}
+								<span class="ap-room-line ap-room-line-latest" data-testid="thread-list-latest"><CornerDownRight role="img" aria-label="Latest message" /><span class="ap-room-line-text">{#if latest.sender}<span class="ap-room-sender">{latest.sender}</span>{' '}{/if}{latest.text}</span></span>
+							{/if}
 						</span>
 						{#if mentions[entry.id] && !open}
 							{@const count = mentions[entry.id]}
@@ -127,8 +134,7 @@
 	/* The title in ink and a little heavier than the preview line under it; heavier still with unread replies. */
 	.joined .ap-room-name { color: var(--ink); font-weight: 500; }
 	.joined .ap-room-unread .ap-room-name { font-weight: 650; }
-	.ap-room-topic { margin-top: 1px; }
-	.room-meta { flex: none; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+	.room-meta { flex: none; font-size: var(--text-sm); line-height: 18px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 	.ap-room-active .room-meta { color: var(--ink); }
 
 	/* The heading's text lines up with the titles under it; its caret hangs to the left, on the guide's line. */

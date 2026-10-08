@@ -2,6 +2,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RoomListing } from '$lib/protocol/client';
+import type { MessageRecord } from '$lib/protocol/types';
 import type { ThreadEntry } from '$lib/ui/timeline';
 import ThreadList from './ThreadList.svelte';
 
@@ -37,6 +38,21 @@ const one = <T extends Element = HTMLButtonElement>(selector: string) => documen
 const titles = (selector: string) => [...document.querySelectorAll(selector)].map((row) => row.querySelector('.ap-room-name')?.textContent);
 
 describe('ThreadList', () => {
+	it('shows a thread’s summary and its latest message under its title, each marked by an icon', () => {
+		const latest = { message_id: 'm1', room_id: 'deploy', from: { user_id: 'grace', name: 'Grace' }, body: { text: 'Flags are\nflipped' } } as unknown as MessageRecord;
+		render({ threads: [
+			{ ...joined('deploy', 'Deploy'), description: 'What to check:\n**flags**, rollback', latestMessage: latest },
+			{ ...joined('cert', 'Expired cert'), latestMessage: latest },
+			{ ...joined('roadmap', 'Roadmap'), description: 'Ship threads, then search' }
+		] });
+		const lines = (id: string) => [...one(`button[data-thread="${id}"]`)!.querySelectorAll('.ap-room-line')]
+			.map((line) => [line.querySelector('svg')?.getAttribute('aria-label'), line.textContent]);
+		expect(lines('deploy')).toEqual([['Summary', 'What to check: flags, rollback'], ['Latest message', 'Grace Flags are flipped']]);
+		expect(lines('cert')).toEqual([['Latest message', 'Grace Flags are flipped']]);
+		expect(lines('roadmap')).toEqual([['Summary', 'Ship threads, then search']]);
+		expect(one('button[data-thread="cert"] .ap-room-sender')?.textContent).toBe('Grace');
+	});
+
 	it('lists joined threads, each with Leave, then the others under a heading that folds, each with Join', () => {
 		const { onthread, onleave, onopen, onjoin } = render();
 		expect(titles('button[data-thread]')).toEqual(['Deploy', 'Expired cert']);
