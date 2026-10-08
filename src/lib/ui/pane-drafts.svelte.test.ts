@@ -62,6 +62,18 @@ describe('PaneDrafts', () => {
 		expect(drafts.files).toEqual([]);
 	});
 
+	it('renames a staged file on whichever draft holds it', () => {
+		const drafts = new PaneDrafts();
+		drafts.open('lobby');
+		drafts.stage([staged('a'), staged('b')]);
+		drafts.rename('b', 'sunset.jpg');
+		expect(drafts.files.map(({ title }) => title)).toEqual([undefined, 'sunset.jpg']);
+		drafts.open('thread');
+		drafts.rename('a', 'dawn');
+		drafts.open('lobby');
+		expect(drafts.files.map(({ title }) => title)).toEqual(['dawn', 'sunset.jpg']);
+	});
+
 	it('gives staged files back with a failed send, unless something new was attached', () => {
 		const drafts = new PaneDrafts();
 		drafts.open('lobby');

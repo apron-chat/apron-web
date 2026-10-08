@@ -122,6 +122,27 @@ describe('ChatClient operations', () => {
 		await expect(missing.promise).rejects.toThrow('no longer in the message');
 	});
 
+	it('edits the text and the embeds in one save: removed ones left out, renamed ones retitled, the rest kept', async () => {
+		await connect();
+		const photo = { embed_id: 'e1', kind: 'upload', title: 'image.png', url: 'https://chat.test/f/1', og: { title: 'image.png', image: { url: 'https://chat.test/f/1/thumb' } } };
+		const link = { kind: 'link', url: 'https://github.com/a/b/pull/1', og: { title: 'PR' } };
+		const notes = { embed_id: 'e2', kind: 'upload', title: 'notes.txt', url: 'https://chat.test/f/2' };
+		socket.receive({ method: 'message', params: message('100', { body: { text: 'see', format: 'markdown', embeds: [photo, link, notes, { kind: 'future' }] } }) });
+		quiet(client.editMessage('100', 'see these', undefined, {
+			removed: [{ og: { title: 'PR' }, url: 'https://github.com/a/b/pull/1', kind: 'link' }],
+			renamed: [{ embed: { embed_id: 'e1', kind: 'upload' }, title: 'sunset.jpg' }, { embed: { embed_id: 'e2', kind: 'upload' }, title: 'notes.md' }]
+		}));
+		expect(socket.request('message').params.body).toEqual({ text: 'see these', format: 'markdown', embeds: [
+			// og.title showed the old name, so it follows; the server restores its own og anyway (§4.8.2).
+			{ ...photo, title: 'sunset.jpg', og: { ...photo.og, title: 'sunset.jpg' } },
+			{ ...notes, title: 'notes.md' },
+			{ kind: 'future' }
+		] });
+		// Builds on the unconfirmed save; an embed already gone is skipped; removing the last one drops `embeds`.
+		quiet(client.editMessage('100', 'bare', undefined, { removed: [{ embed_id: 'e1', kind: 'upload' }, { embed_id: 'e2', kind: 'upload' }, { kind: 'future' }], renamed: [{ embed: { embed_id: 'gone', kind: 'upload' }, title: 'x' }] }));
+		expect(socket.request('message').params.body).toEqual({ text: 'bare', format: 'markdown' });
+	});
+
 	it('rejects saves of messages that are not loaded without sending anything', async () => {
 		await connect();
 		const handle = client.editMessage('404', 'nope');

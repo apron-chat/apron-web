@@ -166,6 +166,8 @@ export interface UploadState {
 /** A file for an upload embed, with an image's dimensions when known. */
 export interface UploadFile {
 	file: File;
+	/** The embed's `title` (§4.8.4); the file's name when absent. */
+	title?: string;
 	width?: number;
 	height?: number;
 }
@@ -344,6 +346,17 @@ export interface MessagePatch {
 	 */
 	ext?: JsonObject;
 	deleted?: true;
+}
+
+/**
+ * Changes an edit makes to a message's embeds (§4.8.2). Each embed is named
+ * by its `embed_id`, or by its value on a server that stores embeds as given.
+ */
+export interface EmbedEdits {
+	/** Saved without these; the server SHOULD delete what it hosted for them. */
+	removed?: Embed[];
+	/** New titles, such as an upload's file name (§4.8.4). */
+	renamed?: Array<{ embed: Embed; title: string }>;
 }
 
 export interface CreateRoomOptions {

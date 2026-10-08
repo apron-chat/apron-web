@@ -293,7 +293,9 @@ describe('ChatClient reference features', () => {
 		await expect(reused.uploaded).rejects.toThrow('This upload link was already used');
 		expect(snapshot.imageOnlyUploads).toBeUndefined();
 		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 415 })));
-		const voice = client.sendFiles('general', '', [{ file: new File(['ogg'], 'voice-message.ogg', { type: 'audio/ogg' }) }]);
+		const voice = client.sendFiles('general', '', [{ file: new File(['ogg'], 'voice-message.ogg', { type: 'audio/ogg' }), title: 'standup notes' }]);
+		// A file renamed before sending goes out under its new name.
+		expect((socket.request('message').params.body as { embeds: unknown }).embeds).toEqual([{ kind: 'upload', title: 'standup notes' }]);
 		await socket.reply('message', { message_id: '53', embeds: [{ embed_id: 'embed_4', kind: 'upload', write_url: 'http://fake.test/write/z' }] });
 		await expect(voice.uploaded).rejects.toThrow(/does not accept this type/);
 		expect(snapshot.imageOnlyUploads).toBe(true);

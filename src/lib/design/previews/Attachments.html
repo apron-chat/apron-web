@@ -1,4 +1,4 @@
-<!-- @dsCard group="Input" height=200 subtitle="Files on a draft: images, audio, other files, preparing" -->
+<!-- @dsCard group="Input" height=200 subtitle="Files on a draft: images, audio, other files, preparing; click a name to rename" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Attachments</title></head>
@@ -12,7 +12,7 @@
     var grad = g.createLinearGradient(0, 0, w, h); grad.addColorStop(0, a); grad.addColorStop(1, b); g.fillStyle = grad; g.fillRect(0, 0, w, h);
     return c.toDataURL();
   }
-  add(A.Attachments, { onremove: function () {}, files: [
+  add(A.Attachments, { onremove: function () {}, onrename: function () {}, files: [
     { kind: 'image', name: 'IMG_4031.webp', size: '671 KB', src: picture(300, 200, '#f6d365', '#fda085') },
     { kind: 'image', name: 'night-sky-long-exposure.webp', preparing: true, src: picture(240, 200, '#0f2027', '#2c5364') },
     { kind: 'file', name: 'deploy-plan.pdf', size: '84 KB' }

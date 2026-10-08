@@ -4,7 +4,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, webPushKey, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, webPushKey, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
@@ -1410,10 +1410,11 @@
 		if (typingTimer) clearTimeout(typingTimer);
 		stickToBottom = true;
 		composer?.focus();
-		feedback.pending(staged.length === 1 ? `Uploading ${staged[0].file.name || 'file'}…` : `Uploading ${staged.length} files…`);
+		feedback.pending(staged.length === 1 ? `Uploading ${staged[0].title || staged[0].file.name || 'file'}…` : `Uploading ${staged.length} files…`);
 		// A file that couldn't be readied was already taken off with its reason; the rest go.
 		const readied = await Promise.allSettled(staged.map(({ prepared }) => prepared));
-		const files = readied.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+		// Each goes out under the name it was given on the draft, if it was renamed.
+		const files = readied.flatMap((result, index) => (result.status === 'fulfilled' ? [{ ...result.value, ...(staged[index].title ? { title: staged[index].title } : {}) }] : []));
 		const kept = staged.filter((_, index) => readied[index].status === 'fulfilled');
 		const restore = () => {
 			if (!drafts.restore(originKey, draft, reply, kept)) return;
@@ -1769,9 +1770,10 @@
 		};
 	}
 
-	function saveEdit(event: MessageRecord, text: string): void {
+	/** Saves an edit: the new text, and any embeds removed or renamed in the editor, together. */
+	function saveEdit(event: MessageRecord, text: string, edits?: EmbedEdits): void {
 		if (!client || !session.canEdit) return;
-		feedback.track(client.editMessage(event.message_id, text), 'Saving edit…');
+		feedback.track(client.editMessage(event.message_id, text, undefined, edits), 'Saving edit…');
 		editingId = undefined;
 	}
 
@@ -2069,7 +2071,7 @@
 								onjump={jumpToMessage}
 								onopenroom={openMentionedRoom}
 								onedit={() => (editingId = event.message_id)}
-								onsave={(text) => saveEdit(event, text)}
+								onsave={(text, edits) => saveEdit(event, text, edits)}
 								oncanceledit={() => (editingId = undefined)}
 								ondelete={() => deleteMessage(event)}
 								onremovereply={() => removeReply(event)}
@@ -2122,7 +2124,7 @@
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} oncancelreply={cancelReply}
+					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply}
 					onmention={() => listMembers(MEMBERS_FRESH_MS)}
 				/>
 			{/if}
