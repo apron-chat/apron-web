@@ -3,7 +3,7 @@ import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ChatClient } from '$lib/protocol/client';
 import RoomEditor from './RoomEditor.svelte';
-import StartThreadDialog from './StartThreadDialog.svelte';
+import NewThreadDialog from './NewThreadDialog.svelte';
 
 let instance: ReturnType<typeof mount> | undefined;
 
@@ -36,52 +36,61 @@ async function submit(): Promise<void> {
 	await tick();
 }
 
-describe('StartThreadDialog', () => {
-	function render(createRoom = vi.fn(() => ({ promise: Promise.resolve({ room_id: 'thread-1' }) }))) {
-		const onstarted = vi.fn();
+describe('NewThreadDialog', () => {
+	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; summary?: string; moving?: number };
+	function render(props: Props = {}, oncreate = vi.fn((_thread: { title: string; description?: string }) => Promise.resolve())) {
 		const onclose = vi.fn();
-		instance = mount(StartThreadDialog, {
-			target: document.body,
-			props: { client: { createRoom } as unknown as ChatClient, room: { id: 'ops', title: 'ops' }, title: 'Deploy failed', summary: '> Deploy failed\n>\n> Runner looked fine.', enabled: true, onstarted, onclose }
-		});
+		instance = mount(NewThreadDialog, { target: document.body, props: { room: { id: 'ops', title: 'ops' }, enabled: true, oncreate, onclose, ...props } });
 		flushSync();
-		return { createRoom, onstarted, onclose };
+		return { oncreate, onclose };
 	}
+	const text = () => field('dialog').textContent ?? '';
+	const submitLabel = () => field('dialog button[type="submit"]').textContent;
 
-	it('asks for a title, with the message quoted as the summary, in a centered dialog', async () => {
-		const { createRoom, onstarted, onclose } = render();
+	it('starts from a message: its first line as the title, selected, and the message quoted as the summary', async () => {
+		const { oncreate, onclose } = render({ title: 'Deploy failed', summary: '> Deploy failed\n>\n> Runner looked fine.' });
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.open).toBe(true);
 		expect(dialog.classList.contains('ap-dialog-md')).toBe(true);
-		expect(dialog.textContent).toContain('Start thread');
-		expect(dialog.textContent).toContain('In ops');
-		expect(field<HTMLInputElement>('input.ap-field').value).toBe('Deploy failed');
+		expect(text()).toContain('Start thread');
+		expect(text()).toContain('In ops');
 		expect(field<HTMLTextAreaElement>('textarea').value).toBe('> Deploy failed\n>\n> Runner looked fine.');
-		type(field('input.ap-field'), '  Why the 4pm deploy failed ');
+		await tick();
+		const input = field<HTMLInputElement>('input.ap-field');
+		expect(document.activeElement).toBe(input);
+		expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'Deploy failed'.length]);
+		type(input, '  Why the 4pm deploy failed ');
 		await submit();
-		expect(createRoom).toHaveBeenCalledWith({ parentRoomId: 'ops', title: 'Why the 4pm deploy failed', description: '> Deploy failed\n>\n> Runner looked fine.' });
-		expect(onstarted).toHaveBeenCalledWith('thread-1');
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Why the 4pm deploy failed', description: '> Deploy failed\n>\n> Runner looked fine.' });
 		expect(onclose).toHaveBeenCalled();
 	});
 
-	it('needs a title, and starts without a summary when it is emptied', async () => {
-		const { createRoom } = render();
-		type(field('input.ap-field'), ' ');
+	it('starts from a room with nothing filled in, and needs a title', async () => {
+		const { oncreate } = render();
+		expect(field<HTMLInputElement>('input.ap-field').value).toBe('');
+		expect(field<HTMLInputElement>('input.ap-field').placeholder).toBe('What it’s about');
 		await submit();
-		expect(createRoom).not.toHaveBeenCalled();
+		expect(oncreate).not.toHaveBeenCalled();
 		expect(document.querySelector('[role="alert"]')?.textContent).toBe('Enter a thread title.');
-		type(field('input.ap-field'), 'Deploy');
-		type(field('textarea'), '');
+		type(field('input.ap-field'), 'Office move');
 		await submit();
-		expect(createRoom).toHaveBeenCalledWith({ parentRoomId: 'ops', title: 'Deploy' });
+		// An empty summary sends no description.
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' });
 	});
 
-	it('stays open with the server’s answer when it declines', async () => {
-		const { onstarted, onclose } = render(vi.fn(() => ({ promise: Promise.reject(new Error('Not allowed')) })));
+	it('says what starting from a selection moves, and that a private room’s thread is private', () => {
+		render({ room: { id: 'hr', title: 'Hiring', private: true }, title: 'Offer', moving: 3 });
+		expect(text()).toContain('Move to a new thread');
+		expect(text()).toContain('The 3 selected messages move into the new thread.');
+		expect(text()).toContain('Private, like its room');
+		expect(submitLabel()).toBe('Move 3 messages');
+	});
+
+	it('stays open with the reason when creating fails', async () => {
+		const { onclose } = render({ title: 'Deploy' }, vi.fn(() => Promise.reject(new Error('Not allowed'))));
 		await submit();
 		expect(document.querySelector('[role="alert"]')?.textContent).toBe('Not allowed');
 		expect(field<HTMLDialogElement>('dialog').open).toBe(true);
-		expect(onstarted).not.toHaveBeenCalled();
 		expect(onclose).not.toHaveBeenCalled();
 	});
 });

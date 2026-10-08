@@ -52,13 +52,15 @@
 		onjoin: (roomId: string) => void;
 		/** Leave a thread of the active room (capability `rooms`). */
 		onleavethread: (thread: string) => void;
-		/** A room or thread created here, asked for as private or not; it opens once its `room_update` arrives. */
+		/** A room created here, asked for as private or not; it opens once its `room_update` arrives. */
 		oncreateroom: (roomId: string, options: { private: boolean }) => void;
+		/** The + on the active room's row: start a thread in it, named in the page's NewThreadDialog. */
+		onnewthread: (room: RoomSnapshot) => void;
 		onsignout: SignOutHandler;
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
-	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own. */
 	let rooms = $derived(sidebarRooms(session.rooms));
 	let canBrowse = $derived(session.canManageRooms && session.ready);
@@ -67,9 +69,6 @@
 	let browseOpen = $state(false);
 	let listError = $state('');
 	let createOpen = $state(false);
-	/** The room a thread is being started in, from the + on its row. */
-	let threadParent = $state<{ id: string; title: string; private?: boolean } | undefined>();
-	let threadOpen = $state(false);
 	let canCreateRoom = $derived(session.canManageRooms && session.ready && !session.readOnly);
 	/** Visible rooms this user hasn't joined (or has left), from the latest `room_list`. */
 	let unjoined = $derived((session.snapshot.directory ?? []).filter((listing) => !listing.joined));
@@ -101,11 +100,6 @@
 	function toggleBrowse(): void {
 		browseOpen = !browseOpen;
 		if (browseOpen) list();
-	}
-
-	function startThread(room: RoomSnapshot): void {
-		threadParent = { id: room.id, title: room.title, ...(room.private ? { private: true } : {}) };
-		threadOpen = true;
 	}
 
 </script>
@@ -144,7 +138,7 @@
 								{#if room.recovering}<span class="room-meta" aria-label="Loading history">…</span>{/if}
 							</button>
 							{#if active && canCreateRoom}
-								<button class="ap-iconbtn new-thread" type="button" data-testid="create-thread" aria-label={`New thread in ${room.title}`} title="New thread" onclick={() => startThread(room)}><Plus size={16} aria-hidden="true" /></button>
+								<button class="ap-iconbtn new-thread" type="button" data-testid="create-thread" aria-label={`New thread in ${room.title}`} title="New thread" onclick={() => onnewthread(room)}><Plus size={16} aria-hidden="true" /></button>
 							{/if}
 						</div>
 						{#if active}
@@ -183,7 +177,6 @@
 </aside>
 
 <CreateRoomDialog {client} bind:open={createOpen} enabled={canCreateRoom} oncreated={oncreateroom} />
-<CreateRoomDialog {client} bind:open={threadOpen} enabled={canCreateRoom && threadParent?.id === session.activeRoomId} parent={threadParent} oncreated={oncreateroom} />
 
 <style>
 	.ap-shell-side { overflow: hidden; }

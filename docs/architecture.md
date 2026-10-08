@@ -28,10 +28,10 @@ tokens stay in the artifact's `tokens.json`; keep them in step with
 The Svelte components under `src/lib/components` wrap the `ap-*`
 classes one to one with the design system's components, adding the app's
 state and behavior — `ConnectScreen`,
-`Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` with `RoomEditor` and `StartThreadDialog` (both the design system's `ThreadEditor`, a `Dialog`), `ThreadCard` and
+`Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` with `RoomEditor` and `NewThreadDialog` (both the design system's `ThreadEditor`, a `Dialog`; every new thread, from a room, a message or a selection, is named in `NewThreadDialog`, which the page owns), `ThreadCard` and
 `ThreadSummary`, `Message` with its `ReactionBar` and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`) and `StagedFile` (the design system's `Attachments`), `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
-`PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog` (all three
+`PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog` (rooms only), `EmailLinkDialog` (all three
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
 choice submitted with a form a `CheckList`-style row),
 `MediaViewerHost` (the design system's `MediaViewer`, opened by image embeds through

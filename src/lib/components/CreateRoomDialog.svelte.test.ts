@@ -18,10 +18,10 @@ afterEach(() => {
 	document.body.innerHTML = '';
 });
 
-function render(parent?: { id: string; title: string; private?: boolean }) {
+function render() {
 	const createRoom = vi.fn(() => ({ promise: Promise.resolve({ room_id: 'new' }) }));
 	const oncreated = vi.fn();
-	instance = mount(CreateRoomDialog, { target: document.body, props: { client: { createRoom } as unknown as ChatClient, open: true, enabled: true, parent, oncreated } });
+	instance = mount(CreateRoomDialog, { target: document.body, props: { client: { createRoom } as unknown as ChatClient, open: true, enabled: true, oncreated } });
 	flushSync();
 	return { createRoom, oncreated };
 }
@@ -41,19 +41,7 @@ async function submit(name: string, about: string) {
 }
 
 describe('CreateRoomDialog', () => {
-	it('starts a thread in a room: a name and a Summary, no Private, which it takes from its room', async () => {
-		const { createRoom, oncreated } = render({ id: 'general', title: 'General', private: true });
-		expect(document.body.textContent).toContain('New thread in General');
-		expect(document.body.textContent).toContain('Thread name');
-		expect(document.body.textContent).toContain('Summary');
-		expect(document.querySelector('input[type="checkbox"]')).toBeNull();
-		await submit('Office move', 'Boxes and keys');
-		expect(createRoom).toHaveBeenCalledWith({ parentRoomId: 'general', title: 'Office move', description: 'Boxes and keys' });
-		// A thread of a private room must come back private too before it's used (§4.3.4).
-		expect(oncreated).toHaveBeenCalledWith('new', { private: true });
-	});
-
-	it('creates a room as before, with Private to choose', async () => {
+	it('creates a room, with Private to choose', async () => {
 		const { createRoom, oncreated } = render();
 		expect(document.body.textContent).toContain('Create a room');
 		expect(document.querySelector('input[type="checkbox"]')).not.toBeNull();
