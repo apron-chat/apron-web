@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UploadState } from '$lib/protocol/client';
+	import type { EmbedEdits, UploadState } from '$lib/protocol/client';
 	import { renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 	import type { Embed as EmbedData, MessageRecord } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -17,6 +17,7 @@
 	import { systemScope } from '$lib/protocol/types';
 	import Embed from './embeds/Embed.svelte';
 	import EmbedRemove from './embeds/EmbedRemove.svelte';
+	import MessageEditor from './MessageEditor.svelte';
 
 	const LONG_PRESS_MS = 500;
 
@@ -55,7 +56,8 @@
 		/** A room mention was clicked (Appendix A.3). */
 		onopenroom: (roomId: string) => void;
 		onedit: () => void;
-		onsave: (text: string) => void;
+		/** The edit's new text, and its embed changes if any. */
+		onsave: (text: string, edits?: EmbedEdits) => void;
 		oncanceledit: () => void;
 		ondelete: () => void;
 		onremovereply: () => void;
@@ -84,7 +86,6 @@
 	/** The React action's button: the emoji picker opens beside it. */
 	let reactButton = $state<HTMLButtonElement | undefined>();
 	let reacting = $derived(emojiPicker.isOpenFor(reactButton));
-	let draft = $state('');
 	let longPress: ReturnType<typeof setTimeout> | undefined;
 
 	let name = $derived(senderName(event));
@@ -118,24 +119,8 @@
 	let hasActions = $derived(!selecting && (caps.reply || caps.edit || caps.removeReply || caps.react || caps.startThread));
 
 	$effect(() => {
-		if (editing) draft = text;
-		else moreOpen = false;
+		if (!editing) moreOpen = false;
 	});
-
-	function editKeydown(key: KeyboardEvent): void {
-		if (key.key === 'Escape') {
-			key.preventDefault();
-			oncanceledit();
-		} else if (key.key === 'Enter' && !key.shiftKey && !key.isComposing) {
-			key.preventDefault();
-			save();
-		}
-	}
-
-	function save(): void {
-		if (!draft.trim()) return;
-		onsave(draft);
-	}
 
 	/** React opens the full picker; a pick toggles that reaction, as a chip does. */
 	function openReact(): void {
@@ -176,7 +161,7 @@
 	/** Touch has no hover: a long press opens select mode instead. */
 	function pointerdown(pointer: PointerEvent): void {
 		cancelLongPress();
-		if (pointer.pointerType !== 'touch' || selecting || !caps.select) return;
+		if (pointer.pointerType !== 'touch' || selecting || editing || !caps.select) return;
 		longPress = setTimeout(() => {
 			longPress = undefined;
 			onbeginselect();
@@ -267,13 +252,7 @@
 		{#if event.deleted}
 			<div class="ap-msg-tomb">Message deleted</div>
 		{:else if editing}
-			<div class="edit">
-				<textarea class="ap-field edit-field" aria-label="Edit message" bind:value={draft} rows="3" onkeydown={editKeydown}></textarea>
-				<div class="ap-profedit-actions">
-					<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" onclick={oncanceledit}>Cancel</button>
-					<button class="ap-btn ap-btn-primary ap-btn-sm" type="button" onclick={save}>Save changes</button>
-				</div>
-			</div>
+			<MessageEditor {text} {embeds} {uploads} {onsave} oncancel={oncanceledit} />
 		{:else}
 			{#if text}
 				<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
@@ -300,7 +279,8 @@
 			<ReactionBar {chips} enabled={caps.react} ontoggle={onreact} />
 		{/if}
 	</div>
-	{#if hasActions && engaged}
+	<!-- While editing, the editor has its own Cancel and Save; the toolbar would sit over the sender's name. -->
+	{#if hasActions && engaged && !editing}
 		<div class="ap-msg-actions">
 			<div class="ap-actions" role="toolbar" aria-label="Message actions">
 				{#if event.deleted && caps.removeReply}
@@ -375,6 +355,4 @@
 	}
 	.markdown :global(blockquote > :first-child) { margin-top: 0; }
 	.markdown :global(blockquote > :last-child) { margin-bottom: 0; }
-	.edit { display: flex; flex-direction: column; gap: var(--space-2); }
-	.edit-field { height: auto; min-height: 66px; padding: var(--space-2); resize: vertical; font-size: var(--text-body); line-height: 22px; }
 </style>

@@ -11,6 +11,8 @@ export interface StagedFile {
 	file: File;
 	/** The file as it will be written: images shrunk and stripped of metadata. */
 	prepared: Promise<UploadFile>;
+	/** A name given before sending: the embed's `title`, in place of the file's name. */
+	title?: string;
 }
 
 /**
@@ -75,6 +77,15 @@ export class PaneDrafts {
 			if (files.some((staged) => staged.id === id)) this.staged.set(key, files.filter((staged) => staged.id !== id));
 		}
 		if (this.files.some((staged) => staged.id === id)) this.files = this.files.filter((staged) => staged.id !== id);
+	}
+
+	/** Renames a staged file on whichever draft holds it: it is sent with `title`. */
+	rename(id: string, title: string): void {
+		const renamed = (files: StagedFile[]) => files.map((staged) => (staged.id === id ? { ...staged, title } : staged));
+		for (const [key, files] of this.staged) {
+			if (files.some((staged) => staged.id === id)) this.staged.set(key, renamed(files));
+		}
+		if (this.files.some((staged) => staged.id === id)) this.files = renamed(this.files);
 	}
 
 	/** Empties the composer and `key`'s kept draft, once it has been sent. */

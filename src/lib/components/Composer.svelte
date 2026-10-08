@@ -68,11 +68,13 @@
 		onfiles: (files: File[]) => void;
 		/** A staged file's (x): take it off the draft. */
 		onunstage: (id: string) => void;
+		/** A staged file's new name, which it is sent with. */
+		onrename: (id: string, title: string) => void;
 		oncancelreply: () => void;
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, oncancelreply, onmention }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention }: Props = $props();
 
 	/** Unique per composer, for the open picker's ID. */
 	const uid = $props.id();
@@ -624,10 +626,7 @@
 {#if files.length > 0}
 	<div class="ap-attachments" data-testid="staged-files" aria-label="Files to send">
 		{#each files as staged (staged.id)}
-			<div class="ap-attachment">
-				<StagedFile {staged} />
-				<EmbedRemove label={`Remove ${staged.file.name || 'file'}`} onremove={() => { onunstage(staged.id); focus(); }} />
-			</div>
+			<StagedFile {staged} onrename={(title) => onrename(staged.id, title)} onremove={() => { onunstage(staged.id); focus(); }} />
 		{/each}
 	</div>
 {/if}

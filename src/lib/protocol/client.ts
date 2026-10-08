@@ -24,6 +24,7 @@ import {
 	privateSender,
 	systemScope,
 	type JsonObject,
+	type JsonValue,
 	type Capability,
 	type Identity,
 	type MessageBody,
@@ -41,6 +42,7 @@ import {
 	type ClientSnapshot,
 	type ConnectionStatus,
 	type CreateRoomOptions,
+	type EmbedEdits,
 	type MessageFormat,
 	type MessagePatch,
 	type MessageResult,
@@ -1269,11 +1271,26 @@ export class ChatClient {
 		if (this.store.putRoom(record)) this.settleSave(this.pendingRoomSaves, record.room_id, roomClientFields(record));
 	}
 
-	/** Replaces the text (and optionally the format) and keeps every other body key. */
-	editMessage(messageId: string, text: string, format?: MessageFormat): OperationHandle<MessageResult> {
+	/**
+	 * Replaces the text (and optionally the format) and keeps every other body
+	 * key. With `edits`, the embeds change in the same save: those removed are
+	 * left out, and those renamed get their new `title`; any it names that are
+	 * gone already are skipped.
+	 */
+	editMessage(messageId: string, text: string, format?: MessageFormat, edits?: EmbedEdits): OperationHandle<MessageResult> {
 		const current = this.messageBase(messageId);
-		const body: MessageBody = { ...(isJsonObject(current?.body) ? current.body : {}), text, ...(format ? { format } : {}) };
-		return this.saveMessage(messageId, { body });
+		const { embeds, ...rest }: MessageBody = { ...(isJsonObject(current?.body) ? current.body : {}), text, ...(format ? { format } : {}) };
+		if (!edits || !Array.isArray(embeds)) return this.saveMessage(messageId, { body: { ...rest, ...(embeds !== undefined ? { embeds } : {}) } });
+		const removed = new Set((edits.removed ?? []).map(embedKey));
+		const titles = new Map((edits.renamed ?? []).map(({ embed, title }) => [embedKey(embed), title]));
+		const kept = embeds.flatMap((entry): JsonValue[] => {
+			if (!isJsonObject(entry)) return [entry];
+			const key = embedKey(entry);
+			if (removed.has(key)) return [];
+			const title = titles.get(key);
+			return [title === undefined ? entry : renamedEmbed(entry, title)];
+		});
+		return this.saveMessage(messageId, { body: kept.length ? { ...rest, embeds: kept } : rest });
 	}
 
 	/**
@@ -1285,8 +1302,8 @@ export class ChatClient {
 		const current = this.messageBase(messageId);
 		const body = isJsonObject(current?.body) ? current.body : {};
 		const embeds = Array.isArray(body.embeds) ? body.embeds : [];
-		const wanted = embed.embed_id ?? canonicalJson(embed);
-		const index = embeds.findIndex((entry) => isJsonObject(entry) && (typeof entry.embed_id === 'string' ? entry.embed_id : canonicalJson(entry)) === wanted);
+		const wanted = embedKey(embed);
+		const index = embeds.findIndex((entry) => isJsonObject(entry) && embedKey(entry) === wanted);
 		if (!current || index === -1) return rejectedHandle('message', new Error('The embed is no longer in the message'));
 		const rest = embeds.filter((_, at) => at !== index);
 		const { embeds: _embeds, ...others } = body;
@@ -1977,7 +1994,7 @@ export class ChatClient {
 		room: string, text: string, attached: Array<File | UploadFile>, format: MessageFormat = 'plain', options: SendOptions = {}, command = false
 	): { sent: Promise<JsonObject>; uploaded: Promise<void> } {
 		const files = attached.map((item) => (item instanceof File ? { file: item } : item));
-		const uploads: Embed[] = files.map(({ file }) => ({ kind: 'upload', ...(file.name ? { title: file.name } : {}) }));
+		const uploads: Embed[] = files.map(({ file, title = file.name }) => ({ kind: 'upload', ...(title ? { title } : {}) }));
 		const embeds = [...(options.embeds ?? []), ...uploads];
 		// A command takes embeds as arguments, and its result lists their write URLs too (§4.8.3, §4.1).
 		const handle: OperationHandle = command ? this.command(room, text, { ...options, embeds }) : this.send(room, text, format, { ...options, embeds });
@@ -2004,9 +2021,9 @@ export class ChatClient {
 			.filter((embed): embed is JsonObject => isJsonObject(embed) && embed.kind === 'upload' && typeof embed.write_url === 'string' && typeof embed.embed_id === 'string');
 		if (written.length < files.length) throw new Error('The server did not accept the attachment');
 		const failures: string[] = [];
-		await Promise.all(files.map(async ({ file, width, height }, index) => {
+		await Promise.all(files.map(async ({ file, title, width, height }, index) => {
 			const embedId = written[index].embed_id as string;
-			const state: UploadState = { name: file.name || 'File', progress: 0, ...(width && height ? { width, height } : {}) };
+			const state: UploadState = { name: title || file.name || 'File', progress: 0, ...(width && height ? { width, height } : {}) };
 			this.uploads.set(embedId, state);
 			this.emit();
 			try {
@@ -3817,4 +3834,20 @@ function signInAdvice(auth: string[], signup: string[]): string {
 	if (auth.includes('webauthn')) return joinByEmail ? 'Sign in with a passkey, or join with your email, from the connect screen.' : 'Sign in with a passkey from the connect screen.';
 	if (joinByEmail) return 'Join with your email from the connect screen.';
 	return 'No supported authentication scheme';
+}
+
+/** Names an embed in a save (§4.8.2): by its `embed_id`, or by its value on a server that stores embeds as given. */
+function embedKey(embed: JsonObject): string {
+	return typeof embed.embed_id === 'string' ? embed.embed_id : canonicalJson(embed);
+}
+
+/**
+ * The embed with a new `title`. Its `og.title`, when it showed the old name
+ * (the server describes an upload by its title, §4.8.3), follows along for a
+ * server that keeps embeds as given; one that hosts the file restores its own.
+ */
+function renamedEmbed(embed: JsonObject, title: string): JsonObject {
+	const og = isJsonObject(embed.og) ? embed.og : undefined;
+	const old = typeof embed.title === 'string' ? embed.title : og?.title;
+	return { ...embed, title, ...(og && og.title !== undefined && og.title === old ? { og: { ...og, title } } : {}) };
 }

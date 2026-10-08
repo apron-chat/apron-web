@@ -639,6 +639,37 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
 .ap-attachment-label { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; padding: 3px var(--space-2) 4px; background: color-mix(in srgb, var(--bg-100) 88%, transparent); backdrop-filter: blur(6px); font-size: var(--text-xs); line-height: 14px; color: var(--ink); }
 .ap-attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .ap-attachment-size { color: var(--ink-muted); }
+/* A long name truncates in its middle, keeping its last characters (the extension) in view */
+.ap-attachment-split { display: flex; min-width: 0; }
+.ap-attachment-stem { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-attachment-tail { flex: none; white-space: pre; }
+/* A file's name is a button that renames it: hovered or focused, its detail line offers Rename; on touch, a pencil sits after the detail */
+.ap-attachment-rename, .ap-attachment-text { display: flex; flex-direction: column; gap: inherit; min-width: 0; width: 100%; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; line-height: inherit; text-align: left; cursor: pointer; }
+.ap-attachment-text { cursor: default; }
+.ap-attachment-rename:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.ap-attachment-meta { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.ap-attachment-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-attachment-renamehint { display: none; align-items: center; gap: 3px; color: var(--ink); }
+.ap-attachment:hover .ap-attachment-renamehint, .ap-attachment-rename:focus-visible .ap-attachment-renamehint { display: inline-flex; }
+.ap-attachment:hover .ap-attachment-rename .ap-attachment-detail, .ap-attachment-rename:focus-visible .ap-attachment-detail { display: none; }
+@media (hover: none) {
+	.ap-attachment .ap-attachment-renamehint { display: inline-flex; color: var(--ink-muted); }
+	.ap-attachment .ap-attachment-rename .ap-attachment-detail { display: inline; }
+	.ap-attachment-renametext { display: none; }
+}
+/* Renaming: the name becomes a field, and a thumbnail widens to give it room */
+.ap-attachment-input { width: 100%; min-width: 0; box-sizing: border-box; margin: 0; padding: 1px var(--space-1); border: 1px solid var(--focus); border-radius: var(--radius-sm); background: var(--bg-000); color: var(--ink); font: inherit; font-weight: 600; outline: none; }
+.ap-attachment-renaming .ap-attachment-thumb { min-width: 180px; }
+.ap-attachment-renaming .ap-attachment-thumb img { width: 100%; max-width: none; }
+.ap-attachment-renaming .ap-attachment-label { padding-top: var(--space-1); padding-bottom: var(--space-1); }
+/* MessageEditor: a message being edited, in place; its text over its files, which can be removed or renamed, and Save */
+.ap-msgedit { display: flex; flex-direction: column; margin-top: 2px; background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
+.ap-msgedit:focus-within { border-color: var(--focus); }
+.ap-msgedit .ap-attachments { padding: var(--space-3) var(--space-3) var(--space-1); }
+.ap-msgedit-field { display: block; width: 100%; box-sizing: border-box; min-height: 38px; max-height: 40vh; field-sizing: content; padding: var(--space-2) var(--space-3); border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--text-body); line-height: 22px; resize: none; outline: none; }
+.ap-msgedit-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); padding: 0 var(--space-2) var(--space-2) var(--space-3); }
+.ap-msgedit-hint { margin-right: auto; font-size: var(--text-xs); line-height: 16px; color: var(--ink-muted); }
+.ap-msgedit-hint kbd { font: inherit; font-weight: 600; color: var(--ink); }
 .ap-embed-stream { width: min(100%, 640px); overflow: hidden; border: 1px solid var(--line); background: var(--bg-200); }
 .ap-embed-streamhead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 6px var(--space-3); border-bottom: 1px solid var(--line); font-size: var(--text-sm); line-height: 16px; }
 .ap-embed-streamkind { font-weight: 600; color: var(--ink-muted); }
