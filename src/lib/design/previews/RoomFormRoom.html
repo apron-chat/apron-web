@@ -1,0 +1,19 @@
+<!-- @dsCard group="Input" height=520 subtitle="RoomForm creating a room: a title, an optional description, and the Private choice" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>RoomForm, creating a room</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.RoomForm, root, {
+    open: true,
+    kind: 'room',
+    mode: 'create',
+    name: 'design-review',
+    summary: 'Critiques and sign-off for **anything** that ships with a UI.',
+    private: true
+  });
+</script>
+</body>
+</html>

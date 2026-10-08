@@ -1,14 +1,15 @@
-<!-- @dsCard group="Input" height=520 subtitle="Start a thread from a message: its first line as the title, the message quoted as its summary. From a room it opens empty; Edit thread and Edit room are the same dialog." -->
+<!-- @dsCard group="Input" height=520 subtitle="Every room and thread form: here, starting a thread from a message, its first line as the title and the message quoted as its summary. Creating a room, starting a thread from scratch or a selection, and editing either are the same dialog." -->
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><title>ThreadEditor</title></head>
+<head><meta charset="utf-8"><title>RoomForm</title></head>
 <body>
 <div id="root"></div>
 <script>
   var A = window.Apron, root = document.getElementById('root');
-  A.render(A.ThreadEditor, root, {
+  A.render(A.RoomForm, root, {
     open: true,
-    mode: 'start',
+    kind: 'thread',
+    mode: 'create',
     subtitle: 'In #ops',
     name: 'Worker 1.9.0 crash-looped after the deploy',
     summary: '> Worker `1.9.0` crash-looped after the deploy. Rolled back to `1.8.3`?\n>\n> The trace points at the new queue client:\n>\n> ```\n> QueueError: lease expired (attempt 3/3)\n> ```'

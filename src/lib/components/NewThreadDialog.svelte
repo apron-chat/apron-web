@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import ThreadEditor from '$lib/design/components/ThreadEditor.svelte';
+	import RoomForm from '$lib/design/components/RoomForm.svelte';
 
 	interface Props {
 		/** The room the thread goes under (`parent_room_id`, §3.4); a thread of a private room is private too (§4.3.4). */
@@ -50,4 +50,4 @@
 	}
 </script>
 
-<ThreadEditor bind:open mode="start" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} bind:summary status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={start} {onclose} />
+<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} bind:summary status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={start} {onclose} />

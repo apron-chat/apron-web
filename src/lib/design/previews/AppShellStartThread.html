@@ -1,4 +1,4 @@
-<!-- @dsCard group="Layout" height=640 width=1280 page subtitle="Start thread on a message: a centered ThreadEditor names it, the message quoted as its summary" -->
+<!-- @dsCard group="Layout" height=640 width=1280 page subtitle="Start thread on a message: a centered RoomForm names it, the message quoted as its summary" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>App shell, starting a thread</title><style>html,body{height:100%}</style></head>
@@ -24,9 +24,10 @@
     actions: A.part(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Start thread', glyph: 'Thread' }], onmore: noop }) }, tl);
   add(A.Message, { sender: dana, time: '14:06', text: 'Looking.' }, tl);
   add(A.Composer, { room: 'Ops', canUpload: true }, $('foot'));
-  add(A.ThreadEditor, {
+  add(A.RoomForm, {
     open: true,
-    mode: 'start',
+    kind: 'thread',
+    mode: 'create',
     subtitle: 'In Ops',
     name: 'Worker 1.9.0 crash-looped after the deploy. Rolled back to 1.8.3?',
     summary: '> Worker `1.9.0` crash-looped after the deploy. Rolled back to `1.8.3`?\n>\n> The trace points at the new queue client:\n>\n> ```\n> QueueError: lease expired (attempt 3/3)\n> ```'

@@ -587,10 +587,11 @@ says the thread will be private too, and one that comes back without
 `private: true` gets the error described below. A **+** on the open room's row
 opens the dialog empty; Start thread on a message and New thread in select mode
 fill it in (below).
-The **+** beside Rooms in the sidebar creates a room
-from a name and an optional CommonMark description (`room_set` with `title` and
-`description`); it opens once its `room_update` arrives, and the dialog stays
-open, with the server's error, if creating fails. **Private** asks for
+The **+** beside Rooms in the sidebar creates a room in the same centered
+dialog, as **Create a room**: a title (required), an optional CommonMark
+description (`room_set` with `title` and `description`) and the **Private**
+choice; it opens once its `room_update` arrives, and the dialog stays open,
+with the server's error, if creating fails. **Private** asks for
 `private: true` ([PROTOCOL.md §4.3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#434-creating-and-editing)):
 a server that keeps no private rooms answers `unsupported`, which the dialog
 says in words; one that creates the room without `private: true` in its record

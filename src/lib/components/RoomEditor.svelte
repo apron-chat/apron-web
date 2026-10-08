@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import ThreadEditor from '$lib/design/components/ThreadEditor.svelte';
+	import RoomForm from '$lib/design/components/RoomForm.svelte';
 	import type { ChatClient } from '$lib/protocol/client';
 
 	interface Props {
@@ -58,5 +58,4 @@
 	}
 </script>
 
-<!-- A centered modal: the design system's ThreadEditor, which edits a room's title and description too. -->
-<ThreadEditor bind:open room={!thread} bind:name={title} bind:summary={description} status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={save} {onclose} />
+<RoomForm bind:open kind={thread ? 'thread' : 'room'} mode="edit" bind:name={title} bind:summary={description} status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={save} {onclose} />

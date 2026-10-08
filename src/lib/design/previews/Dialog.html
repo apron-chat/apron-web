@@ -1,21 +1,22 @@
-<!-- @dsCard group="Layout" height=420 subtitle="Create a room: a title and close button, fields in the body, Cancel and the primary action in the footer" -->
+<!-- @dsCard group="Layout" height=360 subtitle="A short question: a title and close button, text in the body, Cancel and the primary action in the footer. Forms for rooms and threads are RoomForm." -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Dialog</title></head>
 <body>
 <div id="root"></div>
+<style>.ap-dialog-body p { color: var(--ink-muted); }</style>
 <script>
   var A = window.Apron, root = document.getElementById('root');
   A.render(A.Dialog, root, {
     open: true,
-    title: 'Create a room',
+    title: 'Sign in to chat.example.com with this email link?',
+    closeLabel: 'Cancel',
     onsubmit: function (event) { event.preventDefault(); },
     children: A.html(
-      '<label class="ap-fieldlabel">Room name<input class="ap-field" value="design-review"></label>' +
-      '<label class="ap-fieldlabel"><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown, optional</span></span><textarea class="ap-field ap-field-multi" rows="3" placeholder="What this room is for."></textarea></label>' +
-      '<label class="ap-choice-item ap-checklist-item ap-choice-on"><input class="ap-checklist-box" type="checkbox" checked><span class="ap-checklist-label"><span class="ap-choice-title">Private</span><span class="ap-choice-text">Only members see it, and members add others.</span></span></label>'
+      '<p style="margin:0">You’re signed in here as Sam. Continuing signs you out of that account and in to the one the link is for.</p>' +
+      '<p style="margin:0">Only continue if you just asked for this email. A link someone sent you can sign you in to their account.</p>'
     ),
-    footer: A.html('<span style="display:flex;gap:8px"><button class="ap-btn ap-btn-ghost ap-btn-sm" type="button">Cancel</button><button class="ap-btn ap-btn-primary ap-btn-sm" type="submit">Create room</button></span>')
+    footer: A.html('<span style="display:flex;gap:8px"><button class="ap-btn ap-btn-ghost ap-btn-sm" type="button">Cancel</button><button class="ap-btn ap-btn-primary ap-btn-sm" type="submit">Sign in</button></span>')
   });
 </script>
 </body>

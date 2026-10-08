@@ -1,0 +1,20 @@
+<!-- @dsCard group="Input" height=500 subtitle="RoomForm starting a thread for selected messages in a private room: says what moves, and that the thread is private like its room" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>RoomForm, moving a selection</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.RoomForm, root, {
+    open: true,
+    kind: 'thread',
+    mode: 'create',
+    subtitle: 'In Hiring',
+    private: true,
+    moving: 3,
+    name: 'Offer for the platform role'
+  });
+</script>
+</body>
+</html>

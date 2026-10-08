@@ -9,7 +9,7 @@
 	import type { PausedUntil } from '$lib/ui/pause';
 	import { sidebarRooms, type ThreadEntry } from '$lib/ui/timeline';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
-	import CreateRoomDialog from './CreateRoomDialog.svelte';
+	import NewRoomDialog from './NewRoomDialog.svelte';
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
 
@@ -176,7 +176,7 @@
 	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} />
 </aside>
 
-<CreateRoomDialog {client} bind:open={createOpen} enabled={canCreateRoom} oncreated={oncreateroom} />
+{#if createOpen}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}
 
 <style>
 	.ap-shell-side { overflow: hidden; }

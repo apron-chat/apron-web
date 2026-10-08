@@ -7,7 +7,7 @@
 		title: string;
 		/** One line under the title. */
 		subtitle?: string;
-		/** `sm` for a short form or question, `md` for a form with room to write, `lg` for a settings panel of fixed height. */
+		/** `sm` for a short question, `md` for a form with room to write (RoomForm), `lg` for a settings panel of fixed height. */
 		size?: 'sm' | 'md' | 'lg';
 		/** Words for the close button. */
 		closeLabel?: string;

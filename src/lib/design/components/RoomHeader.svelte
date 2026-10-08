@@ -18,7 +18,7 @@
 		thread?: string;
 		threadName?: string;
 		onroom?: () => void;
-		/** Cap `rooms`: an Edit button that opens a <ThreadEditor> dialog, for a thread's title and summary or a room's title and description. */
+		/** Cap `rooms`: an Edit button that opens a <RoomForm> dialog, for a thread's title and summary or a room's title and description. */
 		onedit?: () => void;
 	}
 	let { room, name, topic, private: isPrivate, typing = [], onback, children, thread, threadName, onroom, onedit }: Props = $props();
