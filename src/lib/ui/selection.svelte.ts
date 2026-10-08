@@ -12,12 +12,14 @@ export interface Selection {
 	denied?: { failed: number; total: number };
 }
 
-export type MoveResult = { moved: true; room: string } | { moved: false; error: unknown };
+/** `room`, on a failure: the new thread, which exists although nothing (or not everything) moved into it. */
+export type MoveResult = { moved: true; room: string } | { moved: false; error: unknown; room?: string };
 
-/** What a new thread from a selection is created with: its parent room and title (from the earliest message). */
+/** What a new thread from a selection is created with: its parent room, and the title and summary asked for. */
 export interface NewThreadOptions {
 	parentRoomId: string;
-	title: (firstMessageId: string) => string;
+	title: string;
+	description?: string;
 	/** Checks the thread once it exists, before anything moves into it: an error stops the move. */
 	check?: (roomId: string) => Error | undefined;
 	/** Whether a picked message is yours; see MessageSelection.move. */
@@ -123,30 +125,47 @@ export class MessageSelection {
 		return { moved: false, error: first?.reason };
 	}
 
+	/** The picked message that comes first along `order`, which a new thread's title is suggested from. */
+	earliest(order: string[]): string | undefined {
+		return [...this.ids].sort((a, b) => order.indexOf(a) - order.indexOf(b))[0];
+	}
+
 	/**
-	 * "New thread": one fresh thread for the whole selection, titled after its
-	 * earliest message in `order`. The thread is created first; the moves go
-	 * out once the server has named it. The messages themselves say what it is
-	 * about, so it gets no `description`.
+	 * Whether every picked message may be moved: checked before a new thread is
+	 * asked for or created, since the probe in `move` can only run once a thread
+	 * exists, and a refused one would leave it empty.
 	 */
-	async moveToNewThread(client: ChatClient, order: string[], options: NewThreadOptions): Promise<MoveResult> {
+	checkMovable(movable: (id: string) => boolean): Error | undefined {
+		return this.ids.length > 0 && this.ids.every(movable) ? undefined : new Error(NOT_MOVABLE);
+	}
+
+	/**
+	 * "New thread": one fresh thread for the whole selection, with the title
+	 * and summary asked for. The thread is created first; the moves go out
+	 * once the server has named it. A failure after it exists names it in
+	 * `room`.
+	 */
+	async moveToNewThread(client: ChatClient, options: NewThreadOptions): Promise<MoveResult> {
 		const current = this.current;
 		if (!current || current.saving || current.ids.length === 0) return { moved: false, error: undefined };
-		const first = [...current.ids].sort((a, b) => order.indexOf(a) - order.indexOf(b))[0];
 		// Checked before the thread exists, so a refused move leaves no empty thread behind.
-		if (!current.ids.every(options.movable)) return { moved: false, error: new Error(NOT_MOVABLE) };
+		const unmovable = this.checkMovable(options.movable);
+		if (unmovable) return { moved: false, error: unmovable };
 		this.current = { ...current, saving: true, denied: undefined };
 		this.menuOpen = false;
+		let room: string | undefined;
 		try {
-			const result = await client.createRoom({ parentRoomId: options.parentRoomId, title: options.title(first) }).promise;
+			const result = await client.createRoom({ parentRoomId: options.parentRoomId, title: options.title, ...(options.description ? { description: options.description } : {}) }).promise;
 			if (typeof result.room_id !== 'string') throw new Error('Invalid room response');
-			const refused = options.check?.(result.room_id);
+			room = result.room_id;
+			const refused = options.check?.(room);
 			if (refused) throw refused;
 			this.current = { ...current, saving: false };
-			return await this.move(client, result.room_id, options.own);
+			const moved = await this.move(client, room, options.own);
+			return moved.moved ? moved : { ...moved, room };
 		} catch (error) {
 			this.current = { ...current, saving: false };
-			return { moved: false, error };
+			return { moved: false, error, ...(room !== undefined ? { room } : {}) };
 		}
 	}
 }

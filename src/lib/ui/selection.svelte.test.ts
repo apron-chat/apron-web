@@ -66,17 +66,35 @@ describe('MessageSelection.moveToNewThread', () => {
 	it('creates no thread when a picked message may not be moved', async () => {
 		const { client, moveMessage, createRoom } = fakeClient();
 		const selection = picked(['1', 'b2']);
-		const result = await selection.moveToNewThread(client, ['1', 'b2'], { parentRoomId: 'general', title: () => 'T', own, movable: own });
+		expect(selection.checkMovable(own)?.message).toBe(NOT_MOVABLE);
+		const result = await selection.moveToNewThread(client, { parentRoomId: 'general', title: 'T', own, movable: own });
 		expect(result.moved === false && (result.error as Error).message).toBe(NOT_MOVABLE);
 		expect(createRoom).not.toHaveBeenCalled();
 		expect(moveMessage).not.toHaveBeenCalled();
 	});
 
-	it('moves the messages into the thread once it exists, someone else\'s first', async () => {
-		const { client, moveMessage } = fakeClient();
+	it('creates the thread with the title and summary asked for, then moves the messages in, someone else\'s first', async () => {
+		const { client, moveMessage, createRoom } = fakeClient();
 		const selection = picked(['1', 'b2']);
-		expect(await selection.moveToNewThread(client, ['1', 'b2'], { parentRoomId: 'general', title: () => 'T', own, movable: () => true }))
+		expect(selection.checkMovable(() => true)).toBeUndefined();
+		expect(await selection.moveToNewThread(client, { parentRoomId: 'general', title: 'T', description: 'About T', own, movable: () => true }))
 			.toEqual({ moved: true, room: 'thread_new' });
+		expect(createRoom).toHaveBeenCalledWith({ parentRoomId: 'general', title: 'T', description: 'About T' });
 		expect(moveMessage.mock.calls).toEqual([['b2', 'thread_new'], ['1', 'thread_new']]);
+	});
+
+	it('names the thread it created when the moves fail', async () => {
+		const { client } = fakeClient(['b2']);
+		const selection = picked(['1', 'b2']);
+		const result = await selection.moveToNewThread(client, { parentRoomId: 'general', title: 'T', own, movable: () => true });
+		expect(result).toMatchObject({ moved: false, room: 'thread_new' });
+		const refused = await picked(['1']).moveToNewThread(client, { parentRoomId: 'general', title: 'T', own, movable: () => true, check: () => new Error('visible') });
+		expect(refused).toMatchObject({ moved: false, room: 'thread_new', error: new Error('visible') });
+	});
+
+	it('suggests a title from the earliest picked message', () => {
+		const selection = picked(['3', '1', '2']);
+		expect(selection.earliest(['1', '2', '3'])).toBe('1');
+		expect(new MessageSelection().earliest(['1'])).toBeUndefined();
 	});
 });

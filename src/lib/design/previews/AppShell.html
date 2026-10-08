@@ -9,7 +9,7 @@
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' }, dana = { user_id: 'dana', name: 'Dana' }, me = { user_id: 'sam', name: 'Sam' };
   var noop = function () {}, $ = function (id) { return document.getElementById(id); };
-  var acts = function () { return A.part(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }], onmore: noop }); };
+  var acts = function () { return A.part(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }, { label: 'Start thread', glyph: 'Thread' }], onmore: noop }); };
   function side(activeThread) {
     var rooms = [
       { room: 'general', name: 'General' }, { room: 'ops', name: 'Ops', active: !activeThread },
@@ -21,7 +21,7 @@
   }
   add(A.BackendRail, { active: 'work', onadd: noop, backends: [{ id: 'home', label: 'Home lab', unread: true }, { id: 'work', label: 'Work' }, { id: 'family', label: 'Family chat', mentions: 2, unread: true }] }, $('rail'));
   side(null);
-  add(A.RoomHeader, { room: 'ops', name: 'Ops', topic: 'Deploys and incidents' }, $('head'));
+  add(A.RoomHeader, { room: 'ops', name: 'Ops', topic: 'Deploys and incidents', onedit: noop }, $('head'));
   var tl = $('tl');
   add(A.TimelineDivider, { kind: 'date', label: 'Today' }, tl);
   add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.', actions: acts(),

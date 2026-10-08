@@ -399,16 +399,16 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-msg-text pre .ap-diff-hunk { display: block; color: var(--denim); }
 .ap-msg-text pre .ap-diff-add::before { content: "+ "; } .ap-msg-text pre .ap-diff-del::before { content: "\2212 "; }
 
-/* ProfileEditor sign-in row, ThreadEditor */
+/* ProfileEditor sign-in row */
 .ap-profedit-signin { display: flex; flex-direction: column; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--line); }
 .ap-profedit-row { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
 .ap-profedit-ok { color: var(--ok); }
 .ap-profedit-signin .ap-typing-dots { vertical-align: middle; margin-right: var(--space-1); }
-.ap-tedit { display: flex; flex-direction: column; gap: var(--space-3); width: min(100%, 420px); padding: var(--space-4); box-sizing: border-box; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
 .ap-field-multi { height: auto; padding: var(--space-1) var(--space-2); resize: vertical; font: inherit; font-size: var(--text-field); line-height: 20px; font-weight: 400; }
-.ap-roomhead-pop { position: absolute; right: var(--space-4); top: calc(var(--header-h) + var(--space-2)); z-index: 5; }
 .ap-fieldlabel-row { display: flex; justify-content: space-between; }
 .ap-fieldlabel-hint { font-weight: 400; }
+/* RoomForm: what starting a thread will do, under its fields */
+.ap-roomform-note { margin: 0; font-size: var(--text-ui); line-height: 18px; color: var(--ink-muted); }
 
 /* ConnectScreen — first run, or a new backend from the rail's + */
 .ap-connect { min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); padding: var(--space-8) var(--space-4); background: var(--bg-000); }
@@ -464,6 +464,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 
 /* Dialog — a modal panel: a title with an optional subtitle and a close button, a body, and an optional footer of actions */
 .ap-dialog { --dialog-w: 420px; width: min(var(--dialog-w), calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); box-sizing: border-box; margin: auto; padding: 0; color: var(--ink); background: var(--bg-100); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
+.ap-dialog-md { --dialog-w: 600px; }
 .ap-dialog-lg { --dialog-w: 760px; height: min(560px, calc(100dvh - 32px)); }
 .ap-dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 .ap-dialog-frame { display: flex; flex-direction: column; height: 100%; max-height: inherit; margin: 0; }

@@ -577,16 +577,21 @@ listed; that listing is also what refreshes their cards, since they deliver
 nothing live. Opening one of those reads it through `history` without joining
 it: its header offers **Join**, which makes it live and lists it under the room,
 and replying joins it first.
-With the `rooms` capability, a **+** on the open room's row starts a thread in it
-without a message to start from: **New thread in General** asks for a name and
-an optional CommonMark **Summary** (`room_set` with `parent_room_id`, `title`
-and `description`), and the thread opens once its `room_update` arrives. There
-is no Private choice, since a thread takes its room's; a thread of a private
-room that comes back without `private: true` gets the error described below.
-The **+** beside Rooms in the sidebar creates a room
-from a name and an optional CommonMark description (`room_set` with `title` and
-`description`); it opens once its `room_update` arrives, and the dialog stays
-open, with the server's error, if creating fails. **Private** asks for
+Every new thread is named in the same centered **Start thread** dialog, with the
+`rooms` capability: a title (required) and an optional CommonMark **Summary**
+(`room_set` with `parent_room_id`, `title` and `description`, which an emptied
+Summary leaves out). The thread opens once its `room_update` arrives, and the
+dialog stays open, with the server's error, if creating fails. There is no
+Private choice, since a thread takes its room's; in a private room the dialog
+says the thread will be private too, and one that comes back without
+`private: true` gets the error described below. A **+** on the open room's row
+opens the dialog empty; Start thread on a message and New thread in select mode
+fill it in (below).
+The **+** beside Rooms in the sidebar creates a room in the same centered
+dialog, as **Create a room**: a title (required), an optional CommonMark
+description (`room_set` with `title` and `description`) and the **Private**
+choice; it opens once its `room_update` arrives, and the dialog stays open,
+with the server's error, if creating fails. **Private** asks for
 `private: true` ([PROTOCOL.md §4.3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#434-creating-and-editing)):
 a server that keeps no private rooms answers `unsupported`, which the dialog
 says in words; one that creates the room without `private: true` in its record
@@ -601,14 +606,17 @@ threads show a lock beside their name.
 A room's `description` (CommonMark by convention) shows as one line of text
 under its title in the header. With the `rooms` capability the header's ⋯ menu
 holds the occasional actions: **Edit room** (or **Edit thread**) opens
-a form for the open room's or thread's title and description ("Summary" for a
-thread), saved with one `room_set`; the `room_update` that follows is what
-shows, since the server may alter or decline it.
+a centered dialog with the open room's or thread's title and description
+("Summary" for a thread), saved with one `room_set`; the `room_update` that
+follows is what shows, since the server may alter or decline it.
 
-With the `rooms` capability, **Start thread** on a message creates a thread under the
-room titled after the message's first line, with the message's text as its
-`description` (unless the title already says it all), and opens it with the
-composer replying to that message. Threads don't point at a message, so
+With the `rooms` capability, **Start thread** on a message opens the same
+dialog to name the new thread: its title starts as the message's first line,
+selected so typing replaces it, and its Summary as the message's text quoted
+in Markdown (`> `). **Start thread** there creates the thread under the room
+with that title and Summary as its `description` (a title is required; an
+emptied Summary sends none), and opens it with the composer replying to that
+message. Threads don't point at a message, so
 the thread's first reply carries the link back as its `reply_to` (the
 convention of the protocol's fixtures): its quote shows the message and jumps
 to it. The message stays in the room, with the thread's card after it. A
@@ -645,10 +653,14 @@ move (this server: your own, and anyone's for an admin or a mod). A move is all
 or nothing as far as that goes: when the selection holds a message that isn't
 yours, that one is sent first, alone, and if the server refuses it nothing else
 is sent, the selection stays, and the error says no messages were moved. Otherwise
-the rest go together. A new thread is created first and the moves follow once the
-server has named it; it isn't created when the selection holds someone else's
-message and you have neither `admin` nor `mod`, so a refused move never leaves
-an empty thread. Messages refused after the first (say, over a posting limit)
+the rest go together. **New thread** opens the Start thread dialog (as **Move to a
+new thread**, saying how many messages move) with the earliest selected
+message's first line as the title and an empty Summary; Escape there closes the
+dialog and keeps the selection. The thread is created first and the moves follow
+once the server has named it; the dialog isn't offered when the selection holds
+someone else's message and you have neither `admin` nor `mod`, so a refused move
+never leaves an empty thread. If the moves fail once the thread exists, the
+dialog closes and the error says so, as for any move. Messages refused after the first (say, over a posting limit)
 stay selected and the bar says how many didn't move. Escape leaves select mode.
 
 A reply's quote may point into another room: clicking it opens that room or

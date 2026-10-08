@@ -32,7 +32,7 @@ export { default as ProfileBar } from './ProfileBar.svelte';
 export { default as ProfileEditor } from './ProfileEditor.svelte';
 export { default as ReplyPreview } from './ReplyPreview.svelte';
 export { default as ThreadSummary } from './ThreadSummary.svelte';
-export { default as ThreadEditor } from './ThreadEditor.svelte';
+export { default as RoomForm } from './RoomForm.svelte';
 export { default as ConnectScreen } from './ConnectScreen.svelte';
 export { default as SelectionBar } from './SelectionBar.svelte';
 export { default as Mention } from './Mention.svelte';

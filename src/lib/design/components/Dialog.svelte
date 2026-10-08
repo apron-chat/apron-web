@@ -7,8 +7,8 @@
 		title: string;
 		/** One line under the title. */
 		subtitle?: string;
-		/** `sm` for a short form or question, `lg` for a settings panel of fixed height. */
-		size?: 'sm' | 'lg';
+		/** `sm` for a short question, `md` for a form with room to write (RoomForm), `lg` for a settings panel of fixed height. */
+		size?: 'sm' | 'md' | 'lg';
 		/** Words for the close button. */
 		closeLabel?: string;
 		/** Working, such as a request in flight: Escape, the close button and the backdrop do nothing. */

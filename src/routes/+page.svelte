@@ -28,6 +28,7 @@
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
 	import ThreadSummary from '$lib/components/ThreadSummary.svelte';
 	import RoomEditor from '$lib/components/RoomEditor.svelte';
+	import NewThreadDialog from '$lib/components/NewThreadDialog.svelte';
 	import TypingDots from '$lib/components/TypingDots.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
@@ -47,7 +48,7 @@
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
-	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadLostPrivacy, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadLostPrivacy, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
 	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
@@ -71,7 +72,27 @@
 	 * `replyTo`, the message it was started from, which its composer then
 	 * replies to (the thread-from-message convention: see `startThread`).
 	 */
-	type PendingOpen = { room: string; thread: string; replyTo?: string };
+	type PendingOpen = {
+		room: string;
+		thread: string;
+		replyTo?: string;
+		/** Messages were moved into it already: it opens whatever privacy its record shows, as that was checked before they moved. */
+		moved?: true;
+	};
+
+	/**
+	 * A thread being started, named in the NewThreadDialog: under `room`, with
+	 * what its form starts with. From the room's +, nothing else; from a
+	 * message, `message`, which its first reply then answers; from select
+	 * mode, `moving`, the selected messages that move into it.
+	 */
+	type NewThread = {
+		room: { id: string; title: string; private?: true };
+		title: string;
+		summary: string;
+		message?: string;
+		moving?: number;
+	};
 
 	/** A thread just chosen: where it lands waits until its first load shows whether older replies remain. */
 	let openingThread = $state<string | undefined>();
@@ -233,8 +254,8 @@
 	 * was when the pane opened (§4.6). It stays put while you read.
 	 */
 	let newDivider = $state<{ room: string; after?: string; fixed: boolean }>({ room: '', fixed: false });
-	/** Messages a thread is being started from, for the button's "Starting…". */
-	let startingThreads = $state<Record<string, true>>({});
+	/** The NewThreadDialog, asking for a new thread's title and summary, until it closes. */
+	let newThread = $state<NewThread | undefined>();
 	/** Threads this page started, by the message they were started from: Start thread again opens the same one. */
 	const startedThreads = new Map<string, string>();
 	let mobilePane = $state<'rooms' | 'main'>('main');
@@ -599,6 +620,11 @@
 		const pending = pendingOpen;
 		if (!pending || !session.rooms.some((room) => room.id === pending.thread)) return;
 		pendingOpen = undefined;
+		// A thread of a private room is private too (§4.3.4); one the server made visible isn't opened to reply in.
+		if (!pending.moved && threadLostPrivacy(session.rooms, pending.room, pending.thread)) {
+			untrack(() => feedback.error(PRIVACY_LOST));
+			return;
+		}
 		untrack(() => {
 			openDestination(pending.room, pending.thread);
 			if (pending.replyTo !== undefined && !drafts.reply) drafts.setReply(pending.replyTo);
@@ -919,7 +945,7 @@
 		pendingOpen = undefined;
 		pendingJoin = undefined;
 		pendingPrivate = false;
-		startingThreads = {};
+		newThread = undefined;
 		roomEditorOpen = false;
 		selection.cancel();
 		mentions.reset();
@@ -1162,6 +1188,7 @@
 		drafts.open(draftKey(thread ?? roomId));
 		editingId = undefined;
 		roomEditorOpen = false;
+		newThread = undefined;
 		selection.cancel();
 		composer?.reset();
 		mentions.clearUnseen();
@@ -1796,46 +1823,68 @@
 	}
 
 	/**
-	 * Starts a thread on a message (capability `rooms`): a room under this one, titled
-	 * after the message's first line, whose `description` carries its gist
-	 * (§3.4). Threads no longer point at a message, so the link back is the
-	 * thread's first reply: the thread opens once its `room_update` has arrived
-	 * with its composer replying to the message (`reply_to` crosses rooms,
-	 * §3.5), which stays in the room where it was.
+	 * Asks for a new thread under the active room (capability `rooms`) in the
+	 * NewThreadDialog; `createThread` makes it. Threads hang off a top-level
+	 * room only.
 	 */
-	async function startThread(event: MessageRecord): Promise<void> {
-		if (!client || !activeRoom || !canStartThreads || event.deleted || startingThreads[event.message_id]) return;
-		const chat = client;
-		const roomId = activeRoom.id;
+	function askNewThread(start: Omit<NewThread, 'room'>): void {
+		if (!client || !activeRoom || !canStartThreads || newThread) return;
+		newThread = { room: { id: activeRoom.id, title: activeRoom.title, ...(activeRoom.private ? { private: true as const } : {}) }, ...start };
+	}
+
+	/** The + on the active room's row in the sidebar: a thread named from scratch. */
+	function newThreadInRoom(room: RoomSnapshot): void {
+		if (room.id === activeRoom?.id) askNewThread({ title: '', summary: '' });
+	}
+
+	/**
+	 * Start thread on a message: the dialog suggests the message's first line
+	 * as the title and begins the summary with the message quoted. Threads
+	 * don't point at a message, so the link back is the thread's first reply:
+	 * it opens with its composer replying to the message (`reply_to` crosses
+	 * rooms, §3.5), which stays in the room where it was.
+	 */
+	function startThread(event: MessageRecord): void {
+		if (!activeRoom || event.deleted) return;
 		const id = event.message_id;
 		// A thread already started from this message (here, or by anyone whose first reply points at it) opens instead.
-		const existing = [startedThreads.get(id), threadStartedFrom(session.rooms, roomId, id)]
+		const existing = [startedThreads.get(id), threadStartedFrom(session.rooms, activeRoom.id, id)]
 			.find((thread) => thread !== undefined && session.rooms.some((room) => room.id === thread));
 		if (existing) {
 			chooseThread(existing);
 			return;
 		}
-		startingThreads = { ...startingThreads, [id]: true };
-		feedback.pending('Starting thread…');
-		try {
-			const description = threadDescriptionFor(event);
-			const result = await chat.createRoom({ parentRoomId: roomId, title: threadTitleFor(event), ...(description ? { description } : {}) }).promise;
-			if (typeof result.room_id !== 'string') throw new Error('Invalid room response');
-			startedThreads.set(id, result.room_id);
-			// A thread of a private room is private too (§4.3.4); one the server made visible gets no reply from here.
-			if (threadLostPrivacy(session.rooms, roomId, result.room_id)) {
-				feedback.error(PRIVACY_LOST);
-				return;
-			}
-			pendingOpen = { room: roomId, thread: result.room_id, replyTo: id };
-			feedback.clear();
-		} catch (cause) {
-			feedback.error(cause, 'Unable to start thread');
-		} finally {
-			const next = { ...startingThreads };
-			delete next[id];
-			startingThreads = next;
+		askNewThread({ title: threadTitleFor(event), summary: threadSummaryFor(event) ?? '', message: id });
+	}
+
+	/**
+	 * Creates the thread the NewThreadDialog asked for (§4.3.4), the summary as
+	 * its `description`; it opens once its `room_update` has arrived. From
+	 * select mode the selection then moves into it. A rejection is shown in the
+	 * dialog, which stays open, so it only rejects while no thread exists.
+	 */
+	async function createThread(start: NewThread, thread: { title: string; description?: string }): Promise<void> {
+		if (!client) throw new Error('Not connected');
+		const roomId = start.room.id;
+		if (start.moving) {
+			const result = await selection.moveToNewThread(client, {
+				parentRoomId: roomId,
+				...thread,
+				// Nothing moves out of a private room into a thread others can see.
+				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined,
+				own: ownMessage,
+				movable
+			});
+			if (result.moved) pendingOpen = { room: roomId, thread: result.room, moved: true };
+			else if (result.room === undefined) throw result.error ?? new Error('No messages were moved');
+			// The thread exists, so the dialog closes and says why nothing (or not everything) moved.
+			else feedback.error(result.error, selection.current?.denied ? 'Some messages could not be moved' : 'No messages were moved');
+			return;
 		}
+		const result = await client.createRoom({ parentRoomId: roomId, ...thread }).promise;
+		if (typeof result.room_id !== 'string' || !result.room_id) throw new Error('Invalid room response');
+		if (start.message !== undefined) startedThreads.set(start.message, result.room_id);
+		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined ? { replyTo: start.message } : {}) };
 	}
 
 	// --- Select mode ---
@@ -1848,28 +1897,31 @@
 	}
 
 	/**
-	 * Moves the selection to a thread or back to the room (capability `edit`), or into
-	 * a new thread (capability `rooms`), which opens once it exists. An existing
-	 * destination leaves the pane as it is.
+	 * Moves the selection to a thread or back to the room (capability `edit`).
+	 * The destination leaves the pane as it is.
 	 */
-	async function moveSelection(target: string | 'new'): Promise<void> {
-		if (!client || !activeRoom || !paneRoom || !session.canEdit) return;
-		const roomId = activeRoom.id;
-		const result = target === 'new'
-			? await selection.moveToNewThread(client, messages.map((event) => event.message_id), {
-				parentRoomId: roomId,
-				title: (firstId) => threadTitleFor(resolveMessage(firstId)),
-				// Nothing moves out of a private room into a thread others can see.
-				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined,
-				own: ownMessage,
-				movable
-			})
-			: await selection.move(client, target, ownMessage);
-		if (!result.moved) {
-			if (result.error !== undefined) feedback.error(result.error, selection.current?.denied ? 'Some messages could not be moved' : 'No messages were moved');
+	async function moveSelection(target: string): Promise<void> {
+		if (!client || !paneRoom || !session.canEdit) return;
+		const result = await selection.move(client, target, ownMessage);
+		if (!result.moved && result.error !== undefined) feedback.error(result.error, selection.current?.denied ? 'Some messages could not be moved' : 'No messages were moved');
+	}
+
+	/**
+	 * "New thread" in select mode (capabilities `edit` and `rooms`): the
+	 * NewThreadDialog suggests a title from the earliest selected message, and
+	 * the selection moves into the thread once it exists. A selection that
+	 * can't all move is refused before anything is asked or created.
+	 */
+	function newThreadFromSelection(): void {
+		if (!paneRoom || !session.canEdit) return;
+		const unmovable = selection.checkMovable(movable);
+		if (unmovable) {
+			feedback.error(unmovable);
 			return;
 		}
-		if (target === 'new') pendingOpen = { room: roomId, thread: result.room };
+		selection.menuOpen = false;
+		const first = selection.earliest(messages.map((event) => event.message_id));
+		askNewThread({ title: threadTitleFor(first !== undefined ? resolveMessage(first) : undefined), summary: '', moving: selection.ids.length });
 	}
 
 	/** Escape leaves select mode, as it leaves the thread menu. */
@@ -1895,7 +1947,8 @@
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Escape' || !selection.active) return;
+		// Escape in the NewThreadDialog closes it and keeps the selection it was asked for.
+		if (event.key !== 'Escape' || !selection.active || newThread) return;
 		if (selection.menuOpen) {
 			selection.menuOpen = false;
 			return;
@@ -1954,7 +2007,7 @@
 		webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
-		onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onsignout={signedOut}
+		onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut}
 	/>
 	<SidebarHandle layout={sidebar} />
 	<!-- The first-mention offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->
@@ -1985,6 +2038,14 @@
 			{#if roomEditorOpen && editTarget}
 				{#key editTarget.id}
 					<RoomEditor {client} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} onclose={() => (roomEditorOpen = false)} />
+				{/key}
+			{/if}
+			{#if newThread}
+				{@const start = newThread}
+				{#key start}
+					<NewThreadDialog room={start.room} title={start.title} summary={start.summary} moving={start.moving}
+						enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
+						oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
 				{/key}
 			{/if}
 
@@ -2065,7 +2126,6 @@
 								selecting={selection.active}
 								selected={selection.has(event.message_id)}
 								editing={editingId === event.message_id}
-								startingThread={Boolean(startingThreads[event.message_id])}
 								caps={capsFor(event)}
 								onreply={() => beginReply(event)}
 								onjump={jumpToMessage}
@@ -2105,7 +2165,7 @@
 			{#if selection.active}
 				<SelectionBar
 					{selection} threads={selectThreads} parentRoom={activeThread ? activeRoom.id : undefined} canCreateThread={canStartThreads}
-					onmove={(room) => moveSelection(room)} onnewthread={() => moveSelection('new')} onfill={() => selection.fillBetween(selectableOrder)}
+					onmove={(room) => moveSelection(room)} onnewthread={newThreadFromSelection} onfill={() => selection.fillBetween(selectableOrder)}
 					oncancel={() => { selection.cancel(); composer?.focus(); }}
 				/>
 			{:else if session.readOnly}
