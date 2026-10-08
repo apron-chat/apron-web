@@ -486,13 +486,15 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-dialog-md { --dialog-w: 600px; }
 .ap-dialog-lg { --dialog-w: 760px; height: min(560px, calc(100dvh - 32px)); }
 .ap-dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
-.ap-dialog-frame { display: flex; flex-direction: column; height: 100%; max-height: inherit; margin: 0; }
+/* The frame sizes to its content, up to the dialog's max-height; only lg, with a set height, fills it. A percentage height (or 0% flex-basis) against a dialog sized by its content collapses to nothing in Safari. */
+.ap-dialog-frame { display: flex; flex-direction: column; max-height: inherit; margin: 0; }
+.ap-dialog-lg .ap-dialog-frame { height: 100%; }
 .ap-dialog-head { flex: none; display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6); border-bottom: 1px solid var(--line); }
 .ap-dialog-heading { flex: 1; min-width: 0; display: grid; gap: 2px; padding-top: 2px; }
 .ap-dialog-title { margin: 0; font-size: var(--text-title); line-height: 24px; font-weight: 600; overflow-wrap: anywhere; }
 .ap-dialog-sub { margin: 0; font-size: var(--text-ui); line-height: 18px; color: var(--ink-muted); }
 .ap-dialog-close { flex: none; }
-.ap-dialog-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); }
+.ap-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); }
 .ap-dialog-body > p { margin: 0; font-size: var(--text-field); line-height: 20px; color: var(--ink-muted); }
 .ap-dialog-body-flush { padding: 0; gap: 0; overflow: hidden; }
 .ap-dialog-body .ap-fieldlabel { color: var(--ink); }

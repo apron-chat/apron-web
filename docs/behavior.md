@@ -593,7 +593,8 @@ dialog stays open, with the server's error, if creating fails. There is no
 Private choice, since a thread takes its room's; in a private room the dialog
 says the thread will be private too, and one that comes back without
 `private: true` gets the error described below. A **+** on the open room's row
-opens the dialog empty; Start thread on a message and New thread in select mode
+opens the dialog empty (on a phone, over the room list; the thread then opens
+in place of it); Start thread on a message and New thread in select mode
 fill it in (below).
 The **+** beside Rooms in the sidebar creates a room in the same centered
 dialog, as **Create a room**: a title (required), an optional CommonMark
