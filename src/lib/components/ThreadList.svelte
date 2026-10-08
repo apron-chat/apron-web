@@ -7,7 +7,7 @@
 	import type { RoomListing } from '$lib/protocol/client';
 	import { threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
 	import { loadOtherThreadsOpen, saveOtherThreadsOpen } from '$lib/ui/storage';
-	import { idAgo, idDateTime } from '$lib/ui/time';
+	import { idAgo, idDateTime, idIso } from '$lib/ui/time';
 
 	/** How many of the threads you haven't joined show before "N more…". */
 	const OTHERS_SHOWN = 3;
@@ -35,6 +35,13 @@
 
 	/** A thread you haven't joined: what its listing says, its summary as text and when it was last active. */
 	type Other = { id: string; title: string; private: boolean; summary: string; latestLogId?: string };
+
+	/** The clock the others' last-active times are read against, a minute at a time, so `5m` doesn't stay `5m`. */
+	let now = $state(Date.now());
+	$effect(() => {
+		const timer = setInterval(() => (now = Date.now()), 60_000);
+		return () => clearInterval(timer);
+	});
 
 	let othersOpen = $state(loadOtherThreadsOpen());
 	/** The room whose other threads are all showing, past the first few; another room starts short again. */
@@ -116,7 +123,7 @@
 			{#each shownOthers as other (other.id)}
 				{@const open = other.id === activeThread}
 				{@const summary = other.summary.replace(/\s+/g, ' ')}
-				{@const ago = other.latestLogId !== undefined ? idAgo(other.latestLogId) : ''}
+				{@const ago = other.latestLogId !== undefined ? idAgo(other.latestLogId, now) : ''}
 				<div class={['ap-roomrow', 'ap-roomrow-nested', open && 'ap-roomrow-active']}>
 					<button class="ap-room ap-room-nested ap-room-unjoined" class:ap-room-active={open} type="button" data-other-thread={other.id} data-thread={open ? other.id : undefined} aria-current={open ? 'page' : undefined} title={open ? undefined : `Read ${other.title} without joining`} onclick={() => (open ? onthread(other.id) : onopen(other.id))}>
 						<span class="ap-room-text">
@@ -127,7 +134,7 @@
 						{#if open && reading?.count !== undefined}
 							<small class="room-meta" aria-label={`${reading.count} ${reading.count === 1 ? 'message' : 'messages'}`}>{reading.count}</small>
 						{:else if ago}
-							<time class="ap-room-ago" data-testid="other-thread-ago" title={`Last active ${idDateTime(other.latestLogId ?? '')}`}>{ago}</time>
+							<time class="ap-room-ago" data-testid="other-thread-ago" datetime={idIso(other.latestLogId ?? '')} title={`Last active ${idDateTime(other.latestLogId ?? '')}`}>{ago}</time>
 						{/if}
 					</button>
 					<!-- Joining is a door in, as leaving is a door out. -->
