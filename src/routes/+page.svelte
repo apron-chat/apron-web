@@ -2040,14 +2040,6 @@
 					<RoomEditor {client} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} onclose={() => (roomEditorOpen = false)} />
 				{/key}
 			{/if}
-			{#if newThread}
-				{@const start = newThread}
-				{#key start}
-					<NewThreadDialog room={start.room} title={start.title} summary={start.summary} moving={start.moving}
-						enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
-						oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
-				{/key}
-			{/if}
 
 			{#if session.connection === 'reconnecting' && !session.reconnectNeedsAttention}
 				<!-- A short blip stays quiet: the room, history, and identity are kept in place, and the pill above the composer says it. -->
@@ -2210,6 +2202,19 @@
 			</div>
 		{/if}
 	</main>
+	<!--
+		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
+		so the + on a room's row would open nothing. It floats over whichever pane is up; the new thread opens in the
+		conversation pane once it exists.
+	-->
+	{#if newThread}
+		{@const start = newThread}
+		{#key start}
+			<NewThreadDialog room={start.room} title={start.title} summary={start.summary} moving={start.moving}
+				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
+				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
+		{/key}
+	{/if}
 	{#if memberListWide}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/if}
 	<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
 	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} onmention={(userId) => composer?.mention(userId)} />
