@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { idDateTime, idIso, idTime, idTimeCompact } from './time';
+import { idAgo, idDateTime, idIso, idTime, idTimeCompact } from './time';
 
 describe('timestamps', () => {
 	const id = String(Date.UTC(2026, 8, 14, 15, 4));
@@ -16,9 +16,25 @@ describe('timestamps', () => {
 		expect(idIso(id)).toBe('2026-09-14T15:04:00.000Z');
 	});
 
+	it('say how long ago compactly: minutes, hours, the weekday, the day, then the year', () => {
+		const now = Date.UTC(2026, 8, 14, 15, 4);
+		const ago = (ms: number) => idAgo(String(now - ms), now);
+		const minute = 60_000, hour = 60 * minute, day = 24 * hour;
+		expect(ago(20_000)).toBe('now');
+		// A clock ahead of this one is still now.
+		expect(idAgo(String(now + 5 * minute), now)).toBe('now');
+		expect(ago(5 * minute)).toBe('5m');
+		expect(ago(59 * minute)).toBe('59m');
+		expect(ago(3 * hour)).toBe('3h');
+		expect(ago(2 * day)).toBe(new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(now - 2 * day));
+		expect(ago(40 * day)).toBe(new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(now - 40 * day));
+		expect(ago(400 * day)).toBe(new Intl.DateTimeFormat(undefined, { year: 'numeric' }).format(now - 400 * day));
+	});
+
 	it('are empty for IDs that carry no time', () => {
 		expect(idTime('opaque')).toBe('');
 		expect(idTimeCompact('opaque')).toBe('');
+		expect(idAgo('opaque')).toBe('');
 		expect(idIso('opaque')).toBeUndefined();
 	});
 });

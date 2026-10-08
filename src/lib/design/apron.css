@@ -329,17 +329,28 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 /* Counts stay beside the title when preview lines follow it. */
 .ap-room-nested .ap-count { margin-top: -1px; }
 .ap-roomrow { position: relative; }
-.ap-room-exit { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: calc(var(--radius-md) - 2px); background: transparent; color: var(--ink-muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease, background-color .12s ease, color .12s ease; }
-.ap-roomrow-nested .ap-room-exit { width: 24px; height: 24px; }
-.ap-roomrow:hover .ap-room-exit, .ap-roomrow:focus-within .ap-room-exit { opacity: 1; pointer-events: auto; }
-.ap-roomrow:hover .ap-room .ap-count, .ap-roomrow:focus-within .ap-room .ap-count { visibility: hidden; }
+/* A row's action on hover or focus: Exit (or Leave) on a room or thread you're in, Join on a thread you haven't joined. */
+:is(.ap-room-exit, .ap-room-join) { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: calc(var(--radius-md) - 2px); background: transparent; color: var(--ink-muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease, background-color .12s ease, color .12s ease; }
+.ap-roomrow-nested :is(.ap-room-exit, .ap-room-join) { width: 24px; height: 24px; }
+.ap-roomrow:hover :is(.ap-room-exit, .ap-room-join), .ap-roomrow:focus-within :is(.ap-room-exit, .ap-room-join) { opacity: 1; pointer-events: auto; }
+.ap-roomrow:hover .ap-room :is(.ap-count, .ap-room-ago), .ap-roomrow:focus-within .ap-room :is(.ap-count, .ap-room-ago) { visibility: hidden; }
 .ap-roomrow:hover .ap-room, .ap-roomrow:focus-within .ap-room { padding-right: 36px; }
 .ap-roomrow-nested:hover .ap-room, .ap-roomrow-nested:focus-within .ap-room { padding-right: 32px; }
-.ap-room-exit:hover { background: var(--bg-200); color: var(--ink); }
-.ap-roomrow-active .ap-room-exit:hover { background: var(--bg-100); }
-.ap-room-exit:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: -2px; }
-@media (hover: none) { .ap-roomrow-active .ap-room-exit { opacity: 1; pointer-events: auto; } .ap-roomrow-active .ap-room .ap-count { visibility: hidden; } }
-@media (prefers-reduced-motion: reduce) { .ap-room-exit { transition: none; } }
+:is(.ap-room-exit, .ap-room-join):hover { background: var(--bg-200); color: var(--ink); }
+.ap-roomrow-active :is(.ap-room-exit, .ap-room-join):hover { background: var(--bg-100); }
+:is(.ap-room-exit, .ap-room-join):focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: -2px; }
+/* Touch can't hover: the open row keeps its action, and Join shows on every row it's on, beside the time. */
+@media (hover: none) {
+	.ap-roomrow-active .ap-room-exit, .ap-room-join { opacity: 1; pointer-events: auto; }
+	.ap-roomrow-active .ap-room .ap-count { visibility: hidden; }
+	.ap-roomrow:has(.ap-room-join) .ap-room { padding-right: 32px; }
+	.ap-roomrow:hover .ap-room .ap-room-ago, .ap-roomrow:focus-within .ap-room .ap-room-ago { visibility: visible; }
+}
+@media (prefers-reduced-motion: reduce) { :is(.ap-room-exit, .ap-room-join) { transition: none; } }
+/* A thread you haven't joined: its title muted until you point at it, and when it was last active at the end of its row. */
+.ap-room-unjoined .ap-room-name { color: var(--ink-muted); }
+.ap-roomrow:hover .ap-room-unjoined .ap-room-name, .ap-roomrow:focus-within .ap-room-unjoined .ap-room-name, .ap-room-unjoined.ap-room-active .ap-room-name { color: var(--ink); }
+.ap-room-ago { flex: none; font-size: var(--text-sm); line-height: 18px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-roomhead-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ap-roomhead-crumb { font: inherit; padding: 0; border: 0; background: none; color: var(--ink-muted); cursor: pointer; }
 .ap-roomhead-crumb:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
