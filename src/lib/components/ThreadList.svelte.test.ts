@@ -74,6 +74,37 @@ describe('ThreadList', () => {
 		expect(onjoin).toHaveBeenCalledWith('logo');
 	});
 
+	it('shows each other thread’s summary and when it was last active, with Join as a door in', () => {
+		const offsite = { ...listed('offsite', 'Offsite'), latestLogId: String(Date.now() - 2 * 60 * 60 * 1000), record: { room_id: 'offsite', title: 'Offsite', parent_room_id: 'general', description: 'Dates, *venue*,\nand travel' } } as RoomListing;
+		render({ others: [offsite, listed('logo', 'Logo')] });
+		const row = (id: string) => one(`button[data-other-thread="${id}"]`)!;
+		expect(row('offsite').querySelector('[data-testid="other-thread-summary"]')?.textContent).toBe('Dates, venue, and travel');
+		expect(row('offsite').querySelector('[data-testid="other-thread-summary"] svg')?.getAttribute('aria-label')).toBe('Summary');
+		expect(row('offsite').querySelector('[data-testid="other-thread-ago"]')?.textContent).toBe('2h');
+		expect(row('offsite').querySelector('time')?.getAttribute('datetime')).toBe(new Date(Number(offsite.latestLogId)).toISOString());
+		// Nothing listed, nothing shown.
+		expect(row('logo').querySelector('.ap-room-line, [data-testid="other-thread-ago"]')).toBeNull();
+		const join = one('button[data-join="offsite"]')!;
+		expect(join.getAttribute('aria-label')).toBe('Join Offsite');
+		expect(join.title).toBe('Join thread');
+		expect(join.querySelector('svg')).not.toBeNull();
+	});
+
+	it('keeps the last-active times current, a minute at a time', () => {
+		vi.useFakeTimers();
+		try {
+			const offsite = { ...listed('offsite', 'Offsite'), latestLogId: String(Date.now() - 4 * 60 * 1000) } as RoomListing;
+			render({ others: [offsite] });
+			const ago = () => one('[data-testid="other-thread-ago"]')?.textContent;
+			expect(ago()).toBe('4m');
+			vi.advanceTimersByTime(60_000);
+			flushSync();
+			expect(ago()).toBe('5m');
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('shows the three most active others, and the rest on "N more…"', () => {
 		render({ others: ['a', 'b', 'c', 'd', 'e'].map((id) => listed(id, id.toUpperCase())) });
 		expect(titles('button[data-other-thread]')).toEqual(['A', 'B', 'C']);

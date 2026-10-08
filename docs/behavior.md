@@ -562,13 +562,18 @@ its latest loaded message, the sender's name in ink, behind a reply arrow, in
 ink too with unread replies. Either line shows alone when the thread has only
 that one, and the icon says which it is. A door on hover leaves the thread. Then **Other threads · N**, a heading
 that folds like Browse rooms (it stays as you left it, on this device): the
-threads you haven't joined, titles only, since they deliver nothing live
+threads you haven't joined, beside the guide line carried on dashed, their
+titles muted, each with its Summary line (from its listed `description`) and,
+at the end of the row, when it was last active (`2h`, `Tue`, from its listed
+head). They deliver nothing live
 ([PROTOCOL.md §3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#34-rooms))
-and so have no counts or previews. It shows the three most recently active (the
+and so have no counts or latest message. It shows the three most recently active (the
 server's `room_list` order) and the rest on **N more…**; picking one reads it
 without joining (it stays in this list, picked out, with its Join showing, also
-while the list is folded or past the first three), and **Join** on the row (on hover, or always on touch) joins it
-and opens it once its `room_update` arrives. Leaving is how a thread is put
+while the list is folded or past the first three), and **Join**, a door-in
+button on the row (on hover, where it takes the time's place, or always on
+touch, beside it) as Leave is a door out, joins it and opens it once its
+`room_update` arrives. Leaving is how a thread is put
 away: it stops counting unread and alerting, moves down to Other threads, and
 does so on every device, since it's a membership; its card stays in the room.
 The protocol lets a client hide threads, so nothing here is a server limit.
