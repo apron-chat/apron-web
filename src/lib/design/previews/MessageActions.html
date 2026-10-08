@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=72 subtitle="Hover toolbar" -->
+<!-- @dsCard group="Timeline" height=72 subtitle="Hover toolbar; Start thread opens a ThreadEditor to name the thread" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>MessageActions</title></head>
@@ -7,7 +7,7 @@
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
-  add(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }, { label: 'Move to thread', glyph: 'Move' }], onmore: function () {} });
+  add(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }, { label: 'Start thread', glyph: 'Thread' }, { label: 'Move to thread', glyph: 'Move' }], onmore: function () {} });
   add(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }] });
 </script>
 </body>

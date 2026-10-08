@@ -399,7 +399,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-msg-text pre .ap-diff-hunk { display: block; color: var(--denim); }
 .ap-msg-text pre .ap-diff-add::before { content: "+ "; } .ap-msg-text pre .ap-diff-del::before { content: "\2212 "; }
 
-/* ProfileEditor sign-in row, ThreadEditor */
+/* ProfileEditor sign-in row */
 .ap-profedit-signin { display: flex; flex-direction: column; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--line); }
 .ap-profedit-row { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
 .ap-profedit-ok { color: var(--ok); }

@@ -18,7 +18,7 @@
 		thread?: string;
 		threadName?: string;
 		onroom?: () => void;
-		/** Cap `rooms` and/or `edit`: an Edit button that opens a <ThreadEditor>. */
+		/** Cap `rooms`: an Edit button that opens a <ThreadEditor> dialog, for a thread's title and summary or a room's title and description. */
 		onedit?: () => void;
 	}
 	let { room, name, topic, private: isPrivate, typing = [], onback, children, thread, threadName, onroom, onedit }: Props = $props();
@@ -37,9 +37,9 @@
 		{/if}
 		{#if sub}<p class={['ap-roomhead-sub', typing.length && 'ap-roomhead-typing']}>{sub}</p>{/if}
 	</div>
-	{#if children || (thread && onedit)}
+	{#if children || onedit}
 		<div class="ap-roomhead-actions">
-			{#if thread && onedit}<Button size="sm" variant="ghost" onclick={onedit} label="Edit" />{/if}
+			{#if onedit}<Button size="sm" variant="ghost" onclick={onedit} label="Edit" />{/if}
 			{@render children?.()}
 		</div>
 	{/if}

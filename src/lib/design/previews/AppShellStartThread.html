@@ -1,0 +1,36 @@
+<!-- @dsCard group="Layout" height=640 width=1280 page subtitle="Start thread on a message: a centered ThreadEditor names it, the message quoted as its summary" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>App shell, starting a thread</title><style>html,body{height:100%}</style></head>
+<body>
+<div id="root" style="height:640px"><div class="ap-shell"><span id="rail" style="display:contents"></span><aside class="ap-shell-side" id="side"><div class="ap-shell-sidehead">Work</div><div class="ap-shell-sidebody" id="sidebody"></div></aside><main class="ap-shell-main" id="main"><span id="head" style="display:contents"></span><div class="ap-timeline" id="tl"></div><span id="foot" style="display:contents"></span></main></div></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' }, dana = { user_id: 'dana', name: 'Dana' }, me = { user_id: 'sam', name: 'Sam' };
+  var noop = function () {}, $ = function (id) { return document.getElementById(id); };
+  var rooms = [
+    { room: 'general', name: 'General' }, { room: 'ops', name: 'Ops', active: true },
+    { room: 'deploy', name: 'Deploy', nested: true }, { room: 'oncall', name: 'On-call rotation', nested: true },
+    { room: 'design', name: 'Design', unread: 4 }, { room: 'random', name: 'Random' }];
+  add(A.BackendRail, { active: 'work', onadd: noop, backends: [{ id: 'home', label: 'Home lab' }, { id: 'work', label: 'Work' }] }, $('rail'));
+  add(A.SidebarSection, { title: 'Rooms', children: A.parts.apply(null, rooms.map(function (r) { r.onleave = noop; return A.part(A.RoomItem, r); })) }, $('sidebody'));
+  add(A.ProfileBar, { you: me, backend: 'Work' }, $('side'));
+  add(A.RoomHeader, { room: 'ops', name: 'Ops', topic: 'Deploys and incidents', onedit: noop }, $('head'));
+  var tl = $('tl');
+  add(A.TimelineDivider, { kind: 'date', label: 'Today' }, tl);
+  add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.' }, tl);
+  add(A.Message, { sender: bob, time: '14:04', highlighted: true, children: A.html('<p>Worker <code>1.9.0</code> crash-looped after the deploy. Rolled back to <code>1.8.3</code>?</p><p>The trace points at the new queue client:</p><pre><code>QueueError: lease expired (attempt 3/3)</code></pre>'),
+    actions: A.part(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Start thread', glyph: 'Thread' }], onmore: noop }) }, tl);
+  add(A.Message, { sender: dana, time: '14:06', text: 'Looking.' }, tl);
+  add(A.Composer, { room: 'Ops', canUpload: true }, $('foot'));
+  add(A.ThreadEditor, {
+    open: true,
+    mode: 'start',
+    subtitle: 'In Ops',
+    name: 'Worker 1.9.0 crash-looped after the deploy. Rolled back to 1.8.3?',
+    summary: '> Worker `1.9.0` crash-looped after the deploy. Rolled back to `1.8.3`?\n>\n> The trace points at the new queue client:\n>\n> ```\n> QueueError: lease expired (attempt 3/3)\n> ```'
+  });
+</script>
+</body>
+</html>
