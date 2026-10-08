@@ -28,6 +28,7 @@
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
 	import ThreadSummary from '$lib/components/ThreadSummary.svelte';
 	import RoomEditor from '$lib/components/RoomEditor.svelte';
+	import StartThreadDialog from '$lib/components/StartThreadDialog.svelte';
 	import TypingDots from '$lib/components/TypingDots.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
@@ -47,7 +48,7 @@
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
-	import { buildRoomTimeline, buildThreadTimeline, threadDescriptionFor, threadEntries, threadLostPrivacy, threadStartedFrom, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadLostPrivacy, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
 	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
 	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
@@ -72,6 +73,9 @@
 	 * replies to (the thread-from-message convention: see `startThread`).
 	 */
 	type PendingOpen = { room: string; thread: string; replyTo?: string };
+
+	/** A thread being started from a message: the room it goes under, and what its form starts with. */
+	type ThreadStart = { room: { id: string; title: string }; message: string; title: string; summary: string };
 
 	/** A thread just chosen: where it lands waits until its first load shows whether older replies remain. */
 	let openingThread = $state<string | undefined>();
@@ -233,8 +237,8 @@
 	 * was when the pane opened (§4.6). It stays put while you read.
 	 */
 	let newDivider = $state<{ room: string; after?: string; fixed: boolean }>({ room: '', fixed: false });
-	/** Messages a thread is being started from, for the button's "Starting…". */
-	let startingThreads = $state<Record<string, true>>({});
+	/** Start thread's dialog, asking for the new thread's title, until it closes. */
+	let threadStart = $state<ThreadStart | undefined>();
 	/** Threads this page started, by the message they were started from: Start thread again opens the same one. */
 	const startedThreads = new Map<string, string>();
 	let mobilePane = $state<'rooms' | 'main'>('main');
@@ -919,7 +923,7 @@
 		pendingOpen = undefined;
 		pendingJoin = undefined;
 		pendingPrivate = false;
-		startingThreads = {};
+		threadStart = undefined;
 		roomEditorOpen = false;
 		selection.cancel();
 		mentions.reset();
@@ -1162,6 +1166,7 @@
 		drafts.open(draftKey(thread ?? roomId));
 		editingId = undefined;
 		roomEditorOpen = false;
+		threadStart = undefined;
 		selection.cancel();
 		composer?.reset();
 		mentions.clearUnseen();
@@ -1794,16 +1799,16 @@
 	}
 
 	/**
-	 * Starts a thread on a message (capability `rooms`): a room under this one, titled
-	 * after the message's first line, whose `description` carries its gist
-	 * (§3.4). Threads no longer point at a message, so the link back is the
-	 * thread's first reply: the thread opens once its `room_update` has arrived
-	 * with its composer replying to the message (`reply_to` crosses rooms,
-	 * §3.5), which stays in the room where it was.
+	 * Starts a thread on a message (capability `rooms`): a room under this one,
+	 * named in a dialog that suggests the message's first line, whose summary
+	 * (`description`, §3.4) begins as the message quoted. Threads no longer
+	 * point at a message, so the link back is the thread's first reply: the
+	 * thread opens once its `room_update` has arrived with its composer
+	 * replying to the message (`reply_to` crosses rooms, §3.5), which stays in
+	 * the room where it was.
 	 */
-	async function startThread(event: MessageRecord): Promise<void> {
-		if (!client || !activeRoom || !canStartThreads || event.deleted || startingThreads[event.message_id]) return;
-		const chat = client;
+	function startThread(event: MessageRecord): void {
+		if (!client || !activeRoom || !canStartThreads || event.deleted || threadStart) return;
 		const roomId = activeRoom.id;
 		const id = event.message_id;
 		// A thread already started from this message (here, or by anyone whose first reply points at it) opens instead.
@@ -1813,27 +1818,18 @@
 			chooseThread(existing);
 			return;
 		}
-		startingThreads = { ...startingThreads, [id]: true };
-		feedback.pending('Starting thread…');
-		try {
-			const description = threadDescriptionFor(event);
-			const result = await chat.createRoom({ parentRoomId: roomId, title: threadTitleFor(event), ...(description ? { description } : {}) }).promise;
-			if (typeof result.room_id !== 'string') throw new Error('Invalid room response');
-			startedThreads.set(id, result.room_id);
-			// A thread of a private room is private too (§4.3.4); one the server made visible gets no reply from here.
-			if (threadLostPrivacy(session.rooms, roomId, result.room_id)) {
-				feedback.error(PRIVACY_LOST);
-				return;
-			}
-			pendingOpen = { room: roomId, thread: result.room_id, replyTo: id };
-			feedback.clear();
-		} catch (cause) {
-			feedback.error(cause, 'Unable to start thread');
-		} finally {
-			const next = { ...startingThreads };
-			delete next[id];
-			startingThreads = next;
+		threadStart = { room: { id: roomId, title: activeRoom.title }, message: id, title: threadTitleFor(event), summary: threadSummaryFor(event) ?? '' };
+	}
+
+	/** The server named the thread Start thread asked for: it opens once its `room_update` has arrived. */
+	function threadStarted(start: ThreadStart, threadId: string): void {
+		startedThreads.set(start.message, threadId);
+		// A thread of a private room is private too (§4.3.4); one the server made visible gets no reply from here.
+		if (threadLostPrivacy(session.rooms, start.room.id, threadId)) {
+			feedback.error(PRIVACY_LOST);
+			return;
 		}
+		pendingOpen = { room: start.room.id, thread: threadId, replyTo: start.message };
 	}
 
 	// --- Select mode ---
@@ -1985,6 +1981,13 @@
 					<RoomEditor {client} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} onclose={() => (roomEditorOpen = false)} />
 				{/key}
 			{/if}
+			{#if threadStart && client}
+				{@const start = threadStart}
+				{#key start.message}
+					<StartThreadDialog {client} room={start.room} title={start.title} summary={start.summary} enabled={canStartThreads && canCompose}
+						onstarted={(threadId) => threadStarted(start, threadId)} onclose={() => (threadStart = undefined)} />
+				{/key}
+			{/if}
 
 			{#if session.connection === 'reconnecting' && !session.reconnectNeedsAttention}
 				<!-- A short blip stays quiet: the room, history, and identity are kept in place, and the pill above the composer says it. -->
@@ -2063,7 +2066,6 @@
 								selecting={selection.active}
 								selected={selection.has(event.message_id)}
 								editing={editingId === event.message_id}
-								startingThread={Boolean(startingThreads[event.message_id])}
 								caps={capsFor(event)}
 								onreply={() => beginReply(event)}
 								onjump={jumpToMessage}

@@ -1,14 +1,18 @@
-<!-- @dsCard group="Input" height=400 subtitle="Name and summary" -->
+<!-- @dsCard group="Input" height=520 subtitle="Start a thread from a message: a title to name it, the message quoted as its summary. Edit thread and Edit room are the same dialog." -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ThreadEditor</title></head>
 <body>
-<div id="root" class="ap-row" style="align-items:flex-start"></div>
+<div id="root"></div>
 <script>
   var A = window.Apron, root = document.getElementById('root');
-  function add(C, props, at) { return A.render(C, at || root, props || {}); }
-  add(A.ThreadEditor, { name: 'Deploy', summary: 'Worker `1.9.0` crash-looped on the new queue client. Resolved:\n\n- Rolled back to `1.8.3`\n- Re-ran migration 0042' });
-  add(A.ThreadEditor, { name: 'Deploy 2026-09-19', summary: '', status: 'declined' });
+  A.render(A.ThreadEditor, root, {
+    open: true,
+    mode: 'start',
+    subtitle: 'In #ops',
+    name: 'Worker 1.9.0 crash-looped after the deploy',
+    summary: '> Worker `1.9.0` crash-looped after the deploy. Rolled back to `1.8.3`?\n>\n> The trace points at the new queue client:\n>\n> ```\n> QueueError: lease expired (attempt 3/3)\n> ```'
+  });
 </script>
 </body>
 </html>

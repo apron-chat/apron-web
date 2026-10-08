@@ -404,9 +404,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-profedit-row { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
 .ap-profedit-ok { color: var(--ok); }
 .ap-profedit-signin .ap-typing-dots { vertical-align: middle; margin-right: var(--space-1); }
-.ap-tedit { display: flex; flex-direction: column; gap: var(--space-3); width: min(100%, 420px); padding: var(--space-4); box-sizing: border-box; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
 .ap-field-multi { height: auto; padding: var(--space-1) var(--space-2); resize: vertical; font: inherit; font-size: var(--text-field); line-height: 20px; font-weight: 400; }
-.ap-roomhead-pop { position: absolute; right: var(--space-4); top: calc(var(--header-h) + var(--space-2)); z-index: 5; }
 .ap-fieldlabel-row { display: flex; justify-content: space-between; }
 .ap-fieldlabel-hint { font-weight: 400; }
 
@@ -464,6 +462,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 
 /* Dialog — a modal panel: a title with an optional subtitle and a close button, a body, and an optional footer of actions */
 .ap-dialog { --dialog-w: 420px; width: min(var(--dialog-w), calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); box-sizing: border-box; margin: auto; padding: 0; color: var(--ink); background: var(--bg-100); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
+.ap-dialog-md { --dialog-w: 600px; }
 .ap-dialog-lg { --dialog-w: 760px; height: min(560px, calc(100dvh - 32px)); }
 .ap-dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 .ap-dialog-frame { display: flex; flex-direction: column; height: 100%; max-height: inherit; margin: 0; }

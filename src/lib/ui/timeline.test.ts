@@ -3,7 +3,7 @@ import { ProtocolStore, applyRecords, createTimeline, decodeHistoryRecords, time
 import type { RoomSnapshot } from '$lib/protocol/client';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadPreview, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { escapeMarkdown, quoteMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadPreview, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
 
@@ -120,26 +120,33 @@ describe('thread grouping', () => {
 		expect(threadTitleFor(undefined)).toBe('Thread');
 	});
 
-	it('describes a thread started from a message with its text, shortened', () => {
-		expect(threadDescriptionFor(message(0, 'alice', { body: { text: '  Why did the **4pm** deploy fail?\nThe runner looked fine.\n', format: 'markdown' } }))).toBe('Why did the **4pm** deploy fail?\nThe runner looked fine.');
-		expect([...threadDescriptionFor(message(0, 'alice', { body: { text: 'x'.repeat(600), format: 'markdown' } }))!]).toHaveLength(500);
-		expect(threadDescriptionFor(message(0, 'alice', { body: { embeds: [{ kind: 'image' }] } }))).toBeUndefined();
-		expect(threadDescriptionFor(message(0, 'alice', { deleted: true }))).toBeUndefined();
+	it('begins a thread’s summary with its message quoted, shortened', () => {
+		const unquote = (quoted: string) => quoted.split('\n').map((row) => row.replace(/^> ?/, '')).join('\n');
+		expect(threadSummaryFor(message(0, 'alice', { body: { text: '  Why did the **4pm** deploy fail?\n\nThe runner looked fine.\n', format: 'markdown' } }))).toBe('> Why did the **4pm** deploy fail?\n>\n> The runner looked fine.');
+		expect(threadSummaryFor(message(0, 'alice', { body: { text: 'Deploy?' } }))).toBe('> Deploy?');
+		expect([...unquote(threadSummaryFor(message(0, 'alice', { body: { text: 'x'.repeat(600), format: 'markdown' } }))!)]).toHaveLength(500);
+		expect(threadSummaryFor(message(0, 'alice', { body: { embeds: [{ kind: 'image' }] } }))).toBeUndefined();
+		expect(threadSummaryFor(message(0, 'alice', { deleted: true }))).toBeUndefined();
 		// Plain text stays the same text once read as Markdown.
-		expect(threadDescriptionFor(message(0, 'alice', { body: { text: '1. not a list\n*not bold* # nor a heading' } }))).toBe('1\\. not a list\n\\*not bold\\* \\# nor a heading');
-		// A long one is cut on a line boundary, closing the code fence it leaves open.
+		expect(threadSummaryFor(message(0, 'alice', { body: { text: '1. not a list\n*not bold* # nor a heading' } }))).toBe('> 1\\. not a list\n> \\*not bold\\* \\# nor a heading');
+		expect(markdownText(threadSummaryFor(message(0, 'alice', { body: { text: '1. not a list\n> nor a quote' } }))!)).toBe('1. not a list\n> nor a quote');
+		// A long one is cut on a line boundary, closing the code fence it leaves open, all inside the quote.
 		const fenced = `Look:\n${'word '.repeat(60)}\n\`\`\`\n${'const x = 1;\n'.repeat(40)}\`\`\``;
-		const cut = threadDescriptionFor(message(0, 'alice', { body: { text: fenced, format: 'markdown' } }))!;
+		const quoted = threadSummaryFor(message(0, 'alice', { body: { text: fenced, format: 'markdown' } }))!;
+		expect(quoted.split('\n').every((row) => row === '>' || row.startsWith('> '))).toBe(true);
+		const cut = unquote(quoted);
 		expect(cut.split('\n').filter((row) => row.startsWith('```'))).toHaveLength(2);
 		expect(cut.endsWith('…')).toBe(true);
 		expect(cut.split('\n').filter((row) => row.startsWith('const')).every((row) => row === 'const x = 1;')).toBe(true);
 		// Setext underlines, entities, and indents stay text too.
 		expect(markdownText(escapeMarkdown('Title\n===\na &lt; b\n    not code'))).toBe('Title\n===\na &lt; b\n    not code');
 		// A four-backtick fence closes with four.
-		const long = threadDescriptionFor(message(0, 'alice', { body: { text: `Code:\n\`\`\`\`\n${'x = 1\n'.repeat(120)}\`\`\`\``, format: 'markdown' } }))!;
+		const long = unquote(threadSummaryFor(message(0, 'alice', { body: { text: `Code:\n\`\`\`\`\n${'x = 1\n'.repeat(120)}\`\`\`\``, format: 'markdown' } }))!);
 		expect(long).toMatch(/\n````\n\n…$/);
-		// A short one-liner is all title.
-		expect(threadDescriptionFor(message(0, 'alice', { body: { text: 'Deploy?' } }))).toBeUndefined();
+	});
+
+	it('quotes Markdown line by line', () => {
+		expect(quoteMarkdown('one\n\ntwo')).toBe('> one\n>\n> two');
 	});
 });
 

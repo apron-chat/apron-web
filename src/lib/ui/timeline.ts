@@ -8,7 +8,7 @@ import { dayKey, dayKeyOf, dayLabel, dayLabelOf, eventTime, idTime, isGrouped } 
 
 /** Longest title a thread started from a message gets, in characters. */
 const THREAD_TITLE_MAX = 60;
-/** Longest description a thread started from a message gets, in characters. */
+/** Longest quote of its message a thread started from one begins its summary with, in characters. */
 const THREAD_DESCRIPTION_MAX = 500;
 
 /**
@@ -144,19 +144,24 @@ export function threadTitleFor(event: MessageRecord | undefined): string {
 }
 
 /**
- * The `description` of a thread started from a message (§3.4): the gist, the
- * message's text, shortened on a line or word boundary with any code fence
- * it leaves open closed. A Markdown message is kept as written; a plain one
- * (§3.5: `format` absent or `plain`) is escaped, since a description is
- * Markdown. The message stays in the parent room; the thread's first reply
- * points back at it with `reply_to`. Undefined when the message has no text,
- * or when its title already says it all.
+ * The summary a thread started from a message begins with (its `description`,
+ * §3.4): the message's text as a Markdown `>` quote, shortened on a line or
+ * word boundary with any code fence it leaves open closed. A Markdown message
+ * is kept as written; a plain one (§3.5: `format` absent or `plain`) is
+ * escaped, since a description is Markdown. The message stays in the parent
+ * room; the thread's first reply points back at it with `reply_to`.
+ * Undefined when the message has no text.
  */
-export function threadDescriptionFor(event: MessageRecord | undefined): string | undefined {
+export function threadSummaryFor(event: MessageRecord | undefined): string | undefined {
 	const text = event && !event.deleted ? textOf(event).trim() : '';
-	if (!text || text === threadTitleFor(event)) return undefined;
+	if (!text) return undefined;
 	const markdown = event?.body?.format === 'markdown';
-	return shortenMarkdown(markdown ? text : escapeMarkdown(text), THREAD_DESCRIPTION_MAX);
+	return quoteMarkdown(shortenMarkdown(markdown ? text : escapeMarkdown(text), THREAD_DESCRIPTION_MAX));
+}
+
+/** Markdown as a block quote of itself: every line behind `> `, a blank one behind `>`. */
+export function quoteMarkdown(text: string): string {
+	return text.split('\n').map((line) => (line.trim() ? `> ${line}` : '>')).join('\n');
 }
 
 /**

@@ -28,7 +28,7 @@ tokens stay in the artifact's `tokens.json`; keep them in step with
 The Svelte components under `src/lib/components` wrap the `ap-*`
 classes one to one with the design system's components, adding the app's
 state and behavior — `ConnectScreen`,
-`Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` and `RoomEditor`, `ThreadCard` and
+`Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` with `RoomEditor` and `StartThreadDialog` (both the design system's `ThreadEditor`, a `Dialog`), `ThreadCard` and
 `ThreadSummary`, `Message` with its `ReactionBar` and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`) and `StagedFile` (the design system's `Attachments`), `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
 `PreferencesDialog` with its `FontFamilyField`, `CreateRoomDialog`, `EmailLinkDialog` (all three

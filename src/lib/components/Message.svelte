@@ -48,7 +48,6 @@
 		selecting: boolean;
 		selected: boolean;
 		editing: boolean;
-		startingThread: boolean;
 		caps: MessageCaps;
 		onreply: () => void;
 		onjump: (id: string) => void;
@@ -70,7 +69,7 @@
 		onselect: (range: boolean) => void;
 	}
 	let {
-		event, grouped, resolve, reactions, uploads, mention, pinged, highlighted, selecting, selected, editing, startingThread, caps,
+		event, grouped, resolve, reactions, uploads, mention, pinged, highlighted, selecting, selected, editing, caps,
 		onreply, onjump, onopenroom, onedit, onsave, oncanceledit, ondelete, onremovereply, onremoveembed, onstartthread, onreact, onbeginselect, onselect
 	}: Props = $props();
 
@@ -324,7 +323,7 @@
 					>React</button>
 				{/if}
 				{#if caps.startThread}
-					<button class="ap-actions-btn" type="button" data-testid="start-thread" aria-label="Start thread" title="Start thread" disabled={startingThread} onclick={() => act(onstartthread)}>{startingThread ? 'Starting…' : 'Start thread'}</button>
+					<button class="ap-actions-btn" type="button" data-testid="start-thread" aria-label="Start thread" title="Start thread" onclick={() => act(onstartthread)}>Start thread</button>
 				{/if}
 				{#if caps.edit}
 					<button class="ap-actions-btn" type="button" aria-label="Edit message" title="Edit" onclick={() => act(onedit)}>Edit</button>

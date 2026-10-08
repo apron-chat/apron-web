@@ -601,14 +601,17 @@ threads show a lock beside their name.
 A room's `description` (CommonMark by convention) shows as one line of text
 under its title in the header. With the `rooms` capability the header's ⋯ menu
 holds the occasional actions: **Edit room** (or **Edit thread**) opens
-a form for the open room's or thread's title and description ("Summary" for a
-thread), saved with one `room_set`; the `room_update` that follows is what
-shows, since the server may alter or decline it.
+a centered dialog with the open room's or thread's title and description
+("Summary" for a thread), saved with one `room_set`; the `room_update` that
+follows is what shows, since the server may alter or decline it.
 
-With the `rooms` capability, **Start thread** on a message creates a thread under the
-room titled after the message's first line, with the message's text as its
-`description` (unless the title already says it all), and opens it with the
-composer replying to that message. Threads don't point at a message, so
+With the `rooms` capability, **Start thread** on a message opens the same
+dialog to name the new thread: its title starts as the message's first line,
+selected so typing replaces it, and its Summary as the message's text quoted
+in Markdown (`> `). **Start thread** there creates the thread under the room
+with that title and Summary as its `description` (a title is required; an
+emptied Summary sends none), and opens it with the composer replying to that
+message. Threads don't point at a message, so
 the thread's first reply carries the link back as its `reply_to` (the
 convention of the protocol's fixtures): its quote shows the message and jumps
 to it. The message stays in the room, with the thread's card after it. A
