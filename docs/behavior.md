@@ -554,7 +554,10 @@ without a `room_id` until a message names it, plus any room a message arrives
 in, titled by its `room_id`.
 
 Threads are rooms with a `parent_room_id`. The sidebar lists top-level rooms
-and, under the open room, its threads in two groups. First the ones you've joined,
+and, under the open room, its threads in two groups. Under a room that isn't
+open, it lists only that room's joined threads with news (unread replies or
+mentions), in the same rows, so activity there isn't missed; picking one opens
+its room with the thread open, and quiet threads wait until the room is opened. First the ones you've joined,
 on a guide line from the room:
 each title in ink, heavier with unread replies, over up to two lighter lines:
 its Summary (its `description` as text, on one line) behind a text icon, then

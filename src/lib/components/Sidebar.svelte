@@ -7,7 +7,7 @@
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
-	import { sidebarRooms, type ThreadEntry } from '$lib/ui/timeline';
+	import { sidebarRooms, threadsWithNews, type ThreadEntry } from '$lib/ui/timeline';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import NewRoomDialog from './NewRoomDialog.svelte';
 	import ProfileBar from './ProfileBar.svelte';
@@ -143,6 +143,12 @@
 						</div>
 						{#if active}
 							<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+						{:else}
+							<!-- Under a room that isn't open, only its joined threads with news, so activity there isn't missed. -->
+							{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
+							{#if news.length > 0}
+								<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+							{/if}
 						{/if}
 					{/each}
 				{/if}

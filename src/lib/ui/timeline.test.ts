@@ -3,7 +3,7 @@ import { ProtocolStore, applyRecords, createTimeline, decodeHistoryRecords, time
 import type { RoomSnapshot } from '$lib/protocol/client';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { escapeMarkdown, quoteMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadPreview, threadSummaryText, threadLatest, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { escapeMarkdown, quoteMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadPreview, threadSummaryText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
 
@@ -260,6 +260,21 @@ describe('transient notices and threads not joined', () => {
 			.toEqual(['first', 'between', 'second', 'third+', 'late']);
 		const thread = buildThreadTimeline({ messages: [first, second], notices: [notice('reply', second.message_id)] });
 		expect(kinds(thread)).toEqual(['date', 'message', 'message', 'notice']);
+	});
+
+	it('lists only the joined threads with news under a room that isn’t open', () => {
+		const rooms = [
+			room('general'),
+			room('t1', [], { parentRoomId: 'general', title: 'Replies' }),
+			room('t2', [], { parentRoomId: 'general', title: 'Mention' }),
+			room('t3', [], { parentRoomId: 'general', title: 'Quiet' }),
+			room('t4', [], { parentRoomId: 'general', title: 'Read only', joined: false }),
+			room('t5', [], { parentRoomId: 'ops', title: 'Elsewhere' })
+		];
+		const unread = { t1: 2, t4: 1, t5: 3 };
+		const mentions = { t2: 1 };
+		expect(threadsWithNews(rooms, 'general', unread, mentions).map((entry) => entry.id)).toEqual(['t1', 't2']);
+		expect(threadsWithNews(rooms, 'general', {}, {})).toEqual([]);
 	});
 
 	it('lists a thread open without joining as a card, but never as a room of its own', () => {

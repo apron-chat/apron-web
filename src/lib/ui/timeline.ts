@@ -122,6 +122,17 @@ export function threadEntries(
 	return [...joined, ...unjoined.filter((listing) => !known.has(listing.id)).map(unjoinedThreadEntry)];
 }
 
+/**
+ * A room's joined threads with news, for the sidebar under a room that isn't
+ * open: unread replies or unread mentions. Quiet ones wait until the room is
+ * opened, so the sidebar grows only by what needs attention.
+ */
+export function threadsWithNews(
+	rooms: readonly RoomSnapshot[], parentRoomId: string, unread: Record<string, number>, mentions: Record<string, number>
+): ThreadEntry[] {
+	return threadEntries(rooms, parentRoomId).filter((entry) => entry.joined && ((unread[entry.id] ?? 0) > 0 || (mentions[entry.id] ?? 0) > 0));
+}
+
 /** A thread's summary (its `description`, §3.4) as text, for a preview; empty without one. */
 export function threadSummaryText(entry: Pick<ThreadEntry, 'description'>): string {
 	return entry.description ? markdownText(entry.description).trim() : '';
