@@ -296,7 +296,9 @@ is syntax-highlighted once that language's highlighter loads, fetched the first
 time a block needs it; other blocks stay plain. Only
 `body.mentions` decides who is mentioned: a message that lists you tints its
 row with a rust rule, pulses once as it arrives or when an edit adds you (never
-on replayed history), raises an `@` badge on a room you aren't reading, and,
+on replayed history), raises an `@` badge on the room or thread you aren't
+reading (a thread's on its own row, listed under its room while it has news,
+not on the room as well), and,
 when it lands above the fold, turns the jump bar rust with **Jump to mention**.
 Text that merely contains your `@user_id` does none of that.
 
