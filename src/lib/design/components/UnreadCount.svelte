@@ -18,5 +18,5 @@
 
 <!-- What's new, in one bubble: grey for unread messages, orange with an @ when they include a mention of you. -->
 {#if count > 0}
-	<span class={['ap-count', mentions ? 'ap-count-at' : 'ap-count-quiet']} data-testid={testid} data-mention={mentions ? '' : undefined} aria-label={label}>{#if mentions}@&#8239;{/if}{count99(count)}</span>
+	<span class={['ap-count', mentions ? 'ap-count-at' : 'ap-count-quiet']} data-testid={testid} aria-label={label}>{#if mentions}@&#8239;{/if}{count99(count)}</span>
 {/if}
