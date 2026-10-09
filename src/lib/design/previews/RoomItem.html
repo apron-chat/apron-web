@@ -1,4 +1,4 @@
-<!-- @dsCard group="Navigation" height=440 subtitle="Rooms with threads nested, a private room · a thread shows its summary and its latest message, each marked by an icon · threads you haven't joined, muted, say when they were last active · hover a row for Exit, or Join" -->
+<!-- @dsCard group="Navigation" height=480 subtitle="Rooms with threads nested, a private room · unread in a grey bubble, orange with an @ when it includes a mention · a thread shows its summary and its latest message, each marked by an icon · the open one has a neutral fill and an accent bar, an unread mention a tint, and one with nothing new steps back · threads you haven't joined, muted, say when they were last active · hover a row for Exit, or Join" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>RoomItem</title></head>
@@ -14,6 +14,7 @@
   add(A.RoomItem, { room: 'deploy', name: 'Deploy', nested: true, unread: 2, summary: 'Worker 1.9.0 crash-looped; rolled back to 1.8.3', latest: { sender: 'Dana', text: 'Re-running the migration now' }, onleave: leave });
   add(A.RoomItem, { room: 'mig-0042', name: 'Migration 0042', nested: true, active: true, latest: { sender: 'Sam', text: 'Lock cleared, applying 0042' }, onleave: leave });
   add(A.RoomItem, { room: 'oncall', name: 'On-call rotation', nested: true, mentions: 1, summary: 'Who carries the pager, week by week', onleave: leave });
+  add(A.RoomItem, { room: 'cert', name: 'Expired cert', nested: true, latest: { sender: 'Linus', text: 'Renewed it, CI is green again' }, onleave: leave });
   add(A.RoomItem, { room: 'offsite', name: 'Offsite planning', nested: true, summary: 'Dates, venue, and who books travel', ago: '2h', onjoin: leave });
   add(A.RoomItem, { room: 'logo', name: 'Logo feedback', nested: true, private: true, ago: 'Tue', onjoin: leave });
   add(A.RoomItem, { room: 'random', name: 'Random', unread: 3, onleave: leave });

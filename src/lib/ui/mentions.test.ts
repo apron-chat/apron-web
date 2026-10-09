@@ -32,7 +32,7 @@ describe('mention tracking', () => {
 		tracker.dispose();
 	});
 
-	it('pings new arrivals and badges a thread’s mentions on its parent room', () => {
+	it('pings new arrivals and badges a thread’s mentions on the thread alone, which the sidebar lists under its room', () => {
 		const tracker = new MentionTracker();
 		const general = room('general', [], { latestLogId: '10' });
 		const thread = room('t1', [], { parentRoomId: 'general', latestLogId: '10' });
@@ -40,12 +40,14 @@ describe('mention tracking', () => {
 		const arrived = tracker.observe([general, room('t1', [mention(30, 't1')], { parentRoomId: 'general' })], me, 'general', true);
 		expect(arrived.map((event) => event.message_id)).toEqual(['30']);
 		expect(tracker.pinged).toEqual(['30']);
-		expect(tracker.byRoom).toEqual({ general: 1, t1: 1 });
+		expect(tracker.byRoom).toEqual({ t1: 1 });
 		// In the open pane, above the fold: it joins the jump bar instead.
 		tracker.observe([room('general', [mention(40, 'general')]), room('t1', [mention(30, 't1')], { parentRoomId: 'general' })], me, 'general', false);
 		expect(tracker.unseen).toEqual(['40']);
+		expect(tracker.byRoom).toEqual({ t1: 1 });
+		// A mention in the room itself, read elsewhere, badges the room; opening the thread clears only the thread's.
+		tracker.observe([room('general', [mention(40, 'general'), mention(50, 'general')]), room('t1', [mention(30, 't1')], { parentRoomId: 'general' })], me, 'elsewhere', true);
 		expect(tracker.byRoom).toEqual({ general: 1, t1: 1 });
-		// Opening the thread clears its badge; the parent keeps its own until it is opened.
 		tracker.clearRoom('t1');
 		expect(tracker.byRoom).toEqual({ general: 1 });
 		tracker.dispose();

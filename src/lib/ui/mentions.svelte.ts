@@ -7,9 +7,11 @@ import { mentionsMe } from './messages';
 const PING_MS = 1200;
 
 /**
- * Mentions of you as they arrive: the row pulses once, a room you aren't
- * reading gets an `@` badge (a thread's mentions badge both the thread and its
- * parent room), and one that lands above the fold joins the jump bar's list.
+ * Mentions of you as they arrive: the row pulses once, a room or thread you
+ * aren't reading counts them (its unread bubble turns orange with an `@`; a
+ * thread's on its own row, which the sidebar lists under its room whenever it
+ * has news, so not on the room too), and one that lands above the fold joins
+ * the jump bar's list.
  * A message mentions you when its `body.mentions` lists you (§3.5); an edit
  * that adds you counts as an arrival too. The first time a room is seen its
  * newest known log position becomes its watermark: messages created at or
@@ -37,7 +39,6 @@ export class MentionTracker {
 	observe(rooms: RoomSnapshot[], me: Identity | undefined, pane: string | undefined, latestVisible: boolean): MessageRecord[] {
 		const arrived: MessageRecord[] = [];
 		if (!me) return arrived;
-		const visible = new Set(rooms.map((room) => room.id));
 		for (const room of rooms) {
 			let shown = this.shown.get(room.id);
 			if (!shown) {
@@ -50,7 +51,6 @@ export class MentionTracker {
 				if (newest !== undefined) this.watermarks.set(room.id, newest);
 			}
 			const watermark = this.watermarks.get(room.id);
-			const badge = room.parentRoomId !== undefined && visible.has(room.parentRoomId) ? room.parentRoomId : room.id;
 			for (const id of room.timeline.order) {
 				const event = room.timeline.events[id];
 				const seen = shown.get(id);
@@ -62,11 +62,7 @@ export class MentionTracker {
 				this.ping(id);
 				arrived.push(event);
 				this.arrived++;
-				if (room.id !== pane) {
-					const next = { ...this.byRoom, [badge]: (this.byRoom[badge] ?? 0) + 1 };
-					if (badge !== room.id) next[room.id] = (next[room.id] ?? 0) + 1;
-					this.byRoom = next;
-				}
+				if (room.id !== pane) this.byRoom = { ...this.byRoom, [room.id]: (this.byRoom[room.id] ?? 0) + 1 };
 				else if (!latestVisible && !this.unseen.includes(id)) this.unseen = [...this.unseen, id];
 			}
 		}

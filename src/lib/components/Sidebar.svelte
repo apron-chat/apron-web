@@ -7,11 +7,12 @@
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
-	import { sidebarRooms, type ThreadEntry } from '$lib/ui/timeline';
+	import { sidebarRooms, threadsWithNews, type ThreadEntry } from '$lib/ui/timeline';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import NewRoomDialog from './NewRoomDialog.svelte';
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
+	import UnreadCount from '$lib/design/components/UnreadCount.svelte';
 
 	interface Props {
 		client: ChatClient;
@@ -126,15 +127,15 @@
 					{#each rooms as room (room.id)}
 						{@const active = room.id === session.activeRoomId}
 						{@const current = active && !activeThread}
+						<!-- What's new in the room itself (its threads show their own): none while you're reading it. -->
+						{@const roomUnread = current ? 0 : (unread[room.id] ?? 0)}
+						{@const roomMentions = current ? 0 : (mentions[room.id] ?? 0)}
 						<div class="room-row">
-							<button class="ap-room" class:ap-room-active={current} class:can-start={active && canCreateRoom} type="button" data-room={room.id} aria-current={current ? 'page' : undefined} onclick={() => onroom(room)}>
+							<button class="ap-room" class:ap-room-active={current} class:ap-room-unread={roomUnread > 0 || roomMentions > 0} class:can-start={active && canCreateRoom} type="button" data-room={room.id} aria-current={current ? 'page' : undefined} onclick={() => onroom(room)}>
 								<span class="ap-room-text">
 									<span class="ap-room-name">{room.title}{#if room.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
 								</span>
-								{#if mentions[room.id]}
-									{@const count = mentions[room.id]}
-									<span class="ap-count ap-count-at" data-testid="room-mentions" aria-label={`${count} ${count === 1 ? 'mention' : 'mentions'}`}>@{count > 1 ? count : ''}</span>
-								{/if}
+								<UnreadCount unread={roomUnread} mentions={roomMentions} testid="room-unread" />
 								{#if room.recovering}<span class="room-meta" aria-label="Loading history">…</span>{/if}
 							</button>
 							{#if active && canCreateRoom}
@@ -143,6 +144,12 @@
 						</div>
 						{#if active}
 							<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+						{:else}
+							<!-- Under a room that isn't open, only its joined threads with news, so activity there isn't missed. -->
+							{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
+							{#if news.length > 0}
+								<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+							{/if}
 						{/if}
 					{/each}
 				{/if}

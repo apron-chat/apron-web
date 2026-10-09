@@ -1236,9 +1236,16 @@
 		mobilePane = 'main';
 	}
 
+	/** Opens a thread from the sidebar: under the open room, or, with news, under another, whose room it opens too. */
 	function chooseThread(thread: string): void {
-		if (!activeRoom) return;
-		showThread(activeRoom.id, thread);
+		const parent = session.rooms.find((room) => room.id === thread)?.parentRoomId ?? activeRoom?.id;
+		if (parent === undefined) return;
+		if (parent !== activeRoom?.id) {
+			openDestination(parent, thread);
+			composer?.focus();
+			return;
+		}
+		showThread(parent, thread);
 		mobilePane = 'main';
 		composer?.focus();
 	}
