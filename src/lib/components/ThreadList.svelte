@@ -4,6 +4,7 @@
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogIn from '@lucide/svelte/icons/log-in';
 	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
+	import UnreadCount from '$lib/design/components/UnreadCount.svelte';
 	import type { RoomListing } from '$lib/protocol/client';
 	import { threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
 	import { loadOtherThreadsOpen, saveOtherThreadsOpen } from '$lib/ui/storage';
@@ -85,7 +86,7 @@
 				{@const summary = threadSummaryText(entry).replace(/\s+/g, ' ')}
 				{@const latest = threadLatest(entry)}
 				<div class={['ap-roomrow', 'ap-roomrow-nested', open && 'ap-roomrow-active']}>
-					<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0} class:ap-room-mention={mentioned > 0} class:ap-room-quiet={!open && !replies && !mentioned} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
+					<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0 || mentioned > 0} class:ap-room-mention={mentioned > 0} class:ap-room-quiet={!open && !replies && !mentioned} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
 						<span class="ap-room-text">
 							<span class="ap-room-name">{entry.title}{#if entry.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
 							<!-- Its summary, then its latest message: both when it has both, each marked so either reads alone. -->
@@ -94,12 +95,8 @@
 								<span class="ap-room-line ap-room-line-latest" data-testid="thread-list-latest"><CornerDownRight role="img" aria-label="Latest message" /><span class="ap-room-line-text">{#if latest.sender}<span class="ap-room-sender">{latest.sender}</span>{' '}{/if}{latest.text}</span></span>
 							{/if}
 						</span>
-						<!-- Only what's new: unread mentions, else unread replies; a thread with nothing new shows no number, and steps back. -->
-						{#if mentioned}
-							<span class="ap-count ap-count-at" data-testid="thread-mentions" aria-label={`${mentioned} ${mentioned === 1 ? 'mention' : 'mentions'}`}>@{mentioned > 1 ? mentioned : ''}</span>
-						{:else if replies > 0}
-							<span class="ap-count" data-testid="thread-unread" aria-label={`${replies} unread ${replies === 1 ? 'reply' : 'replies'}`}>{replies > 99 ? '99+' : replies}</span>
-						{/if}
+						<!-- One bubble for what's new: unread replies in grey, orange with an @ when they include a mention. A thread with nothing new shows none, and steps back. -->
+						<UnreadCount unread={replies} mentions={mentioned} noun="reply" testid="thread-unread" />
 					</button>
 					<!-- Leaving is the archive: the thread stops alerting and moves down to Other threads, on every device. -->
 					{#if canJoin}

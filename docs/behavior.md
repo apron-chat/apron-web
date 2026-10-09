@@ -296,9 +296,9 @@ is syntax-highlighted once that language's highlighter loads, fetched the first
 time a block needs it; other blocks stay plain. Only
 `body.mentions` decides who is mentioned: a message that lists you tints its
 row with a rust rule, pulses once as it arrives or when an edit adds you (never
-on replayed history), raises an `@` badge on the room or thread you aren't
-reading (a thread's on its own row, listed under its room while it has news,
-not on the room as well), and,
+on replayed history), turns the unread bubble of the room or thread you aren't
+reading orange with an `@` (a thread's on its own row, listed under its room
+while it has news, not on the room as well), and,
 when it lands above the fold, turns the jump bar rust with **Jump to mention**.
 Text that merely contains your `@user_id` does none of that.
 
@@ -565,10 +565,12 @@ each title in ink, heavier with unread replies, over up to two lighter lines:
 its Summary (its `description` as text, on one line) behind a text icon, then
 its latest loaded message, the sender's name in ink, behind a reply arrow, in
 ink too with unread replies. Either line shows alone when the thread has only
-that one, and the icon says which it is. Only what's new is counted: unread
-replies in an accent count, unread mentions as an @ badge, with the row tinted;
-a thread with nothing new shows no number and steps back, its title and lines
-muted and the row faded. The open room or thread has a neutral fill and an
+that one, and the icon says which it is. Only what's new is counted, in one
+bubble: unread replies in grey, turning orange with an `@` when they include a
+mention of you (the row tinted too); a thread with nothing new shows no number
+and steps back, its title and lines muted and the row faded. A room shows the
+same bubble for its own unread messages (its threads count their own), with
+its name in bold, and none while you're reading it. The open room or thread has a neutral fill and an
 accent bar at its left (on the guide line, for a thread), so it never looks
 unread. A door on hover leaves the thread. Then **Other threads · N**, a heading
 that folds like Browse rooms (it stays as you left it, on this device): the

@@ -85,10 +85,13 @@ describe('ThreadList', () => {
 		expect(state('roadmap')).toEqual(['ap-room-unread', 'ap-room-mention']);
 		expect(state('cert')).toEqual(['ap-room-quiet']);
 		expect(state('hiring')).toEqual(['ap-room-active']);
-		// Only what's new is counted, in the accent: no totals.
-		expect(row('deploy').querySelector('[data-testid="thread-unread"]')?.className).toBe('ap-count');
-		expect(row('deploy').querySelector('[data-testid="thread-unread"]')?.textContent).toBe('2');
-		expect(row('roadmap').querySelector('[data-testid="thread-mentions"]')?.textContent).toBe('@3');
+		// Only what's new is counted, in one bubble: grey for unread replies, orange with an @ when they include a mention; no totals.
+		const bubble = (id: string) => row(id).querySelector('[data-testid="thread-unread"]');
+		expect(bubble('deploy')?.className).toBe('ap-count ap-count-quiet');
+		expect(bubble('deploy')?.textContent).toBe('2');
+		expect(bubble('roadmap')?.className).toBe('ap-count ap-count-at');
+		expect(bubble('roadmap')?.textContent).toBe('@\u202f3');
+		expect(bubble('roadmap')?.getAttribute('aria-label')).toBe('3 unread replies, 3 mentions of you');
 		expect(row('cert').querySelector('.ap-count, .room-meta')).toBeNull();
 	});
 
