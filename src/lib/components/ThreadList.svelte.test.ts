@@ -74,6 +74,24 @@ describe('ThreadList', () => {
 		expect(onjoin).toHaveBeenCalledWith('logo');
 	});
 
+	it('sets apart what’s new: unread replies counted, unread mentions tinted, the open thread marked, the rest stepping back', () => {
+		render({
+			threads: [{ ...joined('deploy', 'Deploy'), count: 18 }, { ...joined('cert', 'Expired cert'), count: 6 }, joined('roadmap', 'Roadmap'), joined('hiring', 'Hiring')],
+			unread: { deploy: 2, roadmap: 1 }, mentions: { roadmap: 3 }, activeThread: 'hiring'
+		});
+		const row = (id: string) => one(`button[data-thread="${id}"]`)!;
+		const state = (id: string) => ['ap-room-unread', 'ap-room-mention', 'ap-room-quiet', 'ap-room-active'].filter((name) => row(id).classList.contains(name));
+		expect(state('deploy')).toEqual(['ap-room-unread']);
+		expect(state('roadmap')).toEqual(['ap-room-unread', 'ap-room-mention']);
+		expect(state('cert')).toEqual(['ap-room-quiet']);
+		expect(state('hiring')).toEqual(['ap-room-active']);
+		// Only what's new is counted, in the accent: no totals.
+		expect(row('deploy').querySelector('[data-testid="thread-unread"]')?.className).toBe('ap-count');
+		expect(row('deploy').querySelector('[data-testid="thread-unread"]')?.textContent).toBe('2');
+		expect(row('roadmap').querySelector('[data-testid="thread-mentions"]')?.textContent).toBe('@3');
+		expect(row('cert').querySelector('.ap-count, .room-meta')).toBeNull();
+	});
+
 	it('shows each other thread’s summary and when it was last active, with Join as a door in', () => {
 		const offsite = { ...listed('offsite', 'Offsite'), latestLogId: String(Date.now() - 2 * 60 * 60 * 1000), record: { room_id: 'offsite', title: 'Offsite', parent_room_id: 'general', description: 'Dates, *venue*,\nand travel' } } as RoomListing;
 		render({ others: [offsite, listed('logo', 'Logo')] });

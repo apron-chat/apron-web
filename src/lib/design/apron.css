@@ -219,7 +219,11 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 /* RoomItem */
 .ap-room { font: inherit; display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: 7px var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink-muted); text-align: left; cursor: pointer; }
 .ap-room:hover { background: var(--bg-300); }
-.ap-room-active, .ap-room-active:hover { background: var(--accent-soft); color: var(--ink); }
+.ap-room-active, .ap-room-active:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+/* The open room or thread: a neutral fill, a semibold name and an accent bar at its left (on the guide line, for a thread), so it never reads as unread or a mention, which own the accent fills. */
+.ap-room-active { position: relative; }
+.ap-room-active .ap-room-name { font-weight: 600; }
+.ap-room-active::before { content: ''; position: absolute; left: 4px; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
 .ap-room-unread { color: var(--ink); }
 .ap-room-unread .ap-room-name { font-weight: 600; }
 .ap-room-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
@@ -328,6 +332,14 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-room-nested { padding: 3px var(--space-3) 3px calc(var(--space-3) + var(--space-4)); font-size: var(--text-ui); line-height: 18px; align-items: flex-start; }
 /* Counts stay beside the title when preview lines follow it. */
 .ap-room-nested .ap-count { margin-top: -1px; }
+.ap-room-nested.ap-room-active::before { left: 20px; top: 4px; bottom: 4px; z-index: 1; }
+/* A thread with an unread mention: a light accent tint, set apart from the open thread's neutral fill. */
+.ap-room-nested.ap-room-mention { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); color: var(--ink); }
+.ap-room-nested.ap-room-mention:hover { background: var(--accent-soft); }
+/* A joined thread with nothing new steps back: its name and lines muted, the row faded, so unread ones stand out. */
+.ap-room-nested.ap-room-quiet { opacity: .9; }
+.ap-room-nested.ap-room-quiet .ap-room-name { color: var(--ink-muted); font-weight: 400; }
+.ap-room-nested.ap-room-quiet .ap-room-line { opacity: .75; }
 .ap-roomrow { position: relative; }
 /* A row's action on hover or focus: Exit (or Leave) on a room or thread you're in, Join on a thread you haven't joined. */
 :is(.ap-room-exit, .ap-room-join) { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: calc(var(--radius-md) - 2px); background: transparent; color: var(--ink-muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease, background-color .12s ease, color .12s ease; }

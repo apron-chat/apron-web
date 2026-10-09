@@ -81,10 +81,11 @@
 			{#each joined as entry (entry.id)}
 				{@const open = activeThread === entry.id}
 				{@const replies = open ? 0 : (unread[entry.id] ?? 0)}
+				{@const mentioned = open ? 0 : (mentions[entry.id] ?? 0)}
 				{@const summary = threadSummaryText(entry).replace(/\s+/g, ' ')}
 				{@const latest = threadLatest(entry)}
 				<div class={['ap-roomrow', 'ap-roomrow-nested', open && 'ap-roomrow-active']}>
-					<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
+					<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0} class:ap-room-mention={mentioned > 0} class:ap-room-quiet={!open && !replies && !mentioned} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
 						<span class="ap-room-text">
 							<span class="ap-room-name">{entry.title}{#if entry.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
 							<!-- Its summary, then its latest message: both when it has both, each marked so either reads alone. -->
@@ -93,14 +94,11 @@
 								<span class="ap-room-line ap-room-line-latest" data-testid="thread-list-latest"><CornerDownRight role="img" aria-label="Latest message" /><span class="ap-room-line-text">{#if latest.sender}<span class="ap-room-sender">{latest.sender}</span>{' '}{/if}{latest.text}</span></span>
 							{/if}
 						</span>
-						{#if mentions[entry.id] && !open}
-							{@const count = mentions[entry.id]}
-							<span class="ap-count ap-count-at" data-testid="thread-mentions" aria-label={`${count} ${count === 1 ? 'mention' : 'mentions'}`}>@{count > 1 ? count : ''}</span>
+						<!-- Only what's new: unread mentions, else unread replies; a thread with nothing new shows no number, and steps back. -->
+						{#if mentioned}
+							<span class="ap-count ap-count-at" data-testid="thread-mentions" aria-label={`${mentioned} ${mentioned === 1 ? 'mention' : 'mentions'}`}>@{mentioned > 1 ? mentioned : ''}</span>
 						{:else if replies > 0}
-							<span class="ap-count ap-count-quiet" data-testid="thread-unread" aria-label={`${replies} unread ${replies === 1 ? 'reply' : 'replies'}`}>{replies > 99 ? '99+' : replies}</span>
-						{/if}
-						{#if entry.count !== undefined}
-							<small class="room-meta" aria-label={`${entry.count} ${entry.count === 1 ? 'message' : 'messages'}`}>{entry.count}</small>
+							<span class="ap-count" data-testid="thread-unread" aria-label={`${replies} unread ${replies === 1 ? 'reply' : 'replies'}`}>{replies > 99 ? '99+' : replies}</span>
 						{/if}
 					</button>
 					<!-- Leaving is the archive: the thread stops alerting and moves down to Other threads, on every device. -->
@@ -158,9 +156,10 @@
 	/* A guide from the room down its joined threads. */
 	.joined { position: relative; display: flex; flex-direction: column; gap: 1px; }
 	.joined::before { content: ''; position: absolute; left: 21px; top: 0; bottom: 0; width: 1px; background: var(--line); pointer-events: none; }
-	/* The title in ink and a little heavier than the preview line under it; heavier still with unread replies. */
-	.joined .ap-room-name { color: var(--ink); font-weight: 500; }
-	.joined .ap-room-unread .ap-room-name { font-weight: 650; }
+	/* The title in ink and a little heavier than the preview line under it; heavier still with unread replies. A thread with nothing new steps back (apron.css). */
+	.joined .ap-room:not(.ap-room-quiet) .ap-room-name { color: var(--ink); font-weight: 500; }
+	.joined .ap-room.ap-room-active .ap-room-name { font-weight: 600; }
+	.joined .ap-room.ap-room-unread .ap-room-name { font-weight: 650; }
 	.room-meta { flex: none; font-size: var(--text-sm); line-height: 18px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 	.ap-room-active .room-meta { color: var(--ink); }
 

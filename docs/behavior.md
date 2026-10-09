@@ -560,7 +560,12 @@ each title in ink, heavier with unread replies, over up to two lighter lines:
 its Summary (its `description` as text, on one line) behind a text icon, then
 its latest loaded message, the sender's name in ink, behind a reply arrow, in
 ink too with unread replies. Either line shows alone when the thread has only
-that one, and the icon says which it is. A door on hover leaves the thread. Then **Other threads · N**, a heading
+that one, and the icon says which it is. Only what's new is counted: unread
+replies in an accent count, unread mentions as an @ badge, with the row tinted;
+a thread with nothing new shows no number and steps back, its title and lines
+muted and the row faded. The open room or thread has a neutral fill and an
+accent bar at its left (on the guide line, for a thread), so it never looks
+unread. A door on hover leaves the thread. Then **Other threads · N**, a heading
 that folds like Browse rooms (it stays as you left it, on this device): the
 threads you haven't joined, beside the guide line carried on dashed, their
 titles muted, each with its Summary line (from its listed `description`) and,
