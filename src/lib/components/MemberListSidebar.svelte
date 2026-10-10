@@ -206,7 +206,9 @@
 	.member.offline .who { color: var(--ink-muted); }
 	.member.offline :global(.ap-avatar) { opacity: .6; }
 	.member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.member :global(.ap-roles) { flex: none; flex-wrap: nowrap; }
+	/* The name comes first: the badges give up their room before it does, cut off at the right. */
+	.member :global(.ap-roles) { flex: 0 10000 auto; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+	.member :global(.ap-role) { flex: none; }
 	.member-name small { margin-left: 4px; color: var(--ink-muted); font-size: var(--text-xs); }
 	/* Remove shows on hover or focus, always on touch screens. */
 	.remove { flex: none; width: 24px; height: 24px; margin-left: auto; opacity: 0; }
