@@ -36,15 +36,10 @@ export function idTimeCompact(id: string): string {
 	return timeFormat.formatToParts(millis).filter((part) => part.type !== 'dayPeriod').map((part) => part.value).join('').trim();
 }
 
-const agoWeekday = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
-const agoDay = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
-const agoYear = new Intl.DateTimeFormat(undefined, { year: 'numeric' });
-
 /**
  * How long ago a log ID was, as compactly as a narrow row allows: `now`, `5m`,
- * `3h`, then the weekday within the week, the day this year, and the year
- * before that. Empty when the ID carries no time. It is as of `now` and
- * doesn't tick by itself.
+ * `3h`, `4d`, `9w`, then `2y`. Empty when the ID carries no time. It is as of
+ * `now` and doesn't tick by itself.
  */
 export function idAgo(id: string, now = Date.now()): string {
 	const millis = idMillis(id);
@@ -52,9 +47,13 @@ export function idAgo(id: string, now = Date.now()): string {
 	const minutes = Math.floor((now - millis) / 60_000);
 	if (minutes < 1) return 'now';
 	if (minutes < 60) return `${minutes}m`;
-	if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h`;
-	if (minutes < 6 * 24 * 60) return agoWeekday.format(millis);
-	return new Date(millis).getFullYear() === new Date(now).getFullYear() ? agoDay.format(millis) : agoYear.format(millis);
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours}h`;
+	const days = Math.floor(hours / 24);
+	if (days < 7) return `${days}d`;
+	const weeks = Math.floor(days / 7);
+	if (weeks < 52) return `${weeks}w`;
+	return `${Math.floor(days / 365) || 1}y`;
 }
 
 /** The exact local date and time, `YYYY-MM-DD HH:MM:SS`, for a timestamp's tooltip. */
