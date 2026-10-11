@@ -197,8 +197,8 @@
 	.add-row { display: flex; gap: var(--space-2); min-width: 0; }
 	.add .ap-field { flex: 1; min-width: 0; height: 28px; font-size: var(--text-ui); }
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-	.member { display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
-	/* Role badges follow the name, as beside a message's sender; the remove button takes the far right. */
+	.member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
+	/* Role badges follow the name, as beside a message's sender; the remove button floats over the far right. */
 	.who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 	.who:hover .member-name { text-decoration: underline; }
 	.who:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -210,10 +210,11 @@
 	.member :global(.ap-roles) { flex: 0 10000 auto; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
 	.member :global(.ap-role) { flex: none; }
 	.member-name small { margin-left: 4px; color: var(--ink-muted); font-size: var(--text-xs); }
-	/* Remove shows on hover or focus, always on touch screens. */
-	.remove { flex: none; width: 24px; height: 24px; margin-left: auto; opacity: 0; }
-	.member:hover .remove, .member:focus-within .remove { opacity: 1; }
-	@media (hover: none) { .remove { opacity: 1; } }
+	/* Remove shows on hover or focus, over the end of the row rather than holding a gap there, so names and badges keep the width. */
+	.remove { position: absolute; top: 50%; right: var(--space-1); width: 24px; height: 24px; transform: translateY(-50%); background: var(--bg-000); box-shadow: -8px 0 6px var(--bg-000); opacity: 0; pointer-events: none; }
+	.member:hover .remove, .member:focus-within .remove { opacity: 1; pointer-events: auto; }
+	/* Touch screens have no hover, so it's always there, in the row's flow at the far right. */
+	@media (hover: none) { .remove { position: static; flex: none; margin-left: auto; transform: none; background: transparent; box-shadow: none; opacity: 1; pointer-events: auto; } }
 	/* Narrower, it overlays the conversation, sliding in from the right edge as the column does on wide screens. */
 	@media (max-width: 959px) {
 		.member-list { position: absolute; z-index: 6; top: var(--header-h); right: 0; bottom: 0; width: min(var(--member-list-w, 280px), calc(100vw - 24px)); box-shadow: var(--shadow-float); transition: transform var(--slide-time, 0s) var(--slide-ease, ease), visibility 0s; }
