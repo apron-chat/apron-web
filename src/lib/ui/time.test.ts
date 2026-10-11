@@ -16,7 +16,7 @@ describe('timestamps', () => {
 		expect(idIso(id)).toBe('2026-09-14T15:04:00.000Z');
 	});
 
-	it('say how long ago compactly: minutes, hours, the weekday, the day, then the year', () => {
+	it('say how long ago compactly: minutes, hours, days, weeks, then years', () => {
 		const now = Date.UTC(2026, 8, 14, 15, 4);
 		const ago = (ms: number) => idAgo(String(now - ms), now);
 		const minute = 60_000, hour = 60 * minute, day = 24 * hour;
@@ -26,9 +26,15 @@ describe('timestamps', () => {
 		expect(ago(5 * minute)).toBe('5m');
 		expect(ago(59 * minute)).toBe('59m');
 		expect(ago(3 * hour)).toBe('3h');
-		expect(ago(2 * day)).toBe(new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(now - 2 * day));
-		expect(ago(40 * day)).toBe(new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(now - 40 * day));
-		expect(ago(400 * day)).toBe(new Intl.DateTimeFormat(undefined, { year: 'numeric' }).format(now - 400 * day));
+		expect(ago(23 * hour + 59 * minute)).toBe('23h');
+		expect(ago(day)).toBe('1d');
+		expect(ago(6 * day)).toBe('6d');
+		expect(ago(7 * day)).toBe('1w');
+		expect(ago(63 * day)).toBe('9w');
+		expect(ago(51 * 7 * day + 6 * day)).toBe('51w');
+		expect(ago(52 * 7 * day)).toBe('1y');
+		expect(ago(400 * day)).toBe('1y');
+		expect(ago(800 * day)).toBe('2y');
 	});
 
 	it('are empty for IDs that carry no time', () => {
