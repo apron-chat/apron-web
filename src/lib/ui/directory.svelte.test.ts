@@ -107,6 +107,11 @@ describe('directory', () => {
 		expect(directory.sharesName(ada)).toBe(true);
 		// Bo's kept and recorded objects are the same user.
 		expect(directory.sharesName({ user_id: 'bo', name: 'Bo' })).toBe(false);
+		// Mentions of either Ada carry their user_id after the name.
+		expect(directory.resolve('guest_9')).toEqual({ kind: 'user', id: 'guest_9', name: 'Ada', me: false, shared: true });
+		expect(renderMarkdown('@ada @guest_9 @bo', directory.resolve)).toBe(
+			'<button type="button" class="ap-mention ap-mention-me" data-user-id="ada" title="@ada">@Ada (ada)</button> <button type="button" class="ap-mention" data-user-id="guest_9" title="@guest_9">@Ada (guest_9)</button> <button type="button" class="ap-mention" data-user-id="bo" title="@bo">@Bo</button>'
+		);
 		// An old message of Ada's renders under her kept name, and a retired ID counts as the identity that replaced it.
 		directory.apply(snapshot([ada, bo], { recordedUsers: { guest_2: { user_id: 'guest_2', name: 'Ada' } }, userAliases: { guest_2: 'ada' } }), undefined);
 		expect(directory.name({ user_id: 'guest_2', name: 'Guest' })).toBe('Ada');

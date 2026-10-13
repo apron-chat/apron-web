@@ -45,7 +45,8 @@ function sanitize(html: string): string {
  * appear only as senders, never in text.
  */
 export type RoomMentionTarget = { kind: 'room'; id: string; title: string };
-export type MentionTarget = { kind: 'user'; id: string; name: string; me?: boolean } | RoomMentionTarget;
+/** `shared` marks a user whose display name another known user also shows under, so their ID shows beside it. */
+export type MentionTarget = { kind: 'user'; id: string; name: string; me?: boolean; shared?: boolean } | RoomMentionTarget;
 
 /** Looks an `@id` up; only a user answers it. A resolver may also answer rooms, for `#id` without a `RoomMentionResolver`. */
 export type MentionResolver = (id: string) => MentionTarget | undefined;
@@ -148,11 +149,13 @@ export type MentionSegment = string | Mention;
 
 /**
  * The design system's Mention component, which every mention renders as (in
- * messages, reply quotes and composer chips): its text is `@name`, or a room's
- * title, `#title` when written `#room_id`.
+ * messages, reply quotes and composer chips): its text is `@name`, with the
+ * `user_id` after it in parentheses when another known user shares the name,
+ * or a room's title, `#title` when written `#room_id`.
  */
 export function mentionLabel({ target, hash }: Mention): string {
-	return target.kind === 'user' ? `@${target.name}` : `${hash ? '#' : ''}${target.title}`;
+	if (target.kind === 'user') return target.shared && target.name !== target.id ? `@${target.name} (${target.id})` : `@${target.name}`;
+	return `${hash ? '#' : ''}${target.title}`;
 }
 
 export function mentionClass({ target, hash }: Mention): string {
