@@ -7,6 +7,7 @@
 	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, webPushKey, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
+	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
 	import { isJsonObject } from '$lib/protocol/types';
 	import Composer from '$lib/components/Composer.svelte';
@@ -205,6 +206,12 @@
 	let accountPushId = $derived(pushSettings.accountPushId);
 	/** A pushed room to open once it is listed, if its `push_id` is this account's. */
 	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
+	/** A room, thread or message the page's URL named when it opened, to open once its server lists its rooms. */
+	let linked = $state<(Destination & { server: string; room: string }) | undefined>();
+	/** The connect screen is up for a link's server: it can be cancelled even before this server is ready. */
+	let offeringLink = $state(false);
+	/** How far back a linked message is looked for, in pages of history. */
+	const LINKED_MESSAGE_PAGES = 20;
 	/** How long a pushed room waits for its account and rooms before it is dropped. */
 	const PUSH_ROOM_WAIT_MS = 30_000;
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
@@ -522,6 +529,30 @@
 		untrack(() => openDestination(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined));
 	});
 
+	// A linked destination waits a while for its server's rooms, then goes.
+	$effect(() => {
+		const pending = linked;
+		if (!pending || serverUrl !== pending.server) return;
+		const timer = setTimeout(() => {
+			if (linked === pending) abandonLink(activeRoom?.id !== pending.room ? 'room' : 'thread');
+		}, PUSH_ROOM_WAIT_MS);
+		return () => clearTimeout(timer);
+	});
+
+	// A linked destination opens once its server's rooms are listed, step by step as each listing arrives; one on
+	// a server offered on the connect screen waits there, and goes if the viewer stays where they are.
+	$effect(() => {
+		const pending = linked;
+		if (!pending || !serverUrl) return;
+		if (serverUrl !== pending.server) {
+			if (!connectOpen) linked = undefined;
+			return;
+		}
+		if (!session.ready || !session.snapshot.roomsListed) return;
+		void [session.rooms, session.snapshot.directory, session.snapshot.threadDirectory[pending.room], activeRoom?.id, activeThread];
+		untrack(() => openLinked(pending));
+	});
+
 	// Nobody has used this page for a while (§4.5 `idle`): the server may push instead.
 	// The client keeps it across connections and reports it on each.
 	$effect(() => {
@@ -778,10 +809,18 @@
 		emailLink = previewMode ? undefined : takeEmailLink(window.location, scrubUrl);
 		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.
 		const hashChanged = () => {
-			const link = takeEmailLink(window.location, scrubUrl);
-			if (link) emailLink = link;
+			const link = previewMode ? undefined : takeEmailLink(window.location, scrubUrl);
+			if (link) {
+				emailLink = link;
+				return;
+			}
+			// A message link differing only in its fragment doesn't reload the page: go to it here.
+			const destination = readDestination(window.location);
+			if (client && destination.room && destination.message) {
+				linked = { ...destination, server: previewMode ? client.url : destination.server ?? homeServer(), room: destination.room };
+			}
 		};
-		if (!previewMode) window.addEventListener('hashchange', hashChanged);
+		window.addEventListener('hashchange', hashChanged);
 		serverInput = previewMode ? 'ws://apron-preview.invalid' : loadServerUrl() ?? defaultWebSocketUrl(window.location);
 		displayName = previewMode ? 'Preview User' : loadDisplayName();
 		recentServers = previewMode ? [] : loadRecentServers();
@@ -821,6 +860,20 @@
 			permission = status;
 			status.onchange = refreshNotificationPermission;
 		}).catch(() => undefined);
+		// A link's server (issue #32): one used here before is switched to at once; any other is offered on the
+		// connect screen first, since connecting is up to the viewer. A notification's own room comes first.
+		const link = pushed ? {} : readDestination(window.location);
+		// A link without a server is for the page's own, wherever this browser was last; that one needs no asking.
+		const linkServer = previewMode ? undefined : link.server ?? (link.room ? homeServer() : undefined);
+		let offeredServer: string | undefined;
+		if (linkServer && linkServer !== normalizeWebSocketUrl(serverInput, window.location)) {
+			if (linkServer === homeServer() || recentServers.some((recent) => recent.url === linkServer)) {
+				serverInput = linkServer;
+				saveServerUrl(linkServer);
+			} else {
+				offeredServer = linkServer;
+			}
+		}
 		const chat = new ChatClient(
 			normalizeWebSocketUrl(serverInput, window.location),
 			displayName,
@@ -841,6 +894,12 @@
 		chat.start();
 		client = chat;
 		if (pushed) void followPush(chat, pushed);
+		if (link.room) linked = { ...link, server: offeredServer ?? chat.url, room: link.room };
+		if (offeredServer) {
+			serverInput = offeredServer;
+			offeringLink = true;
+			openConnect();
+		}
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
@@ -1163,9 +1222,119 @@
 		if (previewMode) return;
 		if (client) recentServers = rememberServer(recentServers, client.url, backendHost(client.url) || undefined);
 		connectOpen = false;
+		offeringLink = false;
 	}
 
 	// --- Navigation and drafts ---
+
+	/**
+	 * Opens what the page's URL named, as far as this server shows it: the room
+	 * (joined, or read without joining), then the thread under it once the
+	 * room's threads are listed, then the message. Each step replaces the URL's
+	 * history entry rather than adding one; the effect calls it again as each
+	 * step lands.
+	 */
+	function openLinked(target: Destination & { room: string }): void {
+		if (!client) return;
+		const listed = (id: string) => session.rooms.some((room) => room.id === id);
+		// Until it has all opened, the URL keeps naming the whole link, so a reload tries it again.
+		const keepLink = () => scrubUrl(addressOf(target.room, target.thread, target.message));
+		if (activeRoom?.id !== target.room) {
+			if (!listed(target.room) && !client.viewRoom(target.room)) {
+				// Not among the rooms to join either, once those are listed: this server doesn't show it here.
+				if (session.snapshot.directory !== undefined || !session.canManageRooms) abandonLink('room');
+				return;
+			}
+			session.chooseRoom(client, target.room);
+			setDestination(target.room, undefined, 'replace');
+			keepLink();
+			return;
+		}
+		if (target.thread && activeThread !== target.thread) {
+			if (!listed(target.thread) && !client.viewRoom(target.thread)) {
+				// The room's threads are listed without it: the room is as far as the link goes.
+				if (session.snapshot.threadDirectory[target.room] !== undefined || !session.canManageRooms) abandonLink('thread');
+				return;
+			}
+			showThread(target.room, target.thread, 'replace');
+			keepLink();
+			return;
+		}
+		linked = undefined;
+		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message);
+	}
+
+	/** Part of a link isn't here: the URL says where the page is instead, and a toast says what wasn't found. */
+	function abandonLink(missing: 'room' | 'thread' | 'message'): void {
+		linked = undefined;
+		feedback.error(`The linked ${missing} isn’t available here.`);
+		scrubUrl(addressOf(selectedRoomId, activeThread));
+	}
+
+	/**
+	 * Scrolls to a linked message in the open room or thread, paging back
+	 * through its history until it is loaded: a `message_id` is the `log_id` it
+	 * was created at (§2), so once what's loaded reaches back past that, it
+	 * isn't here. Only the linked room or thread is searched.
+	 */
+	async function revealLinkedMessage(roomId: string, thread: string | undefined, id: string): Promise<void> {
+		const paneId = thread ?? roomId;
+		const pane = () => session.rooms.find((room) => room.id === paneId);
+		const isOpen = () => activeRoom?.id === roomId && activeThread === thread;
+		const found = () => Boolean(pane()?.timeline.events[id]);
+		await until(() => Boolean(pane()?.loaded) || !isOpen(), JUMP_WAIT_MS * 2);
+		for (let page = 0; page < LINKED_MESSAGE_PAGES && client && isOpen() && !found(); page++) {
+			const room = pane();
+			const oldest = room?.timeline.order[0];
+			if (!room?.olderAvailable || (oldest !== undefined && compareLogIds(oldest, id) <= 0)) break;
+			try {
+				await client.loadOlder(paneId);
+			} catch {
+				break;
+			}
+		}
+		if (!isOpen()) return;
+		if (!found()) {
+			abandonLink('message');
+			return;
+		}
+		await jumpToMessage(id);
+		scrubUrl(addressOf(roomId, thread, id));
+	}
+
+	/** Waits, a frame at a time, until `ready` holds or `ms` pass. */
+	async function until(ready: () => boolean, ms: number): Promise<void> {
+		const started = performance.now();
+		while (!ready() && performance.now() - started < ms) await new Promise((resolve) => requestAnimationFrame(resolve));
+	}
+
+	/**
+	 * The page's URL for a destination: its server (left out where it's the one
+	 * the page connects to anyway), room, thread and message. Never anything
+	 * that signs in.
+	 */
+	function addressOf(roomId: string | undefined, thread?: string, message?: string): string {
+		const server = client && !previewMode ? { server: client.url } : {};
+		return destinationUrl(window.location.href, { ...server, ...(roomId ? { room: roomId } : {}), ...(thread ? { thread } : {}), ...(message ? { message } : {}) }, homeServer());
+	}
+
+	/** The server the page connects to when nothing says otherwise: a URL without `server` names it. */
+	function homeServer(): string {
+		return normalizeWebSocketUrl(defaultWebSocketUrl(window.location), window.location);
+	}
+
+	/** Copies a link to a message: its room, the thread it's in, and the message itself. */
+	async function copyMessageLink(event: MessageRecord): Promise<boolean> {
+		const destination = destinationOf(event);
+		if (!destination) return false;
+		try {
+			await navigator.clipboard.writeText(addressOf(destination.room, destination.thread, event.message_id));
+			return true;
+		} catch {
+			feedback.error('Unable to copy the link');
+			return false;
+		}
+	}
 
 	function chooseRoom(room: RoomSnapshot): void {
 		if (!client) return;
@@ -1228,10 +1397,15 @@
 
 	/** Writes the destination into the page's history entry, unless it is already there. */
 	function recordDestination(roomId: string, thread: string | undefined, history: 'push' | 'replace'): void {
-		if (page.state.room === roomId && page.state.thread === thread) return;
+		const address = addressOf(roomId, thread);
+		if (page.state.room === roomId && page.state.thread === thread) {
+			// The same room on another server (after switching) still names the new server.
+			if (address !== window.location.href) scrubUrl(address);
+			return;
+		}
 		try {
 			// A destination picked from the phone's rooms list takes the list's entry: Back doesn't return to the list.
-			(history === 'push' && !page.state.rooms ? pushState : replaceState)('', thread ? { room: roomId, thread } : { room: roomId });
+			(history === 'push' && !page.state.rooms ? pushState : replaceState)(address, thread ? { room: roomId, thread } : { room: roomId });
 		} catch {
 			// The router isn't started yet (in development): this destination just isn't recorded.
 		}
@@ -1694,13 +1868,10 @@
 	}
 
 	async function renderedMessage(id: string): Promise<HTMLElement | undefined> {
-		const started = performance.now();
 		await tick();
-		for (;;) {
-			const node = messageScroll?.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`);
-			if (node || performance.now() - started > JUMP_WAIT_MS) return node ?? undefined;
-			await new Promise((resolve) => requestAnimationFrame(resolve));
-		}
+		const node = () => messageScroll?.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`) ?? undefined;
+		await until(() => Boolean(node()), JUMP_WAIT_MS);
+		return node();
 	}
 
 	/**
@@ -1828,7 +1999,8 @@
 			startThread: canStartThreads && canCompose && !event.deleted && !activeThread && event.room_id === activeRoom?.id,
 			select: canSelect(event),
 			removeReply: own && Boolean(event.reply_to),
-			react: session.canReact && canCompose && !event.deleted
+			react: session.canReact && canCompose && !event.deleted,
+			link: !event.deleted
 		};
 	}
 
@@ -2017,9 +2189,9 @@
 {:else if connectOpen}
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
-		canCancel={session.rooms.length > 0 || session.ready} initialScheme={connectScheme}
+		canCancel={session.rooms.length > 0 || session.ready || offeringLink} initialScheme={connectScheme}
 		initialError={emailLinkFailure?.error}
-		onconnect={leaveBackend} onconnected={connected} oncancel={() => (connectOpen = false)} onsignout={signedOut}
+		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
 	/>
 {:else}
 <div
@@ -2167,6 +2339,7 @@
 								onremovereply={() => removeReply(event)}
 								onremoveembed={(embed) => removeEmbed(event, embed)}
 								onstartthread={() => startThread(event)}
+								oncopylink={() => copyMessageLink(event)}
 								onreact={(emoji) => react(event, emoji)}
 								onbeginselect={() => beginSelect(event)}
 								onselect={(range) => selection.toggle(event.message_id, selectableOrder, range)}

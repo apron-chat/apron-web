@@ -30,6 +30,8 @@
 		removeReply: boolean;
 		/** Cap `reactions`: the React action and clickable chips. */
 		react: boolean;
+		/** Copy link, under ⋯: a URL that opens this message where it is. */
+		link: boolean;
 	}
 
 	interface Props {
@@ -63,6 +65,8 @@
 		/** Edit the message to drop this embed. */
 		onremoveembed: (embed: EmbedData) => void;
 		onstartthread: () => void;
+		/** Copies the message's link; resolves whether it was copied. */
+		oncopylink: () => Promise<boolean>;
 		/** Toggle your reaction with this emoji. */
 		onreact: (emoji: string) => void;
 		/** Enter select mode with this message picked. */
@@ -72,7 +76,7 @@
 	}
 	let {
 		event, grouped, resolve, reactions, uploads, mention, pinged, highlighted, selecting, selected, editing, caps,
-		onreply, onjump, onopenroom, onedit, onsave, oncanceledit, ondelete, onremovereply, onremoveembed, onstartthread, onreact, onbeginselect, onselect
+		onreply, onjump, onopenroom, onedit, onsave, oncanceledit, ondelete, onremovereply, onremoveembed, onstartthread, oncopylink, onreact, onbeginselect, onselect
 	}: Props = $props();
 
 	let moreOpen = $state(false);
@@ -115,7 +119,11 @@
 	 */
 	let canRemoveEmbeds = $derived(caps.edit && !selecting && (Boolean(text.trim()) || embeds.length > 1));
 	const writing = (embed: EmbedData): boolean => Boolean(embed.embed_id && uploads[embed.embed_id] && !uploads[embed.embed_id].failed);
-	let hasActions = $derived(!selecting && (caps.reply || caps.edit || caps.removeReply || caps.react || caps.startThread));
+	let hasActions = $derived(!selecting && (caps.reply || caps.edit || caps.removeReply || caps.react || caps.startThread || caps.link));
+	/** Copy link says it worked for a moment before ⋯ closes. */
+	let copied = $state(false);
+	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => () => clearTimeout(copiedTimer));
 
 	$effect(() => {
 		if (!editing) moreOpen = false;
@@ -129,6 +137,19 @@
 	function act(action: () => void): void {
 		moreOpen = false;
 		action();
+	}
+
+	async function copyLink(): Promise<void> {
+		if (!(await oncopylink())) {
+			moreOpen = false;
+			return;
+		}
+		clearTimeout(copiedTimer);
+		copied = true;
+		copiedTimer = setTimeout(() => {
+			copied = false;
+			moreOpen = false;
+		}, 1200);
 	}
 
 	/** Shift-click enters select mode with this message picked; inside it, plain clicks toggle. */
@@ -307,14 +328,22 @@
 				{/if}
 				{#if caps.edit}
 					<button class="ap-actions-btn" type="button" aria-label="Edit message" title="Edit" onclick={() => act(onedit)}>Edit</button>
+				{/if}
+				<!-- ⋯ holds the rarer actions: Copy link on any message; on your own, Select and Delete too. -->
+				{#if caps.edit || caps.link}
 					{#if moreOpen}
-						{#if replyId}
+						{#if caps.edit && replyId}
 							<button class="ap-actions-btn" type="button" aria-label="Remove reply reference" onclick={() => act(onremovereply)}>Remove reply</button>
 						{/if}
-						{#if caps.select}
+						{#if caps.edit && caps.select}
 							<button class="ap-actions-btn" type="button" data-testid="select-message" aria-label="Select message" title="Select" onclick={() => act(onbeginselect)}>Select</button>
 						{/if}
-						<button class="ap-actions-btn ap-actions-danger" type="button" aria-label="Delete message" title="Delete" onclick={() => act(ondelete)}>Delete</button>
+						{#if caps.link}
+							<button class="ap-actions-btn" type="button" data-testid="copy-link" aria-label={copied ? 'Link copied' : 'Copy link to message'} title="Copy link" onclick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button>
+						{/if}
+						{#if caps.edit}
+							<button class="ap-actions-btn ap-actions-danger" type="button" aria-label="Delete message" title="Delete" onclick={() => act(ondelete)}>Delete</button>
+						{/if}
 					{:else}
 						<button class="ap-actions-btn" type="button" aria-label="More actions" aria-expanded="false" title="More" onclick={() => (moreOpen = true)}>⋯</button>
 					{/if}
