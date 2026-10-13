@@ -122,6 +122,8 @@
 	let hasActions = $derived(!selecting && (caps.reply || caps.edit || caps.removeReply || caps.react || caps.startThread || caps.link));
 	/** Copy link says it worked for a moment before ⋯ closes. */
 	let copied = $state(false);
+	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => () => clearTimeout(copiedTimer));
 
 	$effect(() => {
 		if (!editing) moreOpen = false;
@@ -142,8 +144,9 @@
 			moreOpen = false;
 			return;
 		}
+		clearTimeout(copiedTimer);
 		copied = true;
-		setTimeout(() => {
+		copiedTimer = setTimeout(() => {
 			copied = false;
 			moreOpen = false;
 		}, 1200);
