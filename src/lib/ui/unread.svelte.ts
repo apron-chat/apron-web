@@ -58,6 +58,13 @@ export class UnreadTracker {
 	}
 }
 
+/** A per-room count added up over every room but `pane`, the one being read. */
+export function countElsewhere(byRoom: Record<string, number>, pane: string | undefined): number {
+	let total = 0;
+	for (const [room, count] of Object.entries(byRoom)) if (room !== pane) total += count;
+	return total;
+}
+
 function sameCounts(a: Record<string, number>, b: Record<string, number>): boolean {
 	const keys = Object.keys(a);
 	return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);

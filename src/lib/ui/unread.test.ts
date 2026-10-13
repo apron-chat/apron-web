@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createTimeline } from '$lib/protocol/reducer';
 import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
-import { UnreadTracker } from './unread.svelte';
+import { UnreadTracker, countElsewhere } from './unread.svelte';
 
 const me = { user_id: 'guest_me', name: 'sam' };
 
@@ -60,5 +60,13 @@ describe('unread tracking', () => {
 		expect(tracker.total).toBe(1);
 		tracker.observe([room('general', []), room('random', [message(20, 'random', 'ada', { deleted: true })])], me, 'general', true);
 		expect(tracker.total).toBe(0);
+	});
+});
+
+describe('countElsewhere', () => {
+	it('adds up every room but the one being read', () => {
+		expect(countElsewhere({ general: 3, random: 2, thread_1: 4 }, 'random')).toBe(7);
+		expect(countElsewhere({ general: 3 }, 'general')).toBe(0);
+		expect(countElsewhere({ general: 3, random: 2 }, undefined)).toBe(5);
 	});
 });
