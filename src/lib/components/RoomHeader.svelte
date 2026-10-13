@@ -7,6 +7,7 @@
 	import type { RoomSnapshot } from '$lib/protocol/client';
 	import { markdownText } from '$lib/protocol/markdown';
 	import MenuButton from '$lib/design/components/MenuButton.svelte';
+	import { count99 } from '$lib/design/components/util';
 
 	interface Props {
 		/** The top-level room. */
@@ -37,6 +38,9 @@
 		 * in the window's corner instead.
 		 */
 		memberListToggle?: boolean;
+		/** Unread messages in the other rooms and threads, and how many mention you, as the rooms list counts them. */
+		unreadElsewhere?: number;
+		mentionsElsewhere?: number;
 		onback: () => void;
 		onroom: () => void;
 		onedit: () => void;
@@ -46,13 +50,18 @@
 	}
 	let {
 		room, pane, threadTitle, typing, replyCount, moreReplies = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, memberListToggle = true, onback, onroom, onedit, onleave, onjoin, onmemberlist
+		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, onjoin, onmemberlist
 	}: Props = $props();
 
 	/** The room's description (§3.4) as one line of text under its title; a thread shows its own as a summary instead. */
 	let topic = $derived(threadTitle === undefined && room.description ? markdownText(room.description).split('\n')[0] : '');
 	let thread = $derived(threadTitle !== undefined);
 	let noun = $derived(thread ? 'thread' : 'room');
+	/** What's new elsewhere, on the back button (phones): a mention may be an edit adding you to a read message, so it counts at least once. */
+	let elsewhere = $derived(Math.max(unreadElsewhere, mentionsElsewhere));
+	let backLabel = $derived(elsewhere
+		? `Back to rooms, ${elsewhere} unread ${elsewhere === 1 ? 'message' : 'messages'}${mentionsElsewhere ? `, ${mentionsElsewhere === 1 ? 'a mention' : `${mentionsElsewhere} mentions`} of you` : ''}`
+		: 'Back to rooms');
 	/** The occasional actions, in the ⋯ menu: Join stays a button, since it's what a pane read without joining is for. */
 	let actions = $derived([
 		...(canEdit ? [{ value: 'edit', label: `Edit ${noun}`, testid: 'edit-room' }] : []),
@@ -66,7 +75,10 @@
 </script>
 
 <header class="ap-roomhead">
-	<button class="ap-roomhead-back" type="button" aria-label="Back to rooms" onclick={onback}>‹</button>
+	<!-- With something new elsewhere, the back arrow becomes the point of a tag holding the count: grey for unread, orange with an @ for a mention, as in the rooms list. -->
+	<button class="ap-roomhead-back" class:tagged={elsewhere > 0} type="button" aria-label={backLabel} onclick={onback}>
+		{#if elsewhere > 0}<span class={['back-tag', mentionsElsewhere ? 'back-tag-at' : 'back-tag-quiet']} data-testid="back-unread" aria-hidden="true">{#if mentionsElsewhere}@&#8239;{/if}{count99(elsewhere)}</span>{:else}‹{/if}
+	</button>
 	<div class="ap-roomhead-text">
 		{#if threadTitle !== undefined}
 			<h1 class="ap-roomhead-name">
@@ -114,5 +126,12 @@
 	@media (max-width: 719px) {
 		.ap-roomhead-back { display: block; }
 		.typing-head { display: block; }
+		/* The tag's point hangs into the button's left padding, where the arrow sits. */
+		.ap-roomhead-back.tagged { display: flex; flex: none; align-items: center; width: auto; min-width: 32px; padding: 0 2px 0 10px; }
 	}
+	.back-tag { position: relative; display: inline-flex; align-items: center; height: 22px; padding: 0 7px 0 3px; border-radius: 0 6px 6px 0; isolation: isolate; font-size: var(--text-sm); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+	/* The point: a square turned on its corner, rounded at the tip, behind the count. */
+	.back-tag::before { content: ''; position: absolute; z-index: -1; left: -7.78px; top: 3.22px; width: 15.56px; height: 15.56px; border-bottom-left-radius: 3px; background: inherit; transform: rotate(45deg); }
+	.back-tag-quiet { background: var(--bg-300); color: var(--ink); }
+	.back-tag-at { background: var(--accent); color: var(--on-accent); font-weight: 700; }
 </style>

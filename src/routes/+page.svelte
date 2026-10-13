@@ -39,7 +39,7 @@
 	import { prepareUpload } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker, notificationsByRoom } from '$lib/ui/incoming-messages';
-	import { UnreadTracker } from '$lib/ui/unread.svelte';
+	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
 	import { isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection } from '$lib/ui/selection.svelte';
@@ -343,6 +343,9 @@
 		return () => clearTimeout(timer);
 	});
 	let paneRoom = $derived(activeThread ? threadRoom : activeRoom);
+	/** What's new in the rooms and threads other than the one being read, as the rooms list counts it: the phone header's back button shows it. */
+	let unreadElsewhere = $derived(countElsewhere(unread.byRoom, paneRoom?.id));
+	let mentionsElsewhere = $derived(countElsewhere(mentions.byRoom, paneRoom?.id));
 	/**
 	 * The open pane is catching up: its history is recovering or loading, or it shows a copy held from before
 	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
@@ -2040,6 +2043,8 @@
 				canJoin={session.canManageRooms && !session.readOnly && Boolean(paneRoom) && !paneRoom?.joined}
 				{memberListOpen}
 				memberListToggle={!memberListWide}
+				{unreadElsewhere}
+				{mentionsElsewhere}
 				onback={() => (mobilePane = 'rooms')} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
 			/>
 			{#if roomEditorOpen && editTarget}
