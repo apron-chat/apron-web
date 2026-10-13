@@ -45,6 +45,9 @@
 		onpause: (until: PausedUntil) => Promise<void> | void;
 		onresume: () => Promise<void> | void;
 		onconnect: () => void;
+		/** The room or thread the phone's rooms list opened over, and the › back to it. */
+		returnTo?: string;
+		onreturn?: () => void;
 		onroom: (room: RoomSnapshot) => void;
 		onthread: (thread: string) => void;
 		/** Reads a thread of the active room that you haven't joined, without joining it. */
@@ -61,7 +64,7 @@
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
 	}
-	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own. */
 	let rooms = $derived(sidebarRooms(session.rooms));
 	let canBrowse = $derived(session.canManageRooms && session.ready);
@@ -109,6 +112,10 @@
 	<div class="ap-shell-sidehead">
 		<span class="backend">{backendLabel}</span>
 		<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" aria-label="Connection settings" onclick={onconnect}>Connect</button>
+		<!-- On phones, the room header's ‹ mirrored: back to the room or thread the list opened over. -->
+		{#if returnTo !== undefined && onreturn}
+			<button class="return" type="button" data-testid="rooms-return" aria-label={`Back to ${returnTo}`} title={`Back to ${returnTo}`} onclick={onreturn}>›</button>
+		{/if}
 	</div>
 	<div class="ap-shell-sidebody">
 		<section class="ap-sect">
@@ -189,6 +196,12 @@
 	.ap-shell-side { overflow: hidden; }
 	.ap-shell-sidehead { gap: var(--space-2); }
 	.create-room-trigger { width: 28px; padding: 0; justify-content: center; }
+	/* As the room header's ‹ (apron.css .ap-roomhead-back). */
+	.return { display: none; flex: none; width: 32px; height: 32px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--denim); font: inherit; font-size: 22px; cursor: pointer; }
+	.return:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+	@media (max-width: 719px) {
+		.return { display: block; }
+	}
 	.backend { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 	.placeholder .ap-skel { height: 12px; }

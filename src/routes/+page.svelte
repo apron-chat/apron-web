@@ -419,10 +419,13 @@
 		if (roomId !== undefined && selectedRoomId !== roomId) setDestination(roomId, undefined);
 	});
 
-	// Back and Forward move between the destinations setDestination recorded.
+	// Back and Forward move between the destinations setDestination recorded, and in and out of the phone's rooms list.
 	$effect(() => {
-		const { room, thread } = page.state;
-		if (room !== undefined) untrack(() => revisit(room, thread));
+		const { room, thread, rooms } = page.state;
+		untrack(() => {
+			if (room !== undefined) revisit(room, thread);
+			mobilePane = rooms ? 'rooms' : 'main';
+		});
 	});
 
 	$effect(() => {
@@ -1169,8 +1172,29 @@
 		mentions.clearRoom(room.id);
 		session.chooseRoom(client, room.id);
 		setDestination(room.id, undefined);
-		mobilePane = 'main';
+		closeRooms();
 		composer?.focus();
+	}
+
+	/**
+	 * Shows the rooms list over the open room or thread (phones), as a history
+	 * entry of its own: Back, the list's ›, or picking the open one again
+	 * returns to it, and picking another takes the entry's place.
+	 */
+	function openRooms(): void {
+		mobilePane = 'rooms';
+		if (page.state.rooms || selectedRoomId === undefined) return;
+		try {
+			pushState('', { ...(activeThread ? { room: selectedRoomId, thread: activeThread } : { room: selectedRoomId }), rooms: true });
+		} catch {
+			// The router isn't started yet (in development): the list just isn't an entry Back leaves.
+		}
+	}
+
+	/** Returns from the rooms list to the room or thread it opened over: Back, while the list is the current entry. */
+	function closeRooms(): void {
+		mobilePane = 'main';
+		if (page.state.rooms) window.history.back();
 	}
 
 	/** Drafts are kept per room, and a thread is a room of its own. */
@@ -1206,7 +1230,8 @@
 	function recordDestination(roomId: string, thread: string | undefined, history: 'push' | 'replace'): void {
 		if (page.state.room === roomId && page.state.thread === thread) return;
 		try {
-			(history === 'push' ? pushState : replaceState)('', thread ? { room: roomId, thread } : { room: roomId });
+			// A destination picked from the phone's rooms list takes the list's entry: Back doesn't return to the list.
+			(history === 'push' && !page.state.rooms ? pushState : replaceState)('', thread ? { room: roomId, thread } : { room: roomId });
 		} catch {
 			// The router isn't started yet (in development): this destination just isn't recorded.
 		}
@@ -1236,7 +1261,7 @@
 		if (!client) return;
 		if (activeRoom?.id !== roomId) session.chooseRoom(client, roomId);
 		setDestination(roomId, thread);
-		mobilePane = 'main';
+		closeRooms();
 	}
 
 	/** Opens a thread from the sidebar: under the open room, or, with news, under another, whose room it opens too. */
@@ -1249,7 +1274,7 @@
 			return;
 		}
 		showThread(parent, thread);
-		mobilePane = 'main';
+		closeRooms();
 		composer?.focus();
 	}
 
@@ -2017,6 +2042,7 @@
 		webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
 		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
+		returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
 		onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut}
 	/>
 	<SidebarHandle layout={sidebar} />
@@ -2045,7 +2071,7 @@
 				memberListToggle={!memberListWide}
 				{unreadElsewhere}
 				{mentionsElsewhere}
-				onback={() => (mobilePane = 'rooms')} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
+				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
 			/>
 			{#if roomEditorOpen && editTarget}
 				{#key editTarget.id}
