@@ -9,6 +9,8 @@ declare global {
 		interface PageState {
 			room?: string;
 			thread?: string;
+			/** The phone's rooms list is open over that room or thread: Back returns to it. */
+			rooms?: true;
 		}
 		// interface Platform {}
 	}
