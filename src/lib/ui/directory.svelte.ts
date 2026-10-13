@@ -1,6 +1,6 @@
 import { userIn, type ClientSnapshot } from '$lib/protocol/client';
 import { safeAvatar } from '$lib/protocol/embeds';
-import type { MentionResolver, RoomMentionResolver } from '$lib/protocol/markdown';
+import type { MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 
 type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
@@ -119,12 +119,16 @@ class Directory {
 		return title === undefined ? undefined : { kind: 'room', id, title };
 	};
 
-	/** Resolves `@user_id` (Appendix A.3): a known user; unknown IDs stay text. */
+	/** Resolves `@user_id` (Appendix A.3): a known user, marked `shared` when another shows under their name; unknown IDs stay text. */
 	readonly resolve: MentionResolver = (id) => {
 		const { users, recordedUsers, userAliases } = this.users;
 		const recorded = recordedUsers[id];
-		const known = users[id] || userAliases[id] !== undefined || recorded ? this.person(recorded ?? { user_id: id }) : undefined;
-		return known ? { kind: 'user', id, name: known.name || known.user_id, me: this.isMe(id) } : undefined;
+		const from = recorded ?? { user_id: id };
+		const known = users[id] || userAliases[id] !== undefined || recorded ? this.person(from) : undefined;
+		if (!known) return undefined;
+		const target: MentionTarget = { kind: 'user', id, name: known.name || known.user_id, me: this.isMe(id) };
+		if (this.sharesName(from)) target.shared = true;
+		return target;
 	};
 }
 

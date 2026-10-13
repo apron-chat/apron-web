@@ -279,7 +279,9 @@
 	function chipMention(part: DraftChip): Mention {
 		if (part.room) return { target: { kind: 'room', id: part.id, title: directory.resolveRoom(part.id)?.title ?? part.id }, hash: true };
 		const person = people.find((entry) => entry.id === part.id) ?? directory.person({ user_id: part.id });
-		return { target: { kind: 'user', id: part.id, name: person?.name?.trim() || part.id, me: directory.isMe(part.id) }, hash: false };
+		const target: Mention['target'] = { kind: 'user', id: part.id, name: person?.name?.trim() || part.id, me: directory.isMe(part.id) };
+		if (directory.sharesName({ user_id: part.id })) target.shared = true;
+		return { target, hash: false };
 	}
 
 	/** A chip: the Mention component as a non-editable span, its ID on hover. */
