@@ -259,7 +259,7 @@ export interface ClientSnapshot {
 	 * text, and what tells apart users who share a display name.
 	 */
 	recordedUsers: Record<string, Identity>;
-	/** Retired `user_id`s mapped to the identity that replaced them (a `user` notification with `old`). */
+	/** Retired `user_id`s mapped to the current identity that replaced them (a `user` notification with `old`), in one step however many changes since. */
 	userAliases: Record<string, string>;
 	/** Files being written to upload embeds, by `embed_id`. */
 	uploads: Record<string, UploadState>;

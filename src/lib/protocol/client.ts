@@ -2723,7 +2723,7 @@ export class ChatClient {
 			if (previous !== undefined && previous !== params.you.user_id && this.authenticated && this.hasCap('rooms')) this.listJoinedRooms();
 		} else if (isIdentity(params.new)) {
 			const current = this.noteUser(cloneJson(params.new));
-			if (isIdentity(params.old) && params.old.user_id !== current.user_id) this.userAliases.set(params.old.user_id, current.user_id);
+			if (isIdentity(params.old) && params.old.user_id !== current.user_id) this.retireUserId(params.old.user_id, current.user_id);
 		} else {
 			return;
 		}
@@ -2825,6 +2825,17 @@ export class ChatClient {
 	}
 
 	/**
+	 * Records a `user_id` change (§3.3), keeping every alias one step from a
+	 * current ID: those of IDs retired into `old` follow it to `next`, and
+	 * `next`, current again (a user changing back), is no one's alias.
+	 */
+	private retireUserId(old: string, next: string): void {
+		this.userAliases.delete(next);
+		for (const [retired, current] of this.userAliases) if (current === old) this.userAliases.set(retired, next);
+		this.userAliases.set(old, next);
+	}
+
+	/**
 	 * A room's members under their current `user_id`s (§3.3): a membership of
 	 * an ID retired by a `user_id` change (a guest that became an account) stays
 	 * in the store until the room is listed again, beside the new ID's own, so
@@ -2837,8 +2848,7 @@ export class ChatClient {
 		const seen = new Set(members.filter((member) => !this.userAliases.has(member.user_id)).map((member) => member.user_id));
 		const current: Identity[] = [];
 		for (const member of members) {
-			let id = member.user_id;
-			for (let hops = 0; hops < 8 && this.userAliases.has(id); hops += 1) id = this.userAliases.get(id)!;
+			const id = this.userAliases.get(member.user_id) ?? member.user_id;
 			if (id === member.user_id) current.push(member);
 			else if (!seen.has(id)) {
 				seen.add(id);

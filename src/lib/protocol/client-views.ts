@@ -22,8 +22,7 @@ const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'ac
  * when it has every field the recorded one has.
  */
 export function userIn(snapshot: Pick<ClientSnapshot, 'users' | 'userAliases'>, recorded: Identity): Identity {
-	let id = recorded.user_id;
-	for (let hops = 0; hops < 8 && snapshot.userAliases[id] !== undefined; hops += 1) id = snapshot.userAliases[id];
+	const id = snapshot.userAliases[recorded.user_id] ?? recorded.user_id;
 	const kept = snapshot.users[id] ?? snapshot.users[recorded.user_id];
 	if (!kept) return recorded;
 	const missing = Object.keys(recorded).filter((key) => key !== 'user_id' && !Object.hasOwn(kept, key) && recorded[key] !== undefined && recorded[key] !== null);
