@@ -597,7 +597,7 @@ export class ChatClient {
 				const record = this.store.room(room.id);
 				const thread = typeof record?.parent_room_id === 'string';
 				const renames = this.store.roomRenames(room.id);
-				const members = this.store.members(room.id);
+				const members = this.currentMembers(this.store.members(room.id));
 				return {
 					id: room.id,
 					title: roomTitle(room.id, record),
@@ -2822,6 +2822,30 @@ export class ChatClient {
 		if (merged !== current) this.users.set(identity.user_id, merged);
 		if (this.you?.user_id === identity.user_id) this.you = merged;
 		return merged;
+	}
+
+	/**
+	 * A room's members under their current `user_id`s (§3.3): a membership of
+	 * an ID retired by a `user_id` change (a guest that became an account) stays
+	 * in the store until the room is listed again, beside the new ID's own, so
+	 * it shows as the identity that replaced it, once. The same array when no
+	 * member's ID is retired.
+	 */
+	private currentMembers(members: Identity[] | undefined): Identity[] | undefined {
+		if (!members || !members.some((member) => this.userAliases.has(member.user_id))) return members;
+		// The new ID's own membership, where it has one, is the one listed.
+		const seen = new Set(members.filter((member) => !this.userAliases.has(member.user_id)).map((member) => member.user_id));
+		const current: Identity[] = [];
+		for (const member of members) {
+			let id = member.user_id;
+			for (let hops = 0; hops < 8 && this.userAliases.has(id); hops += 1) id = this.userAliases.get(id)!;
+			if (id === member.user_id) current.push(member);
+			else if (!seen.has(id)) {
+				seen.add(id);
+				current.push({ ...member, user_id: id });
+			}
+		}
+		return current;
 	}
 
 	/**

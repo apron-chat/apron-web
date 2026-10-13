@@ -212,6 +212,13 @@ describe('ChatClient reference features', () => {
 		// Recorded users never merge into the kept ones.
 		expect(snapshot.users.bob.name).toBe('Bob');
 		expect(general().timeline.order).toEqual([]);
+		// A guest that becomes an account (a user_id change, §3.3) is one member under the new ID, until the room
+		// is listed again: its old membership shows as the new identity, and only once beside the new one's own.
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '15', room_id: 'general', members: [{ user: { user_id: 'guest_7', name: 'Guest 7' }, joined: true }] }] } });
+		socket.receive({ method: 'user', params: { new: { user_id: 'dana', name: 'Dana' }, old: { user_id: 'guest_7', name: 'Guest 7' } } });
+		expect(general().members?.map((member) => member.user_id)).toEqual(['guest_1', 'carol', 'dana']);
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '16', room_id: 'general', members: [{ user: { user_id: 'dana', name: 'Dana' }, joined: true }] }] } });
+		expect(general().members).toEqual([{ user_id: 'guest_1' }, { user_id: 'carol', name: 'Carol' }, { user_id: 'dana', name: 'Dana' }]);
 	});
 
 	it('shares a room_list in flight and reuses a recent one', async () => {
