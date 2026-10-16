@@ -42,11 +42,11 @@ describe('timestamps', () => {
 		const minute = 60_000, hour = 60 * minute, day = 24 * hour;
 		const since = (ms: number) => idSince(String(now - ms), now);
 		const date = (options: Intl.DateTimeFormatOptions, ms: number) => new Intl.DateTimeFormat(undefined, options).format(now - ms);
-		expect(since(20_000)).toBe('just now');
-		expect(since(12 * minute)).toBe('12m ago');
-		expect(since(9 * hour)).toBe('9h ago');
-		expect(since(12 * day)).toBe('12d ago');
-		expect(since(13 * day + 23 * hour)).toBe('13d ago');
+		expect(since(20_000)).toBe('now');
+		expect(since(12 * minute)).toBe('12m');
+		expect(since(9 * hour)).toBe('9h');
+		expect(since(12 * day)).toBe('12d');
+		expect(since(13 * day + 23 * hour)).toBe('13d');
 		expect(since(14 * day)).toBe(date({ day: 'numeric', month: 'short' }, 14 * day));
 		expect(since(300 * day)).toBe(date({ day: 'numeric', month: 'short', year: 'numeric' }, 300 * day));
 		expect(idSince('opaque', now)).toBe('');

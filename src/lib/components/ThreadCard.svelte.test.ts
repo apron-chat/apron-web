@@ -33,7 +33,7 @@ describe('ThreadCard', () => {
 		const lines = [...document.querySelectorAll('.ap-tline')].map((line) => [line.querySelector('svg')?.getAttribute('aria-label'), line.textContent]);
 		expect(lines).toEqual([['Summary', 'Old threads expired, adding a fresh one.'], ['Latest message', 'shazow test test']]);
 		expect(one('[data-testid="thread-preview-summary"]')?.classList.contains('ap-tline-multi')).toBe(true);
-		expect(one('[data-testid="thread-last-reply"]')?.textContent).toBe('9h ago');
+		expect(one('[data-testid="thread-last-reply"]')?.textContent).toBe('9h');
 		expect(one('[data-testid="thread-last-reply"]')?.getAttribute('datetime')).toBe(new Date(Number(id)).toISOString());
 	});
 
@@ -41,17 +41,17 @@ describe('ThreadCard', () => {
 		vi.useFakeTimers();
 		try {
 			render({ lastReplyId: String(Date.now() - 4 * 60 * 1000) });
-			expect(one('[data-testid="thread-last-reply"]')?.textContent).toBe('4m ago');
+			expect(one('[data-testid="thread-last-reply"]')?.textContent).toBe('4m');
 			vi.advanceTimersByTime(60_000);
 			flushSync();
-			expect(one('[data-testid="thread-last-reply"]')?.textContent).toBe('5m ago');
+			expect(one('[data-testid="thread-last-reply"]')?.textContent).toBe('5m');
 		} finally {
 			vi.useRealTimers();
 		}
 		unmount(instance!);
 		const old = Date.now() - 30 * 24 * hour;
 		render({ lastReplyId: String(old) });
-		expect(one('[data-testid="thread-last-reply"]')?.textContent).not.toMatch(/ago$/);
+		expect(one('[data-testid="thread-last-reply"]')?.textContent).not.toMatch(/^\d+[mhd]$/);
 		expect(one('.ap-thread-2')).toBeNull();
 	});
 });

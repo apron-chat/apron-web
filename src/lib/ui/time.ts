@@ -62,8 +62,8 @@ export function idAgo(id: string, now = Date.now()): string {
 }
 
 /**
- * When a log ID was, for a thread's last reply: `just now`, `12m ago`, `9h ago`,
- * `12d ago` within two weeks, then the day, `14 Sep` (with the year when it
+ * When a log ID was, for a thread's last reply: `now`, `12m`, `9h`, `12d`
+ * within two weeks, then the day, `14 Sep` (with the year when it
  * isn't this one). Empty when the ID carries no time; as of `now`, like `idAgo`.
  */
 export function idSince(id: string, now = Date.now()): string {
@@ -72,8 +72,7 @@ export function idSince(id: string, now = Date.now()): string {
 	const elapsed = now - millis;
 	if (elapsed < SINCE_WINDOW_MS) {
 		// Days stay days (`12d`) here, where idAgo turns a week into `1w`.
-		const ago = elapsed < 24 * 60 * 60 * 1000 ? idAgo(id, now) : `${Math.floor(elapsed / (24 * 60 * 60 * 1000))}d`;
-		return ago === 'now' ? 'just now' : `${ago} ago`;
+		return elapsed < 24 * 60 * 60 * 1000 ? idAgo(id, now) : `${Math.floor(elapsed / (24 * 60 * 60 * 1000))}d`;
 	}
 	return (new Date(millis).getFullYear() === new Date(now).getFullYear() ? dateFormat : dateYearFormat).format(millis);
 }

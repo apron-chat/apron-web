@@ -13,7 +13,7 @@
 		summary?: string;
 		/** The thread's members or recent senders, most recent first; up to 4 are shown. */
 		participants?: Sender[];
-		/** Pre-formatted time of the newest message, relative within two weeks: "9h ago", "12d ago", then "14 Sep". */
+		/** Pre-formatted time of the newest message, compact within two weeks: "9h", "12d", then "14 Sep"; shown at the right, unlabelled. */
 		lastReply?: string;
 		/** The newest message, on the line after the summary (up to three lines). Shorten `text` yourself. */
 		latest?: { sender: Sender; text: string };
@@ -35,7 +35,7 @@
 			{#if faces.length}<span class="ap-thread-faces" aria-hidden="true">{#each faces as f, i (uid(f) || i)}<Avatar name={f.name || uid(f)} src={f.avatar} size="sm" />{/each}</span>{/if}
 			<span class="ap-thread-name">{shown}</span>
 			{#if count != null}<span class="ap-thread-count">{count}{count === 1 ? ' reply' : ' replies'}</span>{/if}
-			{#if lastReply}<span class="ap-thread-last">Last reply {lastReply}</span>{/if}
+			{#if lastReply}<span class="ap-thread-last" title="Last reply">{lastReply}</span>{/if}
 		</span>
 		<ThreadLines {summary} latest={last} summaryLines={3} />
 	</button>
