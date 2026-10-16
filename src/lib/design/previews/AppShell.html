@@ -25,9 +25,9 @@
   var tl = $('tl');
   add(A.TimelineDivider, { kind: 'date', label: 'Today' }, tl);
   add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.', actions: acts(),
-    footer: A.part(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', count: 7, lastReply: '14:32', participants: [bob, dana, me], latest: { sender: me, text: 'Re-running the migration now.' } }) }, tl);
+    footer: A.part(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', count: 7, lastReply: '12m', participants: [bob, dana, me], summary: 'Worker 1.9.0 crash-looped; rolled back to 1.8.3', latest: { sender: me, text: 'Re-running the migration now.' } }) }, tl);
   add(A.Message, { sender: bob, time: '14:05', mention: true, children: A.html('<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> migration 0042 is holding a lock, can you look?</p>'),
-    footer: A.part(A.ThreadMarker, { thread: 'mig-0042', name: 'Migration 0042', count: 3, lastReply: '14:18', participants: [dana, me], summary: 'Lock held on accounts table by a stale worker' }) }, tl);
+    footer: A.part(A.ThreadMarker, { thread: 'mig-0042', name: 'Migration 0042', count: 3, lastReply: '3h', participants: [dana, me], summary: 'Lock held on accounts table by a stale worker' }) }, tl);
   add(A.Message, { sender: dana, time: '14:21', text: 'Moved the worker chatter into Deploy.' }, tl);
   add(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', moved: true }, tl);
   add(A.TimelineDivider, { kind: 'new' }, tl);

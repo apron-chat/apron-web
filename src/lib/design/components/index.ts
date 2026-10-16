@@ -13,6 +13,7 @@ export { default as EmbedFallback } from './EmbedFallback.svelte';
 export { default as MediaViewer } from './MediaViewer.svelte';
 export { default as ReactionBar } from './ReactionBar.svelte';
 export { default as ThreadMarker } from './ThreadMarker.svelte';
+export { default as ThreadLines } from './ThreadLines.svelte';
 export { default as TimelineDivider } from './TimelineDivider.svelte';
 export { default as TimelineLoading } from './TimelineLoading.svelte';
 export { default as TypingIndicator } from './TypingIndicator.svelte';

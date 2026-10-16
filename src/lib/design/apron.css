@@ -158,15 +158,17 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-thread:hover { filter: brightness(1.08); }
 .ap-thread-head { display: inline-flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
 .ap-thread-2 { flex-direction: column; align-items: stretch; gap: 2px; border-radius: var(--radius-md); padding: var(--space-1) var(--space-3) 6px var(--space-2); max-width: min(100%, 520px); }
-.ap-thread-preview { display: block; font-size: var(--text-ui); line-height: 18px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ap-thread-plabel { color: var(--ink-muted); }
+/* Its preview lines (ThreadLines), a step larger than the sidebar's, in ink with the icons muted. */
+.ap-thread .ap-tline { margin-top: 0; font-size: var(--text-ui); line-height: 18px; color: var(--ink); }
+.ap-thread .ap-tline > svg { color: var(--ink-muted); }
+.ap-thread .ap-tline-sender { font-weight: 600; }
 .ap-thread-name { font-weight: 600; }
 .ap-thread-name::before { content: "↳ "; }
 .ap-thread-faces + .ap-thread-name::before { content: none; }
 .ap-thread-count { color: var(--denim); }
 .ap-thread-faces { display: inline-flex; align-self: center; }
 .ap-thread-faces .ap-avatar + .ap-avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--denim-soft); }
-.ap-thread-last { color: var(--ink-muted); }
+.ap-thread-last { margin-left: auto; padding-left: var(--space-2); color: var(--ink-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ap-thread-moved { background: transparent; padding-left: 0; cursor: default; color: var(--ink-muted); font-size: var(--text-sm); line-height: 16px; font-style: italic; }
 .ap-thread-moved:hover { background: transparent; }
 .ap-thread-moved .ap-link { font-style: normal; }
@@ -230,11 +232,15 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-room-name, .ap-room-topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-room-topic { font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); }
 /* A thread's preview lines under its title: its summary, then its latest message, each marked by an icon so either reads alone. */
-.ap-room-line { display: flex; align-items: center; gap: 4px; min-width: 0; margin-top: 1px; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); }
-.ap-room-line > svg { flex: none; width: 12px; height: 12px; }
-.ap-room-line-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ap-room-sender { color: var(--ink); font-weight: 500; }
-.ap-room-unread .ap-room-line-latest { color: var(--ink); }
+.ap-tline { display: flex; align-items: center; gap: 4px; min-width: 0; margin-top: 1px; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); }
+.ap-tline > svg { flex: none; width: 12px; height: 12px; }
+.ap-tline-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-tline-sender { color: var(--ink); font-weight: 500; }
+/* A summary given more than a line keeps its line breaks, up to --ap-tline-lines, its icon beside the first. */
+.ap-tline-multi { align-items: flex-start; }
+.ap-tline-multi > svg { margin-top: calc((1lh - 12px) / 2); }
+.ap-tline-multi .ap-tline-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--ap-tline-lines); line-clamp: var(--ap-tline-lines); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ap-room-unread .ap-tline-latest { color: var(--ink); }
 /* A private room (§4.3.4): a small lock beside its name, wherever the name shows. */
 .ap-lock { flex: none; display: inline-block; width: 12px; height: 12px; margin-left: 4px; vertical-align: -1px; color: var(--ink-muted); }
 .ap-count { flex: none; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: 20px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
@@ -339,7 +345,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 /* A joined thread with nothing new steps back: its name and lines muted, the row faded, so unread ones stand out. */
 .ap-room-nested.ap-room-quiet { opacity: .9; }
 .ap-room-nested.ap-room-quiet .ap-room-name { color: var(--ink-muted); font-weight: 400; }
-.ap-room-nested.ap-room-quiet .ap-room-line { opacity: .75; }
+.ap-room-nested.ap-room-quiet .ap-tline { opacity: .75; }
 .ap-roomrow { position: relative; }
 /* A row's action on hover or focus: Exit (or Leave) on a room or thread you're in, Join on a thread you haven't joined. */
 :is(.ap-room-exit, .ap-room-join) { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: calc(var(--radius-md) - 2px); background: transparent; color: var(--ink-muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease, background-color .12s ease, color .12s ease; }
