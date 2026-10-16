@@ -15,7 +15,7 @@ afterEach(() => {
 	localStorage.clear();
 });
 
-const joined = (id: string, title: string): ThreadEntry => ({ id, parentRoomId: 'general', title, loaded: false, participants: [], lastReply: '', joined: true });
+const joined = (id: string, title: string): ThreadEntry => ({ id, parentRoomId: 'general', title, loaded: false, participants: [], joined: true });
 const listed = (id: string, title: string): RoomListing => ({ id, title, parentRoomId: 'general', record: { room_id: id, title, parent_room_id: 'general' }, members: [], joined: false } as RoomListing);
 
 function render(props: Record<string, unknown> = {}) {
@@ -45,12 +45,12 @@ describe('ThreadList', () => {
 			{ ...joined('cert', 'Expired cert'), latestMessage: latest },
 			{ ...joined('roadmap', 'Roadmap'), description: 'Ship threads, then search' }
 		] });
-		const lines = (id: string) => [...one(`button[data-thread="${id}"]`)!.querySelectorAll('.ap-room-line')]
+		const lines = (id: string) => [...one(`button[data-thread="${id}"]`)!.querySelectorAll('.ap-tline')]
 			.map((line) => [line.querySelector('svg')?.getAttribute('aria-label'), line.textContent]);
 		expect(lines('deploy')).toEqual([['Summary', 'What to check: flags, rollback'], ['Latest message', 'Grace Flags are flipped']]);
 		expect(lines('cert')).toEqual([['Latest message', 'Grace Flags are flipped']]);
 		expect(lines('roadmap')).toEqual([['Summary', 'Ship threads, then search']]);
-		expect(one('button[data-thread="cert"] .ap-room-sender')?.textContent).toBe('Grace');
+		expect(one('button[data-thread="cert"] .ap-tline-sender')?.textContent).toBe('Grace');
 	});
 
 	it('lists joined threads, each with Leave, then the others under a heading that folds, each with Join', () => {
@@ -104,7 +104,7 @@ describe('ThreadList', () => {
 		expect(row('offsite').querySelector('[data-testid="other-thread-ago"]')?.textContent).toBe('2h');
 		expect(row('offsite').querySelector('time')?.getAttribute('datetime')).toBe(new Date(Number(offsite.latestLogId)).toISOString());
 		// Nothing listed, nothing shown.
-		expect(row('logo').querySelector('.ap-room-line, [data-testid="other-thread-ago"]')).toBeNull();
+		expect(row('logo').querySelector('.ap-tline, [data-testid="other-thread-ago"]')).toBeNull();
 		const join = one('button[data-join="offsite"]')!;
 		expect(join.getAttribute('aria-label')).toBe('Join Offsite');
 		expect(join.title).toBe('Join thread');

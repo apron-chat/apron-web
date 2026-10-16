@@ -590,8 +590,11 @@ away: it stops counting unread and alerting, moves down to Other threads, and
 does so on every device, since it's a membership; its card stays in the room.
 The protocol lets a client hide threads, so nothing here is a server limit.
 The room feed shows each thread as
-a card where it was started that previews its description as text (or, without
-one, its latest loaded message), including threads you haven't joined, which `room_list` with the
+a card where it was started with the same preview lines as its sidebar row
+(the shared `ThreadLines`): its description as text, up to three lines, then
+its latest loaded message, each marked by its icon. Its **Last reply** is
+relative within two weeks (`just now`, `12m ago`, `9h ago`, `12d ago`), then
+the day (`14 Sep`), with the exact time on hover. Cards cover threads you haven't joined, which `room_list` with the
 room's `parent_room_id` finds whenever the room is opened or its threads are
 listed; that listing is also what refreshes their cards, since they deliver
 nothing live. Opening one of those reads it through `history` without joining

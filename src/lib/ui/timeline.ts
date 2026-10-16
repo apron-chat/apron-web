@@ -4,7 +4,7 @@ import { isLogId, type Identity, type MessageRecord } from '$lib/protocol/types'
 import { markdownText } from '$lib/protocol/markdown';
 import { isBaseline, MembershipRun } from './membership';
 import { embedsOf, senderName, textOf } from './messages';
-import { dayKey, dayKeyOf, dayLabel, dayLabelOf, eventTime, idTime, isGrouped } from './time';
+import { dayKey, dayKeyOf, dayLabel, dayLabelOf, isGrouped } from './time';
 
 /** Longest title a thread started from a message gets, in characters. */
 const THREAD_TITLE_MAX = 60;
@@ -28,7 +28,8 @@ export interface ThreadEntry {
 	count?: number;
 	loaded: boolean;
 	participants: Identity[];
-	lastReply: string;
+	/** The log ID of its newest message, for when it was last active; absent when nothing is known. */
+	lastReplyId?: string;
 	latestMessage?: MessageRecord;
 	/**
 	 * Where the card sits in the parent room's feed: the thread's creation,
@@ -83,8 +84,7 @@ export function threadEntry(room: RoomSnapshot): ThreadEntry {
 		...(room.loaded ? { count: messages.length } : {}),
 		loaded: room.loaded,
 		participants,
-		lastReply: latest ? eventTime(latest) : '',
-		...(latest ? { latestMessage: latest } : {}),
+		...(latest ? { lastReplyId: latest.message_id, latestMessage: latest } : {}),
 		...(anchor !== undefined ? { anchor } : {}),
 		joined: room.joined
 	};
@@ -102,7 +102,7 @@ function unjoinedThreadEntry(listing: RoomListing): ThreadEntry {
 		...(listing.record.private === true ? { private: true } : {}),
 		loaded: false,
 		participants: [],
-		lastReply: listing.latestLogId !== undefined ? idTime(listing.latestLogId) : '',
+		...(listing.latestLogId !== undefined ? { lastReplyId: listing.latestLogId } : {}),
 		...(anchor !== undefined ? { anchor } : {}),
 		joined: false
 	};
@@ -138,26 +138,13 @@ export function threadSummaryText(entry: Pick<ThreadEntry, 'description'>): stri
 	return entry.description ? markdownText(entry.description).trim() : '';
 }
 
-/** A thread's newest loaded message as a preview line: its sender, and its text on one line. */
+/** A thread's newest loaded message as a preview line (ThreadLines, in the sidebar and on its card): its sender, and its text on one line. */
 export function threadLatest(entry: Pick<ThreadEntry, 'latestMessage'>): { sender: string; text: string } | undefined {
 	const event = entry.latestMessage;
 	if (!event) return undefined;
 	if (event.deleted) return { sender: '', text: 'Message deleted' };
 	const text = textOf(event).replace(/\s+/g, ' ').trim();
 	return { sender: senderName(event), text: text || (embedsOf(event).length ? 'Attachment' : 'Empty message') };
-}
-
-/**
- * The one preview under a thread's card in its room: up to three lines of its
- * summary, as text, when it has one (every card can show it, joined or not),
- * else the newest loaded message as "Dana: text" on one line. The sidebar
- * shows both, as threadSummaryText and threadLatest.
- */
-export function threadPreview(entry: ThreadEntry): { label: string; text: string; summary: boolean } | undefined {
-	const summary = threadSummaryText(entry);
-	if (summary) return { label: '', text: summary, summary: true };
-	const latest = threadLatest(entry);
-	return latest ? { label: latest.sender, text: latest.text, summary: false } : undefined;
 }
 
 /** A title for a thread started from a message: its first non-empty line, shortened, else "Thread". */

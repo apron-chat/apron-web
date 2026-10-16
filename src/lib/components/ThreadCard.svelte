@@ -1,16 +1,21 @@
 <script lang="ts">
+	import ThreadLines from '$lib/design/components/ThreadLines.svelte';
+	import { minuteNow } from '$lib/ui/clock.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { threadPreview, type ThreadEntry } from '$lib/ui/timeline';
+	import { threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
+	import { idDateTime, idIso, idSince } from '$lib/ui/time';
 	import Lock from '@lucide/svelte/icons/lock';
 	import Avatar from './Avatar.svelte';
 
-	/** A thread's card in its parent room: faces, title, count, last reply, and a preview of its description or newest message. */
+	/** A thread's card in its parent room: faces, title, count, last reply, then its summary and newest message, as its sidebar row shows them. */
 	let { entry, onopen }: { entry: ThreadEntry; onopen: () => void } = $props();
-	let preview = $derived(threadPreview(entry));
+	let summary = $derived(threadSummaryText(entry));
+	let latest = $derived(threadLatest(entry));
+	let since = $derived(entry.lastReplyId !== undefined ? idSince(entry.lastReplyId, minuteNow()) : '');
 </script>
 
 <div class="row">
-	<button class="ap-thread" class:ap-thread-2={preview} data-timeline-item data-testid="thread-card" data-thread={entry.id} type="button" onclick={onopen}>
+	<button class="ap-thread" class:ap-thread-2={summary || latest} data-timeline-item data-testid="thread-card" data-thread={entry.id} type="button" onclick={onopen}>
 		<span class="ap-thread-head">
 			{#if entry.participants.length > 0}
 				<span class="ap-thread-faces" aria-hidden="true">
@@ -21,13 +26,9 @@
 			{/if}
 			<span class="ap-thread-name">{entry.title}{#if entry.private}<Lock class="ap-lock" aria-label="Private" role="img" />{/if}</span>
 			{#if entry.count !== undefined}<span class="ap-thread-count">{entry.count} {entry.count === 1 ? 'message' : 'messages'}</span>{/if}
-			{#if entry.lastReply}<span class="ap-thread-last">Last reply {entry.lastReply}</span>{/if}
+			{#if since}<span class="ap-thread-last">Last reply <time data-testid="thread-last-reply" datetime={idIso(entry.lastReplyId ?? '')} title={idDateTime(entry.lastReplyId ?? '')}>{since}</time></span>{/if}
 		</span>
-		{#if preview}
-			<span class="ap-thread-preview" class:summary={preview.summary}>
-				{#if preview.label}<span class="ap-thread-plabel">{`${preview.label}: `}</span>{/if}<span class="ap-thread-ptext" data-testid="thread-preview">{preview.text}</span>
-			</span>
-		{/if}
+		<ThreadLines {summary} {latest} summaryLines={3} testid="thread-preview" />
 	</button>
 </div>
 
@@ -35,9 +36,6 @@
 	.row { margin: var(--space-2) var(--space-4) 0 calc(var(--space-4) + var(--avatar-md) + var(--space-3)); }
 	.row .ap-thread { margin-top: 0; }
 	.row .ap-thread-head { flex-wrap: wrap; row-gap: 2px; }
-	/* A description keeps its line breaks and shows up to three lines; a latest-message preview stays one line. */
-	.summary { white-space: normal; }
-	.summary .ap-thread-ptext { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 	@media (max-width: 719px) {
 		.row { margin-left: var(--space-4); }
 	}

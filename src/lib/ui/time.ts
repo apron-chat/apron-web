@@ -17,6 +17,11 @@ function eventMillis(event: MessageRecord): number | undefined {
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 const dayYearFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+const dateFormat = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+const dateYearFormat = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** How far back `idSince` counts in `idAgo`'s units before it names the day. */
+export const SINCE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 /** The local time of day, `2:02 PM` or `14:02` as the browser prefers, or empty when the ID carries no time. */
 export function eventTime(event: MessageRecord): string {
@@ -54,6 +59,23 @@ export function idAgo(id: string, now = Date.now()): string {
 	const weeks = Math.floor(days / 7);
 	if (weeks < 52) return `${weeks}w`;
 	return `${Math.floor(days / 365) || 1}y`;
+}
+
+/**
+ * When a log ID was, for a thread's last reply: `just now`, `12m ago`, `9h ago`,
+ * `12d ago` within two weeks, then the day, `14 Sep` (with the year when it
+ * isn't this one). Empty when the ID carries no time; as of `now`, like `idAgo`.
+ */
+export function idSince(id: string, now = Date.now()): string {
+	const millis = idMillis(id);
+	if (!millis) return '';
+	const elapsed = now - millis;
+	if (elapsed < SINCE_WINDOW_MS) {
+		// Days stay days (`12d`) here, where idAgo turns a week into `1w`.
+		const ago = elapsed < 24 * 60 * 60 * 1000 ? idAgo(id, now) : `${Math.floor(elapsed / (24 * 60 * 60 * 1000))}d`;
+		return ago === 'now' ? 'just now' : `${ago} ago`;
+	}
+	return (new Date(millis).getFullYear() === new Date(now).getFullYear() ? dateFormat : dateYearFormat).format(millis);
 }
 
 /** The exact local date and time, `YYYY-MM-DD HH:MM:SS`, for a timestamp's tooltip. */

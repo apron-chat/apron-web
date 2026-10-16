@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { idAgo, idDateTime, idIso, idTime, idTimeCompact } from './time';
+import { idAgo, idDateTime, idIso, idSince, idTime, idTimeCompact } from './time';
 
 describe('timestamps', () => {
 	const id = String(Date.UTC(2026, 8, 14, 15, 4));
@@ -35,6 +35,21 @@ describe('timestamps', () => {
 		expect(ago(52 * 7 * day)).toBe('1y');
 		expect(ago(400 * day)).toBe('1y');
 		expect(ago(800 * day)).toBe('2y');
+	});
+
+	it('say when a last reply was: relative within two weeks, then the day', () => {
+		const now = Date.UTC(2026, 8, 14, 15, 4);
+		const minute = 60_000, hour = 60 * minute, day = 24 * hour;
+		const since = (ms: number) => idSince(String(now - ms), now);
+		const date = (options: Intl.DateTimeFormatOptions, ms: number) => new Intl.DateTimeFormat(undefined, options).format(now - ms);
+		expect(since(20_000)).toBe('just now');
+		expect(since(12 * minute)).toBe('12m ago');
+		expect(since(9 * hour)).toBe('9h ago');
+		expect(since(12 * day)).toBe('12d ago');
+		expect(since(13 * day + 23 * hour)).toBe('13d ago');
+		expect(since(14 * day)).toBe(date({ day: 'numeric', month: 'short' }, 14 * day));
+		expect(since(300 * day)).toBe(date({ day: 'numeric', month: 'short', year: 'numeric' }, 300 * day));
+		expect(idSince('opaque', now)).toBe('');
 	});
 
 	it('are empty for IDs that carry no time', () => {

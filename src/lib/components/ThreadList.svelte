@@ -1,13 +1,13 @@
 <script lang="ts">
-	import CornerDownRight from '@lucide/svelte/icons/corner-down-right';
 	import DoorOpen from '@lucide/svelte/icons/door-open';
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogIn from '@lucide/svelte/icons/log-in';
-	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
+	import ThreadLines from '$lib/design/components/ThreadLines.svelte';
 	import UnreadCount from '$lib/design/components/UnreadCount.svelte';
 	import type { RoomListing } from '$lib/protocol/client';
 	import { threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
 	import { loadOtherThreadsOpen, saveOtherThreadsOpen } from '$lib/ui/storage';
+	import { minuteNow } from '$lib/ui/clock.svelte';
 	import { idAgo, idDateTime, idIso } from '$lib/ui/time';
 
 	/** How many of the threads you haven't joined show before "N more…". */
@@ -36,13 +36,6 @@
 
 	/** A thread you haven't joined: what its listing says, its summary as text and when it was last active. */
 	type Other = { id: string; title: string; private: boolean; summary: string; latestLogId?: string };
-
-	/** The clock the others' last-active times are read against, a minute at a time, so `5m` doesn't stay `5m`. */
-	let now = $state(Date.now());
-	$effect(() => {
-		const timer = setInterval(() => (now = Date.now()), 60_000);
-		return () => clearInterval(timer);
-	});
 
 	let othersOpen = $state(loadOtherThreadsOpen());
 	/** The room whose other threads are all showing, past the first few; another room starts short again. */
@@ -83,17 +76,12 @@
 				{@const open = activeThread === entry.id}
 				{@const replies = open ? 0 : (unread[entry.id] ?? 0)}
 				{@const mentioned = open ? 0 : (mentions[entry.id] ?? 0)}
-				{@const summary = threadSummaryText(entry).replace(/\s+/g, ' ')}
-				{@const latest = threadLatest(entry)}
 				<div class={['ap-roomrow', 'ap-roomrow-nested', open && 'ap-roomrow-active']}>
 					<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0 || mentioned > 0} class:ap-room-mention={mentioned > 0} class:ap-room-quiet={!open && !replies && !mentioned} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
 						<span class="ap-room-text">
 							<span class="ap-room-name">{entry.title}{#if entry.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
-							<!-- Its summary, then its latest message: both when it has both, each marked so either reads alone. -->
-							{#if summary}<span class="ap-room-line ap-room-line-summary" data-testid="thread-list-summary"><TextAlignStart role="img" aria-label="Summary" /><span class="ap-room-line-text">{summary}</span></span>{/if}
-							{#if latest}
-								<span class="ap-room-line ap-room-line-latest" data-testid="thread-list-latest"><CornerDownRight role="img" aria-label="Latest message" /><span class="ap-room-line-text">{#if latest.sender}<span class="ap-room-sender">{latest.sender}</span>{' '}{/if}{latest.text}</span></span>
-							{/if}
+							<!-- Its summary, then its latest message: both when it has both, each marked so either reads alone, as on its card. -->
+							<ThreadLines summary={threadSummaryText(entry)} latest={threadLatest(entry)} testid="thread-list" />
 						</span>
 						<!-- One bubble for what's new: unread replies in grey, orange with an @ when they include a mention. A thread with nothing new shows none, and steps back. -->
 						<UnreadCount unread={replies} mentions={mentioned} noun="reply" testid="thread-unread" />
@@ -117,13 +105,12 @@
 		<div class="others">
 			{#each shownOthers as other (other.id)}
 				{@const open = other.id === activeThread}
-				{@const summary = other.summary.replace(/\s+/g, ' ')}
-				{@const ago = other.latestLogId !== undefined ? idAgo(other.latestLogId, now) : ''}
+				{@const ago = other.latestLogId !== undefined ? idAgo(other.latestLogId, minuteNow()) : ''}
 				<div class={['ap-roomrow', 'ap-roomrow-nested', open && 'ap-roomrow-active']}>
 					<button class="ap-room ap-room-nested ap-room-unjoined" class:ap-room-active={open} type="button" data-other-thread={other.id} data-thread={open ? other.id : undefined} aria-current={open ? 'page' : undefined} title={open ? undefined : `Read ${other.title} without joining`} onclick={() => (open ? onthread(other.id) : onopen(other.id))}>
 						<span class="ap-room-text">
 							<span class="ap-room-name">{other.title}{#if other.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
-							{#if summary}<span class="ap-room-line ap-room-line-summary" data-testid="other-thread-summary"><TextAlignStart role="img" aria-label="Summary" /><span class="ap-room-line-text">{summary}</span></span>{/if}
+							<ThreadLines summary={other.summary} testid="other-thread" />
 						</span>
 						<!-- The one being read has its history loaded, so its count is known; the others say when they were last active. -->
 						{#if open && reading?.count !== undefined}

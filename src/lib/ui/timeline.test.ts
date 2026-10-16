@@ -3,7 +3,7 @@ import { ProtocolStore, applyRecords, createTimeline, decodeHistoryRecords, time
 import type { RoomSnapshot } from '$lib/protocol/client';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { escapeMarkdown, quoteMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadPreview, threadSummaryText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { escapeMarkdown, quoteMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadSummaryText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
 
@@ -103,14 +103,15 @@ describe('thread grouping', () => {
 		expect(threadEntry(room('opaque', [], { parentRoomId: 'general', record: { room_id: 'opaque', log_id: '42' } })).anchor).toBe('42');
 	});
 
-	it('previews the description as text, else the latest message on one line', () => {
+	it('previews the description as text and the latest message on one line', () => {
 		const latest = message(1000, 'bob', { room_id: 't1', body: { text: 'latest\n  words' } });
 		const entry = threadEntry(room('t1', [latest], { parentRoomId: 'general', description: 'Line **one**\nLine two\n\n- Line three' }));
-		expect(threadPreview(entry)).toEqual({ label: '', text: 'Line one\nLine two\nLine three', summary: true });
-		expect(threadPreview({ ...entry, description: undefined })).toEqual({ label: 'Bob', text: 'latest words', summary: false });
-		expect(threadPreview({ ...entry, description: undefined, latestMessage: { ...latest, deleted: true } })).toEqual({ label: '', text: 'Message deleted', summary: false });
-		expect(threadPreview({ ...entry, description: undefined, latestMessage: message(1, 'bob', { body: { embeds: [{ kind: 'image' }] } }) })).toMatchObject({ text: 'Attachment' });
-		expect(threadPreview({ ...entry, description: undefined, latestMessage: undefined })).toBeUndefined();
+		expect(threadSummaryText(entry)).toBe('Line one\nLine two\nLine three');
+		expect(threadLatest(entry)).toEqual({ sender: 'Bob', text: 'latest words' });
+		expect(entry.lastReplyId).toBe(latest.message_id);
+		expect(threadLatest({ latestMessage: { ...latest, deleted: true } })).toEqual({ sender: '', text: 'Message deleted' });
+		expect(threadLatest({ latestMessage: message(1, 'bob', { body: { embeds: [{ kind: 'image' }] } }) })).toMatchObject({ text: 'Attachment' });
+		expect(threadLatest({ latestMessage: undefined })).toBeUndefined();
 	});
 
 	it('gives the sidebar both: the summary as text and the latest message with its sender', () => {
@@ -297,7 +298,8 @@ describe('transient notices and threads not joined', () => {
 		const card = entries[1];
 		expect(card).toMatchObject({ title: 'Incident', description: 'Pager went *off*', private: true, anchor: String(base + 1), loaded: false, participants: [] });
 		expect(card.count).toBeUndefined();
-		expect(threadPreview(card)).toMatchObject({ text: 'Pager went off', summary: true });
+		expect(threadSummaryText(card)).toBe('Pager went off');
+		expect(card.lastReplyId).toBe(String(base + 60_000));
 		expect(kinds(buildRoomTimeline({ messages: [first], threads: entries }))).toEqual(['date', 'message', 'thread', 'thread']);
 	});
 });

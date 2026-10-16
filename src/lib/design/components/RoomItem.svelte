@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ThreadLines from './ThreadLines.svelte';
 	import UnreadCount from './UnreadCount.svelte';
 
 	interface Props {
@@ -44,7 +45,7 @@
 
 {#snippet row()}
 	<button type="button" class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', (unread || mentions) && 'ap-room-unread', onjoin && 'ap-room-unjoined', mention && 'ap-room-mention', quiet && 'ap-room-quiet']} aria-current={active ? 'page' : undefined} onclick={onselect}>
-		<span class="ap-room-text"><span class="ap-room-name">{shown}{#if isPrivate}<svg class="ap-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Private"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>{/if}</span>{#if topic}<span class="ap-room-topic">{topic}</span>{/if}{#if summary}<span class="ap-room-line ap-room-line-summary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Summary"><path d="M21 5H3" /><path d="M15 12H3" /><path d="M17 19H3" /></svg><span class="ap-room-line-text">{summary}</span></span>{/if}{#if latest}<span class="ap-room-line ap-room-line-latest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Latest message"><path d="m15 10 5 5-5 5" /><path d="M4 4v7a4 4 0 0 0 4 4h12" /></svg><span class="ap-room-line-text">{#if latest.sender}<span class="ap-room-sender">{latest.sender}</span>{' '}{/if}{latest.text}</span></span>{/if}</span>
+		<span class="ap-room-text"><span class="ap-room-name">{shown}{#if isPrivate}<svg class="ap-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Private"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>{/if}</span>{#if topic}<span class="ap-room-topic">{topic}</span>{/if}<ThreadLines {summary} {latest} /></span>
 		<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun={nested ? 'reply' : 'message'} />
 		{#if ago}<span class="ap-room-ago">{ago}</span>{/if}
 	</button>
