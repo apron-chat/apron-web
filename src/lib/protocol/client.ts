@@ -573,6 +573,7 @@ export class ChatClient {
 			if (room) room.dirty = true;
 		}
 		const history = this.hasCap('history');
+		const roomMutes = this.pausedRooms();
 		return {
 			status: this.status,
 			authenticated: this.authenticated,
@@ -585,6 +586,7 @@ export class ChatClient {
 			readOnly: this.authenticated && !this.registeredSession && !serverSettings(this.server).guest_posting,
 			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
 			...(this.mutedUntil !== undefined ? { mutedUntil: this.mutedUntil } : {}),
+			...(roomMutes.length ? { roomMutes: Object.fromEntries(roomMutes) } : {}),
 			...(this.pushError !== undefined ? { pushError: this.pushError } : {}),
 			error: this.error,
 			server: this.server,
@@ -1726,6 +1728,14 @@ export class ChatClient {
 			this.scheduleRoomUnmutes();
 			this.emit();
 		}, Math.min(Math.min(...ends) - now, MAX_TIMER_MS));
+	}
+
+	/** The rooms paused now, with when each pause ends. */
+	private pausedRooms(): Array<[string, number | true]> {
+		return [...this.roomMutes.keys()].flatMap((roomId) => {
+			const until = this.roomMutedUntil(roomId);
+			return until === undefined ? [] : [[roomId, until] as [string, number | true]];
+		});
 	}
 
 	/** When a room's pause ends, if it is paused now. */

@@ -505,6 +505,7 @@ describe('rooms by request (cap rooms)', () => {
 			// A room not listed here yet keeps its mute for when it is.
 			socket.receive({ method: 'status', params: { room_id: 'elsewhere', mute: true } });
 			expect(muted()).toEqual({ general: true, random: Date.now() + 60_000, ops: undefined });
+			expect(snapshot.roomMutes).toEqual({ general: true, random: Date.now() + 60_000, elsewhere: true });
 			// Room records don't carry it: a record without `mute`, or with one, changes nothing.
 			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '20', title: 'General!' }, { room_id: 'ops', log_id: '21', title: 'Ops', mute: true }] } });
 			socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'general', log_id: '24', title: 'General!' }] } });
@@ -513,6 +514,7 @@ describe('rooms by request (cap rooms)', () => {
 			socket.receive({ method: 'status', params: { room_id: 'random', mute: false } });
 			socket.receive({ method: 'status', params: { room_id: 'general', mute: 0 } });
 			expect(muted()).toEqual({ general: undefined, random: undefined, ops: undefined });
+			expect(snapshot.roomMutes).toEqual({ elsewhere: true });
 			// A room's mute leaves the unscoped one alone.
 			expect(snapshot.mutedUntil).toBeUndefined();
 			// An invalid one is ignored.

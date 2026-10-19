@@ -229,6 +229,12 @@ export interface ClientSnapshot {
 	 * resumed. Absent when not.
 	 */
 	mutedUntil?: number | true;
+	/**
+	 * Every room whose notifications are paused (§4.5 `mute` with `room_id`),
+	 * joined or not, keyed by `room_id`: until then, or `true`. Absent when
+	 * none is; each room in `rooms` also says its own as `mutedUntil`.
+	 */
+	roomMutes?: Record<string, number | true>;
 	/** The server refused this device's `push_register` (§4.9): its message, until one succeeds. */
 	pushError?: string;
 	/** This connection's rooms are listed: joined ones (capability `rooms`), else the default room. */
