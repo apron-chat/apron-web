@@ -14,9 +14,31 @@ export function chipText(chip: DraftChip): string {
 	return `${chip.room ? '#' : '@'}${chip.id}`;
 }
 
-/** The draft as sent: every chip becomes its `@user_id` or `#room_id`. */
+/**
+ * The draft as sent: every chip becomes its `@user_id` or `#room_id`. A space
+ * goes between a chip and what touches it where readers would otherwise not
+ * see the chip's ID (Appendix A.3): after it, text that would make the ID
+ * longer (`@ada` then `+1`, or another chip); before it, a letter or digit.
+ * So the sent text is longer than the draft where that happens.
+ */
 export function draftText(parts: DraftPart[]): string {
-	return parts.map((part) => (typeof part === 'string' ? part : chipText(part))).join('');
+	let out = '';
+	// The ID of the chip the text so far ends with.
+	let open: string | undefined;
+	for (const part of parts) {
+		const text = typeof part === 'string' ? part : chipText(part);
+		if (open !== undefined && (textId(open + text)?.length ?? 0) > open.length) out += ' ';
+		else if (typeof part !== 'string' && BEFORE_ID.test(out.slice(-1))) out += ' ';
+		out += text;
+		if (typeof part !== 'string') open = part.id;
+		else if (text) open = undefined;
+	}
+	return out;
+}
+
+/** The draft's length in caret positions: a chip counts as its `@user_id` or `#room_id`, with no added space. */
+export function draftLength(parts: DraftPart[]): number {
+	return parts.reduce((sum, part) => sum + (typeof part === 'string' ? part.length : part.id.length + 1), 0);
 }
 
 /**

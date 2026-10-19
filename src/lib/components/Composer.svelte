@@ -5,7 +5,7 @@
 	import Smile from '@lucide/svelte/icons/smile';
 	import { untrack } from 'svelte';
 	import { mentionClass, mentionLabel, type Mention, type MentionPerson } from '$lib/protocol/markdown';
-	import { collapseMentions, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, unchip, type DraftChip, type DraftPart } from '$lib/ui/draft';
+	import { collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, unchip, type DraftChip, type DraftPart } from '$lib/ui/draft';
 	import { isAutocompleteDismissed, type DismissedAutocomplete } from '$lib/ui/autocomplete-dismiss';
 	import { emojiQuery as findEmojiQuery, searchEmoji, type EmojiQuery, type EmojiSuggestion } from '$lib/ui/emoji-autocomplete';
 	import { roomQuery as findRoomQuery, searchRooms, type RoomQuery, type RoomSuggestion } from '$lib/ui/room-autocomplete';
@@ -220,10 +220,6 @@
 	});
 
 	// --- The field: a plain-text editable whose mention chips are non-editable spans ---
-
-	function draftLength(parts: DraftPart[]): number {
-		return draftText(parts).length;
-	}
 
 	/**
 	 * Reads the field back into draft parts, and the caret (the selection's
