@@ -62,12 +62,15 @@ export type AddableScheme = 'webauthn' | 'email' | 'external';
  * with (`auth`), when none of the ways this browser knows the account has
  * (`methods`: how it signed in, then what it added) is one of them. That
  * covers a kept token as the only way back, and an account made with a
- * scheme only in `signup`. Undefined when there is nothing to suggest.
+ * scheme only in `signup`. A `link` method is an email or an external
+ * sign-in, not known which: either one the server signs in with counts.
+ * Undefined when there is nothing to suggest.
  */
 export function wayBackNudge(server: Pick<ServerParams, 'auth'> | undefined, methods: readonly string[] | undefined): AddableScheme[] | undefined {
 	if (!server || !methods?.length) return undefined;
 	const signsIn = (['webauthn', 'email', 'external'] as const).filter((scheme) => server.auth.includes(scheme));
-	if (!signsIn.length || methods.some((method) => signsIn.includes(method as AddableScheme))) return undefined;
+	const has = (scheme: AddableScheme) => methods.includes(scheme) || (scheme !== 'webauthn' && methods.includes('link'));
+	if (!signsIn.length || signsIn.some(has)) return undefined;
 	return signsIn;
 }
 
@@ -81,12 +84,15 @@ export function wayBackWords(schemes: readonly AddableScheme[]): string {
  * What went wrong adding an address or an external identity (§4.11.3), in
  * words: `denied` is usually one that belongs to another account already.
  */
-export function addError(cause: unknown, scheme: 'email' | 'external' = 'email'): string {
+export function addError(cause: unknown, scheme: 'email' | 'external' | 'link' = 'email'): string {
 	const code = (cause as { code?: number } | undefined)?.code;
 	if (code === -32001) {
+		// `link`: a link of no addition made here, which may have been for signing in, or for another account (§4.11.3).
 		return scheme === 'email'
 			? 'That code was refused: it may be wrong or expired, or the address may belong to another account. Ask for a new code, or sign in with that address instead.'
-			: 'That was refused: the code may be wrong or expired, or that sign-in may belong to another account. Start again, or sign in with it instead.';
+			: scheme === 'external'
+				? 'That was refused: the code may be wrong or expired, or that sign-in may belong to another account. Start again, or sign in with it instead.'
+				: 'That link was refused: it may have expired or been used, be for signing in rather than adding, or be for another account, which it adds to only where that account is signed in. Open it again to sign in with it instead.';
 	}
 	return cause instanceof Error && cause.message ? cause.message : scheme === 'email' ? 'Unable to add the address' : 'Unable to add the sign-in';
 }

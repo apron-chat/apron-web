@@ -68,8 +68,13 @@ export function newRoomState(id: string, kind: RoomKind = 'joined'): RoomState {
 /** `embedded` marks a `reply_to` snapshot, which installs regardless of its room's bound. */
 export type LiveRecord = { kind: 'message'; record: MessageRecord; embedded?: boolean } | { kind: 'reaction'; record: ReactionSet };
 
-/** How a kept session signed in (see `ChatClient.signedInWith`). */
-export type SignInMethod = 'webauthn' | 'email' | 'external' | 'token';
+/**
+ * How a kept session signed in (see `ChatClient.signedInWith`), or what was
+ * added to it. `link` is an email or an external sign-in, by a link of no
+ * proposal this browser made, on a server that offers both: either scheme
+ * approves it (§4.11.3), so which one it was isn't known.
+ */
+export type SignInMethod = 'webauthn' | 'email' | 'external' | 'link' | 'token';
 
 export interface PendingSave {
 	requestId: string;

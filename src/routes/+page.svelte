@@ -50,7 +50,7 @@
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
 	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadLostPrivacy, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
-	import { linkUse, runSignInLink, takeSignInLink, type LinkUse, type SignInLink } from '$lib/ui/sign-in-link';
+	import { askedLinkFailure, linkUse, runSignInLink, sessionSettled, takeSignInLink, type LinkUse, type SignInLink } from '$lib/ui/sign-in-link';
 	import { findProposal } from '$lib/protocol/proposals';
 	import SignInLinkDialog from '$lib/components/SignInLinkDialog.svelte';
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
@@ -951,9 +951,10 @@
 	 * on a fresh connection that is not signed in (§4.11.3), and carries on
 	 * with that connection once it has worked, when the page lets go of the
 	 * view it held. A link adds to an account only with the `state` of an
-	 * addition proposed here (`linkAddition`). A failure changes nothing and
-	 * opens the connect screen on the link's scheme and server, with the
-	 * reason.
+	 * addition proposed here (`linkAddition`), or once the viewer says a
+	 * link of no proposal here is one (`addAskedLink`). A failure changes
+	 * nothing and opens the connect screen on the link's scheme and server,
+	 * with the reason.
 	 */
 	function useLink(use: Exclude<LinkUse, { kind: 'addition' }>): void {
 		const chat = client;
@@ -978,24 +979,45 @@
 			onFailed: (error, server) => {
 				feedback.clear();
 				// The link may have expired or been used: the connect screen can start again, on the
-				// link's server, which is not remembered unless that works.
-				const scheme = use.kind === 'own' ? use.scheme : 'email';
+				// link's server, which is not remembered unless that works. One of no proposal here
+				// may have been for an addition instead, which a new sign-in code wouldn't help with.
 				serverInput = server;
-				linkFailure = { error: `The sign-in link didn’t work (${error}). ${scheme === 'email' ? 'Send a new code' : 'Sign in again'} to try again, or pick another server.` };
-				connectScheme = scheme;
+				linkFailure = {
+					error: use.kind === 'own'
+						? `The sign-in link didn’t work (${error}). ${use.scheme === 'email' ? 'Send a new code' : 'Sign in again'} to try again, or pick another server.`
+						: askedLinkFailure(error)
+				};
+				connectScheme = use.kind === 'own' ? use.scheme : undefined;
 				connectOpen = true;
 			}
 		}).finally(() => (linkBusy = false));
 	}
 
+	/**
+	 * Adds a link of no proposal here to the account this page is signed in
+	 * to, once the viewer said it was sent for that (§4.11.3): the server
+	 * approves it only if that account proposed it, so any other link is
+	 * refused, and changes nothing.
+	 */
+	function addAskedLink(link: SignInLink): void {
+		const chat = client;
+		askedLink = undefined;
+		if (!chat) return;
+		linkBusy = true;
+		feedback.pending('Adding the sign-in…');
+		chat.addWithConfirmedLink(link.token)
+			.then(() => feedback.clear(), (cause: unknown) => feedback.error(addError(cause, 'link')))
+			.finally(() => (linkBusy = false));
+	}
+
 	// A link for an addition this browser proposed (§4.11.3) approves only on a connection signed in to the
-	// account that proposed it: once this page's session has settled, it adds there, or says it can't.
+	// account that proposed it: once this page's session has settled (a kept one resumed, or past resuming), it
+	// adds there, or says it can't.
 	$effect(() => {
 		const addition = linkAddition;
 		const chat = client;
-		if (!addition || !chat || snapshot.status !== 'connected' || snapshot.authBusy) return;
+		if (!addition || !chat || !sessionSettled(snapshot)) return;
 		const signedInAs = snapshot.authenticated ? snapshot.you?.user_id : undefined;
-		if (!signedInAs && !snapshot.held && !snapshot.error) return;
 		untrack(() => {
 			linkAddition = undefined;
 			if (chat.url !== addition.server || signedInAs !== addition.account) {
@@ -2216,14 +2238,16 @@
 </svelte:head>
 
 {#if client && askedLink}
+	<!-- Signed in here, guests too, where a link can add a way in (`addAs`): the link may have been sent for that. -->
 	<SignInLinkDialog
 		link={askedLink}
 		current={{
 			url: client.url, keptSession: Boolean(snapshot.keptSession),
 			...(askedLink.server && askedLink.server !== client.url ? { targetKeptSession: client.keptSessionFor(askedLink.server) } : {}),
-			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {})
+			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}),
+			...(snapshot.authenticated && snapshot.you && snapshot.server?.auth.some((scheme) => scheme === 'email' || scheme === 'external') ? { addAs: snapshot.you.name ? `${snapshot.you.name} (@${snapshot.you.user_id})` : `@${snapshot.you.user_id}` } : {})
 		}}
-		onconfirm={() => askedLink && useLink({ kind: 'ask', link: askedLink })} oncancel={() => (askedLink = undefined)}
+		onconfirm={() => askedLink && useLink({ kind: 'ask', link: askedLink })} onadd={() => askedLink && addAskedLink(askedLink)} oncancel={() => (askedLink = undefined)}
 	/>
 {/if}
 {#if !client}

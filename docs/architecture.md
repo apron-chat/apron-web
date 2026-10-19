@@ -261,8 +261,10 @@ remembered first in local storage (`proposals.ts`, for an hour) with its
 server and whether it signs in or adds, for the link that comes back with it,
 in this tab or another. An external proposal's `url` is opened only when it is
 `https`, or `http` on a loopback host (`signInPageUrl`); a `return_url` the
-server refuses (`denied`, `invalid_params`) is dropped and the proposal sent
-again without it, so the page shows a code instead. The connection stays open
+server refuses (`invalid_params`, a rejected value) is dropped and the proposal
+sent again without it, so the page shows a code instead. Any other refusal,
+`denied` included, is shown as it is, not retried. A proposal that fails is
+forgotten from local storage, so failures don't push out a live one. The connection stays open
 for a code (pinging, and closed after `PROPOSAL_MS`) as the snapshot's
 `signInCode`, leaving this connection and its view untouched; with a return,
 it closes, since a link works on any connection. A newer proposal,
@@ -278,15 +280,19 @@ the result as a sign-in, and then processes the frames that arrived after the
 result. `signInWithLink(token, url?, { scheme?, state?, beforeSwitch? })` does
 the same with a link's token on a fresh connection, with the proposal's
 scheme or else one the server offers (approval takes either); a refused link
-changes nothing. Approval forgets the proposal's `state`.
+changes nothing. Approval forgets the proposal's `state`. It is recorded as
+signed in with the proposal's scheme, or the only one the server offers, or
+else `link` (email or external, not known which), never a guess.
 `requestEmailCodeToAdd` and `proposeExternalToAdd(returnUrl?)` propose on the
 signed-in connection, for its account; `addWithCode(code)` approves on that
 same connection (refused if it has reconnected since), and
 `addWithLink(token, state)` on any connection signed in to the account that
-proposed it. Their `{}` result adds the address or identity: another way back
+proposed it; `addWithConfirmedLink(token)`, on this connection, for a link of
+no addition this browser proposed that the viewer said is one (the server
+refuses it unless this account proposed it). Their `{}` result adds the address or identity: another way back
 in for a registered session, or, for a guest without a token, what makes it an
 account. How the kept
-session signed in (`webauthn`, `email`, `external`, `token`) is remembered beside its token
+session signed in (`webauthn`, `email`, `external`, `link`, `token`) is remembered beside its token
 as `signedInWith`, and ways added to the account since beside it
 (`signInMethods`). Proposing a sign-in, `signInWithCode` and registering a
 passkey accept a scheme listed in `auth` or `signup`, and adding an email or an external sign-in needs it in `auth`; a passkey login and a

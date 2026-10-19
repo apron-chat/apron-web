@@ -1,3 +1,4 @@
+import type { ClientSnapshot } from '$lib/protocol/client';
 import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
 
 /**
@@ -82,14 +83,29 @@ export function linkUse(link: SignInLink, find: (state: string | undefined) => P
  * signs in to, so the warning about links from others matters all the more.
  * `keptSession`: a registered session is kept for the current server,
  * whether or not it has resumed yet (`signedInAs` names it once it has).
+ *
+ * Nor does the link say whether it signs in or adds a sign-in to an account
+ * (§4.11.1): one proposed on another device, or forgotten here, could be
+ * either. `addAs` names the account this page is signed in to on the
+ * current server, guests included; on that server the prompt then offers to
+ * add the link to it as well (`adds`). That is safe to offer: an addition
+ * approves only on a connection signed in to the account that proposed it,
+ * and a sign-in's token is refused on one (§4.11.3).
  */
 export function signInLinkPrompt(
-	link: SignInLink, current: { url: string; label?: string; signedInAs?: string; keptSession?: boolean; targetKeptSession?: boolean }
-): { title: string; lines: string[]; switchesServer: boolean } {
+	link: SignInLink, current: { url: string; label?: string; signedInAs?: string; addAs?: string; keptSession?: boolean; targetKeptSession?: boolean }
+): { title: string; lines: string[]; switchesServer: boolean; adds: boolean } {
 	const target = link.server ?? current.url;
 	const switchesServer = target !== current.url;
 	const host = hostOf(target);
 	const lines: string[] = [];
+	const addAs = switchesServer ? undefined : current.addAs;
+	if (addAs) {
+		lines.push(`If you asked to add this way of signing in to ${addAs}, on this device or another, add it.`);
+		lines.push(`If you asked to sign in with it, signing in signs you out of ${addAs} and in to the account the link is for.`);
+		lines.push('Only sign in if you just asked to, on this device or another. A link someone sent you can sign you in to their account.');
+		return { title: `Use this link on ${host}?`, lines, switchesServer, adds: true };
+	}
 	if (switchesServer) {
 		lines.push(`This link is for ${host}, not ${current.label || hostOf(current.url)}, the server this page is using: continuing switches to it.`);
 		if (current.targetKeptSession) lines.push(`You have a saved session on ${host}. Continuing signs you out of it.`);
@@ -97,7 +113,32 @@ export function signInLinkPrompt(
 	else if (current.signedInAs) lines.push(`You’re signed in here as ${current.signedInAs}. Continuing signs you out of that account and in to the one the link is for.`);
 	else if (current.keptSession) lines.push('You have a saved session here. Continuing signs you out of it.');
 	lines.push('Only continue if you just asked to sign in, on this device or another. A link someone sent you can sign you in to their account.');
-	return { title: `Sign in to ${host} with this link?`, lines, switchesServer };
+	return { title: `Sign in to ${host} with this link?`, lines, switchesServer, adds: false };
+}
+
+/**
+ * Why a link of no proposal here didn't sign in, and what to do: it may
+ * have been sent to add a sign-in to an account instead, which works only
+ * where that account is signed in (§4.11.3), so a new sign-in code wouldn't
+ * help.
+ */
+export function askedLinkFailure(error: string): string {
+	return `The link didn’t sign you in (${error}). If it was sent to add a way of signing in to an account, open it where you’re signed in to that account. Otherwise sign in again, or pick another server.`;
+}
+
+/**
+ * Whether the page's session has settled enough to tell if a link for an
+ * addition proposed here can be used: it is signed in, or it won't be
+ * without the user (held, such as a resume that was refused), or it has
+ * failed with nothing left to resume. A kept session that the server
+ * resumes by token is still on its way while its resume is retried (a
+ * limit, a timeout), even with an error showing meanwhile.
+ */
+export function sessionSettled(snapshot: Pick<ClientSnapshot, 'status' | 'authBusy' | 'authenticated' | 'held' | 'error' | 'keptSession' | 'server'>): boolean {
+	if (snapshot.status !== 'connected' || snapshot.authBusy) return false;
+	if (snapshot.authenticated || snapshot.held) return true;
+	const resuming = Boolean(snapshot.keptSession && snapshot.server?.auth.includes('token'));
+	return Boolean(snapshot.error) && !resuming;
 }
 
 /**

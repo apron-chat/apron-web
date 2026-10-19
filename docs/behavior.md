@@ -995,9 +995,11 @@ screen's **External** proposes on a connection of its own, as Email does
 but only an `https` page, or `http` on a loopback host; any other `url`, such
 as `javascript:`, is refused. The page signs you in however the server
 chooses, and comes back with a link. A server that refuses the `return_url`
-(`denied` or `invalid_params`) is asked again without it: its page then shows
-a code, the connect screen offers the page as a link to open in a new tab, and
+(`invalid_params`: an origin it doesn't trust) is asked again without it: its
+page then shows a code, the connect screen offers the page as a link to open in a new tab, and
 the code field approves on the proposing connection, as an emailed code does.
+Any other refusal, `denied` included, is shown as the server words it, without
+asking again.
 
 Every proposal, email or external, sign-in or addition, carries a new random
 `state` (§4.11.1), remembered in local storage for an hour with the server it
@@ -1023,16 +1025,29 @@ have crafted or forwarded, so it is never used silently: a dialog asks "Sign
 in to *server* with this link?", says whom it signs out when you are signed in
 there (or that a saved session is kept there, before it has resumed), and warns
 that a link someone sent you can sign you in to their account, which matters
-all the more as the link can't say which account it is for. On confirmation it
+all the more as the link can't say which account it is for. Nor can it say
+whether it signs in or adds (one proposed on another device could be either):
+when this page is signed in on the link's server (a guest too) and that server
+signs in with email or an external page, the dialog asks "Use this link on
+*server*?" and offers **Add it** to the signed-in account, as well as
+**Sign in**. Adding approves on this connection, which the server allows only
+if this account proposed it (§4.11.3); a refusal says it may have been for
+signing in, or for another account. On **Sign in** it
 is used as a sign-in, on the link's server (this one unless it names another;
 a `server` that isn't a WebSocket URL makes it unusable), with a scheme that
-server offers, since approval takes either (§4.11.3). A sign-in link never
-adds to an account without its addition's `state`. Only once a sign-in has
+server offers, since approval takes either (§4.11.3). Such a sign-in is
+recorded as the only scheme the server offers, or as an email or external
+sign-in, not saying which, when it offers both. A link never adds to an
+account without its addition's `state` or the viewer's **Add it**. Only once a sign-in has
 worked is a switch to another server remembered, and the server listed under
 Recent; on the same server the account signed in before is signed out of as
 **Sign out** does, so push goes off for it here. If it fails (expired, used,
 `denied`), nothing changes: the page stays on its server, and the connect
-screen opens on the link's scheme, set to the link's server, with the reason.
+screen opens on the link's scheme, set to the link's server, with the reason;
+for a link of no proposal here, it adds that the link may have been sent to
+add a way of signing in, which works where that account is signed in. An
+addition's link waits for a kept session to resume (through retries after a
+limit) before saying it can't be used.
 An email or external sign-in that can't be resumed (no token to resume with) shows as
 signed out after a reconnect, never as a guest, unless a passkey was added to
 the account, which then signs it back in (with a tap, as below); where the

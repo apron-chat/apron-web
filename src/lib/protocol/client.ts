@@ -316,8 +316,9 @@ export class ChatClient {
 	private adding = false;
 	/**
 	 * How this browser signed in to the kept session, remembered with its
-	 * token: `email` and `external` resume with the token or else report the
-	 * session signed out (never a passkey prompt or a guest); `token` alone
+	 * token: `email`, `external` and `link` (either, not known which) resume
+	 * with the token or else report the session signed out (never a passkey
+	 * prompt or a guest); `token` alone
 	 * (pasted, an invite, or a guest token) is the one way back in, worth
 	 * adding another way to (§3.2.1).
 	 */
@@ -358,7 +359,7 @@ export class ChatClient {
 	 * how: a passkey prompt or an email code waits for the user's tap on the
 	 * sign-in screen rather than starting on its own. Cleared with the hold.
 	 */
-	private signInNeeded?: SignInMethod;
+	private signInNeeded?: Exclude<SignInMethod, 'link'>;
 	/** The current socket carried an error about the connection; its message outlives the close. */
 	private connectionErrored = false;
 	private connectionProbe?: AbortController;
@@ -810,6 +811,8 @@ export class ChatClient {
 			rememberProposal({ scheme, kind: 'sign-in', url, state, ...(email ? { email } : {}), expires: this.now() + PROPOSAL_KEPT_MS }, this.now());
 			proposed = await proposeWith(scheme, params, state, (request) => connection.auth(request));
 		} catch (cause) {
+			// Not proposed, or not to be followed: forgotten, so failures don't crowd out a live proposal.
+			forgetProposal(state, this.now());
 			connection.close();
 			throw cause;
 		}
@@ -862,7 +865,9 @@ export class ChatClient {
 	 * default) that is not signed in, which then becomes this client's
 	 * connection as with `signInWithCode`. The approval uses `scheme`, the
 	 * proposal's, or else a scheme that server offers: either works
-	 * (§4.11.3). A refused link changes nothing here.
+	 * (§4.11.3). How it signed in is recorded as the proposal's scheme, or
+	 * the only one the server offers; else as `link`, since the link doesn't
+	 * say which it was. A refused link changes nothing here.
 	 */
 	async signInWithLink(
 		token: string, url = this.serverUrl, options: { scheme?: ProposalScheme; state?: string; beforeSwitch?: () => void } = {}
@@ -873,16 +878,18 @@ export class ChatClient {
 		this.checkApproval();
 		const connection = this.openSignInConnection(url);
 		let scheme: ProposalScheme;
+		let method: ProposalScheme | 'link';
 		try {
 			await connection.ready;
 			const offered = PROPOSAL_SCHEMES.filter((candidate) => connection.offers(candidate));
 			if (!offered.length) throw new Error('This server does not support sign-in links');
 			scheme = options.scheme && offered.includes(options.scheme) ? options.scheme : offered[0];
+			method = options.scheme ?? linkMethod(offered);
 		} catch (cause) {
 			connection.close();
 			throw cause;
 		}
-		return this.approveSignIn(connection, scheme, secret, { beforeSwitch: options.beforeSwitch, retryable: false, state: options.state });
+		return this.approveSignIn(connection, scheme, secret, { beforeSwitch: options.beforeSwitch, retryable: false, state: options.state, method });
 	}
 
 	/** Throws unless a sign-in approval may start now: the client runs, and none is in flight. */
@@ -894,7 +901,7 @@ export class ChatClient {
 	/** Approves a sign-in on `connection` and carries on with it (see `signInWithCode`). */
 	private async approveSignIn(
 		connection: SignInConnection, scheme: ProposalScheme, token: string,
-		options: { name?: string; beforeSwitch?: () => void; retryable: boolean; state?: string }
+		options: { name?: string; beforeSwitch?: () => void; retryable: boolean; state?: string; method?: ProposalScheme | 'link' }
 	): Promise<OperationHandle | undefined> {
 		try {
 			this.checkApproval();
@@ -927,7 +934,7 @@ export class ChatClient {
 			if (this.signInProposal?.connection === connection) this.signInProposal = undefined;
 			options.beforeSwitch?.();
 			if (options.name?.trim()) this.displayName = options.name.trim();
-			this.adoptSignedIn(connection, result, scheme);
+			this.adoptSignedIn(connection, result, options.method ?? scheme);
 			return this.authNameRequest;
 		} finally {
 			this.approvalInFlight = false;
@@ -942,7 +949,7 @@ export class ChatClient {
 	 * server if another, and the connection's `server` frame, the sign-in's
 	 * result, and the frames since are taken as if they had arrived here.
 	 */
-	private adoptSignedIn(connection: SignInConnection, result: JsonObject, scheme: ProposalScheme): void {
+	private adoptSignedIn(connection: SignInConnection, result: JsonObject, method: ProposalScheme | 'link'): void {
 		const { socket, server, frames } = connection.detach();
 		this.signInConnections.delete(connection);
 		if (connection.url !== this.serverUrl) this.switchServer(connection.url);
@@ -970,7 +977,7 @@ export class ChatClient {
 		// Already signed in: the `server` frame is only taken in, not answered with an `auth`.
 		this.authRequested = true;
 		this.handleServer(server);
-		if (!this.handleAuth(result, scheme)) this.authRequested = false;
+		if (!this.handleAuth(result, method)) this.authRequested = false;
 		for (const frame of frames) {
 			if (this.isCurrentSocket(id, socket)) this.handleMessage(frame);
 		}
@@ -1033,7 +1040,14 @@ export class ChatClient {
 		const state = newProposalState();
 		const email = typeof params.email === 'string' ? params.email : undefined;
 		rememberProposal({ scheme, kind: 'addition', url: this.serverUrl, state, account, ...(email ? { email } : {}), expires: this.now() + PROPOSAL_KEPT_MS }, this.now());
-		const proposed = await proposeWith(scheme, params, state, (request) => this.enqueueRequest('auth', request, { visible: false, allowBeforeAuth: false }).promise);
+		let proposed: { page?: string; returns: boolean };
+		try {
+			proposed = await proposeWith(scheme, params, state, (request) => this.enqueueRequest('auth', request, { visible: false, allowBeforeAuth: false }).promise);
+		} catch (cause) {
+			// As for a sign-in: a failed proposal isn't kept to crowd out a live one.
+			forgetProposal(state, this.now());
+			throw cause;
+		}
 		// Proposed by another account than this connection is now: it isn't this one's to approve.
 		if (connection !== this.connectionId || this.you?.user_id !== account) throw new Error('The connection or account changed meanwhile; try again');
 		this.addition = { scheme, state, account, connection };
@@ -1046,8 +1060,8 @@ export class ChatClient {
 	 * connection that proposed it: a short code works only there. The result
 	 * is `{}`: the identity is unchanged, and the address or the external
 	 * identity is one more way back into the account. Only an explicit action
-	 * does this; a link without the `state` of this browser's addition always
-	 * signs in.
+	 * does this; a link without the `state` of this browser's addition adds
+	 * only once the viewer says so (`addWithConfirmedLink`).
 	 */
 	async addWithCode(code: string): Promise<ProposalScheme> {
 		const token = code.trim();
@@ -1077,8 +1091,27 @@ export class ChatClient {
 		return proposal.scheme;
 	}
 
+	/**
+	 * Adds to the signed-in account with the token of a link of no addition
+	 * this browser proposed, once the viewer said it is one: it may have been
+	 * proposed on another device, or forgotten here (§4.11.2). Approval of an
+	 * addition works only on a connection signed in to the account that
+	 * proposed it, and a sign-in's token is refused on one (§4.11.3), so the
+	 * server refuses any other link. Either scheme the server offers
+	 * approves; what was added is recorded as with `signInWithLink`.
+	 */
+	async addWithConfirmedLink(token: string): Promise<ProposalScheme | 'link'> {
+		const offered = PROPOSAL_SCHEMES.filter((scheme) => this.server?.auth.includes(scheme));
+		if (!offered.length) throw new Error('This server does not sign in with email or an external page, so none can be added');
+		this.checkAddition(offered[0]);
+		if (!token.trim()) throw new Error('The link has no token');
+		const method = linkMethod(offered);
+		await this.approveAddition(offered[0], token.trim(), undefined, method);
+		return method;
+	}
+
 	/** Approves an addition on this connection, holding the sign-in guard meanwhile (see `addWithCode`). */
-	private async approveAddition(scheme: ProposalScheme, token: string, state: string): Promise<void> {
+	private async approveAddition(scheme: ProposalScheme, token: string, state: string | undefined, method: ProposalScheme | 'link' = scheme): Promise<void> {
 		if (this.passkeyStarting) throw new Error('Already signing in; finish or cancel that first');
 		await this.readyToSignIn();
 		const account = this.you?.user_id;
@@ -1090,10 +1123,10 @@ export class ChatClient {
 		try {
 			await this.passkeyRequest({ scheme, token });
 			if (controller.signal.aborted || connection !== this.connectionId || this.you?.user_id !== account) throw new Error('Connection changed; try again');
-			forgetProposal(state, this.now());
-			if (this.addition?.state === state) this.addition = undefined;
+			if (state) forgetProposal(state, this.now());
+			if (state && this.addition?.state === state) this.addition = undefined;
 			this.cancelPasskey();
-			this.noteWayAdded(scheme);
+			this.noteWayAdded(method);
 		} finally {
 			this.adding = false;
 			if (this.passkeyAbort === controller) this.cancelPasskey();
@@ -1107,7 +1140,7 @@ export class ChatClient {
 	 * back into an account that is now a registered one (its guest token, if
 	 * any, still resumes it).
 	 */
-	private noteWayAdded(scheme: ProposalScheme): void {
+	private noteWayAdded(scheme: ProposalScheme | 'link'): void {
 		if (this.registeredSession) {
 			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
 			this.noteAdded(scheme);
@@ -2560,7 +2593,7 @@ export class ChatClient {
 	 */
 	private authenticate(auth: string[]): void {
 		const resume = Boolean(this.sessionToken && auth.includes('token'));
-		const linked = this.signedInWith === 'email' || this.signedInWith === 'external';
+		const linked = this.signedInWith === 'email' || this.signedInWith === 'external' || this.signedInWith === 'link';
 		const passkeyWayBack = !linked || this.addedMethods.has('webauthn');
 		if (!resume && this.passkeyRequired && auth.includes('webauthn') && passkeyWayBack) {
 			// Servers without bearer-token resume need a passkey login after a transport
@@ -2574,11 +2607,13 @@ export class ChatClient {
 		}
 		if (!resume && linked) {
 			// An email or external sign-in with nothing to resume it by: signed out, not a guest.
-			const scheme = this.signedInWith as ProposalScheme;
+			// A `link` one, either scheme: named as neither, and the connect screen opens on one the server has.
+			const way = this.signedInWith === 'link' ? undefined : this.signedInWith as ProposalScheme;
+			const again = way ? (auth.includes(way) ? way : undefined) : PROPOSAL_SCHEMES.find((scheme) => auth.includes(scheme));
 			this.reconnectHeld = true;
-			this.signInNeeded = auth.includes(scheme) ? scheme : auth.includes('webauthn') ? 'webauthn' : undefined;
-			this.error = auth.includes(scheme) ? `Sign in with ${scheme === 'email' ? 'your email' : 'the server’s sign-in page'} again from the connect screen.`
-				: `This server doesn’t sign back in with ${scheme === 'email' ? 'email' : 'its sign-in page'}. Sign in another way from the connect screen.`;
+			this.signInNeeded = again ?? (auth.includes('webauthn') ? 'webauthn' : undefined);
+			this.error = again ? `Sign in ${way === 'email' ? 'with your email ' : way === 'external' ? 'with the server’s sign-in page ' : ''}again from the connect screen.`
+				: `This server doesn’t sign back in with ${way === 'email' ? 'email' : way === 'external' ? 'its sign-in page' : 'email or its sign-in page'}. Sign in another way from the connect screen.`;
 			this.emit();
 			return;
 		}
@@ -2621,7 +2656,8 @@ export class ChatClient {
 					this.sessionToken = undefined;
 					this.storeSession(undefined);
 					this.reconnectHeld = true;
-					this.signInNeeded = this.signedInWith === 'email' || this.signedInWith === 'external' || this.signedInWith === 'token' ? this.signedInWith : 'webauthn';
+					this.signInNeeded = this.signedInWith === 'email' || this.signedInWith === 'external' || this.signedInWith === 'token' ? this.signedInWith
+						: this.signedInWith === 'link' ? PROPOSAL_SCHEMES.find((scheme) => this.server?.auth.includes(scheme)) ?? 'email' : 'webauthn';
 					// A passkey signs in again on this connection: it stays open for that tap.
 					if (this.signInNeeded === 'webauthn' && this.server?.auth.includes('webauthn')) {
 						this.emit();
@@ -2642,7 +2678,7 @@ export class ChatClient {
 	 * replaces any saved one. `signedIn` names a sign-in ceremony that made
 	 * this a registered session.
 	 */
-	private handleAuth(result: JsonObject, signedIn?: 'webauthn' | ProposalScheme, added = false): boolean {
+	private handleAuth(result: JsonObject, signedIn?: Exclude<SignInMethod, 'token'>, added = false): boolean {
 		const identity = result.you;
 		if (!isJsonObject(identity) || typeof identity.user_id !== 'string') {
 			this.error = 'Server authentication response did not include an identity';
@@ -3985,11 +4021,20 @@ function readMethods(value: string | null): SignInMethod[] {
 }
 
 function isSignInMethod(method: string | null): method is SignInMethod {
-	return method === 'webauthn' || method === 'email' || method === 'external' || method === 'token';
+	return method === 'webauthn' || method === 'email' || method === 'external' || method === 'link' || method === 'token';
 }
 
 /** The proposals a sign-in link can approve, either of which a server's approval takes (§4.11.3). */
 const PROPOSAL_SCHEMES: ProposalScheme[] = ['email', 'external'];
+
+/**
+ * What a link of no proposal made here signed in or added with, of the
+ * schemes its server `offered`: the only one, else `link`, since either
+ * approves it (§4.11.3) and the link doesn't say which it was.
+ */
+function linkMethod(offered: readonly ProposalScheme[]): ProposalScheme | 'link' {
+	return offered.length === 1 ? offered[0] : 'link';
+}
 
 /** The error for a proposal to a server that doesn’t offer its scheme. */
 const NOT_OFFERED: Record<ProposalScheme, string> = {
@@ -4017,9 +4062,13 @@ function signInCodeOf(proposal: SignInProposal): NonNullable<ClientSnapshot['sig
 /**
  * Sends a proposal (§4.11.1) with `state` through `send`, and reads its
  * result: for `external`, the page to open, which must be one a client may
- * open (§4.11.5). A `return_url` the server refuses (`denied`, or
- * `invalid_params`) is dropped and the proposal sent again without it, so its
- * page shows a code to type instead (`returns` false).
+ * open (§4.11.5). A `return_url` the server refuses, on an origin it doesn't
+ * trust, is a rejected value, `invalid_params` (§1.1): it is dropped and the
+ * proposal sent again without it, so its page shows a code to type instead
+ * (`returns` false). Nothing else in the proposal is the client's to get
+ * wrong. Any other refusal, `denied` included (a proposal the server doesn't
+ * allow, such as past a limit), is the answer: a retry would only replace the
+ * connection's proposal (§4.11.1), count against the limits, and hide why.
  */
 async function proposeWith(
 	scheme: ProposalScheme, params: JsonObject, state: string, send: (request: JsonObject) => Promise<JsonObject>
@@ -4031,7 +4080,7 @@ async function proposeWith(
 		result = await send({ scheme, ...params, state });
 	} catch (cause) {
 		const code = (cause as RpcFailure).code;
-		if (!returns || (code !== -32001 && code !== -32602)) throw cause;
+		if (!returns || code !== -32602) throw cause;
 		returns = false;
 		result = await send({ scheme, ...rest, state });
 	}

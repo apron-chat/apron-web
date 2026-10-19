@@ -440,7 +440,8 @@ describe('sign-in', () => {
 		await latest().greet([], { auth: ['external', 'token', 'guest'] });
 		const { side, proposed } = await proposeExternal('https://untrusted.example/');
 		const first = side.request('auth');
-		side.receive({ id: first.id, error: { code: -32001, message: 'return_url not allowed' } });
+		// A return_url on an origin the server doesn't trust is a rejected value (§1.1, §4.11.5).
+		side.receive({ id: first.id, error: { code: -32602, message: 'return_url not allowed' } });
 		await settle();
 		const second = side.request('auth');
 		expect(second.id).not.toBe(first.id);
@@ -454,6 +455,96 @@ describe('sign-in', () => {
 		expect(snapshot.you?.user_id).toBe('ada');
 		expect(snapshot.signedInWith).toBe('external');
 		expect(findProposal(first.params.state as string)).toBeUndefined();
+	});
+
+	it('shows a denied proposal as it is, without asking again, and forgets a refused proposal’s state', async () => {
+		await latest().greet([], { auth: ['external', 'email', 'token', 'guest'] });
+		const { side, proposed } = await proposeExternal('https://web.example/');
+		const first = side.request('auth');
+		side.receive({ id: first.id, error: { code: -32001, message: 'Too many sign-ins from this account' } });
+		await expect(proposed).rejects.toThrow('Too many sign-ins');
+		expect(side.sent.filter((frame) => frame.method === 'auth')).toHaveLength(1);
+		expect(findProposal(first.params.state as string)).toBeUndefined();
+		// Failures, a limit's say, never crowd out a proposal still waiting for its link.
+		const live = await propose('ada@example.com', ['email', 'token', 'guest']);
+		const liveState = live.request('auth').params.state as string;
+		for (let attempt = 0; attempt < 10; attempt += 1) {
+			const requested = client.requestEmailCode('ada@example.com');
+			const again = latest();
+			again.open();
+			again.receive({ method: 'server', params: { apron: 9, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
+			await settle();
+			again.receive({ id: again.request('auth').id, error: { code: -32002, message: 'Slow down', data: { retry_after: 30 } } });
+			await expect(requested).rejects.toThrow('Slow down');
+		}
+		expect(findProposal(liveState)).toBeDefined();
+	});
+
+	it('records a link of no known proposal as `link` where its server offers both schemes, not as either', async () => {
+		await latest().greet([], { auth: ['token', 'guest'] });
+		const signedIn = client.signInWithLink('Hk41x9', 'ws://other.test/');
+		const link = await linkConnection(['email', 'external', 'token'], 'ws://other.test/');
+		expect(link.request('auth').params).toMatchObject({ scheme: 'email', token: 'Hk41x9' });
+		link.receive({ id: link.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_ada' } });
+		await signedIn;
+		expect(snapshot.signedInWith).toBe('link');
+		expect(snapshot.signInMethods).toEqual(['link']);
+		expect(storage.get('apron.signin:ws://other.test/')).toBe('link');
+		// Its own proposal's link is recorded as that proposal's scheme, whichever approves it.
+		const own = client.signInWithLink('Hk41x9', 'ws://third.test/', { scheme: 'external', state: 's' });
+		const third = await linkConnection(['email', 'external', 'token'], 'ws://third.test/');
+		expect(third.request('auth').params).toMatchObject({ scheme: 'external' });
+		third.receive({ id: third.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_third' } });
+		await own;
+		expect(snapshot.signedInWith).toBe('external');
+	});
+
+	it('reports a `link` session it cannot resume as signed out, naming neither scheme', async () => {
+		storage.set(TOKEN_KEY, 'st_ada');
+		storage.set('apron.signin:ws://fake.test/', 'link');
+		client.stop();
+		client = new ChatClient('ws://fake.test/');
+		client.subscribe((next) => (snapshot = next));
+		client.start();
+		const first = latest();
+		first.open();
+		first.receive({ method: 'server', params: { apron: 9, auth: ['email', 'external', 'token'], capabilities: [] } });
+		first.receive({ id: first.request('auth').id, error: { code: -32001, message: 'Session expired' } });
+		await settle();
+		expect(snapshot.held).toBe(true);
+		expect(snapshot.signInNeeded).toBe('email');
+		expect(snapshot.authenticated).toBe(false);
+		// Nothing to resume by: signed out, never a guest, and told to sign in again without naming a scheme.
+		client.retryNow();
+		const next = latest();
+		next.open();
+		next.receive({ method: 'server', params: { apron: 9, auth: ['external', 'email', 'guest'], capabilities: [] } });
+		await settle();
+		expect(next.sent.filter((frame) => frame.method === 'auth')).toEqual([]);
+		expect(snapshot.held).toBe(true);
+		expect(snapshot.signInNeeded).toBe('email');
+		expect(snapshot.error).toBe('Sign in again from the connect screen.');
+	});
+
+	it('adds a confirmed link of no known addition on the signed-in connection, which the server alone can approve', async () => {
+		await latest().greet([], { auth: ['email', 'external', 'token', 'guest'], token: 'st_ada', you: { user_id: 'ada' } });
+		const socket = latest();
+		const sockets = FakeSocket.instances.length;
+		const refused = client.addWithConfirmedLink(' Hk41x9 ');
+		await vi.advanceTimersByTimeAsync(0);
+		// On this connection, not a fresh one: an addition approves only for the account that proposed it (§4.11.3).
+		expect(FakeSocket.instances).toHaveLength(sockets);
+		expect(socket.request('auth').params).toEqual({ scheme: 'email', token: 'Hk41x9' });
+		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Invalid token' } });
+		await expect(refused).rejects.toThrow('Invalid token');
+		expect(snapshot.you?.user_id).toBe('ada');
+		expect(snapshot.signInMethods).toEqual(['token']);
+		const added = client.addWithConfirmedLink('Hk41x9');
+		await vi.advanceTimersByTimeAsync(0);
+		await socket.reply('auth', {});
+		// Either scheme approves, and the link doesn't say which it added.
+		await expect(added).resolves.toBe('link');
+		expect(snapshot.signInMethods).toEqual(['token', 'link']);
 	});
 
 	it('adds with a link of its own addition on any connection of the proposing account, and only there', async () => {

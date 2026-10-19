@@ -58,6 +58,9 @@ describe('ways back into an account', () => {
 		expect(wayBackNudge({ auth: ['email'] }, ['email'])).toBeUndefined();
 		expect(wayBackNudge({ auth: ['external', 'token'] }, ['token'])).toEqual(['external']);
 		expect(wayBackNudge({ auth: ['email', 'external'] }, ['external'])).toBeUndefined();
+		// `link`: an email or an external sign-in, not known which; either one the server signs in with counts.
+		expect(wayBackNudge({ auth: ['webauthn', 'external'] }, ['link'])).toBeUndefined();
+		expect(wayBackNudge({ auth: ['webauthn'] }, ['link'])).toEqual(['webauthn']);
 		// Nothing to suggest, or nothing known.
 		expect(wayBackNudge({ auth: ['token'] }, ['token'])).toBeUndefined();
 		expect(wayBackNudge({ auth: ['webauthn'] }, undefined)).toBeUndefined();
@@ -73,5 +76,6 @@ describe('ways back into an account', () => {
 		expect(addError(Object.assign(new Error('denied'), { code: -32001 }))).toMatch(/address may belong to another account/);
 		expect(addError(Object.assign(new Error('denied'), { code: -32001 }), 'external')).toMatch(/belong to another account/);
 		expect(addError(new Error('Rate limited'))).toBe('Rate limited');
+		expect(addError(Object.assign(new Error('denied'), { code: -32001 }), 'link')).toMatch(/for signing in rather than adding/);
 	});
 });

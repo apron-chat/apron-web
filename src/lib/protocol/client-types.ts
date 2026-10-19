@@ -197,11 +197,13 @@ export interface ClientSnapshot {
 	passkeySession?: boolean;
 	/**
 	 * How this browser signed in to that account: `token` means a kept token
-	 * is its only way back in here, worth adding another way to (§3.2.1).
+	 * is its only way back in here, worth adding another way to (§3.2.1);
+	 * `link`, an email or an external sign-in, not known which (a link of no
+	 * proposal made here, on a server that offers both).
 	 */
-	signedInWith?: 'webauthn' | 'email' | 'external' | 'token';
+	signedInWith?: 'webauthn' | 'email' | 'external' | 'link' | 'token';
 	/** How this browser can get back into the account: how it signed in, then what it added (§4.10, §4.11). */
-	signInMethods?: Array<'webauthn' | 'email' | 'external' | 'token'>;
+	signInMethods?: Array<'webauthn' | 'email' | 'external' | 'link' | 'token'>;
 	/**
 	 * A registered session is kept for this server (a token to resume with),
 	 * whether or not this connection has resumed it yet.

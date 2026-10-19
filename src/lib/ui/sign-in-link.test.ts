@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Proposal } from '$lib/protocol/proposals';
-import { codeStillFor, linkUse, parseSignInLink, returnUrl, runSignInLink, signInLinkPrompt, takeSignInLink, type SignInLinkClient } from './sign-in-link';
+import { askedLinkFailure, codeStillFor, linkUse, parseSignInLink, returnUrl, runSignInLink, sessionSettled, signInLinkPrompt, takeSignInLink, type SignInLinkClient } from './sign-in-link';
 
 describe('sign-in links (§4.11.2)', () => {
 	it('reads the token, and the optional state and server, from the fragment', () => {
@@ -63,6 +63,40 @@ describe('sign-in links (§4.11.2)', () => {
 		expect(elsewhere.lines[0]).toMatch(/not Chat/);
 		// A kept session that hasn't resumed yet is still named.
 		expect(signInLinkPrompt(link, { url: 'wss://chat.example/', keptSession: true }).lines[0]).toMatch(/saved session here/);
+	});
+
+	it('offers to add a link of no proposal here to the account signed in on its server, or to sign in with it', () => {
+		const link = { token: '1' };
+		const both = signInLinkPrompt(link, { url: 'wss://chat.example/', signedInAs: 'Ada (@ada)', addAs: 'Ada (@ada)' });
+		expect(both.adds).toBe(true);
+		expect(both.title).toBe('Use this link on chat.example?');
+		expect(both.lines.join(' ')).toMatch(/add this way of signing in to Ada \(@ada\)/);
+		expect(both.lines.join(' ')).toMatch(/signs you out of Ada \(@ada\)/);
+		expect(both.lines.join(' ')).toMatch(/their account/);
+		// Only on that server: on another, the page isn't signed in to anything the link could add to.
+		const elsewhere = signInLinkPrompt({ ...link, server: 'wss://other.example/' }, { url: 'wss://chat.example/', addAs: 'Ada (@ada)' });
+		expect(elsewhere.adds).toBe(false);
+		expect(elsewhere.title).toBe('Sign in to other.example with this link?');
+		expect(signInLinkPrompt(link, { url: 'wss://chat.example/' }).adds).toBe(false);
+		// A refused one says it may have been for adding, and where that works; not to send a new code.
+		expect(askedLinkFailure('Invalid token')).toMatch(/Invalid token.*add a way of signing in.*where you’re signed in to that account/);
+		expect(askedLinkFailure('Invalid token')).not.toMatch(/code/);
+	});
+
+	it('waits for a kept session’s resume to settle before an addition’s link is given up on', () => {
+		const server = { apron: 9, auth: ['email', 'token', 'guest'], capabilities: [] };
+		const base = { status: 'connected' as const, authenticated: false, server };
+		expect(sessionSettled({ ...base, authenticated: true })).toBe(true);
+		expect(sessionSettled({ ...base, authenticated: true, authBusy: true })).toBe(false);
+		expect(sessionSettled({ ...base, status: 'reconnecting', authenticated: true })).toBe(false);
+		// Still resuming: no error yet, or one (a limit) while the resume is retried.
+		expect(sessionSettled({ ...base, keptSession: true })).toBe(false);
+		expect(sessionSettled({ ...base, keptSession: true, error: 'Slow down' })).toBe(false);
+		// Past resuming: refused (held), or nothing to resume and failed.
+		expect(sessionSettled({ ...base, held: true, error: 'Session expired' })).toBe(true);
+		expect(sessionSettled({ ...base, error: 'Sign in with your email from the connect screen.' })).toBe(true);
+		expect(sessionSettled({ ...base, server: { ...server, auth: ['email'] }, keptSession: true, error: 'No token resume' })).toBe(true);
+		expect(sessionSettled(base)).toBe(false);
 	});
 
 	it('returns an external sign-in to this app’s own path', () => {
