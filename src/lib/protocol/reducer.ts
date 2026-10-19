@@ -28,7 +28,7 @@ export interface TimelineState {
 	 */
 	reactions: Readonly<Record<string, ReactionSummary[]>>;
 	/**
-	 * The room's membership records (§4.3.2) as logged, each at its own
+	 * The room's membership records (§4.2.2) as logged, each at its own
 	 * `log_id`, ascending: what join and leave lines are drawn from. Unlike the
 	 * member list, superseded records stay: every change keeps its place.
 	 */
@@ -120,16 +120,17 @@ interface MembershipLog {
 }
 
 /**
- * The client-side record stores (PROTOCOL.md §2): one room record per
+ * The client-side record stores (PROTOCOL.md §2.3): one room record per
  * `room_id`, one message snapshot per `message_id`, one reaction set per
  * `(message_id, user_id)`, one membership per `(room_id, user_id)`. Every
  * record replaces the stored one only when its `log_id` is numerically
- * greater, regardless of source or arrival order; a room record without
+ * greater, or it is a tombstone replacing a message at the same `log_id`,
+ * regardless of source or arrival order; a room record without
  * `log_id` (a server without capability `history`) always replaces. Messages are
  * indexed by their current `room_id`, so a move snapshot re-homes a message
  * instead of duplicating it.
  *
- * A room's member list starts from a complete `members` listing (§4.3.2),
+ * A room's member list starts from a complete `members` listing (§4.2.2),
  * which reflects every membership up to the room's `latest_log_id` at the
  * time, and memberships above that apply on top.
  *
@@ -253,10 +254,17 @@ export class ProtocolStore {
 		return renames;
 	}
 
-	/** Install a message snapshot by the replay rule, re-homing it on a move. */
+	/**
+	 * Install a message snapshot by the replay rule, re-homing it on a move. At
+	 * an equal `log_id` a tombstone wins (§2.3), as a redacted copy does over an
+	 * embedded one taken before redaction (§4.4).
+	 */
 	putMessage(record: MessageRecord): boolean {
 		const current = this.messageRecords.get(record.message_id);
-		if (current && compareLogIds(record.log_id, current.log_id) <= 0) return false;
+		if (current) {
+			const order = compareLogIds(record.log_id, current.log_id);
+			if (order < 0 || (order === 0 && (record.deleted !== true || current.deleted === true))) return false;
+		}
 		if (current && current.room_id !== record.room_id) {
 			this.unhome(current.room_id, current.message_id);
 		}
@@ -278,8 +286,8 @@ export class ProtocolStore {
 	}
 
 	/**
-	 * Start a room's member list from a complete `members` listing (§4.3.1,
-	 * §4.3.3), current as of the room's `latest_log_id` in it (`asOf`).
+	 * Start a room's member list from a complete `members` listing (§4.2.1,
+	 * §4.2.3), current as of the room's `latest_log_id` in it (`asOf`).
 	 * Memberships received with a greater `log_id` stay on top of it.
 	 */
 	seedMembers(roomId: string, members: readonly Identity[], asOf?: string): void {
@@ -296,7 +304,7 @@ export class ProtocolStore {
 	}
 
 	/**
-	 * Install one user's membership by the replay rule (§4.3.2). Returns whether
+	 * Install one user's membership by the replay rule (§4.2.2). Returns whether
 	 * it changed the room's members. The entry is also kept in the room's
 	 * membership log at its `log_id`, superseded or not.
 	 */
@@ -455,7 +463,7 @@ export function emptyRecords(): DecodedRecords {
 }
 
 /**
- * Decode every record in a history result (§4.2): room records, message
+ * Decode every record in a history result (§4.3): room records, message
  * snapshots, reaction sets, memberships, and embedded snapshots. A missing
  * array is empty. Records are not filtered by the requested room: a move
  * snapshot carries its destination `room_id`.

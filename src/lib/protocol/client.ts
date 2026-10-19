@@ -1,7 +1,8 @@
 import { describeError, logPasskeyFailure, type PasskeyStage } from './passkey-diagnostics';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
 import { WriteError, writeEmbed } from './embeds';
-import { EmailConnection, type RpcFailure } from './email-connection';
+import { SignInConnection, type RpcFailure } from './signin-connection';
+import { PROPOSAL_KEPT_MS, findProposal, forgetProposal, newProposalState, rememberProposal, signInPageUrl, type ProposalScheme } from './proposals';
 import {
 	ProtocolStore,
 	compareLogIds,
@@ -134,7 +135,7 @@ export {
 } from './client-views';
 
 /**
- * A browser-only Apron protocol v8 session; instantiate one per mounted UI.
+ * A browser-only Apron protocol v9 session; instantiate one per mounted UI.
  *
  * State model: one store of room records, message snapshots, reaction sets,
  * and memberships shared by every room (PROTOCOL.md §2), projected per visible
@@ -173,16 +174,16 @@ export class ChatClient {
 	private readonly uploads = new Map<string, UploadState>();
 	/** A 415 on a file that isn't an image: this server takes images only. */
 	private imageOnlyUploads = false;
-	/** Rooms whose `members` the server truncated (§4.3.1): the total it gave with them. */
+	/** Rooms whose `members` the server truncated (§4.2.1): the total it gave with them. */
 	private readonly memberCounts = new Map<string, number>();
-	/** This server answered adding or removing another user `unsupported` (§4.3.2). */
+	/** This server answered adding or removing another user `unsupported` (§4.2.2). */
 	private memberChangesUnsupported = false;
 	/** Transient notices per room, for the session (§3.5). */
 	private readonly notices = new Map<string, Notice[]>();
 	/** Notices that arrived before there was a room to show them in; the first room shown takes them. */
 	private orphanNotices: Array<{ from: Identity; body?: MessageBody; welcome?: boolean }> = [];
 	private noticeCount = 0;
-	/** Nobody is attending this page (§4.5 `idle`), as the page says (setIdle), and when it was last used, if known. */
+	/** Nobody is attending this page (§4.5 `idle`), as the page says (setIdle), and since when: its last use, else when it said so. */
 	private idle = false;
 	private idleInputAt: number | undefined;
 	/**
@@ -191,10 +192,9 @@ export class ChatClient {
 	 * unanswered, which the server may or may not have applied. `sending` is
 	 * the `status` request in flight, one at a time; `retry` waits out a
 	 * `retry_after`, or a backoff after another failure (`failures` in a
-	 * row), before the current state goes again. `boolean` once the server
-	 * refused `idle` as seconds: it gets `true` instead.
+	 * row), before the current state goes again.
 	 */
-	private idleReport: { connection: number; applied: boolean | undefined; sending?: boolean; retry?: ReturnType<typeof setTimeout>; failures?: number; boolean?: boolean } | undefined;
+	private idleReport: { connection: number; applied: boolean | undefined; sending?: boolean; retry?: ReturnType<typeof setTimeout>; failures?: number } | undefined;
 	/**
 	 * Your notifications are paused until (§4.5 `mute` without `room_id`), as
 	 * the server's last `status` said: epoch milliseconds, or `true`;
@@ -242,13 +242,13 @@ export class ChatClient {
 	 * Rooms kept from a lost connection with their records, floors and
 	 * checkpoints. Hidden until joined again on the next connection, when
 	 * recovery resumes from the checkpoint instead of paging all retained
-	 * history (§4.2).
+	 * history (§4.3).
 	 */
 	private readonly retainedRooms = new Map<string, RoomState>();
 	/**
 	 * The joined rooms kept from the last connection were its whole joined set
 	 * (its `room_list` arrived): a reconnect as the same identity may then list
-	 * only what changed since their checkpoints (`latest_log_id`, §4.3.1).
+	 * only what changed since their checkpoints (`latest_log_id`, §4.2.1).
 	 */
 	private joinedComplete = false;
 	/** The identity whose joined rooms are kept from the last connection. */
@@ -296,29 +296,30 @@ export class ChatClient {
 	/** A tap started a passkey ceremony, which is waiting for its turn (`readyToSignIn`): busy from the tap on. */
 	private passkeyStarting?: AbortController;
 	/**
-	 * An email sign-in proposal (§4.11) waiting for its code, on a connection
-	 * of its own that is not signed in (see `requestEmailCode`).
+	 * A sign-in proposal (§4.11) waiting for its code, on a connection of its
+	 * own that is not signed in (see `requestEmailCode`, `proposeExternal`).
 	 */
-	private emailProposal?: { connection: EmailConnection; email: string; proposed: boolean };
-	/** Every email connection still open (a proposal's, a link's), to close on `stop()`. */
-	private readonly emailConnections = new Set<EmailConnection>();
-	/** An email approval has been sent and not answered. */
-	private emailInFlight = false;
+	private signInProposal?: SignInProposal;
+	/** Every sign-in connection still open (a proposal's, a link's), to close on `stop()`. */
+	private readonly signInConnections = new Set<SignInConnection>();
+	/** A sign-in approval has been sent and not answered. */
+	private approvalInFlight = false;
 	/**
-	 * The connection (`connectionId`) that proposed adding an address, which
-	 * alone can approve it; cleared when that connection signs in again or
-	 * becomes another identity, so an address is never recorded as added to
-	 * an account other than the one that proposed it.
+	 * A proposal to add to the signed-in account (§4.11), made on the
+	 * connection `connection` (a `connectionId`), which alone takes its code;
+	 * cleared when the connection signs in again or becomes another identity,
+	 * so nothing is recorded as added to an account other than `account`, the
+	 * one that proposed it.
 	 */
-	private addProposalConnection?: number;
-	/** `addEmail` holds the sign-in guard: busy, but not with a passkey. */
-	private addingEmail = false;
+	private addition?: { scheme: ProposalScheme; state: string; account: string; connection: number };
+	/** `addWithCode` or `addWithLink` holds the sign-in guard: busy, but not with a passkey. */
+	private adding = false;
 	/**
 	 * How this browser signed in to the kept session, remembered with its
-	 * token: `email` resumes with the token or else reports the session signed
-	 * out (never a passkey prompt or a guest); `token` alone (pasted, an
-	 * invite, or a guest token) is the one way back in, worth adding a
-	 * passkey or an email to (§3.2).
+	 * token: `email` and `external` resume with the token or else report the
+	 * session signed out (never a passkey prompt or a guest); `token` alone
+	 * (pasted, an invite, or a guest token) is the one way back in, worth
+	 * adding another way to (§3.2.1).
 	 */
 	private signedInWith?: SignInMethod;
 	/** Ways back into the account this browser added to it since (§4.10, §4.11), kept beside the token. */
@@ -489,8 +490,8 @@ export class ChatClient {
 			request.reject(new Error('Connection stopped'));
 		}
 		this.requests.clear();
-		this.emailProposal = undefined;
-		for (const connection of [...this.emailConnections]) connection.close(new Error('Connection stopped'));
+		this.signInProposal = undefined;
+		for (const connection of [...this.signInConnections]) connection.close(new Error('Connection stopped'));
 		if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'client stopped');
 		this.status = 'offline';
 		this.emit();
@@ -575,12 +576,12 @@ export class ChatClient {
 		return {
 			status: this.status,
 			authenticated: this.authenticated,
-			authBusy: Boolean(this.passkeyAbort || this.passkeyStarting || this.emailInFlight),
-			...(this.emailProposal?.proposed ? { emailCode: { email: this.emailProposal.email, url: this.emailProposal.connection.url } } : {}),
+			authBusy: Boolean(this.passkeyAbort || this.passkeyStarting || this.approvalInFlight),
+			...(this.signInProposal?.proposed ? { signInCode: signInCodeOf(this.signInProposal) } : {}),
 			passkeySession: Boolean(this.registeredSession && this.authenticated),
 			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith, signInMethods: [this.signedInWith, ...[...this.addedMethods].filter((method) => method !== this.signedInWith)] } : {}),
 			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
-			...(this.passkeyAbort ? { passkeyBusy: !this.addingEmail } : {}),
+			...(this.passkeyAbort ? { passkeyBusy: !this.adding } : {}),
 			readOnly: this.authenticated && !this.registeredSession && !serverSettings(this.server).guest_posting,
 			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
 			...(this.mutedUntil !== undefined ? { mutedUntil: this.mutedUntil } : {}),
@@ -747,135 +748,185 @@ export class ChatClient {
 
 	/**
 	 * Proposes signing in with `email` on the server at `url` (this client's
-	 * by default), which then emails a code (§4.11). The proposal goes on a
-	 * connection of its own that is not signed in, since one on a signed-in
-	 * connection (a guest's too) proposes adding the address instead, and
-	 * that connection stays open for `signInWithEmail`: a short code works
-	 * only on the connection that proposed it. This connection, its rooms,
-	 * identity and pending requests are left as they are meanwhile. It
+	 * by default), which then emails a code and a link (§4.11.4). The
+	 * proposal goes on a connection of its own that is not signed in, since one
+	 * on a signed-in connection (a guest's too) proposes adding the address
+	 * instead, and that connection stays open for `signInWithCode`: a short
+	 * code works only on the connection that proposed it. This connection, its
+	 * rooms, identity and pending requests are left as they are meanwhile. It
 	 * resolves alike whether or not the address has an account. A newer
-	 * proposal replaces the last, which closes.
+	 * proposal replaces the last, whose connection closes; the server keeps
+	 * the proposal itself, so its link still works (`signInWithLink`).
 	 */
 	async requestEmailCode(email: string, url = this.serverUrl): Promise<void> {
 		const address = email.trim();
 		if (!address) throw new Error('Enter your email address');
-		if (url === this.serverUrl && this.server && !this.offers('email')) throw new Error('This server does not support email sign-in');
-		this.emailProposal?.connection.close(new Error('Superseded by another request'));
-		const connection = this.openEmailConnection(url);
-		const proposal = { connection, email: address, proposed: false };
-		this.emailProposal = proposal;
+		await this.proposeSignIn('email', url, { email: address });
+	}
+
+	/**
+	 * Proposes an external sign-in (§4.11.5) on the server at `url` (this
+	 * client's by default), on a connection of its own as `requestEmailCode`
+	 * does, and resolves with the server's page to open. With `returnUrl`
+	 * (this page), the page sends the user back there with a link (`returns`),
+	 * and the connection, which a link doesn't need, closes. A server that
+	 * refuses that `return_url` is asked again without one: its page then
+	 * shows a code, for `signInWithCode` on the connection kept open for it.
+	 */
+	async proposeExternal(returnUrl: string | undefined, url = this.serverUrl): Promise<{ page: string; returns: boolean }> {
+		const proposed = await this.proposeSignIn('external', url, returnUrl ? { return_url: returnUrl } : {});
+		return { page: proposed.page ?? '', returns: proposed.returns };
+	}
+
+	/**
+	 * A sign-in proposal (§4.11.1) on a connection of its own to `url`,
+	 * carrying a new `state` that is remembered first, with its server: a
+	 * link that comes back with it is known for this browser's own.
+	 */
+	private async proposeSignIn(scheme: ProposalScheme, url: string, params: JsonObject): Promise<{ page?: string; returns: boolean }> {
+		const unsupported = NOT_OFFERED[scheme];
+		if (url === this.serverUrl && this.server && !this.offers(scheme)) throw new Error(unsupported);
+		this.signInProposal?.connection.close(new Error('Superseded by another request'));
+		const connection = this.openSignInConnection(url);
+		const state = newProposalState();
+		const email = typeof params.email === 'string' ? params.email : undefined;
+		const proposal: SignInProposal = { connection, scheme, state, ...(email ? { email } : {}), proposed: false };
+		this.signInProposal = proposal;
 		connection.onClose = () => {
-			this.emailConnections.delete(connection);
-			if (this.emailProposal !== proposal) return;
-			this.emailProposal = undefined;
+			this.signInConnections.delete(connection);
+			if (this.signInProposal !== proposal) return;
+			this.signInProposal = undefined;
 			this.emit();
 		};
+		let proposed: { page?: string; returns: boolean };
 		try {
 			await connection.ready;
-			if (!connection.offers('email')) throw new Error('This server does not support email sign-in');
-			await connection.auth({ scheme: 'email', email: address });
+			if (!connection.offers(scheme)) throw new Error(unsupported);
+			// Remembered before it goes out: its link may come back before its result does.
+			rememberProposal({ scheme, kind: 'sign-in', url, state, ...(email ? { email } : {}), expires: this.now() + PROPOSAL_KEPT_MS }, this.now());
+			proposed = await proposeWith(scheme, params, state, (request) => connection.auth(request));
 		} catch (cause) {
 			connection.close();
 			throw cause;
 		}
 		if (connection.closed) throw connection.closed;
+		if (proposed.returns) {
+			// The token comes back in a link, which works on any connection that is not signed in.
+			this.closeSignInConnection(connection);
+			return proposed;
+		}
+		if (proposed.page) proposal.page = proposed.page;
 		proposal.proposed = true;
 		this.emit();
+		return proposed;
 	}
 
-	/** A connection of its own for an email sign-in, closed on `stop()` if still open. */
-	private openEmailConnection(url: string): EmailConnection {
-		const connection = EmailConnection.open(this.webSocketFactory, url);
-		this.emailConnections.add(connection);
-		connection.onClose = () => this.emailConnections.delete(connection);
+	/** A connection of its own for an email or external sign-in, closed on `stop()` if still open. */
+	private openSignInConnection(url: string): SignInConnection {
+		const connection = SignInConnection.open(this.webSocketFactory, url);
+		this.signInConnections.add(connection);
+		connection.onClose = () => this.signInConnections.delete(connection);
 		return connection;
 	}
 
 	/**
-	 * Signs in with the code emailed for the open proposal (`requestEmailCode`,
-	 * §4.11), approving it on the connection that proposed it. That
-	 * connection, now signed in, becomes this client's connection, on the
-	 * proposal's server; the identity the result names replaces any before,
-	 * and the bearer `token` in it resumes the session on later connections
-	 * (§3.2). `beforeSwitch` runs just before, so a view held for the previous
-	 * session can go first. A `name` becomes the display name, and the `me`
-	 * request sent for it is returned, as with `usePasskey`. A wrong code
-	 * leaves the proposal open to try again, until the server gives up on it.
+	 * Signs in with the code for the open proposal (`requestEmailCode`, or
+	 * `proposeExternal` without a return, §4.11), approving it on the
+	 * connection that proposed it. That connection, now signed in, becomes
+	 * this client's connection, on the proposal's server; the identity the
+	 * result names replaces any before, and the bearer `token` in it resumes
+	 * the session on later connections (§3.2.1). `beforeSwitch` runs just
+	 * before, so a view held for the previous session can go first. A `name`
+	 * becomes the display name, and the `me` request sent for it is returned,
+	 * as with `usePasskey`. A wrong code leaves the proposal open to try
+	 * again, until the server gives up on it. Once that connection has closed
+	 * a code has nowhere to go (a short one works only there), though the
+	 * proposal's link still does.
 	 */
-	async signInWithEmail(code: string, name?: string, beforeSwitch?: () => void): Promise<OperationHandle | undefined> {
+	async signInWithCode(code: string, name?: string, beforeSwitch?: () => void): Promise<OperationHandle | undefined> {
 		const token = code.trim();
-		if (!token) throw new Error('Enter the code from the email');
-		const proposal = this.emailProposal;
+		const proposal = this.signInProposal;
+		if (!token) throw new Error(proposal?.scheme === 'external' ? 'Enter the code from the sign-in page' : 'Enter the code from the email');
 		if (!proposal?.proposed || proposal.connection.closed) throw new Error('The request for this code is no longer open. Send a new code.');
-		return this.approveEmail(proposal.connection, token, name, beforeSwitch, true);
+		return this.approveSignIn(proposal.connection, proposal.scheme, token, { name, beforeSwitch, retryable: true, state: proposal.state });
 	}
 
 	/**
-	 * Signs in with the token from an emailed link (§4.11), which the viewer
-	 * has confirmed: it is presented on a fresh connection to `url` (this
-	 * client's server by default) that is not signed in, which then becomes
-	 * this client's connection as with `signInWithEmail`. A refused link
-	 * changes nothing here.
+	 * Signs in with the token of a sign-in link (§4.11.2): one with the
+	 * `state` of a proposal this browser made, or one the viewer confirmed.
+	 * It is presented on a fresh connection to `url` (this client's server by
+	 * default) that is not signed in, which then becomes this client's
+	 * connection as with `signInWithCode`. The approval uses `scheme`, the
+	 * proposal's, or else a scheme that server offers: either works
+	 * (§4.11.3). A refused link changes nothing here.
 	 */
-	async signInWithEmailLink(token: string, url = this.serverUrl, beforeSwitch?: () => void): Promise<OperationHandle | undefined> {
+	async signInWithLink(
+		token: string, url = this.serverUrl, options: { scheme?: ProposalScheme; state?: string; beforeSwitch?: () => void } = {}
+	): Promise<OperationHandle | undefined> {
 		const secret = token.trim();
 		if (!secret) throw new Error('The link has no token');
-		// Checked before a connection opens, and again (by approveEmail) once it is ready.
-		this.checkEmailApproval();
-		const connection = this.openEmailConnection(url);
+		// Checked before a connection opens, and again (by approveSignIn) once it is ready.
+		this.checkApproval();
+		const connection = this.openSignInConnection(url);
+		let scheme: ProposalScheme;
 		try {
 			await connection.ready;
-			if (!connection.offers('email')) throw new Error('This server does not support email sign-in');
+			const offered = PROPOSAL_SCHEMES.filter((candidate) => connection.offers(candidate));
+			if (!offered.length) throw new Error('This server does not support sign-in links');
+			scheme = options.scheme && offered.includes(options.scheme) ? options.scheme : offered[0];
 		} catch (cause) {
 			connection.close();
 			throw cause;
 		}
-		return this.approveEmail(connection, secret, undefined, beforeSwitch, false);
+		return this.approveSignIn(connection, scheme, secret, { beforeSwitch: options.beforeSwitch, retryable: false, state: options.state });
 	}
 
-	/** Throws unless an email approval may start now: the client runs, and none is in flight. */
-	private checkEmailApproval(): void {
+	/** Throws unless a sign-in approval may start now: the client runs, and none is in flight. */
+	private checkApproval(): void {
 		if (!this.running) throw new Error('Connect to the server first');
-		if (this.emailInFlight) throw new Error('Already signing in; wait for it to finish');
+		if (this.approvalInFlight) throw new Error('Already signing in; wait for it to finish');
 	}
 
-	/** Approves an email sign-in on `connection` and carries on with it (see `signInWithEmail`). */
-	private async approveEmail(
-		connection: EmailConnection, token: string, name: string | undefined, beforeSwitch: (() => void) | undefined, retryable: boolean
+	/** Approves a sign-in on `connection` and carries on with it (see `signInWithCode`). */
+	private async approveSignIn(
+		connection: SignInConnection, scheme: ProposalScheme, token: string,
+		options: { name?: string; beforeSwitch?: () => void; retryable: boolean; state?: string }
 	): Promise<OperationHandle | undefined> {
 		try {
-			this.checkEmailApproval();
+			this.checkApproval();
 		} catch (cause) {
 			// A link's connection is used once: nothing else would close it. A proposal stays open for the code.
-			if (!retryable) this.closeEmailConnection(connection);
+			if (!options.retryable) this.closeSignInConnection(connection);
 			throw cause;
 		}
-		this.emailInFlight = true;
+		this.approvalInFlight = true;
 		this.emit();
 		try {
 			let result: JsonObject;
 			try {
-				result = await connection.auth({ scheme: 'email', token });
+				result = await connection.auth({ scheme, token });
 			} catch (cause) {
 				// A wrong code may be retyped on the same proposal; anything else ends it.
-				if (!retryable || (cause as RpcFailure).code !== -32001 || connection.closed) this.closeEmailConnection(connection);
+				if (!options.retryable || (cause as RpcFailure).code !== -32001 || connection.closed) this.closeSignInConnection(connection);
 				throw cause;
 			}
 			if (!isIdentity(result.you)) {
-				this.closeEmailConnection(connection);
+				this.closeSignInConnection(connection);
 				throw new Error('Server authentication response did not include an identity');
 			}
 			if (!this.running) {
-				this.closeEmailConnection(connection);
+				this.closeSignInConnection(connection);
 				throw new Error('Connection stopped');
 			}
-			if (this.emailProposal?.connection === connection) this.emailProposal = undefined;
-			beforeSwitch?.();
-			if (name?.trim()) this.displayName = name.trim();
-			this.adoptSignedIn(connection, result);
+			// Approval used the proposal up (§4.11.1).
+			if (options.state) forgetProposal(options.state, this.now());
+			if (this.signInProposal?.connection === connection) this.signInProposal = undefined;
+			options.beforeSwitch?.();
+			if (options.name?.trim()) this.displayName = options.name.trim();
+			this.adoptSignedIn(connection, result, scheme);
 			return this.authNameRequest;
 		} finally {
-			this.emailInFlight = false;
+			this.approvalInFlight = false;
 			this.emit();
 		}
 	}
@@ -887,9 +938,9 @@ export class ChatClient {
 	 * server if another, and the connection's `server` frame, the sign-in's
 	 * result, and the frames since are taken as if they had arrived here.
 	 */
-	private adoptSignedIn(connection: EmailConnection, result: JsonObject): void {
+	private adoptSignedIn(connection: SignInConnection, result: JsonObject, scheme: ProposalScheme): void {
 		const { socket, server, frames } = connection.detach();
-		this.emailConnections.delete(connection);
+		this.signInConnections.delete(connection);
 		if (connection.url !== this.serverUrl) this.switchServer(connection.url);
 		this.connectionProbe?.abort();
 		this.reconnectHeld = false;
@@ -915,88 +966,152 @@ export class ChatClient {
 		// Already signed in: the `server` frame is only taken in, not answered with an `auth`.
 		this.authRequested = true;
 		this.handleServer(server);
-		if (!this.handleAuth(result, 'email')) this.authRequested = false;
+		if (!this.handleAuth(result, scheme)) this.authRequested = false;
 		for (const frame of frames) {
 			if (this.isCurrentSocket(id, socket)) this.handleMessage(frame);
 		}
 	}
 
-	/** Drops the open email sign-in proposal, if any, closing its connection: its code can no longer be used. */
-	cancelEmailCode(): void {
-		const proposal = this.emailProposal;
-		this.emailProposal = undefined;
+	/**
+	 * Gives up the open sign-in proposal's code, if any, closing its
+	 * connection: a code can no longer be typed for it. The server keeps the
+	 * proposal until it expires, so its link still signs in.
+	 */
+	cancelSignInCode(): void {
+		const proposal = this.signInProposal;
+		this.signInProposal = undefined;
 		proposal?.connection.close();
 		if (proposal) this.emit();
 	}
 
 	/** Closes `connection`, and forgets the open proposal if it was that one's. */
-	private closeEmailConnection(connection: EmailConnection): void {
-		if (this.emailProposal?.connection === connection) this.emailProposal = undefined;
+	private closeSignInConnection(connection: SignInConnection): void {
+		if (this.signInProposal?.connection === connection) this.signInProposal = undefined;
 		connection.close();
 	}
 
 	/**
 	 * Proposes adding `email` to the signed-in account (§4.11), guests
 	 * included: on this connection, which is signed in, a proposal adds
-	 * rather than signs in. `addEmail` approves it, on this same connection.
+	 * rather than signs in. `addWithCode` approves it, on this same
+	 * connection; its link, `addWithLink`.
 	 */
 	async requestEmailCodeToAdd(email: string): Promise<void> {
 		const address = email.trim();
-		if (!this.server?.auth.includes('email')) throw new Error('This server does not sign in with email, so an address can’t be added');
-		if (!this.authenticated) throw new Error('Sign in first');
+		this.checkAddition('email');
 		if (!address) throw new Error('Enter your email address');
-		const connection = this.connectionId;
-		await this.enqueueRequest('auth', { scheme: 'email', email: address }, { visible: false, allowBeforeAuth: false }).promise;
-		this.addProposalConnection = connection;
+		await this.proposeAddition('email', { email: address });
 	}
 
 	/**
-	 * Adds the address proposed with `requestEmailCodeToAdd` to the signed-in
-	 * account (§4.11), approving the proposal with the emailed code on the
-	 * connection that made it. The result is `{}`: the identity is unchanged,
-	 * and the address is one more way back into the account. Only an explicit
-	 * action does this; an emailed link always signs in.
+	 * Proposes adding an external identity to the signed-in account
+	 * (§4.11.5), on this connection, and resolves with the server's page to
+	 * open. With `returnUrl` the page comes back with a link for
+	 * `addWithLink` (`returns`); a server that refuses it is asked again
+	 * without, and its page shows a code for `addWithCode`.
 	 */
-	async addEmail(code: string): Promise<void> {
+	async proposeExternalToAdd(returnUrl?: string): Promise<{ page: string; returns: boolean }> {
+		this.checkAddition('external');
+		const proposed = await this.proposeAddition('external', returnUrl ? { return_url: returnUrl } : {});
+		return { page: proposed.page ?? '', returns: proposed.returns };
+	}
+
+	/** Throws unless the signed-in account can add `scheme` here: a way to sign in (`auth`), not only to join. */
+	private checkAddition(scheme: ProposalScheme): void {
+		if (!this.server?.auth.includes(scheme)) throw new Error(scheme === 'email' ? 'This server does not sign in with email, so an address can’t be added' : 'This server does not sign in with an external page, so none can be added');
+		if (!this.authenticated || !this.you) throw new Error('Sign in first');
+	}
+
+	/** An addition proposal (§4.11.1) on this connection, with a new `state` remembered for the account first. */
+	private async proposeAddition(scheme: ProposalScheme, params: JsonObject): Promise<{ page?: string; returns: boolean }> {
+		const connection = this.connectionId;
+		const account = this.you!.user_id;
+		const state = newProposalState();
+		const email = typeof params.email === 'string' ? params.email : undefined;
+		rememberProposal({ scheme, kind: 'addition', url: this.serverUrl, state, account, ...(email ? { email } : {}), expires: this.now() + PROPOSAL_KEPT_MS }, this.now());
+		const proposed = await proposeWith(scheme, params, state, (request) => this.enqueueRequest('auth', request, { visible: false, allowBeforeAuth: false }).promise);
+		// Proposed by another account than this connection is now: it isn't this one's to approve.
+		if (connection !== this.connectionId || this.you?.user_id !== account) throw new Error('The connection or account changed meanwhile; try again');
+		this.addition = { scheme, state, account, connection };
+		return proposed;
+	}
+
+	/**
+	 * Adds to the signed-in account with the code for the addition proposed
+	 * here (`requestEmailCodeToAdd`, `proposeExternalToAdd`, §4.11.3), on the
+	 * connection that proposed it: a short code works only there. The result
+	 * is `{}`: the identity is unchanged, and the address or the external
+	 * identity is one more way back into the account. Only an explicit action
+	 * does this; a link without the `state` of this browser's addition always
+	 * signs in.
+	 */
+	async addWithCode(code: string): Promise<ProposalScheme> {
 		const token = code.trim();
-		if (!this.server?.auth.includes('email')) throw new Error('This server does not sign in with email, so an address can’t be added');
-		if (!this.authenticated) throw new Error('Sign in first');
+		const addition = this.addition;
+		this.checkAddition(addition?.scheme ?? 'email');
 		if (!token) throw new Error('Enter the code you were sent');
-		if (this.addProposalConnection !== this.connectionId) throw new Error('The connection or account changed since the code was sent. Send a new code.');
+		if (!addition || addition.connection !== this.connectionId) throw new Error('The connection or account changed since the code was sent. Send a new code.');
+		await this.approveAddition(addition.scheme, token, addition.state);
+		return addition.scheme;
+	}
+
+	/**
+	 * Adds to the signed-in account with the token of a link that carries the
+	 * `state` of an addition this browser proposed (§4.11.3): only on a
+	 * connection signed in to the account that proposed it, on its server,
+	 * which needn't be the connection that proposed it.
+	 */
+	async addWithLink(token: string, state: string): Promise<ProposalScheme> {
+		const proposal = findProposal(state, this.now());
+		if (proposal?.kind !== 'addition' || !proposal.account) throw new Error('This browser asked for no such addition, or it has expired');
+		if (proposal.url !== this.serverUrl || !this.authenticated || this.you?.user_id !== proposal.account) {
+			throw new Error(`The link adds to @${proposal.account}, which this page isn’t signed in as`);
+		}
+		this.checkAddition(proposal.scheme);
+		if (!token.trim()) throw new Error('The link has no token');
+		await this.approveAddition(proposal.scheme, token.trim(), state);
+		return proposal.scheme;
+	}
+
+	/** Approves an addition on this connection, holding the sign-in guard meanwhile (see `addWithCode`). */
+	private async approveAddition(scheme: ProposalScheme, token: string, state: string): Promise<void> {
 		if (this.passkeyStarting) throw new Error('Already signing in; finish or cancel that first');
 		await this.readyToSignIn();
+		const account = this.you?.user_id;
 		const controller = new AbortController();
 		this.passkeyAbort = controller;
-		this.addingEmail = true;
+		this.adding = true;
 		const connection = this.connectionId;
 		this.emit();
 		try {
-			await this.passkeyRequest({ scheme: 'email', token });
-			if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
-			this.addProposalConnection = undefined;
+			await this.passkeyRequest({ scheme, token });
+			if (controller.signal.aborted || connection !== this.connectionId || this.you?.user_id !== account) throw new Error('Connection changed; try again');
+			forgetProposal(state, this.now());
+			if (this.addition?.state === state) this.addition = undefined;
 			this.cancelPasskey();
-			this.noteEmailAdded();
+			this.noteWayAdded(scheme);
 		} finally {
-			this.addingEmail = false;
+			this.adding = false;
 			if (this.passkeyAbort === controller) this.cancelPasskey();
 			this.emit();
 		}
 	}
 
 	/**
-	 * An address added to the signed-in account: another way back into a
-	 * registered session, or, for a guest, the way back into an account that
-	 * is now a registered one (its guest token, if any, still resumes it).
+	 * An address or an external identity added to the signed-in account:
+	 * another way back into a registered session, or, for a guest, the way
+	 * back into an account that is now a registered one (its guest token, if
+	 * any, still resumes it).
 	 */
-	private noteEmailAdded(): void {
+	private noteWayAdded(scheme: ProposalScheme): void {
 		if (this.registeredSession) {
 			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
-			this.noteAdded('email');
+			this.noteAdded(scheme);
 			return;
 		}
 		this.registeredSession = true;
 		this.passkeyRequired = true;
-		this.noteSignIn('email');
+		this.noteSignIn(scheme);
 	}
 
 	private async passkeyBegin(action: 'register' | 'login', name: string | undefined): Promise<PasskeyChallenge> {
@@ -1017,7 +1132,7 @@ export class ChatClient {
 		if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 		this.cancelPasskey();
 		// Signing in again on this connection: an address proposed for the account it was is not approved for this one.
-		if (action === 'login') this.addProposalConnection = undefined;
+		if (action === 'login') this.addition = undefined;
 		if (name) this.displayName = name;
 		// A passkey registered on a signed-in connection, a guest's included, is added to that
 		// account (§4.10): not a sign-in (§3.2), so its mutes stand (§4.5). For a registered session it
@@ -1062,7 +1177,7 @@ export class ChatClient {
 		const trimmed = token.trim();
 		if (!trimmed) throw new Error('Paste a token to sign in with');
 		this.tokenName = name?.trim() ? { token: trimmed, name: name.trim() } : undefined;
-		this.cancelEmailCode();
+		this.cancelSignInCode();
 		this.sessionToken = trimmed;
 		this.storeSession(trimmed);
 		this.passkeyRequired = true;
@@ -1357,7 +1472,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Creates a room with `room_set` (capability `rooms`, §4.3.4), which joins the
+	 * Creates a room with `room_set` (capability `rooms`, §4.2.4), which joins the
 	 * creator; with `parentRoomId` it is a thread. Resolves with the new
 	 * `room_id`; the room record arrives in a `room_update`. A server that
 	 * keeps no private rooms rejects `private: true` as `unsupported`; one that
@@ -1375,7 +1490,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Updates a room's client fields with `room_set` (§4.3.4) from its latest
+	 * Updates a room's client fields with `room_set` (§4.2.4) from its latest
 	 * record with the patch applied, resubmitting `title` and `description`:
 	 * omitted fields are cleared, so `null` clears one. `ext` is not
 	 * resubmitted: `room_set` merges it (§4.12), so only the patch's keys go,
@@ -1399,7 +1514,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * `room_join` (§4.3.2): the room arrives in a `room_update` `joined` and
+	 * `room_join` (§4.2.2): the room arrives in a `room_update` `joined` and
 	 * becomes visible. With `userId`, adds that user instead, such as to a
 	 * private room; who may is server policy.
 	 */
@@ -1410,7 +1525,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * `room_leave` (§4.3.2): the room goes when a `room_update` lists it in
+	 * `room_leave` (§4.2.2): the room goes when a `room_update` lists it in
 	 * `left`. With `userId`, removes that user instead, as `/kick` does.
 	 */
 	leaveRoom(roomId: string, userId?: string): OperationHandle {
@@ -1421,7 +1536,7 @@ export class ChatClient {
 
 	/**
 	 * A server that doesn't let members add or remove others replies
-	 * `unsupported` (§4.3.2): the snapshot says so, so the UI stops offering
+	 * `unsupported` (§4.2.2): the snapshot says so, so the UI stops offering
 	 * it until the next `server` frame.
 	 */
 	private noteMemberChange(handle: OperationHandle): OperationHandle {
@@ -1458,14 +1573,15 @@ export class ChatClient {
 	 * Tells a server with capability `status` whether anyone is attending
 	 * this page (§4.5 `idle`), as the page decides it (PagePresence: no input
 	 * for a while), and when it was last used (`inputAt`, epoch milliseconds).
-	 * Idle goes as the whole seconds since then, so the server can push what
-	 * came after you left; `true` where that isn't known. A connection starts
-	 * attended, so an attended one sends nothing; once signed in, one that
-	 * starts idle reports it at once. Kept across connections.
+	 * Idle goes as the whole seconds since then (since this call, where that
+	 * isn't known), so the server can push what came after you left. A
+	 * connection starts attended, so an attended one sends nothing; once
+	 * signed in, one that starts idle reports it at once. Kept across
+	 * connections.
 	 */
 	setIdle(idle: boolean, inputAt?: number): void {
+		this.idleInputAt = inputAt ?? (!idle ? undefined : this.idle ? this.idleInputAt : Date.now());
 		this.idle = idle;
-		this.idleInputAt = inputAt;
 		this.syncIdle();
 	}
 
@@ -1490,10 +1606,10 @@ export class ChatClient {
 		const report = this.idleReport;
 		if (report.sending || report.retry || report.applied === this.idle) return;
 		const idle = this.idle;
-		// Seconds since the page was last used, worked out as it goes (§4.5); `true` where unknown or refused.
-		const seconds = idle && this.idleInputAt !== undefined && !report.boolean ? Math.max(0, Math.floor((Date.now() - this.idleInputAt) / 1000)) : undefined;
+		// Seconds since nobody attended the page, worked out as it goes (§4.5.3).
+		const value = idle ? Math.max(0, Math.floor((Date.now() - (this.idleInputAt ?? Date.now())) / 1000)) : false;
 		report.sending = true;
-		this.enqueueRequest('status', { idle: seconds ?? idle }, { visible: false, allowBeforeAuth: false }).promise.then(() => {
+		this.enqueueRequest('status', { idle: value }, { visible: false, allowBeforeAuth: false }).promise.then(() => {
 			if (this.idleReport !== report) return;
 			report.sending = false;
 			report.applied = idle;
@@ -1503,12 +1619,6 @@ export class ChatClient {
 			if (this.idleReport !== report) return;
 			report.sending = false;
 			const { code, retryAfterMs } = cause as Error & { code?: number; retryAfterMs?: number };
-			// A server that takes `idle` only as a boolean refuses the seconds and applies nothing: say `true` at once.
-			if (code === -32602 && seconds !== undefined) {
-				report.boolean = true;
-				this.syncIdle();
-				return;
-			}
 			if (code === undefined) report.applied = undefined;
 			let wait = retryAfterMs;
 			if (wait === undefined) {
@@ -1775,7 +1885,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Lists visible rooms the user has not joined (capability `rooms`, §4.3.1):
+	 * Lists visible rooms the user has not joined (capability `rooms`, §4.2.1):
 	 * top-level rooms with their members, or with `parentRoomId` that room's
 	 * threads, whose heads refresh the cards of threads not joined (they
 	 * deliver nothing live). The result also lands in the snapshot's
@@ -1795,7 +1905,7 @@ export class ChatClient {
 
 	/**
 	 * Lists one room with its members (`room_list` with `room_id` and
-	 * `members`, §4.3.1), which then show in the room's snapshot as `members`
+	 * `members`, §4.2.1), which then show in the room's snapshot as `members`
 	 * and stay current by memberships. Joined rooms have them from their
 	 * listing already; this is for a room opened without joining.
 	 */
@@ -1830,7 +1940,7 @@ export class ChatClient {
 
 	/**
 	 * Lists every room the user has joined, threads included, with their
-	 * members (`room_list` with `filter: "joined"` and `members`, §4.3.1): the
+	 * members (`room_list` with `filter: "joined"` and `members`, §4.2.1): the
 	 * result becomes the visible set, each room recovering its history as it
 	 * appears, and `room_update` keeps it current from then on. It may go
 	 * right behind `auth`, which finishes first (§3.2). With `since`, the
@@ -1874,7 +1984,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Applies a `room_list` result (§4.3.1): its rooms' records and members,
+	 * Applies a `room_list` result (§4.2.1): its rooms' records and members,
 	 * and the result's `users`. For the listing of joined
 	 * rooms (`joinedSet`) its `joined` becomes the visible set: with `left`,
 	 * a listing of changes, the rooms in it go and every other kept room stays;
@@ -1895,7 +2005,7 @@ export class ChatClient {
 					joinedIds.add(record.room_id);
 					this.showRoom(decoded, 'joined');
 				} else if (this.rooms.has(record.room_id)) {
-					// Its record and delivery fields are the latest (§3.4); for a room
+					// Its record and delivery fields are the latest (§4.2); for a room
 					// opened without joining, the head is what the next load reaches.
 					this.showRoom(decoded);
 				} else {
@@ -1935,13 +2045,13 @@ export class ChatClient {
 	}
 
 	/**
-	 * A room's `members`, complete (§4.3.1, §4.3.3): current user objects,
+	 * A room's `members`, complete (§4.2.1, §4.2.3): current user objects,
 	 * possibly partial, merged into the kept ones, that start its member list as of the room's
 	 * `latest_log_id` in the same frame.
 	 */
 	private noteMembers(roomId: string, delivery: RoomDelivery): void {
 		if (delivery.members === undefined) return;
-		// A list that is not truncated carries no count (§4.3.1).
+		// A list that is not truncated carries no count (§4.2.1).
 		if (delivery.member_count !== undefined) this.memberCounts.set(roomId, delivery.member_count);
 		else this.memberCounts.delete(roomId);
 		for (const member of delivery.members) this.noteUser(member);
@@ -2048,7 +2158,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Loads a room's history (§4.2). Threads and rooms opened without joining
+	 * Loads a room's history (§4.3). Threads and rooms opened without joining
 	 * never recover automatically: call this when one is opened. It loads the
 	 * newest page the first time, and afterwards pages from the previous load's
 	 * checkpoint up to the head known at the call, resolving after the last
@@ -2087,8 +2197,9 @@ export class ChatClient {
 		this.emit();
 		try {
 			if (room.loadCheckpoint === undefined) {
-				// First load: only the newest page. Everything up to H is then
-				// covered for live delivery, and older pages load on demand.
+				// First load: only the newest page, as recovery without a
+				// checkpoint may (§4.3.5). Everything up to H is then covered for
+				// live delivery, and older pages load on demand.
 				const result = await this.enqueueRequest('history', { room_id: room.id, before: head, limit: THREAD_PAGE_SIZE }, {
 					visible: false, allowBeforeAuth: false
 				}).promise;
@@ -2146,7 +2257,7 @@ export class ChatClient {
 
 	/**
 	 * Loads the page of a thread's history just before what is loaded, when a
-	 * newest-first load left older records (§4.2, backward paging).
+	 * newest-first load left older records (§4.3.2, backward paging).
 	 */
 	async loadOlder(roomId: string): Promise<void> {
 		const room = this.rooms.get(roomId);
@@ -2187,8 +2298,8 @@ export class ChatClient {
 
 	/**
 	 * Opens a room the user has not joined, such as a thread from its card,
-	 * without joining it: reading needs no membership (§4.2), and joining would
-	 * log a membership for everyone (§4.3.2). It shows in the snapshot with
+	 * without joining it: reading needs no membership (§4.3), and joining would
+	 * log a membership for everyone (§4.2.2). It shows in the snapshot with
 	 * `joined: false` and loads with `loadRoom`, but nothing about it arrives live
 	 * until it is joined, so its head moves only when a listing (`listRooms`
 	 * with its parent) reports a newer one. Its record and head come from the
@@ -2276,7 +2387,7 @@ export class ChatClient {
 			this.stopPing();
 			this.clearStableTimer();
 			// The protocol view is rebuilt from the next connection's room_list
-			// (PROTOCOL.md §4.3.1; see tests/fixtures/wire/session), but each room's
+			// (PROTOCOL.md §4.2.1; see tests/fixtures/wire/session), but each room's
 			// records and checkpoint are kept so it resumes where it stopped. The
 			// UI keeps the last authenticated view on screen meanwhile, keyed off
 			// disconnectedAt.
@@ -2437,7 +2548,8 @@ export class ChatClient {
 	 */
 	private authenticate(auth: string[]): void {
 		const resume = Boolean(this.sessionToken && auth.includes('token'));
-		const passkeyWayBack = this.signedInWith !== 'email' || this.addedMethods.has('webauthn');
+		const linked = this.signedInWith === 'email' || this.signedInWith === 'external';
+		const passkeyWayBack = !linked || this.addedMethods.has('webauthn');
 		if (!resume && this.passkeyRequired && auth.includes('webauthn') && passkeyWayBack) {
 			// Servers without bearer-token resume need a passkey login after a transport
 			// reconnect so a registered user keeps the server identity. It waits for a
@@ -2448,12 +2560,13 @@ export class ChatClient {
 			this.emit();
 			return;
 		}
-		if (!resume && this.signedInWith === 'email') {
-			// An email sign-in with nothing to resume it by: signed out, not a guest.
+		if (!resume && linked) {
+			// An email or external sign-in with nothing to resume it by: signed out, not a guest.
+			const scheme = this.signedInWith as ProposalScheme;
 			this.reconnectHeld = true;
-			this.signInNeeded = auth.includes('email') ? 'email' : auth.includes('webauthn') ? 'webauthn' : undefined;
-			this.error = auth.includes('email') ? 'Sign in with your email again from the connect screen.'
-				: 'This server doesn’t sign back in with email. Sign in another way from the connect screen.';
+			this.signInNeeded = auth.includes(scheme) ? scheme : auth.includes('webauthn') ? 'webauthn' : undefined;
+			this.error = auth.includes(scheme) ? `Sign in with ${scheme === 'email' ? 'your email' : 'the server’s sign-in page'} again from the connect screen.`
+				: `This server doesn’t sign back in with ${scheme === 'email' ? 'email' : 'its sign-in page'}. Sign in another way from the connect screen.`;
 			this.emit();
 			return;
 		}
@@ -2496,7 +2609,7 @@ export class ChatClient {
 					this.sessionToken = undefined;
 					this.storeSession(undefined);
 					this.reconnectHeld = true;
-					this.signInNeeded = this.signedInWith === 'email' || this.signedInWith === 'token' ? this.signedInWith : 'webauthn';
+					this.signInNeeded = this.signedInWith === 'email' || this.signedInWith === 'external' || this.signedInWith === 'token' ? this.signedInWith : 'webauthn';
 					// A passkey signs in again on this connection: it stays open for that tap.
 					if (this.signInNeeded === 'webauthn' && this.server?.auth.includes('webauthn')) {
 						this.emit();
@@ -2517,7 +2630,7 @@ export class ChatClient {
 	 * replaces any saved one. `signedIn` names a sign-in ceremony that made
 	 * this a registered session.
 	 */
-	private handleAuth(result: JsonObject, signedIn?: 'webauthn' | 'email', added = false): boolean {
+	private handleAuth(result: JsonObject, signedIn?: 'webauthn' | ProposalScheme, added = false): boolean {
 		const identity = result.you;
 		if (!isJsonObject(identity) || typeof identity.user_id !== 'string') {
 			this.error = 'Server authentication response did not include an identity';
@@ -2546,7 +2659,7 @@ export class ChatClient {
 			this.noteAdded(signedIn);
 		} else if (signedIn) {
 			// Signed in another way (a passkey, a link): a sign-in code proposed meanwhile is for nothing now.
-			this.cancelEmailCode();
+			this.cancelSignInCode();
 			this.registeredSession = true;
 			this.passkeyRequired = true;
 			this.noteSignIn(signedIn);
@@ -2601,7 +2714,7 @@ export class ChatClient {
 		const name = this.displayName;
 		const wanted = Boolean(name) && name !== this.you?.name && (registered || this.declinedName !== name);
 		this.authNameRequest = wanted ? this.sendName() : undefined;
-		// Rooms come by request (§4.3.1), usually already sent behind `auth`;
+		// Rooms come by request (§4.2.1), usually already sent behind `auth`;
 		// without capability `rooms` there is the default room.
 		if (this.hasCap('rooms')) {
 			if (!this.joinedListing) this.requestRooms(false);
@@ -2621,9 +2734,9 @@ export class ChatClient {
 	 * the last connection: those opened without joining come back as they
 	 * were, and joined ones wait, hidden, for the listing to say whether they
 	 * still are, while their recovery (capability `history`) already pages forward
-	 * from their checkpoints (§4.2). `sameIdentity`: this sign-in resumes the
+	 * from their checkpoints (§4.3). `sameIdentity`: this sign-in resumes the
 	 * kept rooms' identity, so the listing may ask only for what changed since
-	 * the rooms' checkpoints (§4.3.1).
+	 * the rooms' checkpoints (§4.2.1).
 	 */
 	private requestRooms(sameIdentity: boolean): void {
 		if (!this.hasCap('rooms')) return;
@@ -2700,8 +2813,8 @@ export class ChatClient {
 	 */
 	private setYou(identity: Identity, complete: boolean): void {
 		const changed = this.you?.user_id !== identity.user_id;
-		// A pending address addition belongs to the account that proposed it (§4.11): another identity needs a new code.
-		if (changed) this.addProposalConnection = undefined;
+		// A pending addition belongs to the account that proposed it (§4.11.3): another identity needs a new code.
+		if (changed) this.addition = undefined;
 		this.you = this.noteUser(identity, { own: true, complete });
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
@@ -2731,7 +2844,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * A membership record (§4.3.2): one entry per user, each replacing that
+	 * A membership record (§4.2.2): one entry per user, each replacing that
 	 * user's membership of the room when newer. It advances the room's head.
 	 * Its `user` is a recorded object: never merged into the kept one.
 	 */
@@ -2913,7 +3026,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * A `room_update` (§4.3.3): `joined` rooms become visible with their
+	 * A `room_update` (§4.2.3): `joined` rooms become visible with their
 	 * members and recover, `updated` records replace a visible room's (or
 	 * describe a new or edited thread of one) and carry no members,
 	 * `memberships` records apply once any room they belong to is visible, and
@@ -2952,7 +3065,7 @@ export class ChatClient {
 	 * as `kind` (a joined room's, or one opened without joining), or turning a
 	 * room viewed or kept from the last connection into a joined one: installs
 	 * the record, takes its delivery fields, and starts or resumes its
-	 * automatic recovery (§4.2).
+	 * automatic recovery (§4.3).
 	 */
 	private showRoom(decoded: { record: RoomRecord; delivery: RoomDelivery }, kind?: 'joined'): void {
 		const roomId = decoded.record.room_id;
@@ -2995,7 +3108,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * A room left, removed, no longer visible, or deleted (§4.3.3). A room
+	 * A room left, removed, no longer visible, or deleted (§4.2.3). A room
 	 * kept from the last connection and not joined on this one goes back to
 	 * being kept, so joining it later resumes where it stopped.
 	 */
@@ -3023,7 +3136,7 @@ export class ChatClient {
 			members,
 			joined: false
 		});
-		// A record without `members` leaves the listed members, and a truncated list's total, as they were (§4.3.1).
+		// A record without `members` leaves the listed members, and a truncated list's total, as they were (§4.2.1).
 		const replace = (listings: RoomListing[]) => listings.map((known) => known.id === record.room_id ? { ...listing(known.members), ...(known.memberCount !== undefined ? { memberCount: known.memberCount } : {}) } : known);
 		if (this.directory) this.directory = replace(this.directory);
 		const parent = record.parent_room_id;
@@ -3148,7 +3261,7 @@ export class ChatClient {
 		this.showMessageRoom(record.room_id);
 		// A room shown for its messages has no record to say where its log
 		// ends: its first message on a connection does, and it recovers up to
-		// that (§4.2), buffering the message meanwhile.
+		// that (§4.3), buffering the message meanwhile.
 		const room = this.rooms.get(record.room_id);
 		if (room && !this.store.room(room.id) && room.recoveredOn !== this.connectionId && isLogId(record.log_id)) {
 			room.recoveredOn = this.connectionId;
@@ -3276,7 +3389,7 @@ export class ChatClient {
 			this.abortRecovery(room, 'Invalid history response');
 			return;
 		}
-		// A recovery started without a head takes the first page's (§4.2).
+		// A recovery started without a head takes the first page's (§4.3.5).
 		recovery.head ??= result.latest_log_id;
 		this.observeHistoryResponse(room, result);
 		if (room.recovery !== recovery || recovery.generation !== generation) return;
@@ -3424,7 +3537,7 @@ export class ChatClient {
 	/**
 	 * After a lost connection: hide every room until the next connection
 	 * lists it as joined, but keep its records, floor and checkpoint so it resumes
-	 * from there (§4.2 recovery from `C + 1`). Everything else scoped to
+	 * from there (§4.3.5 recovery from `C + 1`). Everything else scoped to
 	 * the connection is forgotten as in `discardProtocolView`.
 	 */
 	private suspendProtocolView(reason: string): void {
@@ -3772,7 +3885,7 @@ export class ChatClient {
 		this.passkeyRequired = true;
 		this.registeredSession = true;
 		// A session kept before this was remembered: a passkey's, if this browser has used one here.
-		this.signedInWith = method === 'webauthn' || method === 'email' || method === 'token' ? method : undefined;
+		this.signedInWith = isSignInMethod(method) ? method : undefined;
 		this.addedMethods = new Set(readMethods(added));
 	}
 
@@ -3782,7 +3895,7 @@ export class ChatClient {
 
 	/**
 	 * Whether a session is kept in this browser for the server at `url`, such
-	 * as the one an emailed link would switch to.
+	 * as the one a sign-in link would switch to.
 	 */
 	keptSessionFor(url: string): boolean {
 		try {
@@ -3851,7 +3964,64 @@ export class ChatClient {
 
 /** The sign-in methods kept in storage as a comma-separated list. */
 function readMethods(value: string | null): SignInMethod[] {
-	return (value ?? '').split(',').filter((method): method is SignInMethod => method === 'webauthn' || method === 'email' || method === 'token');
+	return (value ?? '').split(',').filter(isSignInMethod);
+}
+
+function isSignInMethod(method: string | null): method is SignInMethod {
+	return method === 'webauthn' || method === 'email' || method === 'external' || method === 'token';
+}
+
+/** The proposals a sign-in link can approve, either of which a server's approval takes (§4.11.3). */
+const PROPOSAL_SCHEMES: ProposalScheme[] = ['email', 'external'];
+
+/** The error for a proposal to a server that doesn’t offer its scheme. */
+const NOT_OFFERED: Record<ProposalScheme, string> = {
+	email: 'This server does not support email sign-in',
+	external: 'This server does not support external sign-in'
+};
+
+/** A sign-in proposal on a connection of its own (§4.11.1); `page` is an external one's, which shows its code. */
+interface SignInProposal {
+	connection: SignInConnection;
+	scheme: ProposalScheme;
+	state: string;
+	email?: string;
+	page?: string;
+	proposed: boolean;
+}
+
+function signInCodeOf(proposal: SignInProposal): NonNullable<ClientSnapshot['signInCode']> {
+	return {
+		scheme: proposal.scheme, url: proposal.connection.url,
+		...(proposal.email !== undefined ? { email: proposal.email } : {}), ...(proposal.page !== undefined ? { page: proposal.page } : {})
+	};
+}
+
+/**
+ * Sends a proposal (§4.11.1) with `state` through `send`, and reads its
+ * result: for `external`, the page to open, which must be one a client may
+ * open (§4.11.5). A `return_url` the server refuses (`denied`, or
+ * `invalid_params`) is dropped and the proposal sent again without it, so its
+ * page shows a code to type instead (`returns` false).
+ */
+async function proposeWith(
+	scheme: ProposalScheme, params: JsonObject, state: string, send: (request: JsonObject) => Promise<JsonObject>
+): Promise<{ page?: string; returns: boolean }> {
+	const { return_url: returnUrl, ...rest } = params;
+	let returns = typeof returnUrl === 'string';
+	let result: JsonObject;
+	try {
+		result = await send({ scheme, ...params, state });
+	} catch (cause) {
+		const code = (cause as RpcFailure).code;
+		if (!returns || (code !== -32001 && code !== -32602)) throw cause;
+		returns = false;
+		result = await send({ scheme, ...rest, state });
+	}
+	if (scheme !== 'external') return { returns: false };
+	const page = signInPageUrl(result.url);
+	if (!page) throw new Error(typeof result.url === 'string' ? 'The server’s sign-in page isn’t a secure web address, so it wasn’t opened' : 'The server gave no sign-in page to open');
+	return { page, returns };
 }
 
 /** A passkey challenge the server issued (`begin`, §4.10). */
@@ -3865,6 +4035,7 @@ interface PasskeyChallenge {
 function signInAdvice(auth: string[], signup: string[]): string {
 	const joinByEmail = !auth.includes('email') && signup.includes('email');
 	if (auth.includes('email')) return 'Sign in with your email from the connect screen.';
+	if (auth.includes('external')) return 'Sign in on the server’s sign-in page from the connect screen.';
 	if (auth.includes('webauthn')) return joinByEmail ? 'Sign in with a passkey, or join with your email, from the connect screen.' : 'Sign in with a passkey from the connect screen.';
 	if (joinByEmail) return 'Join with your email from the connect screen.';
 	return 'No supported authentication scheme';

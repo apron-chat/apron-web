@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { capabilitiesOf, type ClientSnapshot } from '$lib/protocol/client';
-import { addEmailError, connectionStateOf, offeredSchemes, schemeUse, statusLabel, wayBackNudge } from './connection';
+import { addError, connectionStateOf, offeredSchemes, schemeUse, statusLabel, wayBackNudge, wayBackWords } from './connection';
 import { retryAfterLabel } from './time';
 
 const snapshot = (fields: Partial<ClientSnapshot>): ClientSnapshot => ({
@@ -56,13 +56,22 @@ describe('ways back into an account', () => {
 		expect(wayBackNudge({ auth: ['webauthn'] }, ['email'])).toEqual(['webauthn']);
 		expect(wayBackNudge({ auth: ['webauthn', 'token'] }, ['token', 'webauthn'])).toBeUndefined();
 		expect(wayBackNudge({ auth: ['email'] }, ['email'])).toBeUndefined();
+		expect(wayBackNudge({ auth: ['external', 'token'] }, ['token'])).toEqual(['external']);
+		expect(wayBackNudge({ auth: ['email', 'external'] }, ['external'])).toBeUndefined();
 		// Nothing to suggest, or nothing known.
 		expect(wayBackNudge({ auth: ['token'] }, ['token'])).toBeUndefined();
 		expect(wayBackNudge({ auth: ['webauthn'] }, undefined)).toBeUndefined();
 	});
 
-	it('words a refused code on Add email', () => {
-		expect(addEmailError(Object.assign(new Error('denied'), { code: -32001 }))).toMatch(/another account/);
-		expect(addEmailError(new Error('Rate limited'))).toBe('Rate limited');
+	it('words the suggestion', () => {
+		expect(wayBackWords(['webauthn', 'email'])).toBe('a passkey or an email');
+		expect(wayBackWords(['webauthn', 'email', 'external'])).toBe('a passkey, an email or an external sign-in');
+		expect(wayBackWords(['external'])).toBe('an external sign-in');
+	});
+
+	it('words a refused addition', () => {
+		expect(addError(Object.assign(new Error('denied'), { code: -32001 }))).toMatch(/address may belong to another account/);
+		expect(addError(Object.assign(new Error('denied'), { code: -32001 }), 'external')).toMatch(/belong to another account/);
+		expect(addError(new Error('Rate limited'))).toBe('Rate limited');
 	});
 });

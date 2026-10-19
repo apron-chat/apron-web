@@ -1,5 +1,5 @@
 /**
- * Wire types and decoders for Apron protocol v8 (`protocol/PROTOCOL.md`).
+ * Wire types and decoders for Apron protocol v9 (`protocol/PROTOCOL.md`).
  * Decoders normalize server records to the fields the protocol defines
  * and drop unknown top-level keys (§1: unknown keys MAY be dropped), while
  * copying known values exactly, including `ext`, literal `null`s, unknown embed
@@ -109,14 +109,14 @@ export interface MessageRecord extends JsonObject {
 	ext?: JsonObject;
 }
 
-/** A room record (§3.4) without delivery fields. */
+/** A room record (§4.2) without delivery fields. */
 export interface RoomRecord extends JsonObject {
 	room_id: string;
 	/** Absent only from servers without capability `history`. */
 	log_id?: string;
 	/** Marks a thread; fixed at creation. */
 	parent_room_id?: string;
-	/** Visible only to its members (§4.3.4); fixed at creation. Only `true` means private. */
+	/** Visible only to its members (§4.2.4); fixed at creation. Only `true` means private. */
 	private?: boolean;
 	title?: string;
 	/** What the room is about, CommonMark by convention; set with `room_set`. */
@@ -151,7 +151,7 @@ export interface ServerParams {
 	/** CommonMark for the sign-in screen (§3.2): how this server's schemes fit together. */
 	welcome?: string;
 	/**
-	 * Extensions' data, each under its name without `ext:` (§1, §4.12), such
+	 * Extensions' data, each under its name without `ext:` (§4, §4.12), such
 	 * as `settings` for `ext:settings`. Read only with that extension's capability.
 	 */
 	ext?: JsonObject;
@@ -179,7 +179,7 @@ export interface ServerSettings extends JsonObject {
 }
 
 /**
- * Delivery fields of a room record (§3.4): this client's view, not logged.
+ * Delivery fields of a room record (§4.2): this client's view, not logged.
  * Clients always take the latest values.
  */
 export interface RoomDelivery {
@@ -188,18 +188,18 @@ export interface RoomDelivery {
 	/**
 	 * Every user who has joined the room, as current user objects (possibly
 	 * `user_id` only): in `room_list` with `members: true` and in
-	 * `room_update` `joined` (§4.3.1, §4.3.3).
+	 * `room_update` `joined` (§4.2.1, §4.2.3).
 	 */
 	members?: Identity[];
 	/**
 	 * How many users have joined, when the server truncated `members` to the
-	 * most recently active (§4.3.1).
+	 * most recently active (§4.2.1).
 	 */
 	member_count?: number;
 }
 
 /**
- * One user's membership of one room at one `log_id` (§4.3.2): an element of a
+ * One user's membership of one room at one `log_id` (§4.2.2): an element of a
  * `membership` record's `members`, keyed by `(room_id, user.user_id)`. `user`
  * is a recorded object.
  */
@@ -238,8 +238,13 @@ export function isLogId(value: unknown): value is string {
 	return typeof value === 'string' && /^[1-9]\d{0,15}$/.test(value) && Number(value) < 2 ** 53;
 }
 
+/** A `room_id` or `user_id` (§2.4): never empty, and no whitespace or control characters. */
+export function isOpaqueId(value: unknown): value is string {
+	return typeof value === 'string' && /^[^\s\p{Cc}]+$/u.test(value);
+}
+
 export function isIdentity(value: unknown): value is Identity {
-	return isJsonObject(value) && typeof value.user_id === 'string';
+	return isJsonObject(value) && isOpaqueId(value.user_id);
 }
 
 /** Deep copy into null-prototype objects so keys such as `"__proto__"` stay plain data. */
@@ -267,7 +272,7 @@ function toMessageRef(value: unknown): MessageRef | undefined {
  */
 export function decodeMessage(value: unknown): { record: MessageRecord; embedded: MessageRecord[] } | null {
 	if (!isJsonObject(value)) return null;
-	if (!isLogId(value.message_id) || !isLogId(value.log_id) || typeof value.room_id !== 'string') return null;
+	if (!isLogId(value.message_id) || !isLogId(value.log_id) || !isOpaqueId(value.room_id)) return null;
 	if (!isIdentity(value.from)) return null;
 	const record = Object.create(null) as MessageRecord;
 	record.message_id = value.message_id;
@@ -296,11 +301,11 @@ export function decodeMessage(value: unknown): { record: MessageRecord; embedded
  * `rooms` element). Delivery fields are returned separately.
  */
 export function decodeRoom(value: unknown): { record: RoomRecord; delivery: RoomDelivery } | null {
-	if (!isJsonObject(value) || typeof value.room_id !== 'string') return null;
+	if (!isJsonObject(value) || !isOpaqueId(value.room_id)) return null;
 	const record = Object.create(null) as RoomRecord;
 	record.room_id = value.room_id;
 	if (isLogId(value.log_id)) record.log_id = value.log_id;
-	if (Object.hasOwn(value, 'parent_room_id') && typeof value.parent_room_id === 'string') record.parent_room_id = value.parent_room_id;
+	if (Object.hasOwn(value, 'parent_room_id') && isOpaqueId(value.parent_room_id)) record.parent_room_id = value.parent_room_id;
 	if (Object.hasOwn(value, 'private') && typeof value.private === 'boolean') record.private = value.private;
 	if (Object.hasOwn(value, 'title')) record.title = cloneJson(value.title) as string;
 	if (Object.hasOwn(value, 'description')) record.description = cloneJson(value.description) as string;
@@ -322,7 +327,7 @@ export function decodeRoom(value: unknown): { record: RoomRecord; delivery: Room
 export function decodeNotice(value: unknown): { room_id?: string; from: Identity; body?: MessageBody } | null {
 	if (!isJsonObject(value) || value.message_id !== undefined || !isIdentity(value.from)) return null;
 	return {
-		...(typeof value.room_id === 'string' ? { room_id: value.room_id } : {}),
+		...(isOpaqueId(value.room_id) ? { room_id: value.room_id } : {}),
 		from: cloneJson(value.from),
 		...(isJsonObject(value.body) ? { body: cloneJson(value.body) as MessageBody } : {})
 	};
@@ -337,7 +342,7 @@ export function decodeReactions(value: unknown): ReactionSet[] {
 		sets.push({
 			log_id: value.log_id,
 			message_id: value.message_id,
-			...(typeof value.room_id === 'string' ? { room_id: value.room_id } : {}),
+			...(isOpaqueId(value.room_id) ? { room_id: value.room_id } : {}),
 			from: cloneJson(element.from),
 			emojis: [...new Set(element.emojis.filter(isString))]
 		});
@@ -345,9 +350,9 @@ export function decodeReactions(value: unknown): ReactionSet[] {
 	return sets;
 }
 
-/** Decode a `membership` record (a notification's params or a history element) into one entry per member (§4.3.2). */
+/** Decode a `membership` record (a notification's params or a history element) into one entry per member (§4.2.2). */
 export function decodeMembership(value: unknown): MembershipEntry[] {
-	if (!isJsonObject(value) || !isLogId(value.log_id) || typeof value.room_id !== 'string' || !Array.isArray(value.members)) return [];
+	if (!isJsonObject(value) || !isLogId(value.log_id) || !isOpaqueId(value.room_id) || !Array.isArray(value.members)) return [];
 	const entries: MembershipEntry[] = [];
 	for (const element of value.members) {
 		if (!isJsonObject(element) || !isIdentity(element.user) || typeof element.joined !== 'boolean') continue;

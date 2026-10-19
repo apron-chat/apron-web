@@ -3,7 +3,7 @@
 	import RoomForm from '$lib/design/components/RoomForm.svelte';
 
 	interface Props {
-		/** The room the thread goes under (`parent_room_id`, §3.4); a thread of a private room is private too (§4.3.4). */
+		/** The room the thread goes under (`parent_room_id`, §3.4); a thread of a private room is private too (§4.2.4). */
 		room: { id: string; title: string; private?: boolean };
 		/** What the form starts with: empty from a room, or suggested from the message(s) it starts from. */
 		title?: string;

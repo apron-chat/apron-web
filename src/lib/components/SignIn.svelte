@@ -9,13 +9,13 @@
 	import { onDestroy, untrack, type Snippet } from 'svelte';
 	import { normalizeWebSocketUrl, serverSettings, type ChatClient } from '$lib/protocol/client';
 	import { offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
-	import { codeStillFor, type SentCode } from '$lib/ui/email-link';
+	import { codeStillFor, returnUrl, type SentCode } from '$lib/ui/sign-in-link';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, type PasskeyMode, type SignOutHandler, type Scheme } from '$lib/ui/sign-in';
 	import { saveDisplayName, saveServerUrl } from '$lib/ui/storage';
 	import TypingDots from './TypingDots.svelte';
 
-	const LABELS: Record<Scheme, string> = { guest: 'Guest', webauthn: 'Passkey', email: 'Email', token: 'Token' };
+	const LABELS: Record<Scheme, string> = { guest: 'Guest', webauthn: 'Passkey', email: 'Email', external: 'External', token: 'Token' };
 	/** On Passkey, the two paths: each a title and what it does. */
 	const PASSKEY_CHOICES: Array<[PasskeyMode, string, string]> = [
 		['login', 'Sign in', 'I have a passkey'],
@@ -37,9 +37,9 @@
 		canCancel: boolean;
 		/** Preselects a scheme, e.g. when the profile asks to sign in with a passkey. */
 		initialScheme?: Scheme;
-		/** Prefills the email field, e.g. after an emailed sign-in link failed. */
+		/** Prefills the email field. */
 		initialEmail?: string;
-		/** Shows an error to start with, e.g. why an emailed sign-in link failed. */
+		/** Shows an error to start with, e.g. why a sign-in link failed. */
 		initialError?: string;
 		/** Shown at the top of the form, such as the host's title and server field. */
 		header?: Snippet;
@@ -69,18 +69,19 @@
 	let error = $state(untrack(() => initialError ?? ''));
 	/** What to do next, in place of the hint: the browser refused a sheet that followed a connection. */
 	let notice = $state('');
-	/** Email sign-in (§4.11): the address, and the code once the server was asked to send one. */
+	/** Email sign-in (§4.11.4): the address, and the code once the server was asked to send one. */
 	let email = $state(untrack(() => initialEmail ?? ''));
 	let code = $state('');
 	/**
-	 * The address a code was requested for, and the server that will send it:
-	 * the code field shows while it is set, and the code only ever goes back to
-	 * the connection that proposed it, on that server (§4.11). Changing the
-	 * Server field drops it, and so does that connection closing.
+	 * The code asked for, emailed to an address or shown by an external
+	 * sign-in page, and the server that will take it: the code field shows
+	 * while it is set, and the code only ever goes back to the connection that
+	 * proposed it, on that server (§4.11.2). Changing the Server field drops
+	 * it, and so does that connection closing.
 	 */
 	let codeSent = $state<SentCode | undefined>();
-	let codeSentTo = $derived(codeSent?.email);
-	let emailBusy = $state(false);
+	/** A proposal or a code is under way, or an external sign-in page is opening in place of this one. */
+	let codeBusy = $state(false);
 	/** The pasted token for the Token scheme; cleared once handed to the client. */
 	let token = $state('');
 	/** A sign-up invite from `/invite`: it creates an account, named as asked, the server picking its user_id from the name. */
@@ -113,6 +114,8 @@
 		return usable.length ? usable : ['guest'];
 	});
 	let chosen = $derived(schemes.includes(scheme) ? scheme : schemes[0]);
+	/** The code asked for with the chosen scheme, while its field shows. */
+	let codeSentTo = $derived(codeSent && codeSent.scheme === chosen ? codeSent : undefined);
 	/** The server in the field, once it has answered. */
 	let known = $derived(sameServer ? session.server : undefined);
 	/** Whether the chosen scheme signs in, creates an account, or both (`server.signup`, §3.1); unknown servers get both. */
@@ -132,7 +135,7 @@
 		registered,
 		connectionError: Boolean(snapshot.error),
 		pending,
-		busy: Boolean(snapshot.authBusy) || emailBusy,
+		busy: Boolean(snapshot.authBusy) || codeBusy,
 		codeSent: Boolean(codeSentTo)
 	}));
 	/**
@@ -163,27 +166,31 @@
 		if (codeSent && codeSent.url !== normalizedInput) untrack(() => {
 			codeSent = undefined;
 			code = '';
-			client.cancelEmailCode();
+			client.cancelSignInCode();
 		});
 	});
 
 	// Closing the panel, however it closes, gives up a code still waiting: nothing here could take it any more.
-	onDestroy(() => client.cancelEmailCode());
+	onDestroy(() => client.cancelSignInCode());
 
-	// A code works only on the connection that asked for it: once that closes (expired, dropped), ask again.
+	// A short code works only on the connection that asked for it (§4.11.2): once that closes (expired, dropped),
+	// there is nowhere to type it. The proposal outlives the connection, so an emailed link still works.
 	$effect(() => {
-		if (!codeSent || emailBusy || snapshot.emailCode) return;
+		if (!codeSent || codeBusy || snapshot.signInCode) return;
 		untrack(() => {
+			const emailed = codeSent?.scheme === 'email';
 			codeSent = undefined;
 			code = '';
-			error = 'The request for that code has closed (it expired, or the connection dropped). Send a new code.';
+			error = emailed
+				? 'The connection that asked for that code has closed (it expired, or dropped), so the code can’t be typed here now. The link in the email may still work, or send a new code.'
+				: 'The connection that asked for that code has closed (it expired, or dropped). Start again to get a new code.';
 		});
 	});
 
 	// The connection this panel opened has settled. The passkey action that opened it runs now; without
 	// one, a passkey waits for a tap. Everything else is done once signed in.
 	$effect(() => {
-		if (!pending || chosen === 'email') return;
+		if (!pending || chosen === 'email' || chosen === 'external') return;
 		if (chosen === 'webauthn' ? view.phase !== 'ready' && !here : !session.ready || snapshot.authBusy) return;
 		untrack(() => {
 			pending = false;
@@ -222,7 +229,11 @@
 				else void sendCode(normalized);
 				return;
 			case 'email-code':
-				void signInWithEmail();
+			case 'external-code':
+				void signInWithCode();
+				return;
+			case 'external-start':
+				void startExternal(normalized);
 				return;
 			case 'sign-out':
 				void signOut();
@@ -323,26 +334,56 @@
 	 */
 	async function sendCode(url: string): Promise<void> {
 		error = '';
-		emailBusy = true;
+		codeBusy = true;
 		try {
 			const address = email.trim();
 			await client.requestEmailCode(address, url);
-			codeSent = { email: address, url };
+			codeSent = { scheme: 'email', email: address, url };
 			code = '';
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Unable to send a code';
 		} finally {
-			emailBusy = false;
+			codeBusy = false;
 		}
 	}
 
 	/**
-	 * Signs in with the emailed code, approved on the connection that asked
-	 * for it, which the client then carries on with; the bearer token in the
-	 * result is kept to resume with (§3.2). The page lets go of the view it
-	 * held only once the code has worked.
+	 * Proposes an external sign-in to the server in the field (§4.11.5), on a
+	 * connection of its own as `sendCode` does, and opens the server's page.
+	 * It brings the viewer back to this app with a link, which the page signs
+	 * in with on its return; so the page is opened in place of this one. A
+	 * server that won't send the viewer back here shows a code on its page
+	 * instead: the page is offered as a link to open in a new tab, and the
+	 * code field shows.
 	 */
-	async function signInWithEmail(): Promise<void> {
+	async function startExternal(url: string): Promise<void> {
+		error = '';
+		codeBusy = true;
+		let leaving = false;
+		try {
+			const { page, returns } = await client.proposeExternal(returnUrl(window.location), url);
+			if (returns) {
+				leaving = true;
+				window.location.assign(page);
+				return;
+			}
+			codeSent = { scheme: 'external', page, url };
+			code = '';
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : 'Unable to start signing in';
+		} finally {
+			// Busy until the page is replaced.
+			if (!leaving) codeBusy = false;
+		}
+	}
+
+	/**
+	 * Signs in with the code (emailed, or shown by the sign-in page), approved
+	 * on the connection that asked for it, which the client then carries on
+	 * with; the bearer token in the result is kept to resume with (§3.2.1).
+	 * The page lets go of the view it held only once the code has worked.
+	 */
+	async function signInWithCode(): Promise<void> {
 		if (!codeSent) return;
 		const sent = codeStillFor(codeSent, normalizedInput);
 		if (!sent) {
@@ -353,21 +394,21 @@
 			return;
 		}
 		if (!code.trim()) {
-			error = 'Enter the code from the email.';
+			error = sent.scheme === 'email' ? 'Enter the code from the email.' : 'Enter the code from the sign-in page.';
 			return;
 		}
 		error = '';
-		emailBusy = true;
+		codeBusy = true;
 		try {
 			const switching = sent.url !== client.url;
-			await client.signInWithEmail(code, displayName.trim() || undefined, () => (switching ? onconnect() : onsignout()()));
+			await client.signInWithCode(code, displayName.trim() || undefined, () => (switching ? onconnect() : onsignout()()));
 			codeSent = undefined;
 			code = '';
 			finish();
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Unable to sign in';
 		} finally {
-			emailBusy = false;
+			codeBusy = false;
 		}
 	}
 
@@ -450,12 +491,12 @@
 			<label class="ap-fieldlabel">Email
 				<input class="ap-field" data-testid="connect-email-input" type="email" bind:value={email} placeholder="you@example.com" disabled={busy || Boolean(codeSentTo)} autocomplete="email" spellcheck="false" />
 			</label>
-			{#if codeSentTo}
-				<label class="ap-fieldlabel">Code
-					<!-- svelte-ignore a11y_autofocus -->
-					<input class="ap-field ap-field-mono" data-testid="connect-code-input" bind:value={code} placeholder="From the email" disabled={busy} inputmode="numeric" autocomplete="one-time-code" spellcheck="false" autofocus />
-				</label>
-			{/if}
+		{/if}
+		{#if codeSentTo}
+			<label class="ap-fieldlabel">Code
+				<!-- svelte-ignore a11y_autofocus -->
+				<input class="ap-field ap-field-mono" data-testid="connect-code-input" bind:value={code} placeholder={codeSentTo.scheme === 'email' ? 'From the email' : 'From the sign-in page'} disabled={busy} inputmode={codeSentTo.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" spellcheck="false" autofocus />
+			</label>
 		{/if}
 		{#if !passkeyLogin}
 			<label class="ap-fieldlabel">Display name
@@ -463,9 +504,15 @@
 			</label>
 		{/if}
 	{/if}
-	{#if chosen === 'email' && codeSentTo}
-		<p class="ap-profedit-hint" role="status">If {codeSentTo} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
-		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={() => { codeSent = undefined; code = ''; error = ''; client.cancelEmailCode(); }}>Use another address, or send a new code</button>
+	{#if codeSentTo?.scheme === 'email'}
+		<p class="ap-profedit-hint" role="status">If {codeSentTo.email} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
+		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}>Use another address, or send a new code</button>
+	{:else if codeSentTo?.page}
+		<!-- The server won't send the viewer back here (§4.11.5): its page shows a code to type here instead. -->
+		<p class="ap-profedit-hint" role="status">
+			<a href={codeSentTo.page} target="_blank" rel="noopener noreferrer" data-testid="external-page-link">Open the sign-in page</a>, sign in there, then enter the code it shows you.
+		</p>
+		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}>Start again</button>
 	{:else}
 		<p class="ap-profedit-hint" role={view.phase === 'ready' ? 'status' : undefined}>{view.phase === 'ready' && notice ? notice : hint}</p>
 	{/if}

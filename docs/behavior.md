@@ -97,9 +97,8 @@ without input) reports idle at once. After that, the client reports idle when
 the tab becomes idle and sends `{idle: false}` as soon as it is used again.
 Idle goes as the whole seconds since the tab was last used (`{idle: 300}`
 after five minutes), worked out as the request goes, so the server can push
-mentions that came after you left (a tab loaded hidden and never used sends
-`{idle: true}`). A server that refuses the seconds as `invalid_params` gets
-`{idle: true}` instead, at once and for the rest of that connection. One `idle` request is in flight at a time; a change meanwhile goes
+mentions that came after you left (a tab loaded hidden and never used counts
+from when it went idle, so it sends `{idle: 0}`). One `idle` request is in flight at a time; a change meanwhile goes
 after the server's `{}`. If the server answers `retry_after`, the client sends
 the tab's state as it is after the delay, not the refused one, and nothing if
 that is what the server already has. After another error, or no answer, it
@@ -264,7 +263,7 @@ typing row), the messages just above the composer stay in view, pushed up
 rather than covered: at the latest message it stays there, and scrolled back,
 the view moves with the edge. Resizing the window keeps the view where it is.
 
-Mentions follow the `@user_id` convention ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-mention-text)). Typing `@` in the
+Mentions follow the `@user_id` convention ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)). Typing `@` in the
 composer opens the mention picker over the room's members (from the room's
 listing, kept current by the membership records of joins and leaves), or the
 room's recent senders on a server without `room_list`, filtered by name or ID.
@@ -282,7 +281,13 @@ strikethrough, and a typed line break kept as a break; raw HTML shows as
 text. A rendered body (plain or CommonMark, never inside
 code) shows a known user's `@user_id` as a chip with their current name, a known room's
 `#room_id` as a link showing its title that opens the room (or joins it), and unknown
-IDs as written ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)): `@` names only users. Typing `#` in the composer opens room autocomplete over known
+IDs as written ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)): `@` names only users. The ID after
+`@` or `#` is the longest run of letters, digits and `_.+@:-` that starts and
+ends with a letter, a digit or `_`, so `@ada@example.com` and
+`@carol:b.example` are whole IDs and a trailing `.` or `:` is punctuation; an
+`@` or `#` right after a letter or digit is text (`mail@ada.example`). A typed
+`@name` stays text where what follows it would carry on the `@user_id` it
+sends (`@Ada.x`). Typing `#` in the composer opens room autocomplete over known
 rooms and threads, searchable by title or ID (a bare `#` lists them to browse, and
 Enter there still sends; Tab picks); choosing one inserts a chip
 showing `#title` that is sent as `#room_id`, and a typed `#room_id` naming a
@@ -544,13 +549,13 @@ after the cursor as it was when you arrived; it stays put while you read. A
 server whose settings say `read_cursors: false` (below) keeps no cursors: the
 cursor still moves here, for the divider, but isn't sent.
 
-With the `rooms` capability, rooms come by request ([PROTOCOL.md §4.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#43-rooms)): right behind
+With the `rooms` capability, rooms come by request ([PROTOCOL.md §4.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#42-rooms)): right behind
 `auth`, without waiting for its result ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), the client lists
 the rooms you have joined with `room_list` (`filter: "joined"`, `members:
 true`), which is the complete set, threads included (if that `auth` fails, the
 listing ran as the connection was, signed in as no one, and is dropped), and keeps it current from
 `room_update` (`joined`, `left`, `updated`) and each room's members from the
-membership records in its `memberships` ([PROTOCOL.md §4.3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#432-membership)), as in a
+membership records in its `memberships` ([PROTOCOL.md §4.2.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#422-membership)), as in a
 `history` page's `memberships`. Only joined rooms deliver live. Without the capability there is the server's default room, posted to
 without a `room_id` until a message names it, plus any room a message arrives
 in, titled by its `room_id`.
@@ -616,7 +621,7 @@ dialog, as **Create a room**: a title (required), an optional CommonMark
 description (`room_set` with `title` and `description`) and the **Private**
 choice; it opens once its `room_update` arrives, and the dialog stays open,
 with the server's error, if creating fails. **Private** asks for
-`private: true` ([PROTOCOL.md §4.3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#434-creating-and-editing)):
+`private: true` ([PROTOCOL.md §4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)):
 a server that keeps no private rooms answers `unsupported`, which the dialog
 says in words; one that creates the room without `private: true` in its record
 gets an error toast instead of an opened room, so nothing meant to be private
@@ -803,7 +808,7 @@ links may point anywhere `http(s)`.
 **Connect** in the
 sidebar header opens the connect screen: a WebSocket URL or an HTTP(S) server
 base URL, a display name, and a sign-in choice among the schemes the server
-advertises (Guest by default; Passkey, below; Email and Token, further down). Once the server in the field
+advertises (Guest by default; Passkey, below; Email, External and Token, further down). Once the server in the field
 has answered, its `server.welcome`
 ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication))
 shows at the top of the form, rendered as CommonMark and sanitized like a message.
@@ -822,8 +827,9 @@ server applies it with a `user` notification. **Remove** sends `me` with
 `avatar: ""`.
 
 The profile editor's Sign-in row offers, where the server's `auth` lists them,
-**Sign in with a passkey**, **Sign in with email** and **Add email** to a
-guest, and **Add passkey**, **Add email** and **Sign out** to a registered
+**Sign in with a passkey**, **Sign in with email**, **Sign in externally**,
+**Add email** and **Add external sign-in** to a guest, and **Add passkey**,
+**Add email**, **Add external sign-in** and **Sign out** to a registered
 account. A guest's Add email proposes and approves on the guest's connection,
 which adds the address to the guest's account (§4.11); Sign in with email is a
 sign-in to the address's own account. Adding needs the
@@ -839,14 +845,19 @@ restores the identity attached to your chosen passkey. **Add email** asks for
 an address, proposes adding it on this signed-in connection (`auth` with
 `scheme: "email"` and `email`), and approves the proposal with the emailed code
 on this same connection (`scheme: "email"` and `token`, no address), which
-adds the address to the account and answers `{}` (§4.11); a refused code says
-the address may belong to another account. If this connection dropped in
-between, the proposal went with it and the form asks for a new code. Adding doesn't change how
+adds the address to the account and answers `{}` (§4.11.3); a refused code says
+the address may belong to another account. A typed code works only on the
+connection that proposed it, so if this connection dropped in between, the
+form asks for a new code; the link in the email still adds the address (below).
+**Add external sign-in** proposes on this connection (`scheme: "external"`,
+`return_url` and `state`) and opens the server's page in place of this one; the
+page comes back with a link that adds the identity, or, where the server won't
+return here, shows a code for the form. Adding doesn't change how
 the session signed in: it is remembered beside it, as another way back in.
 When, as far as this browser knows, the account has no way back in that the
 server signs in with (only a kept token, pasted or an invite, or an account
 made with a scheme the server lists only in `signup`), the profile bar says
-"add a sign-in" and the Sign-in row suggests a passkey or an email.
+"add a sign-in" and the Sign-in row suggests a passkey, an email or an external sign-in.
 
 The connect screen's form is the one sign-in panel (`SignIn.svelte`, its
 state machine in `$lib/ui/sign-in`), and every way into signing in lands on
@@ -947,7 +958,7 @@ connection change cancels the active ceremony. Chat requests pause while a
 ceremony is active, preventing edits from crossing an identity change.
 
 With `email` in the server's `auth` or `signup`
-([PROTOCOL.md §4.11](https://github.com/shazow/apron/blob/main/PROTOCOL.md#411-email-authentication)),
+([PROTOCOL.md §4.11](https://github.com/shazow/apron/blob/main/PROTOCOL.md#411-email-and-external-sign-in)),
 the connect screen's **Email** asks for an address and proposes signing in
 with it: `auth` with `scheme: "email"` and `email`, which authenticates nothing
 and answers `{}` whether or not the address has an account. A proposal on a
@@ -962,7 +973,7 @@ without first signing in as a guest. The code field then approves the proposal
 on that same connection (`scheme: "email"` and `token`, no address). A wrong
 code can be typed again on the same proposal; if that connection closes (the
 proposal expired, the server went away), the code field goes and the form asks
-for a new code. The code belongs to the server that proposed it: changing the
+for a new code, though the link in the email may still work (below). The code belongs to the server that proposed it: changing the
 Server field drops it and closes that connection, as does "Use another
 address". Once the code works, that connection, now signed in, becomes the
 client's connection (on its server, if another): the previous one closes, the
@@ -977,29 +988,55 @@ which each does. A scheme listed only in `signup` works end to end for joining
 (an email code, or registering a passkey); one listed only in `auth` only signs
 in (a passkey that only signs in is never registered from there).
 
-The email's link is `#token=…`, with an optional `&server=` naming the
-server's `ws:`/`wss:` URL (the suggested convention of §4.11), all
+With `external` in the server's `auth` or `signup` (§4.11.5), the connect
+screen's **External** proposes on a connection of its own, as Email does
+(`scheme: "external"`, with `return_url`, this app's origin and path, and
+`state`), and opens the page the server answers with in place of this one,
+but only an `https` page, or `http` on a loopback host; any other `url`, such
+as `javascript:`, is refused. The page signs you in however the server
+chooses, and comes back with a link. A server that refuses the `return_url`
+(`denied` or `invalid_params`) is asked again without it: its page then shows
+a code, the connect screen offers the page as a link to open in a new tab, and
+the code field approves on the proposing connection, as an emailed code does.
+
+Every proposal, email or external, sign-in or addition, carries a new random
+`state` (§4.11.1), remembered in local storage for an hour with the server it
+went to and whether it signs in or adds, for the account that proposed it. A
+proposal outlives its connection (a disconnect doesn't cancel it, and a newer
+one on another connection doesn't either), so its link still works after the
+code field has gone. The link, from the email or the page's return, is
+`#token=…&state=…`, with `&server=` naming the server's `ws:`/`wss:` URL
+when it opens a client that isn't tied to one, all
 `application/x-www-form-urlencoded` in the URL fragment; it carries no address.
-The fragment is read and scrubbed from the address bar before anything else. A link is a credential someone else may have crafted or forwarded,
-so it is never used silently: a dialog asks "Sign in to *server* with this
-email link?", says whom it signs out when you are signed in there (or that a
-saved session is kept there, before it has resumed), and warns that a link
-someone sent you can sign you in to their account, which matters all the more
-as the link can't say which account it is for. A link pasted into an open tab
-is taken the same way. On confirmation the client opens a fresh connection to
-the link's server (this one unless it names another) that is not signed in,
-presents the token there (`scheme: "email"` and `token`), and carries on with
-that connection once it has worked, as above; only then is a switch to another
-server remembered, and the server listed under Recent. On the same server the
-account signed in before is signed out of as **Sign out** does, so push goes
-off for it here. A link never adds an
-address to an account. If it fails (expired, used), nothing changes: the page
-stays on its server, and the connect screen opens on Email, set to the link's
-server, with the reason.
-An email sign-in that can't be resumed (no token to resume with) shows as
+The fragment is read and scrubbed from the address bar before anything else,
+and a link pasted into an open tab is taken the same way. A link with the
+`state` of a sign-in this browser proposed (in this tab or another) is used at
+once, on the server it was proposed to, whatever `server` the link names: the
+client opens a fresh connection there that is not signed in, presents the
+token with the proposal's scheme (`token`, no address), and carries on with
+that connection once it has worked, as above. One with the `state` of an
+addition waits for this page's session to settle, and adds on its connection
+only if it is signed in to the account that proposed it, on that server
+(any connection of it, not only the one that proposed); otherwise it says
+which account to sign in as. Any other link is a credential someone else may
+have crafted or forwarded, so it is never used silently: a dialog asks "Sign
+in to *server* with this link?", says whom it signs out when you are signed in
+there (or that a saved session is kept there, before it has resumed), and warns
+that a link someone sent you can sign you in to their account, which matters
+all the more as the link can't say which account it is for. On confirmation it
+is used as a sign-in, on the link's server (this one unless it names another;
+a `server` that isn't a WebSocket URL makes it unusable), with a scheme that
+server offers, since approval takes either (§4.11.3). A sign-in link never
+adds to an account without its addition's `state`. Only once a sign-in has
+worked is a switch to another server remembered, and the server listed under
+Recent; on the same server the account signed in before is signed out of as
+**Sign out** does, so push goes off for it here. If it fails (expired, used,
+`denied`), nothing changes: the page stays on its server, and the connect
+screen opens on the link's scheme, set to the link's server, with the reason.
+An email or external sign-in that can't be resumed (no token to resume with) shows as
 signed out after a reconnect, never as a guest, unless a passkey was added to
-the account, which then signs it back in (with a tap, as below); where email
-only signs up, the message points to another way in rather than to email. The link dialog also
+the account, which then signs it back in (with a tap, as below); where the
+scheme only signs up, the message points to another way in rather than to it. The link dialog also
 warns when the server a link switches to has a saved session here.
 
 When the server advertises token authentication, the session token it returns

@@ -31,7 +31,7 @@ state and behavior — `ConnectScreen`,
 `Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` with `RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`) and
 `ThreadSummary`, `Message` with its `ReactionBar` and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`) and `StagedFile` (the design system's `Attachments`), `SelectionBar`, `JumpBar`,
 `EmojiPopover` (the full emoji picker, which the design system leaves to the client),
-`PreferencesDialog` with its `FontFamilyField`, `EmailLinkDialog` (both
+`PreferencesDialog` with its `FontFamilyField`, `SignInLinkDialog` (both
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
 choice submitted with a form a `CheckList`-style row),
 `MediaViewerHost` (the design system's `MediaViewer`, opened by image embeds through
@@ -84,7 +84,7 @@ places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
 picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previews.ts` builds GitHub link previews, `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
 `commands.ts` maps the composer's `/` commands to requests,
-`email-link.ts` reads and scrubs an emailed sign-in link from the URL and words the question asked before using it,
+`sign-in-link.ts` reads and scrubs a sign-in link (emailed, or the return from an external sign-in page) from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,
 `members.ts` reads the `user_id` typed to add a member, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences included (on this device only; nothing is synced),
@@ -107,12 +107,13 @@ account and shares the one subscription between accounts and tabs, and
 from the worker so tests can run them.
 
 Protocol types, replay reduction, and the WebSocket session live under
-`src/lib/protocol` and speak Apron protocol v8. `client.ts` holds the session,
+`src/lib/protocol` and speak Apron protocol v9. `client.ts` holds the session,
 `ChatClient`, and re-exports the rest of its API: `client-types.ts` has the
 snapshot and option types, `client-views.ts` the pure helpers over snapshots,
 capabilities and server URLs, and `client-internals.ts` the per-room state,
-tuning constants and helpers only `ChatClient` uses, and `email-connection.ts`
-the connection an email sign-in proposes and approves on. `reducer.ts` keeps one store
+tuning constants and helpers only `ChatClient` uses, `signin-connection.ts`
+the connection an email or external sign-in proposes and approves on, and
+`proposals.ts` the proposals this browser made, kept by their `state`. `reducer.ts` keeps one store
 of room records, message snapshots, per-user reaction sets, and memberships
 for every room, and beside the latest membership per user, each room's
 membership records in `log_id` order for the timeline's join and leave lines;
@@ -166,9 +167,8 @@ connection is signed in (`handleAuth` calls it after the result; a replacing
 server frame while signed in calls it too). `idleReport` holds what the
 server has for the current connection: each starts attended, so an attended
 start sends nothing, and one on an idle page says so at once. Idle goes as
-the whole seconds since `inputAt` (`PagePresence.inputAt`), or `true` where it
-is unknown or the server refused the seconds (`invalid_params`, after which
-that connection's report says `true`). One request is
+the whole seconds since `inputAt` (`PagePresence.inputAt`), or since the
+page went idle where that is unknown. One request is
 in flight at a time and the latest state follows its `{}`; a `retry_after`
 error waits out the delay and then syncs the current state, and any other
 error or a timeout does the same after a backoff from `IDLE_RETRY_MS`,
@@ -232,7 +232,7 @@ remove someone else; an `unsupported` reply sets the snapshot's
 
 Every successful `auth` result is handled alike: its `you` becomes the
 connection's identity and a `token` in it replaces the saved one, whether it
-answers a guest sign-in, a token resume (rotation), a passkey or an email code.
+answers a guest sign-in, a token resume (rotation), a passkey, or an email or external sign-in.
 A passkey ceremony is `usePasskey(action, name?)`, one per tap: `login` or
 `register` (§4.10), modal mediation only, on the connection to this server
 whether or not it is signed in. It is busy (`authBusy`, `passkeyBusy`) from
@@ -246,30 +246,46 @@ sign-in never runs one: where only a passkey brings a registered session back
 connection (`held`) and says how to sign in (`signInNeeded`), and the page's
 sign-in panel (`SignIn.svelte`, state machine in `$lib/ui/sign-in`) takes the
 user's tap from there.
-Email sign-in (§4.11) proposes and approves on one connection, since a short
-code works only on the connection that proposed it: `requestEmailCode(email,
-url?)` opens an `EmailConnection` (`email-connection.ts`) to that server that
-never signs in until approved, waits for its `server` frame, proposes (`auth`
-with `email`), and keeps it open (pinging, and closed after
-`EMAIL_PROPOSAL_MS`) as the snapshot's `emailCode`, leaving this connection and
-its view untouched; a newer proposal, `cancelEmailCode()` and `stop()` close
-it. `signInWithEmail(code, name?, beforeSwitch?)` approves on it (`auth` with
-`token`); a `denied` code leaves it open to try again. On success the client
+Email and external sign-in (§4.11) propose on a connection of their own,
+since a proposal on a signed-in connection would add to its account, and a
+short code works only on the connection that proposed it: `requestEmailCode(email,
+url?)` and `proposeExternal(returnUrl, url?)` open a `SignInConnection`
+(`signin-connection.ts`) to that server that never signs in until approved,
+wait for its `server` frame, and propose (`auth` without `token`, with
+`email` or `return_url`). Each proposal carries a new random `state`,
+remembered first in local storage (`proposals.ts`, for an hour) with its
+server and whether it signs in or adds, for the link that comes back with it,
+in this tab or another. An external proposal's `url` is opened only when it is
+`https`, or `http` on a loopback host (`signInPageUrl`); a `return_url` the
+server refuses (`denied`, `invalid_params`) is dropped and the proposal sent
+again without it, so the page shows a code instead. The connection stays open
+for a code (pinging, and closed after `PROPOSAL_MS`) as the snapshot's
+`signInCode`, leaving this connection and its view untouched; with a return,
+it closes, since a link works on any connection. A newer proposal,
+`cancelSignInCode()` and `stop()` close it, but the server keeps the proposal,
+and its link still works. `signInWithCode(code, name?, beforeSwitch?)`
+approves on it (`auth` with `token`, the proposal's scheme); a `denied` code
+leaves it open to try again. On success the client
 adopts that connection as its own: `beforeSwitch` runs, it moves to that
 server if another (`switchServer`, as `setUrl` without connecting), closes its
 connection as `restart` would, attaches the socket (`attachSocket`, shared
 with `connectNow`), takes the `server` frame in without answering it, handles
 the result as a sign-in, and then processes the frames that arrived after the
-result. `signInWithEmailLink(token, url?, beforeSwitch?)` does the same with a
-link's token on a fresh connection; a refused link changes nothing.
-`requestEmailCodeToAdd` proposes on the signed-in connection and `addEmail(code)`
-approves on that same connection (refused if it has reconnected since), whose
-`{}` result adds the address: another way back in for a registered session,
-or, for a guest without a token, what makes it an email account. How the kept
-session signed in (`webauthn`, `email`, `token`) is remembered beside its token
+result. `signInWithLink(token, url?, { scheme?, state?, beforeSwitch? })` does
+the same with a link's token on a fresh connection, with the proposal's
+scheme or else one the server offers (approval takes either); a refused link
+changes nothing. Approval forgets the proposal's `state`.
+`requestEmailCodeToAdd` and `proposeExternalToAdd(returnUrl?)` propose on the
+signed-in connection, for its account; `addWithCode(code)` approves on that
+same connection (refused if it has reconnected since), and
+`addWithLink(token, state)` on any connection signed in to the account that
+proposed it. Their `{}` result adds the address or identity: another way back
+in for a registered session, or, for a guest without a token, what makes it an
+account. How the kept
+session signed in (`webauthn`, `email`, `external`, `token`) is remembered beside its token
 as `signedInWith`, and ways added to the account since beside it
-(`signInMethods`). `requestEmailCode`, `signInWithEmail` and registering a
-passkey accept a scheme listed in `auth` or `signup`, and adding an email needs it in `auth`; a passkey login and a
+(`signInMethods`). Proposing a sign-in, `signInWithCode` and registering a
+passkey accept a scheme listed in `auth` or `signup`, and adding an email or an external sign-in needs it in `auth`; a passkey login and a
 token resume need it in `auth`. The `server` frame ([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame))
 is kept on the snapshot's `server` as sent: `apron` (the version), `capabilities`,
 `agent` (the implementation, for debugging; the UI labels a server by its host,

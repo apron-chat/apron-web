@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, type ClientSnapshot } from './client';
 import { REQUEST_TIMEOUT_MS } from './client-internals';
-import { EMAIL_PROPOSAL_MS } from './email-connection';
+import { PROPOSAL_MS } from './signin-connection';
 import { FakeSocket, settle } from './fake-socket';
 import { requestPasskey } from './webauthn';
 
@@ -34,7 +34,7 @@ describe('accounts and their ways back in', () => {
 		await vi.advanceTimersByTimeAsync(10_000);
 		const socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'], ...extra } });
+		socket.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'], ...extra } });
 		await vi.advanceTimersByTimeAsync(0);
 		return socket;
 	}
@@ -48,11 +48,11 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode(`${you}@example.com`);
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'], ...extra } });
+		side.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'], ...extra } });
 		await vi.advanceTimersByTimeAsync(0);
 		await side.reply('auth', {});
 		await requested;
-		const signedIn = client.signInWithEmail('1');
+		const signedIn = client.signInWithCode('1');
 		await vi.advanceTimersByTimeAsync(0);
 		side.receive({ id: side.request('auth').id, result: { you: { user_id: you } } });
 		await signedIn;
@@ -99,7 +99,7 @@ describe('accounts and their ways back in', () => {
 		const asked = client.requestEmailCodeToAdd('ada@example.com');
 		await socket.reply('auth', {});
 		await asked;
-		const added = client.addEmail('1');
+		const added = client.addWithCode('1');
 		await vi.advanceTimersByTimeAsync(0);
 		socket.receive({ id: socket.request('auth').id, result: {} });
 		await added;
@@ -126,7 +126,7 @@ describe('accounts and their ways back in', () => {
 		client.stop();
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
 		expect(frames(latest())[0]).toBe('auth token');
 	});
 
@@ -134,7 +134,7 @@ describe('accounts and their ways back in', () => {
 		const auth = ['email', 'webauthn'];
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
 		const socket = await signInByEmail(auth, 'ada');
 		await socket.reply('room_list', { joined: [] });
 		expect(snapshot.signedInWith).toBe('email');
@@ -156,7 +156,7 @@ describe('accounts and their ways back in', () => {
 		const extra = { signup: ['email'] };
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'], ...extra } });
+		latest().receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'], ...extra } });
 		expect(snapshot.error).toBe('Sign in with a passkey, or join with your email, from the connect screen.');
 		await signInByEmail(auth, 'newbie', extra);
 		const next = await reconnect(auth, extra);
@@ -169,7 +169,7 @@ describe('accounts and their ways back in', () => {
 	it('never signs in as a guest listed only in signup', async () => {
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 8, auth: ['email'], signup: ['guest'], capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 9, auth: ['email'], signup: ['guest'], capabilities: ['rooms'] } });
 		expect(frames(latest())).toEqual([]);
 		expect(snapshot.error).toMatch(/email/);
 	});
@@ -178,7 +178,7 @@ describe('accounts and their ways back in', () => {
 		const auth = ['webauthn', 'email'];
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
 		const main = latest();
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
 		const login = client.usePasskey('login');
@@ -193,7 +193,7 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode('bob@example.com');
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'] } });
+		side.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
 		await vi.advanceTimersByTimeAsync(0);
 		side.receive({ id: side.request('auth').id, result: {} });
 		await requested;
@@ -213,7 +213,7 @@ describe('accounts and their ways back in', () => {
 		const side = latest();
 		expect(side.url).toBe('ws://other.test/');
 		side.open();
-		side.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: [] } });
+		side.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [] } });
 		await expect(requested).rejects.toThrow('does not support email');
 		expect(side.sent).toEqual([]);
 		expect(side.readyState).toBe(FakeSocket.CLOSED);
@@ -231,7 +231,7 @@ describe('accounts and their ways back in', () => {
 		expect(side.readyState).toBe(FakeSocket.CLOSED);
 
 		const stopped = client.requestEmailCode('ada@example.com');
-		const link = client.signInWithEmailLink('Hk41x9');
+		const link = client.signInWithLink('Hk41x9');
 		client.stop();
 		await expect(stopped).rejects.toThrow('stopped');
 		await expect(link).rejects.toThrow('stopped');
@@ -245,7 +245,7 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode('ada@example.com');
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'] } });
+		side.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
 		await vi.advanceTimersByTimeAsync(0);
 		await side.reply('auth', {});
 		await requested;
@@ -268,21 +268,21 @@ describe('accounts and their ways back in', () => {
 		start();
 		await latest().greet([], { auth });
 		const side = await proposeSignIn(auth);
-		const inFlight = client.signInWithEmail('1');
+		const inFlight = client.signInWithCode('1');
 		await vi.advanceTimersByTimeAsync(0);
 		const sockets = FakeSocket.instances.length;
-		await expect(client.signInWithEmailLink('Hk41x9')).rejects.toThrow('Already signing in');
+		await expect(client.signInWithLink('Hk41x9')).rejects.toThrow('Already signing in');
 		expect(FakeSocket.instances).toHaveLength(sockets);
 		side.receive({ id: side.request('auth').id, error: { code: -32001, message: 'Invalid or expired code' } });
 		await expect(inFlight).rejects.toThrow('Invalid or expired code');
 
 		// The link's connection opens first, and an approval starts while it waits for its server frame.
-		const link = client.signInWithEmailLink('Hk41x9');
+		const link = client.signInWithLink('Hk41x9');
 		const linkSocket = latest();
-		const again = client.signInWithEmail('2');
+		const again = client.signInWithCode('2');
 		await vi.advanceTimersByTimeAsync(0);
 		linkSocket.open();
-		linkSocket.receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'] } });
+		linkSocket.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
 		await expect(link).rejects.toThrow('Already signing in');
 		expect(linkSocket.sent).toEqual([]);
 		expect(linkSocket.readyState).toBe(FakeSocket.CLOSED);
@@ -290,7 +290,7 @@ describe('accounts and their ways back in', () => {
 		expect(side.readyState).toBe(FakeSocket.OPEN);
 		side.receive({ id: side.request('auth').id, error: { code: -32001, message: 'Invalid or expired code' } });
 		await expect(again).rejects.toThrow('Invalid or expired code');
-		expect(snapshot.emailCode).toBeDefined();
+		expect(snapshot.signInCode).toBeDefined();
 	});
 
 	it('gives up a sign-in code once the main connection signs in another way', async () => {
@@ -302,26 +302,26 @@ describe('accounts and their ways back in', () => {
 		let side = await proposeSignIn(auth);
 		await passkeyLogin(main);
 		expect(side.readyState).toBe(FakeSocket.CLOSED);
-		expect(snapshot.emailCode).toBeUndefined();
+		expect(snapshot.signInCode).toBeUndefined();
 		// A pasted token.
 		side = await proposeSignIn(auth);
 		client.useToken('st_pasted');
 		expect(side.readyState).toBe(FakeSocket.CLOSED);
-		expect(snapshot.emailCode).toBeUndefined();
+		expect(snapshot.signInCode).toBeUndefined();
 		await vi.advanceTimersByTimeAsync(0);
 		await latest().greet([], { auth, you: { user_id: 'bot' } });
 		// An emailed link.
 		side = await proposeSignIn(auth);
-		const link = client.signInWithEmailLink('Hk41x9');
+		const link = client.signInWithLink('Hk41x9');
 		const linkSocket = latest();
 		linkSocket.open();
-		linkSocket.receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'] } });
+		linkSocket.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
 		await vi.advanceTimersByTimeAsync(0);
 		linkSocket.receive({ id: linkSocket.request('auth').id, result: { you: { user_id: 'linky' }, token: 'st_link' } });
 		await link;
 		expect(snapshot.you?.user_id).toBe('linky');
 		expect(side.readyState).toBe(FakeSocket.CLOSED);
-		expect(snapshot.emailCode).toBeUndefined();
+		expect(snapshot.signInCode).toBeUndefined();
 	});
 
 	it('drops an address proposed for one account once the connection signs in as another', async () => {
@@ -339,14 +339,14 @@ describe('accounts and their ways back in', () => {
 		// Another identity lists its own rooms.
 		await main.reply('room_list', { joined: [] });
 		const approvals = () => main.sent.filter((frame) => frame.method === 'auth' && (frame.params as { token?: string }).token !== undefined);
-		await expect(client.addEmail('418092')).rejects.toThrow('Send a new code');
+		await expect(client.addWithCode('418092')).rejects.toThrow('Send a new code');
 		expect(approvals()).toEqual([]);
 		expect(snapshot.signInMethods ?? []).not.toContain('email');
 		// Proposed again as Ada, it adds to Ada.
 		const again = client.requestEmailCodeToAdd('ada@example.com');
 		await main.reply('auth', {});
 		await again;
-		const added = client.addEmail('418092');
+		const added = client.addWithCode('418092');
 		await vi.advanceTimersByTimeAsync(0);
 		await main.reply('auth', {});
 		await added;
@@ -360,32 +360,32 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode('ada@example.com');
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 8, auth: ['email', 'guest'], capabilities: [], ping: 30 } });
+		side.receive({ method: 'server', params: { apron: 9, auth: ['email', 'guest'], capabilities: [], ping: 30 } });
 		await vi.advanceTimersByTimeAsync(0);
 		await side.reply('auth', {});
 		await requested;
 		// While it waits for the code it keeps the server's liveness rule (§1).
 		await vi.advanceTimersByTimeAsync(30_000);
 		expect(side.sent.filter((frame) => frame.method === 'ping')).toHaveLength(1);
-		const signIn = client.signInWithEmail('1');
+		const signIn = client.signInWithCode('1');
 		const failed = expect(signIn).rejects.toThrow('didn’t answer');
 		await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
 		await failed;
 		expect(snapshot.authBusy).toBe(false);
 		// No answer ends the proposal: a timeout isn't a wrong code.
-		expect(snapshot.emailCode).toBeUndefined();
+		expect(snapshot.signInCode).toBeUndefined();
 		expect(side.readyState).toBe(FakeSocket.CLOSED);
 
 		const again = client.requestEmailCode('ada@example.com');
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 8, auth: ['email', 'guest'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 9, auth: ['email', 'guest'], capabilities: [] } });
 		await vi.advanceTimersByTimeAsync(0);
 		await next.reply('auth', {});
 		await again;
-		await vi.advanceTimersByTimeAsync(EMAIL_PROPOSAL_MS);
+		await vi.advanceTimersByTimeAsync(PROPOSAL_MS);
 		expect(next.readyState).toBe(FakeSocket.CLOSED);
-		expect(snapshot.emailCode).toBeUndefined();
+		expect(snapshot.signInCode).toBeUndefined();
 	});
 });
 
@@ -456,7 +456,7 @@ describe('mutes, statuses and sign-ins', () => {
 		const asked = client.requestEmailCodeToAdd('ada@example.com');
 		await socket.reply('auth', {});
 		await asked;
-		const added = client.addEmail('1');
+		const added = client.addWithCode('1');
 		await vi.advanceTimersByTimeAsync(0);
 		socket.receive({ id: socket.request('auth').id, result: {} });
 		await added;

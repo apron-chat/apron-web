@@ -4,7 +4,8 @@
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
 	import type { ChatClient, OperationHandle } from '$lib/protocol/client';
-	import { addEmailError, passkeyMessage, wayBackNudge } from '$lib/ui/connection';
+	import { addError, passkeyMessage, wayBackNudge, wayBackWords } from '$lib/ui/connection';
+	import { returnUrl } from '$lib/ui/sign-in-link';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { prepareAvatar } from '$lib/ui/images';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -48,7 +49,7 @@
 		onsignout: SignOutHandler;
 		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
 		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
-		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
+		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
 	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin }: Props = $props();
 
@@ -93,21 +94,25 @@
 	let snapshot = $derived(session.snapshot);
 	let connected = $derived(snapshot.status === 'connected');
 	let canUsePasskey = $derived(!!session.server?.auth.includes('webauthn'));
-	/** Email sign-in (§4.11), where the server offers it. */
+	/** Email sign-in (§4.11.4), where the server offers it. */
 	let canUseEmail = $derived(!!session.server?.auth.includes('email'));
+	/** External sign-in on the server's page (§4.11.5), where the server offers it. */
+	let canUseExternal = $derived(!!session.server?.auth.includes('external'));
 	/**
 	 * No way back into the account that the server signs in with, as far as
 	 * this browser knows: only a kept token (pasted, or an invite, §3.2), or an
 	 * account made with a scheme only in `signup` (§3.1). A gentle nudge to add
-	 * a passkey or an email.
+	 * another way in.
 	 */
 	let wayBack = $derived(snapshot.passkeySession ? wayBackNudge(session.server, snapshot.signInMethods) : undefined);
 	/**
-	 * Adding an email to this account (§4.11): an explicit action, the code
-	 * requested and presented on this signed-in connection. An emailed link
-	 * never does this; it signs in.
+	 * Adding an email, or an external identity, to this account (§4.11.3): an
+	 * explicit action, proposed on this signed-in connection, and approved
+	 * there with the code (emailed, or shown by the server's page when it
+	 * won't return here) or by the link that comes back with this browser's
+	 * `state`. A link of no proposal here never adds; it signs in.
 	 */
-	let addEmail = $state<{ step: 'address' | 'code'; email: string; code: string; busy: boolean; error: string } | undefined>();
+	let addEmail = $state<{ scheme: 'email' | 'external'; step: 'address' | 'code'; email: string; code: string; page?: string; busy: boolean; error: string } | undefined>();
 	function toggle(): void {
 		if (open) {
 			close();
@@ -176,7 +181,7 @@
 	 * Signing in happens on the connect screen, which carries a handle typed
 	 * here along so it is applied once the passkey or email signs in.
 	 */
-	function signIn(scheme: 'webauthn' | 'email' = 'webauthn'): void {
+	function signIn(scheme: 'webauthn' | 'email' | 'external' = 'webauthn'): void {
 		const chosen = chosenName();
 		close();
 		onsignin(chosen, scheme);
@@ -215,15 +220,39 @@
 				await client.requestEmailCodeToAdd(form.email);
 				form.step = 'code';
 			} else {
-				await client.addEmail(form.code);
+				await client.addWithCode(form.code);
 				addEmail = undefined;
-				passkeyNotice = `Added ${form.email} · sign in with it anywhere`;
+				passkeyNotice = form.scheme === 'email' ? `Added ${form.email} · sign in with it anywhere` : 'Added · sign in with it anywhere';
 				return;
 			}
 		} catch (cause) {
-			form.error = addEmailError(cause);
+			form.error = addError(cause, form.scheme);
 		}
 		form.busy = false;
+	}
+
+	/**
+	 * Add external sign-in: propose it on this signed-in connection
+	 * (§4.11.5) and open the server's page in place of this one, which comes
+	 * back with a link that the page adds with. A server that won't send the
+	 * viewer back here shows a code on its page instead, for the form.
+	 */
+	async function addExternal(): Promise<void> {
+		passkeyError = '';
+		passkeyNotice = '';
+		const form: NonNullable<typeof addEmail> = { scheme: 'external', step: 'code', email: '', code: '', busy: true, error: '' };
+		addEmail = form;
+		try {
+			const { page, returns } = await client.proposeExternalToAdd(returnUrl(window.location));
+			if (returns) {
+				window.location.assign(page);
+				return;
+			}
+			addEmail = { ...form, page, busy: false };
+		} catch (cause) {
+			addEmail = undefined;
+			passkeyError = addError(cause, 'external');
+		}
 	}
 
 	/** Enter in the Add email fields continues that form, not the profile's. */
@@ -317,14 +346,14 @@
 				{:else if status === 'declined'}
 					<p class="ap-profedit-note ap-profedit-err" role="alert">
 						The server declined this handle{declinedReason ? ` (${declinedReason})` : ''}.
-						{#if (canUsePasskey || canUseEmail) && !snapshot.passkeySession}
+						{#if (canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession}
 							Sign in and it’s applied once you’re signed in.
 						{:else}
 							Your old one is still in use.
 						{/if}
 					</p>
 				{/if}
-				{#if canUsePasskey || canUseEmail}
+				{#if canUsePasskey || canUseEmail || canUseExternal}
 					<div class="ap-profedit-signin" role="group" aria-label="Sign-in">
 						<span class="ap-fieldlabel">Sign-in</span>
 						{#if snapshot.authBusy && !addEmail?.busy}
@@ -338,7 +367,10 @@
 											<button class="ap-btn ap-btn-sm" type="button" data-testid="add-passkey" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
 										{/if}
 										{#if canUseEmail && you && !addEmail}
-											<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+											<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+										{/if}
+										{#if canUseExternal && you && !addEmail}
+											<button class="ap-btn ap-btn-sm" type="button" data-testid="add-external" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
 										{/if}
 										<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
 									{:else}
@@ -350,7 +382,13 @@
 											<!-- Adding an address to a guest asks and answers on this connection; whether that keeps the
 											     guest identity as an account is the server's call (§4.11). -->
 											{#if you && !addEmail}
-												<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+												<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+											{/if}
+										{/if}
+										{#if canUseExternal}
+											<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-external" disabled={status === 'saving'} onclick={() => signIn('external')}>Sign in externally</button>
+											{#if you && !addEmail}
+												<button class="ap-btn ap-btn-sm" type="button" data-testid="add-external" title="Keep this identity: add an external sign-in to it, if the server allows" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
 											{/if}
 										{/if}
 									{/if}
@@ -359,27 +397,30 @@
 									<span class="ap-profedit-hint ap-profedit-err" role="alert">{passkeyError}</span>
 								{:else if passkeyNotice}
 									<span class="ap-profedit-hint ap-profedit-ok" role="status">{passkeyNotice}</span>
-								{:else if passkeyUnavailable && canUsePasskey && !canUseEmail}
+								{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
 									<span class="ap-profedit-hint">{passkeyUnavailable}</span>
 								{:else if wayBack}
-									<span class="ap-profedit-hint" data-testid="way-back-nudge">{snapshot.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBack.length === 2 ? 'a passkey or an email' : wayBack[0] === 'webauthn' ? 'a passkey' : 'an email'} to sign in anywhere.</span>
+									<span class="ap-profedit-hint" data-testid="way-back-nudge">{snapshot.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
 								{:else}
-									<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
+									<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
 								{/if}
 							</span>
 							{#if addEmail}
-								<span class="add-email" role="group" aria-label="Add email">
-									{#if addEmail.step === 'address'}
+								<span class="add-email" role="group" aria-label={addEmail.scheme === 'email' ? 'Add email' : 'Add external sign-in'}>
+									{#if addEmail.scheme === 'external' && !addEmail.page}
+										<span class="ap-profedit-hint" role="status"><TypingDots /> Opening the sign-in page…</span>
+									{:else if addEmail.step === 'address'}
 										<input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com" autocomplete="email" bind:value={addEmail.email} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
 										<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.email.trim()} onclick={continueAddEmail}>Send code</button>
 									{:else}
-										<input class="ap-field ap-field-mono" aria-label="Code from the email" placeholder="Code" inputmode="numeric" autocomplete="one-time-code" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+										<input class="ap-field ap-field-mono" aria-label={addEmail.scheme === 'email' ? 'Code from the email' : 'Code from the sign-in page'} placeholder="Code" inputmode={addEmail.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
 										<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.code.trim()} onclick={continueAddEmail}>Add</button>
 									{/if}
 									<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>
 								</span>
 								{#if addEmail.error}<span class="ap-profedit-hint ap-profedit-err" role="alert">{addEmail.error}</span>
-								{:else if addEmail.step === 'code'}<span class="ap-profedit-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
+								{:else if addEmail.scheme === 'external' && addEmail.page}<span class="ap-profedit-hint" role="status"><a href={addEmail.page} target="_blank" rel="noopener noreferrer">Open the sign-in page</a>, sign in there, then enter the code it shows you.</span>
+								{:else if addEmail.step === 'code' && addEmail.scheme === 'email'}<span class="ap-profedit-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
 							{/if}
 						{/if}
 					</div>

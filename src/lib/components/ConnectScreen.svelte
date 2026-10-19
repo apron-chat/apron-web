@@ -20,9 +20,9 @@
 		canCancel: boolean;
 		/** Preselects a scheme, e.g. when the profile asks to sign in with a passkey. */
 		initialScheme?: Scheme;
-		/** Prefills the email field, e.g. after an emailed sign-in link failed. */
+		/** Prefills the email field. */
 		initialEmail?: string;
-		/** Shows an error to start with, e.g. why an emailed sign-in link failed. */
+		/** Shows an error to start with, e.g. why a sign-in link failed. */
 		initialError?: string;
 		/** The form was submitted for another backend: the page drops whatever belonged to the previous one. */
 		onconnect: () => void;

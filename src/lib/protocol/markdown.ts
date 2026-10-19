@@ -62,8 +62,21 @@ export interface MentionPerson {
 	me?: boolean;
 }
 
-/** `@user_id` or `#room_id`; trailing `.` and `-` are kept outside the ID. */
-const MENTION = /@([A-Za-z0-9_.-]+)|#([A-Za-z0-9_.-]+)/g;
+/**
+ * The ID after an `@` or `#` in text (Appendix A.3): the longest run of
+ * `[A-Za-z0-9_.+@:-]` that starts and ends with a letter, a digit, or `_`, so
+ * `@ada@example.com.` names `ada@example.com`.
+ */
+export const TEXT_ID = /[A-Za-z0-9_](?:[A-Za-z0-9_.+@:-]*[A-Za-z0-9_])?/;
+const LEADING_ID = new RegExp(`^${TEXT_ID.source}`);
+
+/** The ID that text after an `@` or `#` starts with (Appendix A.3), if any. */
+export function textId(text: string): string | undefined {
+	return LEADING_ID.exec(text)?.[0];
+}
+
+/** `@user_id` or `#room_id`, its prefix not right after a letter or digit (Appendix A.3). */
+const MENTION = new RegExp(`(?<![A-Za-z0-9])(?:@(${TEXT_ID.source})|#(${TEXT_ID.source}))`, 'g');
 
 /**
  * A bare `http(s)://` link in escaped text: it runs to whitespace or an escaped
@@ -255,18 +268,13 @@ export function mentionSegments(text: string, resolve?: MentionResolver, resolve
 	const segments: MentionSegment[] = [];
 	let last = 0;
 	for (const match of text.matchAll(MENTION)) {
-		const [whole, rawUser, rawRoom] = match;
+		const [whole, user, room] = match;
 		const offset = match.index;
-		const before = text[offset - 1];
-		const raw = rawUser ?? rawRoom;
-		if (before !== undefined && (rawUser !== undefined ? /[A-Za-z0-9@]/ : /[A-Za-z0-9_]/).test(before)) continue;
-		const id = raw.replace(/[.-]+$/, '');
-		if (!id) continue;
-		const target = rawUser !== undefined ? resolve?.(id) : resolveRoom?.(id) ?? resolve?.(id);
-		if (!target || target.kind !== (rawUser !== undefined ? 'user' : 'room')) continue;
+		const target = user !== undefined ? resolve?.(user) : resolveRoom?.(room) ?? resolve?.(room);
+		if (!target || target.kind !== (user !== undefined ? 'user' : 'room')) continue;
 		if (offset > last) segments.push(text.slice(last, offset));
-		segments.push({ target, hash: rawRoom !== undefined });
-		last = offset + whole.length - (raw.length - id.length);
+		segments.push({ target, hash: room !== undefined });
+		last = offset + whole.length;
 	}
 	if (last < text.length) segments.push(text.slice(last));
 	return segments;

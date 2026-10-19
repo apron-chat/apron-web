@@ -50,6 +50,16 @@ describe('composer mentions', () => {
 		expect(typed('`x` @bob ').parts).toEqual(['`x` ', { id: 'bob' }, ' ']);
 	});
 
+	it('chips email and federated IDs whole, and no name that what follows would make a longer ID', () => {
+		const text = 'cc @ada@example.com, @carol:b.example. ';
+		const forms = collapseMentions([text], people, { caret: text.length, isUser: (id) => id === 'ada@example.com' || id === 'carol:b.example' });
+		expect(forms.parts).toEqual(['cc ', { id: 'ada@example.com' }, ', ', { id: 'carol:b.example' }, '. ']);
+		// Sent as `@bob`, "@Bob.x" would read as `@bob.x` (Appendix A.3).
+		expect(typed('hi @Bob.x there').changed).toBe(false);
+		expect(typed('hi @Bob@example.com there').changed).toBe(false);
+		expect(typed('hi @Bob. there').parts).toEqual(['hi ', { id: 'bob' }, '. there']);
+	});
+
 	it('takes IDs the directory knows beyond the room', () => {
 		const known = collapseMentions(['cc @carol_9 '], people, { caret: 12, isUser: (id) => id === 'carol_9' });
 		expect(known.parts).toEqual(['cc ', { id: 'carol_9' }, ' ']);

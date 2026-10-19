@@ -21,7 +21,7 @@
 		open: boolean;
 		/**
 		 * Offer adding and removing other members (`room_join` and `room_leave`
-		 * with `user_id`, §4.3.2): capability `rooms`, signed in with writes allowed, and
+		 * with `user_id`, §4.2.2): capability `rooms`, signed in with writes allowed, and
 		 * the room joined. Who may is server policy; a server that doesn't support
 		 * it at all answers `unsupported`, and the offer goes.
 		 */
@@ -37,7 +37,7 @@
 	let members = $derived(byStatus([...(room?.members ?? [])].sort((a, b) =>
 		directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)
 	), statusOf));
-	/** A large room's listing may hold only its most recently active members, with the total (§4.3.1). */
+	/** A large room's listing may hold only its most recently active members, with the total (§4.2.1). */
 	let total = $derived(room?.members === undefined ? undefined : Math.max(room.memberCount ?? 0, room.members.length));
 	let truncated = $derived(total !== undefined && room?.members !== undefined && total > room.members.length);
 	let changing = $derived(canChange && !session.snapshot.memberChangesUnsupported && Boolean(client) && Boolean(room?.joined));

@@ -45,7 +45,7 @@ export interface Notice {
  * One visible room: a room the user has joined on this connection (capability
  * `rooms`), else one a message arrived in, or a room opened without joining
  * it (`viewRoom`, `joined: false`). Threads are rooms with `parentRoomId`
- * (PROTOCOL.md §3.4, §4.3).
+ * (PROTOCOL.md §3.4, §4.2).
  */
 export interface RoomSnapshot {
 	id: string;
@@ -62,7 +62,7 @@ export interface RoomSnapshot {
 	/** Set for threads; fixed at creation. */
 	parentRoomId?: string;
 	/**
-	 * The server keeps the room private (§4.3.4): only its members see it.
+	 * The server keeps the room private (§4.2.4): only its members see it.
 	 * Fixed at creation; absent means an ordinary room.
 	 */
 	private?: boolean;
@@ -111,7 +111,7 @@ export interface RoomSnapshot {
 	/** Your read cursor in this room (§4.6), as the server last reported or you advanced it. */
 	readMessageId?: string;
 	/**
-	 * The room's members (§4.3.2): started from a complete `members` listing
+	 * The room's members (§4.2.2): started from a complete `members` listing
 	 * (`room_list` with `members`, or `room_update` `joined`) and kept current by
 	 * the memberships received live and in history. Each is the listed or
 	 * recorded user object; render it through the kept one. Undefined until
@@ -120,7 +120,7 @@ export interface RoomSnapshot {
 	members?: Identity[];
 	/**
 	 * How many users have joined, when the server listed only the most
-	 * recently active in `members` (§4.3.1), as of that listing.
+	 * recently active in `members` (§4.2.1), as of that listing.
 	 */
 	memberCount?: number;
 	/** Transient notices shown in this room this session, in arrival order. */
@@ -128,7 +128,7 @@ export interface RoomSnapshot {
 }
 
 /**
- * A visible room as `room_list` returns it (§4.3.1): its record, its head,
+ * A visible room as `room_list` returns it (§4.2.1): its record, its head,
  * and its members. Listing a room does not join it.
  */
 export interface RoomListing {
@@ -142,7 +142,7 @@ export interface RoomListing {
 	historyLogId?: string | null;
 	/** The room's members when the listing asked for them (`members: true`), else empty. */
 	members: Identity[];
-	/** The total when the server truncated `members` (§4.3.1). */
+	/** The total when the server truncated `members` (§4.2.1). */
 	memberCount?: number;
 	/** The user has joined it: it is in the joined set on this connection. */
 	joined: boolean;
@@ -193,28 +193,30 @@ export interface ClientSnapshot {
 	/** True once the server has accepted this connection's auth request. */
 	authenticated: boolean;
 	authBusy?: boolean;
-	/** Signed in to a registered account (a passkey, an email, or a kept token), not as a guest. */
+	/** Signed in to a registered account (a passkey, an email, an external sign-in, or a kept token), not as a guest. */
 	passkeySession?: boolean;
 	/**
 	 * How this browser signed in to that account: `token` means a kept token
-	 * is its only way back in here, worth adding a passkey or email to (§3.2).
+	 * is its only way back in here, worth adding another way to (§3.2.1).
 	 */
-	signedInWith?: 'webauthn' | 'email' | 'token';
+	signedInWith?: 'webauthn' | 'email' | 'external' | 'token';
 	/** How this browser can get back into the account: how it signed in, then what it added (§4.10, §4.11). */
-	signInMethods?: Array<'webauthn' | 'email' | 'token'>;
+	signInMethods?: Array<'webauthn' | 'email' | 'external' | 'token'>;
 	/**
 	 * A registered session is kept for this server (a token to resume with),
 	 * whether or not this connection has resumed it yet.
 	 */
 	keptSession?: boolean;
-	/** The sign-in guard is held by a passkey ceremony (true) or an email step (false). */
+	/** The sign-in guard is held by a passkey ceremony (true) or an addition's approval (false). */
 	passkeyBusy?: boolean;
 	/**
-	 * An email sign-in proposal waiting for its code (§4.11): the address,
-	 * and the server whose connection proposed it and alone takes the code.
-	 * Gone once used, replaced, or closed (by the server, or on expiry).
+	 * A sign-in proposal waiting for its code (§4.11): its scheme, the server
+	 * whose connection proposed it and alone takes the code, and the address
+	 * an email went to, or the page of an external sign-in that shows the
+	 * code. Gone once used, replaced, or once that connection closes (by the
+	 * server, or on expiry); the proposal's link may still work after that.
 	 */
-	emailCode?: { email: string; url: string };
+	signInCode?: { scheme: 'email' | 'external'; url: string; email?: string; page?: string };
 	/**
 	 * Signed in as a guest on a server whose guests only read
 	 * (`ext:settings` with `guest_posting: false`): posting, reacting, and
@@ -270,7 +272,7 @@ export interface ClientSnapshot {
 	imageOnlyUploads?: boolean;
 	/**
 	 * The server answered adding or removing another member (`room_join` or
-	 * `room_leave` with `user_id`) `unsupported` (§4.3.2): don't offer it.
+	 * `room_leave` with `user_id`) `unsupported` (§4.2.2): don't offer it.
 	 */
 	memberChangesUnsupported?: boolean;
 	/** Top-level rooms from the latest `room_list`, joined or not; undefined until listed. */
@@ -284,10 +286,10 @@ export interface ClientSnapshot {
 	held?: boolean;
 	/**
 	 * Held because the session comes back only by signing in again, and the
-	 * way to: a passkey, an emailed code, or a new token, from the sign-in
-	 * screen. Nothing prompts on its own meanwhile.
+	 * way to: a passkey, an emailed code, the server's sign-in page, or a new
+	 * token, from the sign-in screen. Nothing prompts on its own meanwhile.
 	 */
-	signInNeeded?: 'webauthn' | 'email' | 'token';
+	signInNeeded?: 'webauthn' | 'email' | 'external' | 'token';
 	/**
 	 * When the transport dropped (or failed to open) while the client kept
 	 * running; cleared once a connection authenticates again. The protocol
@@ -362,7 +364,7 @@ export interface EmbedEdits {
 export interface CreateRoomOptions {
 	/** Creates a thread under this room. */
 	parentRoomId?: string;
-	/** Visible only to its members (§4.3.4); fixed at creation. */
+	/** Visible only to its members (§4.2.4); fixed at creation. */
 	private?: boolean;
 	title?: string;
 	/** What the room is about, CommonMark by convention (§3.4). */

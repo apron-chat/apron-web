@@ -35,6 +35,9 @@ describe('composer commands', () => {
 		// …but a chip sent as `@al-` with `al-` in its mentions is that user.
 		expect(composerAction('/kick @al-', both, ['al-'])).toEqual({ kind: 'kick', user: 'al-' });
 		expect(composerAction('/kick @al', both, ['al'])).toEqual({ kind: 'kick', user: 'al' });
+		// Email and federated forms are one ID.
+		expect(composerAction('/kick @ada@example.com', both)).toEqual({ kind: 'kick', user: 'ada@example.com' });
+		expect(composerAction('/invite carol:b.example.', both)).toEqual({ kind: 'invite', user: 'carol:b.example' });
 	});
 
 	it('treats every text as a message without cap command', () => {

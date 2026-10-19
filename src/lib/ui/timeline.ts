@@ -22,7 +22,7 @@ export interface ThreadEntry {
 	title: string;
 	/** The thread's `description` (§3.4): Markdown, its summary or what started it. */
 	description?: string;
-	/** Visible only to its members (§4.3.4). */
+	/** Visible only to its members (§4.2.4). */
 	private?: boolean;
 	/** Messages in the thread; only known once its history has loaded. */
 	count?: number;
@@ -39,7 +39,7 @@ export interface ThreadEntry {
 	 */
 	anchor?: string;
 	/**
-	 * The viewer has joined the thread (§4.3.2). A thread not joined is known
+	 * The viewer has joined the thread (§4.2.2). A thread not joined is known
 	 * from `room_list` or a `room_update`, or open without joining: it still
 	 * gets a card, opening it reads its history, and only joining makes it live.
 	 */
@@ -213,7 +213,7 @@ function shortenMarkdown(text: string, max: number): string {
 
 /**
  * Whether a thread just created in a private room came out visible to
- * others: a thread created without `private` takes its parent's (§4.3.4),
+ * others: a thread created without `private` takes its parent's (§4.2.4),
  * so this client never sends it, and a thread of a private room without
  * `private: true` means the server didn't keep it private. False while
  * either record is unknown.
@@ -247,7 +247,7 @@ export interface RoomTimelineInput {
 	threads: ThreadEntry[];
 	/** Transient notices shown in the room (§3.5), in arrival order. */
 	notices?: readonly Notice[];
-	/** The room's membership records (§4.3.2), ascending by `log_id`. */
+	/** The room's membership records (§4.2.2), ascending by `log_id`. */
 	memberships?: readonly MembershipRecord[];
 	now?: Date;
 }

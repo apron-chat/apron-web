@@ -6,7 +6,7 @@
 
 	/**
 	 * Who joined and left the room between two other timeline items
-	 * (PROTOCOL.md §4.3.2), netted out: "Ada and Bob joined · Carol left". The
+	 * (PROTOCOL.md §4.2.2), netted out: "Ada and Bob joined · Carol left". The
 	 * quietest system line: no avatar, no actions, and its time only on hover.
 	 */
 	let { joined, left, logId }: { joined: Identity[]; left: Identity[]; logId: string } = $props();
