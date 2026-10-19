@@ -640,7 +640,7 @@ export class ChatClient {
 					createdAt
 				})),
 			typing: [...this.typing.values()].map(({ room, from }) => ({ room, from })),
-			users: this.usersWithHeldStatuses(),
+			users: this.usersWithHeldStatuses(heldStatuses),
 			...(heldStatuses.length ? { heldStatuses } : {}),
 			recordedUsers: Object.fromEntries([...this.recordedUsers].map(([id, entry]) => [id, entry.identity])),
 			userAliases: Object.fromEntries(this.userAliases),
@@ -2910,10 +2910,10 @@ export class ChatClient {
 		}
 	}
 
-	/** The kept users, with a held status for each one that has none of its own yet. */
-	private usersWithHeldStatuses(): Record<string, Identity> {
+	/** The kept users, with a held status for each of `showing` (those with none of their own yet). */
+	private usersWithHeldStatuses(showing = this.showingHeldStatuses()): Record<string, Identity> {
 		const users = Object.fromEntries(this.users);
-		for (const userId of this.showingHeldStatuses()) users[userId] = { ...users[userId], status: this.heldStatuses!.get(userId)! };
+		for (const userId of showing) users[userId] = { ...users[userId], status: this.heldStatuses!.get(userId)! };
 		return users;
 	}
 
