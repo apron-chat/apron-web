@@ -25,6 +25,7 @@
 	import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
 	import PanelToggle from '$lib/components/PanelToggle.svelte';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
+	import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
 	import StatusBanner from '$lib/components/StatusBanner.svelte';
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
 	import ThreadSummary from '$lib/components/ThreadSummary.svelte';
@@ -2495,6 +2496,7 @@
 	{#if memberListWide}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/if}
 	<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
 	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} onmention={(userId) => composer?.mention(userId)} />
+	<ReactorsPopover />
 	<!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
 	<!-- Kept while shut (hidden), so its border slides with the list's. -->
 	{#if memberListWide}<SidebarHandle layout={memberList} name="member list" oncollapse={() => memberListToggle?.focus()} />{/if}
