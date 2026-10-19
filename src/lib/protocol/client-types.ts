@@ -261,6 +261,13 @@ export interface ClientSnapshot {
 	 */
 	users: Record<string, Identity>;
 	/**
+	 * Users whose `status` in `users` is only held from before a resume's
+	 * sign-in, which drops the kept statuses (§4.5.4): shown until the joined
+	 * listing arrives or a fresh one comes, so nothing greys out meanwhile, but
+	 * no longer kept. Absent when none is.
+	 */
+	heldStatuses?: string[];
+	/**
 	 * The latest recorded object seen per `user_id` (a message's or
 	 * reaction's `from`, a membership's `user`), by `log_id`. Never merged into
 	 * `users`: a fallback where no frame carries one, such as a mention in

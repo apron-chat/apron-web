@@ -574,6 +574,7 @@ export class ChatClient {
 		}
 		const history = this.hasCap('history');
 		const roomMutes = this.pausedRooms();
+		const heldStatuses = this.showingHeldStatuses();
 		return {
 			status: this.status,
 			authenticated: this.authenticated,
@@ -640,6 +641,7 @@ export class ChatClient {
 				})),
 			typing: [...this.typing.values()].map(({ room, from }) => ({ room, from })),
 			users: this.usersWithHeldStatuses(),
+			...(heldStatuses.length ? { heldStatuses } : {}),
 			recordedUsers: Object.fromEntries([...this.recordedUsers].map(([id, entry]) => [id, entry.identity])),
 			userAliases: Object.fromEntries(this.userAliases),
 			uploads: Object.fromEntries(this.uploads),
@@ -2911,12 +2913,17 @@ export class ChatClient {
 	/** The kept users, with a held status for each one that has none of its own yet. */
 	private usersWithHeldStatuses(): Record<string, Identity> {
 		const users = Object.fromEntries(this.users);
-		if (!this.heldStatuses) return users;
-		for (const [userId, status] of this.heldStatuses) {
-			const user = users[userId];
-			if (user && !Object.hasOwn(user, 'status')) users[userId] = { ...user, status };
-		}
+		for (const userId of this.showingHeldStatuses()) users[userId] = { ...users[userId], status: this.heldStatuses!.get(userId)! };
 		return users;
+	}
+
+	/** The users whose held status shows: those with none of their own yet. */
+	private showingHeldStatuses(): string[] {
+		if (!this.heldStatuses) return [];
+		return [...this.heldStatuses.keys()].filter((userId) => {
+			const user = this.users.get(userId);
+			return user !== undefined && !Object.hasOwn(user, 'status');
+		});
 	}
 
 	/**

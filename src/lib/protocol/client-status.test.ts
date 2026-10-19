@@ -60,16 +60,19 @@ describe('kept statuses and sign-ins', () => {
 		reconnect();
 		hello();
 		await socket.reply('auth', { you: { user_id: 'ada', status: 'dnd' } });
-		// Your own comes from the auth's `you`; the others' from before still show.
+		// Your own comes from the auth's `you`; the others' from before still show, said to be only held.
 		expect(statusOf('ada')).toBe('dnd');
 		expect([statusOf('bo'), statusOf('cy')]).toEqual(['idle', 'dnd']);
+		expect(snapshot.heldStatuses).toEqual(['bo', 'cy']);
 		// After the result the server sends connected users' statuses again (§4.5), which show at once.
 		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'online' } } });
 		expect([statusOf('bo'), statusOf('cy')]).toEqual(['online', 'dnd']);
+		expect(snapshot.heldStatuses).toEqual(['cy']);
 		// Once the listing is in, a status the server didn't send again is no longer known: not offline.
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', members: [{ user_id: 'ada' }, { user_id: 'bo' }, { user_id: 'cy' }] }] });
 		expect(statusOf('bo')).toBe('online');
 		expect(snapshot.users.cy).toEqual({ user_id: 'cy' });
+		expect(snapshot.heldStatuses).toBeUndefined();
 	});
 
 	it('drops them at once at a sign-in as someone else after a lost connection', async () => {
