@@ -9,14 +9,14 @@
 		/** A room (title and description), or a thread (title and summary): a room with a `parent_room_id` (§3.4). */
 		kind?: 'room' | 'thread';
 		/**
-		 * `create` a room or start a thread (`room_create`, §4.3.4), or `edit` an existing one (`room_set`). A thread
+		 * `create` a room or start a thread (`room_create`, §4.2.4), or `edit` an existing one (`room_set`). A thread
 		 * starts from its room, from a message (its text quoted as the summary), or from selected messages.
 		 */
 		mode?: 'create' | 'edit';
 		/** One line under the heading, such as the room a new thread goes in. */
 		subtitle?: string;
 		/**
-		 * Private (§4.3.4), when creating. A room: the Private choice, `bind:private`. A thread takes its room's,
+		 * Private (§4.2.4), when creating. A room: the Private choice, `bind:private`. A thread takes its room's,
 		 * so it's no choice: a note says so. Editing ignores it, since an omitted `private` is kept.
 		 */
 		private?: boolean;

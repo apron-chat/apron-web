@@ -60,7 +60,7 @@ describe('NewRoomDialog', () => {
 		flushSync();
 		await submit();
 		expect(createRoom).toHaveBeenCalledWith({ title: 'Ops', description: 'Deploys', private: true });
-		// Its record must come back private before it's used (§4.3.4).
+		// Its record must come back private before it's used (§4.2.4).
 		expect(oncreated).toHaveBeenCalledWith('new', { private: true });
 		expect(onclose).toHaveBeenCalled();
 	});

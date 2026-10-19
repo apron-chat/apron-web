@@ -2,7 +2,7 @@ import type { MembershipRecord } from '$lib/protocol/reducer';
 import type { Identity } from '$lib/protocol/types';
 
 /**
- * Join and leave lines (PROTOCOL.md §4.3.2): the pure part. The timeline
+ * Join and leave lines (PROTOCOL.md §4.2.2): the pure part. The timeline
  * collects consecutive membership records, with nothing else between them,
  * into a run; a run nets out to who joined and who left, and a line names
  * them.

@@ -88,7 +88,7 @@ describe('thread grouping', () => {
 
 	it('tells when a new thread of a private room came out visible to others', () => {
 		const secret = { id: 'ops', private: true };
-		// Created without `private`, a thread takes its parent's (§4.3.4).
+		// Created without `private`, a thread takes its parent's (§4.2.4).
 		expect(threadLostPrivacy([secret, { id: 't1', private: true }], 'ops', 't1')).toBe(false);
 		expect(threadLostPrivacy([secret, { id: 't1' }], 'ops', 't1')).toBe(true);
 		expect(threadLostPrivacy([{ id: 'general' }, { id: 't1' }], 'general', 't1')).toBe(false);

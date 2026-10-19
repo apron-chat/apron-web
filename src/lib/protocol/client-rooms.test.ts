@@ -34,13 +34,13 @@ describe('rooms by request (cap rooms)', () => {
 
 	async function authenticate(caps: string[]): Promise<void> {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: caps } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: caps } });
 		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
 	}
 
 	it('lists the joined rooms with their members right behind auth, threads included, then follows room_update', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
 		// Auth is a barrier (§3.2): the listing goes out before its result.
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list']);
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
@@ -115,7 +115,7 @@ describe('rooms by request (cap rooms)', () => {
 	it('shows a welcome sent before auth in the first room, and lets the next connection\'s welcome replace it', async () => {
 		const welcome = (text: string) => ({ method: 'message', params: { from: { user_id: '~private', name: 'Only you' }, body: { text } } });
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
 		// Notifications may come before auth (§3.2); with no room yet, it waits for one (Appendix B).
 		socket.receive(welcome('Guests can read along.'));
 		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
@@ -128,7 +128,7 @@ describe('rooms by request (cap rooms)', () => {
 		vi.advanceTimersByTime(5_000);
 		socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
 		socket.receive(welcome('Guests can read along, again.'));
 		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
@@ -180,7 +180,7 @@ describe('rooms by request (cap rooms)', () => {
 		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '11', history_log_id: '10', members: [{ user_id: 'bob' }, { user_id: 'guest_1' }] }], users: [] });
 		await socket.reply('history', { memberships: [{ log_id: '11', room_id: 'general', members: [{ user: { user_id: 'guest_1' }, joined: true }] }], first_log_id: '11', last_log_id: '11', more: false, latest_log_id: '11', history_log_id: '10' });
 		expect(room('general')?.members?.map((member) => member.user_id)).toEqual(['bob', 'guest_1']);
-		// Joining: one room_update with the room, its members, and the membership, then the result (§4.3.2).
+		// Joining: one room_update with the room, its members, and the membership, then the result (§4.2.2).
 		const joined = client.joinRoom('ops');
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '20', title: 'Ops', latest_log_id: '21', history_log_id: '20', members: [{ user_id: 'dana' }, { user_id: 'guest_1' }] }], memberships: [{ log_id: '21', room_id: 'ops', members: [{ user: { user_id: 'guest_1', name: 'Guest' }, joined: true }] }], users: [{ user_id: 'dana', name: 'Dana' }, { user_id: 'guest_1', name: 'Guest' }] } });
 		expect(ids()).toEqual(['general', 'ops']);
@@ -197,7 +197,7 @@ describe('rooms by request (cap rooms)', () => {
 		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '32', room_id: 'ops', members: [{ user: { user_id: 'dana', name: 'Dana' }, joined: false }] }] } });
 		expect(room('ops')?.members?.map((member) => member.user_id)).toEqual(['guest_1']);
 		expect(room('ops')?.latestLogId).toBe('32');
-		// A record may carry several members (§4.3.2).
+		// A record may carry several members (§4.2.2).
 		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '33', room_id: 'ops', members: [{ user: { user_id: 'erin' }, joined: true }, { user: { user_id: 'finn' }, joined: true }] }] } });
 		expect(room('ops')?.members?.map((member) => member.user_id)).toEqual(['guest_1', 'erin', 'finn']);
 		// Your own leave: the room goes, with the membership in the same room_update.
@@ -208,7 +208,7 @@ describe('rooms by request (cap rooms)', () => {
 
 	it('does not report a listing denied behind a failed auth', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
 		const auth = socket.request('auth');
 		const listing = socket.request('room_list');
 		socket.receive({ id: auth.id, error: { code: -32001, message: 'Guests are not accepted right now' } });
@@ -222,7 +222,7 @@ describe('rooms by request (cap rooms)', () => {
 
 	it('drops a listing a server answered behind a failed auth, as the connection was: signed in as no one', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
 		const auth = socket.request('auth');
 		const listing = socket.request('room_list');
 		socket.receive({ id: auth.id, error: { code: -32001, message: 'Guests are not accepted right now' } });
@@ -301,7 +301,7 @@ describe('rooms by request (cap rooms)', () => {
 		const statuses = () => socket.sent.filter((frame) => frame.method === 'status').map((frame) => frame.params as Record<string, unknown>);
 		async function greet(caps: string[] = ['rooms', 'status'], you: Record<string, unknown> = { user_id: 'guest_1', name: 'Guest' }, auth = ['guest']): Promise<void> {
 			socket.open();
-			socket.receive({ method: 'server', params: { apron: 8, auth, capabilities: caps } });
+			socket.receive({ method: 'server', params: { apron: 9, auth, capabilities: caps } });
 			await socket.reply('auth', { you });
 			if (caps.includes('rooms')) await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
 		}
@@ -322,13 +322,13 @@ describe('rooms by request (cap rooms)', () => {
 		it('sends status as a request with an id, and nothing before the auth result', async () => {
 			client.setIdle(true);
 			socket.open();
-			socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['status'] } });
+			socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'] } });
 			// Not signed in yet (§3.2): no status, even for a page already idle.
 			expect(socket.sent.map((frame) => frame.method)).toEqual(['auth']);
 			await socket.reply('auth', { you: { user_id: 'guest_1' } });
 			// After the result, an idle page reports it at once.
 			const request = socket.request('status');
-			expect(request).toEqual({ method: 'status', id: expect.any(String), params: { idle: true } });
+			expect(request).toEqual({ method: 'status', id: expect.any(String), params: { idle: 0 } });
 			expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'status']);
 		});
 
@@ -338,25 +338,25 @@ describe('rooms by request (cap rooms)', () => {
 			vi.advanceTimersByTime(60_000);
 			expect(statuses()).toEqual([]);
 			// A replacing server frame says nothing either.
-			socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+			socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 			expect(statuses()).toEqual([]);
 		});
 
 		it('reports idle and attended as the page says, at once, and only changes', async () => {
 			await greet();
 			client.setIdle(true);
-			expect(statuses()).toEqual([{ idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }]);
 			await answer();
 			client.setIdle(true);
-			expect(statuses()).toEqual([{ idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }]);
 			client.setIdle(false);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }]);
 			await answer();
 			client.setIdle(false);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }]);
 		});
 
-		it('reports how long the page has gone unused as whole seconds, and true to a server that refuses them', async () => {
+		it('reports how long the page has gone unused as whole seconds', async () => {
 			await greet();
 			client.setIdle(true, Date.now() - 300_500);
 			expect(statuses()).toEqual([{ idle: 300 }]);
@@ -365,14 +365,9 @@ describe('rooms by request (cap rooms)', () => {
 			await answer();
 			// Worked out when it goes: a refused request's retry says the time since then.
 			client.setIdle(true, Date.now() - 1_000);
-			await answer({ code: -32602, message: 'idle must be a boolean' });
-			expect(statuses()).toEqual([{ idle: 300 }, { idle: false }, { idle: 1 }, { idle: true }]);
-			await answer();
-			// The rest of this connection says only true.
-			client.setIdle(false);
-			await answer();
-			client.setIdle(true, Date.now());
-			expect(statuses().at(-1)).toEqual({ idle: true });
+			await answer(tooMany(2));
+			vi.advanceTimersByTime(2_000);
+			expect(statuses()).toEqual([{ idle: 300 }, { idle: false }, { idle: 1 }, { idle: 3 }]);
 		});
 
 		it('stays idle after a message: only idle: false ends it', async () => {
@@ -382,9 +377,9 @@ describe('rooms by request (cap rooms)', () => {
 			client.sendTyping('general', true);
 			client.markRead('general', '1724803200001');
 			client.send('general', 'hi').promise.catch(() => undefined);
-			expect(statuses()).toEqual([{ idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }]);
 			client.setIdle(false);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }]);
 			// `activity` never carries attendance.
 			expect(socket.sent.filter((frame) => frame.method === 'activity' && 'idle' in (frame.params as object))).toEqual([]);
 		});
@@ -395,11 +390,12 @@ describe('rooms by request (cap rooms)', () => {
 			await answer();
 			reconnect();
 			await greet();
-			expect(statuses()).toEqual([{ idle: true }]);
+			// Idle since the page said so, before the reconnect.
+			expect(statuses()).toEqual([{ idle: 5 }]);
 			await answer();
 			// Back, then a reconnect: the new connection starts attended, so it says nothing.
 			client.setIdle(false);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 5 }, { idle: false }]);
 			reconnect();
 			await greet();
 			expect(statuses()).toEqual([]);
@@ -410,42 +406,42 @@ describe('rooms by request (cap rooms)', () => {
 			client.setIdle(true);
 			// Back and idle again while the first is unanswered: nothing more goes yet.
 			client.setIdle(false);
-			expect(statuses()).toEqual([{ idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }]);
 			await answer();
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }]);
 			client.setIdle(true);
 			client.setIdle(false);
 			await answer();
 			// What the server has is what the page says: nothing more goes.
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }]);
 		});
 
 		it('resends the current idle state, not the refused one, after retry_after', async () => {
 			await greet();
 			client.setIdle(true);
-			// Back meanwhile: the refused idle: true is not what goes again.
+			// Back meanwhile: the refused idle is not what goes again.
 			client.setIdle(false);
 			await answer(tooMany(5));
-			expect(statuses()).toEqual([{ idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }]);
 			vi.advanceTimersByTime(4_999);
-			expect(statuses()).toEqual([{ idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }]);
 			// Nothing changed on the server (§4.5), and the page is attended, as the connection started: nothing to send.
 			vi.advanceTimersByTime(1);
-			expect(statuses()).toEqual([{ idle: true }]);
-			// Refused again while still idle: after the delay, the same state goes with a new id.
+			expect(statuses()).toEqual([{ idle: 0 }]);
+			// Refused again while still idle: after the delay, the same state goes with a new id, idle for longer.
 			client.setIdle(true);
 			const first = socket.request('status').id;
 			await answer(tooMany(2));
 			vi.advanceTimersByTime(2_000);
-			expect(statuses()).toEqual([{ idle: true }, { idle: true }, { idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: 0 }, { idle: 2 }]);
 			expect(socket.request('status').id).not.toBe(first);
 			await answer();
 			// Attended after a refused idle: false goes again once the delay is over.
 			client.setIdle(false);
 			await answer(tooMany(1));
-			expect(statuses()).toEqual([{ idle: true }, { idle: true }, { idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: 0 }, { idle: 2 }, { idle: false }]);
 			vi.advanceTimersByTime(1_000);
-			expect(statuses()).toEqual([{ idle: true }, { idle: true }, { idle: true }, { idle: false }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: 0 }, { idle: 2 }, { idle: false }, { idle: false }]);
 			await answer();
 		});
 
@@ -455,17 +451,17 @@ describe('rooms by request (cap rooms)', () => {
 			await answer();
 			client.setIdle(false);
 			await answer({ code: -32603, message: 'Internal error' });
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }]);
 			vi.advanceTimersByTime(IDLE_RETRY_MS - 1);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }]);
 			vi.advanceTimersByTime(1);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }, { idle: false }]);
 			// Failing again doubles the wait.
 			await answer({ code: -32603, message: 'Internal error' });
 			vi.advanceTimersByTime(IDLE_RETRY_MS * 2 - 1);
 			expect(statuses()).toHaveLength(3);
 			vi.advanceTimersByTime(1);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }, { idle: false }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }, { idle: false }, { idle: false }]);
 			await answer();
 			// Applied: nothing more goes, and the next failure starts from the first wait.
 			vi.advanceTimersByTime(60_000);
@@ -473,34 +469,34 @@ describe('rooms by request (cap rooms)', () => {
 			client.setIdle(true);
 			await answer({ code: -32603, message: 'Internal error' });
 			vi.advanceTimersByTime(IDLE_RETRY_MS);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }, { idle: false }, { idle: false }, { idle: true }, { idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }, { idle: false }, { idle: false }, { idle: 0 }, { idle: IDLE_RETRY_MS / 1000 }]);
 			// Back meanwhile: the current state is what goes.
 			client.setIdle(false);
 			await answer({ code: -32603, message: 'Internal error' });
 			vi.advanceTimersByTime(IDLE_RETRY_MS * 2);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }, { idle: false }, { idle: false }, { idle: true }, { idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }, { idle: false }, { idle: false }, { idle: 0 }, { idle: IDLE_RETRY_MS / 1000 }]);
 		});
 
 		it('sends the current idle state after a request that timed out, which the server may have applied', async () => {
 			await greet();
 			client.setIdle(true);
-			expect(statuses()).toEqual([{ idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }]);
 			// No answer: the server may take the connection as idle, or not. Back meanwhile.
 			client.setIdle(false);
 			await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
-			expect(statuses()).toEqual([{ idle: true }]);
+			expect(statuses()).toEqual([{ idle: 0 }]);
 			// After the backoff, attended goes, though the connection started attended.
 			vi.advanceTimersByTime(IDLE_RETRY_MS);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }]);
 			await answer();
 			// Answered: the server has it, and nothing more goes.
 			client.setIdle(false);
-			expect(statuses()).toEqual([{ idle: true }, { idle: false }]);
+			expect(statuses()).toEqual([{ idle: 0 }, { idle: false }]);
 		});
 
 		it('keeps a room\'s mute from the server\'s status for it (§4.5), joined or not', async () => {
 			socket.open();
-			socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+			socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 			await socket.reply('auth', { you: { user_id: 'guest_1' } });
 			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }, { room_id: 'random', title: 'Random' }, { room_id: 'ops', title: 'Ops' }] });
 			const muted = () => Object.fromEntries(snapshot.rooms.map((room) => [room.id, room.mutedUntil]));
@@ -509,7 +505,8 @@ describe('rooms by request (cap rooms)', () => {
 			// A room not listed here yet keeps its mute for when it is.
 			socket.receive({ method: 'status', params: { room_id: 'elsewhere', mute: true } });
 			expect(muted()).toEqual({ general: true, random: Date.now() + 60_000, ops: undefined });
-			// Room records no longer carry it: a record without `mute`, or with one, changes nothing.
+			expect(snapshot.roomMutes).toEqual({ general: true, random: Date.now() + 60_000, elsewhere: true });
+			// Room records don't carry it: a record without `mute`, or with one, changes nothing.
 			socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '20', title: 'General!' }, { room_id: 'ops', log_id: '21', title: 'Ops', mute: true }] } });
 			socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'general', log_id: '24', title: 'General!' }] } });
 			expect(muted()).toEqual({ general: true, random: Date.now() + 60_000, ops: undefined });
@@ -517,6 +514,7 @@ describe('rooms by request (cap rooms)', () => {
 			socket.receive({ method: 'status', params: { room_id: 'random', mute: false } });
 			socket.receive({ method: 'status', params: { room_id: 'general', mute: 0 } });
 			expect(muted()).toEqual({ general: undefined, random: undefined, ops: undefined });
+			expect(snapshot.roomMutes).toEqual({ elsewhere: true });
 			// A room's mute leaves the unscoped one alone.
 			expect(snapshot.mutedUntil).toBeUndefined();
 			// An invalid one is ignored.
@@ -536,14 +534,14 @@ describe('rooms by request (cap rooms)', () => {
 
 		it('sends no status to a server without the capability, push or not', async () => {
 			socket.open();
-			socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['activity'], push: { webpush: { key: 'BNcR' } } } });
+			socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['activity'], push: { webpush: { key: 'BNcR' } } } });
 			await socket.reply('auth', { you: { user_id: 'guest_1' } });
 			client.setIdle(true);
 			client.setMute(true);
 			expect(statuses()).toEqual([]);
 			// A replacing server frame with the capability hears the current state.
-			socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['status'] } });
-			expect(statuses()).toEqual([{ idle: true }]);
+			socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'] } });
+			expect(statuses()).toEqual([{ idle: 0 }]);
 		});
 
 		it('pauses notifications with mute, and takes the server\'s status as the word on it (§4.5)', async () => {
@@ -570,7 +568,7 @@ describe('rooms by request (cap rooms)', () => {
 			// Another of your connections paused: the server sends it here too, and this one takes it as its own.
 			socket.receive({ method: 'status', params: { mute: true } });
 			expect(snapshot.mutedUntil).toBe(true);
-			// `you` no longer says anything about mutes (§4.5): a `mute` in it is ignored.
+			// `you` says nothing about mutes (§4.5): a `mute` in it is ignored.
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', mute: 0 } } });
 			socket.receive({ method: 'user', params: { you: { user_id: 'ada', status: 'online' } } });
 			expect(snapshot.mutedUntil).toBe(true);
@@ -663,7 +661,7 @@ describe('rooms by request (cap rooms)', () => {
 			// Reconnected: the server lost the global mute and shortened the room's while this client was away.
 			reconnect();
 			socket.open();
-			socket.receive({ method: 'server', params: { apron: 8, auth: ['token', 'guest'], capabilities: ['rooms', 'status'] } });
+			socket.receive({ method: 'server', params: { apron: 9, auth: ['token', 'guest'], capabilities: ['rooms', 'status'] } });
 			// Until the new auth, the kept mutes still apply.
 			expect(snapshot.mutedUntil).toBe(true);
 			// The sign-in drops every kept mute at its result; every notification it causes comes after (§3.2).
@@ -688,7 +686,7 @@ describe('rooms by request (cap rooms)', () => {
 			socket.receive({ method: 'user', params: { new: { user_id: 'cy', name: 'Cy', status: 'dnd' } } });
 			reconnect();
 			socket.open();
-			socket.receive({ method: 'server', params: { apron: 8, auth: ['token', 'guest'], capabilities: ['rooms', 'status'] } });
+			socket.receive({ method: 'server', params: { apron: 9, auth: ['token', 'guest'], capabilities: ['rooms', 'status'] } });
 			// A lost connection keeps them until the next sign-in.
 			expect([snapshot.mutedUntil, snapshot.users.bo.status]).toEqual([true, 'idle']);
 			await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada', status: 'online' } });
@@ -755,7 +753,7 @@ describe('rooms by request (cap rooms)', () => {
 		const sent = (method: string) => socket.sent.filter((frame) => frame.method === method).map((frame) => frame.params);
 		async function greet(push?: Record<string, unknown>, you = 'ada'): Promise<void> {
 			socket.open();
-			socket.receive({ method: 'server', params: { apron: 8, auth: ['token', 'guest'], capabilities: [], ...(push ? { push } : {}) } });
+			socket.receive({ method: 'server', params: { apron: 9, auth: ['token', 'guest'], capabilities: [], ...(push ? { push } : {}) } });
 			// Nothing is registered before auth.
 			expect(sent('push_register')).toEqual([]);
 			await socket.reply('auth', { you: { user_id: you, name: you } });
@@ -803,7 +801,7 @@ describe('rooms by request (cap rooms)', () => {
 			reconnect();
 			await greet({ relay: {} });
 			expect(sent('push_register')).toEqual([]);
-			socket.receive({ method: 'server', params: { apron: 8, auth: ['token', 'guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
+			socket.receive({ method: 'server', params: { apron: 9, auth: ['token', 'guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
 			expect(sent('push_register')).toEqual([renewed]);
 		});
 
@@ -1073,7 +1071,7 @@ describe('room records and membership', () => {
 		quiet(client.createRoom({ title: 'Oops', private: true }));
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 's2', log_id: '21', title: 'Oops' }] } });
 		expect(room('s2')?.private).toBeUndefined();
-		// Updates never send `private`: omitted, it is kept (§4.3.4).
+		// Updates never send `private`: omitted, it is kept (§4.2.4).
 		quiet(client.updateRoom('s1', { title: 'Secret 2' }));
 		expect(socket.request('room_set').params).toEqual({ room_id: 's1', title: 'Secret 2', description: 'Just us' });
 		// A thread is created without it, and takes its parent's.
@@ -1109,7 +1107,7 @@ describe('room records and membership', () => {
 		// Your own join and leave are unaffected, and a new server frame tries again.
 		quiet(client.leaveRoom('general'));
 		expect(socket.request('room_leave').params).toEqual({ room_id: 'general' });
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
 		expect(snapshot.memberChangesUnsupported).toBeUndefined();
 	});
 
@@ -1120,7 +1118,7 @@ describe('room records and membership', () => {
 	});
 
 	it('never installs a ~private message from a history page', async () => {
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms', 'history'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'history'] } });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '80', title: 'Ops', latest_log_id: '82', history_log_id: '80' }] } });
 		const request = socket.request('history');
 		socket.receive({ id: request.id, result: { messages: [

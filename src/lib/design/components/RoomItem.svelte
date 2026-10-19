@@ -8,7 +8,7 @@
 		name?: string;
 		/** the room's `description` (§3.4) as one line of text */
 		topic?: string;
-		/** `private: true` (§4.3.4): a lock beside the name */
+		/** `private: true` (§4.2.4): a lock beside the name */
 		private?: boolean;
 		/** Unread messages from others: a bold name and a grey count. */
 		unread?: number;
@@ -28,11 +28,11 @@
 		/** When it was last active, compactly (`2h`, `Tue`), at the end of its row: for a thread you haven't joined, which has no counts. */
 		ago?: string;
 		onselect?: () => void;
-		/** Cap `rooms`: a door button titled "Exit" on hover/focus. Sends `room_leave` (§4.3.2). */
+		/** Cap `rooms`: a door button titled "Exit" on hover/focus. Sends `room_leave` (§4.2.2). */
 		onleave?: (e: MouseEvent) => void;
 		/**
 		 * Cap `rooms`, for a thread you haven't joined: a door-in button titled "Join" on hover/focus, where a joined
-		 * one has Exit, and its title muted. Sends `room_join` (§4.3.2).
+		 * one has Exit, and its title muted. Sends `room_join` (§4.2.2).
 		 */
 		onjoin?: (e: MouseEvent) => void;
 	}

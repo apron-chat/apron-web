@@ -3,29 +3,31 @@ import type { WebSocketFactory } from './client-types';
 import { isJsonObject, type JsonObject, type RpcError, type WireFrame } from './types';
 
 /**
- * The longest a proposal connection stays open waiting for its code. A
- * proposal expires within minutes (PROTOCOL.md §4.11), so one still open past
- * this has nothing left to approve.
+ * The longest a proposal's connection stays open waiting for its code. A
+ * proposal expires within minutes (PROTOCOL.md §4.11.1), so one still open
+ * past this has nothing left to approve.
  */
-export const EMAIL_PROPOSAL_MS = 15 * 60_000;
+export const PROPOSAL_MS = 15 * 60_000;
 
 /** An error with the JSON-RPC `code` the server gave, if any. */
 export type RpcFailure = Error & { code?: number };
 
 /**
- * A connection of its own for an email sign-in (§4.11), never signed in
- * until the approval: it waits for the `server` frame, proposes signing in
- * with an address, and stays open while the user types the code, because a
- * short code works only on the connection that made the proposal. The
- * approval (`request` with the token) signs it in; `detach` then hands the
- * open socket, its `server` frame, and whatever arrived after the approval to
- * the client, which carries on with it as its main connection.
+ * A connection of its own for an email or external sign-in (§4.11), never
+ * signed in until the approval: it waits for the `server` frame, proposes
+ * signing in, and stays open while the user types the code, because a short
+ * code works only on the connection that made the proposal (§4.11.2). A
+ * link's token works on any connection that is not signed in, so one of
+ * these is opened for a link too. The approval (`auth` with the token) signs
+ * it in; `detach` then hands the open socket, its `server` frame, and
+ * whatever arrived after the approval to the client, which carries on with it
+ * as its main connection.
  *
  * It sends nothing but these `auth` requests and, when the server asks for
  * them, pings. Anything else the server sends before the approval, such as a
  * `~private` notice, is for this throwaway connection and is dropped.
  */
-export class EmailConnection {
+export class SignInConnection {
 	/** The `server` frame's params, once greeted. */
 	server?: JsonObject;
 	/** Why it closed, once it has. */
@@ -44,7 +46,7 @@ export class EmailConnection {
 	readonly ready: Promise<void>;
 
 	private constructor(readonly url: string, private readonly socket: WebSocket) {
-		this.lifetime = setTimeout(() => this.close(new Error('The code has expired; send a new one')), EMAIL_PROPOSAL_MS);
+		this.lifetime = setTimeout(() => this.close(new Error('The code has expired; send a new one')), PROPOSAL_MS);
 		this.ready = new Promise((resolve, reject) => {
 			const timer = setTimeout(() => this.close(new Error('The server didn’t answer; try again')), REQUEST_TIMEOUT_MS);
 			this.greeted = {
@@ -69,8 +71,8 @@ export class EmailConnection {
 	 * Opens a connection to `url`; its `ready` resolves once the `server`
 	 * frame arrives. Throws if the socket can't be made at all.
 	 */
-	static open(factory: WebSocketFactory, url: string): EmailConnection {
-		return new EmailConnection(url, factory(url));
+	static open(factory: WebSocketFactory, url: string): SignInConnection {
+		return new SignInConnection(url, factory(url));
 	}
 
 	/** Whether the server offers `scheme` to sign in (`auth`) or to sign up (`signup`, §3.1). */

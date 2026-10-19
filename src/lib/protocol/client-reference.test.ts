@@ -206,7 +206,7 @@ describe('ChatClient reference features', () => {
 		const general = () => snapshot.rooms.find((room) => room.id === 'general')!;
 		expect(general().members?.map((member) => member.user_id)).toEqual(['bob', 'guest_1']);
 		expect(snapshot.users.bob.avatar).toBe('https://example.com/b.png');
-		// Memberships keep the members current (§4.3.2), and draw nothing.
+		// Memberships keep the members current (§4.2.2), and draw nothing.
 		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '13', room_id: 'general', members: [{ user: { user_id: 'carol', name: 'Carol' }, joined: true }] }] } });
 		expect(general().members?.map((member) => member.user_id)).toEqual(['bob', 'guest_1', 'carol']);
 		expect(general().latestLogId).toBe('13');
@@ -325,7 +325,7 @@ describe('ChatClient reference features', () => {
 		client.retryNow();
 		socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['history', 'rooms', 'activity'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms', 'activity'] } });
 		// auth, the listing, and the kept room's recovery go out together, before any reply (§3.2).
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list', 'history']);
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });

@@ -84,7 +84,7 @@ export function mentionsMe(event: MessageRecord, me: Identity | undefined): bool
 }
 
 /**
- * Who a composer can mention: the room's members (§4.3.2), kept current by
+ * Who a composer can mention: the room's members (§4.2.2), kept current by
  * memberships, those who spoke most recently first; without a member list,
  * the room's recent senders. The viewer is marked `me` and is always present.
  * Names and avatars are the latest known.

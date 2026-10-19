@@ -93,6 +93,14 @@ describe('the other schemes', () => {
 		expect(signInView({ ...guestHere, scheme: 'email', codeSent: true }).primary).toEqual({ action: 'email-code', label: 'Sign in' });
 	});
 
+	it('opens the server’s sign-in page, and takes a code where the page shows one', () => {
+		expect(signInView({ ...guestHere, scheme: 'external', sameServer: false }).primary).toEqual({ action: 'external-start', label: 'Continue to sign-in page' });
+		expect(signInView({ ...guestHere, scheme: 'external', codeSent: true }).primary).toEqual({ action: 'external-code', label: 'Sign in' });
+		const hint = (use: SignInInput['use']) => signInHint({ scheme: 'external', use, passkey: 'login', registered: false, phase: 'idle', here: false, guest: false, guestReadOnly: false });
+		expect(hint({ signIn: true, signUp: true })).toMatch(/^Signs in on the server’s own sign-in page/);
+		expect(hint({ signIn: false, signUp: true })).toMatch(/^Creates an account/);
+	});
+
 	it('signs in with a pasted token', () => {
 		expect(signInView({ ...guestHere, scheme: 'token', sameServer: false }).primary).toEqual({ action: 'token', label: 'Sign in' });
 	});

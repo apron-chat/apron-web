@@ -53,10 +53,24 @@ describe('mentions (Appendix A.3)', () => {
 		]);
 	});
 
-	it('drops trailing dots and dashes, and never reads a system identity as a mention', () => {
+	it('ends an ID at its last letter, digit or _, and never reads a system identity as a mention', () => {
 		expect(renderPlain('ask @alice-- now', resolve)).toBe('ask <button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>-- now');
+		expect(renderPlain('@alice: @alice+ @alice@', resolve).match(/data-user-id="alice"/g)).toHaveLength(3);
 		const any: MentionResolver = (id) => ({ kind: 'user', id, name: id });
-		expect(renderPlain('ask ~server or @@server', any)).toBe('ask ~server or @@server');
+		expect(renderPlain('ask ~server or @~server', any)).toBe('ask ~server or @~server');
+	});
+
+	it('reads email and federated forms as one ID: the longest run of ID characters', () => {
+		const ids: string[] = [];
+		const any: MentionResolver = (id) => (ids.push(id), { kind: 'user', id, name: id });
+		renderPlain('@ada@example.com. @carol:b.example, @ada+chat@example.com @_x_ @.dot @@bob', any);
+		expect(ids).toEqual(['ada@example.com', 'carol:b.example', 'ada+chat@example.com', '_x_', 'bob']);
+		// Only the whole ID resolves: a known prefix of it is not a mention.
+		expect(renderPlain('@alice@example.com and @alice:b.example', resolve)).toBe('@alice@example.com and @alice:b.example');
+		expect(mentionSegments('#ops:b.example #ops', resolve, (id) => (id === 'ops' ? { kind: 'room', id, title: 'Ops' } : undefined))).toEqual([
+			'#ops:b.example ',
+			{ target: { kind: 'room', id: 'ops', title: 'Ops' }, hash: true }
+		]);
 	});
 
 	it('leaves unknown IDs, emails, and mentions inside code or links as written', () => {

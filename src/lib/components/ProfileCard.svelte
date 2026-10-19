@@ -23,7 +23,7 @@
 		session: SessionView;
 		/** The open pane's room: the thread when one is open. */
 		room: RoomSnapshot | undefined;
-		/** Adding members is offered here as in the member list (§4.3.2). */
+		/** Adding members is offered here as in the member list (§4.2.2). */
 		canChange: boolean;
 		/** Mention is offered while the composer takes text. */
 		canMention: boolean;
@@ -56,7 +56,7 @@
 	let me = $derived(directory.isMe(userId));
 	let shares = $derived(person ? directory.sharesName(person) : false);
 	let system = $derived(isSystemId(userId));
-	/** Membership of the open room, when its listing is known; a large room may list only its recently active members (§4.3.1). */
+	/** Membership of the open room, when its listing is known; a large room may list only its recently active members (§4.2.1). */
 	let listed = $derived(room?.members?.some((member) => directory.person(member)?.user_id === userId));
 	let partial = $derived(room?.members !== undefined && (room.memberCount ?? 0) > room.members.length);
 	let membership = $derived.by(() => {

@@ -34,7 +34,7 @@
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import { composerAction } from '$lib/ui/commands';
-	import { backendHost, statusLabel } from '$lib/ui/connection';
+	import { addError, backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState } from '$lib/ui/feedback.svelte';
 	import { prepareUpload } from '$lib/ui/images';
@@ -50,8 +50,9 @@
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
 	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadLostPrivacy, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
-	import { runEmailLink, takeEmailLink, type EmailLink } from '$lib/ui/email-link';
-	import EmailLinkDialog from '$lib/components/EmailLinkDialog.svelte';
+	import { askedLinkFailure, linkUse, runSignInLink, sessionSettled, takeSignInLink, type LinkUse, type SignInLink } from '$lib/ui/sign-in-link';
+	import { findProposal } from '$lib/protocol/proposals';
+	import SignInLinkDialog from '$lib/components/SignInLinkDialog.svelte';
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
@@ -117,7 +118,7 @@
 	const VIEW_SAVE_MS = 2000;
 	/** The shortest gap between listings made because the pane has no members. */
 	const MEMBERS_RETRY_MS = 10_000;
-	/** A new thread of a private room that the server made visible to others (§4.3.4). */
+	/** A new thread of a private room that the server made visible to others (§4.2.4). */
 	const PRIVACY_LOST = 'The server made the new thread visible to people outside this private room, so nothing was posted or moved into it. Leave it, or use it knowing that.';
 
 	const session = new SessionView();
@@ -242,19 +243,21 @@
 	let editingId = $state<string | undefined>();
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
-	/** An emailed sign-in link this page was opened with (§4.11), until the viewer answers whether to use it. */
-	let emailLink = $state<EmailLink | undefined>();
-	/** The link is being used: its code goes out as a fresh connection's first `auth`. */
-	let emailLinkBusy = $state(false);
-	/** Why the emailed link didn't sign in, for the connect screen, with its address prefilled. */
-	let emailLinkFailure = $state<{ error: string } | undefined>();
+	/** A sign-in link of no proposal this browser made (§4.11.2), until the viewer answers whether to use it. */
+	let askedLink = $state<SignInLink | undefined>();
+	/** A link is being used: its token goes out as a fresh connection's first `auth`, or adds to this account. */
+	let linkBusy = $state(false);
+	/** A link for an addition this browser proposed (§4.11.3), waiting for the session of the account that proposed it. */
+	let linkAddition = $state<Extract<LinkUse, { kind: 'addition' }> | undefined>();
+	/** Why a sign-in link didn't sign in, for the connect screen. */
+	let linkFailure = $state<{ error: string } | undefined>();
 	/** The open thread's `room_id`; undefined in the room view. */
 	let activeThread = $state<string | undefined>();
 	let selectedRoomId = $state<string | undefined>();
 	let pendingOpen = $state<PendingOpen | undefined>();
 	/** A room or thread joined from the directory or just created, opened once its `room_update` has arrived. */
 	let pendingJoin = $state<string | undefined>();
-	/** `pendingJoin` was created as a private room: its record must say `private: true` before it is used (§4.3.4). */
+	/** `pendingJoin` was created as a private room: its record must say `private: true` before it is used (§4.2.4). */
 	let pendingPrivate = $state(false);
 	/**
 	 * Where the New divider sits in the open pane: after your read cursor as it
@@ -418,7 +421,7 @@
 	let editTarget = $derived(activeThread
 		? (activeThreadEntry ? { id: activeThreadEntry.id, title: activeThreadEntry.title, description: activeThreadEntry.description } : undefined)
 		: (activeRoom ? { id: activeRoom.id, title: activeRoom.title, description: activeRoom.description } : undefined));
-	/** Adding and removing other members of the open pane's room (§4.3.2), until the server says it can't. */
+	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneReady);
 
 	$effect(() => {
@@ -599,7 +602,7 @@
 	});
 
 	// Members for the mention picker come with each joined room's listing and stay current by
-	// memberships (§4.3.2); a pane without them (a thread read without joining) lists its room
+	// memberships (§4.2.2); a pane without them (a thread read without joining) lists its room
 	// with `room_list` and `room_id` (capability `rooms`).
 	$effect(() => {
 		const room = paneRoom;
@@ -629,11 +632,11 @@
 	// A server without guests (and no kept session to resume) can only be used signed in, and so can a
 	// session held until its user signs in again with nothing on screen yet: the connect screen, with the
 	// server's welcome (§3.2), opens once by itself, rather than leaving an empty app and an error.
-	// Not while an emailed link waits for its answer or is being used: that is a sign-in already.
+	// Not while a sign-in link waits for its answer or is being used: that is a sign-in already.
 	let promptedSignIn = false;
 	$effect(() => {
 		const server = snapshot.server;
-		if (previewMode || promptedSignIn || connectOpen || emailLink || emailLinkBusy || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
+		if (previewMode || promptedSignIn || connectOpen || askedLink || linkBusy || linkAddition || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
 		const needed = snapshot.signInNeeded && session.rooms.length === 0 ? snapshot.signInNeeded : undefined;
 		if (!needed && (server.auth.includes('guest') || server.signup?.includes('guest') || !snapshot.error)) return;
 		promptedSignIn = true;
@@ -657,7 +660,7 @@
 		const pending = pendingOpen;
 		if (!pending || !session.rooms.some((room) => room.id === pending.thread)) return;
 		pendingOpen = undefined;
-		// A thread of a private room is private too (§4.3.4); one the server made visible isn't opened to reply in.
+		// A thread of a private room is private too (§4.2.4); one the server made visible isn't opened to reply in.
 		if (!pending.moved && threadLostPrivacy(session.rooms, pending.room, pending.thread)) {
 			untrack(() => feedback.error(PRIVACY_LOST));
 			return;
@@ -806,12 +809,12 @@
 		memberListMediaChange(memberListMedia);
 		memberListMedia.addEventListener('change', memberListMediaChange);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
-		emailLink = previewMode ? undefined : takeEmailLink(window.location, scrubUrl);
+		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.
 		const hashChanged = () => {
-			const link = previewMode ? undefined : takeEmailLink(window.location, scrubUrl);
+			const link = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 			if (link) {
-				emailLink = link;
+				followLink(link);
 				return;
 			}
 			// A message link differing only in its fragment doesn't reload the page: go to it here.
@@ -893,6 +896,7 @@
 		});
 		chat.start();
 		client = chat;
+		if (signInLink) followLink(signInLink);
 		if (pushed) void followPush(chat, pushed);
 		if (link.room) linked = { ...link, server: offeredServer ?? chat.url, room: link.room };
 		if (offeredServer) {
@@ -926,29 +930,45 @@
 	// --- Connecting ---
 
 	/**
-	 * The viewer confirmed an emailed link, having been shown its server
-	 * (§4.11: a link's token is presented on a connection that is not signed
-	 * in, once the user has confirmed): the client presents its token on a
-	 * fresh connection to the server it names, and carries on with that
-	 * connection once it has worked, when the page lets go of the view it held.
-	 * A link never adds an address to an account; that is the profile's Add
-	 * email. A failure changes nothing and opens the connect screen on Email,
-	 * set to the link's server, with the reason.
+	 * A sign-in link (§4.11.2), emailed or the return from an external
+	 * sign-in page. One with the `state` of a sign-in this browser proposed
+	 * is used at once, on the server it was proposed to; one for an addition
+	 * waits for the session of the account that proposed it; any other is a
+	 * credential someone else may have crafted or forwarded, and the viewer
+	 * is asked first.
 	 */
-	function useEmailLink(): void {
-		const link = emailLink;
+	function followLink(link: SignInLink): void {
+		const use = linkUse(link, (state) => findProposal(state));
+		if (!use) return;
+		if (use.kind === 'addition') linkAddition = use;
+		else if (use.kind === 'own') useLink(use);
+		else askedLink = use.link;
+	}
+
+	/**
+	 * Signs in with a link of this browser's own proposal, or one the viewer
+	 * confirmed having been shown its server: the client presents its token
+	 * on a fresh connection that is not signed in (§4.11.3), and carries on
+	 * with that connection once it has worked, when the page lets go of the
+	 * view it held. A link adds to an account only with the `state` of an
+	 * addition proposed here (`linkAddition`), or once the viewer says a
+	 * link of no proposal here is one (`addAskedLink`). A failure changes
+	 * nothing and opens the connect screen on the link's scheme and server,
+	 * with the reason.
+	 */
+	function useLink(use: Exclude<LinkUse, { kind: 'addition' }>): void {
 		const chat = client;
-		emailLink = undefined;
-		if (!link || !chat) return;
-		emailLinkBusy = true;
+		askedLink = undefined;
+		if (!chat) return;
+		linkBusy = true;
 		feedback.pending('Signing in…');
-		void runEmailLink(link, chat, {
+		void runSignInLink(use, chat, {
 			// Another account from here on: the view held for the current one goes, and on this
 			// server it is signed out of, push going off for it as a sign-out does.
 			beforeSwitch: (switched) => (switched ? leaveBackend() : signedOut()()),
 			onSignedIn: (server, switched) => {
 				feedback.clear();
-				emailLinkFailure = undefined;
+				linkFailure = undefined;
 				// Only now is a switch to the link's server remembered, and the server listed as recent.
 				if (switched) {
 					serverInput = server;
@@ -958,15 +978,59 @@
 			},
 			onFailed: (error, server) => {
 				feedback.clear();
-				// The link may have expired or been used: the connect screen can send a new code, to the
-				// link's server, which is not remembered unless that works.
+				// The link may have expired or been used: the connect screen can start again, on the
+				// link's server, which is not remembered unless that works. One of no proposal here
+				// may have been for an addition instead, which a new sign-in code wouldn't help with.
 				serverInput = server;
-				emailLinkFailure = { error: `The sign-in link didn’t work (${error}). Send a new code to try again, or pick another server.` };
-				connectScheme = 'email';
+				linkFailure = {
+					error: use.kind === 'own'
+						? `The sign-in link didn’t work (${error}). ${use.scheme === 'email' ? 'Send a new code' : 'Sign in again'} to try again, or pick another server.`
+						: askedLinkFailure(error)
+				};
+				connectScheme = use.kind === 'own' ? use.scheme : undefined;
 				connectOpen = true;
 			}
-		}).finally(() => (emailLinkBusy = false));
+		}).finally(() => (linkBusy = false));
 	}
+
+	/**
+	 * Adds a link of no proposal here to the account this page is signed in
+	 * to, once the viewer said it was sent for that (§4.11.3): the server
+	 * approves it only if that account proposed it, so any other link is
+	 * refused, and changes nothing.
+	 */
+	function addAskedLink(link: SignInLink): void {
+		const chat = client;
+		askedLink = undefined;
+		if (!chat) return;
+		linkBusy = true;
+		feedback.pending('Adding the sign-in…');
+		chat.addWithConfirmedLink(link.token)
+			.then(() => feedback.clear(), (cause: unknown) => feedback.error(addError(cause, 'link')))
+			.finally(() => (linkBusy = false));
+	}
+
+	// A link for an addition this browser proposed (§4.11.3) approves only on a connection signed in to the
+	// account that proposed it: once this page's session has settled (a kept one resumed, or past resuming), it
+	// adds there, or says it can't.
+	$effect(() => {
+		const addition = linkAddition;
+		const chat = client;
+		if (!addition || !chat || !sessionSettled(snapshot)) return;
+		const signedInAs = snapshot.authenticated ? snapshot.you?.user_id : undefined;
+		untrack(() => {
+			linkAddition = undefined;
+			if (chat.url !== addition.server || signedInAs !== addition.account) {
+				feedback.error(`The link adds a sign-in to @${addition.account} on ${backendHost(addition.server) || addition.server}, which this page isn’t signed in as now. Sign in as @${addition.account} there, and add it again.`);
+				return;
+			}
+			linkBusy = true;
+			feedback.pending('Adding the sign-in…');
+			chat.addWithLink(addition.token, addition.state)
+				.then(() => feedback.clear(), (cause: unknown) => feedback.error(addError(cause, findProposal(addition.state)?.scheme)))
+				.finally(() => (linkBusy = false));
+		});
+	});
 
 	/** Replaces the page's URL without adding a history entry: through the router once it runs, else the browser. */
 	function scrubUrl(url: string): void {
@@ -990,7 +1054,7 @@
 		const any = [...offered, ...(session.server?.signup ?? [])];
 		const passkeyFirst = offered.includes('webauthn') ? offered.includes('guest') || !offered.includes('email') : !any.includes('email');
 		connectScheme = options.scheme ?? (options.signIn ? (passkeyFirst ? 'webauthn' : 'email') : undefined);
-		emailLinkFailure = undefined;
+		linkFailure = undefined;
 		if (options.name) displayName = options.name;
 		connectOpen = true;
 	}
@@ -1466,7 +1530,7 @@
 	/**
 	 * A thread card opens its thread. One you haven't joined is read through
 	 * its history without joining it (joining logs a membership for everyone,
-	 * §4.3.2); replying or Join makes it live.
+	 * §4.2.2); replying or Join makes it live.
 	 */
 	function openThreadCard(thread: string): void {
 		if (!client) return;
@@ -1477,7 +1541,7 @@
 		chooseThread(thread);
 	}
 
-	/** Loads a thread's history (§4.2); a failure the client recorded is reported once. */
+	/** Loads a thread's history (§4.3); a failure the client recorded is reported once. */
 	function loadThread(roomId: string): void {
 		client?.loadRoom(roomId).catch((cause: unknown) => {
 			if (session.rooms.find((room) => room.id === roomId)?.recoveryError) feedback.error(cause, 'Unable to load thread');
@@ -1569,7 +1633,7 @@
 			} else if (action.kind === 'topic') {
 				chat.updateRoom(roomId, { description: action.description }).promise.catch(failed);
 			} else {
-				// `/kick @user` and `/invite @user` as `room_leave`/`room_join` with `user_id` (§4.3.2). A server
+				// `/kick @user` and `/invite @user` as `room_leave`/`room_join` with `user_id` (§4.2.2). A server
 				// that answers `unsupported` may still have the command itself (§4.1): it gets the text as typed.
 				const change = action.kind === 'kick' ? chat.leaveRoom(roomId, action.user) : chat.joinRoom(roomId, action.user);
 				change.promise.catch((cause: Error & { code?: number }) => {
@@ -1757,7 +1821,7 @@
 
 	/**
 	 * Opens a listed room or thread without joining it, read through its
-	 * history (§4.2), for a guest on a server whose guests only read.
+	 * history (§4.3), for a guest on a server whose guests only read.
 	 */
 	function openWithoutJoining(roomId: string): void {
 		if (!client || !client.viewRoom(roomId)) return;
@@ -1793,7 +1857,7 @@
 	}
 
 	/**
-	 * Posting needs no membership (§4.3.2), but a poster who hasn't joined
+	 * Posting needs no membership (§4.2.2), but a poster who hasn't joined
 	 * doesn't receive the broadcast: a reply in a thread read without joining
 	 * joins it first, so the reply and what follows arrive.
 	 */
@@ -2065,7 +2129,7 @@
 	}
 
 	/**
-	 * Creates the thread the NewThreadDialog asked for (§4.3.4), the summary as
+	 * Creates the thread the NewThreadDialog asked for (§4.2.4), the summary as
 	 * its `description`; it opens once its `room_update` has arrived. From
 	 * select mode the selection then moves into it. A rejection is shown in the
 	 * dialog, which stays open, so it only rejects while no thread exists.
@@ -2173,15 +2237,17 @@
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
 </svelte:head>
 
-{#if client && emailLink}
-	<EmailLinkDialog
-		link={emailLink}
+{#if client && askedLink}
+	<!-- Signed in here, guests too, where a link can add a way in (`addAs`): the link may have been sent for that. -->
+	<SignInLinkDialog
+		link={askedLink}
 		current={{
 			url: client.url, keptSession: Boolean(snapshot.keptSession),
-			...(emailLink.server && emailLink.server !== client.url ? { targetKeptSession: client.keptSessionFor(emailLink.server) } : {}),
-			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {})
+			...(askedLink.server && askedLink.server !== client.url ? { targetKeptSession: client.keptSessionFor(askedLink.server) } : {}),
+			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}),
+			...(snapshot.authenticated && snapshot.you && snapshot.server?.auth.some((scheme) => scheme === 'email' || scheme === 'external') ? { addAs: snapshot.you.name ? `${snapshot.you.name} (@${snapshot.you.user_id})` : `@${snapshot.you.user_id}` } : {})
 		}}
-		onconfirm={useEmailLink} oncancel={() => (emailLink = undefined)}
+		onconfirm={() => askedLink && useLink({ kind: 'ask', link: askedLink })} onadd={() => askedLink && addAskedLink(askedLink)} oncancel={() => (askedLink = undefined)}
 	/>
 {/if}
 {#if !client}
@@ -2190,7 +2256,7 @@
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
 		canCancel={session.rooms.length > 0 || session.ready || offeringLink} initialScheme={connectScheme}
-		initialError={emailLinkFailure?.error}
+		initialError={linkFailure?.error}
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
 	/>
 {:else}

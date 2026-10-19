@@ -62,7 +62,7 @@
 		onnewthread: (room: RoomSnapshot) => void;
 		onsignout: SignOutHandler;
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
-		onsignin: (name?: string, scheme?: 'webauthn' | 'email') => void;
+		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
 	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own. */
@@ -169,10 +169,10 @@
 				</div>
 				{#if browseOpen}
 					<div class="ap-sect-body" data-testid="room-directory">
-						<!-- Servers may list only the most active rooms (§4.3.1), so this never claims to be all of them. -->
+						<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
 						<p class="muted">Most active rooms</p>
 						{#each unjoined as listing (listing.id)}
-							<!-- A server may list only the most active members of a large room, with the total (§4.3.1). -->
+							<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
 							{@const members = listing.memberCount ?? listing.members.length}
 							<button class="ap-room" type="button" data-join={listing.id} onclick={() => onjoin(listing.id)}>
 								<span class="ap-room-text">

@@ -19,7 +19,7 @@
 		roomTitle: string;
 		/** Its threads you've joined, and one open without joining while it's open, which lists with the others. */
 		threads: ThreadEntry[];
-		/** Its other threads, from `room_list` `not_joined` (§4.3.1): most recently active first, and maybe not all. */
+		/** Its other threads, from `room_list` `not_joined` (§4.2.1): most recently active first, and maybe not all. */
 		others: RoomListing[];
 		activeThread?: string;
 		mentions: Record<string, number>;

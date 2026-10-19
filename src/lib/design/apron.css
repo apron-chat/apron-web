@@ -241,7 +241,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-tline-multi > svg { margin-top: calc((1lh - 12px) / 2); }
 .ap-tline-multi .ap-tline-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--ap-tline-lines); line-clamp: var(--ap-tline-lines); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ap-room-unread .ap-tline-latest { color: var(--ink); }
-/* A private room (§4.3.4): a small lock beside its name, wherever the name shows. */
+/* A private room (§4.2.4): a small lock beside its name, wherever the name shows. */
 .ap-lock { flex: none; display: inline-block; width: 12px; height: 12px; margin-left: 4px; vertical-align: -1px; color: var(--ink-muted); }
 .ap-count { flex: none; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: 20px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
 

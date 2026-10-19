@@ -30,7 +30,7 @@ describe('kept statuses and sign-ins', () => {
 
 	function hello(): void {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 	}
 
 	async function greet(you: Record<string, unknown>, members: Record<string, unknown>[]): Promise<void> {
@@ -60,16 +60,19 @@ describe('kept statuses and sign-ins', () => {
 		reconnect();
 		hello();
 		await socket.reply('auth', { you: { user_id: 'ada', status: 'dnd' } });
-		// Your own comes from the auth's `you`; the others' from before still show.
+		// Your own comes from the auth's `you`; the others' from before still show, said to be only held.
 		expect(statusOf('ada')).toBe('dnd');
 		expect([statusOf('bo'), statusOf('cy')]).toEqual(['idle', 'dnd']);
+		expect(snapshot.heldStatuses).toEqual(['bo', 'cy']);
 		// After the result the server sends connected users' statuses again (§4.5), which show at once.
 		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'online' } } });
 		expect([statusOf('bo'), statusOf('cy')]).toEqual(['online', 'dnd']);
+		expect(snapshot.heldStatuses).toEqual(['cy']);
 		// Once the listing is in, a status the server didn't send again is no longer known: not offline.
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', members: [{ user_id: 'ada' }, { user_id: 'bo' }, { user_id: 'cy' }] }] });
 		expect(statusOf('bo')).toBe('online');
 		expect(snapshot.users.cy).toEqual({ user_id: 'cy' });
+		expect(snapshot.heldStatuses).toBeUndefined();
 	});
 
 	it('drops them at once at a sign-in as someone else after a lost connection', async () => {
@@ -85,7 +88,7 @@ describe('kept statuses and sign-ins', () => {
 		reconnect();
 		hello();
 		await socket.reply('auth', { you: { user_id: 'ada' } });
-		// A resume's listing may hold only rooms that changed (§4.3.1): here, none.
+		// A resume's listing may hold only rooms that changed (§4.2.1): here, none.
 		await socket.reply('room_list', { joined: [] });
 		expect([statusOf('bo'), statusOf('cy'), statusOf('di')]).toEqual(['offline', '', undefined]);
 	});
@@ -144,7 +147,7 @@ describe('a guest that signs in to an existing account, as others see it', () =>
 
 	it('shows the guest leaving and the account arriving as two people, without an alias', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 		await socket.reply('auth', { you: { user_id: 'bo' } });
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', latest_log_id: '10', members: [{ user_id: 'bo' }, { user_id: 'guest_7', name: 'Guest 7', status: 'online' }] }] });
 		const members = () => snapshot.rooms.find((room) => room.id === 'general')?.members?.map((member) => member.user_id);
@@ -179,11 +182,11 @@ describe('server.status', () => {
 		vi.unstubAllGlobals();
 	});
 
-	it('takes a v8 server as it is: status, its sign-ins and member changes all apply', async () => {
+	it('takes the server as it is: status, its sign-ins and member changes all apply', async () => {
 		const socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['rooms', 'status'], status: ['dnd'] } });
-		expect(snapshot.server?.apron).toBe(8);
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'], status: ['dnd'] } });
+		expect(snapshot.server?.apron).toBe(9);
 		expect(snapshot.server?.status).toEqual(['dnd']);
 		await socket.reply('auth', { you: { user_id: 'ada', status: 'online' } });
 		expect(snapshot.authenticated).toBe(true);
@@ -195,11 +198,11 @@ describe('server.status', () => {
 	it('takes the strings listed, and a replacing frame without it leaves none', () => {
 		const socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['status'], status: ['dnd', 'invisible', 7] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'], status: ['dnd', 'invisible', 7] } });
 		expect(snapshot.server?.status).toEqual(['dnd', 'invisible']);
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['status'] } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'] } });
 		expect(snapshot.server && Object.hasOwn(snapshot.server, 'status')).toBe(false);
-		socket.receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: ['status'], status: 'dnd' } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'], status: 'dnd' } });
 		expect(snapshot.server && Object.hasOwn(snapshot.server, 'status')).toBe(false);
 	});
 });

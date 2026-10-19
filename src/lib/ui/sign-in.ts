@@ -13,11 +13,15 @@
  *   none yet, the tap opens one and the ceremony follows once it settles,
  *   and where the browser won't show its sheet that long after the tap, the
  *   panel is `ready` for a second one.
- * - `email-send` / `email-code`, `token`: the other schemes' steps.
+ * - `email-send` / `email-code`: ask for an emailed code, then sign in with it.
+ * - `external-start` / `external-code`: open the server's sign-in page,
+ *   which brings the viewer back signed in or, where the server won't
+ *   return here, shows a code to sign in with.
+ * - `token`: sign in with a pasted token.
  * - `done`, `sign-out`: leave the panel, or leave the registered session.
  */
 
-export type Scheme = 'guest' | 'webauthn' | 'email' | 'token';
+export type Scheme = 'guest' | 'webauthn' | 'email' | 'external' | 'token';
 
 /** On Passkey: sign in to an account with a saved passkey, or create one with a new passkey. */
 export type PasskeyMode = 'login' | 'register';
@@ -30,6 +34,8 @@ export type SignInAction =
 	| 'passkey-register'
 	| 'email-send'
 	| 'email-code'
+	| 'external-start'
+	| 'external-code'
 	| 'token';
 
 /**
@@ -37,7 +43,7 @@ export type SignInAction =
  * - `connecting`: the connection this panel opened isn't settled yet.
  * - `ready`: connected to the server in the form, signed in as no one or a
  *   guest: a passkey tap can start a ceremony right away.
- * - `busy`: a ceremony, an emailed code, or a token sign-in is under way.
+ * - `busy`: a ceremony, a code, a sign-in page, or a token sign-in is under way.
  */
 export type SignInPhase = 'idle' | 'connecting' | 'ready' | 'busy';
 
@@ -59,9 +65,9 @@ export interface SignInInput {
 	connectionError: boolean;
 	/** This panel opened a connection and is waiting for it. */
 	pending: boolean;
-	/** A ceremony, a code, or a token is under way. */
+	/** A ceremony, a code, a sign-in page, or a token is under way. */
 	busy: boolean;
-	/** An emailed code was asked for and the code field shows. */
+	/** A code was asked for (emailed, or shown by the sign-in page) and the code field shows. */
 	codeSent: boolean;
 }
 
@@ -123,6 +129,8 @@ const LABELS: Record<SignInAction, string> = {
 	'passkey-register': 'Create account with passkey',
 	'email-send': 'Email me a code',
 	'email-code': 'Sign in',
+	'external-start': 'Continue to sign-in page',
+	'external-code': 'Sign in',
 	token: 'Sign in'
 };
 
@@ -133,6 +141,8 @@ function primaryAction(input: SignInInput): SignInAction {
 			return 'token';
 		case 'email':
 			return input.codeSent ? 'email-code' : 'email-send';
+		case 'external':
+			return input.codeSent ? 'external-code' : 'external-start';
 		case 'webauthn':
 			if (here && input.registered) return 'done';
 			return passkeyMode(input.use, input.passkey) === 'login' ? 'passkey-login' : 'passkey-register';
@@ -159,6 +169,10 @@ export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'register
 		if (input.use.signIn && !input.use.signUp) return 'Signs in with a code sent to an address already on your account.';
 		if (input.use.signUp && !input.use.signIn) return 'Creates an account with a code sent to your email address.';
 		return 'We email you a code to sign in with; the link in the email signs you in too.';
+	}
+	if (input.scheme === 'external') {
+		const does = input.use.signIn && !input.use.signUp ? 'Signs in to an account you have' : input.use.signUp && !input.use.signIn ? 'Creates an account' : 'Signs in';
+		return `${does} on the server’s own sign-in page (such as single sign-on), which then brings you back here.`;
 	}
 	if (input.scheme === 'token' && input.invite) return 'Creates an account with this sign-up invite. Your user ID is picked from your display name.';
 	if (input.scheme === 'token') return 'Signs in with a token the server gave you, such as a bot token from /invite-bot.';

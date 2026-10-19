@@ -68,8 +68,13 @@ export function newRoomState(id: string, kind: RoomKind = 'joined'): RoomState {
 /** `embedded` marks a `reply_to` snapshot, which installs regardless of its room's bound. */
 export type LiveRecord = { kind: 'message'; record: MessageRecord; embedded?: boolean } | { kind: 'reaction'; record: ReactionSet };
 
-/** How a kept session signed in (see `ChatClient.signedInWith`). */
-export type SignInMethod = 'webauthn' | 'email' | 'token';
+/**
+ * How a kept session signed in (see `ChatClient.signedInWith`), or what was
+ * added to it. `link` is an email or an external sign-in, by a link of no
+ * proposal this browser made, on a server that offers both: either scheme
+ * approves it (§4.11.3), so which one it was isn't known.
+ */
+export type SignInMethod = 'webauthn' | 'email' | 'external' | 'link' | 'token';
 
 export interface PendingSave {
 	requestId: string;
@@ -85,7 +90,7 @@ interface RecoveryState {
 	/**
 	 * Fixed H for the whole recovery. A recovery sent right behind `auth`,
 	 * before any room record is known, starts without it and takes it from its
-	 * first page's `latest_log_id` (§4.2 recovery, step 1).
+	 * first page's `latest_log_id` (§4.3.5 recovery, step 2).
 	 */
 	head?: string;
 	/** Next position to request; undefined means from the start of the log. */
@@ -227,7 +232,7 @@ export function messageClientFields(record: MessageRecord): JsonObject {
 }
 
 /**
- * A room's client fields as an update would submit them (§4.3.4): all but
+ * A room's client fields as an update would submit them (§4.2.4): all but
  * `parent_room_id` and `private`, which are fixed at creation, and `ext`,
  * which `room_set` merges (§4.12).
  */
@@ -360,12 +365,12 @@ export function isEmbedded(live: LiveRecord): boolean {
 	return live.kind === 'message' && live.embedded === true;
 }
 
-/** A forward page; without `before` (a recovery that has no head yet) it runs to the end of the log (§4.2). */
+/** A forward page; without `before` (a recovery that has no head yet) it runs to the end of the log (§4.3.2). */
 export function historyParams(roomId: string, after: string | undefined, before: string | undefined): JsonObject {
 	return { room_id: roomId, after: after ?? FIRST_LOG_ID, ...(before !== undefined ? { before } : {}), limit: HISTORY_PAGE_SIZE };
 }
 
-/** Record arrays that a history page may omit when empty (§4.2). */
+/** Record arrays that a history page may omit when empty (§4.3.2). */
 const HISTORY_ARRAYS = ['rooms', 'messages', 'reactions', 'memberships'];
 
 export function validHistoryMetadata(result: JsonObject): result is ValidHistoryResponse {

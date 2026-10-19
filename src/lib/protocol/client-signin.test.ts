@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, userIn, type ClientSnapshot } from './client';
 import { FakeSocket, settle } from './fake-socket';
+import { findProposal } from './proposals';
 
 function latest(): FakeSocket {
 	return FakeSocket.latest();
 }
 
-/** Email sign-in (§4.11), token rotation (§3.2), `server.welcome`, and roles (§3.3). */
+/** Email and external sign-in (§4.11), token rotation (§3.2.1), `server.welcome`, and roles (§3.3). */
 describe('sign-in', () => {
 	const storage = new Map<string, string>();
 	const fakeLocalStorage = {
@@ -45,7 +46,7 @@ describe('sign-in', () => {
 		const requested = client.requestEmailCode(email);
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 8, auth, capabilities: ['rooms'], ...extra } });
+		side.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'], ...extra } });
 		await settle();
 		side.receive({ id: side.request('auth').id, result: {} });
 		await requested;
@@ -54,7 +55,7 @@ describe('sign-in', () => {
 
 	/** Approves with `code` on `side` and answers with `result`. */
 	async function approve(side: FakeSocket, code: string, result: Record<string, unknown>): Promise<void> {
-		const signedIn = client.signInWithEmail(code);
+		const signedIn = client.signInWithCode(code);
 		await settle();
 		side.receive({ id: side.request('auth').id, result });
 		await signedIn;
@@ -70,10 +71,10 @@ describe('sign-in', () => {
 		const sending = client.send('lobby', 'hello');
 		const side = await propose(' ada@example.com ', ['email', 'token', 'guest']);
 		expect(side).not.toBe(main);
-		expect(side.sent).toEqual([{ method: 'auth', id: expect.any(String), params: { scheme: 'email', email: 'ada@example.com', agent: 'apron-web/0.4' } }]);
+		expect(side.sent).toEqual([{ method: 'auth', id: expect.any(String), params: { scheme: 'email', email: 'ada@example.com', state: expect.any(String), agent: 'apron-web/0.4' } }]);
 		// It stays open for the code, which works only there.
 		expect(side.readyState).toBe(FakeSocket.OPEN);
-		expect(snapshot.emailCode).toEqual({ email: 'ada@example.com', url: 'ws://fake.test/' });
+		expect(snapshot.signInCode).toEqual({ scheme: 'email', email: 'ada@example.com', url: 'ws://fake.test/' });
 		expect(main.readyState).toBe(FakeSocket.OPEN);
 		await main.reply('message', { message_id: '1' });
 		await expect(sending.promise).resolves.toEqual({ message_id: '1' });
@@ -81,7 +82,7 @@ describe('sign-in', () => {
 		expect(snapshot.passkeySession).toBe(false);
 
 		// The approval carries the code alone, on the proposing connection.
-		const signedIn = client.signInWithEmail(' 418092 ', 'Ada L', () => expect(snapshot.you?.user_id).toBe('guest_1'));
+		const signedIn = client.signInWithCode(' 418092 ', 'Ada L', () => expect(snapshot.you?.user_id).toBe('guest_1'));
 		expect(snapshot.authBusy).toBe(true);
 		await settle();
 		const approval = side.request('auth');
@@ -102,7 +103,7 @@ describe('sign-in', () => {
 		expect(snapshot.passkeySession).toBe(true);
 		expect(snapshot.signedInWith).toBe('email');
 		expect(snapshot.authBusy).toBe(false);
-		expect(snapshot.emailCode).toBeUndefined();
+		expect(snapshot.signInCode).toBeUndefined();
 		expect(storage.get(TOKEN_KEY)).toBe('st_Hk41');
 
 		// The next connection resumes with the bearer token.
@@ -130,7 +131,7 @@ describe('sign-in', () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
 		const main = latest();
 		const side = await propose('ada@example.com', ['email', 'token', 'guest']);
-		const wrong = client.signInWithEmail('000000');
+		const wrong = client.signInWithCode('000000');
 		await settle();
 		side.receive({ id: side.request('auth').id, error: { code: -32001, message: 'Invalid or expired code' } });
 		await expect(wrong).rejects.toThrow('Invalid or expired code');
@@ -138,22 +139,22 @@ describe('sign-in', () => {
 		expect(main.readyState).toBe(FakeSocket.OPEN);
 		expect(snapshot.you?.user_id).toBe('guest_1');
 		expect(side.readyState).toBe(FakeSocket.OPEN);
-		expect(snapshot.emailCode?.email).toBe('ada@example.com');
+		expect(snapshot.signInCode?.email).toBe('ada@example.com');
 		await approve(side, '418092', { you: { user_id: 'ada' }, token: 'st_ada' });
 		expect(snapshot.you?.user_id).toBe('ada');
 	});
 
 	it('says when the proposal is gone, and a new one replaces the last', async () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
-		await expect(client.signInWithEmail('1')).rejects.toThrow('no longer open');
+		await expect(client.signInWithCode('1')).rejects.toThrow('no longer open');
 		const first = await propose('ada@example.com', ['email', 'token', 'guest']);
 		const second = await propose('ada@example.com', ['email', 'token', 'guest']);
 		expect(first.readyState).toBe(FakeSocket.CLOSED);
-		expect(snapshot.emailCode).toBeDefined();
+		expect(snapshot.signInCode).toBeDefined();
 		// The server closes it (an expired proposal, a restart): the code has nowhere to go.
 		second.drop();
-		expect(snapshot.emailCode).toBeUndefined();
-		await expect(client.signInWithEmail('418092')).rejects.toThrow('no longer open');
+		expect(snapshot.signInCode).toBeUndefined();
+		await expect(client.signInWithCode('418092')).rejects.toThrow('no longer open');
 		expect(snapshot.you?.user_id).toBe('guest_1');
 	});
 
@@ -166,7 +167,7 @@ describe('sign-in', () => {
 
 	it('signs in by email on a server without guests', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 8, auth: ['email', 'token'], capabilities: ['rooms'], welcome: 'Create an account with **email**.' } });
+		latest().receive({ method: 'server', params: { apron: 9, auth: ['email', 'token'], capabilities: ['rooms'], welcome: 'Create an account with **email**.' } });
 		expect(auths()).toHaveLength(0);
 		expect(snapshot.error).toMatch(/email/);
 		expect(snapshot.server?.welcome).toBe('Create an account with **email**.');
@@ -187,7 +188,7 @@ describe('sign-in', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 8, auth: ['email', 'guest', 'webauthn'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 9, auth: ['email', 'guest', 'webauthn'], capabilities: [] } });
 		await settle();
 		expect(next.sent.filter((frame) => frame.method === 'auth')).toEqual([]);
 		expect(snapshot.authenticated).toBe(false);
@@ -200,10 +201,10 @@ describe('sign-in', () => {
 		expect(snapshot.signedInWith).toBe('token');
 		const socket = latest();
 		const asked = client.requestEmailCodeToAdd('ada@example.com');
-		expect(socket.request('auth').params).toEqual({ scheme: 'email', email: 'ada@example.com' });
+		expect(socket.request('auth').params).toEqual({ scheme: 'email', email: 'ada@example.com', state: expect.any(String) });
 		await socket.reply('auth', {});
 		await asked;
-		const added = client.addEmail(' 418092 ');
+		const added = client.addWithCode(' 418092 ');
 		await vi.advanceTimersByTimeAsync(0);
 		expect(latest()).toBe(socket);
 		expect(snapshot.passkeyBusy).toBe(false);
@@ -227,7 +228,7 @@ describe('sign-in', () => {
 		const asked = client.requestEmailCodeToAdd('ada@example.com');
 		await socket.reply('auth', {});
 		await asked;
-		const added = client.addEmail('418092');
+		const added = client.addWithCode('418092');
 		await vi.advanceTimersByTimeAsync(0);
 		await socket.reply('auth', {});
 		await added;
@@ -238,7 +239,7 @@ describe('sign-in', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 8, auth: ['email', 'guest'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 9, auth: ['email', 'guest'], capabilities: [] } });
 		await settle();
 		expect(next.sent.filter((frame) => frame.method === 'auth')).toEqual([]);
 		expect(snapshot.error).toMatch(/email/);
@@ -252,7 +253,7 @@ describe('sign-in', () => {
 		latest().drop();
 		vi.advanceTimersByTime(5_000);
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
-		await expect(client.addEmail('418092')).rejects.toThrow('Send a new code');
+		await expect(client.addWithCode('418092')).rejects.toThrow('Send a new code');
 		expect(auths()).toHaveLength(1);
 	});
 
@@ -268,7 +269,7 @@ describe('sign-in', () => {
 		const asked = client.requestEmailCodeToAdd('ada@example.com');
 		await latest().reply('auth', {});
 		await asked;
-		const added = client.addEmail('1');
+		const added = client.addWithCode('1');
 		await vi.advanceTimersByTimeAsync(0);
 		latest().receive({ id: latest().request('auth').id, result: {} });
 		await added;
@@ -293,14 +294,14 @@ describe('sign-in', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 8, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
+		next.receive({ method: 'server', params: { apron: 9, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
 		expect(next.sent.filter((frame) => (frame.params as { token?: string } | undefined)?.token === 'bob-session')).toEqual([]);
 	});
 
 	it('signs up with a scheme listed only in signup', async () => {
 		const server = { auth: ['webauthn'], signup: ['email'] };
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 8, capabilities: ['rooms'], ...server } });
+		latest().receive({ method: 'server', params: { apron: 9, capabilities: ['rooms'], ...server } });
 		expect(snapshot.server?.signup).toEqual(['email']);
 		expect(snapshot.error).toMatch(/email/);
 		const side = await propose('new@example.com', [], server);
@@ -310,18 +311,18 @@ describe('sign-in', () => {
 		expect(snapshot.signedInWith).toBe('email');
 		// Email only signs up here: adding it as a way back in is refused, and a passkey is what signs in.
 		await expect(client.requestEmailCodeToAdd('new@example.com')).rejects.toThrow('does not sign in with email');
-		await expect(client.addEmail('1')).rejects.toThrow('does not sign in with email');
+		await expect(client.addWithCode('1')).rejects.toThrow('does not sign in with email');
 	});
 
 	it('signs in with a confirmed link on a fresh connection to its server, and switches only once it worked', async () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
 		const main = latest();
 		// A refused link changes nothing here.
-		const refused = client.signInWithEmailLink('Hk41x9', 'ws://other.test/');
+		const refused = client.signInWithLink('Hk41x9', 'ws://other.test/');
 		const bad = latest();
 		expect(bad.url).toBe('ws://other.test/');
 		bad.open();
-		bad.receive({ method: 'server', params: { apron: 8, auth: ['email', 'token'], capabilities: ['rooms'] } });
+		bad.receive({ method: 'server', params: { apron: 9, auth: ['email', 'token'], capabilities: ['rooms'] } });
 		await settle();
 		expect(bad.request('auth').params).toEqual({ scheme: 'email', token: 'Hk41x9', agent: 'apron-web/0.4' });
 		bad.receive({ id: bad.request('auth').id, error: { code: -32001, message: 'Invalid or expired token' } });
@@ -332,10 +333,10 @@ describe('sign-in', () => {
 		expect(snapshot.you?.user_id).toBe('guest_1');
 
 		let switched = false;
-		const signedIn = client.signInWithEmailLink('Hk41x9', 'ws://other.test/', () => (switched = true));
+		const signedIn = client.signInWithLink('Hk41x9', 'ws://other.test/', { beforeSwitch: () => (switched = true) });
 		const good = latest();
 		good.open();
-		good.receive({ method: 'server', params: { apron: 8, auth: ['email', 'token'], capabilities: ['rooms'] } });
+		good.receive({ method: 'server', params: { apron: 9, auth: ['email', 'token'], capabilities: ['rooms'] } });
 		await settle();
 		good.receive({ id: good.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_other' } });
 		await signedIn;
@@ -345,6 +346,253 @@ describe('sign-in', () => {
 		expect(snapshot.you?.user_id).toBe('ada');
 		expect(storage.get('apron.session:ws://other.test/')).toBe('st_other');
 		expect(storage.has(TOKEN_KEY)).toBe(false);
+	});
+
+	/** Opens a link's connection to `url` and greets it with these schemes; returns it once ready. */
+	async function linkConnection(auth: string[], url = 'ws://fake.test/'): Promise<FakeSocket> {
+		const socket = latest();
+		expect(socket.url).toBe(url);
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
+		await settle();
+		return socket;
+	}
+
+	it('remembers each proposal’s state with its server, and a disconnect leaves its link working', async () => {
+		await latest().greet([], { auth: ['email', 'token', 'guest'] });
+		const side = await propose('ada@example.com', ['email', 'token', 'guest']);
+		const state = side.request('auth').params.state as string;
+		// Unguessable, and at most 256 bytes (§4.11.1).
+		expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+		expect(findProposal(state)).toMatchObject({ scheme: 'email', kind: 'sign-in', url: 'ws://fake.test/', email: 'ada@example.com' });
+		// Another proposal has a state of its own; the first is still remembered, and the server keeps it too.
+		const second = await propose('ada@example.com', ['email', 'token', 'guest']);
+		const secondState = second.request('auth').params.state as string;
+		expect(secondState).not.toBe(state);
+		// Its connection closes: a code has nowhere to go, but the proposal's link still signs in.
+		second.drop();
+		expect(snapshot.signInCode).toBeUndefined();
+		expect(findProposal(secondState)).toBeDefined();
+		const signedIn = client.signInWithLink('Hk41x9', 'ws://fake.test/', { scheme: 'email', state: secondState });
+		const link = await linkConnection(['email', 'token', 'guest']);
+		expect(link.request('auth').params).toEqual({ scheme: 'email', token: 'Hk41x9', agent: 'apron-web/0.4' });
+		link.receive({ id: link.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_ada' } });
+		await signedIn;
+		expect(snapshot.you?.user_id).toBe('ada');
+		// Approval used it up.
+		expect(findProposal(secondState)).toBeUndefined();
+		expect(findProposal(state)).toBeDefined();
+	});
+
+	it('approves a link of no known proposal with a scheme its server offers', async () => {
+		await latest().greet([], { auth: ['token', 'guest'] });
+		const signedIn = client.signInWithLink('Hk41x9', 'ws://other.test/');
+		const link = await linkConnection(['external', 'token'], 'ws://other.test/');
+		// Either scheme the server offers approves (§4.11.3); this one offers only external.
+		expect(link.request('auth').params).toEqual({ scheme: 'external', token: 'Hk41x9', agent: 'apron-web/0.4' });
+		link.receive({ id: link.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_ada' } });
+		await signedIn;
+		expect(snapshot.signedInWith).toBe('external');
+
+		const refused = client.signInWithLink('Hk41x9', 'ws://third.test/');
+		const none = await linkConnection(['token', 'guest'], 'ws://third.test/');
+		await expect(refused).rejects.toThrow('does not support sign-in links');
+		expect(none.sent).toEqual([]);
+		expect(none.readyState).toBe(FakeSocket.CLOSED);
+	});
+
+	/** Proposes an external sign-in on a connection of its own; returns that connection with the proposal still unanswered. */
+	async function proposeExternal(returnUrl: string | undefined): Promise<{ side: FakeSocket; proposed: Promise<{ page: string; returns: boolean }> }> {
+		const proposed = client.proposeExternal(returnUrl);
+		const side = latest();
+		side.open();
+		side.receive({ method: 'server', params: { apron: 9, auth: ['external', 'token', 'guest'], capabilities: ['rooms'] } });
+		await settle();
+		return { side, proposed };
+	}
+
+	it('proposes an external sign-in that returns here, and opens only a page a client may open', async () => {
+		await latest().greet([], { auth: ['external', 'token', 'guest'] });
+		const main = latest();
+		const { side, proposed } = await proposeExternal('https://web.example/app');
+		const proposal = side.request('auth');
+		expect(proposal.params).toEqual({ scheme: 'external', return_url: 'https://web.example/app', state: expect.any(String), agent: 'apron-web/0.4' });
+		side.receive({ id: proposal.id, result: { url: 'https://chat.example/sso?p=Qm7x' } });
+		await expect(proposed).resolves.toEqual({ page: 'https://chat.example/sso?p=Qm7x', returns: true });
+		expect(findProposal(proposal.params.state as string)).toMatchObject({ scheme: 'external', kind: 'sign-in', url: 'ws://fake.test/' });
+		// The token comes back in a link, which needs no connection of its own: nothing waits for a code.
+		expect(side.readyState).toBe(FakeSocket.CLOSED);
+		expect(snapshot.signInCode).toBeUndefined();
+		expect(main.readyState).toBe(FakeSocket.OPEN);
+
+		for (const url of ['javascript:alert(1)', 'http://chat.example/sso', '/sso', 42]) {
+			const bad = await proposeExternal('https://web.example/app');
+			bad.side.receive({ id: bad.side.request('auth').id, result: { url } });
+			await expect(bad.proposed).rejects.toThrow(typeof url === 'string' ? 'wasn’t opened' : 'no sign-in page');
+			expect(bad.side.readyState).toBe(FakeSocket.CLOSED);
+		}
+		const loopback = await proposeExternal('http://localhost:5173/');
+		loopback.side.receive({ id: loopback.side.request('auth').id, result: { url: 'http://127.0.0.1:8080/sso' } });
+		await expect(loopback.proposed).resolves.toMatchObject({ page: 'http://127.0.0.1:8080/sso' });
+	});
+
+	it('asks again without a return_url the server refuses, and signs in with the code its page shows', async () => {
+		await latest().greet([], { auth: ['external', 'token', 'guest'] });
+		const { side, proposed } = await proposeExternal('https://untrusted.example/');
+		const first = side.request('auth');
+		// A return_url on an origin the server doesn't trust is a rejected value (§1.1, §4.11.5).
+		side.receive({ id: first.id, error: { code: -32602, message: 'return_url not allowed' } });
+		await settle();
+		const second = side.request('auth');
+		expect(second.id).not.toBe(first.id);
+		expect(second.params).toEqual({ scheme: 'external', state: first.params.state, agent: 'apron-web/0.4' });
+		side.receive({ id: second.id, result: { url: 'https://chat.example/sso?p=1' } });
+		await expect(proposed).resolves.toEqual({ page: 'https://chat.example/sso?p=1', returns: false });
+		expect(snapshot.signInCode).toEqual({ scheme: 'external', url: 'ws://fake.test/', page: 'https://chat.example/sso?p=1' });
+		expect(side.readyState).toBe(FakeSocket.OPEN);
+		await approve(side, ' 418092 ', { you: { user_id: 'ada' }, token: 'st_ada' });
+		expect(side.request('auth').params).toEqual({ scheme: 'external', token: '418092', agent: 'apron-web/0.4' });
+		expect(snapshot.you?.user_id).toBe('ada');
+		expect(snapshot.signedInWith).toBe('external');
+		expect(findProposal(first.params.state as string)).toBeUndefined();
+	});
+
+	it('shows a denied proposal as it is, without asking again, and forgets a refused proposal’s state', async () => {
+		await latest().greet([], { auth: ['external', 'email', 'token', 'guest'] });
+		const { side, proposed } = await proposeExternal('https://web.example/');
+		const first = side.request('auth');
+		side.receive({ id: first.id, error: { code: -32001, message: 'Too many sign-ins from this account' } });
+		await expect(proposed).rejects.toThrow('Too many sign-ins');
+		expect(side.sent.filter((frame) => frame.method === 'auth')).toHaveLength(1);
+		expect(findProposal(first.params.state as string)).toBeUndefined();
+		// Failures, a limit's say, never crowd out a proposal still waiting for its link.
+		const live = await propose('ada@example.com', ['email', 'token', 'guest']);
+		const liveState = live.request('auth').params.state as string;
+		for (let attempt = 0; attempt < 10; attempt += 1) {
+			const requested = client.requestEmailCode('ada@example.com');
+			const again = latest();
+			again.open();
+			again.receive({ method: 'server', params: { apron: 9, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
+			await settle();
+			again.receive({ id: again.request('auth').id, error: { code: -32002, message: 'Slow down', data: { retry_after: 30 } } });
+			await expect(requested).rejects.toThrow('Slow down');
+		}
+		expect(findProposal(liveState)).toBeDefined();
+	});
+
+	it('records a link of no known proposal as `link` where its server offers both schemes, not as either', async () => {
+		await latest().greet([], { auth: ['token', 'guest'] });
+		const signedIn = client.signInWithLink('Hk41x9', 'ws://other.test/');
+		const link = await linkConnection(['email', 'external', 'token'], 'ws://other.test/');
+		expect(link.request('auth').params).toMatchObject({ scheme: 'email', token: 'Hk41x9' });
+		link.receive({ id: link.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_ada' } });
+		await signedIn;
+		expect(snapshot.signedInWith).toBe('link');
+		expect(snapshot.signInMethods).toEqual(['link']);
+		expect(storage.get('apron.signin:ws://other.test/')).toBe('link');
+		// Its own proposal's link is recorded as that proposal's scheme, whichever approves it.
+		const own = client.signInWithLink('Hk41x9', 'ws://third.test/', { scheme: 'external', state: 's' });
+		const third = await linkConnection(['email', 'external', 'token'], 'ws://third.test/');
+		expect(third.request('auth').params).toMatchObject({ scheme: 'external' });
+		third.receive({ id: third.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_third' } });
+		await own;
+		expect(snapshot.signedInWith).toBe('external');
+	});
+
+	it('reports a `link` session it cannot resume as signed out, naming neither scheme', async () => {
+		storage.set(TOKEN_KEY, 'st_ada');
+		storage.set('apron.signin:ws://fake.test/', 'link');
+		client.stop();
+		client = new ChatClient('ws://fake.test/');
+		client.subscribe((next) => (snapshot = next));
+		client.start();
+		const first = latest();
+		first.open();
+		first.receive({ method: 'server', params: { apron: 9, auth: ['email', 'external', 'token'], capabilities: [] } });
+		first.receive({ id: first.request('auth').id, error: { code: -32001, message: 'Session expired' } });
+		await settle();
+		expect(snapshot.held).toBe(true);
+		expect(snapshot.signInNeeded).toBe('email');
+		expect(snapshot.authenticated).toBe(false);
+		// Nothing to resume by: signed out, never a guest, and told to sign in again without naming a scheme.
+		client.retryNow();
+		const next = latest();
+		next.open();
+		next.receive({ method: 'server', params: { apron: 9, auth: ['external', 'email', 'guest'], capabilities: [] } });
+		await settle();
+		expect(next.sent.filter((frame) => frame.method === 'auth')).toEqual([]);
+		expect(snapshot.held).toBe(true);
+		expect(snapshot.signInNeeded).toBe('email');
+		expect(snapshot.error).toBe('Sign in again from the connect screen.');
+	});
+
+	it('adds a confirmed link of no known addition on the signed-in connection, which the server alone can approve', async () => {
+		await latest().greet([], { auth: ['email', 'external', 'token', 'guest'], token: 'st_ada', you: { user_id: 'ada' } });
+		const socket = latest();
+		const sockets = FakeSocket.instances.length;
+		const refused = client.addWithConfirmedLink(' Hk41x9 ');
+		await vi.advanceTimersByTimeAsync(0);
+		// On this connection, not a fresh one: an addition approves only for the account that proposed it (§4.11.3).
+		expect(FakeSocket.instances).toHaveLength(sockets);
+		expect(socket.request('auth').params).toEqual({ scheme: 'email', token: 'Hk41x9' });
+		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Invalid token' } });
+		await expect(refused).rejects.toThrow('Invalid token');
+		expect(snapshot.you?.user_id).toBe('ada');
+		expect(snapshot.signInMethods).toEqual(['token']);
+		const added = client.addWithConfirmedLink('Hk41x9');
+		await vi.advanceTimersByTimeAsync(0);
+		await socket.reply('auth', {});
+		// Either scheme approves, and the link doesn't say which it added.
+		await expect(added).resolves.toBe('link');
+		expect(snapshot.signInMethods).toEqual(['token', 'link']);
+	});
+
+	it('adds with a link of its own addition on any connection of the proposing account, and only there', async () => {
+		await latest().greet([], { auth: ['email', 'external', 'token', 'guest'], token: 'st_ada', you: { user_id: 'ada' } });
+		const asked = client.proposeExternalToAdd('https://web.example/');
+		expect(latest().request('auth').params).toEqual({ scheme: 'external', return_url: 'https://web.example/', state: expect.any(String) });
+		const state = latest().request('auth').params.state as string;
+		await latest().reply('auth', { url: 'https://chat.example/link' });
+		await expect(asked).resolves.toEqual({ page: 'https://chat.example/link', returns: true });
+		expect(findProposal(state)).toMatchObject({ scheme: 'external', kind: 'addition', account: 'ada', url: 'ws://fake.test/' });
+
+		// The page comes back to a new page load: another connection, the same account.
+		latest().drop();
+		vi.advanceTimersByTime(5_000);
+		await latest().greet([], { auth: ['email', 'external', 'token', 'guest'], you: { user_id: 'ada' } });
+		const socket = latest();
+		const added = client.addWithLink(' Hk41x9 ', state);
+		await vi.advanceTimersByTimeAsync(0);
+		const approval = socket.request('auth');
+		expect(approval.params).toEqual({ scheme: 'external', token: 'Hk41x9' });
+		// Refused (another account's identity, say): nothing added, and the link may be tried again.
+		socket.receive({ id: approval.id, error: { code: -32001, message: 'Identity belongs to another account' } });
+		await expect(added).rejects.toThrow('another account');
+		expect(snapshot.signInMethods).toEqual(['token']);
+		expect(findProposal(state)).toBeDefined();
+		const again = client.addWithLink('Hk41x9', state);
+		await vi.advanceTimersByTimeAsync(0);
+		await socket.reply('auth', {});
+		await expect(again).resolves.toBe('external');
+		expect(snapshot.you?.user_id).toBe('ada');
+		expect(snapshot.signInMethods).toEqual(['token', 'external']);
+		expect(findProposal(state)).toBeUndefined();
+	});
+
+	it('won’t add with an addition’s link on a connection of another account', async () => {
+		await latest().greet([], { auth: ['email', 'token', 'guest'], token: 'st_guest' });
+		const asked = client.requestEmailCodeToAdd('ada@example.com');
+		const state = latest().request('auth').params.state as string;
+		await latest().reply('auth', {});
+		await asked;
+		expect(findProposal(state)).toMatchObject({ kind: 'addition', account: 'guest_1', email: 'ada@example.com' });
+		latest().drop();
+		vi.advanceTimersByTime(5_000);
+		await latest().greet([], { auth: ['email', 'token', 'guest'], you: { user_id: 'bob' } });
+		const sent = latest().sent.length;
+		await expect(client.addWithLink('Hk41x9', state)).rejects.toThrow('@guest_1');
+		await expect(client.addWithLink('Hk41x9', 'not-ours')).rejects.toThrow('no such addition');
+		expect(latest().sent).toHaveLength(sent);
 	});
 
 	it('saves a token rotated in reply to a token resume, and presents the latest next time', async () => {
@@ -366,23 +614,23 @@ describe('sign-in', () => {
 
 	it('reads the server frame’s apron, capabilities and agent, and sends its own agent with auth', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 8, agent: 'aprond/0.9', auth: ['guest'], capabilities: ['rooms', 'history'] } });
-		expect(snapshot.server).toMatchObject({ apron: 8, agent: 'aprond/0.9', capabilities: ['rooms', 'history'] });
+		latest().receive({ method: 'server', params: { apron: 9, agent: 'aprond/0.9', auth: ['guest'], capabilities: ['rooms', 'history'] } });
+		expect(snapshot.server).toMatchObject({ apron: 9, agent: 'aprond/0.9', capabilities: ['rooms', 'history'] });
 		expect(snapshot.capabilities.rooms).toBe(true);
 		expect(auths()[0].params).toEqual({ scheme: 'guest', agent: 'apron-web/0.4' });
 		// Without a version it isn't an Apron server frame.
 		latest().receive({ method: 'server', params: { auth: ['guest'], capabilities: [] } });
-		expect(snapshot.server?.apron).toBe(8);
+		expect(snapshot.server?.apron).toBe(9);
 	});
 
 	it('keeps server.welcome from each server frame, which replaces the last', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: [], welcome: 'Hello *there*' } });
+		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [], welcome: 'Hello *there*' } });
 		expect(snapshot.server?.welcome).toBe('Hello *there*');
-		latest().receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: [] } });
+		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [] } });
 		expect(snapshot.server?.welcome).toBeUndefined();
 		// Not a string: ignored.
-		latest().receive({ method: 'server', params: { apron: 8, auth: ['guest'], capabilities: [], welcome: { text: 'x' } } });
+		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [], welcome: { text: 'x' } } });
 		expect(snapshot.server).not.toHaveProperty('welcome');
 	});
 

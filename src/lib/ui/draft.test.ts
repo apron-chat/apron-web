@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collapseMentions, draftMentions, draftText, insertMention, insertText, mentionQuery, unchip, type DraftChip, type DraftPart } from './draft';
+import { collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, unchip, type DraftChip, type DraftPart } from './draft';
 
 const people = [
 	{ id: 'ada_1', name: 'Ada' },
@@ -50,6 +50,16 @@ describe('composer mentions', () => {
 		expect(typed('`x` @bob ').parts).toEqual(['`x` ', { id: 'bob' }, ' ']);
 	});
 
+	it('chips email and federated IDs whole, and no name that what follows would make a longer ID', () => {
+		const text = 'cc @ada@example.com, @carol:b.example. ';
+		const forms = collapseMentions([text], people, { caret: text.length, isUser: (id) => id === 'ada@example.com' || id === 'carol:b.example' });
+		expect(forms.parts).toEqual(['cc ', { id: 'ada@example.com' }, ', ', { id: 'carol:b.example' }, '. ']);
+		// Sent as `@bob`, "@Bob.x" would read as `@bob.x` (Appendix A.3).
+		expect(typed('hi @Bob.x there').changed).toBe(false);
+		expect(typed('hi @Bob@example.com there').changed).toBe(false);
+		expect(typed('hi @Bob. there').parts).toEqual(['hi ', { id: 'bob' }, '. there']);
+	});
+
 	it('takes IDs the directory knows beyond the room', () => {
 		const known = collapseMentions(['cc @carol_9 '], people, { caret: 12, isUser: (id) => id === 'carol_9' });
 		expect(known.parts).toEqual(['cc ', { id: 'carol_9' }, ' ']);
@@ -71,6 +81,46 @@ describe('composer mentions', () => {
 		expect(insertMention(['hi @ad!'], 3, 6, 'ada_1')).toEqual({ parts: ['hi ', { id: 'ada_1' }, ' !'], caret: 10 });
 		expect(insertMention(['hi @ad there'], 3, 6, 'ada_1')).toEqual({ parts: ['hi ', { id: 'ada_1' }, ' there'], caret: 10 });
 		expect(insertMention([], 0, 0, 'bob')).toEqual({ parts: [{ id: 'bob' }, ' '], caret: 5 });
+	});
+});
+
+describe('draft text', () => {
+	it('ends each chip\'s ID where the chip ends', () => {
+		expect(draftText([{ id: 'ada' }, '+1'])).toBe('@ada +1');
+		expect(draftText([{ id: 'ada' }, '.x and'])).toBe('@ada .x and');
+		expect(draftText([{ id: 'ada' }, ':b'])).toBe('@ada :b');
+		expect(draftText([{ id: 'ops', room: true }, '-2 is down'])).toBe('#ops -2 is down');
+		// Punctuation that cannot end an ID stays where it was typed.
+		expect(draftText(['hi ', { id: 'ada' }, '. ', { id: 'bob' }, ', ', { id: 'carol' }, '!'])).toBe('hi @ada. @bob, @carol!');
+		expect(draftText([{ id: 'ada' }, '-'])).toBe('@ada-');
+		expect(draftText([{ id: 'ada' }, ':-)'])).toBe('@ada:-)');
+	});
+
+	it('separates adjacent chips', () => {
+		expect(draftText([{ id: 'ada' }, { id: 'bob' }])).toBe('@ada @bob');
+		expect(draftText([{ id: 'ada' }, { id: 'ops', room: true }])).toBe('@ada #ops');
+		expect(draftText([{ id: 'ops', room: true }, { id: 'ada' }, { id: 'bob' }, '+1'])).toBe('#ops @ada @bob +1');
+		// `_` ends an ID, and a `#` after it is still a room.
+		expect(draftText([{ id: 'ada_' }, { id: 'ops', room: true }])).toBe('@ada_#ops');
+	});
+
+	it('keeps a letter or digit off a chip\'s prefix', () => {
+		expect(draftText(['hi', { id: 'ada' }])).toBe('hi @ada');
+		expect(draftText(['v2', { id: 'ops', room: true }])).toBe('v2 #ops');
+		expect(draftText(['(', { id: 'ada' }, ')'])).toBe('(@ada)');
+	});
+
+	it('reads back as the chips it was sent from', () => {
+		const people = [{ id: 'ada', name: 'Ada' }, { id: 'bob', name: 'Bob' }];
+		const parts: DraftPart[] = ['hi', { id: 'ada' }, { id: 'bob' }, '+1'];
+		const sent = draftText(parts);
+		const read = collapseMentions([sent], people, { caret: sent.length, final: true });
+		expect(draftMentions(read.parts)).toEqual(draftMentions(parts));
+		expect(draftText(read.parts)).toBe(sent);
+	});
+
+	it('counts caret positions without the added spaces', () => {
+		expect(draftLength(['hi', { id: 'ada' }, { id: 'bob' }, '+1'])).toBe(12);
 	});
 });
 

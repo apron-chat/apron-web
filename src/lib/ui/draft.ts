@@ -1,4 +1,4 @@
-import type { MentionPerson } from '$lib/protocol/markdown';
+import { textId, type MentionPerson } from '$lib/protocol/markdown';
 
 /**
  * A composer draft: text and mention chips. A chip shows a person's name, or
@@ -14,9 +14,31 @@ export function chipText(chip: DraftChip): string {
 	return `${chip.room ? '#' : '@'}${chip.id}`;
 }
 
-/** The draft as sent: every chip becomes its `@user_id` or `#room_id`. */
+/**
+ * The draft as sent: every chip becomes its `@user_id` or `#room_id`. A space
+ * goes between a chip and what touches it where readers would otherwise not
+ * see the chip's ID (Appendix A.3): after it, text that would make the ID
+ * longer (`@ada` then `+1`, or another chip); before it, a letter or digit.
+ * So the sent text is longer than the draft where that happens.
+ */
 export function draftText(parts: DraftPart[]): string {
-	return parts.map((part) => (typeof part === 'string' ? part : chipText(part))).join('');
+	let out = '';
+	// The ID of the chip the text so far ends with.
+	let open: string | undefined;
+	for (const part of parts) {
+		const text = typeof part === 'string' ? part : chipText(part);
+		if (open !== undefined && (textId(open + text)?.length ?? 0) > open.length) out += ' ';
+		else if (typeof part !== 'string' && BEFORE_ID.test(out.slice(-1))) out += ' ';
+		out += text;
+		if (typeof part !== 'string') open = part.id;
+		else if (text) open = undefined;
+	}
+	return out;
+}
+
+/** The draft's length in caret positions: a chip counts as its `@user_id` or `#room_id`, with no added space. */
+export function draftLength(parts: DraftPart[]): number {
+	return parts.reduce((sum, part) => sum + (typeof part === 'string' ? part.length : part.id.length + 1), 0);
 }
 
 /**
@@ -55,10 +77,9 @@ export interface Collapsed {
 	changed: boolean;
 }
 
-const ID_RUN = /^[A-Za-z0-9_.-]+/;
 const WORD = /[A-Za-z0-9_]/;
-const BEFORE_MENTION = /[A-Za-z0-9]/;
-const BEFORE_ROOM = /[A-Za-z0-9_]/;
+/** An `@` or `#` right after one of these is text (Appendix A.3). */
+const BEFORE_ID = /[A-Za-z0-9]/;
 
 /**
  * Turns a typed `@user_id` or `@name` into a chip once it is finished: an
@@ -101,7 +122,7 @@ export function collapseMentions(parts: DraftPart[], people: MentionPerson[], op
 			// A chip right before sends as `@id`, which ends in an ID character: readers would see this as text.
 			const before = at > 0 ? part[at - 1] : typeof previous === 'string' ? previous[previous.length - 1] : previous ? 'x' : undefined;
 			const room = char === '#';
-			if ((char !== '@' && !room) || fence !== 0 || (before !== undefined && (room ? BEFORE_ROOM : BEFORE_MENTION).test(before))) {
+			if ((char !== '@' && !room) || fence !== 0 || (before !== undefined && BEFORE_ID.test(before))) {
 				at += 1;
 				continue;
 			}
@@ -137,13 +158,15 @@ function mentionAt(
 ): { id: string; length: number } | undefined {
 	if (rest.startsWith('@')) return undefined;
 	const candidates: Array<{ id: string; length: number; exact: boolean }> = [];
-	const run = ID_RUN.exec(rest)?.[0].replace(/[.-]+$/, '');
+	const run = textId(rest);
 	if (run && isUser(run)) candidates.push({ id: run, length: run.length, exact: true });
 	const lower = rest.toLowerCase();
 	for (const person of people) {
 		const name = person.name?.trim().toLowerCase();
 		if (!name || !lower.startsWith(name)) continue;
 		if (name.length < rest.length && WORD.test(rest[name.length])) continue;
+		// Sent as `@user_id`, what follows the name must not read as more of the ID ("@Ada.x" is not `@ada` then ".x").
+		if ((textId(person.id + rest.slice(name.length))?.length ?? 0) > person.id.length) continue;
 		candidates.push({ id: person.id, length: name.length, exact: false });
 	}
 	if (candidates.length === 0) return undefined;
@@ -173,7 +196,7 @@ function roomAt(
 	rooms: string[],
 	{ final, followed, caret }: { final: boolean; followed: boolean; caret: number }
 ): { id: string; length: number } | undefined {
-	const run = ID_RUN.exec(rest)?.[0].replace(/[.-]+$/, '');
+	const run = textId(rest);
 	if (!run || !rooms.includes(run)) return undefined;
 	if (final) return { id: run, length: run.length };
 	if (run.length === rest.length && !followed) return undefined;

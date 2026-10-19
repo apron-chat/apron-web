@@ -46,6 +46,17 @@ describe('message store', () => {
 		expect(store.message('12')?.body?.text).toBe('original');
 	});
 
+	it('lets a tombstone win at an equal log_id, whichever arrives first', () => {
+		const tombstone = (log: number, id = log): MessageRecord => ({ ...snapshot(log, id, { deleted: true }), body: undefined });
+		const store = new ProtocolStore();
+		// A redacted snapshot from history, then an embedded copy taken before the redaction.
+		install(store, snapshot(10), tombstone(10));
+		install(store, tombstone(20), snapshot(20));
+		expect(store.message('10')?.deleted).toBe(true);
+		expect(store.message('20')?.deleted).toBe(true);
+		expect(store.putMessage(tombstone(10))).toBe(false);
+	});
+
 	it('re-homes a moved message instead of duplicating it, and ignores a stale source snapshot', () => {
 		const store = new ProtocolStore();
 		install(store, snapshot(100), snapshot(105, 100, { room_id: 'thread' }));
@@ -101,6 +112,12 @@ describe('wire decoding', () => {
 		expect(decodeMessage({ ...snapshot(1), log_id: '0' })).toBeNull();
 		expect(decodeMessage({ message_id: '1', log_id: '1', room_id: 'general' })).toBeNull();
 		expect(decodeMessage({ ...snapshot(1), room_id: undefined })).toBeNull();
+		// A room_id or user_id is never empty, and has no whitespace or control characters (§2.4).
+		expect(decodeMessage({ ...snapshot(1), room_id: '' })).toBeNull();
+		expect(decodeMessage({ ...snapshot(1), from: { user_id: 'ada lovelace' } })).toBeNull();
+		expect(decodeMessage({ ...snapshot(1), from: { user_id: 'ada\u0000' } })).toBeNull();
+		expect(decodeRoom({ room_id: 'gen eral' })).toBeNull();
+		expect(decodeMessage({ ...snapshot(1), from: { user_id: 'ada+chat@example.com' } })?.record.from.user_id).toBe('ada+chat@example.com');
 		expect(isLogId('9007199254740992')).toBe(false);
 		expect(isLogId('9007199254740991')).toBe(true);
 	});

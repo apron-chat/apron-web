@@ -105,7 +105,7 @@ export class MemoryProtocolServer {
 		});
 		engineering.log_id = 1710000000007;
 		// More of general's threads: one joined with news, and three that the guest hasn't joined, which the sidebar
-		// lists apart (room_list `not_joined`, §4.3.1) since they deliver nothing live.
+		// lists apart (room_list `not_joined`, §4.2.1) since they deliver nothing live.
 		const threads: [id: string, title: string, members: string[], description: string | undefined, messages: [string, string, string][]][] = [
 			['thread_cert', 'Expired cert on the runner', ['preview_guest', 'linus', 'margaret'], undefined, [
 				['1710000000020', 'linus', 'The build runner’s cert expired overnight, so every deploy since 2am failed.'],
@@ -169,7 +169,7 @@ export class MemoryProtocolServer {
 			server.sockets.add(socket);
 			socket.readyState = 1;
 			socket.onopen?.({} as Event);
-			socket.deliver({ method: 'server', params: { apron: 8, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities: ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'ext'] } });
+			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities: ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'ext'] } });
 		});
 		return socket as unknown as WebSocket;
 	}
@@ -213,7 +213,7 @@ export class MemoryProtocolServer {
 	private listRooms(params: JsonObject): JsonObject {
 		const parent = typeof params.parent_room_id === 'string' ? params.parent_room_id : undefined;
 		const exact = typeof params.room_id === 'string' ? params.room_id : undefined;
-		// A private room is invisible to anyone but its members (§4.3.4); the one viewer here is preview_guest.
+		// A private room is invisible to anyone but its members (§4.2.4); the one viewer here is preview_guest.
 		const rooms = [...this.rooms.values()].filter((room) => !this.hidden(room)).filter((room) => exact
 			? room.room_id === exact
 			: parent
@@ -320,11 +320,11 @@ export class MemoryProtocolServer {
 			if (parent && !this.rooms.has(parent)) return fail('Unknown parent room');
 			const id = parent ? `thread_preview_${this.roomSerial++}` : `room_preview_${this.roomSerial++}`;
 			room = this.makeRoom(id, typeof p.title === 'string' ? p.title : id, ['preview_guest'], parent);
-			// A thread created without `private` takes its parent's (§4.3.4).
+			// A thread created without `private` takes its parent's (§4.2.4).
 			if (p.private === true || (p.private === undefined && parent && this.rooms.get(parent)?.private)) room.private = true;
 		} else {
 			// An update resubmits every client field; one left out is cleared, except `private`, which is kept,
-			// and `ext`, which merges (§4.3.4, §4.12). It is a new room record.
+			// and `ext`, which merges (§4.2.4, §4.12). It is a new room record.
 			room.title = typeof p.title === 'string' ? p.title : room.room_id;
 			this.nextLog(room);
 		}
@@ -351,7 +351,7 @@ export class MemoryProtocolServer {
 		socket.deliver({ method: 'room_update', params: { left: [{ room_id: String(p.room_id) }] } });
 		reply();
 	}
-	/** Adds or removes another user (§4.3.2): a membership record in `room_update` to the room's members, before and after. */
+	/** Adds or removes another user (§4.2.2): a membership record in `room_update` to the room's members, before and after. */
 	private changeMember(room: PreviewRoom, userId: string, joined: boolean, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const user = people[userId];
 		if (!user || !Object.hasOwn(people, userId)) return fail('Unknown user');

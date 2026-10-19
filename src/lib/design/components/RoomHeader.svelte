@@ -8,7 +8,7 @@
 		name?: string;
 		/** the room's `description` (§3.4) as one line of text */
 		topic?: string;
-		/** `private: true` (§4.3.4): a lock beside the name */
+		/** `private: true` (§4.2.4): a lock beside the name */
 		private?: boolean;
 		/** names from live `activity` typing; replaces the topic while present */
 		typing?: string[];
