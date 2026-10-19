@@ -179,8 +179,9 @@ returns a promise that resolves on `{}` and rejects with the server's error
 (nothing changed; `PauseNotifications` shows it in a `Callout`); it changes
 nothing else: only a `status` notification from the server (`handleStatus`),
 which reaches the sending connection too, before the result,
-sets the snapshot's `mutedUntil`, or a room's with its `room_id`, which
-timers clear when they run out. A sign-in, in `handleAuth`, is an `auth`
+sets the snapshot's `mutedUntil`, or a room's with its `room_id` (and
+`roomMutes`, every room paused, joined or not), which timers clear when
+they run out. A sign-in, in `handleAuth`, is an `auth`
 as a user the connection isn't already signed in as: an `auth` that adds to
 the signed-in connection isn't one (a passkey registered while
 authenticated, a guest's included, passes `added`, and an added address's
@@ -197,7 +198,10 @@ users' `status` values outlast a lost connection, and each sign-in drops
 them (`dropKeptStatuses`), all but your own, which the `auth` result's `you`
 gives, so they show none until the server sends them again: as `user`
 notifications after the result, and in the current user objects of
-`room_list` and `room_update`, which carry `offline` and `""` too.
+`room_list` and `room_update`, which carry `offline` and `""` too. A
+resume as the same user still shows the dropped ones in the snapshot's
+`users` until its joined listing arrives (`settleHeldStatuses`), and names
+those users in `heldStatuses`, since they are no longer kept.
 `setPushRegistration(params, userId)` keeps the `push_register` params (§4.9)
 and sends them after each `auth` as that account while `server.push` offers
 their `kind`. A replaced or cleared registration is unregistered, after the
