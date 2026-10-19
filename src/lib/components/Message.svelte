@@ -182,6 +182,8 @@
 	function pointerdown(pointer: PointerEvent): void {
 		cancelLongPress();
 		if (pointer.pointerType !== 'touch' || selecting || editing || !caps.select) return;
+		// A long press on a reaction chip lists who reacted instead.
+		if ((pointer.target as HTMLElement | null)?.closest?.('[data-testid="reaction-chip"]')) return;
 		longPress = setTimeout(() => {
 			longPress = undefined;
 			onbeginselect();

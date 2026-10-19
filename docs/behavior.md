@@ -703,7 +703,13 @@ message above itself (“React to Ada” and its first line), since new messages
 scroll it away or, on a phone, under the sheet, and while the picker is open that
 message keeps its hover highlight and no other message takes one. Reactions show as chips under the message: emoji and count,
 highlighted when one is yours, with a tooltip naming who reacted. Clicking a
-chip toggles your reaction. Tombstones show no reactions.
+chip toggles your reaction. Right-clicking a chip (or the context menu key on
+it), or long-pressing it on touch, lists everyone who reacted with that emoji,
+you first, each with their avatar, name and `@user_id` where it differs: a
+popover beside the chip (a bottom sheet on narrow screens) that follows
+reactions as they change, and closes with Escape, a press outside, tabbing out,
+or once nobody is left on it. The list opens even where you can't react. A long
+press on a chip doesn't toggle it or enter select mode. Tombstones show no reactions.
 
 Typing `:shortcode` in the composer opens an emoji autocomplete; arrows move,
 Tab or Enter inserts the highlighted native emoji in place of the shortcode,

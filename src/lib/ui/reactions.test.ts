@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ReactionSummary } from '$lib/protocol/client';
-import { reactionChips, whoReacted } from './reactions';
+import { reactionChips, reactorsOf, whoReacted } from './reactions';
 
 const summary = (emoji: string, users: string[], mine = false): ReactionSummary => ({
 	emoji,
@@ -36,5 +36,13 @@ describe('reaction chips', () => {
 		// Callers render reactors through the kept user objects (§3.3).
 		expect(whoReacted(summary('👍', ['ada', 'bob']), 'you', (user) => `${user.user_id}!`)).toBe('ada! and bob!');
 		expect(reactionChips([summary('👍', ['ada'])], 'you', false, () => 'Kept')[0].title).toBe('Kept reacted with 👍');
+	});
+
+	it('lists everyone who reacted, you first', () => {
+		expect(reactionChips([summary('👍', ['ada', 'bob', 'you'], true)], 'you')[0].reactors.map((user) => user.user_id)).toEqual(['you', 'ada', 'bob']);
+		expect(reactorsOf(summary('👍', ['bob', 'ada']), 'you').map((user) => user.name)).toEqual(['Ada', 'Bob']);
+		// Your own set counts before its echo names you.
+		expect(reactorsOf({ ...summary('👍', ['ada']), mine: true }, 'you')).toEqual([{ user_id: 'you' }, { user_id: 'ada', name: 'Ada' }]);
+		expect(reactorsOf(summary('👍', ['ada']), undefined).map((user) => user.user_id)).toEqual(['ada']);
 	});
 });

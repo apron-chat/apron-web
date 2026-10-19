@@ -18,6 +18,16 @@ export interface ReactionChip {
 	title: string;
 	/** What a screen reader hears, including what a click does. */
 	label: string;
+	/** Everyone who reacted, you first, for the list a long press or right-click opens. */
+	reactors: Identity[];
+}
+
+/** Who reacted with this emoji: you first, then others in the summary's order. */
+export function reactorsOf(summary: ReactionSummary, you: string | undefined): Identity[] {
+	const own = you === undefined ? undefined : summary.users.find((user) => user.user_id === you);
+	const others = summary.users.filter((user) => user.user_id !== you);
+	if (own) return [own, ...others];
+	return summary.mine && you !== undefined ? [{ user_id: you }, ...others] : others;
 }
 
 /** "You, Ada and 3 others": you first, then others in the summary's order. */
@@ -52,7 +62,8 @@ export function reactionChips(
 				count: summary.count,
 				mine: summary.mine,
 				title: who ? `${who} reacted with ${summary.emoji}` : summary.emoji,
-				label: `${summary.emoji} ${count}${summary.mine ? ', including yours. Remove yours' : '. Add yours'}`
+				label: `${summary.emoji} ${count}${summary.mine ? ', including yours. Remove yours' : '. Add yours'}`,
+				reactors: reactorsOf(summary, you)
 			};
 		});
 }
