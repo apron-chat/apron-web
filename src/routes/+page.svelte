@@ -47,7 +47,7 @@
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
 	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadLostPrivacy, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
@@ -97,8 +97,6 @@
 		moving?: number;
 	};
 
-	/** A thread just chosen: where it lands waits until its first load shows whether older replies remain. */
-	let openingThread = $state<string | undefined>();
 	/** How near the top of a thread reading back starts loading its older replies. */
 	const OLDER_REPLIES_MARGIN_PX = 240;
 
@@ -422,6 +420,14 @@
 	let editTarget = $derived(activeThread
 		? (activeThreadEntry ? { id: activeThreadEntry.id, title: activeThreadEntry.title, description: activeThreadEntry.description } : undefined)
 		: (activeRoom ? { id: activeRoom.id, title: activeRoom.title, description: activeRoom.description } : undefined));
+	/** Room and thread summaries put away with their ×, on this device. */
+	let hiddenSummaries = $state(loadHiddenSummaries());
+	/** The open room's or thread's description, pinned under the header until its × puts it away (and again once it's edited). */
+	let pinnedSummary = $derived.by(() => {
+		const description = editTarget?.description;
+		if (!editTarget || !description || summaryHidden(hiddenSummaries, draftKey(editTarget.id), description)) return undefined;
+		return { id: editTarget.id, description };
+	});
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneReady);
 
@@ -683,21 +689,6 @@
 				if (messageScroll && messageScroll.scrollHeight <= messageScroll.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
 			});
 		});
-	});
-
-	// A thread opens at its top, unless only its newest replies are loaded: then it
-	// opens at those, like a room, and reading back loads the older ones.
-	$effect(() => {
-		const room = threadRoom;
-		if (!openingThread || !room?.loaded) return;
-		if (room.id !== openingThread) {
-			openingThread = undefined;
-			return;
-		}
-		openingThread = undefined;
-		if (!room.olderAvailable) return;
-		stickToBottom = true;
-		untrack(() => requestAnimationFrame(() => { if (stickToBottom) scrollToLatest(); }));
 	});
 
 	// Threads don't recover with their parent: the open one loads its own history,
@@ -1456,8 +1447,7 @@
 		mentions.clearRoom(roomId);
 		if (thread) mentions.clearRoom(thread);
 		stickToBottom = true;
-		// A thread opens at its summary, at the top, so it renders whole.
-		reveal.from(thread ? 0 : timeline.length - FIRST_PAINT_ITEMS);
+		reveal.from(timeline.length - FIRST_PAINT_ITEMS);
 	}
 
 	/** Writes the destination into the page's history entry, unless it is already there. */
@@ -1517,13 +1507,9 @@
 		composer?.focus();
 	}
 
-	/** Shows a thread from its summary at the top, loading it again if its last load failed. */
+	/** Shows a thread at its latest reply, as a room opens, loading it again if its last load failed. */
 	function showThread(roomId: string, thread: string, history: 'push' | 'replace' = 'push'): void {
 		setDestination(roomId, thread, history);
-		stickToBottom = false;
-		seenCount = messages.length;
-		openingThread = thread;
-		requestAnimationFrame(() => { if (messageScroll) messageScroll.scrollTop = 0; });
 		// A failed load stays failed until the thread is opened again.
 		if (session.rooms.find((room) => room.id === thread)?.recoveryError) loadThread(thread);
 	}
@@ -2298,6 +2284,7 @@
 			<RoomHeader
 				room={activeRoom}
 				pane={paneRoom ?? activeRoom}
+				showTopic={!pinnedSummary}
 				threadTitle={activeThread ? threadTitle(activeThread) : undefined}
 				typing={typingNames}
 				replyCount={activeThread ? threadReplyCount : undefined}
@@ -2347,13 +2334,17 @@
 				</div>
 			{/if}
 
+			{#if pinnedSummary}
+				{@const pinned = pinnedSummary}
+				{#key pinned.id}
+					<ThreadSummary description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenSummaries = hideSummary(hiddenSummaries, draftKey(pinned.id), pinned.description))} />
+				{/key}
+			{/if}
+
 			<div class="ap-timeline" bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
 				<div class="day-float" class:day-float-shown={floatingDay.shown} aria-hidden="true" data-testid="floating-day"><span>{floatingDay.label}</span></div>
 				{#if snapshot.showReconnectDivider}
 					<div class="ap-divider ap-divider-gap" role="separator" data-testid="reconnect-divider"><span>Reconnected · earlier messages aren’t available</span></div>
-				{/if}
-				{#if activeThread && activeThreadEntry?.description}
-					<ThreadSummary description={activeThreadEntry.description} onopenroom={openMentionedRoom} />
 				{/if}
 				<!-- No messages yet: placeholders, not thread cards on their own. -->
 				{#if (messages.length === 0 || paneHeldBack) && paneCatchingUp}

@@ -19,6 +19,8 @@ const KEY = {
 	memberList: 'apron.memberList',
 	/** Whether Other threads, the threads you haven't joined under the open room, is folded away. */
 	otherThreads: 'apron.otherThreads',
+	/** The room and thread summaries put away with their ×, each kept as the fingerprint of the text put away. */
+	hiddenSummaries: 'apron.hiddenSummaries',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
 } as const;
@@ -27,6 +29,8 @@ export type RecentServer = { url: string; label?: string };
 export type SidebarPrefs = { width: number; collapsed: boolean };
 
 const RECENT_SERVERS_MAX = 5;
+/** The most summaries kept put away; the ones put away longest ago show again first. */
+const HIDDEN_SUMMARIES_MAX = 200;
 
 function read(key: string): string | null {
 	try {
@@ -128,6 +132,37 @@ export function loadOtherThreadsOpen(): boolean {
 
 export function saveOtherThreadsOpen(open: boolean): void {
 	write(KEY.otherThreads, open ? 'open' : 'shut');
+}
+
+/** The summaries put away, by the page's key for each room or thread: the fingerprint of the text that was put away. */
+export function loadHiddenSummaries(): Record<string, string> {
+	try {
+		const parsed: unknown = JSON.parse(read(KEY.hiddenSummaries) ?? '{}');
+		if (!isJsonObject(parsed)) return {};
+		return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+	} catch {
+		return {};
+	}
+}
+
+/** Puts a room's or thread's summary away, until it's edited: returns the summaries put away, this one newest. */
+export function hideSummary(hidden: Record<string, string>, key: string, description: string): Record<string, string> {
+	const others = Object.entries(hidden).filter(([entry]) => entry !== key);
+	const next = Object.fromEntries([...others, [key, summaryFingerprint(description)]].slice(-HIDDEN_SUMMARIES_MAX));
+	write(KEY.hiddenSummaries, JSON.stringify(next));
+	return next;
+}
+
+/** Whether a summary was put away as it now reads: an edit brings it back. */
+export function summaryHidden(hidden: Record<string, string>, key: string, description: string): boolean {
+	return hidden[key] === summaryFingerprint(description);
+}
+
+/** A short hash of a summary (FNV-1a), enough to tell an edit, without keeping the text itself. */
+function summaryFingerprint(description: string): string {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < description.length; i++) hash = Math.imul(hash ^ description.charCodeAt(i), 0x01000193);
+	return (hash >>> 0).toString(36);
 }
 
 export function loadNotificationsEnabled(): boolean {

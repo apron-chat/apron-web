@@ -13,8 +13,8 @@ afterEach(() => {
 });
 
 /** The header of a joined room, offering the member list's toggle or not. */
-function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: number; mentionsElsewhere?: number } = {}) {
-	const room = { id: 'general', title: 'General', joined: true } as unknown as RoomSnapshot;
+function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: number; mentionsElsewhere?: number; showTopic?: boolean } = {}) {
+	const room = { id: 'general', title: 'General', description: 'Say **hello**.', joined: true } as unknown as RoomSnapshot;
 	const noop = () => {};
 	instance = mount(RoomHeader, {
 		target: document.body,
@@ -36,6 +36,14 @@ describe('RoomHeader', () => {
 
 	it('leaves it to the corner where the list has a column of its own', () => {
 		expect(render(false)).toBeNull();
+	});
+
+	it('shows the room’s description under its title, unless it’s pinned as a summary', () => {
+		render();
+		expect(document.querySelector('[data-testid="room-description"]')?.textContent).toBe('Say hello.');
+		unmount(instance!);
+		render(undefined, { showTopic: false });
+		expect(document.querySelector('[data-testid="room-description"]')).toBeNull();
 	});
 
 	it('makes the back arrow a tag with what’s new elsewhere: grey for unread, orange with an @ for mentions', () => {

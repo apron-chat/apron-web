@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadAppearance, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, hideSummary, loadAppearance, loadHiddenSummaries, summaryHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 
 const values = new Map<string, string>();
@@ -100,5 +100,20 @@ describe('preference storage', () => {
 		expect(loadAppearance()).toEqual(preferences);
 		values.set('apron.appearance', '{broken');
 		expect(loadAppearance()).toBeUndefined();
+	});
+
+	it('keeps a summary put away until it is edited, and forgets the oldest past the limit', () => {
+		expect(loadHiddenSummaries()).toEqual({});
+		let hidden = hideSummary({}, 'general', 'Say hello.');
+		expect(summaryHidden(hidden, 'general', 'Say hello.')).toBe(true);
+		expect(summaryHidden(hidden, 'general', 'Say hello, and read the rules.')).toBe(false);
+		expect(summaryHidden(hidden, 'random', 'Say hello.')).toBe(false);
+		expect(summaryHidden(loadHiddenSummaries(), 'general', 'Say hello.')).toBe(true);
+		for (let i = 0; i < 200; i++) hidden = hideSummary(hidden, `room${i}`, 'Summary');
+		expect(Object.keys(hidden)).toHaveLength(200);
+		expect(summaryHidden(loadHiddenSummaries(), 'general', 'Say hello.')).toBe(false);
+		expect(summaryHidden(loadHiddenSummaries(), 'room199', 'Summary')).toBe(true);
+		values.set('apron.hiddenSummaries', '{broken');
+		expect(loadHiddenSummaries()).toEqual({});
 	});
 });
