@@ -62,13 +62,13 @@
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, offersNotifications, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, offersAtSignIn, offersNotifications, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
 	import { PushSettings } from '$lib/ui/push-settings.svelte';
 	import { inMutedRoom, inNotifyScopes, notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
-	import { accountServer, canOfferInstall, keepsPushOff, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
+	import { accountServer, canOfferInstall, isStandalone, keepsPushOff, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
 
 	/**
 	 * A thread this viewer created, opened once its `room_update` has arrived;
@@ -144,8 +144,8 @@
 	let notificationsEnabled = $state(false);
 	/** Notifications were turned on or off on this device, or the first-mention offer answered: it isn't made again. */
 	let notificationsChoiceMade = $state(true);
-	/** The first-mention offer to turn notifications on (NotifyPrompt), while it waits for an answer. */
-	let notifyOffer = $state<{ from: string; room: string } | undefined>();
+	/** The offer to turn notifications on (NotifyPrompt), at the first mention or at sign-in in an installed app, while it waits for an answer. */
+	let notifyOffer = $state<{ from?: string; room?: string } | undefined>();
 	let notificationState = $state<NotificationPermissionState>(notificationPermission());
 	/** The server the client is on (`client.url`), kept as page state. */
 	let serverUrl = $state('');
@@ -191,6 +191,8 @@
 	/** Why push doesn't work: the browser couldn't subscribe, or the server refused the registration. */
 	let webPushError = $derived(pushSettings.error ?? session.snapshot.pushError);
 	let webPushAvailable = $state(false);
+	/** Apron runs as an installed app (`isStandalone`), as it loaded. */
+	let runsInstalled = $state(false);
 	/** Notifications are paused until then (§4.5 `mute`, as the server's `status` says). */
 	let pausedUntil = $derived(session.snapshot.mutedUntil);
 	/**
@@ -470,6 +472,12 @@
 	$effect(() => {
 		if (session.showingHeld) return;
 		unread.observe(session.rooms, session.you, paneRoom?.id, latestVisible && presence.visible);
+	});
+
+	// Signed in to an installed app where push works: offer notifications now, not at the first mention.
+	$effect(() => {
+		if (!session.ready || notifyOffer || previewMode) return;
+		if (offersAtSignIn({ installed: runsInstalled, push: webPushAvailable && Boolean(webPushServerKey), chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })) notifyOffer = {};
 	});
 
 	// The account's `push_id`, made and kept in storage the first time: here, not in a derivation.
@@ -822,6 +830,7 @@
 		notificationState = notificationPermission();
 		if (!previewMode) pushSettings.load();
 		webPushAvailable = webPushSupported();
+		runsInstalled = isStandalone();
 		// Push turned on or off in another tab applies here too.
 		const storageChanged = (event: StorageEvent) => {
 			if (previewMode) return;

@@ -416,7 +416,11 @@ far they'd reach (even when Apron is closed, where push works here; else while
 it's open). Its **Turn on** does what the switch does, from the same tap;
 **Not now**, or Escape within it, turns them off. Either answer, or using the
 switch, is the choice, so it isn't offered again on this device, nor once the
-browser blocks notifications. With the rooms list showing, it sits above the
+browser blocks notifications. In an installed app (a Home Screen or desktop
+app window) where push works for the signed-in account, the same prompt is
+offered as soon as you're signed in, without the mention, since a phone that's
+rarely open may not see one arrive for days, and each device asks for its own
+permission. With the rooms list showing, it sits above the
 profile bar, pointing at the Preferences gear where the switch lives, and says
 so; on phones, or with the list collapsed, it sits above the composer. It
 doesn't take focus from what you're typing; a screen reader reads it as it
