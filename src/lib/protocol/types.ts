@@ -176,6 +176,8 @@ export interface ServerSettings extends JsonObject {
 	guest_posting?: boolean;
 	/** `false` when the server keeps no read cursors, so `read_message_id` is not worth sending. */
 	read_cursors?: boolean;
+	/** `false` when only an admin may add other people to rooms (`room_join` with `user_id`, §4.2.2). */
+	add_members?: boolean;
 }
 
 /**

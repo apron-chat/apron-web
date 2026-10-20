@@ -703,7 +703,13 @@ once the server has named it; the dialog isn't offered when the selection holds
 someone else's message and you have neither `admin` nor `mod`, so a refused move
 never leaves an empty thread. If the moves fail once the thread exists, the
 dialog closes and the error says so, as for any move. Messages refused after the first (say, over a posting limit)
-stay selected and the bar says how many didn't move. Escape leaves select mode.
+stay selected and the bar says how many didn't move. A thread delivers to its
+members only, so once messages move into one (new or existing, but not back to
+the room), each of their authors who isn't in it yet is added to it (`room_join`
+with their `user_id`, §4.2.2), where you may add people: while
+`server.ext.settings.add_members` isn't `false`, or as an `admin`. The server
+decides each (it adds no guests); the moves stand either way, and the toast says
+how many authors weren't added and why. Escape leaves select mode.
 
 A reply's quote may point into another room: clicking it opens that room or
 thread, loading the thread's history if needed, and highlights the message.

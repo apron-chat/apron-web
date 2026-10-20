@@ -6,7 +6,8 @@ import { MessageSelection, NOT_MOVABLE } from './selection.svelte';
 function fakeClient(deny: string[] = []) {
 	const moveMessage = vi.fn((id: string) => ({ promise: deny.includes(id) ? Promise.reject(new Error('denied')) : Promise.resolve({ message_id: id }) }));
 	const createRoom = vi.fn(() => ({ promise: Promise.resolve({ room_id: 'thread_new' }) }));
-	return { client: { moveMessage, createRoom } as unknown as ChatClient, moveMessage, createRoom };
+	const joinRoom = vi.fn((_room: string, user: string) => ({ promise: deny.includes(user) ? Promise.reject(new Error('not added')) : Promise.resolve({}) }));
+	return { client: { moveMessage, createRoom, joinRoom } as unknown as ChatClient, moveMessage, createRoom, joinRoom };
 }
 
 function picked(ids: string[]): MessageSelection {
@@ -18,6 +19,12 @@ function picked(ids: string[]): MessageSelection {
 
 /** Messages `b…` are someone else's. */
 const own = (id: string) => !id.startsWith('b');
+
+/** Who wrote each message: `me` mine, `bob` the `b…` ones, and `b3` by `bea`; `amy` is in every thread already. */
+const authors = {
+	of: (id: string) => (own(id) ? 'me' : id === 'b3' ? 'bea' : 'bob'),
+	skip: (user: string) => user === 'me' || user === 'amy'
+};
 
 describe('MessageSelection.move', () => {
 	it('moves your own messages together', async () => {
@@ -62,6 +69,36 @@ describe('MessageSelection.move', () => {
 	});
 });
 
+describe('MessageSelection.move with authors', () => {
+	it('adds each moved message\'s author to the thread once, but you and those in it', async () => {
+		const { client, joinRoom } = fakeClient();
+		const selection = picked(['1', 'b2', 'b3', 'b4']);
+		expect(await selection.move(client, 'thread', own, { ...authors, of: (id) => (id === 'b4' ? 'amy' : authors.of(id)) })).toEqual({ moved: true, room: 'thread' });
+		expect(joinRoom.mock.calls).toEqual([['thread', 'bob'], ['thread', 'bea']]);
+	});
+
+	it('adds no one without authors, as for a move back to the room', async () => {
+		const { client, joinRoom } = fakeClient();
+		await picked(['b1', '2']).move(client, 'general', own);
+		expect(joinRoom).not.toHaveBeenCalled();
+	});
+
+	it('adds only the authors of messages that moved', async () => {
+		const { client, joinRoom } = fakeClient(['b2']);
+		await picked(['b2', '1']).move(client, 'thread', own, authors);
+		expect(joinRoom).not.toHaveBeenCalled();
+		const partly = fakeClient(['b3']);
+		await picked(['b2', 'b3']).move(partly.client, 'thread', own, authors);
+		expect(partly.joinRoom.mock.calls).toEqual([['thread', 'bob']]);
+	});
+
+	it('still counts the move done when the server won\'t add an author, and says how many it didn\'t', async () => {
+		const { client } = fakeClient(['bea']);
+		const result = await picked(['b2', 'b3']).move(client, 'thread', own, authors);
+		expect(result).toEqual({ moved: true, room: 'thread', unadded: { failed: 1, total: 2, error: new Error('not added') } });
+	});
+});
+
 describe('MessageSelection.moveToNewThread', () => {
 	it('creates no thread when a picked message may not be moved', async () => {
 		const { client, moveMessage, createRoom } = fakeClient();
@@ -81,6 +118,12 @@ describe('MessageSelection.moveToNewThread', () => {
 			.toEqual({ moved: true, room: 'thread_new' });
 		expect(createRoom).toHaveBeenCalledWith({ parentRoomId: 'general', title: 'T', description: 'About T' });
 		expect(moveMessage.mock.calls).toEqual([['b2', 'thread_new'], ['1', 'thread_new']]);
+	});
+
+	it('adds the moved messages\' authors to the new thread', async () => {
+		const { client, joinRoom } = fakeClient();
+		await picked(['1', 'b2']).moveToNewThread(client, { parentRoomId: 'general', title: 'T', own, movable: () => true, authors });
+		expect(joinRoom.mock.calls).toEqual([['thread_new', 'bob']]);
 	});
 
 	it('names the thread it created when the moves fail', async () => {

@@ -78,10 +78,10 @@ export const hasHistory = (server: ServerParams | undefined) => hasCapability(se
  * The server's settings (extension `ext:settings`, `server.ext.settings`),
  * each `true` unless the server says `false`: also without the extension.
  */
-export function serverSettings(server: ServerParams | undefined): { guest_posting: boolean; read_cursors: boolean } {
+export function serverSettings(server: ServerParams | undefined): { guest_posting: boolean; read_cursors: boolean; add_members: boolean } {
 	const ext = hasCapability(server, 'ext:settings') ? server?.ext : undefined;
 	const settings = isJsonObject(ext) && isJsonObject(ext.settings) ? ext.settings : {};
-	return { guest_posting: settings.guest_posting !== false, read_cursors: settings.read_cursors !== false };
+	return { guest_posting: settings.guest_posting !== false, read_cursors: settings.read_cursors !== false, add_members: settings.add_members !== false };
 }
 
 /** The VAPID public key (base64url) of the server's `webpush` push kind (§4.9), if it offers one. */
