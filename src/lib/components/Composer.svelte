@@ -28,6 +28,15 @@
 	const MENTION_MATCHES_MAX = 8;
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
 	const PREVIEW_TYPING_PAUSE_MS = 800;
+	/** Plenty for speech, in Opus or AAC: about 240 KB a minute, so a 5 MB upload holds 20 minutes. */
+	const VOICE_BITS_PER_SECOND = 32_000;
+
+	/** The file extension for a recorded clip's type: Safari records MP4, Firefox Ogg, Chrome WebM. */
+	function voiceExtension(type: string): string {
+		if (type.includes('mp4')) return 'm4a';
+		if (type.includes('ogg')) return 'ogg';
+		return 'webm';
+	}
 
 	interface Props {
 		/** The draft as sent: mentions are `@user_id` (Appendix A.3); the field shows them as name chips. */
@@ -583,7 +592,7 @@
 			return;
 		}
 		const chunks: Blob[] = [];
-		const current = new MediaRecorder(stream);
+		const current = new MediaRecorder(stream, { audioBitsPerSecond: VOICE_BITS_PER_SECOND });
 		recorder = current;
 		recordSeconds = 0;
 		recordTimer = setInterval(() => (recordSeconds = (recordSeconds ?? 0) + 1), 1000);
@@ -595,7 +604,7 @@
 			clearRecording();
 			if (chunks.length === 0 || seconds < 1) return;
 			const type = current.mimeType || chunks[0].type || 'audio/webm';
-			onfiles([new File(chunks, `voice-message.${type.includes('ogg') ? 'ogg' : 'webm'}`, { type })]);
+			onfiles([new File(chunks, `voice-message.${voiceExtension(type)}`, { type })]);
 		};
 		current.start();
 	}
