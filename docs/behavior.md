@@ -638,7 +638,8 @@ threads show a lock beside their name.
 
 A room's or thread's `description` (CommonMark by convention) shows as a
 **Summary** pinned under the header, above the timeline, so it stays in view
-while the messages scroll: rendered as CommonMark, three lines of it, fading
+while the messages scroll: rendered as CommonMark beside the summary icon (its
+title says Summary), the text indented past it on every line, three lines of it, fading
 out where a longer one is cut. A click on its text (not on a link or mention)
 opens the rest, scrolling within the summary past a third of the pane, and
 another folds it again; from the keyboard, its toggle is the next stop after

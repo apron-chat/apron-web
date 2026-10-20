@@ -421,7 +421,9 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-reply-text { font-size: var(--text-ui); line-height: 18px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ThreadSummary — pinned under the header of a thread view */
-.ap-summary { position: relative; flex: none; margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4); background: var(--denim-soft); border-radius: var(--radius-md); }
+/* The summary icon has a column of its own, so every line of the text starts after it, not just the first. */
+.ap-summary { position: relative; flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-2); margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-2) var(--space-3); background: var(--denim-soft); border-radius: var(--radius-md); }
+.ap-summary-icon { display: grid; place-items: center; height: 20px; color: var(--denim); }
 .ap-summary-closable { padding-right: 36px; }
 /* × sits beside the first line, centred on it. */
 .ap-summary-close { position: absolute; z-index: 1; top: 6px; right: 6px; width: 24px; height: 24px; }
