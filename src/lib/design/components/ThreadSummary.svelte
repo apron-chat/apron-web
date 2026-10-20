@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import X from '@lucide/svelte/icons/x';
 	/**
 	 * A room's or thread's `description` (§3.4), pinned under the header: rendered + sanitized Markdown as `children`,
-	 * or plain `summary`. It previews three lines, fading out where it's cut; a click on the text opens the rest and
-	 * folds it again, and × (`ondismiss`) puts it away.
+	 * or plain `summary`, beside the summary icon in a column of its own. It previews three lines, fading out where
+	 * it's cut; a click on the text opens the rest and folds it again, and × (`ondismiss`) puts it away.
 	 */
 	interface Props {
 		summary?: string;
@@ -30,6 +31,8 @@
 </script>
 
 <section class={['ap-summary', ondismiss && 'ap-summary-closable']} aria-label={label}>
+	<!-- The region's label already says it's a summary; the icon's title says so to the pointer. -->
+	<span class="ap-summary-icon" title="Summary"><TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /></span>
 	<!-- The pointer opens it from the text itself; the keyboard has the toggle, which shows only as a focus ring around the summary. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
 	<div class={['ap-summary-text', 'ap-msg-text', expanded ? 'ap-summary-open' : overflows && 'ap-summary-clipped']} bind:clientHeight={boxHeight} onclick={click}>
