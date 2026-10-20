@@ -3,10 +3,10 @@
 	import Nudge from '$lib/design/components/Nudge.svelte';
 
 	interface Props {
-		/** Who mentioned you, by name. */
-		from: string;
+		/** Who mentioned you, by name; with `room`, absent for the offer made at sign-in. */
+		from?: string;
 		/** Where: the room's or thread's title. */
-		room: string;
+		room?: string;
 		/** Push works here, so notifications reach this device with Apron closed too. */
 		whenClosed: boolean;
 		/** Points at Preferences (where the switch is), when it's on screen. */
@@ -18,7 +18,7 @@
 	}
 	let { from, room, whenClosed, pointer = false, onaccept, ondecline }: Props = $props();
 
-	let detail = $derived(`${from} mentioned you in ${room}. Apron can alert you on this device${whenClosed ? ', even when it’s closed' : ' while it’s open'}.`);
+	let detail = $derived(`${from !== undefined && room !== undefined ? `${from} mentioned you in ${room}. ` : ''}Apron can alert you on this device${whenClosed ? ', even when it’s closed' : ' while it’s open'}.`);
 
 	function keydown(event: KeyboardEvent): void {
 		if (event.key !== 'Escape') return;

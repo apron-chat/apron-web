@@ -20,6 +20,16 @@ export function offersNotifications(state: { chosen: boolean; active: boolean; p
 	return !state.chosen && !state.active && !state.silenced && (state.permission === 'default' || state.permission === 'granted');
 }
 
+/**
+ * Whether signing in offers notifications without waiting for a mention: in
+ * an installed app (a Home Screen or desktop app window) where push works for
+ * the account, as `offersNotifications` allows. Installing Apron is the ask;
+ * a phone that's rarely open may not see a mention arrive for days.
+ */
+export function offersAtSignIn(state: Parameters<typeof offersNotifications>[0] & { installed: boolean; push: boolean }): boolean {
+	return state.installed && state.push && offersNotifications(state);
+}
+
 /** Called only from an explicit user action; browsers reject unsolicited permission prompts. */
 export async function requestNotificationPermission(): Promise<NotificationPermissionState> {
 	if (typeof Notification === 'undefined' || !globalThis.isSecureContext) return 'unsupported';

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, offersNotifications, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId, type ShowNotificationOptions } from './notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, offersAtSignIn, offersNotifications, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId, type ShowNotificationOptions } from './notifications';
 
 /** A service worker registration's notifications: one per tag, a newer one with a tag replacing the older. */
 function fakeRegistration() {
@@ -359,5 +359,22 @@ describe('offersNotifications', () => {
 		expect(offersNotifications({ ...fresh, permission: 'denied' })).toBe(false);
 		expect(offersNotifications({ ...fresh, permission: 'unsupported' })).toBe(false);
 		expect(offersNotifications({ ...fresh, silenced: true })).toBe(false);
+	});
+});
+
+describe('offersAtSignIn', () => {
+	const fresh = { chosen: false, active: false, permission: 'default' as const, silenced: false, installed: true, push: true };
+
+	it('offers them at sign-in in an installed app where push works', () => {
+		expect(offersAtSignIn(fresh)).toBe(true);
+		expect(offersAtSignIn({ ...fresh, installed: false })).toBe(false);
+		expect(offersAtSignIn({ ...fresh, push: false })).toBe(false);
+	});
+
+	it('not once chosen, on, blocked, or silenced, as at a mention', () => {
+		expect(offersAtSignIn({ ...fresh, chosen: true })).toBe(false);
+		expect(offersAtSignIn({ ...fresh, active: true })).toBe(false);
+		expect(offersAtSignIn({ ...fresh, permission: 'denied' })).toBe(false);
+		expect(offersAtSignIn({ ...fresh, silenced: true })).toBe(false);
 	});
 });

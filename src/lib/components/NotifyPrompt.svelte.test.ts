@@ -41,6 +41,14 @@ describe('NotifyPrompt', () => {
 		expect(pointing.textContent).toContain('You can change this any time in Preferences.');
 	});
 
+	it('offered at sign-in, names no mention', () => {
+		instance = mount(NotifyPrompt, { target: document.body, props: { whenClosed: true, onaccept: () => {}, ondecline: () => {} } });
+		flushSync();
+		const prompt = document.querySelector<HTMLElement>('[data-testid="notify-prompt"]')!;
+		const detail = document.getElementById(prompt.getAttribute('aria-describedby')!);
+		expect(detail?.textContent).toBe('Apron can alert you on this device, even when it’s closed.');
+	});
+
 	it('turns them on, or declines with Not now or Escape', () => {
 		const onaccept = vi.fn();
 		const ondecline = vi.fn();
