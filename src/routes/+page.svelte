@@ -47,7 +47,7 @@
 	import { MessageSelection } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
 	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadLostPrivacy, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
@@ -422,12 +422,10 @@
 		: (activeRoom ? { id: activeRoom.id, title: activeRoom.title, description: activeRoom.description } : undefined));
 	/** Room and thread summaries put away with their ×, on this device. */
 	let hiddenSummaries = $state(loadHiddenSummaries());
+	/** Whether the open room's or thread's description is put away: the header's Summary brings it back. */
+	let summaryPutAway = $derived(Boolean(editTarget?.description && summaryHidden(hiddenSummaries, draftKey(editTarget.id), editTarget.description)));
 	/** The open room's or thread's description, pinned under the header until its × puts it away (and again once it's edited). */
-	let pinnedSummary = $derived.by(() => {
-		const description = editTarget?.description;
-		if (!editTarget || !description || summaryHidden(hiddenSummaries, draftKey(editTarget.id), description)) return undefined;
-		return { id: editTarget.id, description };
-	});
+	let pinnedSummary = $derived(editTarget?.description && !summaryPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneReady);
 
@@ -2285,6 +2283,7 @@
 				room={activeRoom}
 				pane={paneRoom ?? activeRoom}
 				showTopic={!pinnedSummary}
+				onsummary={summaryPutAway ? () => { if (editTarget) hiddenSummaries = showSummary(hiddenSummaries, draftKey(editTarget.id)); } : undefined}
 				threadTitle={activeThread ? threadTitle(activeThread) : undefined}
 				typing={typingNames}
 				replyCount={activeThread ? threadReplyCount : undefined}

@@ -153,6 +153,13 @@ export function hideSummary(hidden: Record<string, string>, key: string, descrip
 	return next;
 }
 
+/** Brings a room's or thread's summary back: returns the summaries still put away. */
+export function showSummary(hidden: Record<string, string>, key: string): Record<string, string> {
+	const next = Object.fromEntries(Object.entries(hidden).filter(([entry]) => entry !== key));
+	write(KEY.hiddenSummaries, JSON.stringify(next));
+	return next;
+}
+
 /** Whether a summary was put away as it now reads: an edit brings it back. */
 export function summaryHidden(hidden: Record<string, string>, key: string, description: string): boolean {
 	return hidden[key] === summaryFingerprint(description);

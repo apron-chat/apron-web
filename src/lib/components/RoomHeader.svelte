@@ -3,6 +3,7 @@
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Pencil from '@lucide/svelte/icons/pencil';
+	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import Users from '@lucide/svelte/icons/users';
 	import type { RoomSnapshot } from '$lib/protocol/client';
 	import { markdownText } from '$lib/protocol/markdown';
@@ -49,10 +50,12 @@
 		onleave: () => void;
 		onjoin?: () => void;
 		onmemberlist: () => void;
+		/** The room's or thread's summary was put away with its ×: a Summary button brings it back. */
+		onsummary?: () => void;
 	}
 	let {
 		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, onjoin, onmemberlist
+		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, onjoin, onmemberlist, onsummary
 	}: Props = $props();
 
 	/** The room's description (§3.4) as one line of text under its title, once its pinned summary is put away; a thread has only its summary. */
@@ -111,6 +114,11 @@
 			<Users size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
 	{/if}
+	{#if onsummary}
+		<button class="ap-btn ap-btn-sm ap-btn-ghost summary-show" type="button" data-testid="show-summary" aria-label={`Show the ${noun} summary`} title={`Show the ${noun} summary`} onclick={onsummary}>
+			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="summary-word">Summary</span>
+		</button>
+	{/if}
 	{#if actions.length > 0}
 		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} testid="room-actions" choices={actions} disabled={editDisabled} onselect={act}>
 			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
@@ -123,11 +131,15 @@
 	.ap-roomhead-back { display: none; }
 	.ap-roomhead-name { max-width: 100%; }
 	.member-list-toggle { flex: none; }
+	.summary-show { flex: none; }
 	/* Typing shows in the header's subtitle only on phones; wide layouts have the row above the composer. */
 	.typing-head { display: none; }
 	@media (max-width: 719px) {
 		.ap-roomhead-back { display: block; }
 		.typing-head { display: block; }
+		/* Phones keep the header's room for the title: the icon alone, its name in its label. */
+		.summary-show { padding: 0 var(--space-2); }
+		.summary-word { display: none; }
 		/* The tag's point hangs into the button's left padding, where the arrow sits. */
 		.ap-roomhead-back.tagged { display: flex; flex: none; align-items: center; width: auto; min-width: 32px; padding: 0 2px 0 10px; }
 	}

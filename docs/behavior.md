@@ -640,7 +640,8 @@ opens the rest, scrolling within the summary past a third of the pane, and
 another folds it again; from the keyboard, its toggle is the next stop after
 the text's links. Its × puts it away, on this device, until
 the description is edited; a room's then shows as one line of text under its
-title in the header instead. With the `rooms` capability the header's ⋯ menu
+title in the header instead, and the header gains a **Summary** button, just
+before its ⋯ menu (the icon alone on a phone), that pins it again. With the `rooms` capability the header's ⋯ menu
 holds the occasional actions: **Edit room** (or **Edit thread**) opens
 a centered dialog with the open room's or thread's title and description
 ("Summary" for a thread), saved with one `room_set`; the `room_update` that

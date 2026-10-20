@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RoomSnapshot } from '$lib/protocol/client';
 import RoomHeader from './RoomHeader.svelte';
 
@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 /** The header of a joined room, offering the member list's toggle or not. */
-function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: number; mentionsElsewhere?: number; showTopic?: boolean } = {}) {
+function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: number; mentionsElsewhere?: number; showTopic?: boolean; onsummary?: () => void } = {}) {
 	const room = { id: 'general', title: 'General', description: 'Say **hello**.', joined: true } as unknown as RoomSnapshot;
 	const noop = () => {};
 	instance = mount(RoomHeader, {
@@ -44,6 +44,18 @@ describe('RoomHeader', () => {
 		unmount(instance!);
 		render(undefined, { showTopic: false });
 		expect(document.querySelector('[data-testid="room-description"]')).toBeNull();
+	});
+
+	it('offers Summary once the summary is put away', () => {
+		render();
+		expect(document.querySelector('[data-testid="show-summary"]')).toBeNull();
+		unmount(instance!);
+		const onsummary = vi.fn();
+		render(undefined, { onsummary });
+		const button = document.querySelector<HTMLButtonElement>('[data-testid="show-summary"]');
+		expect(button?.getAttribute('aria-label')).toBe('Show the room summary');
+		button?.click();
+		expect(onsummary).toHaveBeenCalledOnce();
 	});
 
 	it('makes the back arrow a tag with what’s new elsewhere: grey for unread, orange with an @ for mentions', () => {
