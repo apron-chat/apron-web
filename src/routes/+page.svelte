@@ -4,7 +4,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, timelineMessages, webPushKey, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, serverSettings, timelineMessages, webPushKey, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
@@ -44,7 +44,7 @@
 	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
 	import { isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
-	import { MessageSelection } from '$lib/ui/selection.svelte';
+	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
@@ -2048,6 +2048,21 @@
 		return event !== undefined && mayMove(event, session.you);
 	}
 
+	/**
+	 * Who comes along when picked messages move into a thread: each moved
+	 * message's author not in it yet is added to it (§4.2.2), so they still
+	 * see their messages. Only where this viewer may add people: with
+	 * `server.ext.settings.add_members` on, or as an admin.
+	 */
+	function moveAuthors(): MoveAuthors | undefined {
+		if (!canChangeMembers || session.snapshot.memberChangesUnsupported) return undefined;
+		if (!serverSettings(session.server).add_members && !session.you?.roles?.includes('admin')) return undefined;
+		return {
+			of: (id) => resolveMessage(id)?.from?.user_id,
+			skip: (userId, room) => userId === session.you?.user_id || Boolean(session.rooms.find((other) => other.id === room)?.members?.some((member) => member.user_id === userId))
+		};
+	}
+
 	/** What the toolbar offers: only what the server can do, and only on messages this viewer may change. */
 	function capsFor(event: MessageRecord): MessageCaps {
 		const own = session.canEdit && isOwn(event, session.you);
@@ -2138,12 +2153,14 @@
 				// Nothing moves out of a private room into a thread others can see.
 				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined,
 				own: ownMessage,
-				movable
+				movable,
+				authors: moveAuthors()
 			});
 			if (result.moved) pendingOpen = { room: roomId, thread: result.room, moved: true };
 			else if (result.room === undefined) throw result.error ?? new Error('No messages were moved');
 			// The thread exists, so the dialog closes and says why nothing (or not everything) moved.
 			else feedback.error(result.error, selection.current?.denied ? 'Some messages could not be moved' : 'No messages were moved');
+			if (result.moved && result.unadded) feedback.error(unaddedNote(result.unadded));
 			return;
 		}
 		const result = await client.createRoom({ parentRoomId: roomId, ...thread }).promise;
@@ -2167,8 +2184,17 @@
 	 */
 	async function moveSelection(target: string): Promise<void> {
 		if (!client || !paneRoom || !session.canEdit) return;
-		const result = await selection.move(client, target, ownMessage);
+		// Back to the room, everyone is there already.
+		const result = await selection.move(client, target, ownMessage, target === activeRoom?.id ? undefined : moveAuthors());
 		if (!result.moved && result.error !== undefined) feedback.error(result.error, selection.current?.denied ? 'Some messages could not be moved' : 'No messages were moved');
+		else if (result.unadded) feedback.error(unaddedNote(result.unadded));
+	}
+
+	/** The messages moved, but some of their authors weren't added to the thread: how many, and the server's first reason. */
+	function unaddedNote(unadded: { failed: number; total: number; error: unknown }): string {
+		const who = unadded.failed === unadded.total ? (unadded.total === 1 ? 'the author' : 'the authors') : `${unadded.failed} of ${unadded.total} authors`;
+		const reason = unadded.error instanceof Error && unadded.error.message ? `: ${unadded.error.message}` : '';
+		return `Moved, but ${who} couldn’t be added to the thread${reason}`;
 	}
 
 	/**

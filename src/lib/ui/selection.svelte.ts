@@ -12,8 +12,24 @@ export interface Selection {
 	denied?: { failed: number; total: number };
 }
 
-/** `room`, on a failure: the new thread, which exists although nothing (or not everything) moved into it. */
-export type MoveResult = { moved: true; room: string } | { moved: false; error: unknown; room?: string };
+/**
+ * `room`, on a failure: the new thread, which exists although nothing (or not
+ * everything) moved into it. `unadded`: the authors of moved messages the
+ * server didn't add to the thread, and the first reason.
+ */
+export type MoveResult = ({ moved: true; room: string } | { moved: false; error: unknown; room?: string }) & { unadded?: { failed: number; total: number; error: unknown } };
+
+/**
+ * Adding the authors of messages moved into a thread to it (`room_join` with
+ * their `user_id`, §4.2.2), so they still see their messages there: a thread
+ * delivers to its members only.
+ */
+export interface MoveAuthors {
+	/** The `user_id` of a picked message's author, when known. */
+	of: (id: string) => string | undefined;
+	/** Whether a user needn't be added to `room`: yourself, or someone already in it. */
+	skip: (userId: string, room: string) => boolean;
+}
 
 /** What a new thread from a selection is created with: its parent room, and the title and summary asked for. */
 export interface NewThreadOptions {
@@ -24,6 +40,8 @@ export interface NewThreadOptions {
 	check?: (roomId: string) => Error | undefined;
 	/** Whether a picked message is yours; see MessageSelection.move. */
 	own: (id: string) => boolean;
+	/** Who wrote the picked messages, to add them to the thread once their messages are in it. */
+	authors?: MoveAuthors;
 	/**
 	 * Whether you may move each picked message, checked before the thread is
 	 * created: the probe in `move` can only run once a thread exists, and a
@@ -94,9 +112,11 @@ export class MessageSelection {
 	 * (`own`), it goes first, alone: you may move someone else's message only
 	 * with a role that lets you move anyone's, so if the server refuses it,
 	 * nothing else is sent and the selection stays as it was. Otherwise the
-	 * rest go together, and any refused stay selected.
+	 * rest go together, and any refused stay selected. With `authors` (a move
+	 * into a thread), the authors of the messages that moved who aren't in it
+	 * yet are then added to it, so the conversation's people come with it.
 	 */
-	async move(client: ChatClient, room: string, own: (id: string) => boolean): Promise<MoveResult> {
+	async move(client: ChatClient, room: string, own: (id: string) => boolean, authors?: MoveAuthors): Promise<MoveResult> {
 		const current = this.current;
 		if (!current || current.saving || current.ids.length === 0) return { moved: false, error: undefined };
 		const ids = current.ids;
@@ -116,13 +136,15 @@ export class MessageSelection {
 		const settled = await Promise.allSettled(rest.map((id) => client.moveMessage(id, room).promise));
 		const results = ids.map((id): PromiseSettledResult<unknown> => id === probe ? { status: 'fulfilled', value: undefined } : settled[rest.indexOf(id)]);
 		const failed = ids.filter((_, index) => results[index].status === 'rejected');
+		const added = authors ? await addAuthors(client, room, ids.filter((id) => !failed.includes(id)), authors) : undefined;
+		const unadded = added ? { unadded: added } : {};
 		if (failed.length === 0) {
 			this.current = undefined;
-			return { moved: true, room };
+			return { moved: true, room, ...unadded };
 		}
 		const first = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
 		this.current = { ...current, ids: failed, last: failed[failed.length - 1], saving: false, denied: { failed: failed.length, total: ids.length } };
-		return { moved: false, error: first?.reason };
+		return { moved: false, error: first?.reason, ...unadded };
 	}
 
 	/** The picked message that comes first along `order`, which a new thread's title is suggested from. */
@@ -161,11 +183,25 @@ export class MessageSelection {
 			const refused = options.check?.(room);
 			if (refused) throw refused;
 			this.current = { ...current, saving: false };
-			const moved = await this.move(client, room, options.own);
+			const moved = await this.move(client, room, options.own, options.authors);
 			return moved.moved ? moved : { ...moved, room };
 		} catch (error) {
 			this.current = { ...current, saving: false };
 			return { moved: false, error, ...(room !== undefined ? { room } : {}) };
 		}
 	}
+}
+
+/**
+ * Adds the authors of the `moved` messages to `room` (`room_join` with each
+ * `user_id`, §4.2.2), once each and leaving out those `skip` names. Who may
+ * add whom is server policy (a guest can't be added at all), so a refusal
+ * changes nothing else: what comes back is how many weren't added, or
+ * nothing when everyone was.
+ */
+async function addAuthors(client: ChatClient, room: string, moved: string[], authors: MoveAuthors): Promise<{ failed: number; total: number; error: unknown } | undefined> {
+	const users = [...new Set(moved.map(authors.of))].filter((user): user is string => user !== undefined && !user.startsWith('~') && !authors.skip(user, room));
+	const settled = await Promise.allSettled(users.map((user) => client.joinRoom(room, user).promise));
+	const refused = settled.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+	return refused.length ? { failed: refused.length, total: users.length, error: refused[0].reason } : undefined;
 }
