@@ -421,14 +421,22 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-reply-text { font-size: var(--text-ui); line-height: 18px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ThreadSummary — pinned under the header of a thread view */
-.ap-summary { display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-3) var(--space-4) 0; padding: var(--space-2) var(--space-4) var(--space-3); background: var(--denim-soft); border-radius: var(--radius-md); }
-.ap-summary-label { font-size: var(--text-sm); line-height: 16px; font-weight: 600; color: var(--denim); }
-.ap-summary-text { width: 100%; margin: 0; font-size: var(--text-field); line-height: 20px; color: var(--ink); }
+.ap-summary { position: relative; flex: none; margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4); background: var(--denim-soft); border-radius: var(--radius-md); }
+.ap-summary-closable { padding-right: 36px; }
+/* × sits beside the first line, centred on it. */
+.ap-summary-close { position: absolute; z-index: 1; top: 6px; right: 6px; width: 24px; height: 24px; }
+/* A preview of three lines, faded where it's cut; opened, it scrolls within the pinned box past a third of the pane. */
+.ap-summary-text { max-height: 60px; overflow: hidden; margin: 0; font-size: var(--text-field); line-height: 20px; color: var(--ink); }
+.ap-summary-clipped { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); }
+.ap-summary-clipped, .ap-summary-open { cursor: pointer; }
+.ap-summary-open { max-height: 33vh; overflow-y: auto; }
+/* The keyboard's way to open and fold it: invisible, under the pointer's reach, a focus ring around the summary. */
+.ap-summary-toggle { position: absolute; inset: 0; padding: 0; border: 0; border-radius: inherit; background: none; pointer-events: none; }
+.ap-summary-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ap-summary-text ul, .ap-summary-text ol { margin: var(--space-1) 0 0; padding-left: 20px; }
 .ap-summary-text li + li { margin-top: 2px; }
 .ap-summary-text pre { background: var(--bg-100); }
 .ap-summary-text code { background: var(--bg-100); }
-.ap-timeline .ap-summary + .ap-msg { margin-top: var(--space-4); }
 
 /* Code diffs in Markdown — the highlighter marks lines; we color them */
 .ap-msg-text pre .ap-diff-add { display: block; background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
@@ -595,7 +603,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-menu-item { font: inherit; display: block; width: 100%; padding: 6px var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .ap-menu-item:hover { background: var(--bg-300); }
 /* MenuButton — a button that opens a menu of choices, each with an optional muted hint (Pause notifications) */
-.ap-menubtn { position: relative; display: inline-block; }
+.ap-menubtn { position: relative; display: inline-flex; }
 .ap-menu-below { top: calc(100% + var(--space-1)); bottom: auto; }
 .ap-menubtn .ap-menu-item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); white-space: nowrap; }
 .ap-menu-hint { color: var(--ink-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }

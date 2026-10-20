@@ -632,8 +632,16 @@ comes back without `private: true` gets the same error, and neither the reply
 composer opens on it nor do selected messages move into it. Private rooms and
 threads show a lock beside their name.
 
-A room's `description` (CommonMark by convention) shows as one line of text
-under its title in the header. With the `rooms` capability the header's ⋯ menu
+A room's or thread's `description` (CommonMark by convention) shows as a
+**Summary** pinned under the header, above the timeline, so it stays in view
+while the messages scroll: rendered as CommonMark, three lines of it, fading
+out where a longer one is cut. A click on its text (not on a link or mention)
+opens the rest, scrolling within the summary past a third of the pane, and
+another folds it again; from the keyboard, its toggle is the next stop after
+the text's links. Its × puts it away, on this device, until
+the description is edited; a room's then shows as one line of text under its
+title in the header instead, and the header gains a **Summary** button, just
+before its ⋯ menu (the icon alone on a phone), that pins it again. With the `rooms` capability the header's ⋯ menu
 holds the occasional actions: **Edit room** (or **Edit thread**) opens
 a centered dialog with the open room's or thread's title and description
 ("Summary" for a thread), saved with one `room_set`; the `room_update` that
@@ -649,11 +657,11 @@ message. Threads don't point at a message, so
 the thread's first reply carries the link back as its `reply_to` (the
 convention of the protocol's fixtures): its quote shows the message and jumps
 to it. The message stays in the room, with the thread's card after it. A
-thread's description shows as a **Summary** pinned at the top of the thread,
-rendered as CommonMark. Threads load their newest page of
-history when opened (50 records); one with older replies opens at its latest
-reply, shows "N+ replies", and loads the page before whenever the reader nears
-the top, keeping what is on screen in place. Drafts are kept per room, threads
+thread's description shows as its pinned **Summary** (above). A thread opens
+at its latest reply, as a room does. Threads load their newest page of
+history when opened (50 records); one with older replies shows "N+ replies",
+and loads the page before whenever the reader nears the top, keeping what is
+on screen in place. Drafts are kept per room, threads
 included.
 
 Each room or thread opened is a browser history entry (the URL stays the same),

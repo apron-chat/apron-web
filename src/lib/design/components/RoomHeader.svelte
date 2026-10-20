@@ -20,8 +20,10 @@
 		onroom?: () => void;
 		/** Cap `rooms`: an Edit button that opens a <RoomForm> dialog, for a thread's title and summary or a room's title and description. */
 		onedit?: () => void;
+		/** The room's or thread's pinned <ThreadSummary> was put away with its ×: a Summary button brings it back. */
+		onsummary?: () => void;
 	}
-	let { room, name, topic, private: isPrivate, typing = [], onback, children, thread, threadName, onroom, onedit }: Props = $props();
+	let { room, name, topic, private: isPrivate, typing = [], onback, children, thread, threadName, onroom, onedit, onsummary }: Props = $props();
 	const sub = $derived(typing.length ? (typing.length === 1 ? `${typing[0]} is typing…` : `${typing.length} people are typing…`) : topic);
 </script>
 
@@ -37,8 +39,9 @@
 		{/if}
 		{#if sub}<p class={['ap-roomhead-sub', typing.length && 'ap-roomhead-typing']}>{sub}</p>{/if}
 	</div>
-	{#if children || onedit}
+	{#if children || onedit || onsummary}
 		<div class="ap-roomhead-actions">
+			{#if onsummary}<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost" onclick={onsummary}><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 5H3" /><path d="M15 12H3" /><path d="M17 19H3" /></svg>Summary</button>{/if}
 			{#if onedit}<Button size="sm" variant="ghost" onclick={onedit} label="Edit" />{/if}
 			{@render children?.()}
 		</div>

@@ -23,7 +23,7 @@
   side('deploy');
   add(A.RoomHeader, { room: 'ops', name: 'Ops', thread: 'deploy', threadName: 'Deploy', topic: '7 replies', onroom: noop, onedit: noop }, $('head'));
   var tl = $('tl');
-  add(A.ThreadSummary, { children: A.html('<p>Worker <code>1.9.0</code> crash-looped on the new queue client. Resolved:</p><ul><li>Rolled back to <code>1.8.3</code></li><li>Re-ran migration 0042 once the lock cleared</li></ul>') }, tl);
+  add(A.ThreadSummary, { ondismiss: noop, children: A.html('<p>Worker <code>1.9.0</code> crash-looped on the new queue client. Resolved:</p><ul><li>Rolled back to <code>1.8.3</code></li><li>Re-ran migration 0042 once the lock cleared</li></ul>') }, $('head'));
   add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.' }, tl);
   add(A.TimelineDivider, { kind: 'date', label: '7 replies', sticky: false }, tl);
   add(A.Message, { sender: bob, time: '14:04', text: 'Worker pods are restarting in a loop.' }, tl);
