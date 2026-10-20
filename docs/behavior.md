@@ -634,9 +634,11 @@ threads show a lock beside their name.
 
 A room's or thread's `description` (CommonMark by convention) shows as a
 **Summary** pinned under the header, above the timeline, so it stays in view
-while the messages scroll: rendered as CommonMark, three lines of it, with
-**More** to read the rest (scrolling within the summary past a third of the
-pane) and **Less** to fold it again. Its × puts it away, on this device, until
+while the messages scroll: rendered as CommonMark, three lines of it, fading
+out where a longer one is cut. A click on its text (not on a link or mention)
+opens the rest, scrolling within the summary past a third of the pane, and
+another folds it again; from the keyboard, its toggle is the next stop after
+the text's links. Its × puts it away, on this device, until
 the description is edited; a room's then shows as one line of text under its
 title in the header instead. With the `rooms` capability the header's ⋯ menu
 holds the occasional actions: **Edit room** (or **Edit thread**) opens
