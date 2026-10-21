@@ -165,7 +165,7 @@
 						<!-- Without presence, one list under the panel's own header and count: a Members heading would repeat them. -->
 						{#if section.key !== 'members'}
 							<h3 class="member-section-head">
-								<button class="ap-sect-toggle" class:shut={!open} type="button" aria-expanded={open} onclick={() => toggleSection(section.key)}><span class="ap-sect-caret" aria-hidden="true">▾</span>{section.label} — {section.people.length}</button>
+								<button class="ap-sect-toggle" class:shut={!open} type="button" aria-expanded={open} onclick={() => toggleSection(section.key)}><span class="ap-sect-caret" aria-hidden="true">▾</span>{section.label}<span class="member-section-count">· {section.people.length}</span></button>
 							</h3>
 						{/if}
 						{#if open}
@@ -204,7 +204,8 @@
 	.member-list:not(.open) { visibility: hidden; }
 	.member-list-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-body); line-height: 20px; font-weight: 600; }
 	.member-list-count { color: var(--ink-muted); font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
-	.member-list-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2); }
+	/* Wider on the left, so names line up with the header's Members and the section carets have a gutter to sit in. */
+	.member-list-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2) var(--space-3) var(--space-3); }
 	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 	.placeholder .ap-skel { height: 12px; }
 	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
@@ -216,21 +217,23 @@
 	.add-row { display: flex; gap: var(--space-2); min-width: 0; }
 	.add .ap-field { flex: 1; min-width: 0; height: 28px; font-size: var(--text-ui); }
 	.member-section + .member-section { margin-top: var(--space-4); }
-	/* As the rooms list's section headings, with the count after a dash. */
+	/* As the rooms list's section headings. */
 	.member-section-head { margin: 0; padding: 0 var(--space-1) var(--space-1); font: inherit; }
 	/* As Other threads in the rooms list: the caret sits out in the gutter, so the words line up with the avatars. */
 	.member-section-head .ap-sect-toggle { position: relative; padding-left: 0; }
-	.member-section-head .ap-sect-caret { position: absolute; left: -12px; width: 10px; text-align: center; }
+	.member-section-head .ap-sect-caret { position: absolute; left: -11px; width: 10px; text-align: center; }
 	.shut .ap-sect-caret { transform: rotate(-90deg); }
+	/* The count after a dot and lighter than the words, as Other threads writes its own. */
+	.member-section-count { margin-left: 2px; font-weight: 400; }
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 	.member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
 	/* Role badges follow the name, as beside a message's sender; the remove button floats over the far right. */
 	.who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 	.who:hover .member-name { text-decoration: underline; }
 	.who:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-	/* Offline members (§4.5) recede; their ring and name still read. */
+	/* Offline members (§4.5) recede, badges and all; their ring and name still read. */
 	.member.offline .who { color: var(--ink-muted); }
-	.member.offline :global(.ap-avatar) { opacity: .6; }
+	.member.offline :global(.ap-avatar), .member.offline :global(.ap-roles) { opacity: .6; }
 	.member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	/* The name comes first: the badges give up their room before it does, cut off at the right. */
 	.member :global(.ap-roles) { flex: 0 10000 auto; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
