@@ -62,12 +62,12 @@ describe('MemberListSidebar', () => {
 		]);
 		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'fay', 'di', 'cy', 'eve', 'al', 'zed', 'bo']);
 		expect(rows.map((row) => row.dataset.status ?? '')).toEqual(['online', 'online', 'idle', 'dnd', 'unknown', '', '', 'offline']);
-		expect(sections()).toEqual([['Online — 7', ['ada', 'fay', 'di', 'cy', 'eve', 'al', 'zed']], ['Offline — 1', ['bo']]]);
+		expect(sections()).toEqual([['Online· 7', ['ada', 'fay', 'di', 'cy', 'eve', 'al', 'zed']], ['Offline· 1', ['bo']]]);
 	});
 
 	it('keeps role badges on each row, in Online or Offline whatever the role', () => {
 		const rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'offline', roles: ['admin'] }, { user_id: 'cy', name: 'Cy', status: 'online', roles: ['bot'] }]);
-		expect(sections()).toEqual([['Online — 2', ['ada', 'cy']], ['Offline — 1', ['bo']]]);
+		expect(sections()).toEqual([['Online· 2', ['ada', 'cy']], ['Offline· 1', ['bo']]]);
 		expect(rows.map((row) => row.querySelector('[data-testid="roles"]')?.textContent ?? '')).toEqual(['', 'bot', 'admin']);
 	});
 
@@ -96,15 +96,15 @@ describe('MemberListSidebar', () => {
 		toggle().click();
 		flushSync();
 		expect(toggle().getAttribute('aria-expanded')).toBe('false');
-		expect(toggle().textContent).toBe('▾Offline — 2');
-		expect(sections()).toEqual([['Online — 1', ['ada']], ['Offline — 2', []]]);
+		expect(toggle().textContent).toBe('▾Offline· 2');
+		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', []]]);
 		expect(localStorage.getItem('apron.memberSections')).toBe('["offline"]');
 		unmount(instance!);
 		render(people);
-		expect(sections()).toEqual([['Online — 1', ['ada']], ['Offline — 2', []]]);
+		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', []]]);
 		toggle().click();
 		flushSync();
-		expect(sections()).toEqual([['Online — 1', ['ada']], ['Offline — 2', ['bo', 'cy']]]);
+		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', ['bo', 'cy']]]);
 	});
 
 	it('dims offline members only, with a ring; no status shows no dot and is not dimmed', () => {
