@@ -235,6 +235,23 @@
 	onpointermove={cancelLongPress}
 	onpointercancel={cancelLongPress}
 >
+	<!-- The quote has a row of its own above the sender's name, its spine leading down into the avatar (a reply never groups). -->
+	{#if replyId && !event.deleted}
+		<div class="ap-msg-reply">
+			{#if replyTarget}
+				{@const targetName = senderName(replyTarget)}
+				<button class="ap-reply" data-testid="reply-reference" type="button" aria-label={`Replying to ${targetName}. Jump to their message`} onclick={() => onjump(replyTarget.message_id)}>
+					<Avatar name={targetName} id={directory.person(replyTarget.from)?.user_id} src={directory.avatar(replyTarget.from)} size="sm" />
+					<span class="ap-reply-who">{targetName}</span>
+					<span class="ap-reply-text">{#if replyTarget.deleted}<em>Message deleted</em>{:else}<MentionText text={replySnippet(replyTarget)} />{/if}</span>
+				</button>
+			{:else}
+				<div class="ap-reply reply-static" data-testid="reply-reference">
+					<span class="ap-reply-text"><em>Message unavailable</em></span>
+				</div>
+			{/if}
+		</div>
+	{/if}
 	{#if selectable}
 		<span class="ap-msg-check" role="checkbox" aria-checked={picked} aria-label="Select message" tabindex="0" onkeydown={(key) => { if (key.key === ' ' || key.key === 'Enter') { key.preventDefault(); onselect(false); } }}>{picked ? '✓' : ''}</span>
 	{/if}
@@ -254,22 +271,6 @@
 				<RoleBadges user={event.from} />
 				<span class="ap-msg-meta">{#if time}<time datetime={isoTime} title={fullTime}>{time}</time>{/if}</span>
 			</header>
-		{/if}
-		{#if replyId && !event.deleted}
-			{#if replyTarget}
-				{@const targetName = senderName(replyTarget)}
-				<button class="ap-reply" data-testid="reply-reference" type="button" aria-label={`Replying to ${targetName}. Jump to their message`} onclick={() => onjump(replyTarget.message_id)}>
-					<span class="ap-reply-who">
-						<Avatar name={targetName} id={directory.person(replyTarget.from)?.user_id} src={directory.avatar(replyTarget.from)} size="sm" />
-						{targetName}
-					</span>
-					<span class="ap-reply-text">{#if replyTarget.deleted}<em>Message deleted</em>{:else}<MentionText text={replySnippet(replyTarget)} />{/if}</span>
-				</button>
-			{:else}
-				<div class="ap-reply reply-static" data-testid="reply-reference">
-					<span class="ap-reply-text"><em>Message unavailable</em></span>
-				</div>
-			{/if}
 		{/if}
 		{#if event.deleted}
 			<div class="ap-msg-tomb">Message deleted</div>
@@ -364,7 +365,8 @@
 	.who-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 	.ap-msg-gutter .who-btn { display: inline-flex; border-radius: var(--radius-full); }
 	.reply-static { cursor: default; }
-	.reply-static:hover { background: var(--bg-200); }
+	.reply-static:hover { background: none; color: var(--ink-muted); }
+	:global(.ap-msg-reply) .reply-static:hover::before { border-color: color-mix(in srgb, var(--line-strong) 60%, transparent); }
 	.plain { white-space: pre-wrap; }
 	/* An embed's remove button sits on its corner (EmbedRemove). */
 	.embed-slot { position: relative; max-width: 100%; }
