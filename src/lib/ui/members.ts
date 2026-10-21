@@ -38,18 +38,18 @@ export function compareRoles(a: string, b: string): number {
  * under that role (one with several under the first in role order), then
  * the rest online, then everyone offline (§4.5 `offline`, or your own
  * `invisible`), whatever their roles. A member with no status isn't known
- * to be offline, so stays with the online ones; where no member has a
- * status (a server that sends none), there is no Offline, and the rest are
- * just Members. Each section keeps the order the people came in.
+ * to be offline, so stays with the online ones. Without presence (a server
+ * without capability `status`, or no member with a status), there is no
+ * online or offline: each role's members, then the rest as Members. Each
+ * section keeps the order the people came in.
  */
-export function memberSections<T>(people: readonly T[], statusOf: (person: T) => string | undefined, rolesOf: (person: T) => readonly string[]): MemberSection<T>[] {
+export function memberSections<T>(people: readonly T[], statusOf: (person: T) => string | undefined, rolesOf: (person: T) => readonly string[], presence = true): MemberSection<T>[] {
+	const split = presence && people.some((person) => Boolean(statusOf(person)));
 	const roles = new Map<string, T[]>();
 	const online: T[] = [];
 	const offline: T[] = [];
-	let anyStatus = false;
 	for (const person of people) {
-		const status = statusOf(person);
-		if (status !== undefined && status !== '') anyStatus = true;
+		const status = split ? statusOf(person) : undefined;
 		if (status === 'offline' || status === 'invisible') {
 			offline.push(person);
 			continue;
@@ -59,7 +59,7 @@ export function memberSections<T>(people: readonly T[], statusOf: (person: T) =>
 		else roles.set(role, [...(roles.get(role) ?? []), person]);
 	}
 	const sections: MemberSection<T>[] = [...roles].sort(([a], [b]) => compareRoles(a, b)).map(([role, people]) => ({ key: `role:${role}`, role, label: role, people }));
-	if (online.length) sections.push({ key: 'online', label: anyStatus ? 'Online' : 'Members', people: online });
+	if (online.length) sections.push({ key: 'online', label: split ? 'Online' : 'Members', people: online });
 	if (offline.length) sections.push({ key: 'offline', label: 'Offline', people: offline });
 	return sections;
 }

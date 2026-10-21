@@ -42,8 +42,10 @@
 		const listed = directory.person(person)?.roles;
 		return Array.isArray(listed) ? listed.filter((role): role is string => typeof role === 'string' && role.trim() !== '') : [];
 	}
-	/** Each role's online members, the rest online, then offline, each in the order above. */
-	let sections = $derived(memberSections(members, statusOf, rolesOf));
+	/** Each role's online members, the rest online, then offline, each in the order above; with no `status` capability (§4.5), only roles, then Members. */
+	let sections = $derived(memberSections(members, statusOf, rolesOf, session.snapshot.capabilities.status));
+	/** Only Members (no roles, no presence) would repeat the panel's own header and count, so it goes unheaded. */
+	let headed = $derived(sections.length > 1 || sections[0]?.role !== undefined || sections[0]?.label !== 'Members');
 	/** A large room's listing may hold only its most recently active members, with the total (§4.2.1). */
 	let total = $derived(room?.members === undefined ? undefined : Math.max(room.memberCount ?? 0, room.members.length));
 	let truncated = $derived(total !== undefined && room?.members !== undefined && total > room.members.length);
@@ -156,7 +158,7 @@
 				{#if truncated}<p class="muted" data-testid="member-list-truncated">Showing {members.length} of {total}: the most recently active</p>{/if}
 				{#each sections as section (section.key)}
 					<section class="member-section" data-section={section.key}>
-						<h3 class="member-section-head"><span class="member-section-name" class:role={section.role !== undefined}>{section.label}</span> — {section.people.length}</h3>
+						{#if headed}<h3 class="member-section-head"><span class="member-section-name" class:role={section.role !== undefined}>{section.label}</span> — {section.people.length}</h3>{/if}
 						<ul class="members" aria-label={`${section.label} in ${room.title}`}>
 							{#each section.people as person (person.user_id)}
 								{@const name = directory.name(person)}

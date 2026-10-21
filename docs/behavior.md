@@ -193,9 +193,11 @@ with several under the first of them, `admin` and `mod` first, `bot` last,
 other roles by name between; a role reads as written, its first letter
 raised), then everyone else online, then everyone offline (or invisible)
 under **Offline**, whatever their roles. Someone with no status isn't known
-to be offline, so stays with the online; where no member has a status, the
-rest are **Members** and there is no Offline. Within a section, members sort
-by status, then name. A server may list only the most recently
+to be offline, so stays with the online. Without presence (a server without
+the `status` capability, or no member with a status) there is no online or
+offline: each role's members, then the rest as **Members**, a heading left
+out when it would be the only one. Within a section, members sort by status,
+then name. A server may list only the most recently
 active members of a large room, with `member_count`, the number of users who have joined; the list
 then says so, and the count in its header is the total. In a room you have
 joined, with the `rooms` capability, a small **+** after the header's count

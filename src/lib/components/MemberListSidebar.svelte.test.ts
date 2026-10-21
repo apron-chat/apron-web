@@ -18,10 +18,12 @@ afterEach(() => {
 
 const ada: Identity = { user_id: 'ada', name: 'Ada', status: 'online' };
 
-/** The member list of a room whose members carry these statuses, signed in as Ada. */
+/** The member list of a room whose members carry these statuses, signed in as Ada, on a server with `status`. */
 function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChange = false) {
+	const blank = blankSnapshot();
 	const snapshot: ClientSnapshot = {
-		...blankSnapshot(),
+		...blank,
+		capabilities: { ...blank.capabilities, status: true },
 		authenticated: true,
 		you: ada,
 		users: Object.fromEntries(users.map((user) => [user.user_id, user])),
@@ -86,6 +88,22 @@ describe('MemberListSidebar', () => {
 	it('calls the rest Members, with no Offline, where no member has a status', () => {
 		render([{ user_id: 'ada', name: 'Ada' }, { user_id: 'bo', name: 'Bo', roles: ['admin'] }], { you: { user_id: 'ada', name: 'Ada' } });
 		expect(sections()).toEqual([['Admin — 1', ['bo']], ['Members — 1', ['ada']]]);
+	});
+
+	it('skips online and offline on a server without status (§4.5): roles, then Members, none dimmed', () => {
+		const rows = render([
+			{ user_id: 'ada', name: 'Ada' },
+			{ user_id: 'bo', name: 'Bo', roles: ['admin'] },
+			{ user_id: 'cy', name: 'Cy' }
+		], { you: { user_id: 'ada', name: 'Ada' }, capabilities: blankSnapshot().capabilities });
+		expect(sections()).toEqual([['Admin — 1', ['bo']], ['Members — 2', ['ada', 'cy']]]);
+		expect(rows.some((row) => row.classList.contains('offline') || row.querySelector('.ap-presence'))).toBe(false);
+	});
+
+	it('heads nothing where there are neither roles nor presence: one Members would repeat the header', () => {
+		const rows = render([{ user_id: 'ada', name: 'Ada' }, { user_id: 'bo', name: 'Bo' }], { you: { user_id: 'ada', name: 'Ada' }, capabilities: blankSnapshot().capabilities });
+		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'bo']);
+		expect(document.querySelector('.member-section-head')).toBeNull();
 	});
 
 	it('dims offline members only, with a ring; no status shows no dot and is not dimmed', () => {

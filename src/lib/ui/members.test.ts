@@ -45,6 +45,12 @@ describe('member sections', () => {
 		])).toEqual([['Online', ['b', 'd']], ['Offline', ['a', 'c']]]);
 	});
 
+	it('has no online or offline without presence, even for a status kept from before', () => {
+		const people: Person[] = [{ id: 'a', status: 'offline', roles: ['admin'] }, { id: 'b', status: 'online' }, { id: 'c' }];
+		expect(memberSections(people, (person) => person.status, (person) => person.roles ?? [], false).map(({ label, people }) => [label, people.map((person) => person.id)]))
+			.toEqual([['admin', ['a']], ['Members', ['b', 'c']]]);
+	});
+
 	it('calls the rest Members where nobody has a status, and leaves out empty sections', () => {
 		expect(sections([{ id: 'a' }, { id: 'b', roles: ['admin'] }])).toEqual([['admin', ['b']], ['Members', ['a']]]);
 		expect(sections([])).toEqual([]);
