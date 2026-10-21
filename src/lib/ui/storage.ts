@@ -18,6 +18,8 @@ const KEY = {
 	/** Each account's `push_id` (§4.9), by `webPushAccount`: random, made here. */
 	pushIds: 'apron.pushIds',
 	memberList: 'apron.memberList',
+	/** The member list's sections folded away (`online`, `offline`), on every room. */
+	memberSections: 'apron.memberSections',
 	/** Whether Other threads, the threads you haven't joined under the open room, is folded away. */
 	otherThreads: 'apron.otherThreads',
 	/** The room and thread summaries put away with their ×, each kept as the fingerprint of the text put away. */
@@ -128,6 +130,20 @@ export function loadMemberListPrefs(): Partial<SidebarPrefs> {
 
 export function saveMemberListPrefs(prefs: SidebarPrefs): void {
 	write(KEY.memberList, JSON.stringify(prefs));
+}
+
+/** The member list's sections are open until folded, and stay as they were left. */
+export function loadShutMemberSections(): string[] {
+	try {
+		const shut: unknown = JSON.parse(read(KEY.memberSections) ?? '[]');
+		return Array.isArray(shut) ? shut.filter((key): key is string => typeof key === 'string') : [];
+	} catch {
+		return [];
+	}
+}
+
+export function saveShutMemberSections(shut: readonly string[]): void {
+	write(KEY.memberSections, JSON.stringify(shut));
 }
 
 /** Other threads is open until it's folded, and stays as it was left. */

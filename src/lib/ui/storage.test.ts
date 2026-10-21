@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, hideSummary, loadAppearance, loadHiddenSummaries, showSummary, summaryHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, hideSummary, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadHiddenSummaries, showSummary, summaryHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 
 const values = new Map<string, string>();
@@ -18,6 +18,18 @@ afterEach(() => {
 });
 
 describe('preference storage', () => {
+	it('keeps the member list\'s folded sections, open until folded, and ignores what isn\'t a list of keys', () => {
+		expect(loadShutMemberSections()).toEqual([]);
+		saveShutMemberSections(['offline']);
+		expect(values.get('apron.memberSections')).toBe('["offline"]');
+		expect(loadShutMemberSections()).toEqual(['offline']);
+		values.set('apron.memberSections', '{"offline":true}');
+		expect(loadShutMemberSections()).toEqual([]);
+		values.set('apron.memberSections', 'not json');
+		expect(loadShutMemberSections()).toEqual([]);
+	});
+
+
 	it('keeps notifications off until chosen', () => {
 		expect(loadNotificationsEnabled()).toBe(false);
 		expect(notificationsChosen()).toBe(false);

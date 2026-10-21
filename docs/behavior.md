@@ -187,12 +187,18 @@ returns to.
 
 The member list's panel button, in the window's top-right corner, toggles a right-hand
 sidebar, **Members**, listing the open room's or thread's members from its `room_list`
-snapshot, with their role badges. A server may list only the most recently
+snapshot, with their role badges, in sections as Discord lists them, each
+headed with its count: **Online**, then **Offline** (offline, or your own
+invisible). Each heading folds its section away, as Other threads does, and
+which are folded is remembered for every room. Someone with no status isn't known to be offline, so stays under
+Online. Without presence (a server without the `status` capability, or no
+member with a status) it is one list with no heading, since a Members heading
+would repeat the panel's own. Within a section, members sort by status, then
+name. A server may list only the most recently
 active members of a large room, with `member_count`, the number of users who have joined; the list
 then says so, and the count in its header is the total. In a room you have
-joined, with the `rooms` capability, the list's first row, **Add member** (laid
-out as a member's: a dashed circle over the avatars, its words over the names),
-opens a form under it, which adds someone by `user_id` (`room_join` with their `user_id`,
+joined, with the `rooms` capability, a small **+** after the header's count
+(**Add member**) opens a form atop the list, which adds someone by `user_id` (`room_join` with their `user_id`,
 suggesting people the client knows; the form closes once they are added, or on
 Escape) and each other
 member's remove button removes them (`room_leave` with their `user_id`, after
