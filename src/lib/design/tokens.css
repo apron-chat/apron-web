@@ -62,6 +62,7 @@
 	--text-field: 14px;  /* what people type, and dialog copy */
 	--text-body: 15px;   /* messages and running text; room and panel titles */
 	--text-title: 18px;  /* dialog and card titles */
+	--text-field-ios: 16px; /* the least a field may be on iOS, which zooms the page into anything smaller as it takes focus */
 
 	/* Spacing: the 4px scale. */
 	--space-1: 4px;

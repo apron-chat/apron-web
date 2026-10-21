@@ -782,3 +782,9 @@ a.ap-embed-ogcard:hover { background: var(--bg-300); }
 .ap-status-retry { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-profedit-avbtns { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
 .ap-profedit-remove { font-size: var(--text-sm); color: var(--ink-muted); }
+/* iOS zooms the page into a field set under 16px as it takes focus, and leaves it zoomed and panned (the composer cut
+   off at the left over the keyboard), so every field types at least that large there. Important, to win over the
+   smaller sizes set on particular fields; -webkit-touch-callout is iOS's alone. */
+@supports (-webkit-touch-callout: none) {
+	:is(input, textarea, select, [contenteditable]:not([contenteditable='false'])) { font-size: var(--text-field-ios) !important; }
+}
