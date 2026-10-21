@@ -6,7 +6,7 @@
 	import type { Identity } from '$lib/protocol/types';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { userIdToAdd } from '$lib/ui/members';
+	import { memberSections, userIdToAdd } from '$lib/ui/members';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { presence, presenceLabel } from '$lib/design/components/util';
 	import { byStatus, ownStatusLabel } from '$lib/ui/user-status';
@@ -37,6 +37,13 @@
 	let members = $derived(byStatus([...(room?.members ?? [])].sort((a, b) =>
 		directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)
 	), statusOf));
+	/** A member's roles (§3.3.4), from the kept user object as their badges show them. */
+	function rolesOf(person: Identity): string[] {
+		const listed = directory.person(person)?.roles;
+		return Array.isArray(listed) ? listed.filter((role): role is string => typeof role === 'string' && role.trim() !== '') : [];
+	}
+	/** Each role's online members, the rest online, then offline, each in the order above. */
+	let sections = $derived(memberSections(members, statusOf, rolesOf));
 	/** A large room's listing may hold only its most recently active members, with the total (§4.2.1). */
 	let total = $derived(room?.members === undefined ? undefined : Math.max(room.memberCount ?? 0, room.members.length));
 	let truncated = $derived(total !== undefined && room?.members !== undefined && total > room.members.length);
@@ -47,7 +54,7 @@
 		return Object.values(session.snapshot.users).filter((user) => !current.has(user.user_id) && !user.user_id.startsWith('~'));
 	});
 	let adding = $state('');
-	/** The add form is open: it opens from the header's button, since most visits are to see who is here. */
+	/** The add form is open: it opens from the header's plus, since most visits are to see who is here. */
 	let addOpen = $state(false);
 	let busy = $state(false);
 	let note = $state<{ text: string; error: boolean } | undefined>();
@@ -117,6 +124,9 @@
 	<div class="member-list-head">
 		<span role="heading" aria-level="2">Members</span>
 		{#if total !== undefined}<span class="member-list-count" data-testid="member-count">{total}</span>{/if}
+		{#if changing && room?.members !== undefined}
+			<button bind:this={addToggle} class="ap-iconbtn add-toggle" class:ap-iconbtn-on={addOpen} type="button" aria-label="Add member" title="Add member" aria-expanded={addOpen} aria-controls={`${uid}-add`} onclick={toggleAdd}><Plus size={16} aria-hidden="true" /></button>
+		{/if}
 	</div>
 	<div class="member-list-body" data-testid="room-member-list">
 		{#if !room && session.starting}
@@ -126,12 +136,6 @@
 		{:else if room.members === undefined}
 			<p class="muted">{session.canManageRooms ? 'Loading members…' : 'Members are unavailable on this server.'}</p>
 		{:else}
-			{#if changing}
-				<!-- The list's first row, laid out as a member's: its icon over the avatars, its words over the names. -->
-				<button bind:this={addToggle} class="add-toggle" type="button" aria-expanded={addOpen} aria-controls={`${uid}-add`} onclick={toggleAdd}>
-					<span class="add-icon" aria-hidden="true"><Plus size={12} strokeWidth={2.2} /></span>Add member
-				</button>
-			{/if}
 			{#if changing && addOpen}
 				<form class="add" id={`${uid}-add`} onsubmit={add} aria-label="Add a member">
 					<label class="ap-sr" for={`${uid}-user`}>User to add</label>
@@ -150,27 +154,32 @@
 				<p class="muted">No members listed.</p>
 			{:else}
 				{#if truncated}<p class="muted" data-testid="member-list-truncated">Showing {members.length} of {total}: the most recently active</p>{/if}
-				<ul class="members" aria-label={`Members of ${room.title}`}>
-					{#each members as person (person.user_id)}
-						{@const name = directory.name(person)}
-						{@const me = directory.isMe(person.user_id)}
-						{@const status = statusOf(person)}
-						{@const shown = presence(status)}
-						{@const words = (me ? ownStatusLabel(status) : undefined) ?? presenceLabel(status)}
-						<li class="member" class:offline={shown === 'offline' || shown === 'invisible'} data-user={person.user_id} data-status={shown}>
-							<button class="who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => openProfileFrom(event.currentTarget)}>
-								<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" {status} statusLabel={words} />
-								<span class="member-name">
-									{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.toLowerCase()}</span>{/if}
-								</span>
-							</button>
-							<RoleBadges user={person} />
-							{#if changing && !me}
-								<button class="ap-iconbtn remove" type="button" aria-label={`Remove ${name}`} title="Remove from room" disabled={busy} onclick={() => remove(person.user_id)}><UserMinus size={14} aria-hidden="true" /></button>
-							{/if}
-						</li>
-					{/each}
-				</ul>
+				{#each sections as section (section.key)}
+					<section class="member-section" data-section={section.key}>
+						<h3 class="member-section-head"><span class="member-section-name" class:role={section.role !== undefined}>{section.label}</span> — {section.people.length}</h3>
+						<ul class="members" aria-label={`${section.label} in ${room.title}`}>
+							{#each section.people as person (person.user_id)}
+								{@const name = directory.name(person)}
+								{@const me = directory.isMe(person.user_id)}
+								{@const status = statusOf(person)}
+								{@const shown = presence(status)}
+								{@const words = (me ? ownStatusLabel(status) : undefined) ?? presenceLabel(status)}
+								<li class="member" class:offline={shown === 'offline' || shown === 'invisible'} data-user={person.user_id} data-status={shown}>
+									<button class="who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => openProfileFrom(event.currentTarget)}>
+										<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" {status} statusLabel={words} />
+										<span class="member-name">
+											{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.toLowerCase()}</span>{/if}
+										</span>
+									</button>
+									<RoleBadges user={person} />
+									{#if changing && !me}
+										<button class="ap-iconbtn remove" type="button" aria-label={`Remove ${name}`} title="Remove from room" disabled={busy} onclick={() => remove(person.user_id)}><UserMinus size={14} aria-hidden="true" /></button>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					</section>
+				{/each}
 			{/if}
 		{/if}
 	</div>
@@ -187,15 +196,18 @@
 	.placeholder .ap-skel { height: 12px; }
 	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
 	.err { color: var(--danger); }
-	.add-toggle { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 32px; margin: 0 0 2px; padding: 2px var(--space-1); border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-muted); font: inherit; font-size: var(--text-ui); line-height: 18px; text-align: left; cursor: pointer; }
-	.add-toggle:hover, .add-toggle[aria-expanded='true'] { color: var(--ink); }
-	.add-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-	/* An avatar's size, dashed: a place for someone not here yet. */
-	.add-icon { display: grid; place-items: center; flex: none; width: var(--avatar-sm); height: var(--avatar-sm); border: 1px dashed currentColor; border-radius: var(--radius-full); }
+	/* Small, after the count, as the rooms list's header buttons: most visits are to see who is here. */
+	.add-toggle { width: 24px; height: 24px; }
 	/* Raised, like a popover in place: the members stay in view below it. */
 	.add { display: grid; gap: var(--space-2); margin: 0 var(--space-1) var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-100); }
 	.add-row { display: flex; gap: var(--space-2); min-width: 0; }
 	.add .ap-field { flex: 1; min-width: 0; height: 28px; font-size: var(--text-ui); }
+	.member-section + .member-section { margin-top: var(--space-4); }
+	/* As the rooms list's section headings, with the count after a dash. */
+	.member-section-head { margin: 0; padding: 0 var(--space-1) var(--space-1); color: var(--ink-muted); font-size: var(--text-sm); line-height: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	/* A role is shown as written (§3.3.4), only its first letter raised to match Online and Offline. */
+	.member-section-name.role { display: inline-block; max-width: 100%; vertical-align: bottom; overflow: hidden; text-overflow: ellipsis; }
+	.member-section-name.role::first-letter { text-transform: uppercase; }
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 	.member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
 	/* Role badges follow the name, as beside a message's sender; the remove button floats over the far right. */
