@@ -8,6 +8,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { memberSections, userIdToAdd } from '$lib/ui/members';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
+	import { loadShutMemberSections, saveShutMemberSections } from '$lib/ui/storage';
 	import { presence, presenceLabel } from '$lib/design/components/util';
 	import { byStatus, ownStatusLabel } from '$lib/ui/user-status';
 	import Avatar from './Avatar.svelte';
@@ -39,6 +40,15 @@
 	), statusOf));
 	/** Online, then offline, each in the order above; with no `status` capability (§4.5), one list. */
 	let sections = $derived(memberSections(members, statusOf, session.snapshot.capabilities.status));
+	/** Sections folded away, as the rooms list folds Other threads: a long Offline needn't push the rest out of view. */
+	let shut = $state(new Set(loadShutMemberSections()));
+
+	function toggleSection(key: string): void {
+		const next = new Set(shut);
+		if (!next.delete(key)) next.add(key);
+		shut = next;
+		saveShutMemberSections([...next]);
+	}
 	/** A large room's listing may hold only its most recently active members, with the total (§4.2.1). */
 	let total = $derived(room?.members === undefined ? undefined : Math.max(room.memberCount ?? 0, room.members.length));
 	let truncated = $derived(total !== undefined && room?.members !== undefined && total > room.members.length);
@@ -150,30 +160,37 @@
 			{:else}
 				{#if truncated}<p class="muted" data-testid="member-list-truncated">Showing {members.length} of {total}: the most recently active</p>{/if}
 				{#each sections as section (section.key)}
+					{@const open = section.key === 'members' || !shut.has(section.key)}
 					<section class="member-section" data-section={section.key}>
 						<!-- Without presence, one list under the panel's own header and count: a Members heading would repeat them. -->
-						{#if section.key !== 'members'}<h3 class="member-section-head">{section.label} — {section.people.length}</h3>{/if}
-						<ul class="members" aria-label={`${section.label} in ${room.title}`}>
-							{#each section.people as person (person.user_id)}
-								{@const name = directory.name(person)}
-								{@const me = directory.isMe(person.user_id)}
-								{@const status = statusOf(person)}
-								{@const shown = presence(status)}
-								{@const words = (me ? ownStatusLabel(status) : undefined) ?? presenceLabel(status)}
-								<li class="member" class:offline={shown === 'offline' || shown === 'invisible'} data-user={person.user_id} data-status={shown}>
-									<button class="who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => openProfileFrom(event.currentTarget)}>
-										<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" {status} statusLabel={words} />
-										<span class="member-name">
-											{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.toLowerCase()}</span>{/if}
-										</span>
-									</button>
-									<RoleBadges user={person} />
-									{#if changing && !me}
-										<button class="ap-iconbtn remove" type="button" aria-label={`Remove ${name}`} title="Remove from room" disabled={busy} onclick={() => remove(person.user_id)}><UserMinus size={14} aria-hidden="true" /></button>
-									{/if}
-								</li>
-							{/each}
-						</ul>
+						{#if section.key !== 'members'}
+							<h3 class="member-section-head">
+								<button class="ap-sect-toggle" class:shut={!open} type="button" aria-expanded={open} onclick={() => toggleSection(section.key)}><span class="ap-sect-caret" aria-hidden="true">▾</span>{section.label} — {section.people.length}</button>
+							</h3>
+						{/if}
+						{#if open}
+							<ul class="members" aria-label={`${section.label} in ${room.title}`}>
+								{#each section.people as person (person.user_id)}
+									{@const name = directory.name(person)}
+									{@const me = directory.isMe(person.user_id)}
+									{@const status = statusOf(person)}
+									{@const shown = presence(status)}
+									{@const words = (me ? ownStatusLabel(status) : undefined) ?? presenceLabel(status)}
+									<li class="member" class:offline={shown === 'offline' || shown === 'invisible'} data-user={person.user_id} data-status={shown}>
+										<button class="who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => openProfileFrom(event.currentTarget)}>
+											<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" {status} statusLabel={words} />
+											<span class="member-name">
+												{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.toLowerCase()}</span>{/if}
+											</span>
+										</button>
+										<RoleBadges user={person} />
+										{#if changing && !me}
+											<button class="ap-iconbtn remove" type="button" aria-label={`Remove ${name}`} title="Remove from room" disabled={busy} onclick={() => remove(person.user_id)}><UserMinus size={14} aria-hidden="true" /></button>
+										{/if}
+									</li>
+								{/each}
+							</ul>
+						{/if}
 					</section>
 				{/each}
 			{/if}
@@ -200,7 +217,11 @@
 	.add .ap-field { flex: 1; min-width: 0; height: 28px; font-size: var(--text-ui); }
 	.member-section + .member-section { margin-top: var(--space-4); }
 	/* As the rooms list's section headings, with the count after a dash. */
-	.member-section-head { margin: 0; padding: 0 var(--space-1) var(--space-1); color: var(--ink-muted); font-size: var(--text-sm); line-height: 16px; font-weight: 600; }
+	.member-section-head { margin: 0; padding: 0 var(--space-1) var(--space-1); font: inherit; }
+	/* As Other threads in the rooms list: the caret sits out in the gutter, so the words line up with the avatars. */
+	.member-section-head .ap-sect-toggle { position: relative; padding-left: 0; }
+	.member-section-head .ap-sect-caret { position: absolute; left: -12px; width: 10px; text-align: center; }
+	.shut .ap-sect-caret { transform: rotate(-90deg); }
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 	.member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
 	/* Role badges follow the name, as beside a message's sender; the remove button floats over the far right. */

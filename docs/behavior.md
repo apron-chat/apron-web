@@ -189,7 +189,8 @@ The member list's panel button, in the window's top-right corner, toggles a righ
 sidebar, **Members**, listing the open room's or thread's members from its `room_list`
 snapshot, with their role badges, in sections as Discord lists them, each
 headed with its count: **Online**, then **Offline** (offline, or your own
-invisible). Someone with no status isn't known to be offline, so stays under
+invisible). Each heading folds its section away, as Other threads does, and
+which are folded is remembered for every room. Someone with no status isn't known to be offline, so stays under
 Online. Without presence (a server without the `status` capability, or no
 member with a status) it is one list with no heading, since a Members heading
 would repeat the panel's own. Within a section, members sort by status, then

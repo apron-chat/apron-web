@@ -13,6 +13,7 @@ afterEach(() => {
 	if (instance) unmount(instance);
 	instance = undefined;
 	document.body.innerHTML = '';
+	localStorage.clear();
 	directory.forget();
 });
 
@@ -42,7 +43,7 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChan
 /** Each section's heading and its members' IDs, in order. */
 function sections() {
 	return [...document.querySelectorAll<HTMLElement>('section.member-section')].map((section) => [
-		section.querySelector('h3')?.textContent,
+		section.querySelector('h3')?.textContent?.replace('▾', '').trim(),
 		[...section.querySelectorAll<HTMLLIElement>('li.member')].map((row) => row.dataset.user)
 	]);
 }
@@ -85,6 +86,25 @@ describe('MemberListSidebar', () => {
 		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'bo', 'cy']);
 		expect(document.querySelector('.member-section-head')).toBeNull();
 		expect(rows.some((row) => row.classList.contains('offline') || row.querySelector('.ap-presence'))).toBe(false);
+	});
+
+	it('folds a section from its heading, keeping its count, and remembers it for the next visit', () => {
+		const people = [ada, { user_id: 'bo', name: 'Bo', status: 'offline' }, { user_id: 'cy', name: 'Cy', status: 'offline' }];
+		render(people);
+		const toggle = () => document.querySelector<HTMLButtonElement>('[data-section="offline"] h3 button')!;
+		expect(toggle().getAttribute('aria-expanded')).toBe('true');
+		toggle().click();
+		flushSync();
+		expect(toggle().getAttribute('aria-expanded')).toBe('false');
+		expect(toggle().textContent).toBe('▾Offline — 2');
+		expect(sections()).toEqual([['Online — 1', ['ada']], ['Offline — 2', []]]);
+		expect(localStorage.getItem('apron.memberSections')).toBe('["offline"]');
+		unmount(instance!);
+		render(people);
+		expect(sections()).toEqual([['Online — 1', ['ada']], ['Offline — 2', []]]);
+		toggle().click();
+		flushSync();
+		expect(sections()).toEqual([['Online — 1', ['ada']], ['Offline — 2', ['bo', 'cy']]]);
 	});
 
 	it('dims offline members only, with a ring; no status shows no dot and is not dimmed', () => {
