@@ -2,6 +2,9 @@
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import Square from '@lucide/svelte/icons/square';
 	import Mic from '@lucide/svelte/icons/mic';
+	import Monitor from '@lucide/svelte/icons/monitor';
+	import Video from '@lucide/svelte/icons/video';
+	import MapPin from '@lucide/svelte/icons/map-pin';
 	import Smile from '@lucide/svelte/icons/smile';
 	import { untrack } from 'svelte';
 	import { mentionClass, mentionLabel, type Mention, type MentionPerson } from '$lib/protocol/markdown';
@@ -16,6 +19,10 @@
 	import { findGitHubLinks, linkPreviews } from '$lib/ui/link-previews';
 	import { pastedFiles } from '$lib/ui/file-transfer';
 	import { clockLabel } from '$lib/ui/time';
+	import { fileSize } from '$lib/ui/images';
+	import { locationText } from '$lib/ui/locations';
+	import { CAMERA_CONSTRAINTS, fallbackType, RECORDING_BITRATES, RECORDING_MAX_BYTES, recordingName, recordingSupport, SCREEN_CONSTRAINTS, videoType, type RecordingKind } from '$lib/ui/recording';
+	import MenuButton from '$lib/design/components/MenuButton.svelte';
 	import { enterAction, handheld } from '$lib/ui/handheld';
 	import type { StagedFile as Staged } from '$lib/ui/pane-drafts.svelte';
 	import AutocompletePicker from './AutocompletePicker.svelte';
@@ -28,15 +35,12 @@
 	const MENTION_MATCHES_MAX = 8;
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
 	const PREVIEW_TYPING_PAUSE_MS = 800;
-	/** Plenty for speech, in Opus or AAC: about 240 KB a minute, so a 5 MB upload holds 20 minutes. */
-	const VOICE_BITS_PER_SECOND = 32_000;
+	/** How long a location fix may take, and how old a remembered one may be. */
+	const LOCATE_TIMEOUT_MS = 15_000;
+	const LOCATE_MAX_AGE_MS = 60_000;
 
-	/** The file extension for a recorded clip's type: Safari records MP4, Firefox Ogg, Chrome WebM. */
-	function voiceExtension(type: string): string {
-		if (type.includes('mp4')) return 'm4a';
-		if (type.includes('ogg')) return 'ogg';
-		return 'webm';
-	}
+	/** What the attach button offers, by value. */
+	type AttachChoice = 'file' | RecordingKind | 'location';
 
 	interface Props {
 		/** The draft as sent: mentions are `@user_id` (Appendix A.3); the field shows them as name chips. */
@@ -54,11 +58,11 @@
 		dismissed?: string[];
 		placeholder: string;
 		disabled: boolean;
-		/** Attachments and voice clips (capability `embed:upload`, §4.8.4): each file goes out as an `upload` embed. */
+		/** Attachments, voice clips and screen or camera recordings (capability `embed:upload`, §4.8.4): each file goes out as an `upload` embed. */
 		canUpload: boolean;
 		/** Files attached to the draft, shown above the field until it is sent; each can be removed first. */
 		files?: Staged[];
-		/** False once the server showed it takes images only: voice clips are hidden. */
+		/** False once the server showed it takes images only: voice clips and recordings are hidden. */
 		canUploadAudio?: boolean;
 		/**
 		 * Cap `command` (§4.1): text starting with one `/` is a command, shown
@@ -73,8 +77,10 @@
 		reply?: { name?: string; text: string };
 		oninput: () => void;
 		onsend: () => void;
-		/** Picked or pasted files, or a finished voice clip, to attach to the draft. */
+		/** Picked or pasted files, or a finished recording, to attach to the draft. */
 		onfiles: (files: File[]) => void;
+		/** Something asked for that couldn't be done, such as finding the location, in words for the user. */
+		onproblem?: (message: string) => void;
 		/** A staged file's (x): take it off the draft. */
 		onunstage: (id: string) => void;
 		/** A staged file's new name, which it is sent with. */
@@ -83,7 +89,7 @@
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onproblem, onunstage, onrename, oncancelreply, onmention }: Props = $props();
 
 	/** Unique per composer, for the open picker's ID. */
 	const uid = $props.id();
@@ -106,12 +112,28 @@
 	/** The draft text the field shows, and the field showing it. */
 	let shown: { field: HTMLDivElement; text: string } | undefined;
 	let recordSeconds = $state<number | undefined>();
+	/** What is being recorded, how much of it so far, and the screen or camera it shows. */
+	let recordKind = $state<RecordingKind | undefined>();
+	let recordBytes = $state(0);
+	let recordStream = $state.raw<MediaStream | undefined>();
 	let recorder: MediaRecorder | undefined;
 	let recordTimer: ReturnType<typeof setInterval> | undefined;
+	/** Waiting on the browser for the location. */
+	let locating = $state(false);
 
 	let recording = $derived(recordSeconds !== undefined);
-	/** Voice messages need both uploads and a browser that can record. */
-	let canRecord = $derived(canUpload && canUploadAudio && typeof MediaRecorder !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia));
+	/** Recordings need uploads that aren't only images, and a browser that can record. */
+	let canRecordAny = $derived(canUpload && canUploadAudio);
+	let support = $derived(recordingSupport());
+	let canRecord = $derived(canRecordAny && support.voice);
+	let canLocate = $derived(typeof navigator !== 'undefined' && 'geolocation' in navigator);
+	/** The attach button's choices: only those this browser and server can do. */
+	let attachChoices = $derived([
+		...(canUpload ? [{ value: 'file', label: 'Upload a file', testid: 'attach-file' }] : []),
+		...(canRecordAny && support.screen ? [{ value: 'screen', label: 'Record screen', testid: 'attach-screen' }] : []),
+		...(canRecordAny && support.camera ? [{ value: 'camera', label: 'Record video', testid: 'attach-camera' }] : []),
+		...(canLocate ? [{ value: 'location', label: 'Share location', testid: 'attach-location' }] : [])
+	]);
 	let matches = $derived(query === undefined ? [] : matching(query));
 	let emojiMatches = $derived(emojiFound && emojiData ? searchEmoji(emojiData, emojiFound.query) : []);
 	/** The IDs a typed `#room_id` collapses into a chip for. */
@@ -543,15 +565,15 @@
 
 	/** The emoji button: the full picker, whose pick lands where the caret was. Emoji are text, so no capability gates it. */
 	function openEmoji(): void {
-		if (emojiButton) emojiPicker.toggle({ anchor: emojiButton, onpick: insertEmoji });
+		if (emojiButton) emojiPicker.toggle({ anchor: emojiButton, onpick: insert });
 	}
 
-	/** Puts a picked emoji at the caret, over any selection, and the caret after it, as typing it would. */
-	function insertEmoji(emoji: string): void {
+	/** Puts a picked emoji (or a shared location) at the caret, over any selection, and the caret after it, as typing it would. */
+	function insert(text: string): void {
 		if (!field || disabled) return;
 		const { parts } = readDraft(field);
 		const end = draftLength(parts);
-		const inserted = insertText(parts, lastSelection?.start ?? end, lastSelection?.end ?? end, emoji);
+		const inserted = insertText(parts, lastSelection?.start ?? end, lastSelection?.end ?? end, text);
 		lastSelection = undefined;
 		field.focus();
 		draw(field, inserted.parts, inserted.caret);
@@ -582,38 +604,83 @@
 		if (files.length) onfiles(files);
 	}
 
-	/** Microphone: record, then hand the clip over as an audio file. */
-	async function startRecording(): Promise<void> {
-		if (disabled || !canRecord || recorder) return;
+	/** The attach menu's choice; called from its click, which the file picker and screen capture need. */
+	function attachChoice(choice: string): void {
+		const picked = choice as AttachChoice;
+		if (picked === 'file') attachInput?.click();
+		else if (picked === 'location') locate();
+		else void startRecording(picked);
+	}
+
+	/** The stream to record: the screen the browser asks for, the camera with the microphone, or the microphone. */
+	function capture(kind: RecordingKind): Promise<MediaStream> {
+		if (kind === 'screen') return navigator.mediaDevices.getDisplayMedia(SCREEN_CONSTRAINTS);
+		return navigator.mediaDevices.getUserMedia(kind === 'camera' ? CAMERA_CONSTRAINTS : { audio: true });
+	}
+
+	/**
+	 * Records the microphone, screen or camera, then hands the recording over
+	 * as a file. It stops by itself before it outgrows an upload, and when the
+	 * browser's own Stop sharing ends the screen capture.
+	 */
+	async function startRecording(kind: RecordingKind = 'voice'): Promise<void> {
+		if (disabled || !canRecordAny || !support[kind] || recorder) return;
 		let stream: MediaStream;
 		try {
-			stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-		} catch {
+			stream = await capture(kind);
+		} catch (cause) {
+			// Cancelling the screen picker is a choice, not a problem (browsers report it as NotAllowedError).
+			const refused = cause instanceof DOMException && cause.name === 'NotAllowedError';
+			if (kind === 'screen' && !refused) onproblem?.('Unable to record the screen');
+			if (kind === 'camera') onproblem?.(refused ? 'Camera access is off for this site' : 'Unable to use the camera');
+			return;
+		}
+		if (disabled || recorder) {
+			for (const track of stream.getTracks()) track.stop();
 			return;
 		}
 		const chunks: Blob[] = [];
-		const current = new MediaRecorder(stream, { audioBitsPerSecond: VOICE_BITS_PER_SECOND });
+		const type = kind === 'voice' ? undefined : videoType();
+		let current: MediaRecorder;
+		try {
+			current = new MediaRecorder(stream, { ...RECORDING_BITRATES[kind], ...(type ? { mimeType: type } : {}) });
+		} catch {
+			for (const track of stream.getTracks()) track.stop();
+			onproblem?.('This browser can’t record that');
+			return;
+		}
 		recorder = current;
+		recordKind = kind;
+		recordBytes = 0;
+		recordStream = kind === 'voice' ? undefined : stream;
 		recordSeconds = 0;
 		recordTimer = setInterval(() => (recordSeconds = (recordSeconds ?? 0) + 1), 1000);
-		current.ondataavailable = (event) => { if (event.data.size > 0) chunks.push(event.data); };
+		current.ondataavailable = (event) => {
+			if (event.data.size === 0) return;
+			chunks.push(event.data);
+			if (recorder !== current) return;
+			recordBytes += event.data.size;
+			if (recordBytes >= RECORDING_MAX_BYTES && current.state === 'recording') current.stop();
+		};
 		current.onstop = () => {
 			for (const track of stream.getTracks()) track.stop();
 			if (recorder !== current) return;
 			const seconds = recordSeconds ?? 0;
 			clearRecording();
 			if (chunks.length === 0 || seconds < 1) return;
-			const type = current.mimeType || chunks[0].type || 'audio/webm';
-			onfiles([new File(chunks, `voice-message.${voiceExtension(type)}`, { type })]);
+			const recorded = current.mimeType || chunks[0].type || fallbackType(kind);
+			onfiles([new File(chunks, recordingName(kind, recorded), { type: recorded })]);
 		};
-		current.start();
+		// The browser's Stop sharing (or an unplugged camera) ends the video: the recording so far is kept.
+		for (const track of stream.getVideoTracks()) track.addEventListener('ended', () => { if (recorder === current) stopRecording(); });
+		current.start(1000);
 	}
 
 	function stopRecording(send = true): void {
 		const current = recorder;
 		if (!current) return;
 		if (!send) clearRecording();
-		current.stop();
+		if (current.state !== 'inactive') current.stop();
 	}
 
 	function clearRecording(): void {
@@ -621,6 +688,36 @@
 		if (recordTimer) clearInterval(recordTimer);
 		recordTimer = undefined;
 		recordSeconds = undefined;
+		recordKind = undefined;
+		recordBytes = 0;
+		recordStream = undefined;
+	}
+
+	/**
+	 * Share location: one fix, never tracking, put in the draft as a map link
+	 * with how far off it may be, so it can be read or taken out before
+	 * sending. Its card shows above the field like any link preview's.
+	 */
+	function locate(): void {
+		if (disabled || locating || !canLocate) return;
+		locating = true;
+		navigator.geolocation.getCurrentPosition(
+			({ coords }) => {
+				locating = false;
+				insert(`${/\S$/.test(value) ? ' ' : ''}${locationText(coords)}`);
+			},
+			(problem) => {
+				locating = false;
+				onproblem?.(problem.code === problem.PERMISSION_DENIED ? 'Location access is off for this site' : 'Unable to find your location');
+			},
+			{ enableHighAccuracy: true, timeout: LOCATE_TIMEOUT_MS, maximumAge: LOCATE_MAX_AGE_MS }
+		);
+	}
+
+	/** Shows a live stream in a video element: the screen or camera being recorded. */
+	function live(element: HTMLVideoElement, stream: MediaStream): { update: (next: MediaStream) => void; destroy: () => void } {
+		element.srcObject = stream;
+		return { update: (next) => (element.srcObject = next), destroy: () => (element.srcObject = null) };
 	}
 </script>
 
@@ -708,12 +805,24 @@
 		</AutocompletePicker>
 	{/if}
 	<form class="ap-composer" class:ap-composer-disabled={disabled} class:ap-composer-cmd={command} aria-label="Send a message" onsubmit={(event) => { event.preventDefault(); send(); }}>
-		{#if canUpload}
+		{#if attachChoices.length || recording}
 			<span class="ap-composer-tools">
-				<button class="ap-iconbtn" type="button" aria-label="Attach a file" title="Attach a file" disabled={disabled || recording} onclick={() => attachInput?.click()}>
-					<Paperclip size={18} aria-hidden="true" />
-				</button>
-				{#if canRecord}
+				{#if attachChoices.length === 1 && attachChoices[0].value === 'file'}
+					<button class="ap-iconbtn" type="button" aria-label="Attach a file" title="Attach a file" disabled={disabled || recording} onclick={() => attachInput?.click()}>
+						<Paperclip size={18} aria-hidden="true" />
+					</button>
+				{:else if attachChoices.length}
+					<MenuButton label={locating ? 'Finding your location…' : 'Attach'} testid="attach-menu" choices={attachChoices} placement="above" align="start" disabled={disabled || recording} busy={locating} onselect={attachChoice}>
+						{#snippet icon()}<Paperclip size={18} aria-hidden="true" />{/snippet}
+						{#snippet lead(choice)}
+							{#if choice === 'screen'}<Monitor size={16} aria-hidden="true" />
+							{:else if choice === 'camera'}<Video size={16} aria-hidden="true" />
+							{:else if choice === 'location'}<MapPin size={16} aria-hidden="true" />
+							{:else}<Paperclip size={16} aria-hidden="true" />{/if}
+						{/snippet}
+					</MenuButton>
+				{/if}
+				{#if canRecord || recording}
 					<button class="ap-iconbtn" class:ap-iconbtn-rec={recording} type="button" aria-label={recording ? 'Stop recording' : 'Record a voice message'} aria-pressed={recording} title={recording ? 'Stop recording' : 'Record a voice message'} {disabled} onclick={() => (recording ? stopRecording() : startRecording())}>
 						{#if recording}
 							<Square size={12} fill="currentColor" stroke="currentColor" strokeWidth={0} aria-hidden="true" />
@@ -723,10 +832,16 @@
 					</button>
 				{/if}
 			</span>
+		{/if}
+		{#if canUpload}
 			<input class="sr" type="file" multiple tabindex="-1" aria-hidden="true" data-testid="attach-input" bind:this={attachInput} onchange={(event) => attach(event.currentTarget)} />
 		{/if}
 		{#if recordSeconds !== undefined}
-			<span class="ap-composer-recording" role="status"><span class="ap-composer-recdot" aria-hidden="true"></span>Recording <span class="ap-composer-rectime">{clockLabel(recordSeconds)}</span></span>
+			<span class="ap-composer-recording" role="status">
+				{#if recordStream}<video class="rec-preview" muted autoplay playsinline aria-hidden="true" use:live={recordStream}></video>{/if}
+				<span class="ap-composer-recdot" aria-hidden="true"></span>{recordKind === 'screen' ? 'Recording screen' : recordKind === 'camera' ? 'Recording video' : 'Recording'}
+				<span class="ap-composer-rectime">{clockLabel(recordSeconds)}{#if recordKind !== 'voice'}{` · ${fileSize(recordBytes)} of ${fileSize(RECORDING_MAX_BYTES)}`}{/if}</span>
+			</span>
 		{:else}
 			{#if command}<span class="ap-composer-cmdtag" data-testid="command-tag" title="Sent to the server, not posted">Command</span>{/if}
 			<div
@@ -793,5 +908,7 @@
 	.field :global(.ap-mention) { white-space: nowrap; cursor: default; user-select: all; }
 	/* The emoji button reads as pressed while its picker is open. */
 	.emoji[aria-expanded='true'] { background: var(--bg-300); color: var(--ink); }
+	/* What the screen or camera recording shows, beside its status. */
+	.rec-preview { flex: none; height: 28px; max-width: 50px; border-radius: var(--radius-sm); background: var(--bg-300); object-fit: cover; }
 	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 </style>

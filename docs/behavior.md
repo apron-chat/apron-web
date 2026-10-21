@@ -749,8 +749,21 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
 
 - **Uploads** (capability `embed:upload`): files picked with the paperclip,
   dropped anywhere on the conversation (which shows a "Drop files to attach"
-  outline while they are dragged over it), or pasted, and voice clips from the
-  microphone, are attached to the draft rather than sent. A paste attaches
+  outline while they are dragged over it), or pasted, voice clips from the
+  microphone, and screen or camera recordings, are attached to the draft
+  rather than sent. The paperclip opens a menu of what this browser and
+  server can do: **Upload a file**, **Record screen** (where the browser
+  can capture it, so not on phones), **Record video** (the camera, with
+  sound) and **Share location**; with only files to offer, it opens the file
+  picker. Recordings, like voice clips, are left out once the server showed
+  it takes images only. A screen or camera recording shows what it records
+  beside its "Recording" status, with its size so far; it stops at the mic's
+  Stop, at the browser's own Stop sharing, or by itself a little under 5 MB,
+  and is attached as `screen-recording.webm` or `video-message.webm` (`.mp4`
+  from Safari). **Share location** asks the browser once (never tracking) and
+  puts an OpenStreetMap pin link in the draft, rounded to what the fix's
+  accuracy supports and followed by it ("within 20 m"); its card shows above
+  the field like a link preview's, and a refused or failed fix says so. A paste attaches
   files whether or not the field has focus; pasted text wins over a picture of
   it, as office apps copy both, unless the text only names the copied files,
   as file managers add. Folders are left out of a drop, and a file dropped
@@ -791,8 +804,9 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
 - Any other kind renders from its `og` as a link card, else as the fallback card
   with its kind name and its `url` or `text`.
 - **Link previews**: a message with GitHub pull request, issue, commit, or
-  repository links (up to three) carries a `link` embed for each, with an `og`
-  the sender builds. A link is looked up as soon as it is pasted, or once
+  repository links, or OpenStreetMap pin links (up to three in all), carries a
+  `link` embed for each, with an `og` the sender builds; a pin's card ("Shared
+  location", its degrees) comes from the URL alone. A link is looked up as soon as it is pasted, or once
   typing pauses for a moment: its title, state, author, and an excerpt come
   from the GitHub REST API, which allows cross-origin reads; each link
   is fetched once, and a rate-limited answer pauses fetching until the limit

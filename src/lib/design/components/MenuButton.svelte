@@ -24,6 +24,8 @@
 		size?: 'md' | 'sm';
 		/** Where the menu opens: under the button (the default) or above it. */
 		placement?: 'below' | 'above';
+		/** Which edge of the button the menu lines up with: its end (the default), or its start, for a button at the left of a bar. */
+		align?: 'start' | 'end';
 		disabled?: boolean;
 		/**
 		 * Working on the last choice, such as a request in flight: the button
@@ -40,7 +42,7 @@
 		/** Words for screen readers instead of `label`, such as "Status: Online". */
 		ariaLabel?: string;
 	}
-	let { label, icon, testid, choices, onselect, variant = 'quiet', size = 'sm', placement = 'below', disabled = false, busy = false, open = $bindable(false), selected, lead, ariaLabel }: Props = $props();
+	let { label, icon, testid, choices, onselect, variant = 'quiet', size = 'sm', placement = 'below', align = 'end', disabled = false, busy = false, open = $bindable(false), selected, lead, ariaLabel }: Props = $props();
 
 	let root = $state<HTMLElement | undefined>();
 	let trigger = $state<HTMLButtonElement | undefined>();
@@ -114,7 +116,7 @@
 		<button bind:this={trigger} type="button" class={['ap-btn', 'ap-btn-' + variant, size === 'sm' && 'ap-btn-sm']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel} data-testid={testid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{label}</button>
 	{/if}
 	{#if open}
-		<ul class={['ap-menu', placement === 'below' && 'ap-menu-below', selected !== undefined && 'ap-menu-pick']} role="menu" aria-label={ariaLabel ?? label}>
+		<ul class={['ap-menu', placement === 'below' && 'ap-menu-below', align === 'start' && 'ap-menu-start', selected !== undefined && 'ap-menu-pick']} role="menu" aria-label={ariaLabel ?? label}>
 			{#each choices as choice (choice.value)}
 				{@const on = selected !== undefined && choice.value === selected}
 				<li role="none">

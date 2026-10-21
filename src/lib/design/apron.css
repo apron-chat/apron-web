@@ -607,6 +607,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 /* MenuButton — a button that opens a menu of choices, each with an optional muted hint (Pause notifications) */
 .ap-menubtn { position: relative; display: inline-flex; }
 .ap-menu-below { top: calc(100% + var(--space-1)); bottom: auto; }
+.ap-menu-start { left: 0; right: auto; }
 .ap-menubtn .ap-menu-item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); white-space: nowrap; }
 .ap-menu-hint { color: var(--ink-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 /* As a picker (`selected`): radio items, a check before the current one; `lead` draws before each label, such as a status dot. */

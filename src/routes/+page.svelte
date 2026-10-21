@@ -2479,7 +2479,7 @@
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply}
+					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onproblem={(message) => feedback.error(message)} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply}
 					onmention={() => listMembers(MEMBERS_FRESH_MS)}
 				/>
 			{/if}

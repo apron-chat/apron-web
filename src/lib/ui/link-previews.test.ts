@@ -54,6 +54,18 @@ describe('previews', () => {
 });
 
 describe('LinkPreviews', () => {
+	it('adds location pins, built from the URL without fetching, within the limit', async () => {
+		const fetcher = vi.fn(async () => json({}, 404));
+		const previews = new LinkPreviews(fetcher as unknown as typeof fetch);
+		const pin = 'https://www.openstreetmap.org/?mlat=51.5&mlon=-0.12#map=17/51.5/-0.12';
+		await previews.prefetch(`📍 ${pin} (within 10 m)`);
+		expect(fetcher).not.toHaveBeenCalled();
+		expect(previews.embeds(`📍 ${pin} (within 10 m)`)).toEqual([{ kind: 'link', url: pin, og: { site_name: 'OpenStreetMap', title: 'Shared location', description: '51.5° N, 0.12° W' } }]);
+		expect(previews.embeds(pin, [pin])).toEqual([]);
+		const full = 'https://github.com/a/b/pull/1 https://github.com/a/b/pull/2 https://github.com/a/b/pull/3';
+		expect(previews.embeds(`${full} ${pin}`).map((embed) => embed.url)).not.toContain(pin);
+	});
+
 	it('fetches each pasted link once and attaches what it learned', async () => {
 		const fetcher = vi.fn(async () => json({ title: 'Remove the Go server', state: 'open', user: { login: 'shazow' } }));
 		const previews = new LinkPreviews(fetcher as unknown as typeof fetch);

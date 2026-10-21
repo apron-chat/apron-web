@@ -7,8 +7,11 @@
  * browser can describe a pull request, issue, commit, or repository without
  * a server. A preview is fetched when a link is pasted; a message sent before
  * it arrives, or for a private repository, gets a card built from the URL.
+ * OpenStreetMap pin links, as Share location writes, get a card from the URL
+ * alone (`locations.ts`).
  */
 import type { Embed, OpenGraph } from '$lib/protocol/types';
+import { findLocationLinks, locationPreview } from './locations';
 
 /** At most this many previews per message. */
 export const LINK_PREVIEWS_MAX = 3;
@@ -159,13 +162,16 @@ export class LinkPreviews {
 
 	/**
 	 * `link` embeds for the GitHub links in `text`: fetched details where
-	 * they've arrived, else what the URL says. Links in `dismissed` are left out.
+	 * they've arrived, else what the URL says; then its location pins, up to
+	 * `LINK_PREVIEWS_MAX` in all. Links in `dismissed` are left out.
 	 */
 	embeds(text: string, dismissed: readonly string[] = []): Embed[] {
-		return findGitHubLinks(text, dismissed).flatMap((link) => {
+		const github = findGitHubLinks(text, dismissed).flatMap((link): Embed[] => {
 			const og = this.known.get(link.url) ?? fallbackPreview(link);
 			return og ? [{ kind: 'link', url: link.url, og }] : [];
 		});
+		const pins = findLocationLinks(text, dismissed, LINK_PREVIEWS_MAX - github.length).map((link): Embed => ({ kind: 'link', url: link.url, og: locationPreview(link) }));
+		return [...github, ...pins];
 	}
 
 	private load(link: GitHubLink): Promise<void> {
