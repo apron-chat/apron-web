@@ -204,7 +204,8 @@
 	.member-list:not(.open) { visibility: hidden; }
 	.member-list-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-body); line-height: 20px; font-weight: 600; }
 	.member-list-count { color: var(--ink-muted); font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
-	.member-list-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2); }
+	/* Wider on the left, so names line up with the header's Members and the section carets have a gutter to sit in. */
+	.member-list-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2) var(--space-3) var(--space-3); }
 	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 	.placeholder .ap-skel { height: 12px; }
 	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
@@ -220,7 +221,7 @@
 	.member-section-head { margin: 0; padding: 0 var(--space-1) var(--space-1); font: inherit; }
 	/* As Other threads in the rooms list: the caret sits out in the gutter, so the words line up with the avatars. */
 	.member-section-head .ap-sect-toggle { position: relative; padding-left: 0; }
-	.member-section-head .ap-sect-caret { position: absolute; left: -12px; width: 10px; text-align: center; }
+	.member-section-head .ap-sect-caret { position: absolute; left: -11px; width: 10px; text-align: center; }
 	.shut .ap-sect-caret { transform: rotate(-90deg); }
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 	.member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
