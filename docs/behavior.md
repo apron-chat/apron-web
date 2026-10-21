@@ -752,13 +752,15 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   outline while they are dragged over it), or pasted, voice clips from the
   microphone, and screen or camera recordings, are attached to the draft
   rather than sent. The paperclip opens a menu of what this browser and
-  server can do: **Upload a file**, **Record screen** (where the browser
-  can capture it, so not on phones), **Record video** (the camera, with
-  sound) and **Share location**; with only files to offer, it opens the file
-  picker. Recordings, like voice clips, are left out once the server showed
-  it takes images only. A screen or camera recording shows what it records
-  beside its "Recording" status, with its size so far; it stops at the mic's
-  Stop, at the browser's own Stop sharing, or by itself a little under 5 MB,
+  server can do: **Upload a file**, **Record voice message**, **Record
+  screen** (where the browser can capture it, so not on phones), **Record
+  video** (the camera, with sound) and **Share location**; with only files
+  to offer, it opens the file picker. Recordings are left out once the
+  server showed it takes images only. While one records, a Stop button
+  follows the paperclip, and the field shows a "Recording" status; a screen
+  or camera recording shows what it records beside it, with its size so far.
+  It stops at Stop, at the browser's own Stop sharing, or by itself a little
+  under 5 MB,
   and is attached as `screen-recording.webm` or `video-message.webm` (`.mp4`
   from Safari). **Share location** asks the browser once (never tracking) and
   puts an OpenStreetMap pin link in the draft, rounded to what the fix's

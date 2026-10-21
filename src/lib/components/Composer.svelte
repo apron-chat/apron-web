@@ -125,11 +125,11 @@
 	/** Recordings need uploads that aren't only images, and a browser that can record. */
 	let canRecordAny = $derived(canUpload && canUploadAudio);
 	let support = $derived(recordingSupport());
-	let canRecord = $derived(canRecordAny && support.voice);
 	let canLocate = $derived(typeof navigator !== 'undefined' && 'geolocation' in navigator);
 	/** The attach button's choices: only those this browser and server can do. */
 	let attachChoices = $derived([
 		...(canUpload ? [{ value: 'file', label: 'Upload a file', testid: 'attach-file' }] : []),
+		...(canRecordAny && support.voice ? [{ value: 'voice', label: 'Record voice message', testid: 'attach-voice' }] : []),
 		...(canRecordAny && support.screen ? [{ value: 'screen', label: 'Record screen', testid: 'attach-screen' }] : []),
 		...(canRecordAny && support.camera ? [{ value: 'camera', label: 'Record video', testid: 'attach-camera' }] : []),
 		...(canLocate ? [{ value: 'location', label: 'Share location', testid: 'attach-location' }] : [])
@@ -623,7 +623,7 @@
 	 * as a file. It stops by itself before it outgrows an upload, and when the
 	 * browser's own Stop sharing ends the screen capture.
 	 */
-	async function startRecording(kind: RecordingKind = 'voice'): Promise<void> {
+	async function startRecording(kind: RecordingKind): Promise<void> {
 		if (disabled || !canRecordAny || !support[kind] || recorder) return;
 		let stream: MediaStream;
 		try {
@@ -815,20 +815,17 @@
 					<MenuButton label={locating ? 'Finding your location…' : 'Attach'} testid="attach-menu" choices={attachChoices} placement="above" align="start" disabled={disabled || recording} busy={locating} onselect={attachChoice}>
 						{#snippet icon()}<Paperclip size={18} aria-hidden="true" />{/snippet}
 						{#snippet lead(choice)}
-							{#if choice === 'screen'}<Monitor size={16} aria-hidden="true" />
+							{#if choice === 'voice'}<Mic size={16} aria-hidden="true" />
+							{:else if choice === 'screen'}<Monitor size={16} aria-hidden="true" />
 							{:else if choice === 'camera'}<Video size={16} aria-hidden="true" />
 							{:else if choice === 'location'}<MapPin size={16} aria-hidden="true" />
 							{:else}<Paperclip size={16} aria-hidden="true" />{/if}
 						{/snippet}
 					</MenuButton>
 				{/if}
-				{#if canRecord || recording}
-					<button class="ap-iconbtn" class:ap-iconbtn-rec={recording} type="button" aria-label={recording ? 'Stop recording' : 'Record a voice message'} aria-pressed={recording} title={recording ? 'Stop recording' : 'Record a voice message'} {disabled} onclick={() => (recording ? stopRecording() : startRecording())}>
-						{#if recording}
-							<Square size={12} fill="currentColor" stroke="currentColor" strokeWidth={0} aria-hidden="true" />
-						{:else}
-							<Mic size={18} aria-hidden="true" />
-						{/if}
+				{#if recording}
+					<button class="ap-iconbtn ap-iconbtn-rec" type="button" aria-label="Stop recording" title="Stop recording" {disabled} onclick={() => stopRecording()}>
+						<Square size={12} fill="currentColor" stroke="currentColor" strokeWidth={0} aria-hidden="true" />
 					</button>
 				{/if}
 			</span>

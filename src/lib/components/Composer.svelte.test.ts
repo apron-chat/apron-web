@@ -101,7 +101,8 @@ describe('Composer attach menu', () => {
 		byLabel('Attach')!.click();
 		flushSync();
 		await tick();
-		expect(menuItems().map((item) => item.textContent?.trim())).toEqual(['Upload a file', 'Record screen', 'Record video', 'Share location']);
+		expect(menuItems().map((item) => item.textContent?.trim())).toEqual(['Upload a file', 'Record voice message', 'Record screen', 'Record video', 'Share location']);
+		expect(byLabel('Record a voice message')).toBeUndefined();
 	});
 
 	it('leaves recordings out where uploads are images only, and is a plain paperclip with only files to offer', async () => {
@@ -131,6 +132,25 @@ describe('Composer attach menu', () => {
 		await choose('Share location');
 		geolocation.getCurrentPosition.mock.calls[1][1]({ code: 3, PERMISSION_DENIED: 1 });
 		expect(props.onproblem).toHaveBeenCalledWith('Unable to find your location');
+	});
+
+	it('records a voice message from the menu, with Stop beside the paperclip until it is done', async () => {
+		vi.useFakeTimers();
+		const { media } = browser();
+		const props = render();
+		expect(byLabel('Stop recording')).toBeUndefined();
+		await choose('Record voice message');
+		expect(media.getUserMedia).toHaveBeenCalledWith({ audio: true });
+		expect(FakeRecorder.made[0].options).toEqual({ audioBitsPerSecond: 32_000 });
+		vi.advanceTimersByTime(2000);
+		FakeRecorder.made[0].emit(800);
+		flushSync();
+		expect(document.querySelector('[role="status"]')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Recording 0:02');
+		expect((byLabel('Attach') as HTMLButtonElement).disabled).toBe(true);
+		byLabel('Stop recording')!.click();
+		flushSync();
+		expect((props.onfiles.mock.calls[0] as [File[]])[0][0].name).toBe('voice-message.webm');
+		expect(byLabel('Stop recording')).toBeUndefined();
 	});
 
 	it('records the screen until the browser’s Stop sharing, and attaches it', async () => {
