@@ -414,12 +414,23 @@ a.ap-embed-card:hover { background: var(--bg-300); }
   .ap-embed-livebadge i, .ap-embed-caret { animation: none; }
 }
 
-/* ReplyPreview — the quoted message above a reply; click to jump */
-.ap-reply { font: inherit; display: flex; flex-direction: column; gap: 1px; align-items: flex-start; max-width: min(100%, 520px); margin-bottom: var(--space-1); padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2); border: 0; border-left: 3px solid var(--denim); border-radius: var(--radius-sm) var(--radius-md) var(--radius-md) var(--radius-sm); background: var(--bg-200); color: var(--ink-muted); text-align: left; cursor: pointer; }
-.ap-reply:hover { background: var(--bg-300); }
-.ap-msg-mention .ap-reply, .ap-msg-highlighted .ap-reply { background: var(--bg-100); }
-.ap-reply-who { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-sm); line-height: 18px; font-weight: 600; color: var(--denim); }
-.ap-reply-text { font-size: var(--text-ui); line-height: 18px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ReplyPreview — the quoted message, one line on a row of its own above the sender's name; click to jump.
+   A spine runs up from the avatar's centre and bends into the quote. Every gap is --space-1: the quote to the
+   name line, the spine to the avatar, the spine to the quote's own avatar. Compact runs it from the time column. */
+.ap-msg-reply { --reply-indent: calc(var(--avatar-md) + var(--space-3)); --spine-x: calc(var(--avatar-md) / 2); --spine-drop: 2px; /* past the row: its 4px gap and the gutter's 2px, less 4px */
+	grid-column: 1 / -1; display: flex; min-width: 0; margin-bottom: var(--space-1); padding-left: var(--reply-indent); }
+.ap-msg-selectable .ap-msg-reply { grid-column: 2 / -1; }
+.ap-msg-compact .ap-msg-reply { --reply-indent: calc(40px + var(--space-2)); --spine-x: 20px; --spine-drop: var(--space-1); /* to the time's line; its text starts 4px lower */ }
+.ap-reply { font: inherit; position: relative; display: flex; align-items: center; gap: var(--space-1); min-width: 0; max-width: min(100%, 520px); margin-left: calc(-1 * var(--space-1)); padding: 1px var(--space-1); border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-muted); font-size: var(--text-sm); line-height: 18px; text-align: left; cursor: pointer; }
+.ap-msg-reply .ap-reply::before { content: ''; position: absolute; right: 100%; top: calc(50% - 1px); bottom: calc(-1 * var(--spine-drop)); box-sizing: border-box; width: calc(var(--reply-indent) - var(--space-1) - var(--spine-x) + 1px); border: 2px solid color-mix(in srgb, var(--line-strong) 60%, transparent); border-right: 0; border-bottom: 0; border-top-left-radius: var(--radius-sm); pointer-events: none; }
+.ap-reply:hover { background: var(--bg-300); color: var(--ink); }
+.ap-msg-highlighted .ap-reply:hover { background: var(--bg-100); }
+.ap-msg-reply .ap-reply:hover::before { border-color: var(--denim); }
+/* A face smaller than --avatar-sm, to sit inside the 18px line. */
+.ap-reply .ap-avatar { width: 16px; height: 16px; font-size: 7px; }
+.ap-reply-who { flex: none; color: var(--ink); font-weight: 500; }
+.ap-reply:hover .ap-reply-who { color: var(--denim); }
+.ap-reply-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ThreadSummary — pinned under the header of a thread view */
 /* The summary icon has a column of its own, so every line of the text starts after it, not just the first. */

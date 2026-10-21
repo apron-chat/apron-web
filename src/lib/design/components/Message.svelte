@@ -22,7 +22,7 @@
 		timestamp?: number;
 		/** Pre-formatted time; overrides the short time `timestamp` renders. */
 		time?: string;
-		/** Continuation of the previous sender's group: no avatar or name. */
+		/** Continuation of the previous sender's group: no avatar or name. Ignored on a reply, whose quote leads into its avatar. */
 		grouped?: boolean;
 		status?: 'sent' | 'pending' | 'failed';
 		onretry?: () => void;
@@ -60,7 +60,7 @@
 		onselect?: (e: Event) => void;
 	}
 	let {
-		messageId, sender, handle, text, children, embeds, timestamp, time, grouped, status = 'sent', onretry, edited, deleted,
+		messageId, sender, handle, text, children, embeds, timestamp, time, grouped: groupedProp, status = 'sent', onretry, edited, deleted,
 		system: systemProp, scope: scopeProp, mention, pinged, highlighted, density = 'cozy', actions, footer, replyTo, onjumpto,
 		reactions, reacting, palette, canReact, onreact, onopenreact, onclosereact, selectMode, selected, onselect
 	}: Props = $props();
@@ -71,6 +71,8 @@
 	const system = $derived(systemProp ?? String(sid || '').startsWith('~'));
 	const scope = $derived(scopeProp || (sid === '~server' ? 'server' : sid === '~room' ? 'room' : sid === '~private' ? 'private' : undefined));
 	const showHandle = $derived(!!sid && sid !== name && (handle ?? density !== 'compact'));
+	const quoted = $derived(!!replyTo && !deleted);
+	const grouped = $derived(groupedProp && !quoted);
 	const t = $derived(times(timestamp, time));
 	const sel = $derived(!!selectMode);
 	const noticeTitle = $derived(s.name && s.name !== sid ? `${s.name} (${sid})` : sid);
@@ -98,7 +100,7 @@
 	{#if text}<time class={className} datetime={t.iso} title={t.exact}>{text}</time>{/if}
 {/snippet}
 {#snippet meta()}{#if edited && !deleted}<span>edited</span>{/if}{#if status === 'pending'}<span>Sending…</span>{/if}{/snippet}
-{#snippet quote()}{#if replyTo && !deleted}<ReplyPreview onjump={onjumpto} {...replyTo} />{/if}{/snippet}
+{#snippet quote()}{#if replyTo && quoted}<div class="ap-msg-reply"><ReplyPreview onjump={onjumpto} {...replyTo} /></div>{/if}{/snippet}
 {#snippet embedList()}
 	{#if embeds && embeds.length}<div class="ap-msg-embeds">{#each embeds as e, i (e.embed_id || i)}<Embed {...e} />{/each}</div>{/if}
 {/snippet}
@@ -127,6 +129,7 @@
 {:else if density === 'compact'}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 	<article class={cls} data-message-id={messageId} tabindex="-1" onclick={rowClick}>
+		{@render quote()}
 		{@render check()}
 		<time class="ap-msg-ctime" datetime={t.iso} title={t.exact}>{t.short}</time>
 		<div class="ap-msg-main">
@@ -134,7 +137,6 @@
 			{#if showHandle}<span class="ap-msg-handle">@{sid}</span>{/if}
 			<RoleBadges roles={s.roles} />
 			{#if deleted}{@render tomb()}{:else}
-				{@render quote()}
 				{@render textBody('span')}
 				{#if hasMeta}<span class="ap-msg-meta">{@render meta()}</span>{/if}
 				{@render embedList()}
@@ -147,6 +149,7 @@
 {:else}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 	<article class={cls} data-message-id={messageId} tabindex="-1" onclick={rowClick}>
+		{@render quote()}
 		{@render check()}
 		<div class="ap-msg-gutter">
 			{#if grouped}<time class="ap-msg-hovertime" datetime={t.iso} title={t.exact}>{t.compact}</time>
@@ -162,7 +165,6 @@
 				</header>
 			{:else if hasMeta}<div class="ap-msg-meta">{@render meta()}</div>{/if}
 			{#if deleted}<div class="ap-msg-tomb">Message deleted</div>{:else}
-				{@render quote()}
 				{#if children || text != null}{@render textBody('div')}{/if}
 				{@render embedList()}
 				{@render failed()}

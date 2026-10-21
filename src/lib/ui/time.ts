@@ -124,8 +124,13 @@ function sameDay(a: Date, b: Date): boolean {
 	return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-/** A follower in a group: same sender as the previous message, within the window. */
+/**
+ * A follower in a group: same sender as the previous message, within the
+ * window. A reply never is: its quote sits above the sender's name, its spine
+ * leading into their avatar.
+ */
 export function isGrouped(previous: MessageRecord | undefined, event: MessageRecord): boolean {
+	if (event.reply_to && !event.deleted) return false;
 	if (!previous || !previous.from?.user_id || previous.from.user_id !== event.from?.user_id) return false;
 	const before = eventMillis(previous);
 	const after = eventMillis(event);

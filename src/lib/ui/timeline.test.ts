@@ -38,6 +38,13 @@ describe('grouping', () => {
 		expect(isGrouped(undefined, message(0, 'alice'))).toBe(false);
 	});
 
+	it('starts a new group at a reply, unless it was deleted', () => {
+		const reply = { reply_to: { message_id: String(base) } };
+		expect(isGrouped(message(0, 'alice'), message(1000, 'alice', reply))).toBe(false);
+		expect(isGrouped(message(0, 'alice'), message(1000, 'alice', { ...reply, deleted: true }))).toBe(true);
+		expect(isGrouped(message(1000, 'alice', reply), message(2000, 'alice'))).toBe(true);
+	});
+
 	it('labels days relative to now', () => {
 		const now = new Date(base + 6 * 60 * 60 * 1000);
 		expect(dayLabel(message(0, 'alice'), now)).toBe('Today');

@@ -722,8 +722,12 @@ with their `user_id`, §4.2.2), where you may add people: while
 decides each (it adds no guests); the moves stand either way, and the toast says
 how many authors weren't added and why. Escape leaves select mode.
 
-A reply's quote may point into another room: clicking it opens that room or
-thread, loading the thread's history if needed, and highlights the message.
+A reply's quote is one line above the sender's name (the quoted sender's
+avatar and name, then the start of their message), with a line from the
+reply's avatar bending into it. A reply always starts a new sender group, so
+it always has that avatar and name. The quote may point into another room:
+clicking it opens that room or thread, loading the thread's history if needed,
+and highlights the message.
 
 With the `reactions` capability, a message's **React** action opens the full emoji
 picker right away, its frequently used row starting from emoji-mart's own
