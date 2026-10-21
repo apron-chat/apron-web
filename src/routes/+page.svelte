@@ -57,6 +57,7 @@
 	import { idDateTime, idIso, idTime } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
+	import { trackKeyboard } from '$lib/ui/viewport';
 	import { linkPreviews } from '$lib/ui/link-previews';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
@@ -724,22 +725,30 @@
 	// The timeline is anchored at its bottom edge, as chat apps are: when something in the pane takes more or less
 	// room below it (the composer growing a line, a reply bar, staged files, the typing row), what sat just above the
 	// composer stays there, pushed up rather than covered: at the latest message it stays there, and scrolled back,
-	// the view moves with the edge. Before the frame paints. The window resizing (the pane's own height) is left be.
+	// the view moves with the edge. Before the frame paints. The window resizing (the pane's own height) is left be,
+	// but not an on-screen keyboard coming up or going down (trackKeyboard), which takes room as the composer does.
 	$effect(() => {
 		const scroll = messageScroll;
 		const pane = scroll?.closest<HTMLElement>('.ap-shell-main');
 		if (!scroll || !pane) return;
+		const root = document.documentElement;
 		let height = scroll.clientHeight;
 		let paneHeight = pane.clientHeight;
+		let keyboardHeight = root.style.getPropertyValue('--app-height');
 		const observer = new ResizeObserver(() => {
 			const next = scroll.clientHeight;
 			const change = height - next;
 			const paneChanged = pane.clientHeight !== paneHeight;
+			const keyboardChanged = root.style.getPropertyValue('--app-height') !== keyboardHeight;
 			height = next;
 			paneHeight = pane.clientHeight;
-			if (!change || paneChanged) return;
+			keyboardHeight = root.style.getPropertyValue('--app-height');
+			if (!change || (paneChanged && !keyboardChanged)) return;
 			if (stickToBottom) scrollToLatest();
 			else scroll.scrollTop += change;
+			// A message being edited stays in view over the keyboard.
+			const active = document.activeElement;
+			if (keyboardChanged && active instanceof HTMLElement && scroll.contains(active)) active.scrollIntoView({ block: 'nearest' });
 		});
 		observer.observe(scroll);
 		observer.observe(pane);
@@ -793,6 +802,8 @@
 			observer?.disconnect();
 		};
 	});
+
+	onMount(() => trackKeyboard());
 
 	onMount(() => {
 		passkeyUnavailable = passkeySupportError();
@@ -2562,6 +2573,14 @@
 	 */
 	.app { --corner: calc(var(--space-3) + 28px + var(--space-2)); --slide-time: 240ms; --slide-ease: cubic-bezier(0.2, 0, 0, 1); height: 100dvh; min-height: 100%; position: relative; overflow: clip; }
 	.slides { transition: grid-template-columns var(--slide-time) var(--slide-ease); }
+	/*
+	 * While an on-screen keyboard is up (trackKeyboard), the app is the part of the page above it: its header stays at
+	 * the top and the composer sits on the keyboard, rather than the browser panning the page up under the status bar.
+	 * Fixed, so it stays put however the browser scrolls the page behind it; moved down as far as the browser panned
+	 * (by top, not a transform, which would make it the box its own fixed popovers are placed in).
+	 */
+	:global(html[data-keyboard]) .app { position: fixed; top: var(--app-top); left: 0; right: 0; height: var(--app-height); min-height: 0; }
+	:global(html[data-keyboard]) .app :global(.ap-composer) { margin-bottom: var(--space-2); }
 	/* The rooms list's toggle sits over its header, then over the room's once it's shut: the room's keeps clear of it. */
 	.app :global(.ap-shell-sidehead) { padding-left: var(--corner); }
 	.side-collapsed :global(.ap-roomhead) { padding-left: var(--corner); }

@@ -332,7 +332,8 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-shell-sidehead { display: flex; align-items: center; height: var(--header-h); padding: 0 var(--space-4); border-bottom: 1px solid var(--line); font-size: var(--text-body); line-height: 20px; font-weight: 600; box-sizing: border-box; }
 .ap-shell-sidebody { flex: 1; overflow: auto; padding: var(--space-3) var(--space-2); }
 .ap-shell-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; container-type: inline-size; }
-.ap-timeline { flex: 1; overflow: auto; padding-bottom: var(--space-2); }
+/* Scrolling past either end stays in the timeline, rather than carrying on to the page (which a phone's keyboard lets scroll). */
+.ap-timeline { flex: 1; overflow: auto; overscroll-behavior: contain; padding-bottom: var(--space-2); }
 
 /* Thread rows nested under their room, and the open-thread header breadcrumb */
 .ap-room-nested { padding: 3px var(--space-3) 3px calc(var(--space-3) + var(--space-4)); font-size: var(--text-ui); line-height: 18px; align-items: flex-start; }
@@ -782,3 +783,9 @@ a.ap-embed-ogcard:hover { background: var(--bg-300); }
 .ap-status-retry { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-profedit-avbtns { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
 .ap-profedit-remove { font-size: var(--text-sm); color: var(--ink-muted); }
+/* iOS zooms the page into a field set under 16px as it takes focus, and leaves it zoomed and panned (the composer cut
+   off at the left over the keyboard), so every field types at least that large there. Important, to win over the
+   smaller sizes set on particular fields; -webkit-touch-callout is iOS's alone. */
+@supports (-webkit-touch-callout: none) {
+	:is(input, textarea, select, [contenteditable]:not([contenteditable='false'])) { font-size: var(--text-field-ios) !important; }
+}

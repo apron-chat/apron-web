@@ -255,13 +255,24 @@ In the composer, Enter sends and Shift+Enter starts a new line. On a phone or
 tablet (a touch screen with no pointer that hovers) Enter starts a new line
 instead, as mobile chat apps do, since an on-screen keyboard has no
 Shift+Enter; the Send button sends. Where an autocomplete below offers Enter
-to pick, it picks either way.
+to pick, it picks either way. Pressing Send leaves the focus in the
+field, so a phone's keyboard stays up between messages. However long the
+room or thread's name, the field's placeholder takes one line, cut short.
 
 The timeline is anchored at its bottom edge. When the area below it grows or
 shrinks (the composer taking another line, a reply bar, staged files, the
 typing row), the messages just above the composer stay in view, pushed up
 rather than covered: at the latest message it stays there, and scrolled back,
 the view moves with the edge. Resizing the window keeps the view where it is.
+
+A phone's on-screen keyboard covers the page rather than resizing it, and the
+browser pans the page to keep the field in view. While it's up, the app is
+fitted to what's left above it instead: the header stays at the top, the
+composer sits just above the keyboard, and the timeline is anchored as above,
+so the latest message (or a message being edited) stays in view. Scrolling
+past either end of the timeline doesn't carry on to the page. On iPhone and
+iPad, fields type at 16px at least, so Safari doesn't zoom the page into them
+as they take focus.
 
 Mentions follow the `@user_id` convention ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)). Typing `@` in the
 composer opens the mention picker over the room's members (from the room's
