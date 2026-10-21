@@ -85,6 +85,8 @@ describe('read positions', () => {
 		const positions = new ReadPositions(() => ada);
 		positions.read('general', '10');
 		expect(positions.through(room('general', []), me)).toBe('10');
+		// Reading storage again keeps what is only kept here.
+		expect(positions.through(room('general', []), me, true)).toBe('10');
 	});
 });
 

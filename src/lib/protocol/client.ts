@@ -1916,8 +1916,8 @@ export class ChatClient {
 		const current = this.readCursor(roomId);
 		if (current !== undefined && compareLogIds(messageId, current) <= 0) return;
 		this.setReadCursor(roomId, this.you!.user_id, messageId);
-		// The cursor still moves here (it places the New divider); a server that
-		// keeps no read cursors (`ext:settings`) would only be charged a frame for it.
+		// The cursor still moves here (the page reads it, with what it keeps itself); a
+		// server that keeps no read cursors (`ext:settings`) would only be charged a frame for it.
 		if (serverSettings(this.server).read_cursors) {
 			this.sendFrame({ method: 'activity', params: { room_id: roomId, read_message_id: messageId } });
 		}

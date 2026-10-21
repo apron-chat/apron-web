@@ -11,8 +11,9 @@ import { advanceReadPositions, loadReadPositions, readPositionKey } from './stor
  * position is the furthest of what you read here (the latest message in
  * view), your read cursor as the server reported it (§4.6), and your own
  * newest message: one sent from another device says you had read the room
- * up to it. It only moves forward. Kept per account (`notifyAccount`), a
- * server's guests sharing one; nothing here is sent to the server.
+ * up to it. It only moves forward. Kept per account (`notifyAccount`), the
+ * guests on a server without a kept session sharing one; nothing here is
+ * sent to the server.
  */
 export class ReadPositions {
 	/** By `readPositionKey`; loaded from storage on first use. */
@@ -28,7 +29,7 @@ export class ReadPositions {
 	 * `fresh` reads what is kept again first, for what another tab read since.
 	 */
 	through(room: RoomSnapshot, me: Identity | undefined, fresh = false): string | undefined {
-		if (fresh) this.kept = undefined;
+		if (fresh && this.kept) this.merge(loadReadPositions());
 		const read = furthest(this.positions().get(readPositionKey(this.account(), room.id)), room.readMessageId);
 		return furthest(read, newestOwn(room.timeline, me, read));
 	}
@@ -55,6 +56,15 @@ export class ReadPositions {
 		this.advance(moved);
 	}
 
+	/** Takes each of `positions` that is further than the one kept here. */
+	private merge(positions: Record<string, string>): void {
+		const kept = this.positions();
+		for (const [key, id] of Object.entries(positions)) {
+			const current = kept.get(key);
+			if (current === undefined || compareLogIds(id, current) > 0) kept.set(key, id);
+		}
+	}
+
 	private positions(): Map<string, string> {
 		this.kept ??= new Map(Object.entries(loadReadPositions()));
 		return this.kept;
@@ -65,10 +75,8 @@ export class ReadPositions {
 		positions = Object.fromEntries(Object.entries(positions).filter(([key, id]) => !kept.has(key) || compareLogIds(id, kept.get(key)!) > 0));
 		if (!Object.keys(positions).length) return;
 		// Kept here too, as storage may be off (private mode, a full quota, `/__preview`); and what another tab read since.
-		for (const [key, id] of [...Object.entries(positions), ...Object.entries(advanceReadPositions(positions))]) {
-			const current = kept.get(key);
-			if (current === undefined || compareLogIds(id, current) > 0) kept.set(key, id);
-		}
+		this.merge(positions);
+		this.merge(advanceReadPositions(positions));
 	}
 }
 
