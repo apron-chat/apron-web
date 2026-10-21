@@ -774,7 +774,8 @@
 				<Smile size={18} aria-hidden="true" />
 			</button>
 		</span>
-		<button class="ap-btn ap-btn-primary ap-btn-sm" data-testid="send-button" type="submit" aria-label={command ? 'Run command' : 'Send message'} disabled={disabled || recording || (!value.trim() && files.length === 0)}>{command ? 'Run' : 'Send'}</button>
+		<!-- Pressing Send leaves the focus in the field, so a phone's keyboard stays up between messages rather than dropping and coming back. -->
+		<button class="ap-btn ap-btn-primary ap-btn-sm" data-testid="send-button" type="submit" onmousedown={(event) => event.preventDefault()} aria-label={command ? 'Run command' : 'Send message'} disabled={disabled || recording || (!value.trim() && files.length === 0)}>{command ? 'Run' : 'Send'}</button>
 	</form>
 </div>
 
@@ -788,8 +789,9 @@
 	.embed-slot :global(.ap-embed) { width: 100%; min-width: 0; }
 	.reply-draft span { min-width: 0; overflow-wrap: anywhere; }
 	/* The field is an editable div so mentions can be chips; it sizes like the design system's textarea. */
-	.field { height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
-	.field-empty::before { content: attr(data-placeholder); color: var(--ink-muted); pointer-events: none; }
+	.field { position: relative; height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+	/* On one line, however long the room or thread's name: out of the flow, over the field's padding, cut short. */
+	.field-empty::before { content: attr(data-placeholder); position: absolute; inset: 0; padding: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-muted); pointer-events: none; }
 	.field :global(.ap-mention) { white-space: nowrap; cursor: default; user-select: all; }
 	/* The emoji button reads as pressed while its picker is open. */
 	.emoji[aria-expanded='true'] { background: var(--bg-300); color: var(--ink); }

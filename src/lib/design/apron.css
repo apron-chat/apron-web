@@ -332,7 +332,8 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-shell-sidehead { display: flex; align-items: center; height: var(--header-h); padding: 0 var(--space-4); border-bottom: 1px solid var(--line); font-size: var(--text-body); line-height: 20px; font-weight: 600; box-sizing: border-box; }
 .ap-shell-sidebody { flex: 1; overflow: auto; padding: var(--space-3) var(--space-2); }
 .ap-shell-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; container-type: inline-size; }
-.ap-timeline { flex: 1; overflow: auto; padding-bottom: var(--space-2); }
+/* Scrolling past either end stays in the timeline, rather than carrying on to the page (which a phone's keyboard lets scroll). */
+.ap-timeline { flex: 1; overflow: auto; overscroll-behavior: contain; padding-bottom: var(--space-2); }
 
 /* Thread rows nested under their room, and the open-thread header breadcrumb */
 .ap-room-nested { padding: 3px var(--space-3) 3px calc(var(--space-3) + var(--space-4)); font-size: var(--text-ui); line-height: 18px; align-items: flex-start; }
