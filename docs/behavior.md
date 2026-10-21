@@ -559,10 +559,22 @@ Without the capability, `/` text is an ordinary message.
 
 With the `activity` capability, reading the latest message of a room advances your
 read cursor (`read_message_id`), which the server syncs across your
-connections. Opening a room places a **New** divider above the first message
-after the cursor as it was when you arrived; it stays put while you read. A
-server whose settings say `read_cursors: false` (below) keeps no cursors: the
-cursor still moves here, for the divider, but isn't sent.
+connections. A server whose settings say `read_cursors: false` (below) keeps
+no cursors: the cursor still moves here, but isn't sent.
+
+Whatever the server offers, this device keeps how far you have read each room
+and thread (a thread's own) for the next visit, in `localStorage`, per account
+(a server's guests share one): your read position. It is the furthest of the
+latest message you had in view here, your read cursor as the server reports
+it, and your own newest message, since one sent from another device says you
+had read the room up to it. It only moves forward, and nothing of it is sent.
+Opening a room or thread places a **New** divider above the first message after
+your read position as it was when you arrived; it stays put while you read. The
+pane opens at the divider, just below the top with what is new under it and
+the jump button counting it, rather than at the latest message, unless
+something moved it first (a jump to a message, or your own scroll). Only once
+you reach the latest message does your read position, and your read cursor,
+move past what was new.
 
 With the `rooms` capability, rooms come by request ([PROTOCOL.md §4.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#42-rooms)): right behind
 `auth`, without waiting for its result ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), the client lists

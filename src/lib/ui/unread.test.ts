@@ -61,6 +61,14 @@ describe('unread tracking', () => {
 		tracker.observe([room('general', []), room('random', [message(20, 'random', 'ada', { deleted: true })])], me, 'general', true);
 		expect(tracker.total).toBe(0);
 	});
+
+	it('clears arrivals up to how far you have read, as given', () => {
+		const tracker = new UnreadTracker();
+		tracker.observe([room('general', [], { latestLogId: '10' }), room('random', [], { latestLogId: '10' })], me, 'general', true);
+		const random = room('random', [message(20, 'random'), message(21, 'random'), message(22, 'random')]);
+		tracker.observe([room('general', []), random], me, 'general', true, () => '21');
+		expect(tracker.byRoom).toEqual({ random: 1 });
+	});
 });
 
 describe('countElsewhere', () => {

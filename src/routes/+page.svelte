@@ -42,6 +42,7 @@
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker, notificationsByRoom } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
+	import { ReadPositions } from '$lib/ui/read-positions';
 	import { isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
@@ -103,6 +104,8 @@
 
 	/** How long a jump waits for its target to render (a thread's history may still be loading). */
 	const JUMP_WAIT_MS = 4000;
+	/** Room left above the New divider when a pane opens at it, clear of the floating day. */
+	const LAND_MARGIN_PX = 48;
 	/**
 	 * Opening a room renders its newest items first, enough to fill the pane,
 	 * and the older ones a chunk per frame after that paints, so switching
@@ -130,6 +133,8 @@
 	let audibleMentions = $state(0);
 	const incomingMessages = new IncomingMessageTracker();
 	const unread = new UnreadTracker();
+	/** How far you have read each room and thread, kept for the account (or this server's guests) on this device. */
+	const readPositions = new ReadPositions(() => notifyKey);
 	const presence = new PagePresence();
 	const floatingDay = new FloatingDay();
 	const drafts = new PaneDrafts();
@@ -262,10 +267,13 @@
 	/** `pendingJoin` was created as a private room: its record must say `private: true` before it is used (§4.2.4). */
 	let pendingPrivate = $state(false);
 	/**
-	 * Where the New divider sits in the open pane: after your read cursor as it
-	 * was when the pane opened (§4.6). It stays put while you read.
+	 * Where the New divider sits in the open pane: after your read position
+	 * (`ReadPositions`) as it was when the pane opened. It stays put while you
+	 * read. `landed` once the pane has opened at it (or stayed at the latest).
 	 */
-	let newDivider = $state<{ room: string; after?: string; fixed: boolean }>({ room: '', fixed: false });
+	let newDivider = $state<{ room: string; after?: string; fixed: boolean; landed: boolean }>({ room: '', fixed: false, landed: false });
+	/** The visit to a pane (its `newDivider`) that `landAtDivider` is opening at its divider. */
+	let landing: object | undefined;
 	/** The NewThreadDialog, asking for a new thread's title and summary, until it closes. */
 	let newThread = $state<NewThread | undefined>();
 	/** Threads this page started, by the message they were started from: Start thread again opens the same one. */
@@ -470,9 +478,16 @@
 		for (const event of notificationsByRoom(selected, mentioned)) untrack(() => void notifyMessage(event, mentioned.has(event.message_id)));
 	});
 
+	// Your read cursors as the server reports them, and your own newest messages, move your read positions.
 	$effect(() => {
 		if (session.showingHeld) return;
-		unread.observe(session.rooms, session.you, paneRoom?.id, latestVisible && presence.visible);
+		readPositions.observe(session.rooms, session.you);
+	});
+
+	$effect(() => {
+		if (session.showingHeld) return;
+		const me = session.you;
+		unread.observe(session.rooms, me, paneRoom?.id, latestVisible && presence.visible, (room) => readPositions.through(room, me));
 	});
 
 	// Signed in to an installed app where push works: offer notifications now, not at the first mention.
@@ -587,22 +602,32 @@
 		untrack(() => presence.noteMentions(arrived, playSound, quiet));
 	});
 
-	// The New divider is placed once per visit, from the read cursor the server kept.
+	// The New divider is placed once per visit, from your read position: kept on this device, the server's cursor, or your newest message.
 	$effect(() => {
 		const room = paneRoom;
 		if (!room) return;
-		if (newDivider.room !== room.id) newDivider = { room: room.id, fixed: false };
-		else if (!newDivider.fixed && room.loaded) newDivider = { room: room.id, after: room.readMessageId, fixed: true };
+		if (newDivider.room !== room.id) newDivider = { room: room.id, fixed: false, landed: false };
+		else if (!newDivider.fixed && room.loaded) newDivider = { room: room.id, after: untrack(() => readPositions.through(room, session.you, true)), fixed: true, landed: false };
 	});
 
-	// Reading the latest message advances your read cursor (capability `activity`); the server syncs it to your other devices.
+	// Then the pane opens at it, where you left off, unless something already moved it from the latest.
+	$effect(() => {
+		const room = paneRoom;
+		if (!room || newDivider.room !== room.id || !newDivider.fixed || newDivider.landed) return;
+		const before = newDividerBefore;
+		untrack(() => void landAtDivider(room.id, before));
+	});
+
+	// Reading the latest message advances your read position, and your read cursor (capability `activity`),
+	// which the server syncs to your other devices.
 	$effect(() => {
 		const room = paneRoom;
 		const last = messages[messages.length - 1];
-		// Only once this pane's divider is in place: advancing first would hide what was new.
-		if (!client || !room || !last || !latestVisible || !presence.visible || !room.loaded || !session.ready || newDivider.room !== room.id || !newDivider.fixed) return;
+		// Only once this pane has opened at its divider: advancing first would hide what was new.
+		if (!client || !room || !last || !latestVisible || !presence.visible || !room.loaded || !session.ready || newDivider.room !== room.id || !newDivider.landed) return;
 		const looking = !presence.away;
 		untrack(() => {
+			readPositions.read(room.id, last.message_id);
 			client?.markRead(room.id, last.message_id);
 			// What you just read here no longer needs its notifications on this device. Only once
 			// you're looking (focused too): an unfocused window shows its own desktop notification
@@ -1966,10 +1991,50 @@
 		highlightTimer = setTimeout(() => (highlightedId = undefined), 1600);
 	}
 
+	/**
+	 * Opens the pane at its New divider, near the top with what is new below
+	 * it, as long as it still shows the latest: a jump or the reader may have
+	 * moved it first. Either way the pane has landed after.
+	 */
+	async function landAtDivider(roomId: string, before: string | undefined): Promise<void> {
+		const visit = newDivider;
+		if (landing === visit) return;
+		landing = visit;
+		try {
+			if (before === undefined || !stickToBottom) return;
+			const index = timeline.findIndex((item) => item.kind === 'message' && item.event.message_id === before);
+			if (index >= 0 && index < reveal.hidden) reveal.from(index);
+			await tick();
+			const divider = () => messageScroll?.querySelector<HTMLElement>('.ap-divider-new') ?? undefined;
+			await until(() => Boolean(divider()), JUMP_WAIT_MS);
+			const node = divider();
+			const scroller = messageScroll;
+			if (!node || !scroller || !stickToBottom || newDivider !== visit || paneRoom?.id !== roomId) return;
+			stickToBottom = false;
+			scroller.scrollTop += node.getBoundingClientRect().top - scroller.getBoundingClientRect().top - LAND_MARGIN_PX;
+			lastScrollTop = scroller.scrollTop;
+			// Settled here, not by the next scroll event or intersection, so nothing reads the pane as at its latest meanwhile.
+			stickToBottom = atLatest(scroller);
+			const items = scroller.querySelectorAll<HTMLElement>('[data-timeline-item]');
+			const latest = items[items.length - 1]?.getBoundingClientRect();
+			latestVisible = !latest || latest.top < scroller.getBoundingClientRect().bottom;
+			const seen = messages.findIndex((event) => event.message_id === before);
+			if (!latestVisible && seen >= 0) seenCount = seen;
+		} finally {
+			if (landing === visit) landing = undefined;
+			if (newDivider === visit) newDivider = { ...visit, landed: true };
+		}
+	}
+
 	function jumpToLatest(): void {
 		stickToBottom = true;
 		mentions.clearUnseen();
 		scrollToLatest();
+	}
+
+	/** Whether the list is scrolled to (near enough) its end. */
+	function atLatest(scroller: HTMLElement): boolean {
+		return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 96;
 	}
 
 	function scrollToLatest(): void {
@@ -1999,7 +2064,7 @@
 			});
 			return;
 		}
-		const atBottom = messageScroll.scrollHeight - messageScroll.scrollTop - messageScroll.clientHeight < 96;
+		const atBottom = atLatest(messageScroll);
 		if (top < OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
 		if (!atBottom && stickToBottom) seenCount = messages.length;
 		stickToBottom = atBottom;
