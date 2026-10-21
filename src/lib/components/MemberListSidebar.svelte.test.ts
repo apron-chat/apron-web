@@ -42,7 +42,7 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChan
 /** Each section's heading and its members' IDs, in order. */
 function sections() {
 	return [...document.querySelectorAll<HTMLElement>('section.member-section')].map((section) => [
-		section.querySelector('h3')?.textContent?.replace(/^\w/, (letter) => letter.toUpperCase()),
+		section.querySelector('h3')?.textContent,
 		[...section.querySelectorAll<HTMLLIElement>('li.member')].map((row) => row.dataset.user)
 	]);
 }
@@ -64,46 +64,27 @@ describe('MemberListSidebar', () => {
 		expect(sections()).toEqual([['Online — 7', ['ada', 'fay', 'di', 'cy', 'eve', 'al', 'zed']], ['Offline — 1', ['bo']]]);
 	});
 
-	it('groups online members by role, then the rest Online, then everyone offline whatever their role', () => {
-		render([
-			ada,
-			{ user_id: 'bo', name: 'Bo', status: 'online', roles: ['helper'] },
-			{ user_id: 'cy', name: 'Cy', status: 'idle', roles: ['bot'] },
-			{ user_id: 'di', name: 'Di', status: 'dnd', roles: ['mod', 'helper'] },
-			{ user_id: 'eve', name: 'Eve', status: 'online', roles: ['admin'] },
-			{ user_id: 'fay', name: 'Fay', status: 'offline', roles: ['admin'] }
-		]);
-		expect(sections()).toEqual([
-			['Admin — 1', ['eve']],
-			['Mod — 1', ['di']],
-			['Helper — 1', ['bo']],
-			['Bot — 1', ['cy']],
-			['Online — 1', ['ada']],
-			['Offline — 1', ['fay']]
-		]);
-		// A role is shown as written; only the page's styling raises its first letter.
-		expect(document.querySelector('[data-section="role:admin"] h3')?.textContent).toBe('admin — 1');
+	it('keeps role badges on each row, in Online or Offline whatever the role', () => {
+		const rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'offline', roles: ['admin'] }, { user_id: 'cy', name: 'Cy', status: 'online', roles: ['bot'] }]);
+		expect(sections()).toEqual([['Online — 2', ['ada', 'cy']], ['Offline — 1', ['bo']]]);
+		expect(rows.map((row) => row.querySelector('[data-testid="roles"]')?.textContent ?? '')).toEqual(['', 'bot', 'admin']);
 	});
 
-	it('calls the rest Members, with no Offline, where no member has a status', () => {
-		render([{ user_id: 'ada', name: 'Ada' }, { user_id: 'bo', name: 'Bo', roles: ['admin'] }], { you: { user_id: 'ada', name: 'Ada' } });
-		expect(sections()).toEqual([['Admin — 1', ['bo']], ['Members — 1', ['ada']]]);
+	it('has one list, unheaded and undimmed, where no member has a status', () => {
+		const rows = render([{ user_id: 'ada', name: 'Ada' }, { user_id: 'bo', name: 'Bo', roles: ['admin'] }], { you: { user_id: 'ada', name: 'Ada' } });
+		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'bo']);
+		expect(document.querySelector('.member-section-head')).toBeNull();
 	});
 
-	it('skips online and offline on a server without status (§4.5): roles, then Members, none dimmed', () => {
+	it('skips online and offline on a server without status (§4.5): one list, unheaded, none dimmed', () => {
 		const rows = render([
 			{ user_id: 'ada', name: 'Ada' },
 			{ user_id: 'bo', name: 'Bo', roles: ['admin'] },
 			{ user_id: 'cy', name: 'Cy' }
 		], { you: { user_id: 'ada', name: 'Ada' }, capabilities: blankSnapshot().capabilities });
-		expect(sections()).toEqual([['Admin — 1', ['bo']], ['Members — 2', ['ada', 'cy']]]);
-		expect(rows.some((row) => row.classList.contains('offline') || row.querySelector('.ap-presence'))).toBe(false);
-	});
-
-	it('heads nothing where there are neither roles nor presence: one Members would repeat the header', () => {
-		const rows = render([{ user_id: 'ada', name: 'Ada' }, { user_id: 'bo', name: 'Bo' }], { you: { user_id: 'ada', name: 'Ada' }, capabilities: blankSnapshot().capabilities });
-		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'bo']);
+		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'bo', 'cy']);
 		expect(document.querySelector('.member-section-head')).toBeNull();
+		expect(rows.some((row) => row.classList.contains('offline') || row.querySelector('.ap-presence'))).toBe(false);
 	});
 
 	it('dims offline members only, with a ring; no status shows no dot and is not dimmed', () => {

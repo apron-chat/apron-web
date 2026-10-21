@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareRoles, memberSections, userIdToAdd } from './members';
+import { memberSections, userIdToAdd } from './members';
 
 describe('adding a member', () => {
 	it('takes exactly the user_id typed, with or without @', () => {
@@ -19,40 +19,28 @@ describe('adding a member', () => {
 });
 
 describe('member sections', () => {
-	type Person = { id: string; status?: string; roles?: string[] };
-	const sections = (people: Person[]) => memberSections(people, (person) => person.status, (person) => person.roles ?? []).map(({ label, people }) => [label, people.map((person) => person.id)]);
+	type Person = { id: string; status?: string };
+	const sections = (people: Person[], presence = true) => memberSections(people, (person) => person.status, presence).map(({ label, people }) => [label, people.map((person) => person.id)]);
 
-	it('orders roles by convention, admin and mod first and bot last, others by name between', () => {
-		expect(['bot', 'zeta', 'Alpha', 'moderator', 'mod', 'admin'].sort(compareRoles)).toEqual(['admin', 'mod', 'moderator', 'Alpha', 'zeta', 'bot']);
-	});
-
-	it('puts each online member under their first role in that order, keeping the order they came in', () => {
+	it('puts offline and invisible members under Offline, everyone else under Online, keeping the order they came in', () => {
 		expect(sections([
-			{ id: 'a', status: 'online', roles: ['helper', 'admin'] },
-			{ id: 'b', status: 'idle', roles: ['helper'] },
-			{ id: 'c', status: 'online' },
-			{ id: 'd', status: 'brb', roles: ['bot'] },
-			{ id: 'e', status: 'online', roles: ['helper'] }
-		])).toEqual([['admin', ['a']], ['helper', ['b', 'e']], ['bot', ['d']], ['Online', ['c']]]);
-	});
-
-	it('lumps offline and invisible members into Offline, roles or not; no status stays online', () => {
-		expect(sections([
-			{ id: 'a', status: 'offline', roles: ['admin'] },
-			{ id: 'b' },
+			{ id: 'a', status: 'offline' },
+			{ id: 'b', status: 'idle' },
 			{ id: 'c', status: 'invisible' },
-			{ id: 'd', status: '' }
-		])).toEqual([['Online', ['b', 'd']], ['Offline', ['a', 'c']]]);
+			{ id: 'd' },
+			{ id: 'e', status: 'dnd' },
+			{ id: 'f', status: 'brb' }
+		])).toEqual([['Online', ['b', 'd', 'e', 'f']], ['Offline', ['a', 'c']]]);
 	});
 
-	it('has no online or offline without presence, even for a status kept from before', () => {
-		const people: Person[] = [{ id: 'a', status: 'offline', roles: ['admin'] }, { id: 'b', status: 'online' }, { id: 'c' }];
-		expect(memberSections(people, (person) => person.status, (person) => person.roles ?? [], false).map(({ label, people }) => [label, people.map((person) => person.id)]))
-			.toEqual([['admin', ['a']], ['Members', ['b', 'c']]]);
-	});
-
-	it('calls the rest Members where nobody has a status, and leaves out empty sections', () => {
-		expect(sections([{ id: 'a' }, { id: 'b', roles: ['admin'] }])).toEqual([['admin', ['b']], ['Members', ['a']]]);
+	it('leaves out an empty section', () => {
+		expect(sections([{ id: 'a', status: 'offline' }])).toEqual([['Offline', ['a']]]);
+		expect(sections([{ id: 'a', status: 'online' }])).toEqual([['Online', ['a']]]);
 		expect(sections([])).toEqual([]);
+	});
+
+	it('has one Members section without presence, or where nobody has a status, even for a status kept from before', () => {
+		expect(sections([{ id: 'a', status: 'offline' }, { id: 'b', status: 'online' }], false)).toEqual([['Members', ['a', 'b']]]);
+		expect(sections([{ id: 'a' }, { id: 'b', status: '' }])).toEqual([['Members', ['a', 'b']]]);
 	});
 });

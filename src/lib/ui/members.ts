@@ -10,56 +10,27 @@ export function userIdToAdd(typed: string): string | undefined {
 	return id && !/[\s\p{Cc}]/u.test(id) ? id : undefined;
 }
 
-/** A section of the member list: a role's online members, everyone else online, or everyone offline. */
+/** A section of the member list: everyone online, or everyone offline. */
 export interface MemberSection<T> {
-	key: string;
-	/** The role as written (§3.3.4), for a role's section. */
-	role?: string;
+	key: 'online' | 'offline' | 'members';
 	label: string;
 	people: T[];
 }
 
-/** Roles with a conventional rank lead, in this order; `bot` comes last, and any other role by name between. */
-const LEADING_ROLES = ['admin', 'mod', 'moderator'];
-const TRAILING_ROLES = ['bot'];
-
-/** How roles' sections are ordered: no role outranks another in the protocol (§3.3.4), so by convention, then by name. */
-export function compareRoles(a: string, b: string): number {
-	const rank = (role: string) => {
-		const lead = LEADING_ROLES.indexOf(role);
-		if (lead >= 0) return lead;
-		return TRAILING_ROLES.includes(role) ? LEADING_ROLES.length + 1 : LEADING_ROLES.length;
-	};
-	return rank(a) - rank(b) || a.localeCompare(b, undefined, { sensitivity: 'base' }) || (a < b ? -1 : a > b ? 1 : 0);
-}
-
 /**
- * Members in sections, as Discord lists them: each role's online members
- * under that role (one with several under the first in role order), then
- * the rest online, then everyone offline (§4.5 `offline`, or your own
- * `invisible`), whatever their roles. A member with no status isn't known
+ * Members in sections, as Discord lists them: Online, then Offline (§4.5
+ * `offline`, or your own `invisible`). A member with no status isn't known
  * to be offline, so stays with the online ones. Without presence (a server
  * without capability `status`, or no member with a status), there is no
- * online or offline: each role's members, then the rest as Members. Each
- * section keeps the order the people came in.
+ * online or offline: everyone is in one Members section. Each section keeps
+ * the order the people came in, and an empty one is left out.
  */
-export function memberSections<T>(people: readonly T[], statusOf: (person: T) => string | undefined, rolesOf: (person: T) => readonly string[], presence = true): MemberSection<T>[] {
-	const split = presence && people.some((person) => Boolean(statusOf(person)));
-	const roles = new Map<string, T[]>();
-	const online: T[] = [];
-	const offline: T[] = [];
-	for (const person of people) {
-		const status = split ? statusOf(person) : undefined;
-		if (status === 'offline' || status === 'invisible') {
-			offline.push(person);
-			continue;
-		}
-		const role = [...rolesOf(person)].sort(compareRoles)[0];
-		if (role === undefined) online.push(person);
-		else roles.set(role, [...(roles.get(role) ?? []), person]);
-	}
-	const sections: MemberSection<T>[] = [...roles].sort(([a], [b]) => compareRoles(a, b)).map(([role, people]) => ({ key: `role:${role}`, role, label: role, people }));
-	if (online.length) sections.push({ key: 'online', label: split ? 'Online' : 'Members', people: online });
-	if (offline.length) sections.push({ key: 'offline', label: 'Offline', people: offline });
-	return sections;
+export function memberSections<T>(people: readonly T[], statusOf: (person: T) => string | undefined, presence = true): MemberSection<T>[] {
+	if (!presence || !people.some((person) => Boolean(statusOf(person)))) return people.length ? [{ key: 'members', label: 'Members', people: [...people] }] : [];
+	const offline = (person: T) => statusOf(person) === 'offline' || statusOf(person) === 'invisible';
+	const sections: MemberSection<T>[] = [
+		{ key: 'online', label: 'Online', people: people.filter((person) => !offline(person)) },
+		{ key: 'offline', label: 'Offline', people: people.filter(offline) }
+	];
+	return sections.filter((section) => section.people.length);
 }

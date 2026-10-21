@@ -86,7 +86,7 @@ picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previ
 and `time.ts` read messages, `connection.ts` words the connection state, and
 `commands.ts` maps the composer's `/` commands to requests,
 `sign-in-link.ts` reads and scrubs a sign-in link (emailed, or the return from an external sign-in page) from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,
-`members.ts` reads the `user_id` typed to add a member and splits the member list into its role, Online and Offline sections (`memberSections`), and
+`members.ts` reads the `user_id` typed to add a member and splits the member list into Online and Offline (`memberSections`), and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences and read positions included (on this device only; nothing is synced),
 `session-cache.ts` keeps `SessionView`'s held view in IndexedDB per server, trimmed to

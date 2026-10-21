@@ -37,15 +37,8 @@
 	let members = $derived(byStatus([...(room?.members ?? [])].sort((a, b) =>
 		directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)
 	), statusOf));
-	/** A member's roles (§3.3.4), from the kept user object as their badges show them. */
-	function rolesOf(person: Identity): string[] {
-		const listed = directory.person(person)?.roles;
-		return Array.isArray(listed) ? listed.filter((role): role is string => typeof role === 'string' && role.trim() !== '') : [];
-	}
-	/** Each role's online members, the rest online, then offline, each in the order above; with no `status` capability (§4.5), only roles, then Members. */
-	let sections = $derived(memberSections(members, statusOf, rolesOf, session.snapshot.capabilities.status));
-	/** Only Members (no roles, no presence) would repeat the panel's own header and count, so it goes unheaded. */
-	let headed = $derived(sections.length > 1 || sections[0]?.role !== undefined || sections[0]?.label !== 'Members');
+	/** Online, then offline, each in the order above; with no `status` capability (§4.5), one list. */
+	let sections = $derived(memberSections(members, statusOf, session.snapshot.capabilities.status));
 	/** A large room's listing may hold only its most recently active members, with the total (§4.2.1). */
 	let total = $derived(room?.members === undefined ? undefined : Math.max(room.memberCount ?? 0, room.members.length));
 	let truncated = $derived(total !== undefined && room?.members !== undefined && total > room.members.length);
@@ -158,7 +151,8 @@
 				{#if truncated}<p class="muted" data-testid="member-list-truncated">Showing {members.length} of {total}: the most recently active</p>{/if}
 				{#each sections as section (section.key)}
 					<section class="member-section" data-section={section.key}>
-						{#if headed}<h3 class="member-section-head"><span class="member-section-name" class:role={section.role !== undefined}>{section.label}</span> — {section.people.length}</h3>{/if}
+						<!-- Without presence, one list under the panel's own header and count: a Members heading would repeat them. -->
+						{#if section.key !== 'members'}<h3 class="member-section-head">{section.label} — {section.people.length}</h3>{/if}
 						<ul class="members" aria-label={`${section.label} in ${room.title}`}>
 							{#each section.people as person (person.user_id)}
 								{@const name = directory.name(person)}
@@ -206,10 +200,7 @@
 	.add .ap-field { flex: 1; min-width: 0; height: 28px; font-size: var(--text-ui); }
 	.member-section + .member-section { margin-top: var(--space-4); }
 	/* As the rooms list's section headings, with the count after a dash. */
-	.member-section-head { margin: 0; padding: 0 var(--space-1) var(--space-1); color: var(--ink-muted); font-size: var(--text-sm); line-height: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	/* A role is shown as written (§3.3.4), only its first letter raised to match Online and Offline. */
-	.member-section-name.role { display: inline-block; max-width: 100%; vertical-align: bottom; overflow: hidden; text-overflow: ellipsis; }
-	.member-section-name.role::first-letter { text-transform: uppercase; }
+	.member-section-head { margin: 0; padding: 0 var(--space-1) var(--space-1); color: var(--ink-muted); font-size: var(--text-sm); line-height: 16px; font-weight: 600; }
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 	.member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
 	/* Role badges follow the name, as beside a message's sender; the remove button floats over the far right. */
