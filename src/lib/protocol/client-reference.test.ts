@@ -165,6 +165,17 @@ describe('ChatClient reference features', () => {
 		expect(general().readMessageId).toBe('31');
 	});
 
+	it('takes your kept read cursor as the server sends it after listing the room (§4.6)', async () => {
+		const room = { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '1724803312060', history_log_id: '10' };
+		await socket.greet(['history', 'rooms', 'activity'], { room, you: { user_id: 'alice' } });
+		// Right behind the room_list result, before the room's history: the New divider waits for that.
+		socket.receive({ method: 'activity', params: { room_id: 'general', from: { user_id: 'alice' }, typing: 8, read_message_id: '1724803312050' } });
+		const general = () => snapshot.rooms.find((entry) => entry.id === 'general')!;
+		expect(general()).toMatchObject({ readMessageId: '1724803312050', loaded: false });
+		await socket.reply('history', { more: false, latest_log_id: '1724803312060', history_log_id: '10' });
+		expect(general()).toMatchObject({ readMessageId: '1724803312050', loaded: true });
+	});
+
 	it('keeps your read cursor locally when the server keeps none (ext:settings)', async () => {
 		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], {
 			room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' },

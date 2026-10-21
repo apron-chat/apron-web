@@ -9,7 +9,8 @@ import { isOwn } from './messages';
  * mentions, a room's newest known log position when it is first seen is its
  * watermark, so history never counts. An arrival stops counting once you
  * have had the end of its room on screen (in a visible tab), or once your
- * read cursor moves past it, from this connection or another device.
+ * read cursor moves past it, from this connection or another device (or
+ * your own message after it does, sent from another device).
  */
 export class UnreadTracker {
 	/** Unread arrivals per room (threads are rooms of their own). */
@@ -21,9 +22,10 @@ export class UnreadTracker {
 
 	/**
 	 * Runs over every room after each snapshot; `pane` is the room (or thread)
-	 * the viewer is reading, `reading` whether its end is on screen in a visible tab.
+	 * the viewer is reading, `reading` whether its end is on screen in a visible tab,
+	 * and `readThrough` how far you have read a room (`ReadPositions.through`).
 	 */
-	observe(rooms: RoomSnapshot[], me: Identity | undefined, pane: string | undefined, reading: boolean): void {
+	observe(rooms: RoomSnapshot[], me: Identity | undefined, pane: string | undefined, reading: boolean, readThrough: (room: RoomSnapshot) => string | undefined = (room) => room.readMessageId): void {
 		if (!me) return;
 		const next: Record<string, number> = {};
 		for (const room of rooms) {
@@ -46,7 +48,7 @@ export class UnreadTracker {
 				const event = room.timeline.events[id];
 				if (event && !isOwn(event, me)) arrivals.push(id);
 			}
-			const read = room.readMessageId;
+			const read = readThrough(room);
 			arrivals = room.id === pane && reading ? [] : arrivals.filter((id) => {
 				const event = room.timeline.events[id];
 				return event !== undefined && !event.deleted && (read === undefined || compareLogIds(id, read) > 0);

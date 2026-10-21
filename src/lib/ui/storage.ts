@@ -1,4 +1,5 @@
-import { isJsonObject, type JsonObject } from '$lib/protocol/types';
+import { compareLogIds } from '$lib/protocol/reducer';
+import { isJsonObject, isLogId, type JsonObject } from '$lib/protocol/types';
 import { base64url } from '$lib/protocol/webauthn';
 import type { AppearancePreferences } from './appearance.svelte';
 
@@ -21,6 +22,8 @@ const KEY = {
 	otherThreads: 'apron.otherThreads',
 	/** The room and thread summaries put away with their ×, each kept as the fingerprint of the text put away. */
 	hiddenSummaries: 'apron.hiddenSummaries',
+	/** How far you have read each room and thread, by `readPositionKey`: the `message_id` read through. */
+	readPositions: 'apron.readPositions',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
 } as const;
@@ -31,6 +34,8 @@ export type SidebarPrefs = { width: number; collapsed: boolean };
 const RECENT_SERVERS_MAX = 5;
 /** The most summaries kept put away; the ones put away longest ago show again first. */
 const HIDDEN_SUMMARIES_MAX = 200;
+/** The most read positions kept; the ones moved longest ago go first. */
+const READ_POSITIONS_MAX = 500;
 
 function read(key: string): string | null {
 	try {
@@ -170,6 +175,36 @@ function summaryFingerprint(description: string): string {
 	let hash = 0x811c9dc5;
 	for (let i = 0; i < description.length; i++) hash = Math.imul(hash ^ description.charCodeAt(i), 0x01000193);
 	return (hash >>> 0).toString(36);
+}
+
+/** Where a room's read position is kept: by account (`notifyAccount`) and `room_id`, a thread's own. */
+export function readPositionKey(account: string, roomId: string): string {
+	return JSON.stringify([account, roomId]);
+}
+
+/** Every read position kept on this device, by `readPositionKey`, the ones moved longest ago first. */
+export function loadReadPositions(): Record<string, string> {
+	try {
+		const parsed: unknown = JSON.parse(read(KEY.readPositions) ?? '{}');
+		if (!isJsonObject(parsed)) return {};
+		return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => isLogId(entry[1])));
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Moves read positions forward, never back, over what is kept now (another
+ * tab may have read further): returns every position kept, these newest.
+ */
+export function advanceReadPositions(positions: Record<string, string>): Record<string, string> {
+	const kept = loadReadPositions();
+	const moved = Object.entries(positions).filter(([key, id]) => kept[key] === undefined || compareLogIds(id, kept[key]) > 0);
+	if (!moved.length) return kept;
+	const keys = new Set(moved.map(([key]) => key));
+	const next = Object.fromEntries([...Object.entries(kept).filter(([key]) => !keys.has(key)), ...moved].slice(-READ_POSITIONS_MAX));
+	write(KEY.readPositions, JSON.stringify(next));
+	return next;
 }
 
 export function loadNotificationsEnabled(): boolean {

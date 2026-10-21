@@ -72,7 +72,8 @@ reactive state behind it lives in `src/lib/ui` as small classes — `SessionView
 room shows its held copy, and the open room's thread cards from the same view), `MentionTracker`,
 `IncomingMessageTracker` (new messages from others, for notifications),
 `AppearanceSettings` (theme and fonts),
-`UnreadTracker`, `MessageSelection`, `FeedbackState`, `SidebarLayout`,
+`UnreadTracker`, `ReadPositions` (how far you have read each room and thread,
+kept on this device: where the New divider goes and the pane opens), `MessageSelection`, `FeedbackState`, `SidebarLayout`,
 `PaneDrafts` (the composer's text and reply per room and thread),
 `PagePresence` (whether the tab is attended, and the mention alert),
 `ProgressiveReveal` (long timelines paint newest-first) and `FloatingDay` —
@@ -87,7 +88,7 @@ and `time.ts` read messages, `connection.ts` words the connection state, and
 `sign-in-link.ts` reads and scrubs a sign-in link (emailed, or the return from an external sign-in page) from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,
 `members.ts` reads the `user_id` typed to add a member, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
-Preferences included (on this device only; nothing is synced),
+Preferences and read positions included (on this device only; nothing is synced),
 `session-cache.ts` keeps `SessionView`'s held view in IndexedDB per server, trimmed to
 the last day's messages (`keptView`), which the page primes `SessionView` with
 (`prime`) before the next visit's session is ready: shown as a held view, never
