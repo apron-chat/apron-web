@@ -19,6 +19,11 @@ function color(name: string, theme: Map<string, string>, dark: Map<string, strin
 	return reference ? color(reference[1], theme, dark) : value!;
 }
 
+/** `color-mix(in srgb, hex keep, black)`: each channel scaled, as a multiply by grey. */
+function shade(hex: string, keep: number): string {
+	return '#' + [1, 3, 5].map((at) => Math.round(parseInt(hex.slice(at, at + 2), 16) * keep).toString(16).padStart(2, '0')).join('');
+}
+
 function luminance(hex: string): number {
 	const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
 	return 0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -28,6 +33,23 @@ function contrast(a: string, b: string): number {
 	const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
 	return (high + 0.05) / (low + 0.05);
 }
+
+describe('private colors', () => {
+	const dark = tokens(':root {');
+	const light = tokens(":root[data-theme='light'] {");
+
+	for (const [theme, values] of [['dark', dark], ['light', light]] as const) {
+		it(`sets plum, ink and muted ink at 4.5:1 or more on a private ${theme} card`, () => {
+			const ground = color('--private-soft', values, dark);
+			for (const ink of ['--private', '--ink', '--ink-muted']) expect(contrast(color(ink, values, dark), ground), `${ink} ${theme}`).toBeGreaterThanOrEqual(4.5);
+		});
+
+		it(`sets ink at 4.5:1 or more on a ${theme} card's quiet unread bubble, denim or plum`, () => {
+			const keep = parseFloat(color('--count-shade', values, dark)) / 100;
+			for (const card of ['--denim-soft', '--private-soft']) expect(contrast(color('--ink', values, dark), shade(color(card, values, dark), keep)), `${card} ${theme}`).toBeGreaterThanOrEqual(4.5);
+		});
+	}
+});
 
 describe('presence colors', () => {
 	const dark = tokens(':root {');

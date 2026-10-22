@@ -21,6 +21,7 @@ describe('UnreadCount', () => {
 	it('counts unread messages in grey, and turns orange with an @ when they include a mention', () => {
 		const quiet = render({ unread: 12, mentions: 0 })!;
 		expect([quiet.className, quiet.textContent, quiet.getAttribute('aria-label')]).toEqual(['ap-count ap-count-quiet', '12', '12 unread messages']);
+		expect(quiet.title).toBe('12 unread messages');
 		unmount(instance!);
 		const mention = render({ unread: 12, mentions: 2 })!;
 		expect([mention.className, mention.textContent, mention.getAttribute('aria-label')]).toEqual(['ap-count ap-count-at', '@ 12', '12 unread messages, 2 mentions of you']);

@@ -154,21 +154,29 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-embed-html th { color: var(--ink-muted); font-weight: 500; }
 
 /* ThreadMarker */
-.ap-thread { font: inherit; display: inline-flex; align-items: baseline; gap: var(--space-2); max-width: 100%; margin-top: var(--space-2); padding: 3px var(--space-3) 3px var(--space-2); border: 0; border-radius: var(--radius-full); background: var(--denim-soft); color: var(--denim); cursor: pointer; font-size: var(--text-ui); line-height: 18px; text-align: left; }
+.ap-thread { font: inherit; display: inline-flex; align-items: baseline; gap: var(--space-2); max-width: 100%; margin-top: var(--space-2); padding: 3px var(--space-3) 3px var(--space-2); border: 0; border-radius: var(--radius-full); --ap-thread-ground: var(--denim-soft); background: var(--ap-thread-ground); color: var(--denim); cursor: pointer; font-size: var(--text-ui); line-height: 18px; text-align: left; }
 .ap-thread:hover { filter: brightness(1.08); }
-.ap-thread-head { display: inline-flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+/* One row: the title gives way (ellipsized) to the faces, unread bubble and time, which keep their width; the bubble and time sit together at the right. */
+.ap-thread-head { display: inline-flex; align-items: baseline; gap: var(--space-2); min-width: 0; max-width: 100%; }
 .ap-thread-2 { flex-direction: column; align-items: stretch; gap: 2px; border-radius: var(--radius-md); padding: var(--space-1) var(--space-3) 6px var(--space-2); max-width: min(100%, 520px); }
 /* Its preview lines (ThreadLines), a step larger than the sidebar's, in ink with the icons muted. */
 .ap-thread .ap-tline { margin-top: 0; font-size: var(--text-ui); line-height: 18px; color: var(--ink); }
 .ap-thread .ap-tline > svg { color: var(--ink-muted); }
 .ap-thread .ap-tline-sender { font-weight: 600; }
-.ap-thread-name { font-weight: 600; }
+.ap-thread-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .ap-thread-name::before { content: "↳ "; }
 .ap-thread-faces + .ap-thread-name::before { content: none; }
-.ap-thread-count { color: var(--denim); }
-.ap-thread-faces { display: inline-flex; align-self: center; }
-.ap-thread-faces .ap-avatar + .ap-avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--denim-soft); }
-.ap-thread-last { margin-left: auto; padding-left: var(--space-2); color: var(--ink-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ap-thread-name .ap-lock { margin: 0 4px 0 0; }
+/* A private thread's card, in plum: its title and lock take the hue, its preview lines stay in ink. */
+.ap-thread-private { --ap-thread-ground: var(--private-soft); color: var(--private); }
+.ap-thread-private .ap-lock { color: var(--private); }
+.ap-thread-head .ap-count { align-self: center; margin-left: auto; }
+/* The quiet bubble, a shade of the card's own ground, so it stands out on denim and plum alike. */
+.ap-thread-head .ap-count-quiet { background: color-mix(in srgb, var(--ap-thread-ground) var(--count-shade), black); }
+.ap-thread-head .ap-count + .ap-thread-last { margin-left: 0; padding-left: 0; }
+.ap-thread-faces { flex: none; display: inline-flex; align-self: center; }
+.ap-thread-faces .ap-avatar + .ap-avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--ap-thread-ground); }
+.ap-thread-last { flex: none; margin-left: auto; padding-left: var(--space-2); color: var(--ink-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ap-thread-moved { background: transparent; padding-left: 0; cursor: default; color: var(--ink-muted); font-size: var(--text-sm); line-height: 16px; font-style: italic; }
 .ap-thread-moved:hover { background: transparent; }
 .ap-thread-moved .ap-link { font-style: normal; }
@@ -293,6 +301,9 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 
 /* RoomHeader */
 .ap-roomhead { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); box-sizing: border-box; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); background: var(--bg-100); }
+/* A private room's or thread's header: washed with its cards' plum, its lock in the hue. */
+.ap-roomhead-private { background: color-mix(in srgb, var(--private-soft) 60%, var(--bg-100)); }
+.ap-roomhead-private .ap-lock { color: var(--private); }
 .ap-roomhead-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-3); }
 .ap-roomhead-name { margin: 0; font-size: var(--text-body); line-height: 20px; font-weight: 600; white-space: nowrap; }
 .ap-roomhead-sub { margin: 0; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -7,8 +7,9 @@
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
-  add(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', count: 7, lastReply: '9h', summary: 'Worker 1.9.0 broke the accounts migration', participants: [{ user_id: 'bob', name: 'Bob' }, { user_id: 'alice', name: 'Alice Chen' }, { user_id: 'dana', name: 'Dana' }], latest: { sender: { user_id: 'dana', name: 'Dana' }, text: 'Rolled back worker to 1.8.3, re-running the migration now.' } });
-  add(A.ThreadMarker, { thread: 'mig-0042', name: 'Migration 0042', count: 1, lastReply: '14 Sep', summary: 'Lock held on accounts table' });
+  add(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', unread: 3, mentions: 1, lastReply: '9h', summary: 'Worker 1.9.0 broke the accounts migration', participants: [{ user_id: 'bob', name: 'Bob' }, { user_id: 'alice', name: 'Alice Chen' }, { user_id: 'dana', name: 'Dana' }], latest: { sender: { user_id: 'dana', name: 'Dana' }, text: 'Rolled back worker to 1.8.3, re-running the migration now.' } });
+  add(A.ThreadMarker, { thread: 'mig-0042', name: 'Migration 0042', lastReply: '14 Sep', summary: 'Lock held on accounts table' });
+  add(A.ThreadMarker, { thread: 'offer', name: 'Offer for the platform role', private: true, unread: 1, lastReply: '2h', summary: 'Comp band and start date, before it goes out' });
   add(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', moved: true });
 </script>
 </body>

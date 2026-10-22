@@ -2510,7 +2510,7 @@
 						{#if item.kind === 'date'}
 							<div class="ap-divider ap-divider-date" role="separator"><span>{item.label}</span></div>
 						{:else if item.kind === 'thread'}
-							<ThreadCard entry={item.entry} onopen={() => openThreadCard(item.entry.id)} />
+							<ThreadCard entry={item.entry} unread={unread.byRoom[item.entry.id]} mentions={mentions.byRoom[item.entry.id]} onopen={() => openThreadCard(item.entry.id)} />
 						{:else if item.kind === 'notice'}
 							<NoticeLine notice={item.notice} onopenroom={openMentionedRoom} />
 						{:else if item.kind === 'members'}
