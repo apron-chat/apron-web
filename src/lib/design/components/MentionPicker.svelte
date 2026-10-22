@@ -1,36 +1,80 @@
 <script lang="ts">
+	/* Above the Composer while you type `@name` (people), `#room` (rooms and threads) or `:shortcode` (emoji); ↑ ↓ move, Tab or Enter takes one. */
+	import type { Snippet } from 'svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
-	import type { Sender } from './types';
+	import type { PickerEmoji, PickerRoom, Sender } from './types';
 	import { uid } from './util';
 
-	interface Props {
+	/** Other attributes (`data-*`) go on the list. */
+	interface Props extends HTMLAttributes<HTMLElement> {
+		/** What has been typed after the `@`, `#` or `:`; in a person's name and ID it reads in accent. */
 		query?: string;
-		people: Sender[];
+		/** `@`: who can be named. The list shows `rooms` instead when given, else `emoji`. */
+		people?: Sender[];
+		/** `#`: rooms and threads, each its title and `#room_id`. */
+		rooms?: PickerRoom[];
+		/** `:`: emoji, each its glyph, `:shortcode:` and name. */
+		emoji?: PickerEmoji[];
+		/** The highlighted option, which Tab (and Enter) takes. */
 		active?: number;
-		onpick?: (p: Sender) => void;
-		onhover?: (i: number) => void;
+		/** A pick (a click keeps the focus in the field): the item and its index in the list shown. */
+		onpick?: (item: Sender | PickerRoom | PickerEmoji, index: number) => void;
+		onhover?: (index: number) => void;
+		/** The list's ID, which the field names in `aria-controls`; option `i` is `${id}-${i}`, its `aria-activedescendant`. */
+		id?: string;
+		/** The list's label; by default "Mention someone", "Room suggestions" or "Emoji suggestions". */
+		label?: string;
+		/** What an empty list says; by default that nothing matches the query (with no query, "People in this room"). */
+		empty?: string;
+		/** Replaces a person's avatar, such as with one tinted by their ID. */
+		avatar?: Snippet<[Sender]>;
 	}
-	let { query = '', people, active = 0, onpick, onhover }: Props = $props();
+	let { query = '', people = [], rooms, emoji, active = 0, onpick, onhover, id, label, empty, avatar, ...rest }: Props = $props();
+
+	const kind = $derived(rooms ? 'rooms' : emoji ? 'emoji' : 'people');
+	const items: (Sender | PickerRoom | PickerEmoji)[] = $derived(rooms ?? emoji ?? people);
+	const listLabel = $derived(label ?? (kind === 'rooms' ? 'Room suggestions' : kind === 'emoji' ? 'Emoji suggestions' : 'Mention someone'));
+	const emptyText = $derived(empty ?? (kind === 'rooms' ? `No room matches “${query}”` : kind === 'emoji' ? `No emoji match “${query}”` : query ? `No one here matches “${query}”` : 'People in this room'));
 	const q = $derived(query.toLowerCase());
+	const key = (item: Sender | PickerRoom | PickerEmoji, index: number): string => ('user_id' in item ? uid(item) : item.id) ?? String(index);
+	let list = $state<HTMLUListElement>();
+
 	function split(text: string): [string, string, string] | null {
 		const i = q ? text.toLowerCase().indexOf(q) : -1;
 		return i < 0 ? null : [text.slice(0, i), text.slice(i, i + q.length), text.slice(i + q.length)];
 	}
+
+	// The highlighted option stays in view as the keys move it through a list that scrolls.
+	$effect(() => {
+		if (!items[active] || !list) return;
+		list.querySelectorAll<HTMLElement>('[role="option"]')[active]?.scrollIntoView?.({ block: 'nearest' });
+	});
 </script>
 
-{#snippet mark(text: string)}{@const m = split(text)}{#if m}{m[0]}<mark class="ap-mpick-hit">{m[1]}</mark>{m[2]}{:else}{text}{/if}{/snippet}
+<!-- `prefix` shares the text's first node, so the line shapes as one run. -->
+{#snippet mark(text: string, prefix = '')}{@const m = split(text)}{#if m}{prefix}{m[0]}<mark class="ap-mpick-hit">{m[1]}</mark>{m[2]}{:else}{prefix}{text}{/if}{/snippet}
 
-{#if !people.length}
-	<div class="ap-mpick" role="listbox" aria-label="Mention someone"><div class="ap-mpick-empty">{q ? `No one here matches “${q}”` : 'People in this room'}</div></div>
+{#if !items.length}
+	<div class="ap-mpick" {id} role="listbox" aria-label={listLabel} {...rest}><div class="ap-mpick-empty">{emptyText}</div></div>
 {:else}
-	<ul class="ap-mpick" role="listbox" aria-label="Mention someone">
-		{#each people as p, i (uid(p) ?? i)}
-			{@const pid = uid(p) || ''}
-			{@const name = p.name || pid}
-			<li role="option" aria-selected={i === active} class={['ap-mpick-item', i === active && 'ap-mpick-active']} onmousedown={(e) => { e.preventDefault(); onpick?.(p); }} onmouseenter={() => onhover?.(i)}>
-				<Avatar {name} src={p.avatar} size="sm" />
-				<span class="ap-mpick-name">{@render mark(name)}</span>
-				{#if pid !== name}<span class="ap-mpick-id">@{@render mark(pid)}</span>{/if}
+	<ul class="ap-mpick" {id} role="listbox" aria-label={listLabel} {...rest} bind:this={list}>
+		{#each items as item, i (key(item, i))}
+			<li id={id && `${id}-${i}`} role="option" aria-selected={i === active} class={['ap-mpick-item', i === active && 'ap-mpick-active']} onmousedown={(e) => { e.preventDefault(); onpick?.(item, i); }} onmouseenter={() => onhover?.(i)}>
+				{#if 'user_id' in item}
+					{@const pid = uid(item) || ''}
+					{@const name = item.name?.trim() || pid}
+					{#if avatar}{@render avatar(item)}{:else}<Avatar {name} src={item.avatar} size="sm" />{/if}
+					<span class="ap-mpick-name">{@render mark(name)}</span>
+					{#if pid !== name}<span class="ap-mpick-id">{@render mark(pid, '@')}</span>{/if}
+				{:else if 'native' in item}
+					<span class="ap-mpick-emoji-glyph" aria-hidden="true">{item.native}</span>
+					<span class="ap-mpick-name">:{item.id}:</span>
+					<span class="ap-mpick-id">{item.name}</span>
+				{:else}
+					<span class="ap-mpick-name">{item.title}</span>
+					<span class="ap-mpick-id">#{item.id}</span>
+				{/if}
 				{#if i === active}<kbd class="ap-mpick-kbd">Tab</kbd>{/if}
 			</li>
 		{/each}

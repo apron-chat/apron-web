@@ -246,6 +246,20 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-composer-disabled { opacity: .6; }
 .ap-composer-cmdtag { flex: none; display: inline-flex; align-items: center; height: var(--control-md); box-sizing: border-box; padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 500; }
 .ap-composer-cmd .ap-composer-field { font-family: var(--font-mono); font-size: var(--text-ui); }
+/* The rich field (editable): a plain-text editable whose mentions are chips; it sizes like the textarea. */
+.ap-composer-editable { position: relative; height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+/* On one line, however long the room or thread's name: out of the flow, over the field's padding, cut short. */
+.ap-composer-editable-empty::before { content: attr(data-placeholder); position: absolute; inset: 0; padding: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-muted); pointer-events: none; }
+.ap-composer-editable .ap-mention { white-space: nowrap; cursor: default; user-select: all; }
+/* The autocomplete picker anchors to the composer's row and grows upward. */
+.ap-composer-wrap { position: relative; }
+/* Above the field: the message being replied to, with Cancel reply */
+.ap-composer-reply { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-4); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
+.ap-composer-reply-text { min-width: 0; overflow-wrap: anywhere; }
+/* Previews of the draft's links, above the field; each can be removed before sending. */
+.ap-composer-previews { display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-3) var(--space-4) var(--space-2); }
+.ap-composer-preview { position: relative; flex: 0 1 320px; min-width: 0; }
+.ap-composer-preview .ap-embed { width: 100%; min-width: 0; }
 
 /* RoomItem */
 .ap-room { font: inherit; display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: 7px var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink-muted); text-align: left; cursor: pointer; }

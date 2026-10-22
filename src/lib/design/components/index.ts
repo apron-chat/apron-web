@@ -57,4 +57,5 @@ export { default as Popover } from './Popover.svelte';
 export { default as ProfileCard } from './ProfileCard.svelte';
 export { default as ReactorsPopover } from './ReactorsPopover.svelte';
 export { default as EmojiPopover } from './EmojiPopover.svelte';
+export { default as MessageEditor } from './MessageEditor.svelte';
 export type * from './types';

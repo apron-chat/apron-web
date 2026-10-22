@@ -143,3 +143,29 @@ export interface Reactor extends Sender {
 	/** Show `@user_id` under the name. Defaults to where it differs from the name; `true` shows it even then, such as when two users share the name. */
 	handle?: boolean;
 }
+
+/** A file on a draft (§4.8.4), as Attachments shows it. */
+export interface AttachmentFile {
+	name: string;
+	/** The size it goes out at, after an image is shrunk; until it is known pass `preparing`. */
+	size?: string;
+	preparing?: boolean;
+	kind?: 'image' | 'audio' | 'file';
+	/** Previews an image or audio clip (an object URL). */
+	src?: string;
+}
+
+/** A room or thread a `#` can name, in the MentionPicker. */
+export interface PickerRoom {
+	id: string;
+	title: string;
+}
+
+/** An emoji a `:shortcode` can put in, in the MentionPicker. */
+export interface PickerEmoji {
+	/** The shortcode, without its colons. */
+	id: string;
+	/** The emoji itself. */
+	native: string;
+	name: string;
+}

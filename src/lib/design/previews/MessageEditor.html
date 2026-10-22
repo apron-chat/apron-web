@@ -1,0 +1,17 @@
+<!-- @dsCard group="Timeline" height=290 subtitle="Your message edited in place: its text over its files, Cancel and Save; emptied, Save waits" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>MessageEditor</title></head>
+<body>
+<div id="root" style="padding: 8px 16px; display: flex; flex-direction: column; gap: 16px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  function none() {}
+  add(A.MessageEditor, { value: 'Rollout plan attached, see the second page.', onsave: none, oncancel: none,
+    attachments: A.parts(A.part(A.AttachmentTile, { name: 'rollout-plan.pdf', detail: '84 KB', onremove: none, onrename: none }),
+      A.part(A.AttachmentTile, { kind: 'link', name: 'Pull request #12', detail: 'github.com', onremove: none })) });
+  add(A.MessageEditor, { value: '', canSave: false, onsave: none, oncancel: none });
+</script>
+</body>
+</html>
