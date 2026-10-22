@@ -79,3 +79,81 @@ describe('presence colors', () => {
 		});
 	}
 });
+
+// apron.css against the scales: a value a redesign retunes in tokens.css, never one written out in a rule.
+describe('apron.css', () => {
+	const stylesheet = readFileSync(new URL('./apron.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+	/** Every declaration, with the selector of the innermost rule holding it (a keyframe's step, inside @keyframes). */
+	const declarations = [...stylesheet.matchAll(/([^{}]*)\{([^{}]*)\}/g)].flatMap(([, selector, body]) =>
+		body.split(';').filter((text) => text.includes(':')).map((text) => {
+			const at = text.indexOf(':');
+			return { selector: selector.trim(), property: text.slice(0, at).trim(), value: text.slice(at + 1).trim(), body };
+		})
+	);
+	const where = (d: { selector: string; property: string; value: string }) => `${d.selector} { ${d.property}: ${d.value} }`;
+	const keyframe = /^(from|to|[\d.]+%)(\s*,\s*(from|to|[\d.]+%))*$/;
+
+	it('finds the rules it checks', () => {
+		expect(declarations.length).toBeGreaterThan(1000);
+	});
+
+	// Two kinds of text set their own line box: a glyph sized to its box (its font size is literal too), and a role badge's caps, trimmed to the badge.
+	it('sets line heights on the --leading-* scale', () => {
+		const off = declarations.filter((d) => d.property === 'line-height' && !/^(var\(--leading-[a-z]+\)|1|inherit)$/.test(d.value))
+			.filter((d) => !/font-size:\s*\d+px/.test(d.body) && !d.selector.startsWith('.ap-role'));
+		expect(off.map(where)).toEqual([]);
+	});
+
+	it('fades only by --opacity-disabled and --opacity-dim, outside an animation’s steps', () => {
+		const off = declarations.filter((d) => d.property === 'opacity' && !keyframe.test(d.selector) && !/^(0|1|var\(--opacity-(disabled|dim)\))$/.test(d.value));
+		expect(off.map(where)).toEqual([]);
+	});
+
+	it('draws focus with the --focus-ring, outside or inset', () => {
+		const rings = declarations.filter((d) => d.property === 'outline' && !/^(none|0)$/.test(d.value));
+		expect(rings.filter((d) => d.value !== 'var(--focus-ring)').map(where)).toEqual([]);
+		const offsets = declarations.filter((d) => d.property === 'outline-offset');
+		expect(offsets.filter((d) => !/^(0|var\(--focus-offset(-inset)?\))$/.test(d.value)).map(where)).toEqual([]);
+	});
+
+	// The one literal: the room header tag's point, a square turned on its corner with its tip rounded.
+	it('rounds corners only by the --radius-* scale', () => {
+		const off = declarations.filter((d) => /^border(-[a-z]+)*-radius$/.test(d.property) && d.selector !== '.ap-roomhead-tag::before')
+			.filter((d) => !d.value.split(/\s+/).every((part) => /^(0|inherit|var\(--radius-[a-z]+\))$/.test(part)));
+		expect(off.map(where)).toEqual([]);
+	});
+
+	it('times transitions by the --duration-* tokens', () => {
+		const off = declarations.filter((d) => d.property === 'transition' && /(^|[\s,])\d*\.?\d+m?s\b/.test(d.value.replace(/(^|[\s,])0s\b/g, '$1')));
+		expect(off.map(where)).toEqual([]);
+	});
+
+	// Bold (700) is for bold in what people write: highlighted code's strong, a terminal's bold.
+	it('sets weights from 400, 500 and 600', () => {
+		const off = declarations.filter((d) => d.property === 'font-weight' && !['400', '500', '600'].includes(d.value))
+			.filter((d) => !(d.value === '700' && ['.ap-msg-text .hljs-strong', '.ap-term-bold'].includes(d.selector)));
+		expect(off.map(where)).toEqual([]);
+	});
+
+	// So a tone (ap-tone-ok, -warn, -danger) wins over a note's own color, wherever the note's rule sits.
+	it('colors every status note through --ap-tone', () => {
+		const notes = ['.ap-profedit-hint', '.ap-profedit-note', '.ap-pref-note', '.ap-pref-help', '.ap-profcard-note', '.ap-memberlist-note', '.ap-roomform-note', '.ap-sect-note', '.ap-nudge-note', '.ap-font-status'];
+		for (const note of notes) {
+			const colors = declarations.filter((d) => d.property === 'color' && d.selector.split(',').some((part) => part.trim() === note));
+			expect(colors.length, note).toBeGreaterThan(0);
+			for (const color of colors) expect(color.value, where(color)).toMatch(/^var\(--ap-tone, /);
+		}
+	});
+});
+
+// The page starts its side panels at the tokens' widths, before any width you dragged them to.
+describe('side panel widths', () => {
+	const dark = tokens(':root {');
+	const page = readFileSync(new URL('../../routes/+page.svelte', import.meta.url), 'utf8');
+	const start = (side: string) => page.match(new RegExp(`side: '${side}', defaultWidth: (\\d+)`))?.[1];
+
+	it('opens the rooms list at --sidebar-w and the member list at --member-list-w', () => {
+		expect(`${start('left')}px`).toBe(dark.get('--sidebar-w'));
+		expect(`${start('right')}px`).toBe(dark.get('--member-list-w'));
+	});
+});

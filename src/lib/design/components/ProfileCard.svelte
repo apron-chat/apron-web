@@ -84,5 +84,5 @@
 		{#if oncopyid}<Button variant="ghost" size="sm" onclick={oncopyid}>Copy @user_id</Button>{/if}
 		{#if onaddtoroom}<Button variant="ghost" size="sm" disabled={adding} onclick={onaddtoroom}>{adding ? 'Adding…' : 'Add to room'}</Button>{/if}
 	</div>
-	{#if note}<p class={['ap-profcard-note', note.error && 'ap-profcard-err']} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}
+	{#if note}<p class={['ap-profcard-note', note.error && 'ap-tone-danger']} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}
 </Popover>

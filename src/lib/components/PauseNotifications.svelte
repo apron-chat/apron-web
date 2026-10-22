@@ -68,7 +68,7 @@
 
 <SettingRow title="Pause notifications" hint={until === undefined ? 'Silence desktop and push notifications on all your devices for a while. Only you see it.' : undefined} class="ap-pref-pause">
 	{#if until !== undefined}
-		<p class="ap-pref-note ap-pref-paused"><BellOff size={14} strokeWidth={1.8} aria-hidden="true" /> Paused {pausedUntilLabel(until)} · no desktop or push notifications on your devices.</p>
+		<p class="ap-pref-note ap-pref-paused ap-tone-warn"><BellOff size={14} strokeWidth={1.8} aria-hidden="true" /> Paused {pausedUntilLabel(until)} · no desktop or push notifications on your devices.</p>
 	{/if}
 	{#if refused}
 		<div class="ap-pause-refused" role="alert">

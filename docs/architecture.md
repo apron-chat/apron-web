@@ -4,7 +4,9 @@ How the web client is put together. [behavior.md](behavior.md) describes what
 it does.
 
 The UI follows the Apron design system. `src/lib/design/tokens.css` holds its
-tokens as CSS custom properties: color, type and line heights (`--leading-*`),
+tokens as CSS custom properties: color, interaction grounds (`--hover`,
+`--pressed`, `--selected`, `--chosen`), the focus ring (`--focus-ring`), fades
+(`--opacity-disabled`, `--opacity-dim`), type and line heights (`--leading-*`),
 spacing, radii, control and panel sizes, stacking (`--z-*`) and motion
 (`--duration-*`, `--ease-*`), with the breakpoints listed in a comment, since a
 media query can't read a custom property (`src/lib/ui/breakpoints.ts` holds the
@@ -14,7 +16,12 @@ so its tokens are written twice, and `tokens.test.ts` holds the two blocks
 equal. `src/lib/design/apron.css` is its component stylesheet. Text sizes are the
 `--text-*` scale (caps, xs, sm, ui, field, body, title); only glyphs sized to
 their box, such as avatar initials and emoji, and the connect screen's display
-title keep literal sizes.
+title keep literal sizes. `apron.css` states its shared rules once, at its
+top: one focus ring on every control (outside a standalone one, inside one
+flush in a row or list), one disabled fade, and one status-text treatment
+(`ap-tone-ok`, `-warn`, `-danger` on a muted note; an error is always danger).
+`tokens.test.ts` lints the stylesheet for the scales: line heights, fades and
+weights.
 
 This repository is the design system's source. `src/lib/design/components`
 holds its presentational Svelte 5 components (runes, snippets, typed `Props`,

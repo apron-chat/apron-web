@@ -80,7 +80,7 @@
 		</label>
 	{/if}
 	{#if note}<p class="ap-roomform-note">{note}</p>{/if}
-	{#if error}<p class="ap-profedit-note ap-profedit-err" role="alert">{error}</p>{/if}
+	{#if error}<p class="ap-profedit-note ap-tone-danger" role="alert">{error}</p>{/if}
 	{#snippet footer()}
 		<Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={saving} label="Cancel" />
 		<Button type="submit" variant="primary" size="sm" disabled={saving || disabled} label={action} />

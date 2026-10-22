@@ -236,8 +236,9 @@
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
 	const tabId = Math.random().toString(36).slice(2);
 	const selection = new MessageSelection();
+	/** The rooms list's width (by default tokens.css's --sidebar-w) and whether it's collapsed. */
 	const sidebar = new SidebarLayout({ side: 'left', defaultWidth: 248, minWidth: 160, maxWidth: 480, load: loadSidebarPrefs, save: saveSidebarPrefs });
-	/** The member list's width and, on wide screens, whether it's collapsed. */
+	/** The member list's width (by default tokens.css's --member-list-w) and, on wide screens, whether it's collapsed. */
 	const memberList = new SidebarLayout({ side: 'right', defaultWidth: 240, minWidth: 180, maxWidth: 420, load: loadMemberListPrefs, save: saveMemberListPrefs });
 
 	/** `/__preview` passes its in-memory server's sockets; every other visit connects for real. */

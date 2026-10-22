@@ -607,7 +607,7 @@ ink too with unread replies. Either line shows alone when the thread has only
 that one, and the icon says which it is. Only what's new is counted, in one
 bubble: unread replies in grey, turning orange with an `@` when they include a
 mention of you (the row tinted too); a thread with nothing new shows no number
-and steps back, its title and lines muted and the row faded. A room shows the
+and steps back, its title muted and its lines dimmed. A room shows the
 same bubble for its own unread messages (its threads count their own), with
 its name in bold, and none while you're reading it. The open room or thread has a neutral fill and an
 accent bar at its left (on the guide line, for a thread), so it never looks

@@ -100,7 +100,7 @@
 					</datalist>
 				</form>
 			{/if}
-			{#if note}<p class={['ap-memberlist-note', note.error && 'ap-memberlist-note-error']} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}
+			{#if note}<p class={['ap-memberlist-note', note.error && 'ap-tone-danger']} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}
 			{#if remark}<p class="ap-memberlist-note">{remark}</p>{/if}
 			{#if listed === 0}
 				<p class="ap-memberlist-note">No members listed.</p>

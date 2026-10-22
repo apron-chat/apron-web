@@ -78,7 +78,7 @@
 				<span class="ap-profedit-hint">This backend doesn’t take uploads, so your avatar can’t be set here.</span>
 			{/if}
 			{#if avatarKept}<span class="ap-profedit-hint">The server kept your previous avatar.</span>{/if}
-			{#if avatarError}<span class="ap-profedit-hint ap-profedit-err" role="alert">{avatarError}</span>{/if}
+			{#if avatarError}<span class="ap-profedit-hint ap-tone-danger" role="alert">{avatarError}</span>{/if}
 		</div>
 	</div>
 	<label class="ap-fieldlabel">Handle
@@ -86,17 +86,17 @@
 	</label>
 	<p class="ap-profedit-hint">ID <code>{userId}</code> · set by the server, can’t be changed</p>
 	{#if status === 'altered'}<p class="ap-profedit-note" role="status">The server saved your handle as “{serverName}”.</p>{/if}
-	{#if status === 'declined'}<p class="ap-profedit-note ap-profedit-err" role="alert">The server declined this handle{declinedReason ? ` (${declinedReason})` : ''}. {declinedHint ?? 'Your old one is still in use.'}</p>{/if}
+	{#if status === 'declined'}<p class="ap-profedit-note ap-tone-danger" role="alert">The server declined this handle{declinedReason ? ` (${declinedReason})` : ''}. {declinedHint ?? 'Your old one is still in use.'}</p>{/if}
 	{#if canPasskey || signin}
 		<div class="ap-profedit-signin" role="group" aria-label="Sign-in">
 			<span class="ap-fieldlabel">Sign-in</span>
 			{#if signin}{@render signin()}
-			{:else if passkey === 'done'}<span class="ap-profedit-hint ap-profedit-ok">Passkey saved · this backend will ask your device next time</span>
+			{:else if passkey === 'done'}<span class="ap-profedit-hint ap-tone-ok">Passkey saved · this backend will ask your device next time</span>
 			{:else if passkey === 'waiting'}<span class="ap-profedit-hint"><TypingDots />{' Confirm on your device…'}</span>
 			{:else}
 				<span class="ap-profedit-row">
 					<Button size="sm" onclick={onaddpasskey} disabled={saving} label="Add passkey" />
-					<span class={['ap-profedit-hint', passkey === 'declined' && 'ap-profedit-err']}>{passkey === 'declined' ? 'The server didn’t accept it. Your token still works.' : passkey === 'cancelled' ? 'Cancelled. Your token still works.' : 'Signed in with a token'}</span>
+					<span class={['ap-profedit-hint', passkey === 'declined' && 'ap-tone-danger']}>{passkey === 'declined' ? 'The server didn’t accept it. Your token still works.' : passkey === 'cancelled' ? 'Cancelled. Your token still works.' : 'Signed in with a token'}</span>
 				</span>
 			{/if}
 		</div>

@@ -140,7 +140,7 @@
 					{@const members = listing.memberCount ?? listing.members.length}
 					<RoomItem room={listing.id} name={listing.title} topic={`${members > 0 ? `${members} ${members === 1 ? 'member' : 'members'} · ` : ''}${action}`} data-join={listing.id} onselect={() => onjoin(listing.id)} />
 				{/each}
-				{#if listError}<p class="ap-sect-note" role="alert">{listError}</p>{/if}
+				{#if listError}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
 			</SidebarSection>
 		{/if}
 	</div>

@@ -52,6 +52,6 @@ describe('ProfileEditor', () => {
 		expect(picked).toHaveBeenCalledOnce();
 		input.dispatchEvent(new Event('change', { bubbles: true }));
 		expect(onavatarfile).toHaveBeenCalledWith(input);
-		expect(document.querySelector('.ap-profedit-err')?.textContent).toBe('The server declined this handle (reserved). Sign in and it’s applied.');
+		expect(document.querySelector('.ap-tone-danger')?.textContent).toBe('The server declined this handle (reserved). Sign in and it’s applied.');
 	});
 });

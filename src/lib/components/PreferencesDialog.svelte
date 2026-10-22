@@ -216,12 +216,12 @@
 				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch below turns notifications off.</p>
 			</div>
 			<SettingRow title="Notifications" hint="Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can." class="ap-pref-notifications">
-				<p class={['ap-pref-note', notificationsNote.tone === 'ok' && 'ap-profedit-ok', notificationsNote.tone === 'err' && 'ap-profedit-err']} id="ap-pref-notifications-note">{notificationsNote.text}</p>
+				<p class={['ap-pref-note', notificationsNote.tone === 'ok' && 'ap-tone-ok', notificationsNote.tone === 'err' && 'ap-tone-danger']} id="ap-pref-notifications-note">{notificationsNote.text}</p>
 				<p class="ap-pref-test">
 					{#if notificationsNote.action}<Button size="sm" variant="ghost" label={notificationsNote.action} onclick={onwebpush} />{/if}
 					<Button size="sm" variant="ghost" label={testNotificationStatus === 'sending' ? 'Sending…' : 'Send a test notification'} disabled={testNotificationStatus === 'sending' || !notificationsSupported || notificationPermission === 'denied'} onclick={sendTestNotification} />
 				</p>
-				{#if testNote}<p class={['ap-pref-note', testNote.tone === 'ok' && 'ap-profedit-ok', testNote.tone === 'err' && 'ap-profedit-err']}>{testNote.text}</p>{/if}
+				{#if testNote}<p class={['ap-pref-note', testNote.tone === 'ok' && 'ap-tone-ok', testNote.tone === 'err' && 'ap-tone-danger']}>{testNote.text}</p>{/if}
 				{#snippet control()}
 					<Switch checked={notificationsEnabled} label="Notifications" locked={notificationsLocked} describedby="ap-pref-notifications-note" onchange={onnotifications} />
 				{/snippet}
@@ -277,7 +277,7 @@
 						<FontFamilyField id="ap-interface-font" label="Interface font" placeholder="System UI stack" hint="Applies to the app interface. Leave blank for the browser’s system UI font." bind:value={interfaceFontDraft} fonts={localFontFamilies} fontState={fontBrowserState} fallback="var(--font-sans)" onloadfonts={loadFontsFromUserAction} />
 						<FontFamilyField id="ap-chat-font" label="Chat font" placeholder="Use interface font" hint="Optional font for message text. Leave blank to match the interface." bind:value={chatFontDraft} fonts={localFontFamilies} fontState={fontBrowserState} fallback="var(--font-chat)" onloadfonts={loadFontsFromUserAction} />
 						<FontFamilyField id="ap-mono-font" label="Monospace font" placeholder="System monospace" hint="Used for code, embeds, and command text. Leave blank for the system stack." bind:value={monoFontDraft} fonts={localFontFamilies} fontState={fontBrowserState} fallback="var(--font-mono)" onloadfonts={loadFontsFromUserAction} />
-						{#if fontError}<p class="ap-pref-note ap-profedit-err" role="alert">{fontError}</p>{/if}
+						{#if fontError}<p class="ap-pref-note ap-tone-danger" role="alert">{fontError}</p>{/if}
 						<div class="ap-pref-font-actions">
 							<Button size="sm" variant="ghost" label="Reset fonts" onclick={resetFonts} />
 							<Button type="submit" size="sm" variant="primary" label="Apply fonts" />

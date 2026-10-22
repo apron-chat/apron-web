@@ -112,7 +112,7 @@
 	{:else}
 		<p class="ap-profedit-hint" role={hintStatus ? 'status' : undefined}>{hint}</p>
 	{/if}
-	{#if error}<p class="ap-profedit-note ap-profedit-err" role="alert">{error}</p>{/if}
+	{#if error}<p class="ap-profedit-note ap-tone-danger" role="alert">{error}</p>{/if}
 	<div class="ap-connect-actions">
 		{#if busy}<TypingDots />{/if}
 		{#if secondary}

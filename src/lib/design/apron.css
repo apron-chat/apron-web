@@ -3,23 +3,36 @@
 body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); line-height: var(--leading-body); background: var(--bg-100); color: var(--ink); -webkit-font-smoothing: antialiased; }
 .ap-stack { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); }
 .ap-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-4); }
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-room, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-rail-item, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-field, .ap-reply, .ap-seg-item, .ap-connect-recent-item, .ap-choice-item, .ap-msg-check, .ap-menu-item, .ap-iconbtn, .ap-rchip, .ap-rpick, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Focus — the --focus ring wherever the keyboard is, on every control: outside a standalone one (--focus-offset); inside
+   one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
+   neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
+   edited light their frame instead, and a panel's handle its border. */
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-rail-item, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-rchip, .ap-rpick, .ap-switch, .ap-summary-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
+/* Disabled — one fade, whatever the control. */
+:is(.ap-btn, .ap-iconbtn, .ap-link, .ap-rpick, .ap-seg-item, .ap-choice-item, .ap-field, .ap-viewer-btn):disabled, .ap-switch[aria-disabled='true'] { cursor: default; opacity: var(--opacity-disabled); }
 
 /* Visually hidden, still read by screen readers: live regions, and explanations that controls refer to. */
 .ap-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 /* Button */
-.ap-btn { font: inherit; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; height: var(--control-lg); padding: 0 14px; border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--bg-200); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
-.ap-btn:hover:not(:disabled) { background: var(--bg-300); }
+.ap-btn { font: inherit; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; height: var(--control-lg); padding: 0 var(--space-4); border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--bg-200); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
+.ap-btn:hover:not(:disabled) { background: var(--hover); }
 .ap-btn-sm { height: var(--control-md); padding: 0 var(--space-3); }
 .ap-btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.ap-btn-primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+.ap-btn-primary:hover:not(:disabled) { background: var(--accent); filter: var(--hover-lift); }
 .ap-btn-ghost { background: transparent; border-color: transparent; color: var(--ink-muted); }
 .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
 .ap-btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
-.ap-btn:disabled { cursor: default; opacity: .45; }
 .ap-btn[aria-busy='true'] { cursor: progress; }
 .ap-link { font: inherit; background: none; border: 0; padding: 0; color: var(--denim); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Status text — a line on how something stands, wherever it shows (settings, profile, dialogs, the side panels): muted,
+   or in a status's color when it carries a tone, ap-tone-ok, -warn or -danger; an error is always danger. Each note's
+   own rule reads its color as var(--ap-tone, var(--ink-muted)), so a tone wins wherever that rule sits. */
+.ap-tone-ok { --ap-tone: var(--ok); color: var(--ok); }
+.ap-tone-warn { --ap-tone: var(--warn); color: var(--warn); }
+.ap-tone-danger { --ap-tone: var(--danger); color: var(--danger); }
 
 /* Avatar */
 .ap-avatar { display: inline-grid; place-items: center; flex: none; border-radius: var(--radius-full); background: var(--denim-soft); color: var(--denim); font-weight: 600; object-fit: cover; overflow: hidden; user-select: none; }
@@ -49,10 +62,10 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* Message */
 .ap-msg { position: relative; display: grid; grid-template-columns: var(--avatar-md) minmax(0, 1fr); column-gap: var(--space-3); padding: var(--space-1) var(--space-2); margin: var(--space-3) var(--space-2) 0; border-radius: var(--radius-md); }
 .ap-msg-grouped { margin-top: 0; }
-.ap-msg:hover { background: var(--bg-200); }
+.ap-msg:hover { background: var(--hover-soft); }
 .ap-msg-mention { background: var(--accent-soft); }
 .ap-msg-mention:hover { background: var(--accent-soft); }
-.ap-msg-mention::before { content: ""; position: absolute; left: 0; top: var(--space-1); bottom: var(--space-1); width: 3px; border-radius: 2px; background: var(--accent); }
+.ap-msg-mention::before { content: ""; position: absolute; left: 0; top: var(--space-1); bottom: var(--space-1); width: 3px; border-radius: var(--radius-full); background: var(--accent); }
 .ap-msg-pinged { animation: ap-ping .9s ease-out 1; }
 @keyframes ap-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
 .ap-msg-highlighted, .ap-msg-highlighted:hover { background: var(--bg-300); }
@@ -62,16 +75,16 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-actions:has([aria-expanded='true']) { visibility: visible; }
 /* While a message's picker or menu is open it keeps its hover look, and the rest don't take it: new messages
    can scroll another one under a still pointer, which would look like the one being acted on. */
-.ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected):has(.ap-msg-actions [aria-expanded='true']) { background: var(--bg-200); }
+.ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected):has(.ap-msg-actions [aria-expanded='true']) { background: var(--hover-soft); }
 .ap-msg:has(.ap-msg-actions [aria-expanded='true']) .ap-msg-hovertime { visibility: visible; }
 .ap-timeline:has(.ap-msg-actions [aria-expanded='true']) .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected, :has(.ap-msg-actions [aria-expanded='true'])):hover { background: transparent; }
 .ap-timeline:has(.ap-msg-actions [aria-expanded='true']) .ap-msg:not(:has(.ap-msg-actions [aria-expanded='true'])):is(:hover, :focus-within) :is(.ap-msg-actions, .ap-msg-hovertime, .ap-rchip-add) { visibility: hidden; }
 /* select mode: a check column on the left; the whole row toggles */
 .ap-msg-selectable { grid-template-columns: 24px var(--avatar-md) minmax(0, 1fr); cursor: pointer; user-select: none; }
 .ap-msg-selectable.ap-msg-compact { grid-template-columns: 24px 40px minmax(0, 1fr); }
-.ap-msg-selectable:hover { background: var(--bg-200); }
+.ap-msg-selectable:hover { background: var(--hover-soft); }
 .ap-msg-selected, .ap-msg-selected:hover { background: var(--denim-soft); }
-.ap-msg-check { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-top: 3px; box-sizing: border-box; border: 2px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg-100); color: var(--on-accent); font-size: var(--text-sm); line-height: 1; font-weight: 700; }
+.ap-msg-check { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-top: 3px; box-sizing: border-box; border: 2px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg-100); color: var(--on-accent); font-size: var(--text-sm); line-height: 1; font-weight: 600; }
 .ap-msg-selected .ap-msg-check { border-color: var(--accent); background: var(--accent); }
 .ap-msg-selectable .ap-msg-hovertime { visibility: visible; }
 /* compact density: time | sender + text on one line */
@@ -142,7 +155,6 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* The sender's name and avatar as buttons that open their profile card, looking as they do as text. */
 .ap-msg .ap-msg-who { margin: 0; padding: 0; border: 0; background: none; color: inherit; font-family: inherit; font-size: inherit; line-height: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
 .ap-msg-sender.ap-msg-who:hover { text-decoration: underline; }
-.ap-msg-who:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ap-msg-gutter .ap-msg-who { display: inline-flex; border-radius: var(--radius-full); }
 /* The toolbar wraps rather than running off a narrow screen. */
 .ap-msg-actions .ap-actions { max-width: calc(100vw - var(--space-8)); flex-wrap: wrap; }
@@ -156,8 +168,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-embed { display: block; max-width: min(100%, var(--embed-max-w)); border-radius: var(--radius-lg); box-sizing: border-box; }
 .ap-embed-media { max-height: var(--embed-max-h); width: auto; height: auto; background: var(--bg-200); border: 1px solid var(--line); object-fit: contain; }
 .ap-embed-audio { width: 320px; }
-.ap-embed-card { display: flex; flex-direction: column; gap: 2px; min-width: 240px; padding: var(--space-3) var(--space-4); background: var(--bg-200); border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
-a.ap-embed-card:hover { background: var(--bg-300); }
+.ap-embed-card { display: flex; flex-direction: column; gap: var(--space-0_5); min-width: 240px; padding: var(--space-3) var(--space-4); background: var(--bg-200); border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+a.ap-embed-card:hover { background: var(--hover); }
 .ap-embed-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-embed-detail { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-embed-kind { font-family: var(--font-mono); font-size: var(--text-ui); line-height: var(--leading-field); color: var(--ink); }
@@ -172,10 +184,10 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 
 /* ThreadMarker */
 .ap-thread { font: inherit; display: inline-flex; align-items: baseline; gap: var(--space-2); max-width: 100%; margin-top: var(--space-2); padding: 3px var(--space-3) 3px var(--space-2); border: 0; border-radius: var(--radius-full); --ap-thread-ground: var(--denim-soft); background: var(--ap-thread-ground); color: var(--denim); cursor: pointer; font-size: var(--text-ui); line-height: var(--leading-ui); text-align: left; }
-.ap-thread:hover { filter: brightness(1.08); }
+.ap-thread:hover { filter: var(--hover-lift); }
 /* One row: the title gives way (ellipsized) to the faces, unread bubble and time, which keep their width; the bubble and time sit together at the right. */
 .ap-thread-head { display: inline-flex; align-items: baseline; gap: var(--space-2); min-width: 0; max-width: 100%; }
-.ap-thread-2 { flex-direction: column; align-items: stretch; gap: 2px; border-radius: var(--radius-md); padding: var(--space-1) var(--space-3) 6px var(--space-2); max-width: min(100%, 520px); }
+.ap-thread-2 { flex-direction: column; align-items: stretch; gap: var(--space-0_5); border-radius: var(--radius-md); padding: var(--space-1) var(--space-3) var(--space-1_5) var(--space-2); max-width: min(100%, 520px); }
 /* Its preview lines (ThreadLines), a step larger than the sidebar's, in ink with the icons muted. */
 .ap-thread .ap-tline { margin-top: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); }
 .ap-thread .ap-tline > svg { color: var(--ink-muted); }
@@ -228,22 +240,21 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 /* Composer */
 .ap-composer { display: flex; align-items: flex-start; container-type: normal; gap: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) var(--space-4); background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
 .ap-composer:focus-within { border-color: var(--focus); }
-.ap-composer-tools { display: inline-flex; gap: 2px; }
-.ap-iconbtn { display: inline-grid; place-items: center; width: var(--control-md); height: var(--control-md); padding: 0; border: 0; border-radius: calc(var(--radius-lg) - var(--space-2)); background: transparent; color: var(--ink-muted); cursor: pointer; }
-.ap-iconbtn:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
-.ap-iconbtn:disabled { opacity: .45; cursor: default; }
+.ap-composer-tools { display: inline-flex; gap: var(--space-0_5); }
+.ap-iconbtn { display: inline-grid; place-items: center; width: var(--control-md); height: var(--control-md); padding: 0; border: 0; border-radius: var(--radius-inner); background: transparent; color: var(--ink-muted); cursor: pointer; }
+.ap-iconbtn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 /* A pressed toggle, or the button whose menu is open. */
-.ap-iconbtn-on, .ap-iconbtn-on:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
+.ap-iconbtn-on, .ap-iconbtn-on:hover:not(:disabled) { background: var(--pressed); color: var(--ink); }
 .ap-iconbtn-rec, .ap-iconbtn-rec:hover { color: var(--danger); }
 .ap-composer-recording { flex: 1; display: inline-flex; align-items: center; gap: var(--space-2); height: var(--control-md); box-sizing: border-box; padding: 0 var(--space-1); font-size: var(--text-body); line-height: var(--leading-body); color: var(--ink); }
 .ap-composer-recdot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--danger); animation: ap-blink 1s steps(1) infinite; }
 .ap-composer-rectime { font-variant-numeric: tabular-nums; color: var(--ink-muted); }
 @keyframes ap-blink { 50% { opacity: .25; } }
-.ap-composer .ap-btn { border-radius: calc(var(--radius-lg) - var(--space-2)); }
+.ap-composer .ap-btn { border-radius: var(--radius-inner); }
 .ap-composer-field { flex: 1; box-sizing: border-box; height: var(--control-md); field-sizing: content; min-height: var(--control-md); max-height: 200px; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--text-body); line-height: var(--leading-body); padding: 3px var(--space-1); }
 .ap-composer-field::placeholder { color: var(--ink-muted); }
 .ap-composer-field:focus-visible { outline: 0; }
-.ap-composer-disabled { opacity: .6; }
+.ap-composer-disabled { opacity: var(--opacity-disabled); }
 .ap-composer-cmdtag { flex: none; display: inline-flex; align-items: center; height: var(--control-md); box-sizing: border-box; padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 500; }
 .ap-composer-cmd .ap-composer-field { font-family: var(--font-mono); font-size: var(--text-ui); }
 /* The rich field (editable): a plain-text editable whose mentions are chips; it sizes like the textarea. */
@@ -262,20 +273,20 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-composer-preview .ap-embed { width: 100%; min-width: 0; }
 
 /* RoomItem */
-.ap-room { font: inherit; display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: 7px var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink-muted); text-align: left; cursor: pointer; }
-.ap-room:hover { background: var(--bg-300); }
-.ap-room-active, .ap-room-active:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+.ap-room { font: inherit; display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink-muted); text-align: left; cursor: pointer; }
+.ap-room:hover { background: var(--hover); }
+.ap-room-active, .ap-room-active:hover { background: var(--selected); color: var(--ink); }
 /* The open room or thread: a neutral fill, a semibold name and an accent bar at its left (on the guide line, for a thread), so it never reads as unread or a mention, which own the accent fills. */
 .ap-room-active { position: relative; }
 .ap-room-active .ap-room-name { font-weight: 600; }
-.ap-room-active::before { content: ''; position: absolute; left: 4px; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+.ap-room-active::before { content: ''; position: absolute; left: var(--space-1); top: var(--space-1_5); bottom: var(--space-1_5); width: 3px; border-radius: var(--radius-full); background: var(--accent); pointer-events: none; }
 .ap-room-unread { color: var(--ink); }
 .ap-room-unread .ap-room-name { font-weight: 600; }
 .ap-room-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .ap-room-name, .ap-room-topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-room-topic { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 /* A thread's preview lines under its title: its summary, then its latest message, each marked by an icon so either reads alone. */
-.ap-tline { display: flex; align-items: center; gap: 4px; min-width: 0; margin-top: 1px; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
+.ap-tline { display: flex; align-items: center; gap: var(--space-1); min-width: 0; margin-top: 1px; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-tline > svg { flex: none; width: 12px; height: 12px; }
 .ap-tline-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-tline-sender { color: var(--ink); font-weight: 500; }
@@ -285,8 +296,8 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-tline-multi .ap-tline-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--ap-tline-lines); line-clamp: var(--ap-tline-lines); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ap-room-unread .ap-tline-latest { color: var(--ink); }
 /* A private room (§4.2.4): a small lock beside its name, wherever the name shows. */
-.ap-lock { flex: none; display: inline-block; width: 12px; height: 12px; margin-left: 4px; vertical-align: -1px; color: var(--ink-muted); }
-.ap-count { flex: none; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: var(--leading-field); font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
+.ap-lock { flex: none; display: inline-block; width: 12px; height: 12px; margin-left: var(--space-1); vertical-align: -1px; color: var(--ink-muted); }
+.ap-count { flex: none; min-width: 20px; height: 20px; padding: 0 var(--space-1_5); box-sizing: border-box; border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: var(--leading-field); font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* StatusBanner */
 /* Even on both sides; a button at the end (`ap-status-action`) takes the right side closer, its own padding making up the rest. */
@@ -314,27 +325,27 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-nudge-pointer::after { content: ''; position: absolute; left: var(--ap-nudge-tip, var(--space-6)); bottom: -6px; width: 10px; height: 10px; background: var(--bg-200); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
 .ap-nudge-top { display: flex; align-items: flex-start; gap: var(--space-3); }
 .ap-nudge-icon { flex: none; display: grid; place-items: center; width: var(--control-md); height: var(--control-md); border-radius: var(--radius-full); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
-.ap-nudge-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ap-nudge-text { flex: 1; min-width: 0; display: grid; gap: var(--space-0_5); }
 .ap-nudge-title { font-weight: 600; }
 .ap-nudge-detail { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-nudge-actions { display: flex; justify-content: flex-end; gap: var(--space-1); }
 .ap-nudge-actions .ap-btn-ghost { color: var(--ink-muted); }
 .ap-nudge-actions .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
-.ap-nudge-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
+.ap-nudge-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
 
 /* MessageActions — floating toolbar on message hover/focus */
-.ap-actions { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); box-shadow: var(--shadow-float); }
+.ap-actions { display: inline-flex; gap: var(--space-0_5); padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); box-shadow: var(--shadow-float); }
 .ap-actions-btn { font: inherit; font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; min-width: var(--control-md); height: var(--control-md); padding: 0 var(--space-2); border: 0; border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; }
-.ap-actions-btn:hover { background: var(--bg-300); color: var(--ink); }
+.ap-actions-btn:hover { background: var(--hover); color: var(--ink); }
 .ap-actions-danger:hover { color: var(--danger); }
 
 /* JumpBar — bar above the composer, or a floating button */
 .ap-jumpbar { display: flex; align-items: center; gap: var(--space-3); margin: 0 var(--space-4); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); box-shadow: var(--shadow-float); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-jumpbar-text { flex: 1; color: var(--ink-muted); }
 .ap-jumpbar-btn { font: inherit; font-weight: 600; height: var(--control-md); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-full); background: transparent; color: var(--denim); cursor: pointer; }
-.ap-jumpbar-btn:hover { background: var(--bg-300); }
+.ap-jumpbar-btn:hover { background: var(--hover); }
 .ap-jumpfab { position: relative; width: var(--control-xl); height: var(--control-xl); display: grid; place-items: center; border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--bg-200); color: var(--ink); font-size: 18px; cursor: pointer; box-shadow: var(--shadow-float); }
-.ap-jumpfab:hover { background: var(--bg-300); }
+.ap-jumpfab:hover { background: var(--hover); }
 .ap-jumpfab-count { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); }
 /* Docked in a pane: the bar centred at the timeline's width; the button's anchor has no height, so it floats over the timeline's corner. */
 .ap-jump-dock { display: flex; justify-content: center; margin-bottom: var(--space-2); }
@@ -357,17 +368,17 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-roomhead-back, .ap-roomhead-typing { display: none; }
 .ap-roomhead-members, .ap-roomhead-summary { flex: none; }
 /* With something new elsewhere, the ‹ becomes the point of a tag holding the count: grey for unread, orange with an @ for a mention, as in the rooms list. */
-.ap-roomhead-tag { position: relative; display: inline-flex; align-items: center; height: 22px; padding: 0 7px 0 3px; border-radius: 0 6px 6px 0; isolation: isolate; font-size: var(--text-sm); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* The point: a square turned on its corner, rounded at the tip, behind the count. */
+.ap-roomhead-tag { position: relative; display: inline-flex; align-items: center; height: var(--control-xs); padding: 0 var(--space-2) 0 3px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; isolation: isolate; font-size: var(--text-sm); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The point: a square turned on its corner, rounded at the tip, behind the count (its side the tag's 22px over √2). */
 .ap-roomhead-tag::before { content: ''; position: absolute; z-index: -1; left: -7.78px; top: 3.22px; width: 15.56px; height: 15.56px; border-bottom-left-radius: 3px; background: inherit; transform: rotate(45deg); }
 .ap-roomhead-tag-quiet { background: var(--bg-300); color: var(--ink); }
-.ap-roomhead-tag-at { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.ap-roomhead-tag-at { background: var(--accent); color: var(--on-accent); }
 @media (max-width: 719px) {
 	.ap-roomhead-back, .ap-roomhead-typing { display: block; }
 	/* Phones keep the header's room for the title: Summary's icon alone, its name in its label. */
 	.ap-roomhead .ap-roomhead-summary { padding: 0 var(--space-2); }
 	.ap-roomhead-summary-word { display: none; }
-	/* The tag's point hangs into the button's left padding, where the arrow sits. */
+	/* The tag's point hangs into the button's left padding, where the arrow sits: its 7.78px, and 2px clear of the edge. */
 	.ap-roomhead-back.ap-roomhead-back-tagged { display: flex; flex: none; align-items: center; width: auto; min-width: var(--control-lg); padding: 0 2px 0 10px; }
 }
 
@@ -378,13 +389,13 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-sect-toggle:hover { color: var(--ink); }
 .ap-sect-caret { display: inline-block; font-size: var(--text-caps); }
 .ap-sect-closed .ap-sect-caret { transform: rotate(-90deg); }
-.ap-sect-body { display: flex; flex-direction: column; gap: 2px; }
+.ap-sect-body { display: flex; flex-direction: column; gap: var(--space-0_5); }
 .ap-sect-head .ap-sect-add { width: var(--control-md); padding: 0; justify-content: center; }
 /* While the list loads: a few lines where its rows will be. */
 .ap-sect-skel { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 .ap-sect-skel .ap-skel { height: 12px; }
 /* A line of text among the rows: a caption, an empty list, an error. */
-.ap-sect-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-sect-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
 
 /* BackendRail — one tile per connected backend */
 .ap-rail { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: var(--rail-w); padding: var(--space-3) 0; box-sizing: border-box; background: var(--bg-rail); }
@@ -392,8 +403,8 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-rail-tile { display: grid; place-items: center; width: var(--rail-tile); height: var(--rail-tile); border-radius: var(--radius-lg); background: var(--bg-200); color: var(--ink); font-size: var(--text-field); font-weight: 600; object-fit: cover; }
 .ap-rail-item:hover .ap-rail-tile { background: var(--accent-soft); color: var(--accent); border-radius: var(--radius-full); }
 .ap-rail-active .ap-rail-tile, .ap-rail-active:hover .ap-rail-tile { background: var(--accent); color: var(--on-accent); border-radius: var(--radius-full); }
-.ap-rail-offline .ap-rail-tile { opacity: .45; }
-.ap-rail-pip { position: absolute; left: 0; top: 50%; width: 4px; height: 0; transform: translateY(-50%); border-radius: 0 4px 4px 0; background: var(--ink); }
+.ap-rail-offline .ap-rail-tile { opacity: var(--opacity-dim); }
+.ap-rail-pip { position: absolute; left: 0; top: 50%; width: 4px; height: 0; transform: translateY(-50%); border-radius: 0 var(--radius-full) var(--radius-full) 0; background: var(--ink); }
 .ap-rail-unread .ap-rail-pip { height: 8px; }
 .ap-rail-item:hover .ap-rail-pip { height: 20px; }
 .ap-rail-active .ap-rail-pip, .ap-rail-active:hover .ap-rail-pip { height: var(--rail-tile); }
@@ -516,8 +527,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2) var(--space-3) var(--space-3); }
 .ap-memberlist-placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 .ap-memberlist-placeholder .ap-skel { height: 12px; }
-.ap-memberlist-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
-.ap-memberlist-note-error { color: var(--danger); }
+.ap-memberlist-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
 /* The add form: raised, like a popover in place, so the members stay in view below it. */
 .ap-memberlist-add { display: grid; gap: var(--space-2); margin: 0 var(--space-1) var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-100); }
 .ap-memberlist-addrow { display: flex; gap: var(--space-2); min-width: 0; }
@@ -535,10 +545,9 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* Role badges follow the name, as beside a message's sender; the remove button floats over the far right. */
 .ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .ap-member-who:hover .ap-member-name { text-decoration: underline; }
-.ap-member-who:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Offline members (§4.5) recede, badges and all; their ring and name still read. */
 .ap-member-offline .ap-member-who { color: var(--ink-muted); }
-.ap-member-offline .ap-avatar, .ap-member-offline .ap-roles { opacity: .6; }
+.ap-member-offline .ap-avatar, .ap-member-offline .ap-roles { opacity: var(--opacity-dim); }
 .ap-member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The name comes first: the badges give up their room before it does, cut off at the right. */
 .ap-member .ap-roles { flex: 0 10000 auto; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
@@ -589,26 +598,24 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* A thread with an unread mention: a light accent tint, set apart from the open thread's neutral fill. */
 .ap-room-nested.ap-room-mention { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); color: var(--ink); }
 .ap-room-nested.ap-room-mention:hover { background: var(--accent-soft); }
-/* A joined thread with nothing new steps back: its name and lines muted, the row faded, so unread ones stand out. */
-.ap-room-nested.ap-room-quiet { opacity: .9; }
+/* A joined thread with nothing new steps back: its name muted and its lines dimmed, so unread ones stand out. */
 .ap-room-nested.ap-room-quiet .ap-room-name { color: var(--ink-muted); font-weight: 400; }
-.ap-room-nested.ap-room-quiet .ap-tline { opacity: .75; }
+.ap-room-nested.ap-room-quiet .ap-tline { opacity: var(--opacity-dim); }
 .ap-roomrow { position: relative; }
 /* A row's action on hover or focus: Exit (or Leave) on a room or thread you're in, Join on a thread you haven't joined. */
-:is(.ap-room-exit, .ap-room-join) { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); display: inline-grid; place-items: center; width: var(--control-md); height: var(--control-md); padding: 0; border: 0; border-radius: calc(var(--radius-md) - 2px); background: transparent; color: var(--ink-muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) ease, background-color var(--duration-fast) ease, color var(--duration-fast) ease; }
+:is(.ap-room-exit, .ap-room-join) { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); display: inline-grid; place-items: center; width: var(--control-md); height: var(--control-md); padding: 0; border: 0; border-radius: var(--radius-inner); background: transparent; color: var(--ink-muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) ease, background-color var(--duration-fast) ease, color var(--duration-fast) ease; }
 .ap-roomrow-nested :is(.ap-room-exit, .ap-room-join) { width: var(--control-sm); height: var(--control-sm); }
 .ap-roomrow:hover :is(.ap-room-exit, .ap-room-join), .ap-roomrow:focus-within :is(.ap-room-exit, .ap-room-join) { opacity: 1; pointer-events: auto; }
 .ap-roomrow:hover .ap-room :is(.ap-count, .ap-room-ago), .ap-roomrow:focus-within .ap-room :is(.ap-count, .ap-room-ago) { visibility: hidden; }
-.ap-roomrow:hover .ap-room, .ap-roomrow:focus-within .ap-room { padding-right: 36px; }
-.ap-roomrow-nested:hover .ap-room, .ap-roomrow-nested:focus-within .ap-room { padding-right: 32px; }
-:is(.ap-room-exit, .ap-room-join):hover { background: var(--bg-200); color: var(--ink); }
-.ap-roomrow-active :is(.ap-room-exit, .ap-room-join):hover { background: var(--bg-100); }
-:is(.ap-room-exit, .ap-room-join):focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: -2px; }
+.ap-roomrow:hover .ap-room, .ap-roomrow:focus-within .ap-room { padding-right: calc(var(--control-md) + var(--space-2)); }
+.ap-roomrow-nested:hover .ap-room, .ap-roomrow-nested:focus-within .ap-room { padding-right: calc(var(--control-sm) + var(--space-2)); }
+/* On a row that's hovered or open, so a step back down to the page. */
+:is(.ap-room-exit, .ap-room-join):hover { background: var(--hover-inset); color: var(--ink); }
 /* Touch can't hover: the open row keeps its action, and Join shows on every row it's on, beside the time. */
 @media (hover: none) {
 	.ap-roomrow-active .ap-room-exit, .ap-room-join { opacity: 1; pointer-events: auto; }
 	.ap-roomrow-active .ap-room .ap-count { visibility: hidden; }
-	.ap-roomrow:has(.ap-room-join) .ap-room { padding-right: 32px; }
+	.ap-roomrow:has(.ap-room-join) .ap-room { padding-right: calc(var(--control-sm) + var(--space-2)); }
 	.ap-roomrow:hover .ap-room .ap-room-ago, .ap-roomrow:focus-within .ap-room .ap-room-ago { visibility: visible; }
 }
 @media (prefers-reduced-motion: reduce) { :is(.ap-room-exit, .ap-room-join) { transition: none; } }
@@ -633,14 +640,14 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 
 /* ThreadList — a room's threads under its row: the joined ones along a guide, then the others under a heading that folds */
 .ap-threads { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 var(--space-1); }
-.ap-threads .ap-room-nested { padding-top: 5px; padding-bottom: 5px; }
+.ap-threads .ap-room-nested { padding-top: var(--space-1_5); padding-bottom: var(--space-1_5); }
 /* A guide from the room down its joined threads. */
 .ap-threads-joined { position: relative; display: flex; flex-direction: column; gap: 1px; }
 .ap-threads-joined::before { content: ''; position: absolute; left: 21px; top: 0; bottom: 0; width: 1px; background: var(--line); pointer-events: none; }
-/* The title in ink and a little heavier than the preview line under it; heavier still with unread replies. A thread with nothing new steps back (.ap-room-quiet). */
+/* The title in ink and a little heavier than the preview line under it; semibold, as the open one, with unread replies. A thread with nothing new steps back (.ap-room-quiet). */
 .ap-threads-joined .ap-room:not(.ap-room-quiet) .ap-room-name { color: var(--ink); font-weight: 500; }
 .ap-threads-joined .ap-room.ap-room-active .ap-room-name { font-weight: 600; }
-.ap-threads-joined .ap-room.ap-room-unread .ap-room-name { font-weight: 650; }
+.ap-threads-joined .ap-room.ap-room-unread .ap-room-name { font-weight: 600; }
 /* The heading's text lines up with the titles under it; its caret hangs to the left, on the guide's line. */
 .ap-threads-head { display: flex; margin: var(--space-2) 0 1px; padding-left: calc(var(--space-3) + var(--space-4)); }
 .ap-threads-head .ap-sect-toggle { position: relative; padding-left: 0; }
@@ -652,14 +659,13 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-threads-others::before { content: ''; position: absolute; left: 21px; top: 0; bottom: 0; border-left: 1px dashed var(--line-strong); pointer-events: none; }
 /* The one being read keeps its Join in view, beside its count. */
 .ap-threads-others .ap-roomrow-active .ap-room-join { opacity: 1; pointer-events: auto; }
-.ap-threads-others .ap-roomrow-active .ap-room { padding-right: 32px; }
+.ap-threads-others .ap-roomrow-active .ap-room { padding-right: calc(var(--control-sm) + var(--space-2)); }
 
 /* SidebarHead — the rooms list's header: the server's name, Connect, and on phones a › back to the pane */
 .ap-shell-sidehead { gap: var(--space-2); }
 .ap-shell-sidehead-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* As the room header's ‹ (.ap-roomhead-back). */
 .ap-shell-sidehead-return { display: none; flex: none; width: var(--control-lg); height: var(--control-lg); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--denim); font: inherit; font-size: 22px; cursor: pointer; }
-.ap-shell-sidehead-return:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* The rooms list's column keeps its contents to itself; on phones it's the whole screen, with no border. */
 .ap-shell-side { overflow: hidden; }
 @media (max-width: 719px) {
@@ -671,12 +677,12 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-fieldlabel { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; color: var(--ink-muted); }
 .ap-field { font: inherit; font-size: var(--text-field); line-height: var(--leading-field); font-weight: 400; height: var(--control-lg); box-sizing: border-box; padding: 0 var(--space-2); border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); }
 .ap-field:focus-visible { outline-offset: 0; border-color: var(--focus); }
-.ap-field:disabled { opacity: .6; }
 
 /* ProfileBar — your identity on the active backend, pinned to the bottom of the sidebar */
 .ap-profile { position: relative; flex: none; display: flex; align-items: center; gap: var(--space-1); height: var(--header-h); box-sizing: border-box; padding: var(--space-1) var(--space-2); border-top: 1px solid var(--line); background: var(--bg-000); }
 .ap-profile-me { font: inherit; display: flex; align-items: center; gap: var(--space-2); flex: 1; min-width: 0; height: 100%; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
-.ap-profile-me:hover, .ap-profile-open { background: var(--bg-300); }
+.ap-profile-me:hover { background: var(--hover); }
+.ap-profile-open { background: var(--pressed); }
 .ap-profile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ap-profile-name { font-weight: 600; font-size: var(--text-ui); line-height: var(--leading-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-profile-sub { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -685,27 +691,25 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profile-pop { position: absolute; left: var(--space-2); right: var(--space-2); bottom: calc(100% + var(--space-2)); z-index: var(--z-menu); max-height: calc(100dvh - 96px); overflow-y: auto; }
 /* The gear beside the bar, for the preferences. */
 .ap-profile-settings { position: relative; flex: none; width: var(--control-lg); height: var(--control-lg); display: grid; place-items: center; padding: 0; color: var(--ink-muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; }
-.ap-profile-settings:hover { color: var(--ink); background: var(--bg-300); }
-.ap-profile-settings:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ap-profile-settings:hover { color: var(--ink); background: var(--hover); }
 /* Notifications paused (§4.5 `mute`): a small bell-off on the gear's corner. */
-.ap-profile-paused { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--bg-100); color: var(--warn); box-shadow: 0 0 0 1px var(--line); }
+.ap-profile-paused { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: var(--radius-full); background: var(--bg-100); color: var(--warn); box-shadow: 0 0 0 1px var(--line); }
 
 /* ProfileEditor — the popover above the ProfileBar */
 .ap-profedit { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
 .ap-profedit-top { display: flex; align-items: center; gap: var(--space-3); }
 .ap-profedit-av { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); min-width: 0; }
-.ap-profedit-hint { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
+.ap-profedit-hint { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
 .ap-profedit-hint code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
-.ap-profedit-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink); }
-.ap-profedit-err { color: var(--danger); }
+.ap-profedit-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
 .ap-profedit-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 .ap-profile-pop .ap-profedit-actions { flex-wrap: wrap; }
 
 /* Motion — short and soft; all of it off when the viewer asks */
-.ap-btn, .ap-room, .ap-thread, .ap-msg, .ap-rail-tile, .ap-actions-btn, .ap-profile-me, .ap-jumpbar-btn, .ap-composer, .ap-field { transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, border-radius .18s ease, color var(--duration-fast) ease; }
+.ap-btn, .ap-room, .ap-thread, .ap-msg, .ap-rail-tile, .ap-actions-btn, .ap-profile-me, .ap-jumpbar-btn, .ap-composer, .ap-field { transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, border-radius var(--duration-slow) ease, color var(--duration-fast) ease; }
 @media (prefers-reduced-motion: reduce) {
   .ap-btn, .ap-room, .ap-thread, .ap-msg, .ap-rail-tile, .ap-actions-btn, .ap-profile-me, .ap-jumpbar-btn, .ap-composer, .ap-field { transition: none; }
-  .ap-typing-dots i { animation: none; opacity: .7; }
+  .ap-typing-dots i { animation: none; opacity: var(--opacity-dim); }
   .ap-composer-recdot { animation: none; }
   .ap-msg-pinged { animation: none; }
   .ap-embed-livebadge i, .ap-embed-caret { animation: none; }
@@ -730,9 +734,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profcard-literal { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
 .ap-profcard-names .ap-roles { align-self: flex-start; margin: 2px 0 0; }
 .ap-profcard-note, .ap-profcard-warn { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); }
-.ap-profcard-note { color: var(--ink-muted); }
+.ap-profcard-note { color: var(--ap-tone, var(--ink-muted)); }
 .ap-profcard-warn { padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--bg-300); color: var(--ink); }
-.ap-profcard-err { color: var(--danger); }
 .ap-profcard-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
 /* ReactorsPopover — who reacted with an emoji; the list scrolls past 320px, so a crowd doesn't run off the screen */
@@ -777,8 +780,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-msg-compact .ap-msg-reply { --reply-indent: calc(40px + var(--space-2)); --spine-x: 20px; --spine-drop: var(--space-1); /* to the time's line; its text starts 4px lower */ }
 .ap-reply { font: inherit; position: relative; display: flex; align-items: center; gap: var(--space-1); min-width: 0; max-width: min(100%, 520px); margin-left: calc(-1 * var(--space-1)); padding: 1px var(--space-1); border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-ui); text-align: left; cursor: pointer; }
 .ap-msg-reply .ap-reply::before { content: ''; position: absolute; right: 100%; top: calc(50% - 1px); bottom: calc(-1 * var(--spine-drop)); box-sizing: border-box; width: calc(var(--reply-indent) - var(--space-1) - var(--spine-x) + 1px); border: 2px solid color-mix(in srgb, var(--line-strong) 60%, transparent); border-right: 0; border-bottom: 0; border-top-left-radius: var(--radius-sm); pointer-events: none; }
-.ap-reply:hover { background: var(--bg-300); color: var(--ink); }
-.ap-msg-highlighted .ap-reply:hover { background: var(--bg-100); }
+.ap-reply:hover { background: var(--hover); color: var(--ink); }
+.ap-msg-highlighted .ap-reply:hover { background: var(--hover-inset); }
 .ap-msg-reply .ap-reply:hover::before { border-color: var(--denim); }
 /* A face smaller than --avatar-sm, to sit inside the 18px line. */
 .ap-reply .ap-avatar { width: 16px; height: 16px; font-size: 7px; }
@@ -793,7 +796,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* ThreadSummary — pinned under the header of a thread view */
 /* The summary icon has a column of its own, so every line of the text starts after it, not just the first. */
 .ap-summary { position: relative; flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-2); margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-2) var(--space-3); background: var(--denim-soft); border-radius: var(--radius-md); }
-.ap-summary-icon { display: grid; place-items: center; height: 20px; color: var(--denim); }
+.ap-summary-icon { display: grid; place-items: center; height: var(--leading-field); color: var(--denim); }
 .ap-summary-closable { padding-right: 36px; }
 /* × sits beside the first line, centred on it. */
 .ap-summary-close { position: absolute; z-index: var(--z-raised); top: 6px; right: 6px; width: var(--control-sm); height: var(--control-sm); }
@@ -804,9 +807,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-summary-open { max-height: 33vh; overflow-y: auto; }
 /* The keyboard's way to open and fold it: invisible, under the pointer's reach, a focus ring around the summary. */
 .ap-summary-toggle { position: absolute; inset: 0; padding: 0; border: 0; border-radius: inherit; background: none; pointer-events: none; }
-.ap-summary-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.ap-summary-text ul, .ap-summary-text ol { margin: var(--space-1) 0 0; padding-left: 20px; }
-.ap-summary-text li + li { margin-top: 2px; }
+.ap-summary-text ul, .ap-summary-text ol { margin: var(--space-1) 0 0; padding-left: var(--space-6); }
+.ap-summary-text li + li { margin-top: var(--space-0_5); }
 .ap-summary-text pre { background: var(--bg-100); }
 .ap-summary-text code { background: var(--bg-100); }
 
@@ -819,7 +821,6 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* ProfileEditor sign-in row */
 .ap-profedit-signin { display: flex; flex-direction: column; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--line); }
 .ap-profedit-row { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
-.ap-profedit-ok { color: var(--ok); }
 /* The ways in on offer, as a row of buttons; adding an email or external sign-in, a field and its button. */
 .ap-profedit-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .ap-profedit-add { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
@@ -829,7 +830,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-fieldlabel-row { display: flex; justify-content: space-between; }
 .ap-fieldlabel-hint { font-weight: 400; }
 /* RoomForm: what starting a thread will do, under its fields */
-.ap-roomform-note { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
+.ap-roomform-note { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ap-tone, var(--ink-muted)); }
 
 /* ConnectScreen — first run, or a new backend from the rail's + */
 .ap-connect { min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); padding: var(--space-8) var(--space-4); background: var(--bg-000); }
@@ -837,44 +838,43 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-connect-page { height: 100dvh; }
 .ap-connect-card { display: flex; flex-direction: column; gap: var(--space-3); width: min(100%, 400px); box-sizing: border-box; padding: var(--space-6); background: var(--bg-100); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 .ap-connect-title { margin: 0; font-size: 28px; line-height: var(--leading-display); font-weight: 600; letter-spacing: -.02em; }
-.ap-connect-tag { margin: -6px 0 var(--space-1); font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink-muted); }
+.ap-connect-tag { margin: calc(-1 * var(--space-1_5)) 0 var(--space-1); font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink-muted); }
 .ap-field-mono { font-family: var(--font-mono); font-size: var(--text-ui); }
 /* The server's welcome (§3.2): its Markdown, rendered and sanitized like a message, above the sign-in fields. */
 .ap-welcome { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--bg-200); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); }
 .ap-welcome p { margin: 0; }
 .ap-welcome p + p, .ap-welcome ul, .ap-welcome ol { margin-top: var(--space-1); }
-.ap-welcome ul, .ap-welcome ol { margin-bottom: 0; padding-left: 20px; }
+.ap-welcome ul, .ap-welcome ol { margin-bottom: 0; padding-left: var(--space-6); }
 .ap-connect-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-1); }
-.ap-connect-actions .ap-btn { border-radius: calc(var(--radius-lg) - var(--space-2)); }
+.ap-connect-actions .ap-btn { border-radius: var(--radius-inner); }
 .ap-connect-other { align-self: flex-start; font-size: var(--text-ui); }
-.ap-seg { display: flex; gap: 2px; padding: 2px; margin-top: 2px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); }
-.ap-seg-item { font: inherit; flex: 1; height: var(--control-md); border: 0; border-radius: calc(var(--radius-md) - 2px); background: transparent; color: var(--ink-muted); font-size: var(--text-ui); font-weight: 600; cursor: pointer; }
+.ap-seg { display: flex; gap: var(--space-0_5); padding: var(--space-0_5); margin-top: var(--space-0_5); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.ap-seg-item { font: inherit; flex: 1; height: var(--control-md); border: 0; border-radius: var(--radius-inner); background: transparent; color: var(--ink-muted); font-size: var(--text-ui); font-weight: 600; cursor: pointer; }
 .ap-seg-item:hover:not(:disabled) { color: var(--ink); }
-.ap-seg-on, .ap-seg-on:hover { background: var(--bg-100); color: var(--ink); box-shadow: var(--shadow-chosen); }
+.ap-seg-on, .ap-seg-on:hover { background: var(--chosen); color: var(--ink); box-shadow: var(--shadow-chosen); }
 /* Choice — two paths of equal weight, each a title and a line saying what it does (Sign in · Create account) */
 .ap-choice { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
-.ap-choice-item { font: inherit; display: flex; flex-direction: column; gap: 2px; padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-200); color: var(--ink-muted); text-align: left; cursor: pointer; transition: background-color var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast); }
+.ap-choice-item { font: inherit; display: flex; flex-direction: column; gap: var(--space-0_5); padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-200); color: var(--ink-muted); text-align: left; cursor: pointer; transition: background-color var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast); }
 .ap-choice-item:hover:not(:disabled) { color: var(--ink); border-color: var(--line-strong); }
-.ap-choice-item:disabled { cursor: default; opacity: .6; }
 .ap-choice-title { font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; }
 .ap-choice-text { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
-.ap-choice-on, .ap-choice-on:hover:not(:disabled) { background: var(--bg-100); border-color: var(--line-strong); color: var(--ink); box-shadow: var(--shadow-chosen); }
+.ap-choice-on, .ap-choice-on:hover:not(:disabled) { background: var(--chosen); border-color: var(--line-strong); color: var(--ink); box-shadow: var(--shadow-chosen); }
 @media (prefers-reduced-motion: reduce) { .ap-choice-item { transition: none; } }
 
 /* CheckList — choices that combine, one per row: a checkbox, a title with an optional muted note, and an optional line saying what it does */
 .ap-checklist { display: grid; gap: var(--space-2); min-width: 0; margin: 0; padding: 0; border: 0; }
 .ap-checklist-legend { margin-bottom: var(--space-1); padding: 0; color: var(--ink); font-size: var(--text-ui); font-weight: 600; }
 .ap-checklist-item { flex-direction: row; align-items: flex-start; gap: var(--space-3); }
-.ap-checklist-item:has(.ap-checklist-box:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ap-checklist-item:has(.ap-checklist-box:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .ap-checklist-item-locked { cursor: default; }
-.ap-checklist-item:has(.ap-checklist-box:disabled:not(:checked)), .ap-checklist-item-off { opacity: .6; }
+.ap-checklist-item:has(.ap-checklist-box:disabled:not(:checked)), .ap-checklist-item-off { opacity: var(--opacity-disabled); }
 .ap-checklist-box { flex: none; width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--accent); cursor: inherit; }
-.ap-checklist-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ap-checklist-label { display: flex; flex-direction: column; gap: var(--space-0_5); min-width: 0; }
 .ap-checklist-head { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--space-2); }
 .ap-checklist-note { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 
 /* Callout — something to know or do before a setting works (Add to Home Screen), with an optional action */
-.ap-callout { display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid var(--line); border-left: 3px solid var(--denim); border-radius: var(--radius-md); background: var(--denim-soft); color: var(--ink); font-size: var(--text-ui); line-height: 19px; }
+.ap-callout { display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid var(--line); border-left: 3px solid var(--denim); border-radius: var(--radius-md); background: var(--denim-soft); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-callout-title { margin: 0; font-weight: 600; }
 .ap-callout-body { color: var(--ink); }
 .ap-callout-body :is(p, ol, ul) { margin: 0; }
@@ -882,7 +882,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-callout-action { margin-top: var(--space-1); }
 .ap-connect-recent { display: flex; flex-direction: column; gap: var(--space-1); width: min(100%, 400px); }
 .ap-connect-recent-item { font: inherit; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
-.ap-connect-recent-item:hover { background: var(--bg-300); }
+.ap-connect-recent-item:hover { background: var(--hover); }
 .ap-connect-tile { width: var(--control-lg); height: var(--control-lg); font-size: var(--text-sm); border-radius: var(--radius-md); background: var(--bg-200); }
 
 /* Dialog — a modal panel: a title with an optional subtitle and a close button, a body, and an optional footer of actions */
@@ -894,7 +894,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-dialog-frame { display: flex; flex-direction: column; max-height: inherit; margin: 0; }
 .ap-dialog-lg .ap-dialog-frame { height: 100%; }
 .ap-dialog-head { flex: none; display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6); border-bottom: 1px solid var(--line); }
-.ap-dialog-heading { flex: 1; min-width: 0; display: grid; gap: 2px; padding-top: 2px; }
+.ap-dialog-heading { flex: 1; min-width: 0; display: grid; gap: var(--space-0_5); padding-top: 2px; }
 .ap-dialog-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; overflow-wrap: anywhere; }
 .ap-dialog-sub { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-dialog-close { flex: none; }
@@ -913,17 +913,16 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 }
 
 /* Switch — a setting that takes effect at once (in a form that is submitted, a CheckList row instead) */
-.ap-switch { flex: none; width: 42px; height: 24px; padding: 3px; display: flex; align-items: center; border: 0; border-radius: var(--radius-full); background: var(--bg-300); cursor: pointer; transition: background-color var(--duration-medium); }
-.ap-switch span { width: 18px; height: 18px; border-radius: var(--radius-full); background: var(--ink-muted); transition: transform var(--duration-medium), background-color var(--duration-medium); }
+/* The track is a small control's height; the thumb fills it less its padding, and travels its own width. */
+.ap-switch { --switch-pad: 3px; --switch-thumb: calc(var(--control-sm) - 2 * var(--switch-pad)); flex: none; width: calc(2 * var(--switch-thumb) + 2 * var(--switch-pad)); height: var(--control-sm); padding: var(--switch-pad); display: flex; align-items: center; border: 0; border-radius: var(--radius-full); background: var(--bg-300); cursor: pointer; transition: background-color var(--duration-medium); }
+.ap-switch span { width: var(--switch-thumb); height: var(--switch-thumb); border-radius: var(--radius-full); background: var(--ink-muted); transition: transform var(--duration-medium), background-color var(--duration-medium); }
 .ap-switch[aria-checked='true'] { background: var(--accent-soft); }
-.ap-switch[aria-checked='true'] span { background: var(--accent); transform: translateX(18px); }
-.ap-switch[aria-disabled='true'] { opacity: .5; cursor: not-allowed; }
-.ap-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ap-switch[aria-checked='true'] span { background: var(--accent); transform: translateX(var(--switch-thumb)); }
 @media (prefers-reduced-motion: reduce) { .ap-switch, .ap-switch span { transition: none; } }
 
 /* MediaViewer — an image full screen, over everything, dark in both themes like a photo viewer; ← and → page through the rest */
 .ap-viewer { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: var(--viewer-ground); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); color: var(--viewer-ink); }
-.ap-viewer[open] { display: flex; flex-direction: column; animation: ap-viewer-in .14s ease-out; }
+.ap-viewer[open] { display: flex; flex-direction: column; animation: ap-viewer-in var(--duration-medium) ease-out; }
 .ap-viewer::backdrop { background: transparent; }
 @keyframes ap-viewer-in { from { opacity: 0; } }
 .ap-viewer-bar { flex: none; display: flex; align-items: center; gap: var(--space-2); padding: calc(var(--space-3) + env(safe-area-inset-top, 0px)) var(--space-4) var(--space-3); }
@@ -931,13 +930,13 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-viewer-title { margin: 0; font-size: var(--text-field); line-height: var(--leading-field); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-viewer-detail { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--viewer-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-viewer-count { flex: none; padding: 0 var(--space-2); font-size: var(--text-ui); color: var(--viewer-ink-muted); font-variant-numeric: tabular-nums; }
-.ap-viewer-btn { flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--viewer-control); color: var(--viewer-ink); cursor: pointer; text-decoration: none; transition: background-color var(--duration-fast) ease, opacity var(--duration-fast) ease; }
+.ap-viewer-btn { flex: none; display: inline-grid; place-items: center; width: var(--control-xl); height: var(--control-xl); padding: 0; border: 0; border-radius: var(--radius-full); background: var(--viewer-control); color: var(--viewer-ink); cursor: pointer; text-decoration: none; transition: background-color var(--duration-fast) ease, opacity var(--duration-fast) ease; }
 .ap-viewer-btn:hover:not(:disabled) { background: var(--viewer-control-hover); }
-.ap-viewer-btn:disabled { opacity: .3; cursor: default; }
-.ap-viewer-btn:focus-visible { outline: 2px solid var(--viewer-ink); outline-offset: 2px; }
-.ap-viewer-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 72px calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); }
+/* On the viewer's dark ground, whatever the theme, the ring is in its ink. */
+.ap-viewer-btn:focus-visible { outline-color: var(--viewer-ink); }
+.ap-viewer-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 calc(var(--space-4) + var(--touch-target) + var(--space-3)) calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); }
 .ap-viewer-media { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: var(--radius-sm); }
-.ap-viewer-nav { position: absolute; top: 50%; width: 44px; height: 44px; transform: translateY(-50%); }
+.ap-viewer-nav { position: absolute; top: 50%; width: var(--touch-target); height: var(--touch-target); transform: translateY(-50%); }
 .ap-viewer-prev { left: var(--space-4); }
 .ap-viewer-next { right: var(--space-4); }
 @media (max-width: 560px) {
@@ -951,12 +950,13 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* TimelineLoading — at the foot of the timeline while it catches up: a pill, and placeholder rows when there is nothing to show yet */
 /* The space below it is its own padding, not a sticky offset: an offset would pull it up onto the message above. */
 .ap-tlstatus { position: sticky; bottom: 0; z-index: var(--z-raised); display: flex; justify-content: center; margin-top: var(--space-4); padding-bottom: var(--space-2); pointer-events: none; }
-.ap-tlstatus-pill { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3) var(--space-1) 10px; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); box-shadow: var(--shadow-float); }
+/* A little less padding beside the round spinner, which looks further in than a letter's edge. */
+.ap-tlstatus-pill { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3) var(--space-1) calc(var(--space-3) - 2px); border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); box-shadow: var(--shadow-float); }
 .ap-tlstatus-spin { width: 12px; height: 12px; box-sizing: border-box; border-radius: var(--radius-full); border: 2px solid color-mix(in srgb, var(--ink-muted) 35%, transparent); border-top-color: var(--accent); animation: ap-spin .8s linear infinite; }
 @keyframes ap-spin { to { transform: rotate(360deg); } }
 .ap-tlstatus-float { position: relative; height: 0; z-index: var(--z-float); pointer-events: none; }
 /* Placed right above the composer's row, whose top margin is --space-2: the pill's foot sits on that margin's top, clear of the composer by the same gap, in the space under the last message. */
-.ap-tlstatus-float .ap-tlstatus-pill { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); white-space: nowrap; animation: ap-tlstatus-in .16s ease-out; }
+.ap-tlstatus-float .ap-tlstatus-pill { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); white-space: nowrap; animation: ap-tlstatus-in var(--duration-medium) ease-out; }
 @keyframes ap-tlstatus-in { from { opacity: 0; transform: translate(-50%, 4px); } }
 .ap-tlload { display: flex; flex-direction: column; justify-content: flex-end; min-height: 100%; box-sizing: border-box; }
 .ap-skel-rows { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -971,15 +971,15 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 
 /* SelectionBar — replaces the composer while messages are being picked */
 .ap-selbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) var(--space-4); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); background: var(--bg-200); border: 1px solid var(--accent); border-radius: var(--radius-lg); font-size: var(--text-ui); line-height: var(--leading-ui); }
-.ap-selbar .ap-btn { border-radius: calc(var(--radius-lg) - var(--space-2)); }
+.ap-selbar .ap-btn { border-radius: var(--radius-inner); }
 .ap-selbar-count { font-weight: 600; font-variant-numeric: tabular-nums; }
 .ap-selbar-info { display: inline-flex; align-items: center; gap: var(--space-3); white-space: nowrap; }
 .ap-selbar-actions { display: inline-flex; align-items: center; gap: var(--space-2); margin-left: auto; white-space: nowrap; }
 .ap-selbar-status { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--ink-muted); }
 .ap-selbar-pick { position: relative; }
 .ap-menu { position: absolute; right: 0; bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); min-width: 200px; margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
-.ap-menu-item { font: inherit; display: block; width: 100%; padding: 6px var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
-.ap-menu-item:hover { background: var(--bg-300); }
+.ap-menu-item { font: inherit; display: block; width: 100%; padding: var(--space-1_5) var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.ap-menu-item:hover { background: var(--hover); }
 .ap-selbar-denied { color: var(--danger); }
 /* Every thread of the room is a destination: keep a long list on screen and scrollable. */
 .ap-selbar-pick .ap-menu { max-height: min(320px, 50dvh); overflow-y: auto; max-width: calc(100vw - var(--space-8)); }
@@ -995,14 +995,14 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* As a picker (`selected`): radio items, a check before the current one; `lead` draws before each label, such as a status dot. */
 .ap-menu-label { display: inline-flex; align-items: baseline; gap: var(--space-2); }
 .ap-menu-lead { display: inline-grid; place-items: center; align-self: center; min-width: 10px; }
-.ap-menu-pick .ap-menu-item { position: relative; padding-left: 28px; }
+.ap-menu-pick .ap-menu-item { position: relative; padding-left: calc(var(--space-3) + var(--space-4)); }
 .ap-menu-item-on::before { content: ''; position: absolute; left: 11px; top: 50%; width: 8px; height: 4px; border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: translateY(-75%) rotate(-45deg); }
 
 /* SettingsSections — a settings dialog's body (Preferences): a nav of sections beside the open one, which scrolls */
 .ap-preferences-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr); }
 .ap-preferences-nav { padding: var(--space-4) var(--space-2); border-right: 1px solid var(--line); }
 .ap-preferences-nav button { width: 100%; padding: var(--space-2) var(--space-3); color: var(--ink); text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
-.ap-preferences-nav button[aria-current="page"] { color: var(--ink); background: var(--bg-300); }
+.ap-preferences-nav button[aria-current="page"] { color: var(--ink); background: var(--selected); }
 .ap-preferences-content { padding: var(--space-6); overflow-y: auto; }
 .ap-preferences-content > h3 { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); }
 .ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
@@ -1017,13 +1017,13 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-pref-setting-title { font-size: var(--text-field); }
 label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: pointer; }
 .ap-pref-experimental { display: inline-block; margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-ui); font-weight: 500; vertical-align: 1px; }
-/* Its lines of text, and a callout's under it (Pause, Status), set at a description's width. */
-.ap-pref-setting-text > p, .ap-pref-setting > p, .ap-pref-fonts > .ap-pref-note, .ap-pause-refused .ap-callout-body > p, .ap-status-pick-answer .ap-callout-body > p { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
+/* Its lines of text, set at a description's width. (A callout under it, Pause's or Status's, spaces itself.) */
+.ap-pref-setting-text > p, .ap-pref-setting > p, .ap-pref-fonts > .ap-pref-note { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
 /* `stacked`: the control under the title. (With `below`, the title and control are a row of their own, above it.) */
 .ap-pref-setting-stacked { display: block; }
 /* Preferences' rows: a note on how a setting stands, and a row of buttons under it */
-.ap-pref-note { margin: var(--space-3) 0; color: var(--ink-muted); font-size: var(--text-ui); line-height: 19px; }
-.ap-pref-help { margin: var(--space-1) 0 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: 17px; }
+.ap-pref-note { margin: var(--space-3) 0; color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-pref-help { margin: var(--space-1) 0 0; color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-pref-setting .ap-pref-test { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-2) 0 0 calc(-1 * var(--space-3)); }
 .ap-pref-notifications:has(+ .ap-pref-push-more) { border-bottom: 0; }
 .ap-pref-push-more { max-width: var(--pref-panel-w); padding-bottom: var(--space-4); }
@@ -1031,14 +1031,13 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-pref-theme-setting select { flex: none; }
 .ap-pref-setting .ap-pref-select { width: min(100%, 320px); }
 .ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
-.ap-font-access-status { margin: var(--space-2) 0 var(--space-1); }
 .ap-pref-fonts { margin-top: var(--space-4); }
 .ap-pref-font-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
 /* Pause notifications and Status follow on from the section's heading, ruled below only. */
 .ap-pref-pause, .ap-status-pick { border-top: 0; }
-.ap-pref-paused { display: flex; align-items: center; gap: var(--space-1); color: var(--warn); font-size: var(--text-ui); line-height: 19px; }
+.ap-pref-paused { display: flex; align-items: center; gap: var(--space-1); }
 .ap-pause-action { flex: none; }
-.ap-pause-refused { margin-top: var(--space-2); max-width: 420px; }
+.ap-pause-refused { margin-top: var(--space-2); max-width: var(--pref-panel-w); }
 .ap-status-pick-action { flex: none; display: inline-flex; align-items: center; gap: var(--space-2); }
 .ap-status-pick-dot { display: inline-grid; place-items: center; width: 12px; }
 .ap-status-pick-answer { max-width: var(--pref-panel-w); margin-top: var(--space-3); }
@@ -1047,12 +1046,12 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-font-label { display: block; margin: var(--space-4) 0 var(--space-1); color: var(--ink); font-size: var(--text-ui); font-weight: 600; }
 .ap-font-hint { margin-top: var(--space-1); }
 .ap-font-combobox { position: relative; }
-.ap-font-combobox > input.ap-field { width: min(100%, 420px); }
-.ap-font-options { position: absolute; z-index: 10; top: calc(100% + 3px); left: 0; width: min(100%, 420px); max-height: 210px; overflow-y: auto; padding: var(--space-1); background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
-.ap-font-load { margin: 0 var(--space-2) var(--space-2); padding: 5px var(--space-2); color: var(--ink); background: var(--bg-300); border: 0; border-radius: var(--radius-sm); cursor: pointer; }
-.ap-font-option { display: block; width: 100%; padding: 5px var(--space-2); color: var(--ink); text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
-.ap-font-option:hover, .ap-font-option-active { background: var(--bg-300); }
-.ap-font-status { margin: 0; padding: var(--space-2); color: var(--ink-muted); font-size: var(--text-sm); line-height: 17px; }
+.ap-font-combobox > input.ap-field { width: min(100%, var(--pref-note-w)); }
+.ap-font-options { position: absolute; z-index: var(--z-menu); top: calc(100% + var(--space-1)); left: 0; width: min(100%, var(--pref-note-w)); max-height: 210px; overflow-y: auto; padding: var(--space-1); background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
+.ap-font-load { margin: 0 var(--space-2) var(--space-2); padding: var(--space-1_5) var(--space-2); color: var(--ink); background: var(--bg-300); border: 0; border-radius: var(--radius-sm); cursor: pointer; }
+.ap-font-option { display: block; width: 100%; padding: var(--space-1_5) var(--space-2); color: var(--ink); text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
+.ap-font-option:hover, .ap-font-option-active { background: var(--hover); }
+.ap-font-status { margin: 0; padding: var(--space-2); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-sm); line-height: var(--leading-sm); }
 
 /* Mention — the @name chip inside message text */
 .ap-mention { display: inline; padding: 1px 5px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }
@@ -1062,17 +1061,17 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
 
 /* Shared autocomplete picker — above the composer while typing @…, #… or :… */
 .ap-mpick { position: absolute; left: var(--space-4); bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); width: min(320px, calc(100% - 2 * var(--space-4))); max-height: 240px; overflow: auto; margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
-.ap-mpick-item { display: flex; align-items: center; gap: var(--space-2); padding: 5px var(--space-2); border-radius: var(--radius-sm); font-size: var(--text-field); line-height: var(--leading-field); cursor: pointer; }
-.ap-mpick-active { background: var(--bg-300); }
+.ap-mpick-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1_5) var(--space-2); border-radius: var(--radius-sm); font-size: var(--text-field); line-height: var(--leading-field); cursor: pointer; }
+.ap-mpick-active { background: var(--hover); }
 .ap-mpick-name { font-weight: 600; }
 .ap-mpick-id { color: var(--ink-muted); font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-mpick-hit { background: transparent; color: var(--accent); }
-.ap-mpick-kbd { margin-left: auto; font: inherit; font-size: var(--text-xs); line-height: var(--leading-sm); padding: 0 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-muted); }
+.ap-mpick-kbd { margin-left: auto; font: inherit; font-size: var(--text-xs); line-height: var(--leading-sm); padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-muted); }
 .ap-mpick-empty { padding: var(--space-2) var(--space-3); font-size: var(--text-ui); color: var(--ink-muted); }
 .ap-mpick-emoji-glyph { width: 24px; text-align: center; font-size: 20px; line-height: 24px; }
 
 /* Mention counts: an @ badge in accent beside the room, and in the jump bar */
-.ap-count-at { font-weight: 700; }
+.ap-count-at { font-weight: 600; }
 .ap-count-quiet { background: var(--bg-300); color: var(--ink); }
 .ap-jumpbar-at { border-color: var(--accent); }
 
@@ -1107,7 +1106,7 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
 .ap-embed-caption a { color: var(--denim); }
 .ap-embed-file, .ap-embed-pending { flex-direction: row; align-items: center; gap: var(--space-3); min-width: 260px; }
 .ap-embed-fileglyph { display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--denim-soft); color: var(--denim); }
-.ap-embed-cardtext { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ap-embed-cardtext { display: flex; flex-direction: column; gap: var(--space-0_5); min-width: 0; }
 .ap-embed-pending { position: relative; overflow: hidden; border-style: dashed; border-color: var(--line-strong); }
 .ap-embed-pending .ap-embed-fileglyph { background: var(--bg-300); color: var(--ink-muted); }
 .ap-embed-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--bg-300); }
@@ -1115,9 +1114,9 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
 .ap-embed-audiocard { gap: var(--space-2); }
 .ap-embed-audiocard .ap-embed-audio { width: 100%; }
 /* An embed's (x), on the corner of the slot holding it (position: relative): shows while the slot is hovered or it has focus, and always on touch screens */
-.ap-embed-remove { position: absolute; top: calc(-1 * var(--space-2)); right: calc(-1 * var(--space-2)); display: grid; place-items: center; width: var(--control-xs); height: var(--control-xs); padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--bg-100); color: var(--ink-muted); cursor: pointer; opacity: 0; transition: opacity var(--duration-fast); }
+.ap-embed-remove { position: absolute; top: calc(-1 * var(--space-2)); right: calc(-1 * var(--space-2)); display: grid; place-items: center; width: var(--control-xs); height: var(--control-xs); padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: var(--bg-100); color: var(--ink-muted); cursor: pointer; opacity: 0; transition: opacity var(--duration-fast); }
 :hover > .ap-embed-remove, .ap-embed-remove:focus-visible { opacity: 1; }
-.ap-embed-remove:hover { background: var(--bg-300); color: var(--ink); }
+.ap-embed-remove:hover { background: var(--hover); color: var(--ink); }
 @media (hover: none) { .ap-embed-remove { opacity: 1; } }
 /* Attachments: files on a draft, above the composer until it is sent. Images as thumbnails labeled with the name and size they will go out at; other files as file or audio cards. */
 .ap-attachments { display: flex; align-items: flex-end; gap: var(--space-3); overflow-x: auto; padding: var(--space-3) var(--space-4) var(--space-2); }
@@ -1125,7 +1124,7 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
 .ap-attachment .ap-embed-card { min-width: 200px; }
 .ap-attachment-thumb { position: relative; display: block; margin: 0; height: 96px; min-width: 96px; max-width: 200px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--bg-200); }
 .ap-attachment-thumb img { display: block; height: 100%; width: auto; min-width: 96px; max-width: 200px; object-fit: cover; }
-.ap-attachment-label { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; padding: 3px var(--space-2) 4px; background: color-mix(in srgb, var(--bg-100) 88%, transparent); backdrop-filter: blur(6px); font-size: var(--text-xs); line-height: 14px; color: var(--ink); }
+.ap-attachment-label { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; padding: 3px var(--space-2) var(--space-1); background: color-mix(in srgb, var(--bg-100) 88%, transparent); backdrop-filter: blur(6px); font-size: var(--text-xs); line-height: var(--leading-xs); color: var(--ink); }
 .ap-attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .ap-attachment-size { color: var(--ink-muted); }
 /* A long name truncates in its middle, keeping its last characters (the extension) in view */
@@ -1135,7 +1134,6 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
 /* A file's name is a button that renames it: hovered or focused, its detail line offers Rename; on touch, a pencil sits after the detail */
 .ap-attachment-rename, .ap-attachment-text { display: flex; flex-direction: column; gap: inherit; min-width: 0; width: 100%; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; line-height: inherit; text-align: left; cursor: pointer; }
 .ap-attachment-text { cursor: default; }
-.ap-attachment-rename:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .ap-attachment-meta { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
 .ap-attachment-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-attachment-renamehint { display: none; align-items: center; gap: 3px; color: var(--ink); }
@@ -1155,14 +1153,14 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
 .ap-msgedit { display: flex; flex-direction: column; margin-top: 2px; background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
 .ap-msgedit:focus-within { border-color: var(--focus); }
 .ap-msgedit .ap-attachments { padding: var(--space-3) var(--space-3) var(--space-1); }
-.ap-msgedit-field { display: block; width: 100%; box-sizing: border-box; min-height: 38px; max-height: 40vh; field-sizing: content; padding: var(--space-2) var(--space-3); border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--text-body); line-height: var(--leading-body); resize: none; outline: none; }
+.ap-msgedit-field { display: block; width: 100%; box-sizing: border-box; min-height: calc(var(--leading-body) + 2 * var(--space-2)); max-height: 40vh; field-sizing: content; padding: var(--space-2) var(--space-3); border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--text-body); line-height: var(--leading-body); resize: none; outline: none; }
 .ap-msgedit-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); padding: 0 var(--space-2) var(--space-2) var(--space-3); }
 .ap-msgedit-hint { margin-right: auto; font-size: var(--text-xs); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-msgedit-hint kbd { font: inherit; font-weight: 600; color: var(--ink); }
 .ap-embed-stream { width: min(100%, 640px); overflow: hidden; border: 1px solid var(--line); background: var(--bg-200); }
-.ap-embed-streamhead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 6px var(--space-3); border-bottom: 1px solid var(--line); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-embed-streamhead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-1_5) var(--space-3); border-bottom: 1px solid var(--line); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-embed-streamkind { font-weight: 600; color: var(--ink-muted); }
-.ap-embed-livebadge { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--accent); }
+.ap-embed-livebadge { display: inline-flex; align-items: center; gap: var(--space-1_5); font-weight: 600; color: var(--accent); }
 .ap-embed-livebadge i { width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); animation: ap-blink 1.2s steps(1) infinite; }
 .ap-embed-streambody { margin: 0; max-height: 280px; overflow: auto; padding: var(--space-2) var(--space-3); font-size: var(--text-ui); line-height: var(--leading-field); white-space: pre-wrap; overflow-wrap: anywhere; }
 pre.ap-embed-streambody { font-family: var(--font-mono); }
@@ -1170,7 +1168,7 @@ pre.ap-embed-streambody { font-family: var(--font-mono); }
 .ap-embed-stream-terminal .ap-embed-streambody { color: var(--ink); }
 /* Terminal colors: the 16 ANSI colors from the theme, bright variants sharing their hue. */
 .ap-term-bold { font-weight: 700; }
-.ap-term-dim { opacity: .65; }
+.ap-term-dim { opacity: var(--opacity-dim); }
 .ap-term-italic { font-style: italic; }
 .ap-term-underline { text-decoration: underline; }
 .ap-term-fg0 { color: var(--line-strong); }
@@ -1192,7 +1190,7 @@ pre.ap-embed-streambody { font-family: var(--font-mono); }
 .ap-term-bg7, .ap-term-bg15 { background-color: var(--ink); color: var(--bg-rail); }
 .ap-embed-caret { display: inline-block; width: .55em; height: 1.1em; margin-left: 1px; vertical-align: text-bottom; background: var(--ink-muted); animation: ap-blink 1s steps(1) infinite; }
 .ap-embed-ogcard { display: flex; flex-direction: column; overflow: hidden; width: min(100%, var(--embed-card-w)); border: 1px solid var(--line); background: var(--bg-200); color: var(--ink); text-decoration: none; }
-a.ap-embed-ogcard:hover { background: var(--bg-300); }
+a.ap-embed-ogcard:hover { background: var(--hover); }
 .ap-embed-ogimg { display: block; width: 100%; aspect-ratio: 1.91 / 1; object-fit: cover; background: var(--bg-300); }
 .ap-embed-ogcard .ap-embed-cardtext { padding: var(--space-3) var(--space-4); }
 .ap-embed-site { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
@@ -1202,15 +1200,15 @@ a.ap-embed-ogcard:hover { background: var(--bg-300); }
 .ap-reactions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); max-width: 100%; }
 /* A long press on a chip lists who reacted: no text selection or callout on top of it. A disabled chip stays focusable for that, so it is aria-disabled. */
 .ap-rchip { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1); height: var(--chip-h); padding: 0 var(--space-2); box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, color var(--duration-fast) ease; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-.ap-rchip:hover:not([aria-disabled='true']) { background: var(--bg-300); color: var(--ink); }
+.ap-rchip:hover:not([aria-disabled='true']) { background: var(--hover); color: var(--ink); }
 .ap-rchip-mine { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .ap-rchip[aria-disabled='true'] { cursor: default; }
 .ap-rchip-emoji { font-family: var(--font-emoji); font-size: var(--text-body); line-height: var(--leading-sm); }
 .ap-rchip-count { font-weight: 600; }
 .ap-rchip-add { width: var(--chip-h); justify-content: center; padding: 0; font-size: var(--text-body); visibility: hidden; }
-.ap-rpalette { display: inline-flex; align-self: flex-start; max-width: 100%; flex-wrap: wrap; gap: 2px; margin-top: var(--space-1); padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-float); }
-.ap-rpick { font: inherit; display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); font-size: 18px; line-height: 1; cursor: pointer; }
-.ap-rpick:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
+.ap-rpalette { display: inline-flex; align-self: flex-start; max-width: 100%; flex-wrap: wrap; gap: var(--space-0_5); margin-top: var(--space-1); padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-float); }
+.ap-rpick { font: inherit; display: inline-grid; place-items: center; width: var(--control-lg); height: var(--control-lg); padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.ap-rpick:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 .ap-rpick-mine { background: var(--accent-soft); }
 .ap-msg:hover .ap-rchip-add, .ap-msg:focus-within .ap-rchip-add { visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .ap-rchip { transition: none; } }

@@ -355,9 +355,9 @@
 				{/if}
 			</span>
 			{#if passkeyError}
-				<span class="ap-profedit-hint ap-profedit-err" role="alert">{passkeyError}</span>
+				<span class="ap-profedit-hint ap-tone-danger" role="alert">{passkeyError}</span>
 			{:else if passkeyNotice}
-				<span class="ap-profedit-hint ap-profedit-ok" role="status">{passkeyNotice}</span>
+				<span class="ap-profedit-hint ap-tone-ok" role="status">{passkeyNotice}</span>
 			{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
 				<span class="ap-profedit-hint">{passkeyUnavailable}</span>
 			{:else if wayBack}
@@ -379,7 +379,7 @@
 				{/if}
 				<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>
 			</span>
-			{#if addEmail.error}<span class="ap-profedit-hint ap-profedit-err" role="alert">{addEmail.error}</span>
+			{#if addEmail.error}<span class="ap-profedit-hint ap-tone-danger" role="alert">{addEmail.error}</span>
 			{:else if addEmail.scheme === 'external' && addEmail.page}<span class="ap-profedit-hint" role="status"><a href={addEmail.page} target="_blank" rel="noopener noreferrer">Open the sign-in page</a>, sign in there, then enter the code it shows you.</span>
 			{:else if addEmail.step === 'code' && addEmail.scheme === 'email'}<span class="ap-profedit-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
 		{/if}
