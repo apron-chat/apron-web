@@ -1,9 +1,6 @@
 <script lang="ts">
-	import DoorOpen from '@lucide/svelte/icons/door-open';
-	import Lock from '@lucide/svelte/icons/lock';
-	import LogIn from '@lucide/svelte/icons/log-in';
-	import ThreadLines from '$lib/design/components/ThreadLines.svelte';
-	import UnreadCount from '$lib/design/components/UnreadCount.svelte';
+	import RoomItem from '$lib/design/components/RoomItem.svelte';
+	import DesignThreadList from '$lib/design/components/ThreadList.svelte';
 	import type { RoomListing } from '$lib/protocol/client';
 	import { threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
 	import { loadOtherThreadsOpen, saveOtherThreadsOpen } from '$lib/ui/storage';
@@ -62,102 +59,45 @@
 		return open && !shown.includes(open) ? [...shown, open] : shown;
 	});
 	let hiddenOthers = $derived(othersOpen ? allOthers.length - shownOthers.length : 0);
-
-	function toggleOthers(): void {
-		othersOpen = !othersOpen;
-		saveOtherThreadsOpen(othersOpen);
-	}
 </script>
 
-<div class="threads" data-testid="thread-list" role="group" aria-label={`Threads in ${roomTitle}`}>
-	{#if joined.length > 0}
-		<div class="joined">
-			{#each joined as entry (entry.id)}
-				{@const open = activeThread === entry.id}
-				{@const replies = open ? 0 : (unread[entry.id] ?? 0)}
-				{@const mentioned = open ? 0 : (mentions[entry.id] ?? 0)}
-				<div class={['ap-roomrow', 'ap-roomrow-nested', open && 'ap-roomrow-active']}>
-					<button class="ap-room ap-room-nested" class:ap-room-active={open} class:ap-room-unread={replies > 0 || mentioned > 0} class:ap-room-mention={mentioned > 0} class:ap-room-quiet={!open && !replies && !mentioned} type="button" data-thread={entry.id} aria-current={open ? 'page' : undefined} onclick={() => onthread(entry.id)}>
-						<span class="ap-room-text">
-							<span class="ap-room-name">{entry.title}{#if entry.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
-							<!-- Its summary, then its latest message: both when it has both, each marked so either reads alone, as on its card. -->
-							<ThreadLines summary={threadSummaryText(entry)} latest={threadLatest(entry)} testid="thread-list" />
-						</span>
-						<!-- One bubble for what's new: unread replies in grey, orange with an @ when they include a mention. A thread with nothing new shows none, and steps back. -->
-						<UnreadCount unread={replies} mentions={mentioned} noun="reply" testid="thread-unread" />
-					</button>
-					<!-- Leaving is the archive: the thread stops alerting and moves down to Other threads, on every device. -->
-					{#if canJoin}
-						<button class="ap-room-exit" type="button" data-leave={entry.id} title="Leave thread" aria-label={`Leave ${entry.title}`} onclick={() => onleave(entry.id)}><DoorOpen size={15} aria-hidden="true" /></button>
-					{/if}
-				</div>
-			{/each}
-		</div>
-	{/if}
-	{#if allOthers.length > 0}
-		<!-- A heading that folds, like Browse rooms: these deliver nothing live (§3.4), so they have no counts or previews. -->
-		<div class="others-head">
-			<button class="ap-sect-toggle" class:shut={!othersOpen} type="button" aria-expanded={othersOpen} data-testid="other-threads" onclick={toggleOthers}>
-				<span class="ap-sect-caret" aria-hidden="true">▾</span>Other threads<span class="others-count">· {allOthers.length}</span>
-			</button>
-		</div>
-		<!-- The guide carries on, dashed, beside the threads you haven't joined. -->
-		<div class="others">
-			{#each shownOthers as other (other.id)}
-				{@const open = other.id === activeThread}
-				{@const ago = other.latestLogId !== undefined ? idAgo(other.latestLogId, minuteNow()) : ''}
-				<div class={['ap-roomrow', 'ap-roomrow-nested', open && 'ap-roomrow-active']}>
-					<button class="ap-room ap-room-nested ap-room-unjoined" class:ap-room-active={open} type="button" data-other-thread={other.id} data-thread={open ? other.id : undefined} aria-current={open ? 'page' : undefined} title={open ? undefined : `Read ${other.title} without joining`} onclick={() => (open ? onthread(other.id) : onopen(other.id))}>
-						<span class="ap-room-text">
-							<span class="ap-room-name">{other.title}{#if other.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
-							<ThreadLines summary={other.summary} testid="other-thread" />
-						</span>
-						<!-- The one being read has its history loaded, so its count is known; the others say when they were last active. -->
-						{#if open && reading?.count !== undefined}
-							<small class="room-meta" aria-label={`${reading.count} ${reading.count === 1 ? 'message' : 'messages'}`}>{reading.count}</small>
-						{:else if ago}
-							<time class="ap-room-ago" data-testid="other-thread-ago" datetime={idIso(other.latestLogId ?? '')} title={`Last active ${idDateTime(other.latestLogId ?? '')}`}>{ago}</time>
-						{/if}
-					</button>
-					<!-- Joining is a door in, as leaving is a door out. -->
-					{#if canJoin}
-						<button class="ap-room-join" type="button" data-join={other.id} title="Join thread" aria-label={`Join ${other.title}`} onclick={() => onjoin(other.id)}><LogIn size={15} aria-hidden="true" /></button>
-					{/if}
-				</div>
-			{/each}
-			{#if hiddenOthers > 0}
-				<button class="ap-room ap-room-nested more" type="button" data-testid="more-threads" onclick={() => (allFor = roomId)}>
-					<span class="ap-room-text"><span class="ap-room-name">{hiddenOthers} more…</span></span>
-				</button>
-			{/if}
-		</div>
-	{/if}
-</div>
+<!-- The design system's ThreadList holds the rows, each a nested RoomItem; the app says which threads, and what picking one does. -->
+{#snippet joinedRows()}
+	{#each joined as entry (entry.id)}
+		{@const open = activeThread === entry.id}
+		<!-- Its summary, then its latest message: both when it has both, each marked so either reads alone, as on its card. One bubble for what's new: unread replies in grey, orange with an @ when they include a mention. A thread with nothing new shows none, and steps back. -->
+		<!-- Leaving is the archive: the thread stops alerting and moves down to Other threads, on every device. -->
+		<RoomItem
+			room={entry.id} name={entry.title} private={entry.private} nested active={open}
+			unread={open ? 0 : (unread[entry.id] ?? 0)} mentions={open ? 0 : (mentions[entry.id] ?? 0)}
+			summary={threadSummaryText(entry)} latest={threadLatest(entry)} testid="thread-list" countTestid="thread-unread"
+			data-thread={entry.id} onselect={() => onthread(entry.id)} onleave={canJoin ? () => onleave(entry.id) : undefined}
+		/>
+	{/each}
+{/snippet}
+{#snippet otherRows()}
+	{#each shownOthers as other (other.id)}
+		{@const open = other.id === activeThread}
+		{@const last = other.latestLogId}
+		<!-- The one being read has its history loaded, so its count is known; the others say when they were last active. Joining is a door in, as leaving is a door out. -->
+		<RoomItem
+			room={other.id} name={other.title} private={other.private} nested unjoined active={open} summary={other.summary} testid="other-thread"
+			count={open ? reading?.count : undefined}
+			ago={last !== undefined ? idAgo(last, minuteNow()) : undefined}
+			agoIso={last !== undefined ? idIso(last) : undefined} agoTitle={last !== undefined ? `Last active ${idDateTime(last)}` : undefined}
+			data-other-thread={other.id} data-thread={open ? other.id : undefined} title={open ? undefined : `Read ${other.title} without joining`}
+			onselect={() => (open ? onthread(other.id) : onopen(other.id))} onjoin={canJoin ? () => onjoin(other.id) : undefined}
+		/>
+	{/each}
+{/snippet}
 
-<style>
-	.threads { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 var(--space-1); }
-	.threads .ap-room-nested { padding-top: 5px; padding-bottom: 5px; }
-	/* A guide from the room down its joined threads. */
-	.joined { position: relative; display: flex; flex-direction: column; gap: 1px; }
-	.joined::before { content: ''; position: absolute; left: 21px; top: 0; bottom: 0; width: 1px; background: var(--line); pointer-events: none; }
-	/* The title in ink and a little heavier than the preview line under it; heavier still with unread replies. A thread with nothing new steps back (apron.css). */
-	.joined .ap-room:not(.ap-room-quiet) .ap-room-name { color: var(--ink); font-weight: 500; }
-	.joined .ap-room.ap-room-active .ap-room-name { font-weight: 600; }
-	.joined .ap-room.ap-room-unread .ap-room-name { font-weight: 650; }
-	.room-meta { flex: none; font-size: var(--text-sm); line-height: var(--leading-ui); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-	.ap-room-active .room-meta { color: var(--ink); }
-
-	/* The heading's text lines up with the titles under it; its caret hangs to the left, on the guide's line. */
-	.others-head { display: flex; margin: var(--space-2) 0 1px; padding-left: calc(var(--space-3) + var(--space-4)); }
-	.others-head .ap-sect-toggle { position: relative; padding-left: 0; }
-	.others-head .ap-sect-caret { position: absolute; left: -12px; width: 10px; text-align: center; }
-	.others-count { margin-left: 2px; font-weight: 400; }
-	.shut .ap-sect-caret { transform: rotate(-90deg); }
-	.more .ap-room-name { color: var(--denim); font-size: var(--text-sm); }
-	/* The guide from the room carries on beside the threads you haven't joined, dashed, as they aren't yours yet. */
-	.others { position: relative; display: flex; flex-direction: column; gap: 1px; }
-	.others::before { content: ''; position: absolute; left: 21px; top: 0; bottom: 0; border-left: 1px dashed var(--line-strong); pointer-events: none; }
-	/* The one being read keeps its Join in view, beside its count. */
-	.others .ap-roomrow-active .ap-room-join { opacity: 1; pointer-events: auto; }
-	.others .ap-roomrow-active .ap-room { padding-right: 32px; }
-</style>
+<DesignThreadList
+	room={roomTitle}
+	joined={joined.length > 0 ? joinedRows : undefined}
+	others={allOthers.length}
+	{otherRows}
+	bind:othersOpen
+	ontoggleothers={saveOtherThreadsOpen}
+	more={hiddenOthers}
+	onmore={() => (allFor = roomId)}
+/>

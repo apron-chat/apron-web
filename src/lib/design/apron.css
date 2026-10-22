@@ -337,9 +337,25 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-roomhead-name { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; white-space: nowrap; }
 .ap-roomhead-sub { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-roomhead-typing { color: var(--denim); }
-.ap-roomhead-actions { display: flex; gap: var(--space-1); }
 .ap-roomhead-back { font: inherit; font-size: 22px; width: var(--control-lg); height: var(--control-lg); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--denim); cursor: pointer; }
 @container (max-width: 560px) { .ap-roomhead-text { flex-direction: column; align-items: stretch; gap: 0; } }
+/* The ‹ back to the rooms list, and typing in the subtitle, are for phones: wider, the rooms list is beside the pane and typing shows above the composer. */
+.ap-roomhead-back, .ap-roomhead-typing { display: none; }
+.ap-roomhead-members, .ap-roomhead-summary { flex: none; }
+/* With something new elsewhere, the ‹ becomes the point of a tag holding the count: grey for unread, orange with an @ for a mention, as in the rooms list. */
+.ap-roomhead-tag { position: relative; display: inline-flex; align-items: center; height: 22px; padding: 0 7px 0 3px; border-radius: 0 6px 6px 0; isolation: isolate; font-size: var(--text-sm); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The point: a square turned on its corner, rounded at the tip, behind the count. */
+.ap-roomhead-tag::before { content: ''; position: absolute; z-index: -1; left: -7.78px; top: 3.22px; width: 15.56px; height: 15.56px; border-bottom-left-radius: 3px; background: inherit; transform: rotate(45deg); }
+.ap-roomhead-tag-quiet { background: var(--bg-300); color: var(--ink); }
+.ap-roomhead-tag-at { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+@media (max-width: 719px) {
+	.ap-roomhead-back, .ap-roomhead-typing { display: block; }
+	/* Phones keep the header's room for the title: Summary's icon alone, its name in its label. */
+	.ap-roomhead .ap-roomhead-summary { padding: 0 var(--space-2); }
+	.ap-roomhead-summary-word { display: none; }
+	/* The tag's point hangs into the button's left padding, where the arrow sits. */
+	.ap-roomhead-back.ap-roomhead-back-tagged { display: flex; flex: none; align-items: center; width: auto; min-width: var(--control-lg); padding: 0 2px 0 10px; }
+}
 
 /* SidebarSection */
 .ap-sect + .ap-sect { margin-top: var(--space-3); }
@@ -349,6 +365,12 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-sect-caret { display: inline-block; font-size: var(--text-caps); }
 .ap-sect-closed .ap-sect-caret { transform: rotate(-90deg); }
 .ap-sect-body { display: flex; flex-direction: column; gap: 2px; }
+.ap-sect-head .ap-sect-add { width: var(--control-md); padding: 0; justify-content: center; }
+/* While the list loads: a few lines where its rows will be. */
+.ap-sect-skel { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
+.ap-sect-skel .ap-skel { height: 12px; }
+/* A line of text among the rows: a caption, an empty list, an error. */
+.ap-sect-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
 
 /* BackendRail — one tile per connected backend */
 .ap-rail { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: var(--rail-w); padding: var(--space-3) 0; box-sizing: border-box; background: var(--bg-rail); }
@@ -410,12 +432,56 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-room-unjoined .ap-room-name { color: var(--ink-muted); }
 .ap-roomrow:hover .ap-room-unjoined .ap-room-name, .ap-roomrow:focus-within .ap-room-unjoined .ap-room-name, .ap-room-unjoined.ap-room-active .ap-room-name { color: var(--ink); }
 .ap-room-ago { flex: none; font-size: var(--text-sm); line-height: var(--leading-ui); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-.ap-roomhead-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A thread read without joining: how many messages it has, once loaded. A room whose history is loading: a …. */
+.ap-room-count { flex: none; font-size: var(--text-sm); line-height: var(--leading-ui); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.ap-room-active .ap-room-count { color: var(--ink); }
+.ap-room-loading { flex: none; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* The open room's row: a + that starts a thread in it, always shown, the row making room for it. */
+.ap-roomstart { position: relative; }
+.ap-roomstart .ap-room { padding-right: calc(var(--control-md) + var(--space-1) + var(--space-2)); }
+.ap-room-new { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); }
+.ap-roomhead-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .ap-roomhead-crumb { font: inherit; padding: 0; border: 0; background: none; color: var(--ink-muted); cursor: pointer; }
 .ap-roomhead-crumb:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 .ap-roomhead-sep { color: var(--ink-muted); font-weight: 400; }
 /* A standalone "Moved to" marker lines up with the message text column */
 .ap-timeline > .ap-thread-moved { margin-left: calc(var(--space-4) + var(--avatar-md) + var(--space-3)); }
+
+/* ThreadList — a room's threads under its row: the joined ones along a guide, then the others under a heading that folds */
+.ap-threads { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 var(--space-1); }
+.ap-threads .ap-room-nested { padding-top: 5px; padding-bottom: 5px; }
+/* A guide from the room down its joined threads. */
+.ap-threads-joined { position: relative; display: flex; flex-direction: column; gap: 1px; }
+.ap-threads-joined::before { content: ''; position: absolute; left: 21px; top: 0; bottom: 0; width: 1px; background: var(--line); pointer-events: none; }
+/* The title in ink and a little heavier than the preview line under it; heavier still with unread replies. A thread with nothing new steps back (.ap-room-quiet). */
+.ap-threads-joined .ap-room:not(.ap-room-quiet) .ap-room-name { color: var(--ink); font-weight: 500; }
+.ap-threads-joined .ap-room.ap-room-active .ap-room-name { font-weight: 600; }
+.ap-threads-joined .ap-room.ap-room-unread .ap-room-name { font-weight: 650; }
+/* The heading's text lines up with the titles under it; its caret hangs to the left, on the guide's line. */
+.ap-threads-head { display: flex; margin: var(--space-2) 0 1px; padding-left: calc(var(--space-3) + var(--space-4)); }
+.ap-threads-head .ap-sect-toggle { position: relative; padding-left: 0; }
+.ap-threads-head .ap-sect-caret { position: absolute; left: -12px; width: 10px; text-align: center; }
+.ap-threads-count { margin-left: 2px; font-weight: 400; }
+.ap-threads-more .ap-room-name { color: var(--denim); font-size: var(--text-sm); }
+/* The guide from the room carries on beside the threads you haven't joined, dashed, as they aren't yours yet. */
+.ap-threads-others { position: relative; display: flex; flex-direction: column; gap: 1px; }
+.ap-threads-others::before { content: ''; position: absolute; left: 21px; top: 0; bottom: 0; border-left: 1px dashed var(--line-strong); pointer-events: none; }
+/* The one being read keeps its Join in view, beside its count. */
+.ap-threads-others .ap-roomrow-active .ap-room-join { opacity: 1; pointer-events: auto; }
+.ap-threads-others .ap-roomrow-active .ap-room { padding-right: 32px; }
+
+/* SidebarHead — the rooms list's header: the server's name, Connect, and on phones a › back to the pane */
+.ap-shell-sidehead { gap: var(--space-2); }
+.ap-shell-sidehead-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* As the room header's ‹ (.ap-roomhead-back). */
+.ap-shell-sidehead-return { display: none; flex: none; width: var(--control-lg); height: var(--control-lg); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--denim); font: inherit; font-size: 22px; cursor: pointer; }
+.ap-shell-sidehead-return:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* The rooms list's column keeps its contents to itself; on phones it's the whole screen, with no border. */
+.ap-shell-side { overflow: hidden; }
+@media (max-width: 719px) {
+	.ap-shell-sidehead-return { display: block; }
+	.ap-shell-side { border-right: 0; }
+}
 
 /* Text field — profile handle and other single-line inputs */
 .ap-fieldlabel { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; color: var(--ink-muted); }
@@ -424,15 +490,21 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-field:disabled { opacity: .6; }
 
 /* ProfileBar — your identity on the active backend, pinned to the bottom of the sidebar */
-.ap-profile { position: relative; flex: none; height: var(--header-h); box-sizing: border-box; padding: var(--space-1) var(--space-2); border-top: 1px solid var(--line); background: var(--bg-000); }
-.ap-profile-me { font: inherit; display: flex; align-items: center; gap: var(--space-2); width: 100%; height: 100%; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.ap-profile { position: relative; flex: none; display: flex; align-items: center; gap: var(--space-1); height: var(--header-h); box-sizing: border-box; padding: var(--space-1) var(--space-2); border-top: 1px solid var(--line); background: var(--bg-000); }
+.ap-profile-me { font: inherit; display: flex; align-items: center; gap: var(--space-2); flex: 1; min-width: 0; height: 100%; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .ap-profile-me:hover, .ap-profile-open { background: var(--bg-300); }
 .ap-profile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ap-profile-name { font-weight: 600; font-size: var(--text-ui); line-height: var(--leading-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-profile-sub { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-profile-edit { font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; color: var(--ink-muted); visibility: hidden; }
 .ap-profile-me:hover .ap-profile-edit, .ap-profile-me:focus-visible .ap-profile-edit, .ap-profile-open .ap-profile-edit { visibility: visible; }
-.ap-profile-pop { position: absolute; left: var(--space-2); right: var(--space-2); bottom: calc(100% + var(--space-2)); z-index: var(--z-menu); }
+.ap-profile-pop { position: absolute; left: var(--space-2); right: var(--space-2); bottom: calc(100% + var(--space-2)); z-index: var(--z-menu); max-height: calc(100dvh - 96px); overflow-y: auto; }
+/* The gear beside the bar, for the preferences. */
+.ap-profile-settings { position: relative; flex: none; width: var(--control-lg); height: var(--control-lg); display: grid; place-items: center; padding: 0; color: var(--ink-muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; }
+.ap-profile-settings:hover { color: var(--ink); background: var(--bg-300); }
+.ap-profile-settings:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Notifications paused (§4.5 `mute`): a small bell-off on the gear's corner. */
+.ap-profile-paused { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--bg-100); color: var(--warn); box-shadow: 0 0 0 1px var(--line); }
 
 /* ProfileEditor — the popover above the ProfileBar */
 .ap-profedit { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
@@ -443,6 +515,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-profedit-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink); }
 .ap-profedit-err { color: var(--danger); }
 .ap-profedit-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.ap-profile-pop .ap-profedit-actions { flex-wrap: wrap; }
 
 /* Motion — short and soft; all of it off when the viewer asks */
 .ap-btn, .ap-room, .ap-thread, .ap-msg, .ap-rail-tile, .ap-actions-btn, .ap-profile-me, .ap-jumpbar-btn, .ap-composer, .ap-field { transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, border-radius .18s ease, color var(--duration-fast) ease; }
@@ -506,6 +579,10 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-profedit-signin { display: flex; flex-direction: column; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--line); }
 .ap-profedit-row { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
 .ap-profedit-ok { color: var(--ok); }
+/* The ways in on offer, as a row of buttons; adding an email or external sign-in, a field and its button. */
+.ap-profedit-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ap-profedit-add { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
+.ap-profedit-add .ap-field { flex: 1; min-width: 0; height: var(--control-md); font-size: var(--text-ui); }
 .ap-profedit-signin .ap-typing-dots { vertical-align: middle; margin-right: var(--space-1); }
 .ap-field-multi { height: auto; padding: var(--space-1) var(--space-2); resize: vertical; font: inherit; font-size: var(--text-field); line-height: var(--leading-field); font-weight: 400; }
 .ap-fieldlabel-row { display: flex; justify-content: space-between; }

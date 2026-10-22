@@ -1,4 +1,4 @@
-<!-- @dsCard group="Identity" height=400 subtitle="Closed and open" -->
+<!-- @dsCard group="Identity" height=400 subtitle="Closed with its preferences gear, notifications paused and a sign-in to add; open, its editor above it; before signing in" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ProfileBar</title></head>
@@ -8,9 +8,11 @@
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   function col() { var c = document.createElement('div'); c.style.cssText = 'width:248px;background:var(--bg-000);display:flex;flex-direction:column;justify-content:flex-end;height:100%'; root.appendChild(c); return c; }
-  add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work' }, col());
-  add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work', open: true,
-    editor: A.part(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true }) }, col());
+  var noop = function () {};
+  add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work', status: 'online', note: 'add a sign-in', onpreferences: noop, paused: 'until 14:30' }, col());
+  add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work', open: true, onpreferences: noop,
+    editor: A.part(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, dialog: false }) }, col());
+  add(A.ProfileBar, { placeholder: 'Signing in…', backend: 'Work', onpreferences: noop }, col());
 </script>
 </body>
 </html>

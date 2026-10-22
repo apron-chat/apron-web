@@ -1,4 +1,4 @@
-<!-- @dsCard group="Identity" height=760 subtitle="Handle, avatar, passkey states" -->
+<!-- @dsCard group="Identity" height=900 subtitle="Handle, avatar, passkey states; an upload in flight and one that failed; a declined handle with the server's reason; the sign-in group filled by the client" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ProfileEditor</title></head>
@@ -13,6 +13,10 @@
   add(A.ProfileEditor, { userId: 'guest_7', name: 'Alice', canPasskey: true, passkey: 'waiting' });
   add(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, canPasskey: true, passkey: 'done' });
   add(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canPasskey: true, passkey: 'declined' });
+  add(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, avatarBusy: 'uploading' });
+  add(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, avatarError: 'The image is too large' });
+  add(A.ProfileEditor, { userId: 'guest_7', name: 'root', status: 'declined', declinedReason: 'reserved', declinedHint: 'Sign in and it’s applied once you’re signed in.',
+    signin: A.html('<span class="ap-profedit-row"><span class="ap-profedit-buttons"><button class="ap-btn ap-btn-sm" type="button">Sign in with a passkey</button><button class="ap-btn ap-btn-sm" type="button">Sign in with email</button></span><span class="ap-profedit-hint">Signed in as a guest</span></span><span class="ap-profedit-add" role="group" aria-label="Add email"><input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com"><button class="ap-btn ap-btn-sm" type="button">Send code</button><button class="ap-link" type="button">Cancel</button></span>') });
 </script>
 </body>
 </html>

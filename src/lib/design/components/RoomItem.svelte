@@ -1,8 +1,14 @@
 <script lang="ts">
+	import DoorOpen from '@lucide/svelte/icons/door-open';
+	import Lock from '@lucide/svelte/icons/lock';
+	import LogIn from '@lucide/svelte/icons/log-in';
+	import Plus from '@lucide/svelte/icons/plus';
+	import type { HTMLButtonAttributes } from 'svelte/elements';
 	import ThreadLines from './ThreadLines.svelte';
 	import UnreadCount from './UnreadCount.svelte';
 
-	interface Props {
+	/** Other attributes (`data-*`, `title`) go on the row's button. */
+	interface Props extends HTMLButtonAttributes {
 		room: string;
 		/** `title`, falling back to `room_id` */
 		name?: string;
@@ -21,49 +27,70 @@
 		 * nothing new (no unread, no mention, not open) it steps back, muted and faded.
 		 */
 		nested?: boolean;
+		/** A thread you haven't joined, with or without Join on it: its title muted, never tinted or stepped back. On by default with `onjoin`. */
+		unjoined?: boolean;
 		/** A thread's summary (its `description`) as one line of text, under its title, marked by a text icon. */
 		summary?: string;
 		/** A thread's newest message, on the line after its summary, marked by a reply arrow: its sender, then its text. */
 		latest?: { sender?: string; text: string };
 		/** When it was last active, compactly (`2h`, `Tue`), at the end of its row: for a thread you haven't joined, which has no counts. */
 		ago?: string;
+		/** `ago`'s moment as an ISO 8601 `datetime`, and in full for its tooltip ("Last active …"). */
+		agoIso?: string;
+		agoTitle?: string;
+		/** How many messages it holds, once its history has loaded, at the end of its row in place of `ago`: for a thread read without joining. */
+		count?: number;
+		/** Its history is still loading: a … at the end of its row. */
+		loading?: boolean;
+		/** Prefix for `data-testid`s: `<testid>-summary` and `<testid>-latest` on its preview lines, `<testid>-ago` on its time. */
+		testid?: string;
+		/** A `data-testid` for its unread bubble. */
+		countTestid?: string;
 		onselect?: () => void;
-		/** Cap `rooms`: a door button titled "Exit" on hover/focus. Sends `room_leave` (§4.2.2). */
+		/** Cap `rooms`: a door-out button titled "Leave thread" (or room) on hover/focus. Sends `room_leave` (§4.2.2). */
 		onleave?: (e: MouseEvent) => void;
 		/**
-		 * Cap `rooms`, for a thread you haven't joined: a door-in button titled "Join" on hover/focus, where a joined
-		 * one has Exit, and its title muted. Sends `room_join` (§4.2.2).
+		 * Cap `rooms`, for a thread you haven't joined: a door-in button titled "Join thread" on hover/focus, where a
+		 * joined one has Leave. Sends `room_join` (§4.2.2).
 		 */
 		onjoin?: (e: MouseEvent) => void;
+		/** A + at the end of the open room's row, always shown, that starts a thread in it. */
+		onnewthread?: () => void;
 	}
-	let { room, name, topic, private: isPrivate, unread, mentions, active, nested, summary, latest, ago, onselect, onleave, onjoin }: Props = $props();
+	let { room, name, topic, private: isPrivate, unread, mentions, active, nested, unjoined, summary, latest, ago, agoIso, agoTitle, count, loading, testid, countTestid, onselect, onleave, onjoin, onnewthread, ...rest }: Props = $props();
 	const shown = $derived(name || room);
+	const outside = $derived(unjoined ?? Boolean(onjoin));
 	/** A joined thread: tinted with an unread mention, stepped back with nothing new. */
-	const mention = $derived(nested && !active && !onjoin && Boolean(mentions));
-	const quiet = $derived(nested && !active && !onjoin && !unread && !mentions);
+	const mention = $derived(nested && !active && !outside && Boolean(mentions));
+	const quiet = $derived(nested && !active && !outside && !unread && !mentions);
+	const noun = $derived(nested ? 'thread' : 'room');
 </script>
 
 {#snippet row()}
-	<button type="button" class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', (unread || mentions) && 'ap-room-unread', onjoin && 'ap-room-unjoined', mention && 'ap-room-mention', quiet && 'ap-room-quiet']} aria-current={active ? 'page' : undefined} onclick={onselect}>
-		<span class="ap-room-text"><span class="ap-room-name">{shown}{#if isPrivate}<svg class="ap-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Private"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>{/if}</span>{#if topic}<span class="ap-room-topic">{topic}</span>{/if}<ThreadLines {summary} {latest} /></span>
-		<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun={nested ? 'reply' : 'message'} />
-		{#if ago}<span class="ap-room-ago">{ago}</span>{/if}
+	<button type="button" {...rest} class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', (unread || mentions) && 'ap-room-unread', outside && 'ap-room-unjoined', mention && 'ap-room-mention', quiet && 'ap-room-quiet']} aria-current={active ? 'page' : undefined} onclick={onselect}>
+		<span class="ap-room-text"><span class="ap-room-name">{shown}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>{#if topic}<span class="ap-room-topic">{topic}</span>{/if}<ThreadLines {summary} {latest} {testid} /></span>
+		<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun={nested ? 'reply' : 'message'} testid={countTestid} />
+		{#if count !== undefined}<small class="ap-room-count" aria-label={`${count} ${count === 1 ? 'message' : 'messages'}`}>{count}</small>
+		{:else if ago}<time class="ap-room-ago" data-testid={testid && `${testid}-ago`} datetime={agoIso} title={agoTitle}>{ago}</time>{/if}
+		{#if loading}<span class="ap-room-loading" aria-label="Loading history">…</span>{/if}
 	</button>
 {/snippet}
 
-{#if onjoin}
+<!-- A thread's row always sits in a .ap-roomrow, which makes room for its action on hover, whether or not it has one. -->
+{#if nested || onjoin || onleave}
 	<div class={['ap-roomrow', nested && 'ap-roomrow-nested', active && 'ap-roomrow-active']}>
 		{@render row()}
-		<button type="button" class="ap-room-join" title="Join" aria-label="Join {shown}" onclick={(e) => { e.stopPropagation(); onjoin(e); }}>
-			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 17 5-5-5-5" /><path d="M15 12H3" /><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /></svg>
-		</button>
+		{#if onleave}
+			<button type="button" class="ap-room-exit" data-leave={room} title="Leave {noun}" aria-label="Leave {shown}" onclick={onleave}><DoorOpen size={15} aria-hidden="true" /></button>
+		{/if}
+		{#if onjoin}
+			<button type="button" class="ap-room-join" data-join={room} title="Join {noun}" aria-label="Join {shown}" onclick={onjoin}><LogIn size={15} aria-hidden="true" /></button>
+		{/if}
 	</div>
-{:else if onleave}
-	<div class={['ap-roomrow', nested && 'ap-roomrow-nested', active && 'ap-roomrow-active']}>
+{:else if onnewthread}
+	<div class="ap-roomstart">
 		{@render row()}
-		<button type="button" class="ap-room-exit" title="Exit" aria-label="Exit {shown}" onclick={(e) => { e.stopPropagation(); onleave(e); }}>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 4h3a2 2 0 0 1 2 2v14" /><path d="M2 20h3" /><path d="M13 20h9" /><path d="M10 12v.01" /><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z" /></svg>
-		</button>
+		<button type="button" class="ap-iconbtn ap-room-new" data-testid="create-thread" aria-label="New thread in {shown}" title="New thread" onclick={onnewthread}><Plus size={16} aria-hidden="true" /></button>
 	</div>
 {:else}
 	{@render row()}

@@ -1,27 +1,59 @@
 <script lang="ts">
+	import BellOff from '@lucide/svelte/icons/bell-off';
+	import Settings from '@lucide/svelte/icons/settings';
 	import type { Snippet } from 'svelte';
 	import Avatar from './Avatar.svelte';
 	import type { Sender } from './types';
-	import { uid } from './util';
+	import { presenceLabel, uid } from './util';
 
 	interface Props {
 		/** Your identity on the active backend: `you` from `auth`, merged with every later `user` notification carrying `you` (§3.3). */
-		you: Sender;
+		you?: Sender;
+		/** Shown in place of your name before there is a `you`, such as "Signing in…" or "Not signed in". */
+		placeholder?: string;
 		backend?: string;
+		/** After the backend's name: something to do, such as "add a sign-in". */
+		note?: string;
+		/** Your `status` (§4.5) as you chose it: a dot on your avatar, and said in the button's label. `statusLabel` replaces its words. */
+		status?: string;
+		statusLabel?: string;
+		/** Replaces the avatar, such as with one tinted by your `user_id`. */
+		avatar?: Snippet;
 		open?: boolean;
 		onedit?: () => void;
-		/** Usually a <ProfileEditor>; shown in a popover above the bar while `open`. */
+		/** Usually a <ProfileEditor> (`dialog: false`); shown in a dialog popover above the bar while `open`. */
 		editor?: Snippet;
+		/** A gear beside the bar that opens the preferences. */
+		onpreferences?: () => void;
+		/** Notifications are paused (§4.5 `mute`), and until when, in words ("until 14:30"): a small bell-off on the gear's corner. */
+		paused?: string;
+		/** The gear, to return focus to as its dialog closes; bindable. */
+		preferencesButton?: HTMLButtonElement;
+		/** Rendered in the bar, such as the dialog the gear opens. */
+		children?: Snippet;
 	}
-	let { you, backend, open, onedit, editor }: Props = $props();
-	const name = $derived(you?.name || uid(you));
+	let { you, placeholder, backend, note, status, statusLabel, avatar, open, onedit, editor, onpreferences, paused, preferencesButton = $bindable(), children }: Props = $props();
+	const name = $derived(you?.name || uid(you) || placeholder || '');
+	/** The placeholder in a sentence: "Signing in…" says "signing in". */
+	const label = $derived(you?.name || uid(you) || (placeholder ?? '').replace(/…$/, '').toLowerCase());
+	const statusWords = $derived(status ? (statusLabel ?? presenceLabel(status) ?? '').toLowerCase() : '');
 </script>
 
 <div class="ap-profile">
-	{#if open && editor}<div class="ap-profile-pop">{@render editor()}</div>{/if}
-	<button type="button" class={['ap-profile-me', open && 'ap-profile-open']} onclick={onedit} aria-haspopup="dialog" aria-expanded={!!open} aria-label="Your profile on {backend || 'this backend'}: {name}. Edit">
-		<Avatar {name} src={you?.avatar} />
-		<span class="ap-profile-text"><span class="ap-profile-name">{name}</span><span class="ap-profile-sub">{backend ? `on ${backend}` : uid(you)}</span></span>
+	{#if open && editor}<div class="ap-profile-pop" role="dialog" aria-label="Edit profile">{@render editor()}</div>{/if}
+	{@render children?.()}
+	<button type="button" class={['ap-profile-me', open && 'ap-profile-open']} aria-haspopup="dialog" aria-expanded={!!open} aria-label="Your profile on {backend || 'this backend'}: {label}{statusWords ? `, ${statusWords}` : ''}. Edit" onclick={onedit}>
+		{#if avatar}{@render avatar()}{:else}<Avatar name={you?.name || uid(you) || '?'} src={you?.avatar} {status} {statusLabel} />{/if}
+		<span class="ap-profile-text">
+			<span class="ap-profile-name">{name}</span>
+			<span class="ap-profile-sub">{backend ? `on ${backend}` : uid(you)}{#if note} · {note}{/if}</span>
+		</span>
 		<span class="ap-profile-edit" aria-hidden="true">Edit</span>
 	</button>
+	{#if onpreferences}
+		<button class="ap-profile-settings" bind:this={preferencesButton} type="button" aria-label={paused ? `Open preferences. Notifications paused ${paused}` : 'Open preferences'} aria-haspopup="dialog" title={paused ? `Preferences · notifications paused ${paused}` : 'Preferences'} onclick={onpreferences}>
+			<Settings size={18} strokeWidth={1.6} aria-hidden="true" />
+			{#if paused}<span class="ap-profile-paused" aria-hidden="true"><BellOff size={10} strokeWidth={2.2} /></span>{/if}
+		</button>
+	{/if}
 </div>

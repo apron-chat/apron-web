@@ -1,6 +1,4 @@
 <script lang="ts">
-	import Settings from '@lucide/svelte/icons/settings';
-	import BellOff from '@lucide/svelte/icons/bell-off';
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
 	import type { ChatClient, OperationHandle } from '$lib/protocol/client';
@@ -13,7 +11,8 @@
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
-	import { presenceLabel } from '$lib/design/components/util';
+	import DesignProfileBar from '$lib/design/components/ProfileBar.svelte';
+	import ProfileEditor from '$lib/design/components/ProfileEditor.svelte';
 	import { ownStatusLabel } from '$lib/ui/user-status';
 	import { signOutThen, type SignOutHandler } from '$lib/ui/sign-in';
 	import Avatar from './Avatar.svelte';
@@ -66,7 +65,6 @@
 	let passkeyNotice = $state('');
 	let avatarStatus = $state<'idle' | 'uploading' | 'removing'>('idle');
 	let avatarError = $state('');
-	let avatarInput = $state<HTMLInputElement | undefined>();
 	let you = $derived(session.you);
 	/** While notifications are paused, when that ends in words ("until 14:30"). */
 	let paused = $derived(pause?.until !== undefined ? pausedUntilLabel(pause.until) : undefined);
@@ -297,8 +295,7 @@
 	}
 
 	/** Sends the handle with `name`; the editor then shows what the server actually kept. */
-	function save(event: SubmitEvent): void {
-		event.preventDefault();
+	function save(): void {
 		const requested = draft.trim();
 		if (!requested) return;
 		displayName = requested;
@@ -312,126 +309,120 @@
 	}
 </script>
 
-<div class="ap-profile">
-	{#if open}
-		<div class="ap-profile-pop" role="dialog" aria-label="Edit profile">
-			<form class="ap-profedit" onsubmit={save}>
-				<div class="ap-profedit-top">
-					<Avatar name={draft || you?.user_id || '?'} id={you?.user_id} src={avatar} size="lg" status={ownStatus} statusLabel={ownLabel} />
-					<div class="ap-profedit-av">
-						{#if canUploadAvatar}
-							<span class="ap-profedit-avbtns">
-								<button class="ap-btn ap-btn-sm" type="button" data-testid="change-avatar" disabled={status === 'saving' || avatarStatus !== 'idle' || !connected} onclick={() => avatarInput?.click()}>
-									{avatarStatus === 'uploading' ? 'Uploading…' : you?.avatar ? 'Change avatar' : 'Add avatar'}
-								</button>
-								{#if you?.avatar}
-									<button class="ap-link ap-profedit-remove" type="button" data-testid="remove-avatar" disabled={avatarStatus !== 'idle' || !connected} onclick={removeAvatar}>Remove</button>
-								{/if}
-							</span>
-							<input class="sr" type="file" accept="image/*" tabindex="-1" aria-hidden="true" data-testid="avatar-input" bind:this={avatarInput} onchange={(event) => uploadAvatar(event.currentTarget)} />
-						{:else if you?.avatar}
-							<button class="ap-link ap-profedit-remove" type="button" disabled={avatarStatus !== 'idle' || !connected} onclick={removeAvatar}>Remove avatar</button>
-						{:else}
-							<span class="ap-profedit-hint">This backend doesn’t take uploads, so your avatar can’t be set here.</span>
+<!-- The design system's ProfileBar and ProfileEditor draw it; the app fills in its avatar, and the ways to sign in this server offers. -->
+{#snippet barAvatar()}
+	<Avatar name={you?.name || you?.user_id || '?'} id={you?.user_id} src={avatar} status={ownStatus} statusLabel={ownLabel} />
+{/snippet}
+{#snippet face()}
+	<Avatar name={draft || you?.user_id || '?'} id={you?.user_id} src={avatar} size="lg" status={ownStatus} statusLabel={ownLabel} />
+{/snippet}
+{#snippet signin()}
+	{#if snapshot.authBusy && !addEmail?.busy}
+		<span class="ap-profedit-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
+	{:else}
+		<span class="ap-profedit-row">
+			<span class="ap-profedit-buttons">
+				{#if snapshot.passkeySession}
+					<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
+					{#if canUsePasskey && you}
+						<button class="ap-btn ap-btn-sm" type="button" data-testid="add-passkey" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
+					{/if}
+					{#if canUseEmail && you && !addEmail}
+						<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+					{/if}
+					{#if canUseExternal && you && !addEmail}
+						<button class="ap-btn ap-btn-sm" type="button" data-testid="add-external" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
+					{/if}
+					<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
+				{:else}
+					{#if canUsePasskey}
+						<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin" disabled={!!passkeyUnavailable || status === 'saving'} onclick={() => signIn('webauthn')}>Sign in with a passkey</button>
+					{/if}
+					{#if canUseEmail}
+						<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-email" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
+						<!-- Adding an address to a guest asks and answers on this connection; whether that keeps the
+						     guest identity as an account is the server's call (§4.11). -->
+						{#if you && !addEmail}
+							<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
 						{/if}
-						{#if avatarError}<span class="ap-profedit-hint ap-profedit-err" role="alert">{avatarError}</span>{/if}
-					</div>
-				</div>
-				<label class="ap-fieldlabel">Handle
-					<input class="ap-field" data-testid="display-name-input" bind:value={draft} disabled={status === 'saving'} maxlength="64" autocomplete="nickname" spellcheck="false" />
-				</label>
-				<p class="ap-profedit-hint">ID <code>{you?.user_id ?? '—'}</code> · set by the server, can’t be changed</p>
-				{#if status === 'altered'}
-					<p class="ap-profedit-note" role="status">The server saved your handle as “{serverName}”.</p>
-				{:else if status === 'declined'}
-					<p class="ap-profedit-note ap-profedit-err" role="alert">
-						The server declined this handle{declinedReason ? ` (${declinedReason})` : ''}.
-						{#if (canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession}
-							Sign in and it’s applied once you’re signed in.
-						{:else}
-							Your old one is still in use.
+					{/if}
+					{#if canUseExternal}
+						<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-external" disabled={status === 'saving'} onclick={() => signIn('external')}>Sign in externally</button>
+						{#if you && !addEmail}
+							<button class="ap-btn ap-btn-sm" type="button" data-testid="add-external" title="Keep this identity: add an external sign-in to it, if the server allows" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
 						{/if}
-					</p>
+					{/if}
 				{/if}
-				{#if canUsePasskey || canUseEmail || canUseExternal}
-					<div class="ap-profedit-signin" role="group" aria-label="Sign-in">
-						<span class="ap-fieldlabel">Sign-in</span>
-						{#if snapshot.authBusy && !addEmail?.busy}
-							<span class="ap-profedit-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
-						{:else}
-							<span class="ap-profedit-row">
-								<span class="signin-actions">
-									{#if snapshot.passkeySession}
-										<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
-										{#if canUsePasskey && you}
-											<button class="ap-btn ap-btn-sm" type="button" data-testid="add-passkey" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
-										{/if}
-										{#if canUseEmail && you && !addEmail}
-											<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
-										{/if}
-										{#if canUseExternal && you && !addEmail}
-											<button class="ap-btn ap-btn-sm" type="button" data-testid="add-external" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
-										{/if}
-										<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
-									{:else}
-										{#if canUsePasskey}
-											<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin" disabled={!!passkeyUnavailable || status === 'saving'} onclick={() => signIn('webauthn')}>Sign in with a passkey</button>
-										{/if}
-										{#if canUseEmail}
-											<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-email" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
-											<!-- Adding an address to a guest asks and answers on this connection; whether that keeps the
-											     guest identity as an account is the server's call (§4.11). -->
-											{#if you && !addEmail}
-												<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
-											{/if}
-										{/if}
-										{#if canUseExternal}
-											<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-external" disabled={status === 'saving'} onclick={() => signIn('external')}>Sign in externally</button>
-											{#if you && !addEmail}
-												<button class="ap-btn ap-btn-sm" type="button" data-testid="add-external" title="Keep this identity: add an external sign-in to it, if the server allows" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
-											{/if}
-										{/if}
-									{/if}
-								</span>
-								{#if passkeyError}
-									<span class="ap-profedit-hint ap-profedit-err" role="alert">{passkeyError}</span>
-								{:else if passkeyNotice}
-									<span class="ap-profedit-hint ap-profedit-ok" role="status">{passkeyNotice}</span>
-								{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
-									<span class="ap-profedit-hint">{passkeyUnavailable}</span>
-								{:else if wayBack}
-									<span class="ap-profedit-hint" data-testid="way-back-nudge">{snapshot.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
-								{:else}
-									<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
-								{/if}
-							</span>
-							{#if addEmail}
-								<span class="add-email" role="group" aria-label={addEmail.scheme === 'email' ? 'Add email' : 'Add external sign-in'}>
-									{#if addEmail.scheme === 'external' && !addEmail.page}
-										<span class="ap-profedit-hint" role="status"><TypingDots /> Opening the sign-in page…</span>
-									{:else if addEmail.step === 'address'}
-										<input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com" autocomplete="email" bind:value={addEmail.email} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
-										<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.email.trim()} onclick={continueAddEmail}>Send code</button>
-									{:else}
-										<input class="ap-field ap-field-mono" aria-label={addEmail.scheme === 'email' ? 'Code from the email' : 'Code from the sign-in page'} placeholder="Code" inputmode={addEmail.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
-										<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.code.trim()} onclick={continueAddEmail}>Add</button>
-									{/if}
-									<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>
-								</span>
-								{#if addEmail.error}<span class="ap-profedit-hint ap-profedit-err" role="alert">{addEmail.error}</span>
-								{:else if addEmail.scheme === 'external' && addEmail.page}<span class="ap-profedit-hint" role="status"><a href={addEmail.page} target="_blank" rel="noopener noreferrer">Open the sign-in page</a>, sign in there, then enter the code it shows you.</span>
-								{:else if addEmail.step === 'code' && addEmail.scheme === 'email'}<span class="ap-profedit-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
-							{/if}
-						{/if}
-					</div>
+			</span>
+			{#if passkeyError}
+				<span class="ap-profedit-hint ap-profedit-err" role="alert">{passkeyError}</span>
+			{:else if passkeyNotice}
+				<span class="ap-profedit-hint ap-profedit-ok" role="status">{passkeyNotice}</span>
+			{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
+				<span class="ap-profedit-hint">{passkeyUnavailable}</span>
+			{:else if wayBack}
+				<span class="ap-profedit-hint" data-testid="way-back-nudge">{snapshot.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
+			{:else}
+				<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
+			{/if}
+		</span>
+		{#if addEmail}
+			<span class="ap-profedit-add" role="group" aria-label={addEmail.scheme === 'email' ? 'Add email' : 'Add external sign-in'}>
+				{#if addEmail.scheme === 'external' && !addEmail.page}
+					<span class="ap-profedit-hint" role="status"><TypingDots /> Opening the sign-in page…</span>
+				{:else if addEmail.step === 'address'}
+					<input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com" autocomplete="email" bind:value={addEmail.email} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+					<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.email.trim()} onclick={continueAddEmail}>Send code</button>
+				{:else}
+					<input class="ap-field ap-field-mono" aria-label={addEmail.scheme === 'email' ? 'Code from the email' : 'Code from the sign-in page'} placeholder="Code" inputmode={addEmail.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+					<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.code.trim()} onclick={continueAddEmail}>Add</button>
 				{/if}
-				<div class="ap-profedit-actions">
-					<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={status === 'saving'} onclick={close}>{status === 'altered' ? 'Close' : 'Cancel'}</button>
-					<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" disabled={status === 'saving' || !draft.trim()}>{status === 'saving' ? 'Saving…' : 'Save'}</button>
-				</div>
-			</form>
-		</div>
+				<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>
+			</span>
+			{#if addEmail.error}<span class="ap-profedit-hint ap-profedit-err" role="alert">{addEmail.error}</span>
+			{:else if addEmail.scheme === 'external' && addEmail.page}<span class="ap-profedit-hint" role="status"><a href={addEmail.page} target="_blank" rel="noopener noreferrer">Open the sign-in page</a>, sign in there, then enter the code it shows you.</span>
+			{:else if addEmail.step === 'code' && addEmail.scheme === 'email'}<span class="ap-profedit-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
+		{/if}
 	{/if}
+{/snippet}
+{#snippet editor()}
+	<ProfileEditor
+		dialog={false}
+		userId={you?.user_id ?? '—'}
+		bind:name={draft}
+		avatar={you?.avatar}
+		{face}
+		canUpload={canUploadAvatar}
+		onavatarfile={uploadAvatar}
+		onremoveavatar={removeAvatar}
+		avatarBusy={avatarStatus === 'idle' ? undefined : avatarStatus}
+		{avatarError}
+		offline={!connected}
+		{status}
+		{serverName}
+		{declinedReason}
+		declinedHint={(canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession ? 'Sign in and it’s applied once you’re signed in.' : undefined}
+		onsave={save}
+		oncancel={close}
+		signin={canUsePasskey || canUseEmail || canUseExternal ? signin : undefined}
+	/>
+{/snippet}
+
+<DesignProfileBar
+	{you}
+	placeholder={session.starting ? 'Signing in…' : 'Not signed in'}
+	backend={backendLabel}
+	note={wayBack ? 'add a sign-in' : undefined}
+	status={ownStatus}
+	statusLabel={ownLabel}
+	avatar={barAvatar}
+	{open}
+	onedit={toggle}
+	{editor}
+	onpreferences={showPreferences}
+	{paused}
+	bind:preferencesButton={preferencesTrigger}
+>
 	<PreferencesDialog
 		bind:open={preferencesOpen}
 		{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
@@ -439,34 +430,4 @@
 		status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
 		onclosed={() => preferencesTrigger?.focus()}
 	/>
-	<button class="ap-profile-me" class:ap-profile-open={open} type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Your profile on ${backendLabel}: ${you?.name || you?.user_id || (session.starting ? 'signing in' : 'not signed in')}${ownStatus ? `, ${(ownLabel ?? presenceLabel(ownStatus) ?? '').toLowerCase()}` : ''}. Edit`} onclick={toggle}>
-		<Avatar name={you?.name || you?.user_id || '?'} id={you?.user_id} src={avatar} status={ownStatus} statusLabel={ownLabel} />
-		<span class="ap-profile-text">
-			<span class="ap-profile-name">{you?.name || you?.user_id || (session.starting ? 'Signing in…' : 'Not signed in')}</span>
-			<span class="ap-profile-sub">on {backendLabel}{#if wayBack} · add a sign-in{/if}</span>
-		</span>
-		<span class="ap-profile-edit" aria-hidden="true">Edit</span>
-	</button>
-	<button class="ap-profile-settings" bind:this={preferencesTrigger} type="button" aria-label={paused ? `Open preferences. Notifications paused ${paused}` : 'Open preferences'} aria-haspopup="dialog" title={paused ? `Preferences · notifications paused ${paused}` : 'Preferences'} onclick={showPreferences}>
-		<Settings size={18} strokeWidth={1.6} aria-hidden="true" />
-		{#if paused}<span class="ap-profile-paused" aria-hidden="true"><BellOff size={10} strokeWidth={2.2} /></span>{/if}
-	</button>
-</div>
-
-<style>
-	.ap-profile { display: flex; align-items: center; gap: var(--space-1); }
-	.add-email { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
-	.add-email .ap-field { flex: 1; min-width: 0; height: var(--control-md); font-size: var(--text-ui); }
-	.ap-profile-me { flex: 1; min-width: 0; width: auto; }
-	.ap-profile-settings { flex: none; width: var(--control-lg); height: var(--control-lg); display: grid; place-items: center; padding: 0; color: var(--ink-muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; }
-	.ap-profile-settings:hover { color: var(--ink); background: var(--bg-300); }
-	.ap-profile-settings:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-	.ap-profile-settings { position: relative; }
-	/* Notifications paused (§4.5 `mute`): a small bell-off on the gear's corner. */
-	.ap-profile-paused { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--bg-100); color: var(--warn); box-shadow: 0 0 0 1px var(--line); }
-	.ap-profile-pop { max-height: calc(100dvh - 96px); overflow-y: auto; }
-	.ap-profile-pop .ap-profedit-actions { flex-wrap: wrap; }
-	.signin-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-	.signin-actions { align-items: center; }
-	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-</style>
+</DesignProfileBar>

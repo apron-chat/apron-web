@@ -1,0 +1,15 @@
+<!-- @dsCard group="Navigation" height=140 subtitle="The rooms list's header: the server's name and Connect; on phones a › back to the room or thread the list opened over" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SidebarHead</title></head>
+<body>
+<div id="root" class="ap-stack" style="padding:0;gap:12px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { var c = document.createElement('div'); c.style.cssText = 'width:248px;background:var(--bg-000)'; root.appendChild(c); return A.render(C, c, props || {}); }
+  var noop = function () {};
+  add(A.SidebarHead, { name: 'Work', onconnect: noop });
+  add(A.SidebarHead, { name: 'chat.example.org, a server with a long name', onconnect: noop, returnTo: 'Ops', onreturn: noop });
+</script>
+</body>
+</html>

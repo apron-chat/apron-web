@@ -26,7 +26,7 @@ function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: numbe
 		}
 	});
 	flushSync();
-	return document.querySelector<HTMLButtonElement>('button.member-list-toggle');
+	return document.querySelector<HTMLButtonElement>('button.ap-roomhead-members');
 }
 
 describe('RoomHeader', () => {
@@ -68,13 +68,13 @@ describe('RoomHeader', () => {
 		unmount(instance!);
 		render(undefined, { unreadElsewhere: 12 });
 		expect(tag()?.textContent).toBe('12');
-		expect(tag()?.classList.contains('back-tag-quiet')).toBe(true);
+		expect(tag()?.classList.contains('ap-roomhead-tag-quiet')).toBe(true);
 		expect(back().getAttribute('aria-label')).toBe('Back to rooms, 12 unread messages');
 		unmount(instance!);
 		// A mention may be an edit adding you to a message already read: it counts at least once.
 		render(undefined, { unreadElsewhere: 0, mentionsElsewhere: 1 });
 		expect(tag()?.textContent).toBe('@\u202f1');
-		expect(tag()?.classList.contains('back-tag-at')).toBe(true);
+		expect(tag()?.classList.contains('ap-roomhead-tag-at')).toBe(true);
 		expect(back().getAttribute('aria-label')).toBe('Back to rooms, 1 unread message, a mention of you');
 		unmount(instance!);
 		render(undefined, { unreadElsewhere: 250, mentionsElsewhere: 2 });

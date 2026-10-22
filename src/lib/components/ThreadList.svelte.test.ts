@@ -92,7 +92,7 @@ describe('ThreadList', () => {
 		expect(bubble('roadmap')?.className).toBe('ap-count ap-count-at');
 		expect(bubble('roadmap')?.textContent).toBe('@\u202f3');
 		expect(bubble('roadmap')?.getAttribute('aria-label')).toBe('3 unread replies, 3 mentions of you');
-		expect(row('cert').querySelector('.ap-count, .room-meta')).toBeNull();
+		expect(row('cert').querySelector('.ap-count, .ap-room-count')).toBeNull();
 	});
 
 	it('shows each other thread’s summary and when it was last active, with Join as a door in', () => {
@@ -162,7 +162,7 @@ describe('ThreadList', () => {
 
 	it('keeps a thread open without joining among the others, picked out, with Join and no Leave', () => {
 		const { onthread, onopen } = render({ threads: [joined('deploy', 'Deploy'), { ...joined('logo', 'Logo'), joined: false, loaded: true, count: 3 }], activeThread: 'logo' });
-		expect(titles('.joined button[data-thread]')).toEqual(['Deploy']);
+		expect(titles('.ap-threads-joined button[data-thread]')).toEqual(['Deploy']);
 		expect(titles('button[data-other-thread]')).toEqual(['Offsite', 'Logo']);
 		const row = one('button[data-other-thread="logo"]')!;
 		expect(row.dataset.thread).toBe('logo');

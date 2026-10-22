@@ -29,6 +29,8 @@ export { default as MessageActions } from './MessageActions.svelte';
 export { default as JumpBar } from './JumpBar.svelte';
 export { default as RoomHeader } from './RoomHeader.svelte';
 export { default as SidebarSection } from './SidebarSection.svelte';
+export { default as SidebarHead } from './SidebarHead.svelte';
+export { default as ThreadList } from './ThreadList.svelte';
 export { default as BackendRail } from './BackendRail.svelte';
 export { default as ProfileBar } from './ProfileBar.svelte';
 export { default as ProfileEditor } from './ProfileEditor.svelte';
