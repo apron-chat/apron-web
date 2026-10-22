@@ -11,7 +11,7 @@
   var at = function (hh, mm) { var d = new Date(); d.setHours(hh, mm, 7, 0); return d.getTime(); };
   var acts = A.part(A.MessageActions, { items: [{ label: 'Reply', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }], onmore: function () {} });
   add(A.Message, { sender: alice, timestamp: at(14, 2), text: 'Deploy is green, rolling to prod now.', actions: acts, highlighted: true,
-    footer: A.part(A.ThreadMarker, { thread: 'deploy-4-2', name: 'Deploy', count: 7, lastReply: '12m', participants: [bob, alice, me] }) });
+    footer: A.part(A.ThreadMarker, { thread: 'deploy-4-2', name: 'Deploy', unread: 2, lastReply: '12m', participants: [bob, alice, me] }) });
   add(A.Message, { sender: alice, timestamp: at(14, 2), grouped: true, edited: true, children: A.html('<p>Canary looks fine: <code>p99 = 41ms</code></p>') });
   add(A.Message, { sender: alice, time: '14:03', grouped: true, children: A.html('<p>The fix, for the record:</p><pre><code><span class="ap-diff-hunk">@@ worker/queue.go @@</span><span class="ap-diff-del">client.Timeout = 2 * time.Second</span><span class="ap-diff-add">client.Timeout = 30 * time.Second</span><span>client.Retry = backoff.Default</span></code></pre>') });
   add(A.Message, { sender: bob, time: '14:04', text: 'Ship it.', replyTo: { messageId: '1724803380000', sender: alice, snippet: 'The fix, for the record: @@ worker/queue.go @@ …' },

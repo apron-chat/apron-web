@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Avatar from './Avatar.svelte';
 	import ThreadLines from './ThreadLines.svelte';
+	import UnreadCount from './UnreadCount.svelte';
 	import type { Sender } from './types';
 	import { uid } from './util';
 
@@ -8,7 +9,9 @@
 		/** The thread's `room_id` (a room with `parent_room_id`, §3.4). */
 		thread: string;
 		name?: string;
-		count?: number;
+		/** Unread replies from others, and how many mention you: a bubble beside the time, as on its sidebar row. Leave out when unknown. */
+		unread?: number;
+		mentions?: number;
 		/** The thread's `description` (§3.4) as text: its summary, or the gist of the message that started it. */
 		summary?: string;
 		/** The thread's members or recent senders, most recent first; up to 4 are shown. */
@@ -21,7 +24,7 @@
 		moved?: boolean;
 		onopen?: () => void;
 	}
-	let { thread, name, count, summary, participants, lastReply, latest, moved, onopen }: Props = $props();
+	let { thread, name, unread = 0, mentions = 0, summary, participants, lastReply, latest, moved, onopen }: Props = $props();
 	const shown = $derived(name || thread);
 	const faces = $derived((participants || []).slice(0, 4));
 	const last = $derived(latest ? { sender: latest.sender?.name || uid(latest.sender) || '', text: latest.text } : undefined);
@@ -34,7 +37,7 @@
 		<span class="ap-thread-head">
 			{#if faces.length}<span class="ap-thread-faces" aria-hidden="true">{#each faces as f, i (uid(f) || i)}<Avatar name={f.name || uid(f)} src={f.avatar} size="sm" />{/each}</span>{/if}
 			<span class="ap-thread-name">{shown}</span>
-			{#if count != null && !summary}<span class="ap-thread-count">{count}{count === 1 ? ' reply' : ' replies'}</span>{/if}
+			<UnreadCount {unread} {mentions} noun="reply" />
 			{#if lastReply}<span class="ap-thread-last" title="Last reply">{lastReply}</span>{/if}
 		</span>
 		<ThreadLines {summary} latest={last} summaryLines={3} />

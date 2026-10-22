@@ -15,10 +15,10 @@ afterEach(() => {
 
 const hour = 60 * 60 * 1000;
 
-function render(entry: Partial<ThreadEntry>) {
+function render(entry: Partial<ThreadEntry>, news: { unread?: number; mentions?: number } = {}) {
 	instance = mount(ThreadCard, {
 		target: document.body,
-		props: { entry: { id: 't1', parentRoomId: 'general', title: 'Thread Example', loaded: true, participants: [], joined: true, ...entry }, onopen: vi.fn() }
+		props: { entry: { id: 't1', parentRoomId: 'general', title: 'Thread Example', loaded: true, participants: [], joined: true, ...entry }, ...news, onopen: vi.fn() }
 	});
 	flushSync();
 }
@@ -37,13 +37,15 @@ describe('ThreadCard', () => {
 		expect(one('[data-testid="thread-last-reply"]')?.getAttribute('datetime')).toBe(new Date(Number(id)).toISOString());
 	});
 
-	it('leaves the count out beside a summary, keeping its head to one row', () => {
-		render({ count: 4, lastReplyId: String(Date.now() - hour) });
-		expect(one('.ap-thread-count')?.textContent).toBe('4 messages');
+	it('shows what is new beside the time instead of a message count, and leads its title with the lock', () => {
+		render({ count: 4, private: true, description: 'some day this will be a living summary of the thread', lastReplyId: String(Date.now() - hour) });
+		expect(document.body.textContent).not.toContain('4 messages');
+		expect(one('[data-testid="thread-unread"]')).toBeNull();
+		expect(one('.ap-thread-name')?.firstElementChild?.getAttribute('aria-label')).toBe('Private');
 		unmount(instance!);
-		render({ count: 4, description: 'some day this will be a living summary of the thread', lastReplyId: String(Date.now() - hour) });
-		expect(one('.ap-thread-count')).toBeNull();
-		expect(one('.ap-thread-head [data-testid="thread-last-reply"]')?.textContent).toBe('1h');
+		render({ count: 4, lastReplyId: String(Date.now() - hour) }, { unread: 2, mentions: 1 });
+		expect(one('[data-testid="thread-unread"]')?.getAttribute('aria-label')).toBe('2 unread replies, a mention of you');
+		expect(one('[data-testid="thread-unread"] + [data-testid="thread-last-reply"]')?.textContent).toBe('1h');
 	});
 
 	it('names the day of a last reply older than two weeks, and keeps a recent one current', () => {

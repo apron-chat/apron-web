@@ -156,7 +156,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 /* ThreadMarker */
 .ap-thread { font: inherit; display: inline-flex; align-items: baseline; gap: var(--space-2); max-width: 100%; margin-top: var(--space-2); padding: 3px var(--space-3) 3px var(--space-2); border: 0; border-radius: var(--radius-full); background: var(--denim-soft); color: var(--denim); cursor: pointer; font-size: var(--text-ui); line-height: 18px; text-align: left; }
 .ap-thread:hover { filter: brightness(1.08); }
-/* One row: the title gives way (ellipsized) to the faces, count and time, which keep their width. */
+/* One row: the title gives way (ellipsized) to the faces, unread bubble and time, which keep their width; the bubble and time sit together at the right. */
 .ap-thread-head { display: inline-flex; align-items: baseline; gap: var(--space-2); min-width: 0; max-width: 100%; }
 .ap-thread-2 { flex-direction: column; align-items: stretch; gap: 2px; border-radius: var(--radius-md); padding: var(--space-1) var(--space-3) 6px var(--space-2); max-width: min(100%, 520px); }
 /* Its preview lines (ThreadLines), a step larger than the sidebar's, in ink with the icons muted. */
@@ -166,7 +166,9 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-thread-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .ap-thread-name::before { content: "↳ "; }
 .ap-thread-faces + .ap-thread-name::before { content: none; }
-.ap-thread-count { flex: none; color: var(--denim); white-space: nowrap; }
+.ap-thread-name .ap-lock { margin: 0 4px 0 0; }
+.ap-thread-head .ap-count { align-self: center; margin-left: auto; }
+.ap-thread-head .ap-count + .ap-thread-last { margin-left: 0; padding-left: 0; }
 .ap-thread-faces { flex: none; display: inline-flex; align-self: center; }
 .ap-thread-faces .ap-avatar + .ap-avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--denim-soft); }
 .ap-thread-last { flex: none; margin-left: auto; padding-left: var(--space-2); color: var(--ink-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
