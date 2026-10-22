@@ -29,6 +29,18 @@ function contrast(a: string, b: string): number {
 	return (high + 0.05) / (low + 0.05);
 }
 
+describe('private colors', () => {
+	const dark = tokens(':root {');
+	const light = tokens(":root[data-theme='light'] {");
+
+	for (const [theme, values] of [['dark', dark], ['light', light]] as const) {
+		it(`sets plum, ink and muted ink at 4.5:1 or more on a private ${theme} card`, () => {
+			const ground = color('--private-soft', values, dark);
+			for (const ink of ['--private', '--ink', '--ink-muted']) expect(contrast(color(ink, values, dark), ground), `${ink} ${theme}`).toBeGreaterThanOrEqual(4.5);
+		});
+	}
+});
+
 describe('presence colors', () => {
 	const dark = tokens(':root {');
 	const light = tokens(":root[data-theme='light'] {");

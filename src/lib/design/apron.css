@@ -167,6 +167,10 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-thread-name::before { content: "↳ "; }
 .ap-thread-faces + .ap-thread-name::before { content: none; }
 .ap-thread-name .ap-lock { margin: 0 4px 0 0; }
+/* A private thread's card, in plum: its title and lock take the hue, its preview lines stay in ink. */
+.ap-thread-private { background: var(--private-soft); color: var(--private); }
+.ap-thread-private .ap-lock { color: var(--private); }
+.ap-thread-private .ap-thread-faces .ap-avatar + .ap-avatar { box-shadow: 0 0 0 2px var(--private-soft); }
 .ap-thread-head .ap-count { align-self: center; margin-left: auto; }
 .ap-thread-head .ap-count + .ap-thread-last { margin-left: 0; padding-left: 0; }
 .ap-thread-faces { flex: none; display: inline-flex; align-self: center; }
@@ -296,6 +300,9 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 
 /* RoomHeader */
 .ap-roomhead { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); box-sizing: border-box; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); background: var(--bg-100); }
+/* A private room's or thread's header: washed with its cards' plum, its lock in the hue. */
+.ap-roomhead-private { background: color-mix(in srgb, var(--private-soft) 60%, var(--bg-100)); }
+.ap-roomhead-private .ap-lock { color: var(--private); }
 .ap-roomhead-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-3); }
 .ap-roomhead-name { margin: 0; font-size: var(--text-body); line-height: 20px; font-weight: 600; white-space: nowrap; }
 .ap-roomhead-sub { margin: 0; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

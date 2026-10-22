@@ -8,7 +8,7 @@
 		name?: string;
 		/** the room's `description` (§3.4) as one line of text */
 		topic?: string;
-		/** `private: true` (§4.2.4): a lock beside the name */
+		/** `private: true` (§4.2.4): a lock beside the name, on a plum wash */
 		private?: boolean;
 		/** names from live `activity` typing; replaces the topic while present */
 		typing?: string[];
@@ -29,7 +29,7 @@
 
 {#snippet lock()}<svg class="ap-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Private"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>{/snippet}
 
-<header class="ap-roomhead">
+<header class={['ap-roomhead', isPrivate && 'ap-roomhead-private']}>
 	{#if onback}<button type="button" class="ap-roomhead-back" onclick={onback} aria-label="Back to rooms">‹</button>{/if}
 	<div class="ap-roomhead-text">
 		{#if thread}

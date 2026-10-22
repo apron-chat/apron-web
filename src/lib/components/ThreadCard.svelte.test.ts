@@ -42,8 +42,10 @@ describe('ThreadCard', () => {
 		expect(document.body.textContent).not.toContain('4 messages');
 		expect(one('[data-testid="thread-unread"]')).toBeNull();
 		expect(one('.ap-thread-name')?.firstElementChild?.getAttribute('aria-label')).toBe('Private');
+		expect(one('.ap-thread-private')).not.toBeNull();
 		unmount(instance!);
 		render({ count: 4, lastReplyId: String(Date.now() - hour) }, { unread: 2, mentions: 1 });
+		expect(one('.ap-thread-private')).toBeNull();
 		expect(one('[data-testid="thread-unread"]')?.getAttribute('aria-label')).toBe('2 unread replies, a mention of you');
 		expect(one('[data-testid="thread-unread"] + [data-testid="thread-last-reply"]')?.textContent).toBe('1h');
 	});

@@ -8,7 +8,7 @@
 	import Lock from '@lucide/svelte/icons/lock';
 	import Avatar from './Avatar.svelte';
 
-	/** A thread's card in its parent room: faces, title (ellipsized), what's new in it and when it was last replied to (at the right), all on one row, then its summary and newest message, as its sidebar row shows them. */
+	/** A thread's card in its parent room: faces, title (ellipsized), what's new in it and when it was last replied to (at the right), all on one row, then its summary (in plum when it's private) and newest message, as its sidebar row shows them. */
 	let { entry, unread = 0, mentions = 0, onopen }: {
 		entry: ThreadEntry;
 		/** Its unread replies and mentions of you, as the sidebar counts them; only known for a thread you've joined. */
@@ -22,7 +22,7 @@
 </script>
 
 <div class="row">
-	<button class="ap-thread" class:ap-thread-2={summary || latest} data-timeline-item data-testid="thread-card" data-thread={entry.id} type="button" onclick={onopen}>
+	<button class="ap-thread" class:ap-thread-2={summary || latest} class:ap-thread-private={entry.private} data-timeline-item data-testid="thread-card" data-thread={entry.id} type="button" onclick={onopen}>
 		<span class="ap-thread-head">
 			{#if entry.participants.length > 0}
 				<span class="ap-thread-faces" aria-hidden="true">

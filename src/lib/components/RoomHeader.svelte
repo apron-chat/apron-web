@@ -79,7 +79,7 @@
 	}
 </script>
 
-<header class="ap-roomhead">
+<header class="ap-roomhead" class:ap-roomhead-private={pane.private}>
 	<!-- With something new elsewhere, the back arrow becomes the point of a tag holding the count: grey for unread, orange with an @ for a mention, as in the rooms list. -->
 	<button class="ap-roomhead-back" class:tagged={elsewhere > 0} type="button" aria-label={backLabel} onclick={onback}>
 		{#if elsewhere > 0}<span class={['back-tag', mentionsElsewhere ? 'back-tag-at' : 'back-tag-quiet']} data-testid="back-unread" aria-hidden="true">{#if mentionsElsewhere}@&#8239;{/if}{count99(elsewhere)}</span>{:else}‹{/if}
