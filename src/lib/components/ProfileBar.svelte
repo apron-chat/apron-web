@@ -456,9 +456,9 @@
 <style>
 	.ap-profile { display: flex; align-items: center; gap: var(--space-1); }
 	.add-email { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
-	.add-email .ap-field { flex: 1; min-width: 0; height: 28px; font-size: var(--text-ui); }
+	.add-email .ap-field { flex: 1; min-width: 0; height: var(--control-md); font-size: var(--text-ui); }
 	.ap-profile-me { flex: 1; min-width: 0; width: auto; }
-	.ap-profile-settings { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; color: var(--ink-muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; }
+	.ap-profile-settings { flex: none; width: var(--control-lg); height: var(--control-lg); display: grid; place-items: center; padding: 0; color: var(--ink-muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; }
 	.ap-profile-settings:hover { color: var(--ink); background: var(--bg-300); }
 	.ap-profile-settings:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 	.ap-profile-settings { position: relative; }

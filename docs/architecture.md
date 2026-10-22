@@ -4,14 +4,17 @@ How the web client is put together. [behavior.md](behavior.md) describes what
 it does.
 
 The UI follows the Apron design system. `src/lib/design/tokens.css` holds its
-color, type, spacing, radius and size tokens as CSS custom properties (dark is
-the reference theme; light follows `prefers-color-scheme`, or `data-theme` on
-the root when Preferences picks one), and
-`src/lib/design/apron.css` is its component stylesheet. Text sizes are the
+tokens as CSS custom properties: color, type and line heights (`--leading-*`),
+spacing, radii, control and panel sizes, stacking (`--z-*`) and motion
+(`--duration-*`, `--ease-*`), with the breakpoints listed in a comment, since a
+media query can't read a custom property (`src/lib/ui/breakpoints.ts` holds the
+ones scripts need). Dark is the reference theme; light follows
+`prefers-color-scheme`, or `data-theme` on the root when Preferences picks one,
+so its tokens are written twice, and `tokens.test.ts` holds the two blocks
+equal. `src/lib/design/apron.css` is its component stylesheet. Text sizes are the
 `--text-*` scale (caps, xs, sm, ui, field, body, title); only glyphs sized to
 their box, such as avatar initials and emoji, and the connect screen's display
-title keep literal sizes. `npm run design:bundle` copies the scale into
-`bundle.css`, since the design system's `tokens.json` doesn't carry it yet.
+title keep literal sizes.
 
 This repository is the design system's source. `src/lib/design/components`
 holds its presentational Svelte 5 components (runes, snippets, typed `Props`,
@@ -19,11 +22,12 @@ exported from `$lib/design/components`), and `src/lib/design/previews` a live
 preview page for each. `npm run design:bundle` builds them into
 `dist-design/project/components/`: `bundle.js` (one classic script, with the
 Svelte runtime inside, that sets `window.Apron` with `render`, `html`, `part`
-and `parts` for plain pages), `bundle.css` (`apron.css` itself), `index.d.ts`
+and `parts` for plain pages), `bundle.css` (all of `tokens.css`, both themes,
+then `apron.css`, so it needs nothing else), `index.d.ts`
 (generated from each component's `interface Props`) and each
-`<Name>/preview.html`. Publish those files to the design system artifact. Its
-tokens stay in the artifact's `tokens.json`; keep them in step with
-`tokens.css`.
+`<Name>/preview.html`. Publish those files to the design system artifact.
+`tokens.css` is the tokens' source of truth: change a token there, and it
+reaches the design system with the next bundle.
 
 The Svelte components under `src/lib/components` wrap the `ap-*`
 classes one to one with the design system's components, adding the app's

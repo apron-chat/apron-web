@@ -1,6 +1,8 @@
-/* Apron design tokens (project/tokens.json). Dark is the reference theme; light is its equal.
+/* Apron design tokens, the source of truth: npm run design:bundle carries this whole file, both themes, into the
+   design system's components/bundle.css. Dark is the reference theme; light is its equal.
    Two hues with jobs: accent (rust) is what you can do, denim is where you can go.
-   Every other color is a status and always carries a word. */
+   Every other color is a status and always carries a word.
+   A token that differs by theme goes in both light blocks below, the system preference's and Preferences' (tokens.test.ts holds them equal). */
 :root {
 	color-scheme: dark light;
 
@@ -40,6 +42,8 @@
 	--presence-unknown: var(--ink-muted);
 	--shadow-popover: 0 8px 24px rgba(4, 4, 10, 0.6);
 	--shadow-float: 0 2px 8px rgba(4, 4, 10, 0.55);
+	/* The same in both themes: a chosen segment or choice, lifted a little off its track. */
+	--shadow-chosen: 0 1px 2px rgba(0, 0, 0, 0.15);
 	/* The same in both themes. A modal's backdrop; and the media viewer, dark like a photo viewer whatever the theme. */
 	--scrim: rgba(5, 5, 12, 0.68);
 	--viewer-ground: rgba(8, 8, 14, 0.96);
@@ -68,6 +72,13 @@
 	--text-body: 15px;   /* messages and running text; room and panel titles */
 	--text-title: 18px;  /* dialog and card titles */
 	--text-field-ios: 16px; /* the least a field may be on iOS, which zooms the page into anything smaller as it takes focus */
+	/* Line heights, named for the size they usually set; a smaller size may take a larger line to sit on its row. */
+	--leading-sm: 16px;      /* meta and hints, one-line labels and captions */
+	--leading-ui: 18px;      /* controls, menus, rows and notes */
+	--leading-field: 20px;   /* fields, dialog copy, panel titles */
+	--leading-body: 22px;    /* messages and running text, and the times in their gutter */
+	--leading-title: 24px;   /* dialog and card titles */
+	--leading-display: 32px; /* the connect screen's display title */
 
 	/* Spacing: the 4px scale. */
 	--space-1: 4px;
@@ -95,6 +106,51 @@
 	--rail-w: 64px;
 	--rail-tile: 40px;
 	--header-h: 48px;
+	/* The member list's width until the page sets the one you dragged it to. */
+	--member-list-w: 280px;
+
+	/* Control boxes: the height (and width, when square) of buttons, icon buttons, small fields and tiles. */
+	--control-xs: 22px;  /* a close or remove on a corner: an embed's ×, a toast's */
+	--control-sm: 24px;  /* a row's own action: a thread row's Exit or Join, a member's remove, a summary's × */
+	--control-md: 28px;  /* icon buttons, small buttons and fields, the composer's line, toolbar buttons */
+	--control-lg: 32px;  /* buttons and fields, a header's back, the gear */
+	--control-xl: 40px;  /* the floating jump-to-latest button */
+	--chip-h: 26px;      /* a reaction chip, and its + */
+
+	/* Floating widths. */
+	--nudge-w: 300px;         /* a Nudge, and where the page anchors one */
+	--toast-max-w: 480px;     /* a toast or a notice floating over the page */
+	--embed-card-w: 420px;    /* a link's preview card */
+	--pref-note-w: 420px;     /* a Preferences setting's description */
+	--pref-panel-w: 460px;    /* what a Preferences setting opens under it: push setup, scopes, a status's answer */
+
+	/* Stacking, lowest first. Each is relative to the nearest stacking context: a dialog, opened in the top layer, has its own. */
+	--z-raised: 1;    /* over its neighbors in the flow: a sticky divider or loading pill, an active row's bar, a summary's × */
+	--z-float: 2;     /* over those: a message's hover actions, the floating day and loading pill */
+	--z-handle: 4;    /* a panel's resize handle, on its border */
+	--z-menu: 5;      /* menus and pickers opened in place: the profile popover, a menu, autocomplete */
+	--z-toggle: 5;    /* a panel's toggle in the window's corner */
+	--z-overlay: 6;   /* the member list, over the conversation on narrower screens */
+	--z-nudge: 7;     /* a Nudge over the rooms list's foot */
+	--z-toast: 10;    /* a toast */
+	--z-drop: 20;     /* the drop zone over the conversation while files are dragged */
+	--z-banner: 20;   /* a notice floating at the top: a new version */
+	--z-sheet: 40;    /* fixed popovers that turn into bottom sheets on phones: emoji, profile card, who reacted */
+
+	/* Motion: short and soft, all of it off when the viewer asks (prefers-reduced-motion). */
+	--duration-fast: 120ms;    /* hover and press: colors and fills */
+	--duration-medium: 150ms;  /* a state change: a switch, a fade in or out */
+	--duration-slow: 200ms;    /* the floating day pill */
+	--duration-slide: 240ms;   /* the side panels opening and shutting (the page's SLIDE_MS) */
+	--ease-slide: cubic-bezier(0.2, 0, 0, 1);
+
+	/* Breakpoints. Media queries can't read custom properties, so these are written out where used
+	   (and in src/lib/ui/breakpoints.ts for scripts); these are the only ones:
+	   560px  (max-width: 560px)  dialogs and the media viewer go edge to edge; Preferences narrows its nav.
+	          @container (max-width: 560px) on the main pane stacks the room header's name over its topic.
+	   720px  (max-width: 719px)  one pane at a time: rooms, then the room or thread; popovers become bottom sheets.
+	          (min-width: 720px)  above it.
+	   960px  (min-width: 960px)  the member list gets a column of its own; (max-width: 959px) overlays it. */
 }
 
 @media (prefers-color-scheme: light) {

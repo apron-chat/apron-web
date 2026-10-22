@@ -48,6 +48,7 @@
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
+	import { WIDE_MIN } from '$lib/ui/breakpoints';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
@@ -858,7 +859,7 @@
 		sidebar.load();
 		memberList.load();
 		requestAnimationFrame(() => requestAnimationFrame(() => (slidesReady = true)));
-		const memberListMedia = window.matchMedia('(min-width: 960px)');
+		const memberListMedia = window.matchMedia(`(min-width: ${WIDE_MIN}px)`);
 		const memberListMediaChange = ({ matches }: { matches: boolean }) => {
 			memberListWide = matches;
 			memberListOverlay = false;
@@ -1802,7 +1803,7 @@
 		});
 	}
 
-	/** How long a side panel takes to slide open or shut: --slide-time in the CSS. */
+	/** How long a side panel takes to slide open or shut: --duration-slide in tokens.css (the page's --slide-time). */
 	const SLIDE_MS = 240;
 	let heldTimeline: { scroller: HTMLElement; width: number; release: () => void } | undefined;
 
@@ -2672,12 +2673,13 @@
 	:global(button), :global(input), :global(textarea), :global(select) { font: inherit; }
 	/*
 	 * --corner: how far a header's content keeps clear of a PanelToggle in the window's corner.
-	 * --slide: how both side panels open and shut. Their grid columns move (the grid's own transition, not an
+	 * --slide-time, --slide-ease: how both side panels open and shut, the --duration-slide and --ease-slide tokens, set on
+	 * the app alone (a panel rendered outside it doesn't slide). Their grid columns move (the grid's own transition, not an
 	 * inherited variable, so nothing else restyles each frame); each panel's contents keep their width against its
 	 * inner edge, so they ride the moving border rather than squeeze, and fade; the timeline keeps its final width
 	 * meanwhile (prepareSlide). A drag follows the pointer instead.
 	 */
-	.app { --corner: calc(var(--space-3) + 28px + var(--space-2)); --slide-time: 240ms; --slide-ease: cubic-bezier(0.2, 0, 0, 1); height: 100dvh; min-height: 100%; position: relative; overflow: clip; }
+	.app { --corner: calc(var(--space-3) + var(--control-md) + var(--space-2)); --slide-time: var(--duration-slide); --slide-ease: var(--ease-slide); height: 100dvh; min-height: 100%; position: relative; overflow: clip; }
 	.slides { transition: grid-template-columns var(--slide-time) var(--slide-ease); }
 	/*
 	 * While an on-screen keyboard is up (trackKeyboard), the app is the part of the page above it: its header stays at
@@ -2708,7 +2710,7 @@
 	.banner { padding: var(--space-2) var(--space-4) 0; }
 	/* Over the conversation while files are dragged onto it; drag events pass through to the pane. */
 	.drop-zone {
-		position: absolute; inset: var(--space-2); z-index: 20; display: grid; place-items: center;
+		position: absolute; inset: var(--space-2); z-index: var(--z-drop); display: grid; place-items: center;
 		border: 2px dashed var(--accent); border-radius: var(--radius-lg);
 		background: color-mix(in srgb, var(--bg-100) 85%, transparent); color: var(--ink);
 		font-weight: 600; pointer-events: none;
@@ -2718,7 +2720,7 @@
 	.starting-title { width: 120px; height: 14px; }
 	.starting-timeline { display: flex; flex-direction: column; }
 	.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; }
-	.empty h2 { margin: 0; font-size: var(--text-title); line-height: 24px; font-weight: 600; color: var(--ink); }
+	.empty h2 { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; color: var(--ink); }
 	.empty p { margin: 0; }
 	.empty .ap-btn { margin-top: var(--space-2); }
 	.typing-row { min-height: 20px; padding-top: var(--space-1); }
@@ -2726,7 +2728,7 @@
 	 * The first-mention offer. Over the rooms list's foot, pointing at the Preferences gear (32px, its center 25px in
 	 * from the list's right edge): its left edge 8px in, or further right on a list wider than it, to reach the gear.
 	 */
-	.notify-anchored { --notify-left: max(var(--space-2), calc(var(--sidebar-w) - 300px - var(--space-2))); position: absolute; z-index: 7; left: var(--notify-left); bottom: calc(var(--header-h) + 10px); width: 300px; max-width: calc(100vw - var(--space-4)); display: none; }
+	.notify-anchored { --notify-left: max(var(--space-2), calc(var(--sidebar-w) - var(--nudge-w) - var(--space-2))); position: absolute; z-index: var(--z-nudge); left: var(--notify-left); bottom: calc(var(--header-h) + 10px); width: var(--nudge-w); max-width: calc(100vw - var(--space-4)); display: none; }
 	.notify-anchored :global(.ap-nudge) { --ap-nudge-tip: calc(var(--sidebar-w) - 30px - var(--notify-left)); }
 	.notify-inline { padding: 0 var(--space-4); }
 	.notify-inline:not(:empty) { padding-top: var(--space-2); }
@@ -2736,18 +2738,18 @@
 		.app:not(.side-collapsed) .notify-inline { display: none; }
 	}
 	/* A zero-height sticky row, so the pill floats over the timeline without taking space. */
-	.day-float { position: sticky; top: var(--space-2); z-index: 2; height: 0; display: flex; align-items: flex-start; justify-content: center; pointer-events: none; }
-	.day-float span { padding: 3px var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); box-shadow: var(--shadow-float); color: var(--ink); font-size: var(--text-sm); line-height: 16px; font-weight: 500; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity .2s, transform .2s; }
+	.day-float { position: sticky; top: var(--space-2); z-index: var(--z-float); height: 0; display: flex; align-items: flex-start; justify-content: center; pointer-events: none; }
+	.day-float span { padding: 3px var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); box-shadow: var(--shadow-float); color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity var(--duration-slow), transform var(--duration-slow); }
 	.day-float-shown span { opacity: 1; transform: none; }
 	@media (prefers-reduced-motion: reduce) {
 		.day-float span { transition: none; transform: none; }
 		.app, .app :global(.ap-shell-side), .app :global(.member-list), .app :global(.ap-roomhead) { transition: none; }
 	}
-	.toast { position: fixed; z-index: 10; left: 50%; bottom: calc(var(--space-4) + 64px); transform: translateX(-50%); max-width: min(480px, calc(100% - var(--space-8))); }
+	.toast { position: fixed; z-index: var(--z-toast); left: 50%; bottom: calc(var(--space-4) + 64px); transform: translateX(-50%); max-width: min(var(--toast-max-w), calc(100% - var(--space-8))); }
 	.toast :global(.ap-status) { box-shadow: var(--shadow-float); }
 	.toast-right { left: auto; right: var(--space-4); transform: none; }
 	/* Smaller than an icon button, so a toast that can be closed is no taller than one that can't. */
-	.toast-close { width: 22px; height: 22px; margin: -2px 0; flex: none; }
+	.toast-close { width: var(--control-xs); height: var(--control-xs); margin: -2px 0; flex: none; }
 
 	/* Wide screens give an open member list its own column; narrower ones overlay it. */
 	@media (min-width: 960px) {

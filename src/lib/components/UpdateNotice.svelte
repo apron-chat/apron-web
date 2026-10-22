@@ -35,7 +35,7 @@
 {/if}
 
 <style>
-	.update { position: fixed; z-index: 20; top: var(--space-4); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(480px, calc(100% - var(--space-8))); }
+	.update { position: fixed; z-index: var(--z-banner); top: var(--space-4); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(var(--toast-max-w), calc(100% - var(--space-8))); }
 	@media (max-width: 719px) {
 		.update { left: var(--space-4); right: var(--space-4); transform: none; width: auto; max-width: none; }
 	}

@@ -365,7 +365,7 @@
 	 * resolve: a link card or stream would size the slot by its longest line
 	 * and leave the (x) floating past its edge. The same widths, in pixels.
 	 */
-	.embed-slot :global(.ap-embed-ogcard) { width: 420px; max-width: 100%; }
+	.embed-slot :global(.ap-embed-ogcard) { width: var(--embed-card-w); max-width: 100%; }
 	.embed-slot :global(.ap-embed-stream) { width: var(--embed-max-w); max-width: 100%; }
 	.markdown :global(blockquote) {
 		margin: var(--space-2) 0;

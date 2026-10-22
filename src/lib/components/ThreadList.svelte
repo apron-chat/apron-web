@@ -144,7 +144,7 @@
 	.joined .ap-room:not(.ap-room-quiet) .ap-room-name { color: var(--ink); font-weight: 500; }
 	.joined .ap-room.ap-room-active .ap-room-name { font-weight: 600; }
 	.joined .ap-room.ap-room-unread .ap-room-name { font-weight: 650; }
-	.room-meta { flex: none; font-size: var(--text-sm); line-height: 18px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+	.room-meta { flex: none; font-size: var(--text-sm); line-height: var(--leading-ui); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 	.ap-room-active .room-meta { color: var(--ink); }
 
 	/* The heading's text lines up with the titles under it; its caret hangs to the left, on the guide's line. */

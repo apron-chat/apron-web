@@ -33,6 +33,6 @@
 <style>
 	.jump { display: flex; justify-content: center; margin-bottom: var(--space-2); }
 	.jump .ap-jumpbar { width: min(100%, var(--timeline-max-w)); }
-	.jump-fab { position: relative; height: 0; z-index: 1; }
+	.jump-fab { position: relative; height: 0; z-index: var(--z-raised); }
 	.jump-fab .ap-jumpfab { position: absolute; right: var(--space-4); bottom: var(--space-3); }
 </style>

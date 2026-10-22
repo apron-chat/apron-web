@@ -31,7 +31,7 @@
 </button>
 
 <style>
-	.panel-toggle { position: absolute; z-index: 5; top: calc((var(--header-h) - 28px) / 2); }
+	.panel-toggle { position: absolute; z-index: var(--z-toggle); top: calc((var(--header-h) - var(--control-md)) / 2); }
 	.left { left: var(--space-3); }
 	.right { right: var(--space-3); }
 </style>

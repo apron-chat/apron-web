@@ -141,7 +141,7 @@
 		.summary-show { padding: 0 var(--space-2); }
 		.summary-word { display: none; }
 		/* The tag's point hangs into the button's left padding, where the arrow sits. */
-		.ap-roomhead-back.tagged { display: flex; flex: none; align-items: center; width: auto; min-width: 32px; padding: 0 2px 0 10px; }
+		.ap-roomhead-back.tagged { display: flex; flex: none; align-items: center; width: auto; min-width: var(--control-lg); padding: 0 2px 0 10px; }
 	}
 	.back-tag { position: relative; display: inline-flex; align-items: center; height: 22px; padding: 0 7px 0 3px; border-radius: 0 6px 6px 0; isolation: isolate; font-size: var(--text-sm); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
 	/* The point: a square turned on its corner, rounded at the tip, behind the count. */

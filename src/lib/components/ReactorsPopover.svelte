@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { directory } from '$lib/ui/directory.svelte';
-	import { NARROW_MAX, placePicker } from '$lib/ui/emoji';
+	import { NARROW_MAX } from '$lib/ui/breakpoints';
+	import { placePicker } from '$lib/ui/emoji';
 	import { reactorsList } from '$lib/ui/reactors.svelte';
 	import Avatar from './Avatar.svelte';
 
@@ -117,20 +118,20 @@
 <style>
 	/* A popover: raised ground, hairline, popover shadow, large radius. */
 	.reactors {
-		position: fixed; z-index: 40; box-sizing: border-box; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3);
+		position: fixed; z-index: var(--z-sheet); box-sizing: border-box; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3);
 		background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover);
 		font-family: var(--font-sans); color: var(--ink);
 	}
 	.reactors:focus { outline: none; }
 	/* Narrow screens: a bottom sheet, full width, rounded only where it meets the page. */
 	.sheet { left: 0; right: 0; bottom: 0; border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom)); }
-	.head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-ui); line-height: 18px; color: var(--ink-muted); }
-	.head .emoji { font-family: var(--font-emoji); font-size: var(--text-title); line-height: 24px; }
+	.head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
+	.head .emoji { font-family: var(--font-emoji); font-size: var(--text-title); line-height: var(--leading-title); }
 	.list { margin: 0; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
-	.row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: var(--space-1) 0; font-size: var(--text-ui); line-height: 18px; }
+	.row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: var(--space-1) 0; font-size: var(--text-ui); line-height: var(--leading-ui); }
 	.names { display: flex; flex-direction: column; min-width: 0; }
 	.name-line { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
 	.name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 	.muted { flex: none; color: var(--ink-muted); }
-	.handle { font-size: var(--text-sm); line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.handle { font-size: var(--text-sm); line-height: var(--leading-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

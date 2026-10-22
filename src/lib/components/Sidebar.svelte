@@ -195,9 +195,9 @@
 <style>
 	.ap-shell-side { overflow: hidden; }
 	.ap-shell-sidehead { gap: var(--space-2); }
-	.create-room-trigger { width: 28px; padding: 0; justify-content: center; }
+	.create-room-trigger { width: var(--control-md); padding: 0; justify-content: center; }
 	/* As the room header's ‹ (apron.css .ap-roomhead-back). */
-	.return { display: none; flex: none; width: 32px; height: 32px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--denim); font: inherit; font-size: 22px; cursor: pointer; }
+	.return { display: none; flex: none; width: var(--control-lg); height: var(--control-lg); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--denim); font: inherit; font-size: 22px; cursor: pointer; }
 	.return:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 	@media (max-width: 719px) {
 		.return { display: block; }
@@ -205,8 +205,8 @@
 	.backend { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 	.placeholder .ap-skel { height: 12px; }
-	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
-	.room-meta { flex: none; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
+	.room-meta { flex: none; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 	.room-row { position: relative; }
 	.can-start { padding-right: 40px; }
 	.new-thread { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); }

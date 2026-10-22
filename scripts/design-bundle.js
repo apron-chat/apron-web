@@ -1,6 +1,6 @@
 // Builds the Apron design system's bundle from src/lib/design: components/bundle.js (one classic script that sets
-// window.Apron) and components/bundle.css (tokens-independent component styles), under dist-design/project/.
-// Also index.d.ts and each components/<Name>/preview.html. Publish those files to the design system artifact; its tokens.css comes from its own tokens.json.
+// window.Apron) and components/bundle.css (every token from tokens.css, both themes, then apron.css's component styles),
+// under dist-design/project/. Also index.d.ts and each components/<Name>/preview.html. Publish those files to the design system artifact.
 import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import { build } from 'vite';
 
@@ -16,14 +16,13 @@ let js = readFileSync('dist-design/bundle.js', 'utf8');
 js = js.replace(/<\/script/gi, '<\\/script').replace(/<!--/g, '\\x3C!--');
 if (/\bimport\s*\(|\beval\s*\(|new Function\s*\(/.test(js)) throw new Error('bundle.js must not import, eval or new Function');
 
-// Variables the app's tokens.css derives from other tokens (the design system's tokens.json holds only literal values).
-const derived = `:root { --font-chat: var(--font-sans); --font-emoji: 'EmojiMart', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Segoe UI', 'Apple Color Emoji', 'Twemoji Mozilla', 'Noto Color Emoji', 'Android Emoji'; --presence-online: var(--ok); --presence-idle: var(--warn); --presence-dnd: var(--danger); --presence-offline: #78788c; --presence-unknown: var(--ink-muted); }\n`;
-// Tokens the design system's tokens.json doesn't carry yet (the type scale, the scrim, the media viewer's
-// colors, the same in both themes), read from tokens.css so the bundle works without them.
+// Every token, read from tokens.css, the source of truth: its dark :root, the light theme's media-query block and the
+// data-theme blocks, whole, so bundle.css works on its own and no token is written out a second time by hand.
 const tokens = readFileSync('src/lib/design/tokens.css', 'utf8');
-const pending = [...tokens.slice(0, tokens.indexOf('\n}')).matchAll(/(--(?:text|scrim|viewer)[\w-]*):\s*([^;]+);/g)];
-const fixed = `:root { ${pending.map(([, name, value]) => `${name}: ${value.trim()};`).join(' ')} }\n`;
-const css = derived + fixed + readFileSync('src/lib/design/apron.css', 'utf8');
+for (const block of [':root {', '@media (prefers-color-scheme: light) {', ":root:not([data-theme='dark']) {", ":root[data-theme='dark'] {", ":root[data-theme='light'] {"]) {
+	if (!tokens.includes(block)) throw new Error(`tokens.css has no ${block} block`);
+}
+const css = `${tokens}\n${readFileSync('src/lib/design/apron.css', 'utf8')}`;
 if (/<\/style/i.test(css)) throw new Error('bundle.css must not contain </style');
 
 mkdirSync(OUT, { recursive: true });

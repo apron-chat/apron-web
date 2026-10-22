@@ -99,18 +99,18 @@
 	.reactions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); max-width: 100%; }
 	.chip {
 		font: inherit; display: inline-flex; align-items: center; gap: var(--space-1);
-		height: 26px; padding: 0 var(--space-2); box-sizing: border-box;
+		height: var(--chip-h); padding: 0 var(--space-2); box-sizing: border-box;
 		border: 1px solid var(--line); border-radius: var(--radius-full);
 		background: var(--bg-200); color: var(--ink-muted);
-		font-size: var(--text-ui); line-height: 16px; font-variant-numeric: tabular-nums; cursor: pointer;
-		transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+		font-size: var(--text-ui); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; cursor: pointer;
+		transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, color var(--duration-fast) ease;
 		/* A long press lists who reacted: no text selection or callout on top of it. */
 		-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
 	}
 	.chip:hover:not([aria-disabled='true']) { background: var(--bg-300); color: var(--ink); }
 	.chip.mine { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 	.chip[aria-disabled='true'] { cursor: default; }
-	.emoji { font-family: var(--font-emoji); font-size: var(--text-body); line-height: 16px; }
+	.emoji { font-family: var(--font-emoji); font-size: var(--text-body); line-height: var(--leading-sm); }
 	.count { font-weight: 600; }
 	.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 	@media (prefers-reduced-motion: reduce) {

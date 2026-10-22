@@ -4,7 +4,8 @@
 	import { presence, presenceLabel } from '$lib/design/components/util';
 	import { ownStatusLabel } from '$lib/ui/user-status';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { NARROW_MAX, placePicker } from '$lib/ui/emoji';
+	import { NARROW_MAX } from '$lib/ui/breakpoints';
+	import { placePicker } from '$lib/ui/emoji';
 	import { profileCard } from '$lib/ui/profile-card.svelte';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import Avatar from './Avatar.svelte';
@@ -200,7 +201,7 @@
 <style>
 	/* A popover: raised ground, hairline, popover shadow, large radius. */
 	.profile-card {
-		position: fixed; z-index: 40; box-sizing: border-box; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4);
+		position: fixed; z-index: var(--z-sheet); box-sizing: border-box; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4);
 		background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover);
 		font-family: var(--font-sans); color: var(--ink);
 	}
@@ -210,13 +211,13 @@
 	.who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 	.names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 	.name-line { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
-	.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-title); line-height: 24px; font-weight: 600; }
+	.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; }
 	.you { flex: none; color: var(--ink-muted); font-size: var(--text-sm); }
-	.handle { color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; overflow-wrap: anywhere; user-select: all; }
-	.presence { color: var(--ink-muted); font-size: var(--text-sm); line-height: 16px; overflow-wrap: anywhere; }
+	.handle { color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; user-select: all; }
+	.presence { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 	.presence .literal { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
 	.names :global(.ap-roles) { align-self: flex-start; margin: 2px 0 0; }
-	.muted, .warn { margin: 0; font-size: var(--text-ui); line-height: 18px; }
+	.muted, .warn { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); }
 	.muted { color: var(--ink-muted); }
 	.warn { padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--bg-300); color: var(--ink); }
 	.err { color: var(--danger); }

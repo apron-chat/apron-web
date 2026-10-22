@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { currentTheme, NARROW_MAX, PICKER_HEIGHT, PICKER_MIN_HEIGHT, PICKER_WIDTH, pickerColors, placePicker, rgbTriple } from './emoji';
+import { NARROW_MAX } from './breakpoints';
+import { currentTheme, PICKER_HEIGHT, PICKER_MIN_HEIGHT, PICKER_WIDTH, pickerColors, placePicker, rgbTriple } from './emoji';
 
 const desktop = { width: 1280, height: 800 };
 /** A 28px trigger with its top-left corner at (left, top). */

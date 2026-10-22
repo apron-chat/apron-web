@@ -5,10 +5,11 @@ const fsModule = 'node:fs';
 const { readFileSync } = await import(/* @vite-ignore */ fsModule) as { readFileSync: (path: URL, encoding: 'utf8') => string };
 const css = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8');
 
-/** The custom properties a block declares: the first `:root {` (dark, the reference) or `:root[data-theme='light'] {`. */
+/** The custom properties a block declares, comments aside: the first `:root {` (dark, the reference), or a light one. */
 function tokens(opening: string): Map<string, string> {
 	const start = css.indexOf(opening);
-	const body = css.slice(start + opening.length, css.indexOf('\n}', start));
+	if (start < 0) throw new Error(`tokens.css has no ${opening} block`);
+	const body = css.slice(start + opening.length, css.indexOf('\n}', start)).replace(/\/\*[\s\S]*?\*\//g, '');
 	return new Map([...body.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()]));
 }
 
@@ -49,6 +50,21 @@ describe('private colors', () => {
 			for (const card of ['--denim-soft', '--private-soft']) expect(contrast(color('--ink', values, dark), shade(color(card, values, dark), keep)), `${card} ${theme}`).toBeGreaterThanOrEqual(4.5);
 		});
 	}
+});
+
+// Light is written twice, for the system's preference and for Preferences' choice (pure CSS can't share one block).
+describe('light theme', () => {
+	const dark = tokens(':root {');
+	const system = tokens(":root:not([data-theme='dark']) {");
+	const chosen = tokens(":root[data-theme='light'] {");
+
+	it('declares the same tokens, to the same values, whether the system prefers it or Preferences picks it', () => {
+		expect(Object.fromEntries(system)).toEqual(Object.fromEntries(chosen));
+	});
+
+	it('only overrides tokens the dark theme declares', () => {
+		for (const name of chosen.keys()) expect(dark.has(name), name).toBe(true);
+	});
 });
 
 describe('presence colors', () => {

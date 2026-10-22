@@ -42,7 +42,7 @@
 	 * Placed by its panel's column (--sidebar-w, --member-list-track), moving on the panels' slide (--slide-time,
 	 * once the page allows slides), so the border goes with the list as it opens and shuts.
 	 */
-	.handle { position: absolute; top: 0; bottom: 0; left: max(0px, calc(var(--sidebar-w) - 4px)); width: 9px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; z-index: 4; cursor: col-resize; touch-action: none; }
+	.handle { position: absolute; top: 0; bottom: 0; left: max(0px, calc(var(--sidebar-w) - 4px)); width: 9px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; z-index: var(--z-handle); cursor: col-resize; touch-action: none; }
 	.handle::after { content: ''; position: absolute; top: 0; bottom: 0; left: min(4px, var(--sidebar-w)); width: 1px; background: var(--line); }
 	.handle:hover::after, .handle:focus-visible::after, .resizing::after { left: 3px; width: 3px; background: var(--denim); }
 	.handle:focus-visible { outline: none; }

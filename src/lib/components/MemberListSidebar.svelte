@@ -202,20 +202,20 @@
 	.member-list { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-000); border-left: 1px solid var(--line); }
 	/* Shut, it stays in the layout (hidden from everyone) so it can slide: the page moves its column, or below 960px its overlay. */
 	.member-list:not(.open) { visibility: hidden; }
-	.member-list-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-body); line-height: 20px; font-weight: 600; }
+	.member-list-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; }
 	.member-list-count { color: var(--ink-muted); font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
 	/* Wider on the left, so names line up with the header's Members and the section carets have a gutter to sit in. */
 	.member-list-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2) var(--space-3) var(--space-3); }
 	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 	.placeholder .ap-skel { height: 12px; }
-	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
+	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
 	.err { color: var(--danger); }
 	/* Small, after the count, as the rooms list's header buttons: most visits are to see who is here. */
-	.add-toggle { width: 24px; height: 24px; }
+	.add-toggle { width: var(--control-sm); height: var(--control-sm); }
 	/* Raised, like a popover in place: the members stay in view below it. */
 	.add { display: grid; gap: var(--space-2); margin: 0 var(--space-1) var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-100); }
 	.add-row { display: flex; gap: var(--space-2); min-width: 0; }
-	.add .ap-field { flex: 1; min-width: 0; height: 28px; font-size: var(--text-ui); }
+	.add .ap-field { flex: 1; min-width: 0; height: var(--control-md); font-size: var(--text-ui); }
 	.member-section + .member-section { margin-top: var(--space-4); }
 	/* As the rooms list's section headings. */
 	.member-section-head { margin: 0; padding: 0 var(--space-1) var(--space-1); font: inherit; }
@@ -226,7 +226,7 @@
 	/* The count after a dot and lighter than the words, as Other threads writes its own. */
 	.member-section-count { margin-left: 2px; font-weight: 400; }
 	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-	.member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: 18px; }
+	.member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 	/* Role badges follow the name, as beside a message's sender; the remove button floats over the far right. */
 	.who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 	.who:hover .member-name { text-decoration: underline; }
@@ -240,13 +240,13 @@
 	.member :global(.ap-role) { flex: none; }
 	.member-name small { margin-left: 4px; color: var(--ink-muted); font-size: var(--text-xs); }
 	/* Remove shows on hover or focus, over the end of the row rather than holding a gap there, so names and badges keep the width. */
-	.remove { position: absolute; top: 50%; right: var(--space-1); width: 24px; height: 24px; transform: translateY(-50%); background: var(--bg-000); box-shadow: -8px 0 6px var(--bg-000); opacity: 0; pointer-events: none; }
+	.remove { position: absolute; top: 50%; right: var(--space-1); width: var(--control-sm); height: var(--control-sm); transform: translateY(-50%); background: var(--bg-000); box-shadow: -8px 0 6px var(--bg-000); opacity: 0; pointer-events: none; }
 	.member:hover .remove, .member:focus-within .remove { opacity: 1; pointer-events: auto; }
 	/* Touch screens have no hover, so it's always there, in the row's flow at the far right. */
 	@media (hover: none) { .remove { position: static; flex: none; margin-left: auto; transform: none; background: transparent; box-shadow: none; opacity: 1; pointer-events: auto; } }
 	/* Narrower, it overlays the conversation, sliding in from the right edge as the column does on wide screens. */
 	@media (max-width: 959px) {
-		.member-list { position: absolute; z-index: 6; top: var(--header-h); right: 0; bottom: 0; width: min(var(--member-list-w, 280px), calc(100vw - 24px)); box-shadow: var(--shadow-float); transition: transform var(--slide-time, 0s) var(--slide-ease, ease), visibility 0s; }
+		.member-list { position: absolute; z-index: var(--z-overlay); top: var(--header-h); right: 0; bottom: 0; width: min(var(--member-list-w), calc(100vw - 24px)); box-shadow: var(--shadow-float); transition: transform var(--slide-time, 0s) var(--slide-ease, ease), visibility 0s; }
 		.member-list:not(.open) { transform: translateX(calc(100% + 24px)); transition: transform var(--slide-time, 0s) var(--slide-ease, ease), visibility 0s var(--slide-time, 0s); }
 	}
 	@media (prefers-reduced-motion: reduce) {

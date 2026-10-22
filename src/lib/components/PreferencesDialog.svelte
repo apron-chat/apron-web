@@ -307,20 +307,20 @@
 	.ap-preferences-nav button { width: 100%; padding: var(--space-2) var(--space-3); color: var(--ink); text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
 	.ap-preferences-nav button[aria-current="page"] { color: var(--ink); background: var(--bg-300); }
 	.ap-preferences-content { padding: var(--space-6); overflow-y: auto; }
-	.ap-preferences-content h3 { margin: 0; font-size: var(--text-body); line-height: 20px; }
+	.ap-preferences-content h3 { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); }
 	.ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
 	.ap-pref-setting { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 	.ap-pref-setting strong { font-size: var(--text-field); }
-	.ap-pref-experimental { display: inline-block; margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-xs); line-height: 18px; font-weight: 500; vertical-align: 1px; }
-	.ap-pref-setting p { max-width: 420px; margin: var(--space-1) 0 0; }
+	.ap-pref-experimental { display: inline-block; margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-ui); font-weight: 500; vertical-align: 1px; }
+	.ap-pref-setting p { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
 	.ap-pref-theme-setting label { color: var(--ink); font-size: var(--text-field); font-weight: 600; cursor: pointer; }
 	.ap-pref-theme-setting select { flex: none; }
 	.ap-pref-font-setting { display: block; }
 	.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
 	.ap-pref-setting .ap-pref-test { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-2) 0 0 calc(-1 * var(--space-3)); }
 	.ap-pref-notifications:has(+ .ap-pref-push-more) { border-bottom: 0; }
-	.ap-pref-push-more { max-width: 460px; padding-bottom: var(--space-4); }
-	.ap-pref-scopes { max-width: 460px; padding: var(--space-4) 0; }
+	.ap-pref-push-more { max-width: var(--pref-panel-w); padding-bottom: var(--space-4); }
+	.ap-pref-scopes { max-width: var(--pref-panel-w); padding: var(--space-4) 0; }
 	.ap-pref-note { margin: var(--space-3) 0; color: var(--ink-muted); font-size: var(--text-ui); line-height: 19px; }
 	.ap-pref-select { width: min(100%, 320px); }
 	.ap-pref-help { margin: var(--space-1) 0 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: 17px; }

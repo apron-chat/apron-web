@@ -129,8 +129,8 @@
 	.ap-status-pick { padding: var(--space-4) 0; border-bottom: 1px solid var(--line); }
 	.ap-status-pick-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
 	.ap-status-pick strong { font-size: var(--text-field); }
-	.ap-status-pick p { max-width: 420px; margin: var(--space-1) 0 0; }
+	.ap-status-pick p { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
 	.ap-status-pick-action { flex: none; display: inline-flex; align-items: center; gap: var(--space-2); }
 	.ap-status-pick-dot { display: inline-grid; place-items: center; width: 12px; }
-	.ap-status-pick-answer { max-width: 460px; margin-top: var(--space-3); }
+	.ap-status-pick-answer { max-width: var(--pref-panel-w); margin-top: var(--space-3); }
 </style>

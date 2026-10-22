@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { currentTheme, NARROW_MAX, pickerColors, placePicker } from '$lib/ui/emoji';
+	import { NARROW_MAX } from '$lib/ui/breakpoints';
+	import { currentTheme, pickerColors, placePicker } from '$lib/ui/emoji';
 	import { emojiPicker, loadEmojiMart } from '$lib/ui/emoji-picker.svelte';
 
 	/**
@@ -173,7 +174,7 @@
 <style>
 	/* A popover: raised ground, hairline, popover shadow, large radius. */
 	.emoji-pop {
-		position: fixed; z-index: 40; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+		position: fixed; z-index: var(--z-sheet); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
 		background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover);
 		font-family: var(--font-sans); color: var(--ink);
 	}
@@ -182,7 +183,7 @@
 	.sheet { left: 0; right: 0; bottom: 0; border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: env(safe-area-inset-bottom); }
 	.mount { display: flex; flex: 1; min-width: 0; min-height: 0; }
 	/* Which message a pick reacts to, in one line: it may have scrolled away under the picker. */
-	.caption { flex: none; display: flex; gap: var(--space-1); min-width: 0; margin: 0; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); white-space: nowrap; }
+	.caption { flex: none; display: flex; gap: var(--space-1); min-width: 0; margin: 0; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); white-space: nowrap; }
 	.caption-lead { flex: none; font-weight: 600; color: var(--ink); }
 	.caption-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 	/* emoji-mart's own custom properties, set from outside its shadow root: app type, radius and neutrals. */
@@ -196,5 +197,5 @@
 		--color-border: var(--bg-300);
 		--color-border-over: var(--line-strong);
 	}
-	.status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-4); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; text-align: center; }
+	.status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-4); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); text-align: center; }
 </style>
