@@ -369,7 +369,9 @@
 		const timer = setTimeout(keepView, Math.max(0, viewSavedAt + VIEW_SAVE_MS - Date.now()));
 		return () => clearTimeout(timer);
 	});
-	let paneRoom = $derived(activeThread ? threadRoom : activeRoom);
+	/** The open thread as the pane shows it: its copy held from before (a reload) while the live one loads, as the room's. */
+	let shownThreadRoom = $derived(session.heldCopy(threadRoom) ?? threadRoom);
+	let paneRoom = $derived(activeThread ? shownThreadRoom : activeRoom);
 	/** What's new in the rooms and threads other than the one being read, as the rooms list counts it: the phone header's back button shows it. */
 	let unreadElsewhere = $derived(countElsewhere(unread.byRoom, paneRoom?.id));
 	let mentionsElsewhere = $derived(countElsewhere(mentions.byRoom, paneRoom?.id));
@@ -377,7 +379,7 @@
 	 * The open pane is catching up: its history is recovering or loading, or it shows a copy held from before
 	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
 	 */
-	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || session.showingHeld || (!activeThread && (session.activeRoomHeld || awaitingThreads)))));
+	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || session.showingHeld || (activeThread ? shownThreadRoom !== threadRoom : session.activeRoomHeld || awaitingThreads))));
 	/** `paneCatchingUp` or a quiet reconnect, as the floating pill shows it: only once it outlasts a moment, then for a moment at least. */
 	let checkingShown = $state(false);
 	const checking = new SettleFlag((on) => (checkingShown = on));

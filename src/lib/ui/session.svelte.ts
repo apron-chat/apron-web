@@ -55,11 +55,22 @@ export class SessionView {
 	 */
 	private readonly standIn = $derived.by(() => {
 		const live = this.rooms.find((room) => room.id === this.activeRoomId);
-		const held = this.held;
-		const copy = held?.rooms.find((room) => room.id === live?.id);
+		const copy = live && this.held?.rooms.find((room) => room.id === live.id);
 		if (!live || !copy || live === copy) return undefined;
-		return (live.recovering && live.timeline.order.length === 0) || this.awaitingThreads === live.id ? copy : undefined;
+		return this.heldCopy(live) ?? (this.awaitingThreads === live.id ? copy : undefined);
 	});
+
+	/**
+	 * The copy held from before of a live room with nothing to show yet: one
+	 * recovering, or a thread (or a room open without joining) not loaded on
+	 * this connection. The pane shows it in the live room's place until the
+	 * history arrives, as it does the open room's. Not once loading failed.
+	 */
+	heldCopy(live: RoomSnapshot | undefined): RoomSnapshot | undefined {
+		if (!live || live.timeline.order.length > 0 || live.recoveryError || (live.loaded && !live.recovering)) return undefined;
+		const copy = this.held?.rooms.find((room) => room.id === live.id);
+		return copy && copy !== live ? copy : undefined;
+	}
 	readonly activeRoom = $derived(this.standIn ?? this.rooms.find((room) => room.id === this.activeRoomId));
 	/** The open room on screen is a copy held from before, while the live one catches up: a reconnect, or a reload. */
 	readonly activeRoomHeld = $derived(Boolean(this.standIn) || (this.showingHeld && this.activeRoomId !== undefined));
@@ -69,7 +80,20 @@ export class SessionView {
 	 */
 	threadSource(roomId: string | undefined): { rooms: RoomSnapshot[]; directory: ClientSnapshot['threadDirectory'][string] | undefined } {
 		if (roomId !== undefined && this.activeRoomHeld && this.held) return { rooms: this.held.rooms, directory: this.held.threadDirectory?.[roomId] };
-		return { rooms: this.rooms, directory: roomId !== undefined ? this.snapshot.threadDirectory[roomId] : undefined };
+		return { rooms: this.rooms.map((room) => this.currentCopy(room) ?? room), directory: roomId !== undefined ? this.snapshot.threadDirectory[roomId] : undefined };
+	}
+
+	/**
+	 * A thread not loaded on this connection, with the messages its held copy
+	 * had, while nothing has happened in it since (the same head): its card
+	 * keeps its faces and newest reply instead of losing them once the live
+	 * rooms take over, and is still true. Anything newer, and it shows as the
+	 * live one does until it is opened.
+	 */
+	private currentCopy(live: RoomSnapshot): RoomSnapshot | undefined {
+		if (live.parentRoomId === undefined || live.loaded || live.latestLogId === undefined) return undefined;
+		const copy = this.heldCopy(live);
+		return copy && copy.latestLogId === live.latestLogId ? { ...live, timeline: copy.timeline } : undefined;
 	}
 
 	/** The open room's threads aren't listed yet on this connection (or are, with undefined). */
@@ -87,7 +111,13 @@ export class SessionView {
 	private hold(next: ClientSnapshot): void {
 		if (!isSessionReady(next) || next.disconnectedAt !== undefined || next.rooms.length === 0 || this.awaitingThreads !== undefined) return;
 		if (next.rooms.some((room) => room.recovering && room.timeline.order.length === 0)) return;
-		this.held = { rooms: next.rooms, activeRoom: next.activeRoom, you: next.you, server: next.server, threadDirectory: next.threadDirectory };
+		// Threads (and rooms open without joining) load only when opened: until one is, its held copy stays, to
+		// stand in when it opens, and to keep on the device, rather than an empty room in its place.
+		const rooms = next.rooms.map((room) => {
+			const copy = this.heldCopy(room);
+			return copy?.timeline.order.length ? copy : room;
+		});
+		this.held = { rooms, activeRoom: next.activeRoom, you: next.you, server: next.server, threadDirectory: next.threadDirectory };
 		this.primed = false;
 	}
 
