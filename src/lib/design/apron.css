@@ -154,7 +154,7 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-embed-html th { color: var(--ink-muted); font-weight: 500; }
 
 /* ThreadMarker */
-.ap-thread { font: inherit; display: inline-flex; align-items: baseline; gap: var(--space-2); max-width: 100%; margin-top: var(--space-2); padding: 3px var(--space-3) 3px var(--space-2); border: 0; border-radius: var(--radius-full); background: var(--denim-soft); color: var(--denim); cursor: pointer; font-size: var(--text-ui); line-height: 18px; text-align: left; }
+.ap-thread { font: inherit; display: inline-flex; align-items: baseline; gap: var(--space-2); max-width: 100%; margin-top: var(--space-2); padding: 3px var(--space-3) 3px var(--space-2); border: 0; border-radius: var(--radius-full); --ap-thread-ground: var(--denim-soft); background: var(--ap-thread-ground); color: var(--denim); cursor: pointer; font-size: var(--text-ui); line-height: 18px; text-align: left; }
 .ap-thread:hover { filter: brightness(1.08); }
 /* One row: the title gives way (ellipsized) to the faces, unread bubble and time, which keep their width; the bubble and time sit together at the right. */
 .ap-thread-head { display: inline-flex; align-items: baseline; gap: var(--space-2); min-width: 0; max-width: 100%; }
@@ -168,13 +168,14 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-thread-faces + .ap-thread-name::before { content: none; }
 .ap-thread-name .ap-lock { margin: 0 4px 0 0; }
 /* A private thread's card, in plum: its title and lock take the hue, its preview lines stay in ink. */
-.ap-thread-private { background: var(--private-soft); color: var(--private); }
+.ap-thread-private { --ap-thread-ground: var(--private-soft); color: var(--private); }
 .ap-thread-private .ap-lock { color: var(--private); }
-.ap-thread-private .ap-thread-faces .ap-avatar + .ap-avatar { box-shadow: 0 0 0 2px var(--private-soft); }
 .ap-thread-head .ap-count { align-self: center; margin-left: auto; }
+/* The quiet bubble, a shade of the card's own ground, so it stands out on denim and plum alike. */
+.ap-thread-head .ap-count-quiet { background: color-mix(in srgb, var(--ap-thread-ground) var(--count-shade), black); }
 .ap-thread-head .ap-count + .ap-thread-last { margin-left: 0; padding-left: 0; }
 .ap-thread-faces { flex: none; display: inline-flex; align-self: center; }
-.ap-thread-faces .ap-avatar + .ap-avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--denim-soft); }
+.ap-thread-faces .ap-avatar + .ap-avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--ap-thread-ground); }
 .ap-thread-last { flex: none; margin-left: auto; padding-left: var(--space-2); color: var(--ink-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ap-thread-moved { background: transparent; padding-left: 0; cursor: default; color: var(--ink-muted); font-size: var(--text-sm); line-height: 16px; font-style: italic; }
 .ap-thread-moved:hover { background: transparent; }
