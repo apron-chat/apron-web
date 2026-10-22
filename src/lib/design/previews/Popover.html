@@ -1,0 +1,17 @@
+<!-- @dsCard group="Layout" height=360 subtitle="Fixed to the viewport: beside the button that opened it on wide screens, then as a bottom sheet on a phone, full width and rounded only where it meets the page" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Popover</title></head>
+<body>
+<div id="root" style="padding:16px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.Button, root, { size: 'sm', label: 'Opened from here' });
+  function body(title, text) {
+    return A.html('<div style="display:flex;flex-direction:column;gap:8px;padding:16px;font-size:var(--text-ui);line-height:var(--leading-ui)"><strong>' + title + '</strong><span style="color:var(--ink-muted)">' + text + '</span></div>');
+  }
+  A.render(A.Popover, document.body, { 'aria-label': 'A popover', mode: 'popover', top: 52, left: 16, width: 280, children: body('A popover', 'Placed below what opened it, clear of the viewport’s edges. You place it and close it.') });
+  A.render(A.Popover, document.body, { 'aria-label': 'A sheet', mode: 'sheet', children: body('A bottom sheet', 'On a phone: along the bottom, full width, clear of the home indicator.') });
+</script>
+</body>
+</html>

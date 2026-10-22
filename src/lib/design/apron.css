@@ -527,6 +527,63 @@ a.ap-embed-card:hover { background: var(--bg-300); }
   .ap-embed-livebadge i, .ap-embed-caret { animation: none; }
 }
 
+/* Popover — fixed to the viewport, so the timeline never clips it: raised ground, hairline, popover shadow, large radius */
+.ap-popover { position: fixed; z-index: var(--z-sheet); box-sizing: border-box; display: flex; flex-direction: column; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); font-family: var(--font-sans); color: var(--ink); }
+.ap-popover:focus { outline: none; }
+/* Narrow screens: a bottom sheet, full width, rounded only where it meets the page. */
+.ap-popover-sheet { left: 0; right: 0; bottom: 0; border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: env(safe-area-inset-bottom); }
+
+/* ProfileCard — who someone is, from a mention, a sender or a member */
+.ap-profcard { gap: var(--space-3); padding: var(--space-4); }
+.ap-profcard.ap-popover-sheet { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); }
+.ap-profcard-who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.ap-profcard-names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ap-profcard-nameline { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
+.ap-profcard-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; }
+.ap-profcard-you { flex: none; color: var(--ink-muted); font-size: var(--text-sm); }
+.ap-profcard-handle { color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; user-select: all; }
+.ap-profcard-status { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
+.ap-profcard-literal { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
+.ap-profcard-names .ap-roles { align-self: flex-start; margin: 2px 0 0; }
+.ap-profcard-note, .ap-profcard-warn { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-profcard-note { color: var(--ink-muted); }
+.ap-profcard-warn { padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--bg-300); color: var(--ink); }
+.ap-profcard-err { color: var(--danger); }
+.ap-profcard-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* ReactorsPopover — who reacted with an emoji; the list scrolls past 320px, so a crowd doesn't run off the screen */
+.ap-reactors { gap: var(--space-2); padding: var(--space-3); }
+.ap-reactors.ap-popover-sheet { padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom)); }
+.ap-reactors-head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
+.ap-reactors-emoji { font-family: var(--font-emoji); font-size: var(--text-title); line-height: var(--leading-title); }
+.ap-reactors-list { max-height: 320px; margin: 0; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.ap-reactors-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: var(--space-1) 0; font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-reactors-names { display: flex; flex-direction: column; min-width: 0; }
+.ap-reactors-nameline { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
+.ap-reactors-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ap-reactors-muted { flex: none; color: var(--ink-muted); }
+.ap-reactors-handle { font-size: var(--text-sm); line-height: var(--leading-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* EmojiPopover — the full emoji picker, which is the client's (emoji-mart); it fills what the caption leaves */
+.ap-emojipop { overflow: hidden; }
+.ap-emojipop-mount { display: flex; flex: 1; min-width: 0; min-height: 0; }
+/* Which message a pick reacts to, in one line: it may have scrolled away under the picker. */
+.ap-emojipop-caption { flex: none; display: flex; gap: var(--space-1); min-width: 0; margin: 0; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); white-space: nowrap; }
+.ap-emojipop-lead { flex: none; font-weight: 600; color: var(--ink); }
+.ap-emojipop-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ap-emojipop-status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-4); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); text-align: center; }
+/* emoji-mart's own custom properties, set from outside its shadow root: app type, radius and neutrals. */
+.ap-emojipop-mount em-emoji-picker {
+	flex: 1; width: 100%; height: 100%; min-height: 0;
+	--border-radius: calc(var(--radius-lg) - 1px);
+	--shadow: none;
+	--font-family: var(--font-sans);
+	--font-size: var(--text-body);
+	--category-icon-size: 18px;
+	--color-border: var(--bg-300);
+	--color-border-over: var(--line-strong);
+}
+
 /* ReplyPreview — the quoted message, one line on a row of its own above the sender's name; click to jump.
    A spine runs up from the avatar's centre and bends into the quote. Every gap is --space-1: the quote to the
    name line, the spine to the avatar, the spine to the quote's own avatar. Compact runs it from the time column. */

@@ -53,4 +53,8 @@ export { default as SignInForm } from './SignInForm.svelte';
 export { default as SettingsSections } from './SettingsSections.svelte';
 export { default as SettingRow } from './SettingRow.svelte';
 export { default as FontField } from './FontField.svelte';
+export { default as Popover } from './Popover.svelte';
+export { default as ProfileCard } from './ProfileCard.svelte';
+export { default as ReactorsPopover } from './ReactorsPopover.svelte';
+export { default as EmojiPopover } from './EmojiPopover.svelte';
 export type * from './types';

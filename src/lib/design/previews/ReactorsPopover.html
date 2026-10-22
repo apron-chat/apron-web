@@ -1,0 +1,22 @@
+<!-- @dsCard group="Timeline" height=420 subtitle="Who reacted, from a chip right-clicked or long-pressed: you first, @user_id where it differs from the name or the name is shared; then one reaction as a bottom sheet" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ReactorsPopover</title></head>
+<body>
+<div id="root" style="padding:16px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.ReactionBar, root, { reactions: [{ emoji: '👍', count: 4, mine: true }, { emoji: '🎉', count: 1 }] });
+  A.render(A.ReactorsPopover, document.body, {
+    mode: 'popover', top: 48, left: 16, width: 260, emoji: '👍',
+    reactors: [
+      { user_id: 'sam', name: 'Sam Rivera', you: true },
+      { user_id: 'ada', name: 'Ada Lovelace' },
+      { user_id: 'grace', name: 'Grace', handle: true },
+      { user_id: 'grace_2', name: 'Grace' }
+    ]
+  });
+  A.render(A.ReactorsPopover, document.body, { mode: 'sheet', emoji: '🎉', reactors: [{ user_id: 'linus' }] });
+</script>
+</body>
+</html>

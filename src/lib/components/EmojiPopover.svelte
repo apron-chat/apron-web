@@ -3,11 +3,13 @@
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import { currentTheme, pickerColors, placePicker } from '$lib/ui/emoji';
 	import { emojiPicker, loadEmojiMart } from '$lib/ui/emoji-picker.svelte';
+	import EmojiPopover from '$lib/design/components/EmojiPopover.svelte';
 
 	/**
 	 * The one full emoji picker (emoji-mart), drawn for whichever trigger opened
-	 * it. It lives outside the app shell and is fixed to the viewport, so the
-	 * timeline's overflow and containment never clip it: a popover beside the
+	 * it, in the design system's EmojiPopover. It lives outside the app shell
+	 * and is fixed to the viewport, so the timeline's overflow and containment
+	 * never clip it: a popover beside the
 	 * trigger on wide screens, a bottom sheet on narrow ones. emoji-mart and its
 	 * data load the first time it opens, from this app's origin: it gets its
 	 * data, strings and native glyphs passed in, so it fetches nothing.
@@ -145,57 +147,19 @@
 </script>
 
 {#if request && placement}
-	<div
-		class="emoji-pop"
-		class:sheet={placement.mode === 'sheet'}
-		role="dialog"
-		aria-label="Emoji picker"
-		tabindex="-1"
+	<EmojiPopover
+		mode={placement.mode}
+		top={placement.mode === 'popover' ? placement.top : undefined}
+		left={placement.mode === 'popover' ? placement.left : undefined}
+		width={placement.mode === 'popover' ? placement.width : undefined}
+		height={placement.height}
+		caption={request.caption}
+		{status}
 		data-testid="emoji-picker"
 		data-state={status}
-		style:top={placement.mode === 'popover' ? `${placement.top}px` : undefined}
-		style:left={placement.mode === 'popover' ? `${placement.left}px` : undefined}
-		style:width={placement.mode === 'popover' ? `${placement.width}px` : undefined}
-		style:height={`${placement.height}px`}
-		bind:this={box}
+		bind:element={box}
+		bind:mount
 		onkeydowncapture={keydown}
 		onfocusout={focusout}
-	>
-		{#if request.caption}
-			<p class="caption" data-testid="emoji-picker-caption"><span class="caption-lead">{request.caption.lead}</span> <span class="caption-text">“{request.caption.text}”</span></p>
-		{/if}
-		{#if status !== 'ready'}
-			<p class="status" role="status">{status === 'failed' ? 'Emoji couldn’t load. Close and try again.' : 'Loading emoji…'}</p>
-		{/if}
-		<div class="mount" bind:this={mount}></div>
-	</div>
+	/>
 {/if}
-
-<style>
-	/* A popover: raised ground, hairline, popover shadow, large radius. */
-	.emoji-pop {
-		position: fixed; z-index: var(--z-sheet); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
-		background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover);
-		font-family: var(--font-sans); color: var(--ink);
-	}
-	.emoji-pop:focus { outline: none; }
-	/* Narrow screens: a bottom sheet, full width, rounded only where it meets the page. */
-	.sheet { left: 0; right: 0; bottom: 0; border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: env(safe-area-inset-bottom); }
-	.mount { display: flex; flex: 1; min-width: 0; min-height: 0; }
-	/* Which message a pick reacts to, in one line: it may have scrolled away under the picker. */
-	.caption { flex: none; display: flex; gap: var(--space-1); min-width: 0; margin: 0; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); white-space: nowrap; }
-	.caption-lead { flex: none; font-weight: 600; color: var(--ink); }
-	.caption-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-	/* emoji-mart's own custom properties, set from outside its shadow root: app type, radius and neutrals. */
-	.mount :global(em-emoji-picker) {
-		flex: 1; width: 100%; height: 100%; min-height: 0;
-		--border-radius: calc(var(--radius-lg) - 1px);
-		--shadow: none;
-		--font-family: var(--font-sans);
-		--font-size: var(--text-body);
-		--category-icon-size: 18px;
-		--color-border: var(--bg-300);
-		--color-border-over: var(--line-strong);
-	}
-	.status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-4); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); text-align: center; }
-</style>

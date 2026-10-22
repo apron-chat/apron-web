@@ -1,0 +1,20 @@
+<!-- @dsCard group="Input" height=520 subtitle="The client's emoji picker (here a stand-in grid) under which message a pick reacts to; then loading, as a bottom sheet" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>EmojiPopover</title></head>
+<body>
+<script>
+  var A = window.Apron;
+  // A stand-in for the client's picker (emoji-mart in the app), which fills what the caption leaves.
+  var emoji = '😀 😂 🥲 😍 🤔 😴 😎 🤯 🥳 👍 👎 👏 🙏 💪 👀 🎉 🔥 ✨ ❤️ 💯 ✅ ❌ 🚀 ☕ 🍕 🌱 🐛 📦 🔒 📌'.split(' ');
+  var grid = '<div style="flex:1;display:grid;grid-template-columns:repeat(9,1fr);align-content:start;gap:4px;padding:12px;font-family:var(--font-emoji);font-size:22px;line-height:32px;text-align:center">' +
+    emoji.map(function (e) { return '<span>' + e + '</span>'; }).join('') + '</div>';
+  A.render(A.EmojiPopover, document.body, {
+    mode: 'popover', top: 16, left: 16, width: 352, height: 280,
+    caption: { lead: 'Reacting to Ada', text: 'Shipping the deploy checklist after lunch, unless someone objects' },
+    children: A.html(grid)
+  });
+  A.render(A.EmojiPopover, document.body, { mode: 'sheet', height: 180, status: 'loading' });
+</script>
+</body>
+</html>

@@ -123,3 +123,23 @@ export interface MediaItem {
 	width?: number;
 	height?: number;
 }
+
+/** Where a Popover sits, in viewport px: beside what opened it on wide screens, a bottom sheet on narrow ones. */
+export interface PopoverPlacement {
+	/** `popover`: at `top` and `left`, `width` wide. `sheet`: along the bottom, full width, rounded only where it meets the page. */
+	mode?: 'popover' | 'sheet';
+	top?: number;
+	left?: number;
+	/** As a popover; a sheet is full width. */
+	width?: number;
+	/** Either way; omitted, it fits its content. */
+	height?: number;
+}
+
+/** Someone who reacted, in a ReactorsPopover. */
+export interface Reactor extends Sender {
+	/** The viewer: "(you)" follows the name. */
+	you?: boolean;
+	/** Show `@user_id` under the name. Defaults to where it differs from the name; `true` shows it even then, such as when two users share the name. */
+	handle?: boolean;
+}

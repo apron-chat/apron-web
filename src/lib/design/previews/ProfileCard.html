@@ -1,0 +1,26 @@
+<!-- @dsCard group="Identity" height=640 subtitle="A member with a role: Mention, Copy @user_id; someone with an unknown status who shares a name, not in the room, Add to room, after a copy failed; your own card, invisible, as a bottom sheet" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ProfileCard</title></head>
+<body>
+<script>
+  var A = window.Apron, at = document.body;
+  function noop() {}
+  A.render(A.ProfileCard, at, {
+    mode: 'popover', top: 16, left: 16, width: 288,
+    userId: 'ada', name: 'Ada Lovelace', status: 'online', roles: ['admin'], membership: 'Member of general',
+    onmention: noop, oncopyid: noop, note: { text: 'Copied @ada' }
+  });
+  A.render(A.ProfileCard, at, {
+    mode: 'popover', top: 16, left: 320, width: 288,
+    userId: 'grace_2', name: 'Grace', status: 'brb', roles: ['bot'], sharesName: true, membership: 'Not in general',
+    oncopyid: noop, onaddtoroom: noop, note: { text: 'Unable to copy', error: true }
+  });
+  A.render(A.ProfileCard, at, {
+    mode: 'sheet',
+    userId: 'sam', name: 'Sam Rivera', you: true, status: 'invisible', statusLabel: 'Invisible · others see you as offline', membership: 'Member of general',
+    onmention: noop, oncopyid: noop
+  });
+</script>
+</body>
+</html>
