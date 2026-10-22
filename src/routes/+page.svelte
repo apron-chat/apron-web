@@ -53,6 +53,7 @@
 	import { WIDE_MIN } from '$lib/ui/breakpoints';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
+	import SystemLine from '$lib/design/components/SystemLine.svelte';
 	import AppShell from '$lib/design/components/AppShell.svelte';
 	import DropZone from '$lib/design/components/DropZone.svelte';
 	import EmptyState from '$lib/design/components/EmptyState.svelte';
@@ -63,7 +64,7 @@
 	import { askedLinkFailure, linkUse, runSignInLink, sessionSettled, takeSignInLink, type LinkUse, type SignInLink } from '$lib/ui/sign-in-link';
 	import { findProposal } from '$lib/protocol/proposals';
 	import SignInLinkDialog from '$lib/components/SignInLinkDialog.svelte';
-	import { idDateTime, idIso, idTime } from '$lib/ui/time';
+	import { idMillis } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
 	import { trackKeyboard } from '$lib/ui/viewport';
@@ -2509,10 +2510,7 @@
 						{:else if item.kind === 'members'}
 							<MembershipLine joined={item.joined} left={item.left} logId={item.logId} />
 						{:else if item.kind === 'renamed'}
-							<div data-timeline-item class="ap-msg ap-msg-system" data-testid="thread-renamed">
-								<div class="ap-msg-system-body">{#if item.title}Thread renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}Thread name cleared{/if}</div>
-								{#if idTime(item.logId)}<time class="ap-msg-system-time" datetime={idIso(item.logId)} title={idDateTime(item.logId)}>{idTime(item.logId)}</time>{/if}
-							</div>
+							<SystemLine timestamp={idMillis(item.logId)} data-timeline-item="" data-testid="thread-renamed">{#if item.title}Thread renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}Thread name cleared{/if}</SystemLine>
 						{:else}
 							{@const event = item.event}
 							{#if event.message_id === newDividerBefore}

@@ -29,18 +29,30 @@ then `apron.css`, so it needs nothing else), `index.d.ts`
 `tokens.css` is the tokens' source of truth: change a token there, and it
 reaches the design system with the next bundle.
 
-The Svelte components under `src/lib/components` wrap the `ap-*`
-classes one to one with the design system's components, adding the app's
-state and behavior — `ConnectScreen`,
-`Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` with `RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`) and
-`ThreadSummary` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `Message` (the design system's `Message` itself, which the app fills through its `avatar`, `name`, `reply`, `body`, `footer` and `actions` snippets) with its `ReactionBar` (whose chips open `ReactorsPopover`, the list of who reacted, through `reactors.svelte.ts`) and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`) and `StagedFile` (the design system's `Attachments`), `SelectionBar`, `JumpBar`,
-`EmojiPopover` (the full emoji picker, which the design system leaves to the client),
-`PreferencesDialog` with its `FontFamilyField`, `SignInLinkDialog` (both
+The Svelte components under `src/lib/components` are the app's side of the
+design system: each renders a design component and adds the app's state and
+behavior (the client, `directory` lookups, stores, requests), and none has
+markup or styles of its own. The page lays itself out with the design
+system's `AppShell` (rooms panel, main pane and member-list column; the
+panels' collapse, slide and resize handles (`PanelToggle`, `PanelHandle`,
+driven by `SidebarHandle`); one pane at a time on phones; the overlaid member
+list under 960px) and renders `EmptyState`, `RoomLoading` (in `NoRoom`),
+`FloatingDay` and `DropZone`, with `Toasts` and `ConnectionNotice` beside it.
+The wrappers: `ConnectScreen` and `SignIn` (the design system's
+`ConnectScreen` and the `SignInForm` it shares; `SignIn` keeps the state
+machine in `$lib/ui/sign-in`), `Sidebar` (`SidebarHead`, `SidebarSection` and
+`RoomItem`) with `ThreadList` (the design system's `ThreadList`),
+`MemberListSidebar` (`MemberList`), `ProfileBar` (`ProfileBar` with its
+`ProfileEditor`), `RoomHeader` (`RoomHeader`, with its ⋯ `MenuButton`) with
+`RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
+`ThreadSummary` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `Message` (the design system's `Message` itself, which the app fills through its `avatar`, `name`, `reply`, `body`, `footer` and `actions` snippets) with its `ReactionBar` (whose chips open `ReactorsPopover`, the list of who reacted, through `reactors.svelte.ts`), `RoleBadges`, `MentionText` (`Mention`) and its embeds (`Embed*`, `EmbedRemove`; the trusted-origin gate stays in `embeds/og.ts`), `MessageEditor` (`MessageEditor`), `NoticeLine` (a scoped `Message`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose field the app fills and edits) with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
+`ProfileCard`, `ReactorsPopover` and `EmojiPopover` (the full emoji picker, which the design system leaves to the client; all three in the design system's `Popover`, a bottom sheet on phones),
+`PreferencesDialog` (`SettingsSections` and `SettingRow`) with its `FontFamilyField` (`FontField`), `StatusPicker`, `PauseNotifications` and `NotifyPrompt` (`Nudge`), `SignInLinkDialog` (both
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
 choice submitted with a form a `CheckList`-style row),
 `MediaViewerHost` (the design system's `MediaViewer`, opened by image embeds through
-`media-viewer.svelte.ts`, which reads the open timeline's `data-viewer-*` links), `StatusBanner`, `UpdateNotice` (the design system's `ActionBanner`, which reads whether the page's
-`PaneDrafts` hold anything unsent through `pageDrafts`), `Avatar`. A style change goes in `apron.css`, and reaches the
+`media-viewer.svelte.ts`, which reads the open timeline's `data-viewer-*` links), `UpdateNotice` (the design system's `ActionBanner`, which reads whether the page's
+`PaneDrafts` hold anything unsent through `pageDrafts`), `Avatar`. Global resets (the page's height, `box-sizing`, `font: inherit` on controls) are in `src/app.css`. A style change goes in `apron.css`, and reaches the
 design system with the next `npm run design:bundle`. A user's `status` (§4.5)
 is the design system's `StatusDot` on their `Avatar`: online a dot, idle a
 crescent, dnd a barred dot, offline a hollow ring, your own `invisible` the
