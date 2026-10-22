@@ -1,0 +1,16 @@
+<!-- @dsCard group="Embeds" height=200 subtitle="The (x) on an embed's corner: hover the preview; always shown on touch screens" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>EmbedRemove</title></head>
+<body>
+<div id="root" class="ap-stack"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  // The slot holding the embed is positioned, and sized to it, so the (x) sits on its corner.
+  var slot = document.createElement('div'); slot.style.position = 'relative'; slot.style.alignSelf = 'flex-start'; root.appendChild(slot);
+  add(A.EmbedCard, { kind: 'link', url: 'https://github.com/shazow/apron', og: { site_name: 'GitHub', title: 'shazow/apron', description: 'A chat protocol and client for bring-your-own backends.' } }, slot);
+  add(A.EmbedRemove, { label: 'Remove preview', onremove: function () { slot.remove(); } }, slot);
+</script>
+</body>
+</html>

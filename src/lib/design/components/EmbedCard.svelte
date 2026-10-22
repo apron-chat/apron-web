@@ -9,7 +9,7 @@
 	const img = $derived(og.image && safeHttp(og.image.url));
 </script>
 
-<svelte:element this={url ? 'a' : 'div'} class={['ap-embed', 'ap-embed-ogcard', img && 'ap-embed-ogcard-img']} href={url} rel={url ? 'noreferrer noopener' : undefined} target={url ? '_blank' : undefined}>
+<svelte:element this={url ? 'a' : 'div'} class={['ap-embed', 'ap-embed-ogcard', img && 'ap-embed-ogcard-img']} href={url} rel={url ? 'noreferrer noopener' : undefined} target={url ? '_blank' : undefined} data-testid={props.testid}>
 	{#if img}<img class="ap-embed-ogimg" src={img} alt={og.image?.alt || ''} loading="lazy" />{/if}
 	<span class="ap-embed-cardtext">
 		{#if og.site_name}<span class="ap-embed-site">{og.site_name}</span>{/if}

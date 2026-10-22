@@ -783,12 +783,13 @@ a.ap-embed-ogcard:hover { background: var(--bg-300); }
 .ap-embed-desc { font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 
 /* ReactionBar — chips under a message, and the palette */
-.ap-reactions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
-.ap-rchip { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1); height: var(--chip-h); padding: 0 var(--space-2); box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; cursor: pointer; }
-.ap-rchip:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
+.ap-reactions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); max-width: 100%; }
+/* A long press on a chip lists who reacted: no text selection or callout on top of it. A disabled chip stays focusable for that, so it is aria-disabled. */
+.ap-rchip { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1); height: var(--chip-h); padding: 0 var(--space-2); box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, color var(--duration-fast) ease; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.ap-rchip:hover:not([aria-disabled='true']) { background: var(--bg-300); color: var(--ink); }
 .ap-rchip-mine { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
-.ap-rchip:disabled { cursor: default; }
-.ap-rchip-emoji { font-family: var(--font-emoji); font-size: var(--text-body); }
+.ap-rchip[aria-disabled='true'] { cursor: default; }
+.ap-rchip-emoji { font-family: var(--font-emoji); font-size: var(--text-body); line-height: var(--leading-sm); }
 .ap-rchip-count { font-weight: 600; }
 .ap-rchip-add { width: var(--chip-h); justify-content: center; padding: 0; font-size: var(--text-body); visibility: hidden; }
 .ap-rpalette { display: inline-flex; align-self: flex-start; max-width: 100%; flex-wrap: wrap; gap: 2px; margin-top: var(--space-1); padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-float); }
@@ -796,6 +797,7 @@ a.ap-embed-ogcard:hover { background: var(--bg-300); }
 .ap-rpick:hover:not(:disabled) { background: var(--bg-300); color: var(--ink); }
 .ap-rpick-mine { background: var(--accent-soft); }
 .ap-msg:hover .ap-rchip-add, .ap-msg:focus-within .ap-rchip-add { visibility: visible; }
+@media (prefers-reduced-motion: reduce) { .ap-rchip { transition: none; } }
 
 /* Room mentions and unknown mentions */
 .ap-mention-room { font: inherit; border: 0; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }

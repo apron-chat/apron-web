@@ -1,4 +1,5 @@
 import type { Snippet } from 'svelte';
+import type { HTMLAttributes } from 'svelte/elements';
 import type { Sender } from './util';
 export type { Sender };
 
@@ -19,10 +20,10 @@ export interface EmbedProps {
 	url?: string;
 	title?: string;
 	og?: OG;
-	/** upload, sender side only: 0–1 while the HTTP write to `write_url` is in flight (§4.8.3); `failed` if it never completed. */
+	/** upload, sender side only: 0–1 while the HTTP write to `write_url` is in flight (§4.8.3); `failed` if it never completed, a string saying why. */
 	progress?: number;
-	failed?: boolean;
-	/** upload without og media: a detail line under the file name (size, type). */
+	failed?: boolean | string;
+	/** upload: a detail line under the file name: what it is (size, type) on a file card without og media, or ahead of Uploading… while pending. */
 	detail?: string;
 	/** upload with og.image: false hides the caption under the picture. */
 	caption?: boolean;
@@ -31,19 +32,27 @@ export interface EmbedProps {
 	 * to show it full screen in a MediaViewer. Other clicks still open the link in a new tab or window.
 	 */
 	onview?: (event: MouseEvent) => void;
+	/** upload with og.image: more attributes for the link around the picture, such as the `data-*` a viewer pages through. */
+	link?: HTMLAttributes<HTMLAnchorElement>;
 	/** stream (§4.8.5): `format` plain | markdown | terminal. Live while `url` is set and not `done`. */
 	format?: string;
 	text?: string;
 	done?: boolean;
 	truncated?: boolean;
-	/** stream with format markdown: the rendered, sanitized body. */
+	/** stream: what the header says once it isn't live, in place of Finished (such as Ended). */
+	status?: string;
+	/** stream: the body's content, such as rendered and sanitized Markdown or colored terminal spans; `text` otherwise. */
 	children?: Snippet;
+	/** stream with format markdown: an attachment for the body, such as one that highlights its code blocks. */
+	attach?: (body: HTMLElement) => void | (() => void);
 	/** iframe: `height` is a suggestion, clamped to iframe-max-h; `live` false shows the paused placeholder. */
 	height?: number;
 	live?: boolean;
 	onactivate?: () => void;
 	/** html: ALREADY SANITIZED markup (DOMPurify or equivalent). */
 	html?: string;
+	/** A `data-testid` for the embed's root. */
+	testid?: string;
 }
 
 /** One chip per emoji, aggregated by you from the reaction sets (§4.7). */
@@ -53,6 +62,10 @@ export interface ReactionChip {
 	mine?: boolean;
 	/** "You, Ada and Bob" for the tooltip */
 	who?: string;
+	/** The whole tooltip, in place of the one made from `who`. */
+	title?: string;
+	/** What a screen reader hears, in place of the emoji, count and what a click does. */
+	label?: string;
 }
 
 /** A quoted message: who wrote it and a one-line snippet (you shorten it — ~120 chars, first line, no Markdown). */

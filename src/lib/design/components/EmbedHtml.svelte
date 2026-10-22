@@ -4,4 +4,4 @@
 	let props: EmbedProps = $props();
 </script>
 
-<div class="ap-embed ap-embed-html">{@html props.html || ''}</div>
+<div class="ap-embed ap-embed-html" data-testid={props.testid}>{@html props.html || ''}</div>

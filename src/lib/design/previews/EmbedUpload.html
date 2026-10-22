@@ -1,4 +1,4 @@
-<!-- @dsCard group="Embeds" height=560 subtitle="Image, audio, file, uploading, failed" -->
+<!-- @dsCard group="Embeds" height=630 subtitle="Image, audio, file, uploading (with its size), failed (with why)" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>EmbedUpload</title></head>
@@ -12,7 +12,8 @@
   add(A.EmbedUpload, { kind: 'upload', url: '#', title: 'voice-0:12.webm', og: { audio: { url: '#' } } });
   add(A.EmbedUpload, { kind: 'upload', url: '#', title: 'migration-0042.log', og: { description: 'text/plain · 18 KB' } });
   add(A.EmbedUpload, { kind: 'upload', title: 'deploy-plan.pdf', progress: 0.62 });
-  add(A.EmbedUpload, { kind: 'upload', title: 'screenshot.png', failed: true });
+  add(A.EmbedUpload, { kind: 'upload', title: 'whiteboard.png', detail: '1920 × 1080' });
+  add(A.EmbedUpload, { kind: 'upload', title: 'screenshot.png', failed: 'the file is too large' });
 </script>
 </body>
 </html>
