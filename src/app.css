@@ -1,0 +1,5 @@
+/* The app's page, under apron.css: the window's full height, border-box sizing, and controls in the page's font.
+   Not in the design system's bundle, whose previews size their own boxes. */
+html, body { height: 100%; }
+*, *::before, *::after { box-sizing: border-box; }
+button, input, textarea, select { font: inherit; }

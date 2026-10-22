@@ -3,12 +3,20 @@
 <html>
 <head><meta charset="utf-8"><title>App shell, starting a thread</title><style>html,body{height:100%}</style></head>
 <body>
-<div id="root" style="height:640px"><div class="ap-shell"><span id="rail" style="display:contents"></span><aside class="ap-shell-side" id="side"><div class="ap-shell-sidehead">Work</div><div class="ap-shell-sidebody" id="sidebody"></div></aside><main class="ap-shell-main" id="main"><span id="head" style="display:contents"></span><div class="ap-timeline" id="tl"></div><span id="foot" style="display:contents"></span></main></div></div>
+<div id="root" style="height:640px"></div>
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' }, dana = { user_id: 'dana', name: 'Dana' }, me = { user_id: 'sam', name: 'Sam' };
   var noop = function () {}, $ = function (id) { return document.getElementById(id); };
+  // The shell: the rooms list and the main pane are markup the parts below are mounted into.
+  A.render(A.AppShell, root, {
+    rail: A.html('<span id="rail" style="display:contents"></span>'),
+    sideToggle: A.part(A.PanelToggle, { side: 'left', panel: 'rooms', open: true }),
+    side: A.html('<aside class="ap-shell-side" id="side"><div class="ap-shell-sidehead">Work</div><div class="ap-shell-sidebody" id="sidebody"></div></aside>'),
+    sideHandle: A.part(A.PanelHandle, { side: 'left' }),
+    main: A.html('<span id="head" style="display:contents"></span><div class="ap-timeline" id="tl"></div><span id="foot" style="display:contents"></span>')
+  });
   var rooms = [
     { room: 'general', name: 'General' }, { room: 'ops', name: 'Ops', active: true },
     { room: 'deploy', name: 'Deploy', nested: true }, { room: 'oncall', name: 'On-call rotation', nested: true },

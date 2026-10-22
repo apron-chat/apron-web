@@ -401,13 +401,183 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-rail-add .ap-rail-tile { background: transparent; border: 1px dashed var(--line-strong); color: var(--ink-muted); font-size: 18px; font-weight: 400; box-sizing: border-box; }
 .ap-rail-add:hover .ap-rail-tile { border-style: solid; }
 
-/* Layout shell — rail | sidebar | main pane. A thread opens in the main pane; there is no thread pane. */
-.ap-shell { display: grid; grid-template-columns: var(--rail-w) var(--sidebar-w) minmax(0, 1fr); height: 100%; min-height: 0; background: var(--bg-100); }
+/* AppShell — rail | rooms | main pane | member list. A thread opens in the main pane; there is no thread pane.
+   --corner: how far a header's content keeps clear of a PanelToggle in the window's corner. */
+.ap-shell { --corner: calc(var(--space-3) + var(--control-md) + var(--space-2)); position: relative; display: grid; grid-template-columns: var(--rail-w) var(--sidebar-w) minmax(0, 1fr); height: 100%; min-height: 0; overflow: clip; background: var(--bg-100); }
 .ap-shell-norail { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
 .ap-shell-side { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--bg-000); border-right: 1px solid var(--line); }
 .ap-shell-sidehead { display: flex; align-items: center; height: var(--header-h); padding: 0 var(--space-4); border-bottom: 1px solid var(--line); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; box-sizing: border-box; }
 .ap-shell-sidebody { flex: 1; overflow: auto; padding: var(--space-3) var(--space-2); }
 .ap-shell-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; container-type: inline-size; }
+/*
+ * Filling the window (ap-shell-viewport). While an on-screen keyboard is up (the page sets data-keyboard, --app-height and
+ * --app-top on the root), the part of it above the keyboard: its header stays at the top and the composer sits on the
+ * keyboard, rather than the browser panning the page up under the status bar. Fixed, so it stays put however the browser
+ * scrolls the page behind it; moved down as far as the browser panned (by top, not a transform, which would make it the
+ * box its own fixed popovers are placed in).
+ */
+.ap-shell-viewport { height: 100dvh; min-height: 100%; }
+html[data-keyboard] .ap-shell-viewport { position: fixed; top: var(--app-top); left: 0; right: 0; height: var(--app-height); min-height: 0; }
+html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space-2); }
+/*
+ * The side panels open and shut sliding (ap-shell-slides): their grid columns move (the grid's own transition, not an
+ * inherited variable, so nothing else restyles each frame); each panel's contents keep their width against its inner
+ * edge, so they ride the moving border rather than squeeze, and fade. A drag (ap-shell-resizing) follows the pointer instead.
+ */
+.ap-shell-slides { transition: grid-template-columns var(--duration-slide) var(--ease-slide); }
+/* The rooms list's toggle sits over its header, then over the room's once it's shut: the room's keeps clear of it. */
+.ap-shell-side-toggle .ap-shell-sidehead { padding-left: var(--corner); }
+.ap-shell-side-toggle.ap-shell-side-shut .ap-roomhead { padding-left: var(--corner); }
+/* With a column of its own, the member list's toggle sits over its header, then over the room's. */
+.ap-shell-members-toggle .ap-memberlist-head { padding-right: var(--corner); }
+.ap-shell-members-toggle:not(.ap-shell-members-open) .ap-roomhead { padding-right: var(--corner); }
+.ap-shell-slides .ap-roomhead { transition: padding var(--duration-slide) var(--ease-slide); }
+/* Each panel's contents keep its open width, against the edge that faces the conversation. */
+.ap-shell .ap-shell-side { align-items: flex-end; }
+.ap-shell .ap-shell-side > * { box-sizing: border-box; width: calc(var(--rooms-w, var(--sidebar-w)) - 1px); }
+.ap-shell-members-wide .ap-memberlist { overflow: hidden; align-items: flex-start; }
+.ap-shell-members-wide .ap-memberlist > * { box-sizing: border-box; width: calc(var(--member-list-w) - 1px); }
+/* Shut, a panel fades as it slides, then hides (from the keyboard and screen readers too). */
+.ap-shell-slides .ap-shell-side, .ap-shell-slides.ap-shell-members-wide .ap-memberlist { transition: opacity var(--duration-slide) var(--ease-slide), visibility 0s; }
+.ap-shell-side-shut .ap-shell-side, .ap-shell-members-wide:not(.ap-shell-members-open) .ap-memberlist { opacity: 0; visibility: hidden; }
+.ap-shell-slides.ap-shell-side-shut .ap-shell-side, .ap-shell-slides.ap-shell-members-wide:not(.ap-shell-members-open) .ap-memberlist { transition: opacity var(--duration-slide) var(--ease-slide), visibility 0s var(--duration-slide); }
+.ap-shell-resizing, .ap-shell-resizing .ap-shell-side, .ap-shell-resizing .ap-memberlist, .ap-shell-resizing .ap-roomhead { transition: none; }
+.ap-shell-resizing, .ap-shell-resizing * { user-select: none; }
+/* PanelToggle: in the window's top corner, over the header beside it, staying put while its panel slides. */
+.ap-shell-toggle { position: absolute; z-index: var(--z-toggle); top: calc((var(--header-h) - var(--control-md)) / 2); }
+.ap-shell-toggle-left { left: var(--space-3); }
+.ap-shell-toggle-right { right: var(--space-3); }
+/* PanelHandle: placed by its panel's column (--sidebar-w, --member-list-track), sliding with it, so the border goes with the list as it opens and shuts. */
+.ap-shell-handle { position: absolute; top: 0; bottom: 0; left: max(0px, calc(var(--sidebar-w) - 4px)); width: 9px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; z-index: var(--z-handle); cursor: col-resize; touch-action: none; }
+.ap-shell-handle::after { content: ''; position: absolute; top: 0; bottom: 0; left: min(4px, var(--sidebar-w)); width: 1px; background: var(--line); }
+.ap-shell-handle:hover::after, .ap-shell-handle:focus-visible::after, .ap-shell-handle-resizing::after { left: 3px; width: 3px; background: var(--denim); }
+.ap-shell-handle:focus-visible { outline: none; }
+.ap-shell-handle-shut { cursor: e-resize; }
+.ap-shell-slides .ap-shell-handle { transition: left var(--duration-slide) var(--ease-slide), right var(--duration-slide) var(--ease-slide); }
+.ap-shell-slides .ap-shell-handle-resizing { transition: none; }
+.ap-shell-handle-right { left: auto; right: calc(var(--member-list-track, var(--member-list-w)) - 9px); }
+.ap-shell-handle-right::after, .ap-shell-handle-right:hover::after, .ap-shell-handle-right:focus-visible::after, .ap-shell-handle-right.ap-shell-handle-resizing::after { left: 0; }
+/* The member list's, shut: out of reach until it's open again (from its corner toggle). */
+.ap-shell-handle-right.ap-shell-handle-shut { visibility: hidden; }
+.ap-shell-slides .ap-shell-handle-right.ap-shell-handle-shut { transition: left var(--duration-slide) var(--ease-slide), right var(--duration-slide) var(--ease-slide), visibility 0s var(--duration-slide); }
+/*
+ * AppShell's nudge: an offer over the rooms list's foot, pointing at the Preferences gear (32px, its center 25px in from
+ * the list's right edge): its left edge 8px in, or further right on a list wider than it, to reach the gear. While the
+ * rooms list is shut or on a phone, the same offer shows in the main pane above the composer (ap-shell-nudge-inline).
+ */
+.ap-shell-nudge { --notify-left: max(var(--space-2), calc(var(--sidebar-w) - var(--nudge-w) - var(--space-2))); position: absolute; z-index: var(--z-nudge); left: var(--notify-left); bottom: calc(var(--header-h) + 10px); width: var(--nudge-w); max-width: calc(100vw - var(--space-4)); display: none; }
+.ap-shell-nudge .ap-nudge { --ap-nudge-tip: calc(var(--sidebar-w) - 30px - var(--notify-left)); }
+.ap-shell-nudge-inline { padding: 0 var(--space-4); }
+.ap-shell-nudge-inline:not(:empty) { padding-top: var(--space-2); }
+.ap-shell-nudge-inline .ap-nudge { width: auto; }
+@media (min-width: 720px) {
+	.ap-shell:not(.ap-shell-side-shut) .ap-shell-nudge { display: block; }
+	.ap-shell:not(.ap-shell-side-shut) .ap-shell-nudge-inline { display: none; }
+}
+/* Beside a rail, what is placed against the rooms list's left edge moves over by it. */
+.ap-shell:not(.ap-shell-norail) :is(.ap-shell-toggle-left, .ap-shell-nudge), .ap-shell:not(.ap-shell-norail) .ap-shell-handle:not(.ap-shell-handle-right) { margin-left: var(--rail-w); }
+/* In the main pane: a StatusBanner under the header, and who is typing, in a row kept while nobody is so nothing moves. */
+.ap-shell-banner { padding: var(--space-2) var(--space-4) 0; }
+.ap-typing.ap-shell-typing { min-height: 20px; padding-top: var(--space-1); }
+/* Wide screens give the member list a column of its own, there while it's shut too, at 0, so it can slide. */
+@media (min-width: 960px) {
+	.ap-shell-members-wide { grid-template-columns: var(--rail-w) var(--sidebar-w) minmax(0, 1fr) var(--member-list-track); }
+	.ap-shell-norail.ap-shell-members-wide { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--member-list-track); }
+}
+/* Narrower, it overlays the conversation, sliding in from the right edge as the column does on wide screens. */
+@media (max-width: 959px) {
+	.ap-shell .ap-memberlist { position: absolute; z-index: var(--z-overlay); top: var(--header-h); right: 0; bottom: 0; width: min(var(--member-list-w), calc(100vw - 24px)); box-shadow: var(--shadow-float); transition: transform var(--duration-slide) var(--ease-slide), visibility 0s; }
+	.ap-shell .ap-memberlist:not(.ap-memberlist-open) { transform: translateX(calc(100% + 24px)); transition: transform var(--duration-slide) var(--ease-slide), visibility 0s var(--duration-slide); }
+}
+/* Under 720px it's one pane at a time (data-pane): rooms, then the room or thread, pushed like pages. Phones go back to the rooms list rather than shut it. */
+@media (max-width: 719px) {
+	.ap-shell { grid-template-columns: minmax(0, 1fr); }
+	.ap-shell .ap-rail, .ap-shell .ap-shell-toggle-left, .ap-shell-handle, .ap-typing.ap-shell-typing { display: none; }
+	.ap-shell-side-toggle .ap-shell-sidehead, .ap-shell.ap-shell-side-toggle .ap-roomhead { padding-left: var(--space-4); }
+	.ap-shell .ap-shell-side { align-items: stretch; }
+	.ap-shell .ap-shell-side > * { width: auto; }
+	.ap-shell[data-pane='main'] .ap-shell-side { display: none; }
+	.ap-shell[data-pane='rooms'] .ap-shell-main, .ap-shell[data-pane='rooms'] .ap-memberlist { display: none; }
+	.ap-shell-side-shut .ap-shell-side, .ap-shell-slides.ap-shell-side-shut .ap-shell-side { opacity: 1; visibility: visible; transition: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.ap-shell, .ap-shell .ap-shell-side, .ap-shell .ap-memberlist, .ap-shell .ap-roomhead, .ap-shell .ap-memberlist:not(.ap-memberlist-open), .ap-shell-slides .ap-shell-handle { transition: none; }
+}
+
+/* MemberList — who is in the room (§4.2.1): Online, then Offline (§4.5), each folding away from its heading */
+.ap-memberlist { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-000); border-left: 1px solid var(--line); }
+/* Shut, it stays in the layout (hidden from everyone) so it can slide: AppShell moves its column, or below 960px its overlay. */
+.ap-memberlist:not(.ap-memberlist-open) { visibility: hidden; }
+.ap-memberlist-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); box-sizing: border-box; flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; }
+.ap-memberlist-count { color: var(--ink-muted); font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
+/* Small, after the count, as the rooms list's header buttons: most visits are to see who is here. */
+.ap-memberlist-head .ap-memberlist-addtoggle { width: var(--control-sm); height: var(--control-sm); }
+/* Wider on the left, so names line up with the header's Members and the section carets have a gutter to sit in. */
+.ap-memberlist-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2) var(--space-3) var(--space-3); }
+.ap-memberlist-placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
+.ap-memberlist-placeholder .ap-skel { height: 12px; }
+.ap-memberlist-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-memberlist-note-error { color: var(--danger); }
+/* The add form: raised, like a popover in place, so the members stay in view below it. */
+.ap-memberlist-add { display: grid; gap: var(--space-2); margin: 0 var(--space-1) var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-100); }
+.ap-memberlist-addrow { display: flex; gap: var(--space-2); min-width: 0; }
+.ap-memberlist-add .ap-field { flex: 1; min-width: 0; height: var(--control-md); font-size: var(--text-ui); }
+.ap-memberlist-section + .ap-memberlist-section { margin-top: var(--space-4); }
+/* As the rooms list's section headings; the caret sits out in the gutter, as Other threads' does, so the words line up with the avatars. */
+.ap-memberlist-sectionhead { margin: 0; padding: 0 var(--space-1) var(--space-1); font: inherit; }
+.ap-memberlist-sectionhead .ap-sect-toggle { position: relative; padding-left: 0; }
+.ap-memberlist-sectionhead .ap-sect-caret { position: absolute; left: -11px; width: 10px; text-align: center; }
+.ap-memberlist-shut .ap-sect-caret { transform: rotate(-90deg); }
+/* The count after a dot and lighter than the words, as Other threads writes its own. */
+.ap-memberlist-sectioncount { margin-left: 2px; font-weight: 400; }
+.ap-memberlist-people { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.ap-member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
+/* Role badges follow the name, as beside a message's sender; the remove button floats over the far right. */
+.ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ap-member-who:hover .ap-member-name { text-decoration: underline; }
+.ap-member-who:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Offline members (§4.5) recede, badges and all; their ring and name still read. */
+.ap-member-offline .ap-member-who { color: var(--ink-muted); }
+.ap-member-offline .ap-avatar, .ap-member-offline .ap-roles { opacity: .6; }
+.ap-member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The name comes first: the badges give up their room before it does, cut off at the right. */
+.ap-member .ap-roles { flex: 0 10000 auto; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+.ap-member .ap-role { flex: none; }
+.ap-member-name small { margin-left: 4px; color: var(--ink-muted); font-size: var(--text-xs); }
+/* Remove shows on hover or focus, over the end of the row rather than holding a gap there, so names and badges keep the width. */
+.ap-member .ap-member-remove { position: absolute; top: 50%; right: var(--space-1); width: var(--control-sm); height: var(--control-sm); transform: translateY(-50%); background: var(--bg-000); box-shadow: -8px 0 6px var(--bg-000); opacity: 0; pointer-events: none; }
+.ap-member:hover .ap-member-remove, .ap-member:focus-within .ap-member-remove { opacity: 1; pointer-events: auto; }
+/* Touch screens have no hover, so it's always there, in the row's flow at the far right. */
+@media (hover: none) { .ap-member .ap-member-remove { position: static; flex: none; margin-left: auto; transform: none; background: transparent; box-shadow: none; opacity: 1; pointer-events: auto; } }
+
+/* EmptyState — the main pane, or a timeline, with nothing in it: a title, a line on what to do, and a button */
+.ap-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; }
+.ap-empty-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; color: var(--ink); }
+.ap-empty-detail { margin: 0; }
+.ap-empty .ap-btn { margin-top: var(--space-2); }
+
+/* RoomLoading — the main pane while the app comes up: a header and a timeline of placeholders where the room will be */
+.ap-roomload { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.ap-roomload-title { width: 120px; height: 14px; }
+.ap-roomload .ap-timeline { display: flex; flex-direction: column; }
+
+/* FloatingDay — the day of the messages in view, floating at the top of the timeline while it scrolls: a zero-height sticky row, so it takes no space */
+.ap-dayfloat { position: sticky; top: var(--space-2); z-index: var(--z-float); height: 0; display: flex; align-items: flex-start; justify-content: center; pointer-events: none; }
+.ap-dayfloat-pill { padding: 3px var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); box-shadow: var(--shadow-float); color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity var(--duration-slow), transform var(--duration-slow); }
+.ap-dayfloat-shown .ap-dayfloat-pill { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .ap-dayfloat-pill { transition: none; transform: none; } }
+
+/* DropZone — over the conversation while files are dragged onto it; drag events pass through to the pane */
+.ap-dropzone { position: absolute; inset: var(--space-2); z-index: var(--z-drop); display: grid; place-items: center; border: 2px dashed var(--accent); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--bg-100) 85%, transparent); color: var(--ink); font-weight: 600; pointer-events: none; }
+
+/* Toast — a StatusBanner floating over the page's foot, above the composer: a change under way, or an error until it's closed (ap-toast-close) */
+.ap-toast { position: fixed; z-index: var(--z-toast); left: 50%; bottom: calc(var(--space-4) + 64px); transform: translateX(-50%); max-width: min(var(--toast-max-w), calc(100% - var(--space-8))); }
+.ap-toast .ap-status { box-shadow: var(--shadow-float); }
+/* At the right, apart from one in the middle: the connection's error. Across the foot on a phone. */
+.ap-toast-end { left: auto; right: var(--space-4); transform: none; }
+@media (max-width: 719px) { .ap-toast-end { right: var(--space-4); left: var(--space-4); max-width: none; } }
+/* Smaller than an icon button, so a toast that can be closed is no taller than one that can't. */
+.ap-toast .ap-toast-close { width: var(--control-xs); height: var(--control-xs); margin: -2px 0; flex: none; }
 /* Scrolling past either end stays in the timeline, rather than carrying on to the page (which a phone's keyboard lets scroll). */
 .ap-timeline { flex: 1; overflow: auto; overscroll-behavior: contain; padding-bottom: var(--space-2); }
 

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import X from '@lucide/svelte/icons/x';
 	import { onMount, tick, untrack } from 'svelte';
+	import { createAttachmentKey, fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
@@ -23,10 +23,12 @@
 	import SidebarHandle from '$lib/components/SidebarHandle.svelte';
 	import MemberListSidebar from '$lib/components/MemberListSidebar.svelte';
 	import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
-	import PanelToggle from '$lib/components/PanelToggle.svelte';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
 	import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
 	import StatusBanner from '$lib/components/StatusBanner.svelte';
+	import ConnectionNotice from '$lib/components/ConnectionNotice.svelte';
+	import NoRoom from '$lib/components/NoRoom.svelte';
+	import Toasts from '$lib/components/Toasts.svelte';
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
 	import ThreadSummary from '$lib/components/ThreadSummary.svelte';
 	import RoomEditor from '$lib/components/RoomEditor.svelte';
@@ -51,6 +53,11 @@
 	import { WIDE_MIN } from '$lib/ui/breakpoints';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
+	import AppShell from '$lib/design/components/AppShell.svelte';
+	import DropZone from '$lib/design/components/DropZone.svelte';
+	import EmptyState from '$lib/design/components/EmptyState.svelte';
+	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
+	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
 	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadLostPrivacy, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
 	import { askedLinkFailure, linkUse, runSignInLink, sessionSettled, takeSignInLink, type LinkUse, type SignInLink } from '$lib/ui/sign-in-link';
@@ -404,6 +411,8 @@
 	let canAttach = $derived(canCompose && snapshot.capabilities['embed:upload'] && !selection.active);
 	/** Files are being dragged over the conversation. */
 	let dropping = $state(false);
+	/** The conversation pane's `<main>`: its label, and the files dropped on it. */
+	const mainAttrs = { 'aria-label': 'Conversation', [createAttachmentKey()]: fromAction(fileDrop, () => ({ enabled: canAttach, onfiles: stageFiles, onactive: (active: boolean) => (dropping = active) })) };
 	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...messages], session.you, paneRoom?.members));
 	let roomSuggestions = $derived.by(() => {
 		const rooms = new Map<string, { id: string; title: string }>();
@@ -2389,7 +2398,7 @@
 	/>
 {/if}
 {#if !client}
-	<div class="app ap-shell ap-shell-norail"></div>
+	<AppShell viewport />
 {:else if connectOpen}
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
@@ -2398,39 +2407,44 @@
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
 	/>
 {:else}
-<div
-	class="app ap-shell ap-shell-norail"
-	class:slides={slidesReady}
-	class:side-collapsed={sidebar.collapsed}
-	class:side-resizing={sidebar.resizing || memberList.resizing}
-	class:member-list-open={memberListOpen}
-	class:member-list-wide={memberListWide}
-	data-pane={mobilePane}
-	style:--sidebar-w="{roomsTrack}px"
-	style:--rooms-w="{sidebar.width}px"
-	style:--member-list-w="{memberList.width}px"
-	style:--member-list-track="{membersTrack}px"
+{#snippet membersToggle()}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/snippet}
+<!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
+<!-- Kept while shut (hidden), so its border slides with the list's. -->
+{#snippet membersHandle()}<SidebarHandle layout={memberList} name="member list" oncollapse={() => memberListToggle?.focus()} />{/snippet}
+<AppShell
+	viewport
+	slides={slidesReady}
+	sideCollapsed={sidebar.collapsed}
+	resizing={sidebar.resizing || memberList.resizing}
+	membersOpen={memberListOpen}
+	membersWide={memberListWide}
+	pane={mobilePane}
+	sideWidth={sidebar.width}
+	membersWidth={memberList.width}
+	{mainAttrs}
+	membersToggle={memberListWide ? membersToggle : undefined}
+	membersHandle={memberListWide ? membersHandle : undefined}
 >
-	<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />
-	<Sidebar
-		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
-		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
-		webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
-		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
-		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
-		returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
-		onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut}
-	/>
-	<SidebarHandle layout={sidebar} />
+	{#snippet sideToggle()}<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />{/snippet}
+	{#snippet side()}
+		<Sidebar
+			client={client!} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
+			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
+			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
+			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
+			onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
+			returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
+			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut}
+		/>
+	{/snippet}
+	{#snippet sideHandle()}<SidebarHandle layout={sidebar} />{/snippet}
 	<!-- The first-mention offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->
-	<div class="notify-anchored" aria-live="polite">
+	{#snippet nudge()}
 		{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} pointer onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />{/if}
-	</div>
+	{/snippet}
 
-	<main class="ap-shell-main" aria-label="Conversation" use:fileDrop={{ enabled: canAttach, onfiles: stageFiles, onactive: (active) => (dropping = active) }}>
-		{#if dropping}
-			<div class="drop-zone" data-testid="drop-zone" aria-hidden="true"><span>Drop files to attach</span></div>
-		{/if}
+	{#snippet main()}
+		{#if dropping}<DropZone data-testid="drop-zone" />{/if}
 		{#if activeRoom}
 			<RoomHeader
 				room={activeRoom}
@@ -2453,32 +2467,13 @@
 			/>
 			{#if roomEditorOpen && editTarget}
 				{#key editTarget.id}
-					<RoomEditor {client} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} onclose={() => (roomEditorOpen = false)} />
+					<RoomEditor client={client!} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} onclose={() => (roomEditorOpen = false)} />
 				{/key}
 			{/if}
 
-			{#if session.connection === 'reconnecting' && !session.reconnectNeedsAttention}
-				<!-- A short blip stays quiet: the room, history, and identity are kept in place, and the pill above the composer says it. -->
-				<span class="sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
-			{:else if session.starting && session.connection === 'connecting'}
-				<!-- Coming up with a view from before: the timeline's foot says it's checking; a banner would only alarm. -->
-				<span class="sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
-			{:else if session.connection !== 'connected'}
-				<div class="banner">
-					<StatusBanner tone={session.connection === 'connecting' ? 'warn' : 'danger'} testid="connection-status" live>
-						{statusLabel(snapshot, session.stalled)}
-						{#snippet action()}
-							{#if session.reconnectNeedsAttention}
-								<button class="ap-btn ap-btn-sm" type="button" data-testid="reconnect-retry" disabled={Boolean(snapshot.retryAfterMs)} onclick={signInAgain}>{snapshot.held ? 'Sign in' : 'Try Again'}</button>
-							{/if}
-						{/snippet}
-					</StatusBanner>
-				</div>
-			{:else}
-				<span class="sr" data-testid="connection-status" role="status" aria-live="polite">Connected</span>
-			{/if}
+			<ConnectionNotice {session} onretry={signInAgain} />
 			{#if activeThread && !activeThreadEntry}
-				<div class="banner">
+				<div class="ap-shell-banner">
 					<StatusBanner tone="danger">
 						This thread is no longer available on the server.
 						{#snippet action()}<button class="ap-btn ap-btn-sm" type="button" onclick={backToRoom}>Back to room</button>{/snippet}
@@ -2494,7 +2489,7 @@
 			{/if}
 
 			<div class="ap-timeline" bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
-				<div class="day-float" class:day-float-shown={floatingDay.shown} aria-hidden="true" data-testid="floating-day"><span>{floatingDay.label}</span></div>
+				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown} data-testid="floating-day" />
 				{#if snapshot.showReconnectDivider}
 					<div class="ap-divider ap-divider-gap" role="separator" data-testid="reconnect-divider"><span>Reconnected · earlier messages aren’t available</span></div>
 				{/if}
@@ -2502,10 +2497,7 @@
 				{#if (messages.length === 0 || paneHeldBack) && paneCatchingUp}
 					<TimelineLoading label={activeThread ? 'Loading replies…' : 'Loading messages…'} rows={activeThread ? 3 : 6} />
 				{:else if timeline.length === 0}
-					<div class="empty">
-						<h2>{activeThread ? 'No replies yet' : 'Nothing here yet'}</h2>
-						<p>{activeThread ? 'Reply below to continue the thread.' : `Start the conversation in ${activeRoom.title}.`}</p>
-					</div>
+					<EmptyState title={activeThread ? 'No replies yet' : 'Nothing here yet'} detail={activeThread ? 'Reply below to continue the thread.' : `Start the conversation in ${activeRoom.title}.`} />
 				{:else}
 					{#each shownTimeline as item (item.key)}
 						{#if item.kind === 'date'}
@@ -2563,10 +2555,10 @@
 				<JumpBar count={unseenCount} mentions={mentions.unseen.length} onjump={jumpToLatest} onjumpmention={jumpToMention} />
 			{/if}
 
-			<div class="notify-inline" aria-live="polite">
+			<div class="ap-shell-nudge-inline" aria-live="polite">
 				{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />{/if}
 			</div>
-			<div class="ap-typing typing-row" aria-live="polite">
+			<div class="ap-typing ap-shell-typing" aria-live="polite">
 				{#if typingNames.length > 0}
 					<TypingDots />
 					{typingLine(typingNames)}
@@ -2601,28 +2593,15 @@
 					onmention={() => listMembers(MEMBERS_FRESH_MS)}
 				/>
 			{/if}
-		{:else if session.starting}
-			<!-- Coming up (connecting, signing in, listing rooms): placeholders where the room will be, not "No room open". -->
-			<div class="starting">
-				<header class="ap-roomhead"><span class="ap-skel starting-title" aria-hidden="true"></span></header>
-				<div class="ap-timeline starting-timeline">
-					<span class="sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
-					<TimelineLoading label={session.connection === 'connected' ? 'Loading messages…' : 'Connecting…'} rows={6} />
-				</div>
-			</div>
 		{:else}
-			<div class="empty empty-room">
-				{#if session.connection !== 'connected'}
-					<StatusBanner tone={session.connection === 'offline' ? 'danger' : 'warn'} testid="connection-status" live>{statusLabel(snapshot, session.stalled)}</StatusBanner>
-				{:else}
-					<span class="sr" data-testid="connection-status" role="status" aria-live="polite">Connected</span>
-					<h2>No room open</h2>
-					<p>Pick a room from the list.</p>
-				{/if}
-				<button class="ap-btn ap-btn-sm" type="button" onclick={() => openConnect()}>Connect to a backend</button>
-			</div>
+			<NoRoom {session} onconnect={() => openConnect()} />
 		{/if}
-	</main>
+	{/snippet}
+	{#snippet members()}
+		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
+		<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} onmention={(userId) => composer?.mention(userId)} />
+		<ReactorsPopover />
+	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
 		so the + on a room's row would open nothing. It floats over whichever pane is up; the new thread opens in the
@@ -2636,139 +2615,7 @@
 				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
 		{/key}
 	{/if}
-	{#if memberListWide}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/if}
-	<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
-	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} onmention={(userId) => composer?.mention(userId)} />
-	<ReactorsPopover />
-	<!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
-	<!-- Kept while shut (hidden), so its border slides with the list's. -->
-	{#if memberListWide}<SidebarHandle layout={memberList} name="member list" oncollapse={() => memberListToggle?.focus()} />{/if}
-
-	<!-- An error stays until closed or the next request; a pending line goes by itself. -->
-	{#snippet close(label: string, onclose: () => void)}
-		<button class="ap-iconbtn toast-close" type="button" aria-label={label} title="Dismiss" onclick={onclose}><X size={14} aria-hidden="true" /></button>
-	{/snippet}
-	{#if feedback.current}
-		{@const error = feedback.current.kind === 'error'}
-		<div class="toast">
-			<StatusBanner tone={error ? 'danger' : 'warn'} role={error ? 'alert' : 'status'} action={error ? dismissFeedback : undefined}>{feedback.current.text}</StatusBanner>
-		</div>
-	{/if}
-	{#snippet dismissFeedback()}{@render close('Dismiss', () => feedback.clear())}{/snippet}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
-	{#if snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting'}
-		<div class="toast toast-right">
-			<StatusBanner tone="danger" role="alert" action={dismissClientError}>{snapshot.error}</StatusBanner>
-		</div>
-	{/if}
-	{#snippet dismissClientError()}{@render close('Dismiss connection error', () => (dismissedError = snapshot.error))}{/snippet}
-</div>
+	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
+</AppShell>
 {/if}
-
-<style>
-	/* App glue over the Apron design system: layout height, the sidebar's collapse and the
-	   phone's one-pane-at-a-time. Everything else is ap-* from apron.css, inside the components. */
-	:global(html), :global(body) { height: 100%; }
-	:global(*), :global(*::before), :global(*::after) { box-sizing: border-box; }
-	:global(button), :global(input), :global(textarea), :global(select) { font: inherit; }
-	/*
-	 * --corner: how far a header's content keeps clear of a PanelToggle in the window's corner.
-	 * --slide-time, --slide-ease: how both side panels open and shut, the --duration-slide and --ease-slide tokens, set on
-	 * the app alone (a panel rendered outside it doesn't slide). Their grid columns move (the grid's own transition, not an
-	 * inherited variable, so nothing else restyles each frame); each panel's contents keep their width against its
-	 * inner edge, so they ride the moving border rather than squeeze, and fade; the timeline keeps its final width
-	 * meanwhile (prepareSlide). A drag follows the pointer instead.
-	 */
-	.app { --corner: calc(var(--space-3) + var(--control-md) + var(--space-2)); --slide-time: var(--duration-slide); --slide-ease: var(--ease-slide); height: 100dvh; min-height: 100%; position: relative; overflow: clip; }
-	.slides { transition: grid-template-columns var(--slide-time) var(--slide-ease); }
-	/*
-	 * While an on-screen keyboard is up (trackKeyboard), the app is the part of the page above it: its header stays at
-	 * the top and the composer sits on the keyboard, rather than the browser panning the page up under the status bar.
-	 * Fixed, so it stays put however the browser scrolls the page behind it; moved down as far as the browser panned
-	 * (by top, not a transform, which would make it the box its own fixed popovers are placed in).
-	 */
-	:global(html[data-keyboard]) .app { position: fixed; top: var(--app-top); left: 0; right: 0; height: var(--app-height); min-height: 0; }
-	:global(html[data-keyboard]) .app :global(.ap-composer) { margin-bottom: var(--space-2); }
-	/* The rooms list's toggle sits over its header, then over the room's once it's shut: the room's keeps clear of it. */
-	.app :global(.ap-shell-sidehead) { padding-left: var(--corner); }
-	.side-collapsed :global(.ap-roomhead) { padding-left: var(--corner); }
-	/* With a column of its own, the member list's toggle sits over its header, then over the room's. */
-	.member-list-wide :global(.member-list-head) { padding-right: var(--corner); }
-	.member-list-wide:not(.member-list-open) :global(.ap-roomhead) { padding-right: var(--corner); }
-	.slides :global(.ap-roomhead) { transition: padding var(--slide-time) var(--slide-ease); }
-	/* Each panel's contents keep its open width, against the edge that faces the conversation. */
-	.app :global(.ap-shell-side) { align-items: flex-end; }
-	.app :global(.ap-shell-side > *) { width: calc(var(--rooms-w) - 1px); }
-	.member-list-wide :global(.member-list) { overflow: hidden; align-items: flex-start; }
-	.member-list-wide :global(.member-list > *) { width: calc(var(--member-list-w) - 1px); }
-	/* Shut, a panel fades as it slides, then hides (from the keyboard and screen readers too). */
-	.slides :global(.ap-shell-side), .slides.member-list-wide :global(.member-list) { transition: opacity var(--slide-time) var(--slide-ease), visibility 0s; }
-	.side-collapsed :global(.ap-shell-side), .member-list-wide:not(.member-list-open) :global(.member-list) { opacity: 0; visibility: hidden; }
-	.slides.side-collapsed :global(.ap-shell-side), .slides.member-list-wide:not(.member-list-open) :global(.member-list) { transition: opacity var(--slide-time) var(--slide-ease), visibility 0s var(--slide-time); }
-	.side-resizing, .side-resizing :global(.ap-shell-side), .side-resizing :global(.member-list), .side-resizing :global(.ap-roomhead) { transition: none; }
-	.side-resizing, .side-resizing :global(*) { user-select: none; }
-	.banner { padding: var(--space-2) var(--space-4) 0; }
-	/* Over the conversation while files are dragged onto it; drag events pass through to the pane. */
-	.drop-zone {
-		position: absolute; inset: var(--space-2); z-index: var(--z-drop); display: grid; place-items: center;
-		border: 2px dashed var(--accent); border-radius: var(--radius-lg);
-		background: color-mix(in srgb, var(--bg-100) 85%, transparent); color: var(--ink);
-		font-weight: 600; pointer-events: none;
-	}
-	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-	.starting { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-	.starting-title { width: 120px; height: 14px; }
-	.starting-timeline { display: flex; flex-direction: column; }
-	.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; }
-	.empty h2 { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; color: var(--ink); }
-	.empty p { margin: 0; }
-	.empty .ap-btn { margin-top: var(--space-2); }
-	.typing-row { min-height: 20px; padding-top: var(--space-1); }
-	/*
-	 * The first-mention offer. Over the rooms list's foot, pointing at the Preferences gear (32px, its center 25px in
-	 * from the list's right edge): its left edge 8px in, or further right on a list wider than it, to reach the gear.
-	 */
-	.notify-anchored { --notify-left: max(var(--space-2), calc(var(--sidebar-w) - var(--nudge-w) - var(--space-2))); position: absolute; z-index: var(--z-nudge); left: var(--notify-left); bottom: calc(var(--header-h) + 10px); width: var(--nudge-w); max-width: calc(100vw - var(--space-4)); display: none; }
-	.notify-anchored :global(.ap-nudge) { --ap-nudge-tip: calc(var(--sidebar-w) - 30px - var(--notify-left)); }
-	.notify-inline { padding: 0 var(--space-4); }
-	.notify-inline:not(:empty) { padding-top: var(--space-2); }
-	.notify-inline :global(.ap-nudge) { width: auto; }
-	@media (min-width: 720px) {
-		.app:not(.side-collapsed) .notify-anchored { display: block; }
-		.app:not(.side-collapsed) .notify-inline { display: none; }
-	}
-	/* A zero-height sticky row, so the pill floats over the timeline without taking space. */
-	.day-float { position: sticky; top: var(--space-2); z-index: var(--z-float); height: 0; display: flex; align-items: flex-start; justify-content: center; pointer-events: none; }
-	.day-float span { padding: 3px var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); box-shadow: var(--shadow-float); color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity var(--duration-slow), transform var(--duration-slow); }
-	.day-float-shown span { opacity: 1; transform: none; }
-	@media (prefers-reduced-motion: reduce) {
-		.day-float span { transition: none; transform: none; }
-		.app, .app :global(.ap-shell-side), .app :global(.member-list), .app :global(.ap-roomhead) { transition: none; }
-	}
-	.toast { position: fixed; z-index: var(--z-toast); left: 50%; bottom: calc(var(--space-4) + 64px); transform: translateX(-50%); max-width: min(var(--toast-max-w), calc(100% - var(--space-8))); }
-	.toast :global(.ap-status) { box-shadow: var(--shadow-float); }
-	.toast-right { left: auto; right: var(--space-4); transform: none; }
-	/* Smaller than an icon button, so a toast that can be closed is no taller than one that can't. */
-	.toast-close { width: var(--control-xs); height: var(--control-xs); margin: -2px 0; flex: none; }
-
-	/* Wide screens give an open member list its own column; narrower ones overlay it. */
-	@media (min-width: 960px) {
-		/* Its column is there while shut too, at 0, so it can slide. */
-		.app.member-list-wide { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--member-list-track); }
-	}
-	/* Under 720px it's one pane at a time: rooms, then the room or thread, pushed like pages. */
-	@media (max-width: 719px) {
-		.app { grid-template-columns: minmax(0, 1fr); }
-		/* Phones go back to the rooms list instead. */
-		.app > :global(.panel-toggle.left) { display: none; }
-		.app :global(.ap-shell-sidehead) { padding-left: var(--space-4); }
-		.app :global(.ap-roomhead) { padding-left: var(--space-4); }
-		.app :global(.ap-shell-side) { align-items: stretch; }
-		.app :global(.ap-shell-side > *) { width: auto; }
-		.app[data-pane='main'] :global(.ap-shell-side) { display: none; }
-		.app[data-pane='rooms'] .ap-shell-main, .app[data-pane='rooms'] :global(.member-list) { display: none; }
-		.side-collapsed :global(.ap-shell-side), .slides.side-collapsed :global(.ap-shell-side) { opacity: 1; visibility: visible; transition: none; }
-		.typing-row { display: none; }
-		.toast-right { right: var(--space-4); left: var(--space-4); max-width: none; }
-	}
-</style>

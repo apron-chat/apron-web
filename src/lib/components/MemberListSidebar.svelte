@@ -1,7 +1,5 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import UserMinus from '@lucide/svelte/icons/user-minus';
-	import Plus from '@lucide/svelte/icons/plus';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { Identity } from '$lib/protocol/types';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -9,7 +7,9 @@
 	import { memberSections, userIdToAdd } from '$lib/ui/members';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { loadShutMemberSections, saveShutMemberSections } from '$lib/ui/storage';
-	import { presence, presenceLabel } from '$lib/design/components/util';
+	import { presenceLabel } from '$lib/design/components/util';
+	import MemberList from '$lib/design/components/MemberList.svelte';
+	import type { MemberListPerson, MemberListSection } from '$lib/design/components/types';
 	import { byStatus, ownStatusLabel } from '$lib/ui/user-status';
 	import Avatar from './Avatar.svelte';
 	import RoleBadges from './RoleBadges.svelte';
@@ -51,7 +51,6 @@
 	}
 	/** A large room's listing may hold only its most recently active members, with the total (§4.2.1). */
 	let total = $derived(room?.members === undefined ? undefined : Math.max(room.memberCount ?? 0, room.members.length));
-	let truncated = $derived(total !== undefined && room?.members !== undefined && total > room.members.length);
 	let changing = $derived(canChange && !session.snapshot.memberChangesUnsupported && Boolean(client) && Boolean(room?.joined));
 	/** People this client knows of who aren't members yet, suggested by `user_id` when adding someone. */
 	let candidates = $derived.by(() => {
@@ -63,9 +62,25 @@
 	let addOpen = $state(false);
 	let busy = $state(false);
 	let note = $state<{ text: string; error: boolean } | undefined>();
-	let addToggle = $state<HTMLButtonElement | undefined>();
-	let addInput = $state<HTMLInputElement | undefined>();
-	const uid = $props.id();
+	let list = $state<MemberList | undefined>();
+	/** Each member as the list shows them, with their status in words: yours as you chose it. */
+	let shown = $derived(sections.map((section): MemberListSection => ({ key: section.key, label: section.label, people: section.people.map(person) })));
+	/** The members by `user_id`, for their role badges. */
+	let byId = $derived(new Map(members.map((member) => [member.user_id, member])));
+
+	function person(member: Identity): MemberListPerson {
+		const me = directory.isMe(member.user_id);
+		const status = statusOf(member);
+		return {
+			user_id: member.user_id,
+			name: directory.name(member),
+			avatar: directory.avatar(member),
+			status,
+			statusLabel: (me ? ownStatusLabel(status) : undefined) ?? presenceLabel(status),
+			handle: directory.sharesName(member),
+			you: me
+		};
+	}
 
 	$effect(() => {
 		void room?.id;
@@ -79,17 +94,16 @@
 		if (!addOpen) return;
 		note = undefined;
 		await tick();
-		addInput?.focus();
+		list?.focusAdd();
 	}
 
 	function closeAdd(): void {
 		addOpen = false;
 		adding = '';
-		addToggle?.focus();
+		list?.focusAddToggle();
 	}
 
-	async function add(event: SubmitEvent): Promise<void> {
-		event.preventDefault();
+	async function add(): Promise<void> {
 		const userId = userIdToAdd(adding);
 		if (!userId) {
 			note = { text: 'Enter the person’s @user_id: names aren’t unique.', error: true };
@@ -125,131 +139,28 @@
 	}
 </script>
 
-<aside class="member-list" class:open aria-label="Room member list">
-	<div class="member-list-head">
-		<span role="heading" aria-level="2">Members</span>
-		{#if total !== undefined}<span class="member-list-count" data-testid="member-count">{total}</span>{/if}
-		{#if changing && room?.members !== undefined}
-			<button bind:this={addToggle} class="ap-iconbtn add-toggle" class:ap-iconbtn-on={addOpen} type="button" aria-label="Add member" title="Add member" aria-expanded={addOpen} aria-controls={`${uid}-add`} onclick={toggleAdd}><Plus size={16} aria-hidden="true" /></button>
-		{/if}
-	</div>
-	<div class="member-list-body" data-testid="room-member-list">
-		{#if !room && session.starting}
-			<div class="placeholder" aria-hidden="true"><span class="ap-skel" style:width="62%"></span><span class="ap-skel" style:width="48%"></span></div>
-		{:else if !room}
-			<p class="muted">Select a room to see its members.</p>
-		{:else if room.members === undefined}
-			<p class="muted">{session.canManageRooms ? 'Loading members…' : 'Members are unavailable on this server.'}</p>
-		{:else}
-			{#if changing && addOpen}
-				<form class="add" id={`${uid}-add`} onsubmit={add} aria-label="Add a member">
-					<label class="ap-sr" for={`${uid}-user`}>User to add</label>
-					<div class="add-row">
-						<input id={`${uid}-user`} bind:this={addInput} class="ap-field" list="member-candidates" placeholder="@user_id" bind:value={adding} disabled={busy} autocomplete="off" spellcheck="false" onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); closeAdd(); } }} />
-						<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" disabled={busy || !adding.trim()}>Add</button>
-					</div>
-					<datalist id="member-candidates">
-						{#each candidates as user (user.user_id)}<option value={user.user_id}>{directory.name(user)} (@{user.user_id})</option>{/each}
-					</datalist>
-				</form>
-			{/if}
-			{#if note}<p class="muted" class:err={note.error} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}
-			{#if session.snapshot.memberChangesUnsupported && canChange}<p class="muted">This server doesn’t let members add or remove others.</p>{/if}
-			{#if members.length === 0}
-				<p class="muted">No members listed.</p>
-			{:else}
-				{#if truncated}<p class="muted" data-testid="member-list-truncated">Showing {members.length} of {total}: the most recently active</p>{/if}
-				{#each sections as section (section.key)}
-					{@const open = section.key === 'members' || !shut.has(section.key)}
-					<section class="member-section" data-section={section.key}>
-						<!-- Without presence, one list under the panel's own header and count: a Members heading would repeat them. -->
-						{#if section.key !== 'members'}
-							<h3 class="member-section-head">
-								<button class="ap-sect-toggle" class:shut={!open} type="button" aria-expanded={open} onclick={() => toggleSection(section.key)}><span class="ap-sect-caret" aria-hidden="true">▾</span>{section.label}<span class="member-section-count">· {section.people.length}</span></button>
-							</h3>
-						{/if}
-						{#if open}
-							<ul class="members" aria-label={`${section.label} in ${room.title}`}>
-								{#each section.people as person (person.user_id)}
-									{@const name = directory.name(person)}
-									{@const me = directory.isMe(person.user_id)}
-									{@const status = statusOf(person)}
-									{@const shown = presence(status)}
-									{@const words = (me ? ownStatusLabel(status) : undefined) ?? presenceLabel(status)}
-									<li class="member" class:offline={shown === 'offline' || shown === 'invisible'} data-user={person.user_id} data-status={shown}>
-										<button class="who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => openProfileFrom(event.currentTarget)}>
-											<Avatar {name} id={person.user_id} src={directory.avatar(person)} size="sm" {status} statusLabel={words} />
-											<span class="member-name">
-												{name}{#if directory.sharesName(person)}<small>@{person.user_id}</small>{/if}{#if me}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.toLowerCase()}</span>{/if}
-											</span>
-										</button>
-										<RoleBadges user={person} />
-										{#if changing && !me}
-											<button class="ap-iconbtn remove" type="button" aria-label={`Remove ${name}`} title="Remove from room" disabled={busy} onclick={() => remove(person.user_id)}><UserMinus size={14} aria-hidden="true" /></button>
-										{/if}
-									</li>
-								{/each}
-							</ul>
-						{/if}
-					</section>
-				{/each}
-			{/if}
-		{/if}
-	</div>
-</aside>
-
-<style>
-	.member-list { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-000); border-left: 1px solid var(--line); }
-	/* Shut, it stays in the layout (hidden from everyone) so it can slide: the page moves its column, or below 960px its overlay. */
-	.member-list:not(.open) { visibility: hidden; }
-	.member-list-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; }
-	.member-list-count { color: var(--ink-muted); font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
-	/* Wider on the left, so names line up with the header's Members and the section carets have a gutter to sit in. */
-	.member-list-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2) var(--space-3) var(--space-3); }
-	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
-	.placeholder .ap-skel { height: 12px; }
-	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
-	.err { color: var(--danger); }
-	/* Small, after the count, as the rooms list's header buttons: most visits are to see who is here. */
-	.add-toggle { width: var(--control-sm); height: var(--control-sm); }
-	/* Raised, like a popover in place: the members stay in view below it. */
-	.add { display: grid; gap: var(--space-2); margin: 0 var(--space-1) var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-100); }
-	.add-row { display: flex; gap: var(--space-2); min-width: 0; }
-	.add .ap-field { flex: 1; min-width: 0; height: var(--control-md); font-size: var(--text-ui); }
-	.member-section + .member-section { margin-top: var(--space-4); }
-	/* As the rooms list's section headings. */
-	.member-section-head { margin: 0; padding: 0 var(--space-1) var(--space-1); font: inherit; }
-	/* As Other threads in the rooms list: the caret sits out in the gutter, so the words line up with the avatars. */
-	.member-section-head .ap-sect-toggle { position: relative; padding-left: 0; }
-	.member-section-head .ap-sect-caret { position: absolute; left: -11px; width: 10px; text-align: center; }
-	.shut .ap-sect-caret { transform: rotate(-90deg); }
-	/* The count after a dot and lighter than the words, as Other threads writes its own. */
-	.member-section-count { margin-left: 2px; font-weight: 400; }
-	.members { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-	.member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
-	/* Role badges follow the name, as beside a message's sender; the remove button floats over the far right. */
-	.who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-	.who:hover .member-name { text-decoration: underline; }
-	.who:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-	/* Offline members (§4.5) recede, badges and all; their ring and name still read. */
-	.member.offline .who { color: var(--ink-muted); }
-	.member.offline :global(.ap-avatar), .member.offline :global(.ap-roles) { opacity: .6; }
-	.member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	/* The name comes first: the badges give up their room before it does, cut off at the right. */
-	.member :global(.ap-roles) { flex: 0 10000 auto; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
-	.member :global(.ap-role) { flex: none; }
-	.member-name small { margin-left: 4px; color: var(--ink-muted); font-size: var(--text-xs); }
-	/* Remove shows on hover or focus, over the end of the row rather than holding a gap there, so names and badges keep the width. */
-	.remove { position: absolute; top: 50%; right: var(--space-1); width: var(--control-sm); height: var(--control-sm); transform: translateY(-50%); background: var(--bg-000); box-shadow: -8px 0 6px var(--bg-000); opacity: 0; pointer-events: none; }
-	.member:hover .remove, .member:focus-within .remove { opacity: 1; pointer-events: auto; }
-	/* Touch screens have no hover, so it's always there, in the row's flow at the far right. */
-	@media (hover: none) { .remove { position: static; flex: none; margin-left: auto; transform: none; background: transparent; box-shadow: none; opacity: 1; pointer-events: auto; } }
-	/* Narrower, it overlays the conversation, sliding in from the right edge as the column does on wide screens. */
-	@media (max-width: 959px) {
-		.member-list { position: absolute; z-index: var(--z-overlay); top: var(--header-h); right: 0; bottom: 0; width: min(var(--member-list-w), calc(100vw - 24px)); box-shadow: var(--shadow-float); transition: transform var(--slide-time, 0s) var(--slide-ease, ease), visibility 0s; }
-		.member-list:not(.open) { transform: translateX(calc(100% + 24px)); transition: transform var(--slide-time, 0s) var(--slide-ease, ease), visibility 0s var(--slide-time, 0s); }
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.member-list, .member-list:not(.open) { transition: none; }
-	}
-</style>
+<MemberList
+	bind:this={list}
+	{open}
+	room={room?.title}
+	count={total}
+	sections={room?.members === undefined ? undefined : shown}
+	placeholder={!room && session.starting}
+	empty={!room ? 'Select a room to see its members.' : session.canManageRooms ? 'Loading members…' : 'Members are unavailable on this server.'}
+	shut={[...shut]}
+	ontogglesection={toggleSection}
+	onprofile={(_, anchor) => openProfileFrom(anchor)}
+	onremove={changing ? remove : undefined}
+	onaddtoggle={changing ? toggleAdd : undefined}
+	{addOpen}
+	bind:adding
+	candidates={candidates.map((user) => ({ user_id: user.user_id, name: directory.name(user) }))}
+	onadd={add}
+	onaddcancel={closeAdd}
+	{busy}
+	{note}
+	remark={session.snapshot.memberChangesUnsupported && canChange ? 'This server doesn’t let members add or remove others.' : undefined}
+>
+	{#snippet avatar(member)}<Avatar name={member.name ?? member.user_id} id={member.user_id} src={member.avatar} size="sm" status={member.status} statusLabel={member.statusLabel} />{/snippet}
+	{#snippet roles(member)}<RoleBadges user={byId.get(member.user_id)} />{/snippet}
+</MemberList>

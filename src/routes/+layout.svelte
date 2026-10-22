@@ -3,6 +3,7 @@
 	import { appearanceSettings } from '$lib/ui/appearance.svelte';
 	import '$lib/design/tokens.css';
 	import '$lib/design/apron.css';
+	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import EmojiPopover from '$lib/components/EmojiPopover.svelte';
 	import MediaViewerHost from '$lib/components/MediaViewerHost.svelte';

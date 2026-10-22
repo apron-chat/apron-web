@@ -1,0 +1,14 @@
+<!-- @dsCard group="Layout" height=260 subtitle="An empty room, and no room open with a way to connect" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>EmptyState</title></head>
+<body>
+<div id="root" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function pane() { var box = document.createElement('div'); box.style.cssText = 'display:flex;flex-direction:column;height:220px;border:1px solid var(--line);border-radius:10px;background:var(--bg-100)'; root.appendChild(box); return box; }
+  A.render(A.EmptyState, pane(), { title: 'Nothing here yet', detail: 'Start the conversation in Ops.' });
+  A.render(A.EmptyState, pane(), { title: 'No room open', detail: 'Pick a room from the list.', actions: A.part(A.Button, { size: 'sm', label: 'Connect to a backend' }) });
+</script>
+</body>
+</html>

@@ -169,3 +169,27 @@ export interface PickerEmoji {
 	native: string;
 	name: string;
 }
+
+/** Someone in a MemberList (§4.2.1). */
+export interface MemberListPerson {
+	user_id: string;
+	/** Falls back to `user_id`. */
+	name?: string;
+	avatar?: string;
+	/** Their `status` (§4.5): a dot on the avatar; offline (or invisible) dims the row. */
+	status?: Presence | (string & {});
+	/** The status in words, instead of its own, such as for your own ("Invisible · others see you as offline"). */
+	statusLabel?: string;
+	roles?: string[];
+	/** Show `@user_id` after the name, where someone else has the same one (§3.3). */
+	handle?: boolean;
+	/** You: marked "(you)", and never offered for removal. */
+	you?: boolean;
+}
+
+/** One group of a MemberList: Online, Offline, or with key `members` the one list of a server without status (§4.5), which has no heading and never folds. */
+export interface MemberListSection {
+	key: string;
+	label: string;
+	people: MemberListPerson[];
+}
