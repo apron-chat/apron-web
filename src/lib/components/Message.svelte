@@ -8,12 +8,12 @@
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { embedsOf, isSystem, replySnippet, senderName, textOf } from '$lib/ui/messages';
 	import type { ReactionChip } from '$lib/ui/reactions';
-	import { eventTime, idDateTime, idIso, idTimeCompact } from '$lib/ui/time';
+	import { eventTime, idMillis } from '$lib/ui/time';
+	import { copyCode } from '$lib/ui/copy-code';
+	import DesignMessage from '$lib/design/components/Message.svelte';
 	import Avatar from './Avatar.svelte';
 	import MentionText from './MentionText.svelte';
 	import ReactionBar from './ReactionBar.svelte';
-	import RoleBadges from './RoleBadges.svelte';
-	import SystemNotice from './SystemNotice.svelte';
 	import { systemScope } from '$lib/protocol/types';
 	import Embed from './embeds/Embed.svelte';
 	import EmbedRemove from './embeds/EmbedRemove.svelte';
@@ -101,11 +101,17 @@
 	/** Who else got a system message (Appendix A.1): everyone on the server, the room, or only you. */
 	let scope = $derived(systemScope(event.from.user_id));
 	let time = $derived(eventTime(event));
-	let fullTime = $derived(idDateTime(event.message_id));
-	let isoTime = $derived(idIso(event.message_id));
 	let text = $derived(textOf(event));
 	let embeds = $derived(embedsOf(event));
 	let system = $derived(isSystem(event));
+	/** A system message shows as a line, or as a card titled by its sender as the frame carries it (§3.3) when scoped; neither has actions or select gestures. */
+	let systemShown = $derived(system && !selecting);
+	let notice = $derived(systemShown && Boolean(scope));
+	/** `roles` (§3.3) from the kept user object, else the recorded one: badges beside the name, never part of it. */
+	let roles = $derived.by(() => {
+		const listed = directory.person(event.from)?.roles;
+		return Array.isArray(listed) ? listed : undefined;
+	});
 	let body = $derived(event.body?.format === 'markdown' ? renderMarkdown(text, directory.resolve, directory.resolveRoom) : renderPlain(text, directory.resolve, directory.resolveRoom));
 	let selectable = $derived(selecting && caps.select);
 	let picked = $derived(selectable && selected);
@@ -199,163 +205,147 @@
 	$effect(() => cancelLongPress);
 </script>
 
-{#if system && !selecting && scope}
-	<!-- A scoped system message (Appendix A.1): a left-aligned card titled by who got it. -->
-	<SystemNotice {scope} from={event.from} html={body} plain={event.body?.format !== 'markdown'} deleted={event.deleted} messageId={event.message_id}
-		time={time ? { short: time, iso: isoTime, full: fullTime } : undefined} onclick={click} />
-{:else if system && !selecting}
-	<!-- Another system identity (Appendix A.1): a quiet centered line, no avatar, actions or grouping. -->
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events -->
-	<article data-timeline-item class="ap-msg ap-msg-system" data-message-id={event.message_id} tabindex="-1" onclick={click}>
-		<span class="ap-msg-system-who">{name}</span>
-		<div class="ap-msg-system-body">
-			{#if event.deleted}<span class="ap-msg-tomb">Message deleted</span>{:else}<div class="ap-msg-text" class:plain={event.body?.format !== 'markdown'} use:highlightCode={body}>{@html body}</div>{/if}
+<!-- The design system's Message draws the row; the app fills in who the sender is, the quote, the body and the toolbar. -->
+{#snippet avatar()}
+	<!-- The name beside it is the keyboard's way in; the avatar is a second target for the pointer. -->
+	<button class="who-btn" type="button" tabindex="-1" aria-hidden="true" data-user-id={handle}><Avatar {name} id={directory.person(event.from)?.user_id} src={directory.avatar(event.from)} /></button>
+{/snippet}
+{#snippet sender()}
+	<button class="ap-msg-sender who-btn" type="button" data-user-id={handle} aria-haspopup="dialog" title="Show profile">{name}</button>
+	{#if showHandle}<span class="ap-msg-handle" data-testid="sender-handle">@{handle}</span>{/if}
+{/snippet}
+<!-- The quote has a row of its own above the sender's name, its spine leading down into the avatar (a reply never groups). -->
+{#snippet reply()}
+	{#if replyTarget}
+		{@const targetName = senderName(replyTarget)}
+		<button class="ap-reply" data-testid="reply-reference" type="button" aria-label={`Replying to ${targetName}. Jump to their message`} onclick={() => onjump(replyTarget.message_id)}>
+			<Avatar name={targetName} id={directory.person(replyTarget.from)?.user_id} src={directory.avatar(replyTarget.from)} size="sm" />
+			<span class="ap-reply-who">{targetName}</span>
+			<span class="ap-reply-text">{#if replyTarget.deleted}<em>Message deleted</em>{:else}<MentionText text={replySnippet(replyTarget)} />{/if}</span>
+		</button>
+	{:else}
+		<div class="ap-reply reply-static" data-testid="reply-reference">
+			<span class="ap-reply-text"><em>Message unavailable</em></span>
 		</div>
-		{#if time}<time class="ap-msg-system-time" datetime={isoTime} title={fullTime}>{time}</time>{/if}
-	</article>
-{:else}
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<article
-	data-timeline-item
-	class="ap-msg"
-	class:ap-msg-grouped={grouped}
-	class:ap-msg-mention={mention}
-	class:ap-msg-pinged={pinged}
-	class:ap-msg-highlighted={highlighted}
-	class:ap-msg-selectable={selectable}
-	class:ap-msg-selected={picked}
-	data-message-id={event.message_id}
-	tabindex="-1"
-	onclick={click}
-	onkeydown={keydown}
-	onpointerenter={() => (engaged = true)}
-	onfocusin={() => (engaged = true)}
-	onpointerdown={pointerdown}
-	onpointerup={cancelLongPress}
-	onpointermove={cancelLongPress}
-	onpointercancel={cancelLongPress}
->
-	<!-- The quote has a row of its own above the sender's name, its spine leading down into the avatar (a reply never groups). -->
-	{#if replyId && !event.deleted}
-		<div class="ap-msg-reply">
-			{#if replyTarget}
-				{@const targetName = senderName(replyTarget)}
-				<button class="ap-reply" data-testid="reply-reference" type="button" aria-label={`Replying to ${targetName}. Jump to their message`} onclick={() => onjump(replyTarget.message_id)}>
-					<Avatar name={targetName} id={directory.person(replyTarget.from)?.user_id} src={directory.avatar(replyTarget.from)} size="sm" />
-					<span class="ap-reply-who">{targetName}</span>
-					<span class="ap-reply-text">{#if replyTarget.deleted}<em>Message deleted</em>{:else}<MentionText text={replySnippet(replyTarget)} />{/if}</span>
-				</button>
+	{/if}
+{/snippet}
+<!-- A scoped system message (Appendix A.1): a left-aligned card titled by who got it; code blocks in it get a Copy button. -->
+{#snippet noticeText()}
+	<div class="ap-msg-text" class:plain={event.body?.format !== 'markdown'} use:copyCode={body} use:highlightCode={body}>{@html body}</div>
+{/snippet}
+<!-- Another system identity (Appendix A.1): a quiet centered line, no avatar, actions or grouping. -->
+{#snippet systemText()}
+	<div class="ap-msg-text" class:plain={event.body?.format !== 'markdown'} use:highlightCode={body}>{@html body}</div>
+{/snippet}
+{#snippet content()}
+	{#if editing}
+		<MessageEditor {text} {embeds} {uploads} {onsave} oncancel={oncanceledit} />
+	{:else}
+		{#if text}
+			<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
+			{#if event.body?.format === 'markdown'}
+				<div class="ap-msg-text markdown" use:highlightCode={body}>{@html body}</div>
 			{:else}
-				<div class="ap-reply reply-static" data-testid="reply-reference">
-					<span class="ap-reply-text"><em>Message unavailable</em></span>
-				</div>
+				<div class="ap-msg-text plain">{@html body}</div>
 			{/if}
-		</div>
+		{/if}
+		{#if embeds.length > 0}
+			<div class="ap-msg-embeds">
+				{#each embeds as embed, index (embed.embed_id ?? index)}
+					<div class="embed-slot">
+						<Embed {embed} upload={embed.embed_id ? uploads[embed.embed_id] : undefined} detail={time ? `${name} · ${time}` : name} />
+						{#if canRemoveEmbeds && !writing(embed)}
+							<EmbedRemove label="Remove embed" onremove={() => onremoveembed(embed)} />
+						{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
 	{/if}
-	{#if selectable}
-		<span class="ap-msg-check" role="checkbox" aria-checked={picked} aria-label="Select message" tabindex="0" onkeydown={(key) => { if (key.key === ' ' || key.key === 'Enter') { key.preventDefault(); onselect(false); } }}>{picked ? '✓' : ''}</span>
-	{/if}
-	<div class="ap-msg-gutter">
-		{#if grouped}
-			<time class="ap-msg-hovertime" datetime={isoTime} title={fullTime}>{idTimeCompact(event.message_id)}</time>
-		{:else}
-			<!-- The name beside it is the keyboard's way in; the avatar is a second target for the pointer. -->
-			<button class="who-btn" type="button" tabindex="-1" aria-hidden="true" data-user-id={handle}><Avatar {name} id={directory.person(event.from)?.user_id} src={directory.avatar(event.from)} /></button>
+{/snippet}
+{#snippet reactionBar()}
+	{#if !event.deleted}<ReactionBar {chips} enabled={caps.react} ontoggle={onreact} />{/if}
+{/snippet}
+{#snippet toolbar()}
+	<div class="ap-actions" role="toolbar" aria-label="Message actions">
+		{#if event.deleted && caps.removeReply}
+			<button class="ap-actions-btn" type="button" aria-label="Remove reply reference" onclick={() => act(onremovereply)}>Remove reply</button>
 		{/if}
-	</div>
-	<div class="ap-msg-main">
-		{#if !grouped}
-			<header class="ap-msg-head">
-				<button class="ap-msg-sender who-btn" type="button" data-user-id={handle} aria-haspopup="dialog" title="Show profile">{name}</button>
-				{#if showHandle}<span class="ap-msg-handle" data-testid="sender-handle">@{handle}</span>{/if}
-				<RoleBadges user={event.from} />
-				<span class="ap-msg-meta">{#if time}<time datetime={isoTime} title={fullTime}>{time}</time>{/if}</span>
-			</header>
+		{#if caps.reply}
+			<button class="ap-actions-btn" type="button" aria-label="Reply to message" onclick={() => act(onreply)}>Reply</button>
 		{/if}
-		{#if event.deleted}
-			<div class="ap-msg-tomb">Message deleted</div>
-		{:else if editing}
-			<MessageEditor {text} {embeds} {uploads} {onsave} oncancel={oncanceledit} />
-		{:else}
-			{#if text}
-				<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
-				{#if event.body?.format === 'markdown'}
-					<div class="ap-msg-text markdown" use:highlightCode={body}>{@html body}</div>
-				{:else}
-					<div class="ap-msg-text plain">{@html body}</div>
-				{/if}
-			{/if}
-			{#if embeds.length > 0}
-				<div class="ap-msg-embeds">
-					{#each embeds as embed, index (embed.embed_id ?? index)}
-						<div class="embed-slot">
-							<Embed {embed} upload={embed.embed_id ? uploads[embed.embed_id] : undefined} detail={time ? `${name} · ${time}` : name} />
-							{#if canRemoveEmbeds && !writing(embed)}
-								<EmbedRemove label="Remove embed" onremove={() => onremoveembed(embed)} />
-							{/if}
-						</div>
-					{/each}
-				</div>
-			{/if}
+		{#if caps.react && !event.deleted}
+			<button
+				class="ap-actions-btn"
+				type="button"
+				data-testid="react"
+				aria-label="React"
+				title="React"
+				aria-haspopup="dialog"
+				aria-expanded={reacting}
+				bind:this={reactButton}
+				use:emojiAnchor
+				onclick={() => act(openReact)}
+			>React</button>
 		{/if}
-		{#if !event.deleted}
-			<ReactionBar {chips} enabled={caps.react} ontoggle={onreact} />
+		{#if caps.startThread}
+			<button class="ap-actions-btn" type="button" data-testid="start-thread" aria-label="Start thread" title="Start thread" onclick={() => act(onstartthread)}>Start thread</button>
 		{/if}
-	</div>
-	<!-- While editing, the editor has its own Cancel and Save; the toolbar would sit over the sender's name. -->
-	{#if hasActions && engaged && !editing}
-		<div class="ap-msg-actions">
-			<div class="ap-actions" role="toolbar" aria-label="Message actions">
-				{#if event.deleted && caps.removeReply}
+		{#if caps.edit}
+			<button class="ap-actions-btn" type="button" aria-label="Edit message" title="Edit" onclick={() => act(onedit)}>Edit</button>
+		{/if}
+		<!-- ⋯ holds the rarer actions: Copy link on any message; on your own, Select and Delete too. -->
+		{#if caps.edit || caps.link}
+			{#if moreOpen}
+				{#if caps.edit && replyId}
 					<button class="ap-actions-btn" type="button" aria-label="Remove reply reference" onclick={() => act(onremovereply)}>Remove reply</button>
 				{/if}
-				{#if caps.reply}
-					<button class="ap-actions-btn" type="button" aria-label="Reply to message" onclick={() => act(onreply)}>Reply</button>
+				{#if caps.edit && caps.select}
+					<button class="ap-actions-btn" type="button" data-testid="select-message" aria-label="Select message" title="Select" onclick={() => act(onbeginselect)}>Select</button>
 				{/if}
-				{#if caps.react && !event.deleted}
-					<button
-						class="ap-actions-btn"
-						type="button"
-						data-testid="react"
-						aria-label="React"
-						title="React"
-						aria-haspopup="dialog"
-						aria-expanded={reacting}
-						bind:this={reactButton}
-						use:emojiAnchor
-						onclick={() => act(openReact)}
-					>React</button>
-				{/if}
-				{#if caps.startThread}
-					<button class="ap-actions-btn" type="button" data-testid="start-thread" aria-label="Start thread" title="Start thread" onclick={() => act(onstartthread)}>Start thread</button>
+				{#if caps.link}
+					<button class="ap-actions-btn" type="button" data-testid="copy-link" aria-label={copied ? 'Link copied' : 'Copy link to message'} title="Copy link" onclick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button>
 				{/if}
 				{#if caps.edit}
-					<button class="ap-actions-btn" type="button" aria-label="Edit message" title="Edit" onclick={() => act(onedit)}>Edit</button>
+					<button class="ap-actions-btn ap-actions-danger" type="button" aria-label="Delete message" title="Delete" onclick={() => act(ondelete)}>Delete</button>
 				{/if}
-				<!-- ⋯ holds the rarer actions: Copy link on any message; on your own, Select and Delete too. -->
-				{#if caps.edit || caps.link}
-					{#if moreOpen}
-						{#if caps.edit && replyId}
-							<button class="ap-actions-btn" type="button" aria-label="Remove reply reference" onclick={() => act(onremovereply)}>Remove reply</button>
-						{/if}
-						{#if caps.edit && caps.select}
-							<button class="ap-actions-btn" type="button" data-testid="select-message" aria-label="Select message" title="Select" onclick={() => act(onbeginselect)}>Select</button>
-						{/if}
-						{#if caps.link}
-							<button class="ap-actions-btn" type="button" data-testid="copy-link" aria-label={copied ? 'Link copied' : 'Copy link to message'} title="Copy link" onclick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button>
-						{/if}
-						{#if caps.edit}
-							<button class="ap-actions-btn ap-actions-danger" type="button" aria-label="Delete message" title="Delete" onclick={() => act(ondelete)}>Delete</button>
-						{/if}
-					{:else}
-						<button class="ap-actions-btn" type="button" aria-label="More actions" aria-expanded="false" title="More" onclick={() => (moreOpen = true)}>⋯</button>
-					{/if}
-				{/if}
-			</div>
-		</div>
-	{/if}
-</article>
-{/if}
+			{:else}
+				<button class="ap-actions-btn" type="button" aria-label="More actions" aria-expanded="false" title="More" onclick={() => (moreOpen = true)}>⋯</button>
+			{/if}
+		{/if}
+	</div>
+{/snippet}
+
+<DesignMessage
+	data-timeline-item=""
+	messageId={event.message_id}
+	sender={notice ? event.from : { user_id: handle, name, roles }}
+	timestamp={idMillis(event.message_id)}
+	{grouped}
+	deleted={event.deleted}
+	system={systemShown}
+	{scope}
+	{mention}
+	{pinged}
+	{highlighted}
+	selectMode={selectable}
+	selected={picked}
+	onselect={() => onselect(false)}
+	avatar={avatar}
+	name={sender}
+	reply={replyId ? reply : undefined}
+	body={notice ? noticeText : systemShown ? systemText : content}
+	footer={reactionBar}
+	actions={hasActions && engaged && !editing ? toolbar : undefined}
+	onclick={click}
+	onkeydown={systemShown ? undefined : keydown}
+	onpointerenter={systemShown ? undefined : () => (engaged = true)}
+	onfocusin={systemShown ? undefined : () => (engaged = true)}
+	onpointerdown={systemShown ? undefined : pointerdown}
+	onpointerup={systemShown ? undefined : cancelLongPress}
+	onpointermove={systemShown ? undefined : cancelLongPress}
+	onpointercancel={systemShown ? undefined : cancelLongPress}
+/>
 
 <style>
 	.ap-actions { max-width: calc(100vw - 32px); flex-wrap: wrap; }
@@ -363,7 +353,7 @@
 	.who-btn { margin: 0; padding: 0; border: 0; background: none; color: inherit; font-family: inherit; font-size: inherit; line-height: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
 	.ap-msg-sender.who-btn:hover { text-decoration: underline; }
 	.who-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-	.ap-msg-gutter .who-btn { display: inline-flex; border-radius: var(--radius-full); }
+	:global(.ap-msg-gutter) .who-btn { display: inline-flex; border-radius: var(--radius-full); }
 	.reply-static { cursor: default; }
 	.reply-static:hover { background: none; color: var(--ink-muted); }
 	:global(.ap-msg-reply) .reply-static:hover::before { border-color: color-mix(in srgb, var(--line-strong) 60%, transparent); }

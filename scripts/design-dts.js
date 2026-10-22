@@ -11,7 +11,7 @@ const out = [
 	' * Generated from src/lib/design/components by scripts/design-dts.js; it documents their props.',
 	" * In Svelte, import them from '$lib/design/components'; in any page, components/bundle.js sets window.Apron (bottom of this file). */",
 	"import type { Component, Snippet } from 'svelte';",
-	"import type { HTMLButtonAttributes } from 'svelte/elements';",
+	"import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements';",
 	'',
 	sender,
 	'',
