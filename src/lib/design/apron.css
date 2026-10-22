@@ -134,6 +134,23 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-failed { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--danger); margin-top: 2px; }
 .ap-msg-failed .ap-link { color: var(--danger); }
 .ap-msg-embeds { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-2); }
+/* An absent format is plain (§3.5): its line breaks kept. A Markdown body's quotes set apart on a muted ground. */
+.ap-msg-plain { white-space: pre-wrap; }
+.ap-msg-text.ap-msg-markdown blockquote { margin: var(--space-2) 0; padding: var(--space-1) var(--space-3); border-left: 3px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg-200); color: var(--ink-muted); }
+.ap-msg-text.ap-msg-markdown blockquote > :first-child { margin-top: 0; }
+.ap-msg-text.ap-msg-markdown blockquote > :last-child { margin-bottom: 0; }
+/* The sender's name and avatar as buttons that open their profile card, looking as they do as text. */
+.ap-msg .ap-msg-who { margin: 0; padding: 0; border: 0; background: none; color: inherit; font-family: inherit; font-size: inherit; line-height: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
+.ap-msg-sender.ap-msg-who:hover { text-decoration: underline; }
+.ap-msg-who:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ap-msg-gutter .ap-msg-who { display: inline-flex; border-radius: var(--radius-full); }
+/* The toolbar wraps rather than running off a narrow screen. */
+.ap-msg-actions .ap-actions { max-width: calc(100vw - var(--space-8)); flex-wrap: wrap; }
+/* A slot holding an embed and its (x) (position: relative), shrunk to fit it, where a percentage width can't resolve:
+   a link card or stream would size the slot by its longest line and leave the (x) floating past its edge. The same widths, in pixels. */
+.ap-embed-slot { position: relative; max-width: 100%; }
+.ap-embed-slot .ap-embed-ogcard { width: var(--embed-card-w); max-width: 100%; }
+.ap-embed-slot .ap-embed-stream { width: var(--embed-max-w); max-width: 100%; }
 
 /* Embed */
 .ap-embed { display: block; max-width: min(100%, var(--embed-max-w)); border-radius: var(--radius-lg); box-sizing: border-box; }
@@ -180,6 +197,10 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-thread-moved { background: transparent; padding-left: 0; cursor: default; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-style: italic; }
 .ap-thread-moved:hover { background: transparent; }
 .ap-thread-moved .ap-link { font-style: normal; }
+/* On a row of its own in the timeline, lined up with the message text (on phones, with the timeline's edge). */
+.ap-thread-row { margin: var(--space-2) var(--space-4) 0 calc(var(--space-4) + var(--avatar-md) + var(--space-3)); }
+.ap-thread-row > .ap-thread { margin-top: 0; }
+@media (max-width: 719px) { .ap-thread-row { margin-left: var(--space-4); } }
 
 /* TimelineDivider */
 .ap-divider { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-6) var(--space-4) var(--space-2); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; color: var(--ink-muted); }
@@ -271,6 +292,9 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-banner-actions { flex: none; display: flex; gap: var(--space-1); }
 .ap-banner .ap-btn-ghost { color: var(--ink-muted); }
 .ap-banner .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
+/* Floating at the top centre of the page, over everything; on phones, across the top. */
+.ap-banner-float { position: fixed; z-index: var(--z-banner); top: var(--space-4); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(var(--toast-max-w), calc(100% - var(--space-8))); }
+@media (max-width: 719px) { .ap-banner-float { left: var(--space-4); right: var(--space-4); transform: none; width: auto; max-width: none; } }
 /* Nudge — a small offer made once, when it's useful (turning on notifications at your first mention); it can point at the control that changes it later */
 .ap-nudge { position: relative; display: grid; gap: var(--space-3); width: var(--nudge-w); max-width: 100%; box-sizing: border-box; padding: var(--space-3); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-nudge-pointer::after { content: ''; position: absolute; left: var(--ap-nudge-tip, var(--space-6)); bottom: -6px; width: 10px; height: 10px; background: var(--bg-200); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
@@ -298,6 +322,11 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-jumpfab { position: relative; width: var(--control-xl); height: var(--control-xl); display: grid; place-items: center; border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--bg-200); color: var(--ink); font-size: 18px; cursor: pointer; box-shadow: var(--shadow-float); }
 .ap-jumpfab:hover { background: var(--bg-300); }
 .ap-jumpfab-count { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); }
+/* Docked in a pane: the bar centred at the timeline's width; the button's anchor has no height, so it floats over the timeline's corner. */
+.ap-jump-dock { display: flex; justify-content: center; margin-bottom: var(--space-2); }
+.ap-jump-dock .ap-jumpbar { width: min(100%, var(--timeline-max-w)); }
+.ap-jump-dock-fab { position: relative; height: 0; z-index: var(--z-raised); }
+.ap-jump-dock-fab .ap-jumpfab { position: absolute; right: var(--space-4); bottom: var(--space-3); }
 
 /* RoomHeader */
 .ap-roomhead { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); box-sizing: border-box; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); background: var(--bg-100); }
@@ -442,6 +471,10 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-reply-who { flex: none; color: var(--ink); font-weight: 500; }
 .ap-reply:hover .ap-reply-who { color: var(--denim); }
 .ap-reply-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A quote of a message that can't be found: it reads, but jumps nowhere. */
+.ap-reply-static { cursor: default; }
+.ap-reply.ap-reply-static:hover { background: none; color: var(--ink-muted); }
+.ap-msg-reply .ap-reply-static:hover::before { border-color: color-mix(in srgb, var(--line-strong) 60%, transparent); }
 
 /* ThreadSummary — pinned under the header of a thread view */
 /* The summary icon has a column of its own, so every line of the text starts after it, not just the first. */
@@ -627,6 +660,13 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-menu { position: absolute; right: 0; bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); min-width: 200px; margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
 .ap-menu-item { font: inherit; display: block; width: 100%; padding: 6px var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .ap-menu-item:hover { background: var(--bg-300); }
+.ap-selbar-denied { color: var(--danger); }
+/* Every thread of the room is a destination: keep a long list on screen and scrollable. */
+.ap-selbar-pick .ap-menu { max-height: min(320px, 50dvh); overflow-y: auto; max-width: calc(100vw - var(--space-8)); }
+.ap-selbar-pick .ap-menu-item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+/* ReadOnlyBar — stands in for the composer while a guest only reads: why, and Sign in */
+.ap-composer-readonly { align-items: center; }
+.ap-composer-readonly-text { flex: 1; margin: 0; padding: 3px var(--space-1); font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink-muted); }
 /* MenuButton — a button that opens a menu of choices, each with an optional muted hint (Pause notifications) */
 .ap-menubtn { position: relative; display: inline-flex; }
 .ap-menu-below { top: calc(100% + var(--space-1)); bottom: auto; }

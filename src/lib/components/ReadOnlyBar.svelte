@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Button from '$lib/design/components/Button.svelte';
+
 	/**
 	 * Stands in for the composer while a guest only reads (`ext:settings`
 	 * with `guest_posting: false`): says why, and offers the passkey
@@ -12,16 +14,11 @@
 	let { passkeyUnavailable, onsignin }: Props = $props();
 </script>
 
-<div class="ap-composer readonly" role="note" data-testid="read-only-bar">
-	<p class="readonly-text">
+<div class="ap-composer ap-composer-readonly" role="note" data-testid="read-only-bar">
+	<p class="ap-composer-readonly-text">
 		You’re reading as a guest. {passkeyUnavailable ? `Posting needs a passkey sign-in. ${passkeyUnavailable}` : 'Sign in to post, react, join rooms, and start threads.'}
 	</p>
 	{#if !passkeyUnavailable}
-		<button class="ap-btn ap-btn-primary ap-btn-sm" type="button" data-testid="read-only-signin" onclick={onsignin}>Sign in</button>
+		<Button variant="primary" size="sm" data-testid="read-only-signin" onclick={onsignin} label="Sign in" />
 	{/if}
 </div>
-
-<style>
-	.readonly { align-items: center; }
-	.readonly-text { flex: 1; margin: 0; padding: 3px var(--space-1); font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink-muted); }
-</style>

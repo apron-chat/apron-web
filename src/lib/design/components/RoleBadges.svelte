@@ -6,11 +6,12 @@
 	 */
 	interface Props {
 		roles?: string[];
+		testid?: string;
 	}
-	let { roles = [] }: Props = $props();
+	let { roles = [], testid }: Props = $props();
 	const shown = $derived([...new Set(roles.filter((role) => typeof role === 'string' && role.trim()))]);
 </script>
 
 {#if shown.length}
-	<span class="ap-roles">{#each shown as role (role)}<span class={['ap-role', role === 'admin' && 'ap-role-admin', role === 'bot' && 'ap-role-bot']} title="Role: {role}">{role}</span>{/each}</span>
+	<span class="ap-roles" data-testid={testid}>{#each shown as role (role)}<span class={['ap-role', role === 'admin' && 'ap-role-admin', role === 'bot' && 'ap-role-bot']} title="Role: {role}">{role}</span>{/each}</span>
 {/if}

@@ -208,10 +208,10 @@
 <!-- The design system's Message draws the row; the app fills in who the sender is, the quote, the body and the toolbar. -->
 {#snippet avatar()}
 	<!-- The name beside it is the keyboard's way in; the avatar is a second target for the pointer. -->
-	<button class="who-btn" type="button" tabindex="-1" aria-hidden="true" data-user-id={handle}><Avatar {name} id={directory.person(event.from)?.user_id} src={directory.avatar(event.from)} /></button>
+	<button class="ap-msg-who" type="button" tabindex="-1" aria-hidden="true" data-user-id={handle}><Avatar {name} id={directory.person(event.from)?.user_id} src={directory.avatar(event.from)} /></button>
 {/snippet}
 {#snippet sender()}
-	<button class="ap-msg-sender who-btn" type="button" data-user-id={handle} aria-haspopup="dialog" title="Show profile">{name}</button>
+	<button class="ap-msg-sender ap-msg-who" type="button" data-user-id={handle} aria-haspopup="dialog" title="Show profile">{name}</button>
 	{#if showHandle}<span class="ap-msg-handle" data-testid="sender-handle">@{handle}</span>{/if}
 {/snippet}
 <!-- The quote has a row of its own above the sender's name, its spine leading down into the avatar (a reply never groups). -->
@@ -224,18 +224,18 @@
 			<span class="ap-reply-text">{#if replyTarget.deleted}<em>Message deleted</em>{:else}<MentionText text={replySnippet(replyTarget)} />{/if}</span>
 		</button>
 	{:else}
-		<div class="ap-reply reply-static" data-testid="reply-reference">
+		<div class="ap-reply ap-reply-static" data-testid="reply-reference">
 			<span class="ap-reply-text"><em>Message unavailable</em></span>
 		</div>
 	{/if}
 {/snippet}
 <!-- A scoped system message (Appendix A.1): a left-aligned card titled by who got it; code blocks in it get a Copy button. -->
 {#snippet noticeText()}
-	<div class="ap-msg-text" class:plain={event.body?.format !== 'markdown'} use:copyCode={body} use:highlightCode={body}>{@html body}</div>
+	<div class="ap-msg-text" class:ap-msg-plain={event.body?.format !== 'markdown'} use:copyCode={body} use:highlightCode={body}>{@html body}</div>
 {/snippet}
 <!-- Another system identity (Appendix A.1): a quiet centered line, no avatar, actions or grouping. -->
 {#snippet systemText()}
-	<div class="ap-msg-text" class:plain={event.body?.format !== 'markdown'} use:highlightCode={body}>{@html body}</div>
+	<div class="ap-msg-text" class:ap-msg-plain={event.body?.format !== 'markdown'} use:highlightCode={body}>{@html body}</div>
 {/snippet}
 {#snippet content()}
 	{#if editing}
@@ -244,15 +244,15 @@
 		{#if text}
 			<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
 			{#if event.body?.format === 'markdown'}
-				<div class="ap-msg-text markdown" use:highlightCode={body}>{@html body}</div>
+				<div class="ap-msg-text ap-msg-markdown" use:highlightCode={body}>{@html body}</div>
 			{:else}
-				<div class="ap-msg-text plain">{@html body}</div>
+				<div class="ap-msg-text ap-msg-plain">{@html body}</div>
 			{/if}
 		{/if}
 		{#if embeds.length > 0}
 			<div class="ap-msg-embeds">
 				{#each embeds as embed, index (embed.embed_id ?? index)}
-					<div class="embed-slot">
+					<div class="ap-embed-slot">
 						<Embed {embed} upload={embed.embed_id ? uploads[embed.embed_id] : undefined} detail={time ? `${name} · ${time}` : name} />
 						{#if canRemoveEmbeds && !writing(embed)}
 							<EmbedRemove label="Remove embed" onremove={() => onremoveembed(embed)} />
@@ -347,34 +347,3 @@
 	onpointercancel={systemShown ? undefined : cancelLongPress}
 />
 
-<style>
-	.ap-actions { max-width: calc(100vw - 32px); flex-wrap: wrap; }
-	/* The sender's name and avatar open their profile card, and look as they did. */
-	.who-btn { margin: 0; padding: 0; border: 0; background: none; color: inherit; font-family: inherit; font-size: inherit; line-height: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
-	.ap-msg-sender.who-btn:hover { text-decoration: underline; }
-	.who-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-	:global(.ap-msg-gutter) .who-btn { display: inline-flex; border-radius: var(--radius-full); }
-	.reply-static { cursor: default; }
-	.reply-static:hover { background: none; color: var(--ink-muted); }
-	:global(.ap-msg-reply) .reply-static:hover::before { border-color: color-mix(in srgb, var(--line-strong) 60%, transparent); }
-	.plain { white-space: pre-wrap; }
-	/* An embed's remove button sits on its corner (EmbedRemove). */
-	.embed-slot { position: relative; max-width: 100%; }
-	/*
-	 * The slot shrinks to fit its embed, where a percentage width can't
-	 * resolve: a link card or stream would size the slot by its longest line
-	 * and leave the (x) floating past its edge. The same widths, in pixels.
-	 */
-	.embed-slot :global(.ap-embed-ogcard) { width: var(--embed-card-w); max-width: 100%; }
-	.embed-slot :global(.ap-embed-stream) { width: var(--embed-max-w); max-width: 100%; }
-	.markdown :global(blockquote) {
-		margin: var(--space-2) 0;
-		padding: var(--space-1) var(--space-3);
-		border-left: 3px solid var(--line-strong);
-		border-radius: var(--radius-sm);
-		background: var(--bg-200);
-		color: var(--ink-muted);
-	}
-	.markdown :global(blockquote > :first-child) { margin-top: 0; }
-	.markdown :global(blockquote > :last-child) { margin-bottom: 0; }
-</style>

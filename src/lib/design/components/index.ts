@@ -46,4 +46,5 @@ export { default as MenuButton } from './MenuButton.svelte';
 export { default as Dialog } from './Dialog.svelte';
 export { default as Switch } from './Switch.svelte';
 export { default as StatusDot } from './StatusDot.svelte';
+export { default as SystemLine } from './SystemLine.svelte';
 export type * from './types';

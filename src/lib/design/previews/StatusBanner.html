@@ -1,4 +1,4 @@
-<!-- @dsCard group="Feedback" height=150 subtitle="Connection state" -->
+<!-- @dsCard group="Feedback" height=260 subtitle="Connection state, then any status with its own tone and words" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>StatusBanner</title></head>
@@ -10,6 +10,9 @@
   add(A.StatusBanner, { state: 'connected' });
   add(A.StatusBanner, { state: 'reconnecting', action: A.part(A.Button, { size: 'sm', label: 'Retry now' }) });
   add(A.StatusBanner, { state: 'offline' });
+  // Without a state: a tone, a role and the words, such as a thread that's gone, or an error toast.
+  add(A.StatusBanner, { tone: 'danger', children: A.html('This thread is no longer available on the server.'), action: A.part(A.Button, { size: 'sm', label: 'Back to room' }) });
+  add(A.StatusBanner, { tone: 'warn', role: 'alert', live: true, children: A.html('Some messages could not be moved') });
 </script>
 </body>
 </html>

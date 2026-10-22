@@ -1,20 +1,25 @@
 <script lang="ts">
-	/** A mention chip (Appendix A.3). Whether a message mentions someone is `body.mentions` (§3.5), not the chip. */
+	/** A mention chip (Appendix A.3). Whether a message mentions someone is `body.mentions` (§3.5), not the chip. Without `onopen` it only reads, such as inside a reply quote, which is itself a control. */
 	interface Props {
 		user_id?: string;
 		name?: string;
 		me?: boolean;
 		roomId?: string;
 		title?: string;
+		/** A room written `#room_id`: its title shows after a #. */
+		hash?: boolean;
 		onopen?: () => void;
 		unknown?: boolean;
 	}
-	let { user_id, name, me, roomId, title, onopen, unknown }: Props = $props();
+	let { user_id, name, me, roomId, title, hash, onopen, unknown }: Props = $props();
 	const id = $derived(roomId || user_id);
 	const shown = $derived(name || title || id);
+	const roomClass = $derived(['ap-mention', 'ap-mention-room', hash && 'ap-mention-hash-room']);
+	// A room's chip that only reads carries no data-room-id: a click delegated on its ID would open the room.
 </script>
 
-{#if roomId}<button type="button" class="ap-mention ap-mention-room" data-room-id={id} onclick={onopen} title="Open {shown}">{shown}</button>
+{#if roomId && onopen}<button type="button" class={roomClass} data-room-id={id} onclick={onopen} title="Open {shown}">{hash ? '#' : ''}{shown}</button>
+{:else if roomId}<span class={roomClass} title="#{id}">{hash ? '#' : ''}{shown}</span>
 {:else if unknown}<span class="ap-mention-unknown">@{id}</span>
 {:else if onopen}<button type="button" class={['ap-mention', me && 'ap-mention-me']} data-user-id={id} onclick={onopen} title={id !== shown ? '@' + id : undefined}>@{shown}</button>
 {:else}<span class={['ap-mention', me && 'ap-mention-me']} data-user-id={id} title={id !== shown ? '@' + id : undefined}>@{shown}</span>{/if}

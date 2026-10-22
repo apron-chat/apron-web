@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=150 subtitle="Floating button, and the mention bar" -->
+<!-- @dsCard group="Timeline" height=250 subtitle="Floating button, the mention bar, and both docked in a pane above the composer" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>JumpBar</title></head>
@@ -10,6 +10,11 @@
   var fabs = document.getElementById('fabs');
   add(A.JumpBar, {}, fabs); add(A.JumpBar, { count: 3 }, fabs); add(A.JumpBar, { count: 128 }, fabs);
   add(A.JumpBar, { count: 12, mentions: 1 });
+  // Docked: the button floats over the timeline's bottom-right corner, taking no space; the bar sits above the composer.
+  var docks = document.createElement('div'); docks.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 16px'; root.appendChild(docks);
+  function pane() { var box = document.createElement('div'); box.style.cssText = 'display:flex;flex-direction:column;justify-content:flex-end;height:72px;border:1px solid var(--line);border-radius:10px;background:var(--bg-100)'; docks.appendChild(box); return box; }
+  add(A.JumpBar, { docked: true, count: 4 }, pane());
+  add(A.JumpBar, { docked: true, count: 2, mentions: 2 }, pane());
 </script>
 </body>
 </html>

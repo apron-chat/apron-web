@@ -3,6 +3,7 @@
 	import { updated } from '$app/state';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import ActionBanner from '$lib/design/components/ActionBanner.svelte';
+	import Button from '$lib/design/components/Button.svelte';
 	import { pageDrafts } from '$lib/ui/pane-drafts.svelte';
 
 	/**
@@ -23,20 +24,11 @@
 </script>
 
 {#if (updated.current || chunkMissing) && !dismissed}
-	<div class="update">
-		<ActionBanner title="Apron has been updated" detail={unsent ? 'Reloading clears your unsent message.' : undefined} testid="update-notice">
-			{#snippet icon()}<RefreshCw size={16} aria-hidden="true" />{/snippet}
-			{#snippet action()}
-				<button class="ap-btn ap-btn-sm ap-btn-ghost" type="button" onclick={() => (dismissed = true)}>Later</button>
-				<button class="ap-btn ap-btn-sm ap-btn-primary" type="button" data-testid="update-reload" onclick={() => location.reload()}>Reload</button>
-			{/snippet}
-		</ActionBanner>
-	</div>
+	<ActionBanner float title="Apron has been updated" detail={unsent ? 'Reloading clears your unsent message.' : undefined} testid="update-notice">
+		{#snippet icon()}<RefreshCw size={16} aria-hidden="true" />{/snippet}
+		{#snippet action()}
+			<Button size="sm" variant="ghost" onclick={() => (dismissed = true)} label="Later" />
+			<Button size="sm" variant="primary" data-testid="update-reload" onclick={() => location.reload()} label="Reload" />
+		{/snippet}
+	</ActionBanner>
 {/if}
-
-<style>
-	.update { position: fixed; z-index: var(--z-banner); top: var(--space-4); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(var(--toast-max-w), calc(100% - var(--space-8))); }
-	@media (max-width: 719px) {
-		.update { left: var(--space-4); right: var(--space-4); transform: none; width: auto; max-width: none; }
-	}
-</style>

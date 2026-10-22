@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { Identity } from '$lib/protocol/types';
+	import SystemLine from '$lib/design/components/SystemLine.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { membershipSummary } from '$lib/ui/membership';
-	import { idDateTime, idIso, idTime } from '$lib/ui/time';
+	import { idMillis } from '$lib/ui/time';
 
 	/**
 	 * Who joined and left the room between two other timeline items
@@ -18,10 +19,6 @@
 	}
 
 	let summary = $derived(membershipSummary(joined.map(label), left.map(label)));
-	let time = $derived(idTime(logId));
 </script>
 
-<div data-timeline-item class="ap-msg ap-msg-system ap-msg-member" data-testid="membership-line" data-log-id={logId} title={summary.title}>
-	<div class="ap-msg-system-body">{summary.text}</div>
-	{#if time}<time class="ap-msg-system-time" datetime={idIso(logId)} title={idDateTime(logId)}>{time}</time>{/if}
-</div>
+<SystemLine quiet text={summary.text} timestamp={idMillis(logId)} data-timeline-item="" data-testid="membership-line" data-log-id={logId} title={summary.title} />

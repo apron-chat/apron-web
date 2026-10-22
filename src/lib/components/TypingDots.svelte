@@ -1,1 +1,5 @@
-<span class="ap-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+<script lang="ts">
+	import DesignTypingDots from '$lib/design/components/TypingDots.svelte';
+</script>
+
+<DesignTypingDots />

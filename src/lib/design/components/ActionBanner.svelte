@@ -11,16 +11,22 @@
 		/** The buttons: a quiet Later, then the one thing to do. */
 		action?: Snippet;
 		testid?: string;
+		/** Floats over the page, at the top centre (across the top on phones), as a new version's notice does. */
+		float?: boolean;
 	}
-	let { title, detail, icon, action, testid }: Props = $props();
+	let { title, detail, icon, action, testid, float }: Props = $props();
 </script>
 
-<!-- On the accent, since it offers something to do; StatusBanner's dots are for the connection's state. -->
-<div class="ap-banner" role="status" data-testid={testid}>
-	{#if icon}<span class="ap-banner-icon" aria-hidden="true">{@render icon()}</span>{/if}
-	<span class="ap-banner-text">
-		<span class="ap-banner-title">{title}</span>
-		{#if detail}<span class="ap-banner-detail">{detail}</span>{/if}
-	</span>
-	{#if action}<span class="ap-banner-actions">{@render action()}</span>{/if}
-</div>
+{#snippet banner()}
+	<!-- On the accent, since it offers something to do; StatusBanner's dots are for the connection's state. -->
+	<div class="ap-banner" role="status" data-testid={testid}>
+		{#if icon}<span class="ap-banner-icon" aria-hidden="true">{@render icon()}</span>{/if}
+		<span class="ap-banner-text">
+			<span class="ap-banner-title">{title}</span>
+			{#if detail}<span class="ap-banner-detail">{detail}</span>{/if}
+		</span>
+		{#if action}<span class="ap-banner-actions">{@render action()}</span>{/if}
+	</div>
+{/snippet}
+
+{#if float}<div class="ap-banner-float">{@render banner()}</div>{:else}{@render banner()}{/if}

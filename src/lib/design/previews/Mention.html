@@ -14,7 +14,7 @@
   add(A.Message, { sender: bob, time: '14:05', grouped: true, children: A.html('<p>cc <span class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</span></p>') });
   var row = document.createElement('div'); row.className = 'ap-row'; root.appendChild(row);
   add(A.Mention, { user_id: 'dana', name: 'Dana' }, row); add(A.Mention, { user_id: 'sam', name: 'Sam', me: true }, row);
-  add(A.Mention, { roomId: 'ops', title: 'Ops' }, row); add(A.Mention, { user_id: 'ghost_9', unknown: true }, row);
+  add(A.Mention, { roomId: 'ops', title: 'Ops', onopen: function () {} }, row); add(A.Mention, { roomId: 'ops', name: 'Ops', hash: true }, row); add(A.Mention, { user_id: 'ghost_9', unknown: true }, row);
 </script>
 </body>
 </html>
