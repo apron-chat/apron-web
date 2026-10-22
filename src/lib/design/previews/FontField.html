@@ -1,0 +1,18 @@
+<!-- @dsCard group="Input" height=420 subtitle="A font family field, its value shown in that font: focus one to see its suggestions, or the offer to load the installed fonts" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>FontField</title></head>
+<body>
+<div class="ap-stack" id="root" style="max-width:460px;gap:0"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(props) {
+    var handle = A.render(A.FontField, root, Object.assign({ onloadfonts: function () { handle.set({ fontState: 'ready', fonts: ['Arial', 'Georgia', 'Inter', 'JetBrains Mono', 'Times New Roman'] }); } }, props));
+    return handle;
+  }
+  add({ id: 'font-1', label: 'Interface font', hint: 'Applies to the app interface. Leave blank for the browser’s system UI font.', placeholder: 'System UI stack', value: 'Georgia', font: '"Georgia", var(--font-sans)', fonts: [], fontState: 'idle' });
+  add({ id: 'font-2', label: 'Chat font', hint: 'Optional font for message text. Leave blank to match the interface.', placeholder: 'Use interface font', value: '', font: 'var(--font-chat)', fonts: ['Arial', 'Georgia', 'Inter'], fontState: 'ready' });
+  add({ id: 'font-3', label: 'Monospace font', hint: 'Used for code, embeds, and command text. Leave blank for the system stack.', placeholder: 'System monospace', value: '', font: 'var(--font-mono)', fonts: [], fontState: 'unsupported' });
+</script>
+</body>
+</html>

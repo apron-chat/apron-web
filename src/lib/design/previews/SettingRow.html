@@ -1,0 +1,29 @@
+<!-- @dsCard group="Input" height=760 subtitle="Preferences' settings: a status picker with what the server answered below it; Pause notifications; a Switch with how it stands and a test button; a theme select labelled by its title; fonts stacked under an Experimental title" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SettingRow</title></head>
+<body>
+<div class="ap-stack" id="root" style="max-width:600px;gap:0"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props) { return A.render(C, root, props || {}); }
+  var statuses = [
+    { value: 'online', label: 'Online', hint: 'Automatic' },
+    { value: 'dnd', label: 'Do not disturb', hint: 'Mutes notifications' },
+    { value: 'none', label: 'None', hint: 'Show no status' }
+  ];
+  add(A.SettingRow, { title: 'Status', hint: 'Others see you online, idle or offline, as you come and go.', class: 'ap-status-pick',
+    control: A.part(A.MenuButton, { label: 'Online', choices: statuses, selected: 'online', onselect: function () {}, lead: A.partOf(A.StatusDot, function (value) { return { status: value === 'none' ? undefined : value, decorative: true }; }) }),
+    below: A.html('<div class="ap-status-pick-answer"><div class="ap-callout" role="note"><p class="ap-callout-title">This server doesn’t offer Do not disturb</p><div class="ap-callout-body"><p>Your status is Online.</p></div></div></div>') });
+  add(A.SettingRow, { title: 'Pause notifications', hint: 'Silence desktop and push notifications on all your devices for a while. Only you see it.', class: 'ap-pref-pause',
+    control: A.part(A.MenuButton, { label: 'Pause…', choices: [{ value: '1h', label: 'For 1 hour', hint: 'until 15:42' }, { value: 'resume', label: 'Until I resume' }], onselect: function () {} }) });
+  add(A.SettingRow, { title: 'Notifications', hint: 'Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can.', class: 'ap-pref-notifications',
+    children: A.html('<p class="ap-pref-note" id="note-1">On · alerts on this device, even when Apron is closed.</p><p class="ap-pref-test"><button class="ap-btn ap-btn-ghost ap-btn-sm" type="button">Send a test notification</button></p>'),
+    control: A.part(A.Switch, { checked: true, label: 'Notifications', describedby: 'note-1', onchange: function () {} }) });
+  add(A.SettingRow, { title: 'Theme', for: 'theme-1', hint: 'System follows your operating system’s light or dark preference.', class: 'ap-pref-theme-setting',
+    control: A.html('<select id="theme-1" class="ap-field ap-pref-select"><option>System</option><option>Light</option><option>Dark</option></select>') });
+  add(A.SettingRow, { title: 'Fonts', badge: 'Experimental', hint: 'Customize the interface, chat, and monospace fonts on this device.', stacked: true, class: 'ap-pref-font-setting',
+    control: A.part(A.FontField, { id: 'font-1', label: 'Interface font', hint: 'Applies to the app interface. Leave blank for the browser’s system UI font.', placeholder: 'System UI stack', value: 'Inter', font: '"Inter", var(--font-sans)', fonts: [], fontState: 'idle', onloadfonts: function () {} }) });
+</script>
+</body>
+</html>

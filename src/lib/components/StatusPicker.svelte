@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import Callout from '$lib/design/components/Callout.svelte';
 	import MenuButton from '$lib/design/components/MenuButton.svelte';
+	import SettingRow from '$lib/design/components/SettingRow.svelte';
 	import StatusDot from '$lib/design/components/StatusDot.svelte';
 	import { OPTIONAL_STATUSES, STATUS_CHOICES, chosenStatusLabel, ownStatusLabel } from '$lib/ui/user-status';
 
@@ -92,12 +93,8 @@
 	}
 </script>
 
-<div class="ap-status-pick">
-	<div class="ap-status-pick-row">
-		<div>
-			<strong>Status</strong>
-			<p class="ap-profedit-hint" data-testid="status-hint">{hint}</p>
-		</div>
+<SettingRow title="Status" {hint} hintTestid="status-hint" class="ap-status-pick" below={serverAnswer}>
+	{#snippet control()}
 		<span class="ap-status-pick-action">
 			<span class="ap-status-pick-dot"><StatusDot status={current} label={ownStatusLabel(current)} decorative /></span>
 			<MenuButton
@@ -114,7 +111,10 @@
 				{/snippet}
 			</MenuButton>
 		</span>
-	</div>
+	{/snippet}
+</SettingRow>
+<!-- What the server answered, under the row. -->
+{#snippet serverAnswer()}
 	{#if answered}
 		<div class="ap-status-pick-answer">
 			<Callout title={answered.title}>
@@ -122,15 +122,4 @@
 			</Callout>
 		</div>
 	{/if}
-</div>
-
-<style>
-	/* A row of the Preferences dialog, as Pause notifications is. */
-	.ap-status-pick { padding: var(--space-4) 0; border-bottom: 1px solid var(--line); }
-	.ap-status-pick-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
-	.ap-status-pick strong { font-size: var(--text-field); }
-	.ap-status-pick p { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
-	.ap-status-pick-action { flex: none; display: inline-flex; align-items: center; gap: var(--space-2); }
-	.ap-status-pick-dot { display: inline-grid; place-items: center; width: 12px; }
-	.ap-status-pick-answer { max-width: var(--pref-panel-w); margin-top: var(--space-3); }
-</style>
+{/snippet}

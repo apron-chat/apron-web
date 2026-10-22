@@ -6,6 +6,8 @@
 	import Callout from '$lib/design/components/Callout.svelte';
 	import CheckList from '$lib/design/components/CheckList.svelte';
 	import Dialog from '$lib/design/components/Dialog.svelte';
+	import SettingRow from '$lib/design/components/SettingRow.svelte';
+	import SettingsSections from '$lib/design/components/SettingsSections.svelte';
 	import Switch from '$lib/design/components/Switch.svelte';
 	import { pausedUntilLabel, type PausedUntil } from '$lib/ui/pause';
 	import PauseNotifications from './PauseNotifications.svelte';
@@ -48,7 +50,11 @@
 
 	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onclosed }: Props = $props();
 
-	let preferencesSection = $state<'notifications' | 'appearance'>('notifications');
+	const SECTIONS = [
+		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
+		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' }
+	];
+	let preferencesSection = $state('notifications');
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
 	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: it wakes for nothing. */
@@ -190,84 +196,66 @@
 </script>
 
 <Dialog bind:open title="Preferences" size="lg" closeLabel="Close preferences" backdropCloses flush onclose={preferencesClosed}>
-	<div class="ap-preferences-body">
-		<nav class="ap-preferences-nav" aria-label="Preference sections">
-			<button type="button" aria-current={preferencesSection === 'notifications' ? 'page' : undefined} onclick={() => (preferencesSection = 'notifications')}>Notifications</button>
-			<button type="button" aria-current={preferencesSection === 'appearance' ? 'page' : undefined} onclick={() => (preferencesSection = 'appearance')}>Appearance</button>
-		</nav>
+	<SettingsSections sections={SECTIONS} bind:current={preferencesSection}>
 		{#if preferencesSection === 'notifications'}
-			<section class="ap-preferences-content" aria-labelledby="ap-pref-notifications">
-				<h3 id="ap-pref-notifications">Notifications</h3>
-				<p class="ap-profedit-hint">Choose when Apron can interrupt you.</p>
-				<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
-				{#if status}
-					<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} onannounce={(text) => (statusAnswer = text)} disabled={status.disabled} />
-				{/if}
-				{#if pause}
-					<PauseNotifications until={pause.until} {onpause} {onresume} />
-				{/if}
-				<div class="ap-pref-scopes">
-					<CheckList
-						label="Notify me about"
-						options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
-						value={notifyScopes}
-						min={1}
-						onchange={onnotifyscopes}
-					/>
-					<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch below turns notifications off.</p>
-				</div>
-				<div class="ap-pref-setting ap-pref-notifications">
-					<div>
-						<strong>Notifications</strong>
-						<p class="ap-profedit-hint">Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can.</p>
-						<p class={['ap-pref-note', notificationsNote.tone === 'ok' && 'ap-profedit-ok', notificationsNote.tone === 'err' && 'ap-profedit-err']} id="ap-pref-notifications-note">{notificationsNote.text}</p>
-						<p class="ap-pref-test">
-							{#if notificationsNote.action}<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" onclick={onwebpush}>{notificationsNote.action}</button>{/if}
-							<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={testNotificationStatus === 'sending' || !notificationsSupported || notificationPermission === 'denied'} onclick={sendTestNotification}>{testNotificationStatus === 'sending' ? 'Sending…' : 'Send a test notification'}</button>
-						</p>
-						{#if testNote}<p class={['ap-pref-note', testNote.tone === 'ok' && 'ap-profedit-ok', testNote.tone === 'err' && 'ap-profedit-err']}>{testNote.text}</p>{/if}
-					</div>
+			<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
+			{#if status}
+				<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} onannounce={(text) => (statusAnswer = text)} disabled={status.disabled} />
+			{/if}
+			{#if pause}
+				<PauseNotifications until={pause.until} {onpause} {onresume} />
+			{/if}
+			<div class="ap-pref-scopes">
+				<CheckList
+					label="Notify me about"
+					options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
+					value={notifyScopes}
+					min={1}
+					onchange={onnotifyscopes}
+				/>
+				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch below turns notifications off.</p>
+			</div>
+			<SettingRow title="Notifications" hint="Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can." class="ap-pref-notifications">
+				<p class={['ap-pref-note', notificationsNote.tone === 'ok' && 'ap-profedit-ok', notificationsNote.tone === 'err' && 'ap-profedit-err']} id="ap-pref-notifications-note">{notificationsNote.text}</p>
+				<p class="ap-pref-test">
+					{#if notificationsNote.action}<Button size="sm" variant="ghost" label={notificationsNote.action} onclick={onwebpush} />{/if}
+					<Button size="sm" variant="ghost" label={testNotificationStatus === 'sending' ? 'Sending…' : 'Send a test notification'} disabled={testNotificationStatus === 'sending' || !notificationsSupported || notificationPermission === 'denied'} onclick={sendTestNotification} />
+				</p>
+				{#if testNote}<p class={['ap-pref-note', testNote.tone === 'ok' && 'ap-profedit-ok', testNote.tone === 'err' && 'ap-profedit-err']}>{testNote.text}</p>{/if}
+				{#snippet control()}
 					<Switch checked={notificationsEnabled} label="Notifications" locked={notificationsLocked} describedby="ap-pref-notifications-note" onchange={onnotifications} />
+				{/snippet}
+			</SettingRow>
+			{#if webPush?.homeScreen}
+				<div class="ap-pref-push-more">
+					<Callout title="Add Apron to your Home Screen to be alerted when it’s closed">
+						<ol>
+							<li>Tap Share in Safari.</li>
+							<li>Choose Add to Home Screen.</li>
+							<li>Open Apron from your Home Screen and turn notifications on there.</li>
+						</ol>
+					</Callout>
 				</div>
-				{#if webPush?.homeScreen}
-					<div class="ap-pref-push-more">
-						<Callout title="Add Apron to your Home Screen to be alerted when it’s closed">
-							<ol>
-								<li>Tap Share in Safari.</li>
-								<li>Choose Add to Home Screen.</li>
-								<li>Open Apron from your Home Screen and turn notifications on there.</li>
-							</ol>
-						</Callout>
-					</div>
-				{:else if webPush?.installable}
-					<div class="ap-pref-push-more">
-						<Callout title="Install Apron as an app">
-							<p>It opens in its own window, with its notifications.</p>
-							{#snippet action()}<Button size="sm" variant="primary" label="Install app" onclick={oninstallapp} />{/snippet}
-						</Callout>
-					</div>
-				{/if}
-			</section>
+			{:else if webPush?.installable}
+				<div class="ap-pref-push-more">
+					<Callout title="Install Apron as an app">
+						<p>It opens in its own window, with its notifications.</p>
+						{#snippet action()}<Button size="sm" variant="primary" label="Install app" onclick={oninstallapp} />{/snippet}
+					</Callout>
+				</div>
+			{/if}
 		{:else}
-			<section class="ap-preferences-content" aria-labelledby="ap-pref-appearance">
-				<h3 id="ap-pref-appearance">Appearance</h3>
-				<p class="ap-profedit-hint">Adjust the theme and reading fonts on this device.</p>
-				<div class="ap-pref-setting ap-pref-theme-setting">
-					<div>
-						<label for="ap-theme-mode">Theme</label>
-						<p class="ap-profedit-hint">System follows your operating system’s light or dark preference.</p>
-					</div>
+			<SettingRow title="Theme" for="ap-theme-mode" hint="System follows your operating system’s light or dark preference." class="ap-pref-theme-setting">
+				{#snippet control()}
 					<select id="ap-theme-mode" class="ap-field ap-pref-select" value={appearanceSettings.current.mode} onchange={(event) => setThemeMode(event.currentTarget.value)}>
 						<option value="system">System</option>
 						<option value="light">Light</option>
 						<option value="dark">Dark</option>
 					</select>
-				</div>
-				<div class="ap-pref-setting ap-pref-font-setting">
-					<div class="ap-pref-font-heading">
-						<strong>Fonts</strong> <span class="ap-pref-experimental">Experimental</span>
-						<p class="ap-profedit-hint">Customize the interface, chat, and monospace fonts on this device. Font choices are an experiment and will be replaced by a choice of themes.</p>
-					</div>
+				{/snippet}
+			</SettingRow>
+			<SettingRow title="Fonts" badge="Experimental" hint="Customize the interface, chat, and monospace fonts on this device. Font choices are an experiment and will be replaced by a choice of themes." stacked class="ap-pref-font-setting">
+				{#snippet control()}
 					<p class="ap-pref-help ap-font-access-status" id="ap-font-access-status" role="status" aria-live="polite">
 						{#if fontBrowserState === 'unsupported'}
 							Installed-font suggestions aren’t supported here; type a font name manually.
@@ -291,44 +279,12 @@
 						<FontFamilyField id="ap-mono-font" label="Monospace font" placeholder="System monospace" hint="Used for code, embeds, and command text. Leave blank for the system stack." bind:value={monoFontDraft} fonts={localFontFamilies} fontState={fontBrowserState} fallback="var(--font-mono)" onloadfonts={loadFontsFromUserAction} />
 						{#if fontError}<p class="ap-pref-note ap-profedit-err" role="alert">{fontError}</p>{/if}
 						<div class="ap-pref-font-actions">
-							<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" onclick={resetFonts}>Reset fonts</button>
-							<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit">Apply fonts</button>
+							<Button size="sm" variant="ghost" label="Reset fonts" onclick={resetFonts} />
+							<Button type="submit" size="sm" variant="primary" label="Apply fonts" />
 						</div>
 					</form>
-				</div>
-			</section>
+				{/snippet}
+			</SettingRow>
 		{/if}
-	</div>
+	</SettingsSections>
 </Dialog>
-
-<style>
-	.ap-preferences-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr); }
-	.ap-preferences-nav { padding: var(--space-4) var(--space-2); border-right: 1px solid var(--line); }
-	.ap-preferences-nav button { width: 100%; padding: var(--space-2) var(--space-3); color: var(--ink); text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
-	.ap-preferences-nav button[aria-current="page"] { color: var(--ink); background: var(--bg-300); }
-	.ap-preferences-content { padding: var(--space-6); overflow-y: auto; }
-	.ap-preferences-content h3 { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); }
-	.ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
-	.ap-pref-setting { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-	.ap-pref-setting strong { font-size: var(--text-field); }
-	.ap-pref-experimental { display: inline-block; margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-ui); font-weight: 500; vertical-align: 1px; }
-	.ap-pref-setting p { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
-	.ap-pref-theme-setting label { color: var(--ink); font-size: var(--text-field); font-weight: 600; cursor: pointer; }
-	.ap-pref-theme-setting select { flex: none; }
-	.ap-pref-font-setting { display: block; }
-	.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
-	.ap-pref-setting .ap-pref-test { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-2) 0 0 calc(-1 * var(--space-3)); }
-	.ap-pref-notifications:has(+ .ap-pref-push-more) { border-bottom: 0; }
-	.ap-pref-push-more { max-width: var(--pref-panel-w); padding-bottom: var(--space-4); }
-	.ap-pref-scopes { max-width: var(--pref-panel-w); padding: var(--space-4) 0; }
-	.ap-pref-note { margin: var(--space-3) 0; color: var(--ink-muted); font-size: var(--text-ui); line-height: 19px; }
-	.ap-pref-select { width: min(100%, 320px); }
-	.ap-pref-help { margin: var(--space-1) 0 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: 17px; }
-	.ap-font-access-status { margin: var(--space-2) 0 var(--space-1); }
-	.ap-pref-fonts { margin-top: var(--space-4); }
-	.ap-pref-font-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
-	@media (max-width: 560px) {
-		.ap-preferences-body { grid-template-columns: 130px minmax(0, 1fr); }
-		.ap-preferences-content { padding: var(--space-4); }
-	}
-</style>

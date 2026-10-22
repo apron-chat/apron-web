@@ -592,6 +592,8 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 
 /* ConnectScreen — first run, or a new backend from the rail's + */
 .ap-connect { min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); padding: var(--space-8) var(--space-4); background: var(--bg-000); }
+/* As the app's whole page: the viewport's height. */
+.ap-connect-page { height: 100dvh; }
 .ap-connect-card { display: flex; flex-direction: column; gap: var(--space-3); width: min(100%, 400px); box-sizing: border-box; padding: var(--space-6); background: var(--bg-100); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 .ap-connect-title { margin: 0; font-size: 28px; line-height: var(--leading-display); font-weight: 600; letter-spacing: -.02em; }
 .ap-connect-tag { margin: -6px 0 var(--space-1); font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink-muted); }
@@ -754,6 +756,62 @@ a.ap-embed-card:hover { background: var(--bg-300); }
 .ap-menu-lead { display: inline-grid; place-items: center; align-self: center; min-width: 10px; }
 .ap-menu-pick .ap-menu-item { position: relative; padding-left: 28px; }
 .ap-menu-item-on::before { content: ''; position: absolute; left: 11px; top: 50%; width: 8px; height: 4px; border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: translateY(-75%) rotate(-45deg); }
+
+/* SettingsSections — a settings dialog's body (Preferences): a nav of sections beside the open one, which scrolls */
+.ap-preferences-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr); }
+.ap-preferences-nav { padding: var(--space-4) var(--space-2); border-right: 1px solid var(--line); }
+.ap-preferences-nav button { width: 100%; padding: var(--space-2) var(--space-3); color: var(--ink); text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
+.ap-preferences-nav button[aria-current="page"] { color: var(--ink); background: var(--bg-300); }
+.ap-preferences-content { padding: var(--space-6); overflow-y: auto; }
+.ap-preferences-content > h3 { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); }
+.ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
+@media (max-width: 560px) {
+	.ap-preferences-body { grid-template-columns: 130px minmax(0, 1fr); }
+	.ap-preferences-content { padding: var(--space-4); }
+}
+
+/* SettingRow — a setting: its title and what it does, the control at the end; ruled above and below */
+.ap-pref-setting, .ap-pref-setting-below { padding: var(--space-4) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ap-pref-setting, .ap-pref-setting-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.ap-pref-setting-title { font-size: var(--text-field); }
+label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: pointer; }
+.ap-pref-experimental { display: inline-block; margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-ui); font-weight: 500; vertical-align: 1px; }
+/* Its lines of text, and a callout's under it (Pause, Status), set at a description's width. */
+.ap-pref-setting-text > p, .ap-pref-setting > p, .ap-pref-fonts > .ap-pref-note, .ap-pause-refused .ap-callout-body > p, .ap-status-pick-answer .ap-callout-body > p { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
+/* `stacked`: the control under the title. (With `below`, the title and control are a row of their own, above it.) */
+.ap-pref-setting-stacked { display: block; }
+/* Preferences' rows: a note on how a setting stands, and a row of buttons under it */
+.ap-pref-note { margin: var(--space-3) 0; color: var(--ink-muted); font-size: var(--text-ui); line-height: 19px; }
+.ap-pref-help { margin: var(--space-1) 0 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: 17px; }
+.ap-pref-setting .ap-pref-test { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-2) 0 0 calc(-1 * var(--space-3)); }
+.ap-pref-notifications:has(+ .ap-pref-push-more) { border-bottom: 0; }
+.ap-pref-push-more { max-width: var(--pref-panel-w); padding-bottom: var(--space-4); }
+.ap-pref-scopes { max-width: var(--pref-panel-w); padding: var(--space-4) 0; }
+.ap-pref-theme-setting select { flex: none; }
+.ap-pref-setting .ap-pref-select { width: min(100%, 320px); }
+.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
+.ap-font-access-status { margin: var(--space-2) 0 var(--space-1); }
+.ap-pref-fonts { margin-top: var(--space-4); }
+.ap-pref-font-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
+/* Pause notifications and Status follow on from the section's heading, ruled below only. */
+.ap-pref-pause, .ap-status-pick { border-top: 0; }
+.ap-pref-paused { display: flex; align-items: center; gap: var(--space-1); color: var(--warn); font-size: var(--text-ui); line-height: 19px; }
+.ap-pause-action { flex: none; }
+.ap-pause-refused { margin-top: var(--space-2); max-width: 420px; }
+.ap-status-pick-action { flex: none; display: inline-flex; align-items: center; gap: var(--space-2); }
+.ap-status-pick-dot { display: inline-grid; place-items: center; width: 12px; }
+.ap-status-pick-answer { max-width: var(--pref-panel-w); margin-top: var(--space-3); }
+
+/* FontField — a font family to type, or pick from the installed fonts it suggests */
+.ap-font-label { display: block; margin: var(--space-4) 0 var(--space-1); color: var(--ink); font-size: var(--text-ui); font-weight: 600; }
+.ap-font-hint { margin-top: var(--space-1); }
+.ap-font-combobox { position: relative; }
+.ap-font-combobox > input.ap-field { width: min(100%, 420px); }
+.ap-font-options { position: absolute; z-index: 10; top: calc(100% + 3px); left: 0; width: min(100%, 420px); max-height: 210px; overflow-y: auto; padding: var(--space-1); background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
+.ap-font-load { margin: 0 var(--space-2) var(--space-2); padding: 5px var(--space-2); color: var(--ink); background: var(--bg-300); border: 0; border-radius: var(--radius-sm); cursor: pointer; }
+.ap-font-option { display: block; width: 100%; padding: 5px var(--space-2); color: var(--ink); text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
+.ap-font-option:hover, .ap-font-option-active { background: var(--bg-300); }
+.ap-font-status { margin: 0; padding: var(--space-2); color: var(--ink-muted); font-size: var(--text-sm); line-height: 17px; }
 
 /* Mention — the @name chip inside message text */
 .ap-mention { display: inline; padding: 1px 5px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }

@@ -3,10 +3,10 @@
 	import { normalizeWebSocketUrl, type ChatClient } from '$lib/protocol/client';
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { initials } from '$lib/ui/messages';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import type { Scheme, SignOutHandler } from '$lib/ui/sign-in';
 	import type { RecentServer } from '$lib/ui/storage';
+	import DesignConnectScreen from '$lib/design/components/ConnectScreen.svelte';
 	import SignIn from './SignIn.svelte';
 
 	interface Props {
@@ -52,36 +52,13 @@
 	});
 </script>
 
-<div class="app ap-connect">
-	<SignIn
-		{client} {session} bind:serverInput bind:displayName bind:busy {passkeyUnavailable} {canCancel}
-		{initialScheme} {initialEmail} {initialError} {onconnect} {onconnected} {oncancel} {onsignout}
-	>
-		{#snippet header()}
-			<h1 class="ap-connect-title">Apron</h1>
-			<p class="ap-connect-tag">Connect to a backend</p>
-			{#if welcome}<div class="ap-welcome ap-msg-text" data-testid="server-welcome">{@html welcome}</div>{/if}
-			<label class="ap-fieldlabel">Server
-				<input class="ap-field ap-field-mono" data-testid="server-url-input" type="text" inputmode="url" bind:value={serverInput} placeholder="wss://server.apron.chat/" disabled={busy} autocomplete="url" spellcheck="false" />
-			</label>
-		{/snippet}
-	</SignIn>
-	{#if recentServers.length > 0}
-		<div class="ap-connect-recent" role="group" aria-label="Recent backends">
-			<span class="ap-fieldlabel">Recent</span>
-			{#each recentServers as recent (recent.url)}
-				<button class="ap-connect-recent-item" type="button" disabled={busy} onclick={() => (serverInput = recent.url)}>
-					<span class="ap-rail-tile ap-connect-tile" aria-hidden="true">{initials(recent.label || recent.url)}</span>
-					<span class="ap-room-text">
-						<span class="ap-room-name">{recent.label || recent.url}</span>
-						<span class="ap-room-topic">{recent.url}</span>
-					</span>
-				</button>
-			{/each}
-		</div>
-	{/if}
-</div>
-
-<style>
-	.app { height: 100dvh; min-height: 100%; }
-</style>
+<!-- The design system's ConnectScreen draws the page; the app's SignIn runs the form under its header. -->
+{#snippet welcomeHtml()}{@html welcome}{/snippet}
+<DesignConnectScreen page bind:url={serverInput} {busy} welcome={welcome ? welcomeHtml : undefined} recent={recentServers} onpickrecent={(recent) => (serverInput = recent.url)}>
+	{#snippet form(header)}
+		<SignIn
+			{client} {session} bind:serverInput bind:displayName bind:busy {passkeyUnavailable} {canCancel}
+			{initialScheme} {initialEmail} {initialError} {header} {onconnect} {onconnected} {oncancel} {onsignout}
+		/>
+	{/snippet}
+</DesignConnectScreen>

@@ -13,16 +13,10 @@
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, type PasskeyMode, type SignOutHandler, type Scheme } from '$lib/ui/sign-in';
 	import { saveDisplayName, saveServerUrl } from '$lib/ui/storage';
-	import TypingDots from './TypingDots.svelte';
+	import SignInForm from '$lib/design/components/SignInForm.svelte';
 
-	const LABELS: Record<Scheme, string> = { guest: 'Guest', webauthn: 'Passkey', email: 'Email', external: 'External', token: 'Token' };
-	/** On Passkey, the two paths: each a title and what it does. */
-	const PASSKEY_CHOICES: Array<[PasskeyMode, string, string]> = [
-		['login', 'Sign in', 'I have a passkey'],
-		['register', 'Create account', 'I’m new here']
-	];
 	/** Every scheme this client can drive, in the order shown when the server's list isn't known yet. */
-	const KNOWN_SCHEMES = Object.keys(LABELS) as Scheme[];
+	const KNOWN_SCHEMES: Scheme[] = ['guest', 'webauthn', 'email', 'external', 'token'];
 
 	interface Props {
 		client: ChatClient;
@@ -109,7 +103,7 @@
 	 */
 	let schemes = $derived.by((): Scheme[] => {
 		const offered = sameServer && session.server ? offeredSchemes(session.server) : undefined;
-		const listed = offered ? offered.filter((candidate): candidate is Scheme => Object.hasOwn(LABELS, candidate)) : KNOWN_SCHEMES;
+		const listed = offered ? offered.filter((candidate): candidate is Scheme => (KNOWN_SCHEMES as string[]).includes(candidate)) : KNOWN_SCHEMES;
 		const usable = listed.filter((candidate) => candidate !== 'webauthn' || !passkeyUnavailable);
 		return usable.length ? usable : ['guest'];
 	});
@@ -458,72 +452,14 @@
 	}
 </script>
 
-<form class="ap-connect-card" aria-label="Sign in" data-testid="sign-in" data-phase={view.phase} onsubmit={submit}>
-	{@render header?.()}
-	<div class="ap-fieldlabel">Sign in with
-		<div class="ap-seg" role="radiogroup" aria-label="Sign in with">
-			{#each schemes as candidate (candidate)}
-				<button class="ap-seg-item" class:ap-seg-on={chosen === candidate} type="button" role="radio" aria-checked={chosen === candidate} disabled={busy} onclick={() => (scheme = candidate)}>{LABELS[candidate]}</button>
-			{/each}
-		</div>
-	</div>
-	{#if chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)}
-		<div class="ap-choice" role="radiogroup" aria-label="Passkey" data-testid="passkey-choice">
-			{#each PASSKEY_CHOICES as [value, title, text] (value)}
-				<button class="ap-choice-item" class:ap-choice-on={passkeyChosen === value} type="button" role="radio" aria-checked={passkeyChosen === value} data-testid="passkey-choice-{value}" disabled={busy} onclick={() => { passkeyChosen = value; error = ''; notice = ''; }}>
-					<span class="ap-choice-title">{title}</span>
-					<span class="ap-choice-text">{text}</span>
-				</button>
-			{/each}
-		</div>
-	{/if}
-	{#if chosen === 'token'}
-		<label class="ap-fieldlabel">Token
-			<input class="ap-field ap-field-mono" data-testid="connect-token-input" type="password" bind:value={token} placeholder="apron_bot_…" disabled={busy} autocomplete="off" spellcheck="false" />
-		</label>
-		{#if inviteToken}
-			<label class="ap-fieldlabel">Display name
-				<input class="ap-field" data-testid="connect-name-input" bind:value={displayName} placeholder="How others see you" disabled={busy} maxlength="64" autocomplete="nickname" spellcheck="false" />
-			</label>
-		{/if}
-	{:else}
-		{#if chosen === 'email'}
-			<label class="ap-fieldlabel">Email
-				<input class="ap-field" data-testid="connect-email-input" type="email" bind:value={email} placeholder="you@example.com" disabled={busy || Boolean(codeSentTo)} autocomplete="email" spellcheck="false" />
-			</label>
-		{/if}
-		{#if codeSentTo}
-			<label class="ap-fieldlabel">Code
-				<!-- svelte-ignore a11y_autofocus -->
-				<input class="ap-field ap-field-mono" data-testid="connect-code-input" bind:value={code} placeholder={codeSentTo.scheme === 'email' ? 'From the email' : 'From the sign-in page'} disabled={busy} inputmode={codeSentTo.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" spellcheck="false" autofocus />
-			</label>
-		{/if}
-		{#if !passkeyLogin}
-			<label class="ap-fieldlabel">Display name
-				<input class="ap-field" data-testid="connect-name-input" bind:value={displayName} placeholder={chosen === 'webauthn' ? 'Names your account and its passkey' : 'How others see you'} disabled={busy} maxlength="64" autocomplete="nickname" spellcheck="false" />
-			</label>
-		{/if}
-	{/if}
-	{#if codeSentTo?.scheme === 'email'}
-		<p class="ap-profedit-hint" role="status">If {codeSentTo.email} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
-		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}>Use another address, or send a new code</button>
-	{:else if codeSentTo?.page}
-		<!-- The server won't send the viewer back here (§4.11.5): its page shows a code to type here instead. -->
-		<p class="ap-profedit-hint" role="status">
-			<a href={codeSentTo.page} target="_blank" rel="noopener noreferrer" data-testid="external-page-link">Open the sign-in page</a>, sign in there, then enter the code it shows you.
-		</p>
-		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}>Start again</button>
-	{:else}
-		<p class="ap-profedit-hint" role={view.phase === 'ready' ? 'status' : undefined}>{view.phase === 'ready' && notice ? notice : hint}</p>
-	{/if}
-	{#if errorText}<p class="ap-profedit-note ap-profedit-err" role="alert">{errorText}</p>{/if}
-	<div class="ap-connect-actions">
-		{#if busy}<TypingDots />{/if}
-		{#if joinedAsGuest && view.phase === 'ready'}
-			<button class="ap-btn ap-btn-ghost" type="button" onclick={finish}>Stay a guest</button>
-		{:else if canCancel}
-			<button class="ap-btn ap-btn-ghost" type="button" onclick={() => { client.cancelPasskeyPrompt(); oncancel(); }}>Cancel</button>
-		{/if}
-		<button class="ap-btn ap-btn-primary" type="submit" data-testid={view.primary.action} disabled={busy}>{view.primary.label}</button>
-	</div>
-</form>
+<!-- The design system's SignInForm draws the panel; this runs it. -->
+<SignInForm
+	aria-label="Sign in" data-testid="sign-in" data-phase={view.phase} onsubmit={submit}
+	{header} {schemes} scheme={chosen} onscheme={(candidate) => (scheme = candidate as Scheme)}
+	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }}
+	bind:token bind:email bind:code bind:name={displayName} askName={chosen === 'token' ? inviteToken : !passkeyLogin}
+	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}
+	hint={view.phase === 'ready' && notice ? notice : hint} hintStatus={view.phase === 'ready'} error={errorText} {busy}
+	submit={view.primary.label} submitTestid={view.primary.action}
+	secondary={joinedAsGuest && view.phase === 'ready' ? { label: 'Stay a guest', onclick: finish } : canCancel ? { label: 'Cancel', onclick: () => { client.cancelPasskeyPrompt(); oncancel(); } } : undefined}
+/>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { SignInLink } from '$lib/ui/sign-in-link';
 	import { signInLinkPrompt } from '$lib/ui/sign-in-link';
+	import Button from '$lib/design/components/Button.svelte';
 	import Dialog from '$lib/design/components/Dialog.svelte';
 
 	interface Props {
@@ -34,12 +35,12 @@
 <Dialog open title={prompt.title} closeLabel="Cancel" testid="sign-in-link-dialog" onclose={oncancel} onsubmit={(event) => { event.preventDefault(); if (prompt.adds) onadd(); else onconfirm(); }}>
 	{#each prompt.lines as line (line)}<p>{line}</p>{/each}
 	{#snippet footer()}
-		<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" onclick={oncancel}>Cancel</button>
+		<Button size="sm" variant="ghost" label="Cancel" onclick={oncancel} />
 		{#if prompt.adds}
-			<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" onclick={onconfirm} data-testid="sign-in-link-confirm">Sign in</button>
-			<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" data-testid="sign-in-link-add">Add it</button>
+			<Button size="sm" variant="ghost" label="Sign in" onclick={onconfirm} data-testid="sign-in-link-confirm" />
+			<Button type="submit" size="sm" variant="primary" label="Add it" data-testid="sign-in-link-add" />
 		{:else}
-			<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" data-testid="sign-in-link-confirm">Sign in</button>
+			<Button type="submit" size="sm" variant="primary" label="Sign in" data-testid="sign-in-link-confirm" />
 		{/if}
 	{/snippet}
 </Dialog>

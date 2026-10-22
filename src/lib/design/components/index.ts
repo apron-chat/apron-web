@@ -49,4 +49,8 @@ export { default as Dialog } from './Dialog.svelte';
 export { default as Switch } from './Switch.svelte';
 export { default as StatusDot } from './StatusDot.svelte';
 export { default as SystemLine } from './SystemLine.svelte';
+export { default as SignInForm } from './SignInForm.svelte';
+export { default as SettingsSections } from './SettingsSections.svelte';
+export { default as SettingRow } from './SettingRow.svelte';
+export { default as FontField } from './FontField.svelte';
 export type * from './types';

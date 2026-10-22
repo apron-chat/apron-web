@@ -4,6 +4,7 @@
 	import Button from '$lib/design/components/Button.svelte';
 	import Callout from '$lib/design/components/Callout.svelte';
 	import MenuButton from '$lib/design/components/MenuButton.svelte';
+	import SettingRow from '$lib/design/components/SettingRow.svelte';
 	import { pauseChoices, pausedUntilLabel, type PausedUntil } from '$lib/ui/pause';
 
 	interface Props {
@@ -21,7 +22,7 @@
 	}
 	let { until, onpause, onresume }: Props = $props();
 
-	let row = $state<HTMLElement | undefined>();
+	let actionBox = $state<HTMLElement | undefined>();
 	/** The Pause menu's choices, with when each would end, worked out as it opens. */
 	let menuOpen = $state(false);
 	let choices = $derived.by(() => {
@@ -37,7 +38,7 @@
 		const now = until !== undefined ? 'pause' : 'resume';
 		if (asked !== now) return;
 		asked = undefined;
-		void tick().then(() => row?.querySelector<HTMLButtonElement>('.ap-pause-action button')?.focus());
+		void tick().then(() => actionBox?.querySelector<HTMLButtonElement>('button')?.focus());
 	});
 
 	/** The server refused the last pause or resume (§4.5: nothing changed): why, until the next ask. */
@@ -65,36 +66,24 @@
 	}
 </script>
 
-<div class="ap-pref-setting ap-pref-pause" bind:this={row}>
-	<div>
-		<strong>Pause notifications</strong>
-		{#if until !== undefined}
-			<p class="ap-pref-note ap-pref-paused"><BellOff size={14} strokeWidth={1.8} aria-hidden="true" /> Paused {pausedUntilLabel(until)} · no desktop or push notifications on your devices.</p>
-		{:else}
-			<p class="ap-profedit-hint">Silence desktop and push notifications on all your devices for a while. Only you see it.</p>
-		{/if}
-		{#if refused}
-			<div class="ap-pause-refused" role="alert">
-				<Callout title={refused.action === 'pause' ? 'Notifications weren’t paused' : 'Notifications are still paused'}>
-					<p>{refused.message}</p>
-				</Callout>
-			</div>
-		{/if}
-	</div>
-	<div class="ap-pause-action">
-		{#if until !== undefined}
-			<Button size="sm" variant="primary" label="Resume" onclick={resume} />
-		{:else}
-			<MenuButton label="Pause…" bind:open={menuOpen} {choices} onselect={pause} />
-		{/if}
-	</div>
-</div>
-
-<style>
-	.ap-pref-pause { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: 1px solid var(--line); }
-	.ap-pref-pause strong { font-size: var(--text-field); }
-	.ap-pref-pause p { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
-	.ap-pref-paused { display: flex; align-items: center; gap: var(--space-1); color: var(--warn); font-size: var(--text-ui); line-height: 19px; }
-	.ap-pause-action { flex: none; }
-	.ap-pause-refused { margin-top: var(--space-2); max-width: 420px; }
-</style>
+<SettingRow title="Pause notifications" hint={until === undefined ? 'Silence desktop and push notifications on all your devices for a while. Only you see it.' : undefined} class="ap-pref-pause">
+	{#if until !== undefined}
+		<p class="ap-pref-note ap-pref-paused"><BellOff size={14} strokeWidth={1.8} aria-hidden="true" /> Paused {pausedUntilLabel(until)} · no desktop or push notifications on your devices.</p>
+	{/if}
+	{#if refused}
+		<div class="ap-pause-refused" role="alert">
+			<Callout title={refused.action === 'pause' ? 'Notifications weren’t paused' : 'Notifications are still paused'}>
+				<p>{refused.message}</p>
+			</Callout>
+		</div>
+	{/if}
+	{#snippet control()}
+		<div class="ap-pause-action" bind:this={actionBox}>
+			{#if until !== undefined}
+				<Button size="sm" variant="primary" label="Resume" onclick={resume} />
+			{:else}
+				<MenuButton label="Pause…" bind:open={menuOpen} {choices} onselect={pause} />
+			{/if}
+		</div>
+	{/snippet}
+</SettingRow>

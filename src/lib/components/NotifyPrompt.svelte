@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Bell from '@lucide/svelte/icons/bell';
+	import Button from '$lib/design/components/Button.svelte';
 	import Nudge from '$lib/design/components/Nudge.svelte';
 
 	interface Props {
@@ -32,8 +33,8 @@
 	<Nudge title="Get notified when you’re mentioned?" {detail} note={pointer ? 'You can change this any time in Preferences.' : undefined} {pointer} testid="notify-prompt">
 		{#snippet icon()}<Bell size={16} strokeWidth={2} />{/snippet}
 		{#snippet actions()}
-			<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" onclick={ondecline}>Not now</button>
-			<button class="ap-btn ap-btn-primary ap-btn-sm" type="button" onclick={onaccept}>Turn on</button>
+			<Button size="sm" variant="ghost" label="Not now" onclick={ondecline} />
+			<Button size="sm" variant="primary" label="Turn on" onclick={onaccept} />
 		{/snippet}
 	</Nudge>
 </div>
