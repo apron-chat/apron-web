@@ -17,7 +17,7 @@
 	import { signOutThen, type SignOutHandler } from '$lib/ui/sign-in';
 	import Avatar from './Avatar.svelte';
 	import PreferencesDialog from './PreferencesDialog.svelte';
-	import TypingDots from './TypingDots.svelte';
+	import TypingDots from '$lib/design/components/TypingDots.svelte';
 
 	type Status = 'idle' | 'saving' | 'altered' | 'declined';
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import X from '@lucide/svelte/icons/x';
 	import type { FeedbackState } from '$lib/ui/feedback.svelte';
-	import StatusBanner from './StatusBanner.svelte';
+	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
 
 	/**
 	 * The page's toasts: what a request is doing or how it failed (`feedback`),

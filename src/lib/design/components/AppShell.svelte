@@ -76,7 +76,7 @@
 		sideToggle && 'ap-shell-side-toggle', membersToggle && 'ap-shell-members-toggle', className
 	]}
 	data-pane={pane}
-	style:--sidebar-w={sideCollapsed ? '0px' : px(sideWidth)}
+	style:--side-col={sideCollapsed ? '0px' : px(sideWidth)}
 	style:--rooms-w={px(sideWidth)}
 	style:--member-list-w={px(membersWidth)}
 	style:--member-list-track={membersTrack}

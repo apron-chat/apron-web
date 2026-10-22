@@ -459,8 +459,8 @@ a.ap-embed-card:hover { background: var(--hover); }
 
 /* AppShell — rail | rooms | main pane | member list. A thread opens in the main pane; there is no thread pane.
    --corner: how far a header's content keeps clear of a PanelToggle in the window's corner. */
-.ap-shell { --corner: calc(var(--space-3) + var(--control-md) + var(--space-2)); position: relative; display: grid; grid-template-columns: var(--rail-w) var(--sidebar-w) minmax(0, 1fr); height: 100%; min-height: 0; overflow: clip; background: var(--bg-100); }
-.ap-shell-norail { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+.ap-shell { --corner: calc(var(--space-3) + var(--control-md) + var(--space-2)); position: relative; display: grid; grid-template-columns: var(--rail-w) var(--side-col, var(--sidebar-w)) minmax(0, 1fr); height: 100%; min-height: 0; overflow: clip; background: var(--bg-100); }
+.ap-shell-norail { grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr); }
 .ap-shell-side { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--bg-000); border-right: 1px solid var(--line); }
 .ap-shell-sidehead { display: flex; align-items: center; height: var(--header-h); padding: 0 var(--space-4); border-bottom: 1px solid var(--line); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; box-sizing: border-box; }
 .ap-shell-sidebody { flex: 1; overflow: auto; padding: var(--space-3) var(--space-2); }
@@ -504,8 +504,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-shell-toggle-left { left: var(--space-3); }
 .ap-shell-toggle-right { right: var(--space-3); }
 /* PanelHandle: placed by its panel's column (--sidebar-w, --member-list-track), sliding with it, so the border goes with the list as it opens and shuts. */
-.ap-shell-handle { position: absolute; top: 0; bottom: 0; left: max(0px, calc(var(--sidebar-w) - 4px)); width: 9px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; z-index: var(--z-handle); cursor: col-resize; touch-action: none; }
-.ap-shell-handle::after { content: ''; position: absolute; top: 0; bottom: 0; left: min(4px, var(--sidebar-w)); width: 1px; background: var(--line); }
+.ap-shell-handle { position: absolute; top: 0; bottom: 0; left: max(0px, calc(var(--side-col, var(--sidebar-w)) - 4px)); width: 9px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; z-index: var(--z-handle); cursor: col-resize; touch-action: none; }
+.ap-shell-handle::after { content: ''; position: absolute; top: 0; bottom: 0; left: min(4px, var(--side-col, var(--sidebar-w))); width: 1px; background: var(--line); }
 .ap-shell-handle:hover::after, .ap-shell-handle:focus-visible::after, .ap-shell-handle-resizing::after { left: 3px; width: 3px; background: var(--denim); }
 .ap-shell-handle:focus-visible { outline: none; }
 .ap-shell-handle-shut { cursor: e-resize; }
@@ -521,8 +521,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
  * the list's right edge): its left edge 8px in, or further right on a list wider than it, to reach the gear. While the
  * rooms list is shut or on a phone, the same offer shows in the main pane above the composer (ap-shell-nudge-inline).
  */
-.ap-shell-nudge { --notify-left: max(var(--space-2), calc(var(--sidebar-w) - var(--nudge-w) - var(--space-2))); position: absolute; z-index: var(--z-nudge); left: var(--notify-left); bottom: calc(var(--header-h) + 10px); width: var(--nudge-w); max-width: calc(100vw - var(--space-4)); display: none; }
-.ap-shell-nudge .ap-nudge { --ap-nudge-tip: calc(var(--sidebar-w) - 30px - var(--notify-left)); }
+.ap-shell-nudge { --notify-left: max(var(--space-2), calc(var(--side-col, var(--sidebar-w)) - var(--nudge-w) - var(--space-2))); position: absolute; z-index: var(--z-nudge); left: var(--notify-left); bottom: calc(var(--header-h) + 10px); width: var(--nudge-w); max-width: calc(100vw - var(--space-4)); display: none; }
+.ap-shell-nudge .ap-nudge { --ap-nudge-tip: calc(var(--side-col, var(--sidebar-w)) - 30px - var(--notify-left)); }
 .ap-shell-nudge-inline { padding: 0 var(--space-4); }
 .ap-shell-nudge-inline:not(:empty) { padding-top: var(--space-2); }
 .ap-shell-nudge-inline .ap-nudge { width: auto; }
@@ -537,8 +537,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-typing.ap-shell-typing { min-height: 20px; padding-top: var(--space-1); }
 /* Wide screens give the member list a column of its own, there while it's shut too, at 0, so it can slide. */
 @media (min-width: 960px) {
-	.ap-shell-members-wide { grid-template-columns: var(--rail-w) var(--sidebar-w) minmax(0, 1fr) var(--member-list-track); }
-	.ap-shell-norail.ap-shell-members-wide { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--member-list-track); }
+	.ap-shell-members-wide { grid-template-columns: var(--rail-w) var(--side-col, var(--sidebar-w)) minmax(0, 1fr) var(--member-list-track); }
+	.ap-shell-norail.ap-shell-members-wide { grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr) var(--member-list-track); }
 }
 /* Narrower, it overlays the conversation, sliding in from the right edge as the column does on wide screens. */
 @media (max-width: 959px) {

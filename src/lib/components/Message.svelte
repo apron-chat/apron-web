@@ -16,7 +16,7 @@
 	import ReactionBar from './ReactionBar.svelte';
 	import { systemScope } from '$lib/protocol/types';
 	import Embed from './embeds/Embed.svelte';
-	import EmbedRemove from './embeds/EmbedRemove.svelte';
+	import EmbedRemove from '$lib/design/components/EmbedRemove.svelte';
 	import MessageEditor from './MessageEditor.svelte';
 
 	const LONG_PRESS_MS = 500;

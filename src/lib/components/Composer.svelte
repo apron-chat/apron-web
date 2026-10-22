@@ -167,13 +167,6 @@
 		return scored.sort((a, b) => a.rank - b.rank).map((entry) => entry.person).slice(0, MENTION_MATCHES_MAX);
 	}
 
-	/** Splits a name around the letters being typed, which read in accent. */
-	function mark(text: string): { before: string; hit: string; after: string } {
-		const typed = query ?? '';
-		const at = typed ? text.toLowerCase().indexOf(typed.toLowerCase()) : -1;
-		if (at < 0) return { before: text, hit: '', after: '' };
-		return { before: text.slice(0, at), hit: text.slice(at, at + typed.length), after: text.slice(at + typed.length) };
-	}
 
 	const isUser = (id: string): boolean => directory.resolve(id)?.kind === 'user';
 
@@ -354,6 +347,11 @@
 	}
 
 	/** Chips finished mentions; `final` when sending, so one at the very end counts too. */
+	/** A named handler, not an arrow in fieldProps: the field keeps one listener as fieldProps is rebuilt while typing. */
+	function compositionEnd(): void {
+		collapse(false);
+	}
+
 	function collapse(final: boolean): void {
 		if (!field) return;
 		const { parts, caret } = readDraft(field);
@@ -643,7 +641,7 @@
 		'aria-activedescendant': completion?.count ? `${pickerId}-${activeIndex}` : undefined,
 		onbeforeinput: beforeinput,
 		oninput: input,
-		oncompositionend: () => collapse(false),
+		oncompositionend: compositionEnd,
 		onkeydown: keydown,
 		onkeyup: refreshQuery,
 		onclick: refreshQuery,

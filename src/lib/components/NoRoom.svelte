@@ -3,7 +3,7 @@
 	import RoomLoading from '$lib/design/components/RoomLoading.svelte';
 	import { statusLabel } from '$lib/ui/connection';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import StatusBanner from './StatusBanner.svelte';
+	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
 
 	/** The main pane with no room open: placeholders while the app comes up, then a pointer to the rooms list. */
 	interface Props {

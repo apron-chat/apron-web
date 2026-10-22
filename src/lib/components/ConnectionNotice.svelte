@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { statusLabel } from '$lib/ui/connection';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import StatusBanner from './StatusBanner.svelte';
+	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
 
 	/**
 	 * The connection's state under an open room's header: a banner while it's

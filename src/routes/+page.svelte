@@ -25,7 +25,7 @@
 	import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
 	import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
-	import StatusBanner from '$lib/components/StatusBanner.svelte';
+	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
 	import ConnectionNotice from '$lib/components/ConnectionNotice.svelte';
 	import NoRoom from '$lib/components/NoRoom.svelte';
 	import Toasts from '$lib/components/Toasts.svelte';
@@ -33,7 +33,7 @@
 	import ThreadSummary from '$lib/components/ThreadSummary.svelte';
 	import RoomEditor from '$lib/components/RoomEditor.svelte';
 	import NewThreadDialog from '$lib/components/NewThreadDialog.svelte';
-	import TypingDots from '$lib/components/TypingDots.svelte';
+	import TypingDots from '$lib/design/components/TypingDots.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import { composerAction } from '$lib/ui/commands';
@@ -1814,7 +1814,7 @@
 		});
 	}
 
-	/** How long a side panel takes to slide open or shut: --duration-slide in tokens.css (the page's --slide-time). */
+	/** How long a side panel takes to slide open or shut: --duration-slide in tokens.css. */
 	const SLIDE_MS = 240;
 	let heldTimeline: { scroller: HTMLElement; width: number; release: () => void } | undefined;
 
@@ -2598,8 +2598,6 @@
 	{/snippet}
 	{#snippet members()}
 		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
-		<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} onmention={(userId) => composer?.mention(userId)} />
-		<ReactorsPopover />
 	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
@@ -2614,6 +2612,9 @@
 				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
 		{/key}
 	{/if}
+	<!-- Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut. -->
+	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} onmention={(userId) => composer?.mention(userId)} />
+	<ReactorsPopover />
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
 	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
 </AppShell>
