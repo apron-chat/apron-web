@@ -66,11 +66,11 @@
 <Dialog bind:open size="md" title={heading} {subtitle} locked={saving} testid="room-form" {onclose}
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled) onsubmit?.(); }}>
 	<label class="ap-fieldlabel" for="{uid}-name">Title
-		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true"
+		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
 			placeholder={creating ? (thread ? 'What it’s about' : 'What to call it') : ''} />
 	</label>
 	<label class="ap-fieldlabel" for="{uid}-summary"><span class="ap-fieldlabel-row"><span>{thread ? 'Summary' : 'Description'}</span><span class="ap-fieldlabel-hint">Markdown{creating ? ', optional' : ''}</span></span>
-		<textarea id="{uid}-summary" class="ap-field ap-field-multi" aria-label={thread ? 'Thread summary' : 'Room description'} rows={creating && !summary ? 4 : 8} bind:value={summary} disabled={saving} spellcheck="true"
+		<textarea id="{uid}-summary" class="ap-field ap-field-multi" aria-label={thread ? 'Thread summary' : 'Room description'} rows={creating && !summary ? 4 : 8} bind:value={summary} disabled={saving} spellcheck="true" dir="auto"
 			placeholder={thread ? 'What this thread is about, or what it settled. Shows on its card and at the top of the thread.' : 'What this room is for.'}></textarea>
 	</label>
 	{#if creating && !thread}

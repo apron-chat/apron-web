@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Button from './Button.svelte';
 	import TypingDots from './TypingDots.svelte';
+	import { roomName } from './util';
 
 	interface Props {
 		count: number;
@@ -54,7 +55,7 @@
 								<li><button type="button" class="ap-menu-item" role="option" aria-selected="false" onclick={() => move(room)}>Move to room</button></li>
 							{/if}
 							{#each threads as t (t.thread)}
-								<li><button type="button" class="ap-menu-item" role="option" aria-selected="false" data-thread={t.thread} onclick={() => move(t.thread)}>{t.name || t.thread}</button></li>
+								<li><button type="button" class="ap-menu-item" role="option" aria-selected="false" data-thread={t.thread} onclick={() => move(t.thread)}><bdi>{roomName(t.name, t.thread)}</bdi></button></li>
 							{/each}
 						</ul>
 					{/if}

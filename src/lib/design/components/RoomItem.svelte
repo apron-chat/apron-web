@@ -6,6 +6,7 @@
 	import type { HTMLButtonAttributes } from 'svelte/elements';
 	import ThreadLines from './ThreadLines.svelte';
 	import UnreadCount from './UnreadCount.svelte';
+	import { roomName } from './util';
 
 	/** Other attributes (`data-*`, `title`) go on the row's button. */
 	interface Props extends HTMLButtonAttributes {
@@ -58,7 +59,7 @@
 		onnewthread?: () => void;
 	}
 	let { room, name, topic, private: isPrivate, unread, mentions, active, nested, unjoined, summary, latest, ago, agoIso, agoTitle, count, loading, testid, countTestid, onselect, onleave, onjoin, onnewthread, ...rest }: Props = $props();
-	const shown = $derived(name || room);
+	const shown = $derived(roomName(name, room));
 	const outside = $derived(unjoined ?? Boolean(onjoin));
 	/** A joined thread: tinted with an unread mention, stepped back with nothing new. */
 	const mention = $derived(nested && !active && !outside && Boolean(mentions));

@@ -15,6 +15,7 @@
 	import Button from './Button.svelte';
 	import Embed from './Embed.svelte';
 	import type { AttachmentFile, EmbedProps } from './types';
+	import { roomName } from './util';
 
 	interface Props {
 		room?: string;
@@ -88,7 +89,7 @@
 		files, onremovefile, onrenamefile, attachments, previews, preview, onremovepreview, picker
 	}: Props = $props();
 
-	const ph = $derived(placeholder || (thread ? `Reply in ${thread.name || thread.thread}` : `Message ${room || ''}`));
+	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread)}` : `Message ${room || ''}`));
 	/* "//" posts a message starting with "/" */
 	const cmd = $derived(command ?? (!!canCommand && value.startsWith('/') && !value.startsWith('//')));
 	const sendable = $derived(canSend ?? !!value.trim());
@@ -108,7 +109,7 @@
 
 {#if reply}
 	<div class="ap-composer-reply" data-testid="reply-draft" role="status">
-		<span class="ap-composer-reply-text">Replying to {#if reply.name}{reply.name}: {#if replyText}{@render replyText()}{:else}{reply.text}{/if}{:else}{reply.text}{/if}</span>
+		<span class="ap-composer-reply-text">Replying to {#if reply.name}<bdi>{reply.name}</bdi>: <bdi>{#if replyText}{@render replyText()}{:else}{reply.text}{/if}</bdi>{:else}<bdi>{reply.text}</bdi>{/if}</span>
 		<Button variant="ghost" size="sm" aria-label="Cancel reply" onclick={oncancelreply} label="Cancel reply" />
 	</div>
 {/if}
@@ -161,11 +162,12 @@
 					tabindex={disabled ? -1 : 0}
 					contenteditable={disabled ? 'false' : 'plaintext-only'}
 					spellcheck="true"
+					dir="auto"
 					{...fieldProps}
 					bind:this={field}
 				></div>
 			{:else}
-				<textarea class="ap-composer-field" rows="1" placeholder={ph} bind:value={() => value, (v) => { value = v; oninput?.(v); }} {disabled} aria-label={cmd ? 'Command' : 'Message'} {...fieldProps} bind:this={field}></textarea>
+				<textarea class="ap-composer-field" rows="1" dir="auto" placeholder={ph} bind:value={() => value, (v) => { value = v; oninput?.(v); }} {disabled} aria-label={cmd ? 'Command' : 'Message'} {...fieldProps} bind:this={field}></textarea>
 			{/if}
 		{/if}
 		{#if onemoji}

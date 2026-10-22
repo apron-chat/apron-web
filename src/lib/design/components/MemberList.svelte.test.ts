@@ -77,4 +77,11 @@ describe('MemberList', () => {
 		expect(document.querySelector('.ap-memberlist-addtoggle')).toBeNull();
 		expect(document.querySelector('form')).toBeNull();
 	});
+
+	it('isolates each name, so one written right to left can’t carry the handle or (you) across it', () => {
+		render({ sections: [{ key: 'members', label: 'Members', people: [{ user_id: 'mo', name: 'محمد', you: true }] }] });
+		const name = document.querySelector('.ap-member-name')!;
+		expect(name.querySelector('bdi')?.textContent).toBe('محمد');
+		expect(name.textContent).toBe('محمد(you)');
+	});
 });

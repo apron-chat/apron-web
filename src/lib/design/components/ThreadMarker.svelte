@@ -6,7 +6,7 @@
 	import ThreadLines from './ThreadLines.svelte';
 	import UnreadCount from './UnreadCount.svelte';
 	import type { Sender } from './types';
-	import { times, uid } from './util';
+	import { roomName, times, uid } from './util';
 
 	/** Other attributes (`data-*`) go on the card. */
 	interface Props extends HTMLAttributes<HTMLElement> {
@@ -39,7 +39,7 @@
 		onopen?: () => void;
 	}
 	let { thread, name, unread = 0, mentions = 0, private: isPrivate, summary, participants, faces: facesSnippet, lastReply, lastReplyAt, latest, moved, row, testid, onopen, ...rest }: Props = $props();
-	const shown = $derived(name || thread);
+	const shown = $derived(roomName(name, thread));
 	const faces = $derived((participants || []).slice(0, 4));
 	const last = $derived(latest ? { sender: typeof latest.sender === 'string' ? latest.sender : latest.sender?.name || uid(latest.sender) || '', text: latest.text } : undefined);
 	const at = $derived(times(lastReplyAt));

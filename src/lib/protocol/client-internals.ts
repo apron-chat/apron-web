@@ -256,9 +256,12 @@ export function canonicalJson(value: JsonValue): string {
 /** Shared by rooms without notices, so their snapshots compare equal. */
 export const NO_NOTICES: readonly Notice[] = Object.freeze([]);
 
-/** A room's display title: its record's `title`, else its `room_id` (§3.4). */
+/**
+ * A room's or thread's display title: its record's `title`, else its `room_id` (§3.4). A title of only spaces counts
+ * as none, so nothing is named by a blank; the design system's `roomName` applies the same rule to names it is given.
+ */
 export function roomTitle(roomId: string, record: RoomRecord | undefined): string {
-	if (typeof record?.title === 'string' && record.title) return record.title;
+	if (typeof record?.title === 'string' && record.title.trim()) return record.title;
 	if (roomId === DEFAULT_ROOM_ID) return 'Default room';
 	return roomId;
 }

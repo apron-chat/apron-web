@@ -95,4 +95,14 @@ describe('Composer', () => {
 		expect(emoji.classList.contains('ap-iconbtn-on')).toBe(true);
 		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(true);
 	});
+
+	it('takes the direction of what is typed, in either field, and names a blank-titled thread by its room_id', () => {
+		render({ thread: { thread: 't1', name: '' } });
+		const field = document.querySelector('.ap-composer-field')!;
+		expect(field.getAttribute('dir')).toBe('auto');
+		expect(field.getAttribute('placeholder')).toBe('Reply in t1');
+		unmount(instance!);
+		render({ editable: true, empty: true });
+		expect(document.querySelector('.ap-composer-editable')?.getAttribute('dir')).toBe('auto');
+	});
 });

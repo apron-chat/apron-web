@@ -124,7 +124,7 @@
 {/snippet}
 {#snippet senderName()}
 	{#if nameSnippet}{@render nameSnippet()}
-	{:else}<span class="ap-msg-sender">{name}</span>{#if showHandle}<span class="ap-msg-handle">@{sid}</span>{/if}{/if}
+	{:else}<span class="ap-msg-sender" title={name}>{name}</span>{#if showHandle}<span class="ap-msg-handle">@{sid}</span>{/if}{/if}
 {/snippet}
 {#snippet actionBar()}
 	{#if actions && !sel}<div class="ap-msg-actions">{@render actions()}</div>{/if}

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { roomName } from './util';
+
 	/** A mention chip (Appendix A.3). Whether a message mentions someone is `body.mentions` (§3.5), not the chip. Without `onopen` it only reads, such as inside a reply quote, which is itself a control. */
 	interface Props {
 		user_id?: string;
@@ -13,7 +15,7 @@
 	}
 	let { user_id, name, me, roomId, title, hash, onopen, unknown }: Props = $props();
 	const id = $derived(roomId || user_id);
-	const shown = $derived(name || title || id);
+	const shown = $derived(roomId ? roomName(name || title, roomId) : name || id);
 	const roomClass = $derived(['ap-mention', 'ap-mention-room', hash && 'ap-mention-hash-room']);
 	// A room's chip that only reads carries no data-room-id: a click delegated on its ID would open the room.
 </script>

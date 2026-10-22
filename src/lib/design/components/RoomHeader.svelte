@@ -7,7 +7,7 @@
 	import Users from '@lucide/svelte/icons/users';
 	import type { Snippet } from 'svelte';
 	import MenuButton from './MenuButton.svelte';
-	import { count99 } from './util';
+	import { count99, roomName } from './util';
 
 	interface Props {
 		room: string;
@@ -83,15 +83,15 @@
 		{#if thread}
 			<!-- The spaces around the separator are the title's, in its weight, and the separator's own collapse into them. -->
 			<h1 class="ap-roomhead-name">
-				<button type="button" class="ap-roomhead-crumb" aria-label="Back to room" onclick={onroom}>{name || room}</button>
+				<button type="button" class="ap-roomhead-crumb" aria-label="Back to room" onclick={onroom}>{roomName(name, room)}</button>
 				<span class="ap-roomhead-sep" aria-hidden="true"> › </span>
-				{threadName || thread}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}
+				<bdi>{roomName(threadName, thread)}</bdi>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}
 			</h1>
 		{:else}
-			<h1 class="ap-roomhead-name">{name || room}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</h1>
+			<h1 class="ap-roomhead-name">{roomName(name, room)}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</h1>
 		{/if}
 		{#if typing.length}
-			<p class="ap-roomhead-sub ap-roomhead-typing">{typing.length === 1 ? `${typing[0]} is typing…` : `${typing.length} people are typing…`}</p>
+			<p class="ap-roomhead-sub ap-roomhead-typing">{#if typing.length === 1}<bdi>{typing[0]}</bdi> is typing…{:else}{typing.length} people are typing…{/if}</p>
 		{:else if replies}
 			<p class="ap-roomhead-sub">{replies.count}{replies.more ? '+' : ''} {replies.count === 1 && !replies.more ? 'reply' : 'replies'}</p>
 		{:else if topic}

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, DEFAULT_ROOM_ID, IDLE_RETRY_MS, type ClientSnapshot } from './client';
 import { FakeSocket, settle } from './fake-socket';
-import { REQUEST_TIMEOUT_MS } from './client-internals';
+import { REQUEST_TIMEOUT_MS, roomTitle } from './client-internals';
 
 /** Operations whose outcome a test does not await still settle when the client stops. */
 function quiet(value: { promise: Promise<unknown> } | undefined): void {
@@ -1143,5 +1143,15 @@ describe('room records and membership', () => {
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'opaque', log_id: '70', parent_room_id: 'general', title: 'T' }] } });
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'opaque', log_id: '75', parent_room_id: 'general', title: 'T', description: 'Now summarized' }] } });
 		expect(room('opaque')).toMatchObject({ firstRecordLogId: '70', description: 'Now summarized' });
+	});
+});
+
+describe('roomTitle', () => {
+	it('titles a room or thread by its record, else its room_id (§3.4), never by a blank', () => {
+		expect(roomTitle('t1', { room_id: 't1', title: 'Deploy' })).toBe('Deploy');
+		expect(roomTitle('t1', { room_id: 't1' })).toBe('t1');
+		expect(roomTitle('t1', { room_id: 't1', title: '' })).toBe('t1');
+		expect(roomTitle('t1', { room_id: 't1', title: '   ' })).toBe('t1');
+		expect(roomTitle(DEFAULT_ROOM_ID, undefined)).toBe('Default room');
 	});
 });

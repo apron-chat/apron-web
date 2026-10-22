@@ -71,4 +71,10 @@ describe('RoomItem', () => {
 		add.click();
 		expect(onnewthread).toHaveBeenCalledOnce();
 	});
+
+	it('names a thread with a blank title by its room_id, as every place that names one does', () => {
+		expect(render({ nested: true, name: '   ' }).querySelector('.ap-room-name')?.textContent).toBe('deploy');
+		unmount(instance!);
+		expect(render({ name: undefined }).querySelector('.ap-room-name')?.textContent).toBe('deploy');
+	});
 });

@@ -46,7 +46,8 @@
 		{#if avatar}{@render avatar()}{:else}<Avatar name={you?.name || uid(you) || '?'} src={you?.avatar} {status} {statusLabel} />{/if}
 		<span class="ap-profile-text">
 			<span class="ap-profile-name">{name}</span>
-			<span class="ap-profile-sub">{backend ? `on ${backend}` : uid(you)}{#if note} · {note}{/if}</span>
+			<!-- The separator is an expression: a space leading an {#if} block's text would be trimmed. -->
+			<span class="ap-profile-sub">{#if backend}{'on '}<bdi>{backend}</bdi>{:else}{uid(you)}{/if}{#if note}{' · '}{note}{/if}</span>
 		</span>
 		<span class="ap-profile-edit" aria-hidden="true">Edit</span>
 	</button>

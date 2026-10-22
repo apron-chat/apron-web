@@ -22,7 +22,7 @@ describe('ProfileBar', () => {
 	it('names you, your status and what to add in its label, or what it’s waiting for before there is a you', () => {
 		const me = render({ you: { user_id: 'alice', name: 'Alice' }, status: 'dnd', note: 'add a sign-in' });
 		expect(me.getAttribute('aria-label')).toBe('Your profile on Work: Alice, do not disturb. Edit');
-		expect(me.querySelector('.ap-profile-sub')?.textContent).toMatch(/^on Work ?· add a sign-in$/);
+		expect(me.querySelector('.ap-profile-sub')?.textContent).toBe('on Work · add a sign-in');
 		unmount(instance!);
 		const waiting = render({ placeholder: 'Signing in…' });
 		expect(waiting.getAttribute('aria-label')).toBe('Your profile on Work: signing in. Edit');

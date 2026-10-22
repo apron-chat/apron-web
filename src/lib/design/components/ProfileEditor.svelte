@@ -82,7 +82,7 @@
 		</div>
 	</div>
 	<label class="ap-fieldlabel">Handle
-		<input class="ap-field" data-testid="display-name-input" bind:value={() => name, (v) => { name = v; oninput?.(v); }} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" />
+		<input class="ap-field" data-testid="display-name-input" bind:value={() => name, (v) => { name = v; oninput?.(v); }} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" dir="auto" />
 	</label>
 	<p class="ap-profedit-hint">ID <code>{userId}</code> · set by the server, can’t be changed</p>
 	{#if status === 'altered'}<p class="ap-profedit-note" role="status">The server saved your handle as “{serverName}”.</p>{/if}

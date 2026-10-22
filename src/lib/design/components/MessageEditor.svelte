@@ -55,7 +55,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="ap-msgedit" data-testid="message-editor" onkeydown={keydown}>
 	{#if attachments}<Attachments aria-label="Attachments">{@render attachments()}</Attachments>{/if}
-	<textarea class="ap-msgedit-field" aria-label="Edit message" rows="1" bind:this={field} bind:value onkeydown={fieldKeydown}></textarea>
+	<textarea class="ap-msgedit-field" aria-label="Edit message" rows="1" dir="auto" bind:this={field} bind:value onkeydown={fieldKeydown}></textarea>
 	<div class="ap-msgedit-foot">
 		{#if !handheld}<span class="ap-msgedit-hint"><kbd>Esc</kbd> to cancel · <kbd>Enter</kbd> to save</span>{/if}
 		<Button variant="ghost" size="sm" onclick={oncancel} label="Cancel" />

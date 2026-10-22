@@ -38,4 +38,12 @@ describe('ThreadMarker', () => {
 		expect(one('.ap-thread-name')?.firstElementChild?.getAttribute('aria-label')).toBe('Private');
 		expect(one('span.ap-thread-last')?.getAttribute('title')).toBe('Last reply');
 	});
+
+	it('names a thread with a blank title by its room_id, on its card and its Moved to line', () => {
+		render({ name: '' });
+		expect(one('.ap-thread-name')?.textContent).toBe('t1');
+		unmount(instance!);
+		render({ name: '  ', moved: true });
+		expect(one('.ap-thread-moved button')?.textContent).toBe('t1');
+	});
 });

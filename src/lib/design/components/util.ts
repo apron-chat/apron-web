@@ -15,6 +15,15 @@ export function uid(u: { user_id?: string } | undefined | null): string | undefi
 	return u?.user_id || undefined;
 }
 
+/**
+ * What a room or thread is called wherever it is named (rows, cards, headers, breadcrumbs, menus, placeholders): its
+ * `title`, else its `room_id` (§3.4: "absent: shown as room_id"). A title that is empty or only spaces counts as
+ * absent, so nothing is ever named by a blank. The client's own titles follow the same rule (`roomTitle`).
+ */
+export function roomName(title: string | undefined | null, roomId: string | undefined): string {
+	return typeof title === 'string' && title.trim() ? title : (roomId ?? '');
+}
+
 export function initials(name: string | undefined): string {
 	const p = String(name || '?').trim().split(/\s+/);
 	return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
