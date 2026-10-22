@@ -34,7 +34,7 @@
 		<span class="ap-thread-head">
 			{#if faces.length}<span class="ap-thread-faces" aria-hidden="true">{#each faces as f, i (uid(f) || i)}<Avatar name={f.name || uid(f)} src={f.avatar} size="sm" />{/each}</span>{/if}
 			<span class="ap-thread-name">{shown}</span>
-			{#if count != null}<span class="ap-thread-count">{count}{count === 1 ? ' reply' : ' replies'}</span>{/if}
+			{#if count != null && !summary}<span class="ap-thread-count">{count}{count === 1 ? ' reply' : ' replies'}</span>{/if}
 			{#if lastReply}<span class="ap-thread-last" title="Last reply">{lastReply}</span>{/if}
 		</span>
 		<ThreadLines {summary} latest={last} summaryLines={3} />

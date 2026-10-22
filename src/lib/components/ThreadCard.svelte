@@ -7,7 +7,7 @@
 	import Lock from '@lucide/svelte/icons/lock';
 	import Avatar from './Avatar.svelte';
 
-	/** A thread's card in its parent room: faces, title, count, when it was last replied to (at the right), then its summary and newest message, as its sidebar row shows them. */
+	/** A thread's card in its parent room: faces, title (ellipsized), count (left out beside a summary), when it was last replied to (at the right), all on one row, then its summary and newest message, as its sidebar row shows them. */
 	let { entry, onopen }: { entry: ThreadEntry; onopen: () => void } = $props();
 	let summary = $derived(threadSummaryText(entry));
 	let latest = $derived(threadLatest(entry));
@@ -25,7 +25,7 @@
 				</span>
 			{/if}
 			<span class="ap-thread-name">{entry.title}{#if entry.private}<Lock class="ap-lock" aria-label="Private" role="img" />{/if}</span>
-			{#if entry.count !== undefined}<span class="ap-thread-count">{entry.count} {entry.count === 1 ? 'message' : 'messages'}</span>{/if}
+			{#if entry.count !== undefined && !summary}<span class="ap-thread-count">{entry.count} {entry.count === 1 ? 'message' : 'messages'}</span>{/if}
 			{#if since}<time class="ap-thread-last" data-testid="thread-last-reply" datetime={idIso(entry.lastReplyId ?? '')} title={`Last reply ${idDateTime(entry.lastReplyId ?? '')}`}>{since}</time>{/if}
 		</span>
 		<ThreadLines {summary} {latest} summaryLines={3} testid="thread-preview" />
@@ -35,7 +35,6 @@
 <style>
 	.row { margin: var(--space-2) var(--space-4) 0 calc(var(--space-4) + var(--avatar-md) + var(--space-3)); }
 	.row .ap-thread { margin-top: 0; }
-	.row .ap-thread-head { flex-wrap: wrap; row-gap: 2px; }
 	@media (max-width: 719px) {
 		.row { margin-left: var(--space-4); }
 	}

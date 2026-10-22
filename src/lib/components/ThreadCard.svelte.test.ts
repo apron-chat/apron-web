@@ -37,6 +37,15 @@ describe('ThreadCard', () => {
 		expect(one('[data-testid="thread-last-reply"]')?.getAttribute('datetime')).toBe(new Date(Number(id)).toISOString());
 	});
 
+	it('leaves the count out beside a summary, keeping its head to one row', () => {
+		render({ count: 4, lastReplyId: String(Date.now() - hour) });
+		expect(one('.ap-thread-count')?.textContent).toBe('4 messages');
+		unmount(instance!);
+		render({ count: 4, description: 'some day this will be a living summary of the thread', lastReplyId: String(Date.now() - hour) });
+		expect(one('.ap-thread-count')).toBeNull();
+		expect(one('.ap-thread-head [data-testid="thread-last-reply"]')?.textContent).toBe('1h');
+	});
+
 	it('names the day of a last reply older than two weeks, and keeps a recent one current', () => {
 		vi.useFakeTimers();
 		try {
