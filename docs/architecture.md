@@ -69,14 +69,34 @@ The wrappers: `ConnectScreen` and `SignIn` (the pieces the design system's
 which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, with its `AddMemberForm`), `ProfileBar` (`ProfileBar` with its
 `ProfileEditor`), `RoomHeader` (`RoomHeader`, with its ⋯ `MenuButton`) with
 `RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
-`ThreadSummary` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `Message` (the design system's `Message` itself, which the app fills through its `avatar`, `name`, `reply`, `body`, `footer` and `actions` snippets) with its `ReactionBar` (whose chips open `ReactorsPopover`, the list of who reacted, through `reactors.svelte.ts`), `RoleBadges`, `MentionText` (`Mention`) and its embeds (`Embed*`, `EmbedRemove`; the trusted-origin gate stays in `embeds/og.ts`), `MessageEditor` (`MessageEditor`), `NoticeLine` (a scoped `Message`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: a `ComposerEditable` it fills and edits) with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
+`ThreadSummary` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `RoleBadges`, `MentionText` (`Mention`), the embeds (`Embed*`; the trusted-origin gate stays in `embeds/og.ts`), `MessageEditor` (`MessageEditor`), `NoticeLine` (a scoped `Message`, from `noticeView`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: a `ComposerEditable` it fills and edits) with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
 `ProfileCard`, `ReactorsPopover` and `EmojiPopover` (the full emoji picker, which the design system leaves to the client; all three in the design system's `Popover`, a bottom sheet on phones),
 `PreferencesDialog` (`SettingsSections` and `SettingRow`) with its `FontFamilyField` (`FontField`), `StatusPicker`, `PauseNotifications` and `NotifyPrompt` (`Nudge`), `SignInLinkDialog` (both
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
 choice submitted with a form a `CheckList`-style row),
 `MediaViewerHost` (the design system's `MediaViewer`, opened by image embeds through
 `media-viewer.svelte.ts`, which reads the open timeline's `data-viewer-*` links), `UpdateNotice` (the design system's `ActionBanner`, which reads whether the page's
-`PaneDrafts` hold anything unsent through `pageDrafts`), `Avatar`. Global resets (the page's height, `box-sizing`, `font: inherit` on controls) are in `src/app.css`. A style change goes in `apron.css`, and reaches the
+`PaneDrafts` hold anything unsent through `pageDrafts`). Avatars are the design system's `Avatar`, given an avatar
+`directory` will load and the `hue` of their `user_id` (`hueOf`).
+
+A message row has no wrapper: the page renders the design system's `Message`
+straight from a `MessageView`, plain data that `messageView` (`src/lib/ui/message-view.ts`)
+makes from the record, where it sits (grouped, selected, edited, highlighted) and what
+the viewer may do (`MessageCaps`): the sender as `directory` knows them, with a handle
+only where a name is shared, the body's sanitized markup, the reply's quote, the
+embeds with their uploads and the reaction chips. It keeps what depends only on the
+record and the directory per record, and hands back the previous view while nothing in
+it changed, so a change elsewhere redraws no row. The row draws its header, body and
+reactions itself and adds the rest only where present: the quote (`ReplyPreview`), the
+embeds (`MessageEmbeds`, each through the page's `embed` snippet, the app's `Embed`),
+the hover toolbar (`MessageActions`, built once a pointer or focus reaches the row) and
+the editor (the page's `editor` snippet, the lazy `MessageEditor`, for the row being
+edited). What its controls do is one `MessageHandlers` object for every row, each
+handler given the row's view: replying, reacting (the emoji picker through `pick`, who
+reacted through `showReactors` in `reactors.svelte.ts`), editing, deleting, starting a
+thread, copying the link, the select gestures (a shift-click, `x`, a long press),
+opening rooms and profile cards, jumping to a quote, and decorating code blocks
+(`decorateCode`). The design system's `Message` takes no other attributes. Global resets (the page's height, `box-sizing`, `font: inherit` on controls) are in `src/app.css`. A style change goes in `apron.css`, and reaches the
 design system with the next `npm run design:bundle`. A user's `status` (§4.5)
 is the design system's `StatusDot` on their `Avatar`: online a dot, idle a
 crescent, dnd a barred dot, offline a hollow ring, your own `invisible` the

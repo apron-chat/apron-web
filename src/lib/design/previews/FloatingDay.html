@@ -7,9 +7,9 @@
 <script>
   var A = window.Apron, root = document.getElementById('root');
   A.render(A.FloatingDay, root, { label: 'Yesterday', shown: true });
-  A.render(A.Message, root, { sender: { user_id: 'alice', name: 'Alice Chen' }, time: '18:40', text: 'Rolling the worker back to 1.8.3.' });
-  A.render(A.Message, root, { sender: { user_id: 'bob', name: 'Bob' }, time: '18:52', text: 'Lock on accounts is clear; re-running 0042.' });
-  A.render(A.Message, root, { sender: { user_id: 'dana', name: 'Dana' }, time: '19:05', text: 'Green across the board.' });
+  A.render(A.Message, root, { view: { sender: { user_id: 'alice', name: 'Alice Chen' }, time: '18:40', body: { html: 'Rolling the worker back to 1.8.3.' } } });
+  A.render(A.Message, root, { view: { sender: { user_id: 'bob', name: 'Bob' }, time: '18:52', body: { html: 'Lock on accounts is clear; re-running 0042.' } } });
+  A.render(A.Message, root, { view: { sender: { user_id: 'dana', name: 'Dana' }, time: '19:05', body: { html: 'Green across the board.' } } });
 </script>
 </body>
 </html>

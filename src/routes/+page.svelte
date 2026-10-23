@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { newThreadDialog, roomEditor, signInLinkDialog } from '$lib/components/lazy';
+	import { messageEditor, newThreadDialog, roomEditor, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { createAttachmentKey, fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -17,7 +17,14 @@
 	import { SettleFlag } from '$lib/ui/settle-flag';
 	import type { Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
-	import Message, { type MessageCaps } from '$lib/components/Message.svelte';
+	import Message from '$lib/design/components/Message.svelte';
+	import EmbedItem from '$lib/components/embeds/Embed.svelte';
+	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
+	import { messageView, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
+	import { decorateCode } from '$lib/ui/copy-code';
+	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
+	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
+	import { showReactors } from '$lib/ui/reactors.svelte';
 	import RoomHeader from '$lib/components/RoomHeader.svelte';
 	import SelectionBar from '$lib/components/SelectionBar.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
@@ -44,7 +51,7 @@
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
 	import { ReadPositions } from '$lib/ui/read-positions';
-	import { isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
+	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, textOf, typingLine } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
@@ -1878,6 +1885,72 @@
 		feedback.track(client.toggleReaction(event.message_id, emoji), 'Reacting…');
 	}
 
+	// --- Message rows ---
+
+	/** The test ids interop finds a message's parts by. */
+	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message' };
+
+	/** What every row reads from, each field only where a row needs it. */
+	const messageContext: MessageContext = {
+		resolve: resolveMessage,
+		get uploads() {
+			return snapshot.uploads;
+		}
+	};
+
+	/** The record a row shows: the open pane's, else wherever it is. */
+	function rowEvent(view: MessageView): MessageRecord | undefined {
+		return view.id ? (paneRoom?.timeline.events[view.id] ?? resolveMessage(view.id)) : undefined;
+	}
+
+	/** Runs `action` on the row's record, if it is still there. */
+	function onRow(action: (event: MessageRecord) => void): (view: MessageView) => void {
+		return (view) => {
+			const event = rowEvent(view);
+			if (event) action(event);
+		};
+	}
+
+	/** The picker the React action opened last, and on which message: it's open for that row while it is the open one. */
+	let reactPick: { id: string; request: EmojiPickerRequest } | undefined;
+
+	/** One set of handlers for every row; each finds its message by the row's id. */
+	const messageHandlers: MessageHandlers = {
+		reply: onRow(beginReply),
+		react: (view, emoji) => onRow((event) => react(event, emoji))(view),
+		// React opens the full picker; a pick toggles that reaction, as a chip does.
+		pick: (view, anchor) => onRow((event) => {
+			const request: EmojiPickerRequest = { anchor, onpick: (emoji) => react(event, emoji), caption: { lead: `React to ${view.sender.name}`, text: replySnippet(event) } };
+			reactPick = { id: event.message_id, request };
+			emojiPicker.toggle(request);
+		})(view),
+		picking: (view) => emojiPicker.current !== undefined && emojiPicker.current === reactPick?.request && reactPick.id === view.id,
+		pickAnchor: emojiAnchor,
+		// Who reacted, read from the current chips, so the open list follows changes.
+		reactors: (view, emoji, anchor) => showReactors(anchor, emoji, () => {
+			const event = rowEvent(view);
+			return event ? reactionsFor(event) : [];
+		}),
+		edit: onRow((event) => (editingId = event.message_id)),
+		delete: onRow(deleteMessage),
+		startThread: onRow(startThread),
+		copyLink: async (view) => {
+			const event = rowEvent(view);
+			return event ? copyMessageLink(event) : false;
+		},
+		select: (view, range) => {
+			if (view.id) selection.toggle(view.id, selectableOrder, range);
+		},
+		beginSelect: onRow(beginSelect),
+		removeReply: onRow(removeReply),
+		removeEmbed: (view, embed) => onRow((event) => removeEmbed(event, embed as unknown as Embed))(view),
+		openRoom: openMentionedRoom,
+		// A user mention, or the sender's name or avatar, opens their profile card.
+		openProfile: openProfileFrom,
+		jump: jumpToMessage,
+		code: decorateCode
+	};
+
 	// --- Reading ---
 
 	/** Where a message shows: a thread's messages in the thread, a room's own in the room. */
@@ -2301,6 +2374,13 @@
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
 	/>
 {:else}
+<!-- A message row's embed, through the app's media gates; and the row being edited, in the editor loaded for it. -->
+{#snippet messageEmbed(item: MessageEmbed)}<EmbedItem embed={item.embed as unknown as Embed} upload={item.upload} detail={item.detail} />{/snippet}
+{#snippet editMessage(view: MessageView)}
+	{@const MessageEditor = messageEditor.component}
+	{@const event = rowEvent(view)}
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} onsave={(text, edits) => saveEdit(event, text, edits)} oncancel={() => (editingId = undefined)} />{/if}
+{/snippet}
 {#snippet membersToggle()}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/snippet}
 <!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
 <!-- Kept while shut (hidden), so its border slides with the list's. -->
@@ -2407,37 +2487,21 @@
 							<SystemLine timestamp={idMillis(item.logId)} data-timeline-item="" data-testid="thread-renamed">{#if item.title}Thread renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}Thread name cleared{/if}</SystemLine>
 						{:else}
 							{@const event = item.event}
+							{@const view = messageView(event, {
+								grouped: item.grouped,
+								reactions: reactionsFor(event),
+								mention: mentionsMe(event, session.you),
+								pinged: mentions.pinged.includes(event.message_id),
+								highlighted: highlightedId === event.message_id,
+								selecting: selection.active,
+								selected: selection.has(event.message_id),
+								editing: editingId === event.message_id,
+								caps: capsFor(event)
+							}, messageContext)}
 							{#if event.message_id === newDividerBefore}
 								<div class="ap-divider ap-divider-new" role="separator" data-testid="new-divider"><span>New</span></div>
 							{/if}
-							<Message
-								{event}
-								grouped={item.grouped}
-								resolve={resolveMessage}
-								reactions={reactionsFor(event)}
-								uploads={snapshot.uploads}
-								mention={mentionsMe(event, session.you)}
-								pinged={mentions.pinged.includes(event.message_id)}
-								highlighted={highlightedId === event.message_id}
-								selecting={selection.active}
-								selected={selection.has(event.message_id)}
-								editing={editingId === event.message_id}
-								caps={capsFor(event)}
-								onreply={() => beginReply(event)}
-								onjump={jumpToMessage}
-								onopenroom={openMentionedRoom}
-								onedit={() => (editingId = event.message_id)}
-								onsave={(text, edits) => saveEdit(event, text, edits)}
-								oncanceledit={() => (editingId = undefined)}
-								ondelete={() => deleteMessage(event)}
-								onremovereply={() => removeReply(event)}
-								onremoveembed={(embed) => removeEmbed(event, embed)}
-								onstartthread={() => startThread(event)}
-								oncopylink={() => copyMessageLink(event)}
-								onreact={(emoji) => react(event, emoji)}
-								onbeginselect={() => beginSelect(event)}
-								onselect={(range) => selection.toggle(event.message_id, selectableOrder, range)}
-							/>
+							<Message {view} on={messageHandlers} testids={MESSAGE_TESTIDS} editor={view.editing && messageEditor.component ? editMessage : undefined} embed={messageEmbed} />
 						{/if}
 					{/each}
 				{/if}

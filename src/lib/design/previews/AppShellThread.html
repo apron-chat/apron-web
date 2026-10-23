@@ -17,7 +17,10 @@
     sideHandle: A.part(A.PanelHandle, { side: 'left' }),
     main: A.html('<span id="head" style="display:contents"></span><div class="ap-timeline" id="tl"></div><span id="foot" style="display:contents"></span>')
   });
-  var acts = function () { return A.part(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }], onmore: noop }); };
+  // Hover a message for its toolbar, from what the viewer may do.
+  var caps = { reply: true, edit: false, startThread: true, select: false, removeReply: false, react: true, link: true };
+  var mine = { reply: true, edit: true, startThread: false, select: true, removeReply: false, react: true, link: true };
+  function msg(view, at) { view.caps = view.caps || caps; return add(A.Message, { view: view, on: {} }, at); }
   function side(activeThread) {
     var rooms = [
       { room: 'general', name: 'General' }, { room: 'ops', name: 'Ops', active: !activeThread },
@@ -32,13 +35,13 @@
   add(A.RoomHeader, { room: 'ops', name: 'Ops', thread: 'deploy', threadName: 'Deploy', topic: '7 replies', onroom: noop, onedit: noop }, $('head'));
   var tl = $('tl');
   add(A.ThreadSummary, { ondismiss: noop, children: A.html('<p>Worker <code>1.9.0</code> crash-looped on the new queue client. Resolved:</p><ul><li>Rolled back to <code>1.8.3</code></li><li>Re-ran migration 0042 once the lock cleared</li></ul>') }, $('head'));
-  add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.' }, tl);
+  msg({ sender: alice, time: '14:02', body: { html: 'Deploy is green, rolling to prod now.' } }, tl);
   add(A.TimelineDivider, { kind: 'date', label: '7 replies', sticky: false }, tl);
-  add(A.Message, { sender: bob, time: '14:04', text: 'Worker pods are restarting in a loop.' }, tl);
-  add(A.Message, { sender: bob, time: '14:04', grouped: true, text: 'Crash is in the new queue client.', embeds: [{ kind: 'upload', url: '#', title: 'worker-crash.log', og: { description: 'text/plain · 42 KB' } }] }, tl);
-  add(A.Message, { sender: dana, time: '14:20', text: 'Rolled back worker to 1.8.3.', reactions: [{ emoji: '🙏', count: 2, mine: true, who: 'Sam, Bob' }], replyTo: { messageId: '1724803100000', sender: bob, snippet: 'Worker pods are restarting in a loop.' } }, tl);
-  add(A.Message, { system: true, time: '14:25', children: A.html('Thread renamed to <span class="ap-msg-text">“Deploy”</span>') }, tl);
-  add(A.Message, { sender: me, time: '14:32', text: 'Re-running the migration now.', embeds: [{ kind: 'stream', format: 'terminal', url: '#', text: '$ ./migrate up 0042\nacquiring lock on accounts… ok\napplying 0042_orders_idx… ' }] }, tl);
+  msg({ sender: bob, time: '14:04', body: { html: 'Worker pods are restarting in a loop.' } }, tl);
+  msg({ sender: bob, time: '14:04', grouped: true, body: { html: 'Crash is in the new queue client.' }, embeds: [{ key: '0', embed: { kind: 'upload', url: '#', title: 'worker-crash.log', og: { description: 'text/plain · 42 KB' } } }] }, tl);
+  msg({ sender: dana, time: '14:20', body: { html: 'Rolled back worker to 1.8.3.' }, reactions: [{ emoji: '🙏', count: 2, mine: true, who: 'Sam, Bob' }], reply: { id: '1724803100000', name: bob.name, snippet: ['Worker pods are restarting in a loop.'] } }, tl);
+  add(A.SystemLine, { time: '14:25', children: A.html('Thread renamed to <span class="ap-msg-text">“Deploy”</span>') }, tl);
+  msg({ sender: me, time: '14:32', caps: mine, body: { html: 'Re-running the migration now.' }, embeds: [{ key: '0', embed: { kind: 'stream', format: 'terminal', url: '#', text: '$ ./migrate up 0042\nacquiring lock on accounts… ok\napplying 0042_orders_idx… ' } }] }, tl);
   add(A.Composer, { room: 'Ops', thread: { thread: 'deploy', name: 'Deploy' }, canUpload: true }, $('foot'));
   setTimeout(function () { tl.scrollTop = tl.scrollHeight; }, 60);
 </script>

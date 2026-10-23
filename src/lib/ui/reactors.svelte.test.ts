@@ -6,9 +6,9 @@ import type { Identity } from '$lib/protocol/types';
 import { directory } from '$lib/ui/directory.svelte';
 import { blankSnapshot } from '$lib/ui/session.svelte';
 import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
-import { reactorsList } from '$lib/ui/reactors.svelte';
-import ReactionBar from './ReactionBar.svelte';
-import ReactorsPopover from './ReactorsPopover.svelte';
+import ReactionBar from '$lib/design/components/ReactionBar.svelte';
+import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
+import { reactorsList, showReactors } from './reactors.svelte';
 import * as dom from '$lib/test/dom';
 
 const you: Identity = { user_id: 'you', name: 'You' };
@@ -36,14 +36,14 @@ function chipsOf(users: Identity[], emoji = '👍'): ReactionChip[] {
 function render(chips: ReactionChip[], enabled = true) {
 	const ontoggle = vi.fn();
 	dom.render(ReactorsPopover);
-	dom.render(ReactionBar, { chips, enabled, ontoggle });
-	const chip = document.querySelector<HTMLButtonElement>('[data-testid="reaction-chip"]')!;
+	dom.render(ReactionBar, { reactions: chips, disabled: !enabled, add: false, ontoggle, onreactors: (emoji: string, anchor: HTMLElement) => showReactors(anchor, emoji, () => chips) });
+	const chip = dom.button(/^👍 /) as HTMLButtonElement;
 	return { chip, ontoggle };
 }
 
 const reactors = () => [...document.querySelectorAll('[data-testid="reactor"]')].map((row) => row.getAttribute('data-user-id'));
 
-describe('ReactionBar reactors', () => {
+describe('who reacted', () => {
 	it('lists who reacted on a right-click, you first, without toggling', () => {
 		const { chip, ontoggle } = render(chipsOf([ada, bob, you]));
 		const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });

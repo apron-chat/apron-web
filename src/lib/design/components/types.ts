@@ -1,5 +1,5 @@
 import type { Snippet } from 'svelte';
-import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements';
+import type { HTMLAttributes } from 'svelte/elements';
 import type { Sender } from './util';
 export type { Sender };
 
@@ -70,25 +70,25 @@ export interface ReactionChip {
 	label?: string;
 }
 
-/**
- * A quoted message: who wrote it and a one-line snippet (you shorten it — ~120 chars, first line, no Markdown). Other
- * attributes (`data-*`, `class`, …) go on ReplyPreview's button.
- */
-export interface ReplyPreviewProps extends HTMLButtonAttributes {
-	messageId: string;
-	sender: Sender;
-	snippet?: string;
-	deleted?: boolean;
-	/** A click on it, after your `onclick`, which can `preventDefault()` to keep it from jumping. */
-	onjump?: () => void;
-}
-
+/** One button of a MessageActions toolbar. */
 export interface MessageAction {
 	id?: string;
+	/** What a screen reader hears. */
 	label: string;
 	/** A short text glyph; omitted, the label shows. */
 	glyph?: string;
-	onclick?: () => void;
+	/** The tooltip; none when omitted. */
+	title?: string;
+	/** A press. One that returns a promise resolving true, on an action with `done`, says so for a moment. */
+	onclick?: (event: MouseEvent) => unknown;
+	/** What the button says for a moment after its press worked, before the ⋯ actions close (Copy link: Copied). */
+	done?: { label: string; glyph?: string };
+	/** It opens a dialog beside it (`aria-haspopup`); `expanded` says whether that is open. */
+	popup?: boolean;
+	expanded?: boolean;
+	/** An attachment for the button, such as one that closes the popup it opened when the button goes. */
+	attach?: (button: HTMLElement) => void | (() => void);
+	testid?: string;
 	danger?: boolean;
 	hidden?: boolean;
 }
@@ -207,4 +207,157 @@ export interface MemberListSection {
 	key: string;
 	label: string;
 	people: MemberListPerson[];
+}
+
+/** What the viewer may do to a message, from the server's capabilities and who sent it: only real actions show. */
+export interface MessageCaps {
+	reply: boolean;
+	edit: boolean;
+	startThread: boolean;
+	/** Pick it in select mode, to move it. */
+	select: boolean;
+	removeReply: boolean;
+	/** Capability `reactions`: the React action and chips that toggle. */
+	react: boolean;
+	/** Copy link, under ⋯: a URL that opens this message where it is. */
+	link: boolean;
+}
+
+/** Who sent a message, as its row shows them (§3.3): the kept user object, else the one it was posted under. */
+export interface MessageSender {
+	user_id: string;
+	/** The display name; for a scoped notice, its title as the server names its sender. */
+	name: string;
+	/** `@user_id` beside the name, set only where it tells people apart: another user shows under the same name. */
+	handle?: string;
+	/** Badges beside the name (never part of it); absent when there are none. */
+	roles?: string[];
+	/** An avatar this client will load (§4.8.6); without one, initials. */
+	avatar?: string;
+	/** The initials' tint, 0–360; absent keeps the denim placeholder. */
+	hue?: number;
+}
+
+/** A mention in a reply's snippet (Appendix A.3), as a Mention that only reads: a user, or a room. */
+export type MessageMention = { user_id: string; name: string; me?: boolean } | { roomId: string; name?: string; thread?: boolean; hash?: boolean };
+
+/** The message a reply quotes (§3.5), resolved by you, maybe in another room. Without `id` it couldn't be found: "Message unavailable". */
+export interface MessageReply {
+	/** The quoted message's `message_id`, to jump to. */
+	id?: string;
+	name?: string;
+	avatar?: string;
+	hue?: number;
+	/** One line of its text (~120 chars, first line, no Markdown), mentions picked out. */
+	snippet?: (string | MessageMention)[];
+	deleted?: boolean;
+}
+
+/** A file being written to an upload embed, sender side (§4.8.3). */
+export interface MessageUpload {
+	name: string;
+	width?: number;
+	height?: number;
+	/** 0–1 once the write started. */
+	progress?: number;
+	/** Why the write failed. */
+	failed?: string;
+}
+
+/** One of a message's embeds (§4.8), as its row lists it. */
+export interface MessageEmbed {
+	/** Keys the list: the `embed_id`, else its place. */
+	key: string;
+	embed: EmbedProps;
+	upload?: MessageUpload;
+	/** Who sent it and when, for an image shown full screen. */
+	detail?: string;
+	/** Your own, and not the last thing in the message nor still being written: an (x) on its corner takes it off. */
+	removable?: boolean;
+}
+
+/**
+ * A message as its row draws it, plain data made from the record and what the viewer knows (who people are, what
+ * they may do, what is selected). Build it once per change and pass it whole: nothing in it is derived again.
+ */
+export interface MessageView {
+	/** The `message_id`; absent on a transient notice (§3.5), which is rendered, never stored. */
+	id?: string;
+	sender: MessageSender;
+	/** Epoch ms of the creation `log_id` (the `message_id`): the time and its tooltip. */
+	timestamp?: number;
+	/** The short time, pre-formatted; without a timestamp it's all that shows. */
+	time?: string;
+	/** ALREADY SANITIZED markup of the text; absent when a message has none. `code` when it holds code blocks to decorate. */
+	body?: { html: string; markdown?: boolean; code?: boolean };
+	reply?: MessageReply;
+	embeds?: MessageEmbed[];
+	/** Chips under the message; none on a tombstone. */
+	reactions?: ReactionChip[];
+	/** Continuation of the previous sender's group: no avatar or header, the time on hover. Ignored on a reply. */
+	grouped?: boolean;
+	/** Tombstone (§4.4): body and reactions hidden. */
+	deleted?: boolean;
+	/** A system message (Appendix A.1): a quiet line, or with `scope` a card titled by its sender. Neither has actions. */
+	system?: boolean;
+	/** Who else got a system message: everyone on the server, the room, or only you. */
+	scope?: 'server' | 'room' | 'private';
+	/** `body.mentions` lists the viewer (§3.5). */
+	mention?: boolean;
+	/** First render after the mention arrived: one ring pulse. */
+	pinged?: boolean;
+	highlighted?: boolean;
+	/** Select mode is on for the pane: a message you may `select` shows a check, and clicks pick it. */
+	selecting?: boolean;
+	selected?: boolean;
+	/** Its editor is open: no toolbar. */
+	editing?: boolean;
+	caps?: MessageCaps;
+}
+
+/**
+ * What a Message's controls do, one object for every row. Each gets the row's view; leave out what you don't offer.
+ * The rest is yours to wire up: what a click on a person or a room opens, and how code blocks are decorated.
+ */
+export interface MessageHandlers {
+	reply?: (view: MessageView) => void;
+	/** Toggle your reaction with this emoji (a chip, or a pick). */
+	react?: (view: MessageView, emoji: string) => void;
+	/** The React action: open your picker beside its button. */
+	pick?: (view: MessageView, anchor: HTMLElement) => void;
+	/** Whether that picker is open for this message, for the button's `aria-expanded`. */
+	picking?: (view: MessageView) => boolean;
+	/** An attachment for the React action's button, such as one that closes your picker when the button goes. */
+	pickAnchor?: (button: HTMLElement) => void | (() => void);
+	/** A right-click or long press on a chip: show who reacted, beside it. */
+	reactors?: (view: MessageView, emoji: string, chip: HTMLElement) => void;
+	edit?: (view: MessageView) => void;
+	delete?: (view: MessageView) => void;
+	startThread?: (view: MessageView) => void;
+	/** Copy the message's link; resolves whether it was copied, and Copy link says so for a moment. */
+	copyLink?: (view: MessageView) => Promise<boolean>;
+	/** In select mode: toggle this message, or with `range` fill the selection to it. */
+	select?: (view: MessageView, range: boolean) => void;
+	/** Enter select mode with this message picked: Select under ⋯, a shift-click, `x`, or a long press. */
+	beginSelect?: (view: MessageView) => void;
+	removeReply?: (view: MessageView) => void;
+	removeEmbed?: (view: MessageView, embed: EmbedProps) => void;
+	/** A room mention was clicked (Appendix A.3). */
+	openRoom?: (roomId: string) => void;
+	/** A click outside select mode, such as on a mention or the sender: open their profile if it names someone, and say whether it did. */
+	openProfile?: (target: EventTarget | null) => boolean;
+	/** The reply's quote: go to the message it quotes. */
+	jump?: (messageId: string) => void;
+	/** Decorate the code blocks in a body (highlighting; `copy` adds Copy buttons, on a notice). Runs again when the body changes. */
+	code?: (body: HTMLElement, copy: boolean) => void | (() => void);
+}
+
+/** The `data-testid`s a Message puts on its parts, for whoever queries them. */
+export interface MessageTestids {
+	row?: string;
+	handle?: string;
+	reply?: string;
+	reactions?: string;
+	chip?: string;
+	select?: string;
 }

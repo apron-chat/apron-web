@@ -66,6 +66,15 @@ class Directory {
 		if (!sameEntries(this.untitled, untitled)) this.untitled = untitled;
 	}
 
+	/**
+	 * Everything names, avatars and mentions are read from, one value per piece:
+	 * reading it depends on all of them, and a rendering made from the same
+	 * pieces is still current (`samePieces`).
+	 */
+	get pieces(): readonly unknown[] {
+		return [this.origin, this.you, this.users, this.rooms, this.untitled];
+	}
+
 	forget(): void {
 		this.you = undefined;
 		this.users = { users: {}, recordedUsers: {}, userAliases: {} };
@@ -139,6 +148,11 @@ class Directory {
 		if (this.sharesName(from)) target.shared = true;
 		return target;
 	};
+}
+
+/** Whether two `pieces` of the directory are the same, so what was rendered from one is current for the other. */
+export function samePieces(a: readonly unknown[], b: readonly unknown[]): boolean {
+	return a.length === b.length && a.every((piece, index) => piece === b[index]);
 }
 
 /** The same keys holding the same values; the client keeps an identity object until that user changes. */

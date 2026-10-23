@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=1000 subtitle="Cozy, compact, echo, edit, delete, reactions, system lines, notice cards, shared names" -->
+<!-- @dsCard group="Timeline" height=900 subtitle="A MessageView each: groups, replies, reactions, embeds, the hover toolbar, tombstones, system lines, notice cards, shared names" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Message</title></head>
@@ -7,31 +7,37 @@
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
-  var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' }, me = { user_id: 'sam', name: 'Sam' };
+  // Each row takes a MessageView: plain data, its body already rendered and sanitized. `hue` tints the initials.
+  var alice = { user_id: 'alice', name: 'Alice Chen', hue: 210 }, bob = { user_id: 'bob', name: 'Bob', hue: 28 }, me = { user_id: 'sam', name: 'Sam', hue: 150 };
   var at = function (hh, mm) { var d = new Date(); d.setHours(hh, mm, 7, 0); return d.getTime(); };
-  var acts = A.part(A.MessageActions, { items: [{ label: 'Reply', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }], onmore: function () {} });
-  add(A.Message, { sender: alice, timestamp: at(14, 2), text: 'Deploy is green, rolling to prod now.', actions: acts, highlighted: true,
-    footer: A.part(A.ThreadMarker, { thread: 'deploy-4-2', name: 'Deploy', unread: 2, lastReply: '12m', participants: [bob, alice, me] }) });
-  add(A.Message, { sender: alice, timestamp: at(14, 2), grouped: true, edited: true, children: A.html('<p>Canary looks fine: <code>p99 = 41ms</code></p>') });
-  add(A.Message, { sender: alice, time: '14:03', grouped: true, children: A.html('<p>The fix, for the record:</p><pre><code><span class="ap-diff-hunk">@@ worker/queue.go @@</span><span class="ap-diff-del">client.Timeout = 2 * time.Second</span><span class="ap-diff-add">client.Timeout = 30 * time.Second</span><span>client.Retry = backoff.Default</span></code></pre>') });
-  add(A.Message, { sender: bob, time: '14:04', text: 'Ship it.', replyTo: { messageId: '1724803380000', sender: alice, snippet: 'The fix, for the record: @@ worker/queue.go @@ …' },
-    reactions: [{ emoji: '👍', count: 2, mine: true, who: 'Sam, Alice' }, { emoji: '🎉', count: 1, who: 'Dana' }] });
-  add(A.Message, { system: true, timestamp: at(14, 4), text: 'Dana joined' });
-  add(A.Message, { sender: { user_id: '~room', name: 'Ops' }, timestamp: at(14, 4), text: 'Poll closed: Tuesday wins, 7 votes to 4.' });
-  add(A.Message, { sender: { user_id: 'deploy', name: 'Deploy', roles: ['bot'] }, time: '14:04', text: 'Rolled out 1.4.2 to 3 of 3 regions.' });
-  add(A.Message, { system: true, timestamp: at(14, 4), children: A.html('Thread renamed to <span class="ap-msg-text">“Deploy”</span>') });
-  add(A.Message, { sender: bob, time: '14:05', mention: true, pinged: true, children: A.html('<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> can you check the migration logs? <span class="ap-mention" data-user-id="dana" title="@dana">@Dana</span> already looked.</p>') });
-  add(A.Message, { sender: bob, time: '14:05', grouped: true, deleted: true });
-  add(A.Message, { sender: me, time: '14:06', status: 'pending', text: 'On it, pulling them up.' });
-  add(A.Message, { sender: me, time: '14:06', grouped: true, status: 'failed', text: 'Looks like the lock timed out.' });
-  add(A.Message, { sender: { user_id: '~private', name: 'System message to you' }, time: '14:07',
-    children: A.html('<p>Your bot signs in as <strong>Bot of Sam</strong> (<code>bot_sam</code>) with this token. It replaces any earlier one, so keep it secret.</p><pre><code>apron_bot_h58Ecmun2BeA4ZG2PTgpsfyzknAGbt8Mn8seiWtiT3E</code><button type="button" class="ap-btn ap-btn-sm ap-notice-copy">Copy</button></pre>') });
-  add(A.TimelineDivider, { kind: 'date', label: 'Compact density', sticky: false });
-  add(A.Message, { density: 'compact', sender: alice, time: '14:10', text: 'Retrying with a longer lock timeout.' });
-  add(A.Message, { density: 'compact', sender: { user_id: 'bob', name: 'Bob', roles: ['admin'] }, time: '14:11', edited: true, text: 'Worked. Closing the incident.' });
-  add(A.Message, { density: 'compact', sender: me, time: '14:11', status: 'pending', text: 'Thanks both.' });
-  add(A.Message, { density: 'compact', sender: { user_id: 'alex.r', name: 'Alex' }, handle: true, time: '14:12', text: 'Two of us are called Alex here,' });
-  add(A.Message, { density: 'compact', sender: { user_id: 'guest_7', name: 'Alex' }, handle: true, time: '14:12', text: 'so both names carry their @user_id.' });
+  // What the viewer may do: hover a row for its toolbar; ⋯ holds Select, Copy link and Delete.
+  var all = { reply: true, edit: true, startThread: true, select: true, removeReply: true, react: true, link: true };
+  var theirs = { reply: true, edit: false, startThread: true, select: false, removeReply: false, react: true, link: true };
+  var log = function (what) { return function () { console.log(what); }; };
+  var on = { reply: log('reply'), react: log('react'), pick: log('pick'), edit: log('edit'), delete: log('delete'), startThread: log('start thread'), select: log('select'),
+    beginSelect: log('select mode'), removeReply: log('remove reply'), jump: log('jump'), copyLink: function () { return Promise.resolve(true); } };
+  function msg(view, at2) { return add(A.Message, { view: view, on: on }, at2); }
+  msg({ id: '1', sender: alice, timestamp: at(14, 2), body: { html: 'Deploy is green, rolling to prod now.' }, highlighted: true, caps: theirs });
+  msg({ id: '2', sender: alice, timestamp: at(14, 2), grouped: true, body: { html: '<p>Canary looks fine: <code>p99 = 41ms</code></p>', markdown: true }, caps: theirs });
+  msg({ id: '3', sender: alice, time: '14:03', grouped: true, body: { html: '<p>The fix, for the record:</p><pre><code><span class="ap-diff-hunk">@@ worker/queue.go @@</span><span class="ap-diff-del">client.Timeout = 2 * time.Second</span><span class="ap-diff-add">client.Timeout = 30 * time.Second</span><span>client.Retry = backoff.Default</span></code></pre>', markdown: true } });
+  add(A.ThreadMarker, { row: true, thread: 'fix-timeout', name: 'Queue timeout', unread: 2, lastReply: '12m', participants: [bob, alice, me] });
+  msg({ id: '4', sender: bob, time: '14:04', body: { html: 'Ship it.' }, reply: { id: '3', name: alice.name, hue: alice.hue, snippet: ['The fix, for the record: @@ worker/queue.go @@ …'] },
+    reactions: [{ emoji: '👍', count: 2, mine: true, who: 'Sam, Alice' }, { emoji: '🎉', count: 1, who: 'Dana' }], caps: theirs });
+  msg({ sender: { user_id: '~room', name: 'Ops' }, system: true, timestamp: at(14, 4), body: { html: 'Poll closed: Tuesday wins, 7 votes to 4.' } });
+  msg({ id: '5', sender: { user_id: 'deploy', name: 'Deploy', roles: ['bot'] }, time: '14:04', body: { html: 'Rolled out 1.4.2 to 3 of 3 regions.' },
+    embeds: [{ key: '0', embed: { kind: 'upload', url: '#', title: 'rollout.log', og: { description: 'text/plain · 4 KB' } } }] });
+  msg({ id: '6', sender: bob, time: '14:05', mention: true, pinged: true, caps: theirs,
+    body: { html: '<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> can you check the migration logs? <span class="ap-mention" data-user-id="dana" title="@dana">@Dana</span> already looked.</p>', markdown: true } });
+  msg({ id: '7', sender: bob, time: '14:05', grouped: true, deleted: true });
+  msg({ id: '8', sender: me, time: '14:06', body: { html: 'On it, pulling them up.' }, reply: { id: '6', name: bob.name, hue: bob.hue, snippet: [{ user_id: 'sam', name: 'Sam', me: true }, ' can you check the migration logs?'] }, caps: all });
+  msg({ id: '9', sender: me, time: '14:06', grouped: true, body: { html: 'Looks like the lock timed out.' }, caps: all,
+    embeds: [{ key: '0', embed: { kind: 'upload', title: 'lock.txt' }, upload: { name: 'lock.txt', progress: 0.4 } }] });
+  msg({ sender: { user_id: '~private', name: 'System message to you (~private)' }, system: true, scope: 'private', time: '14:07',
+    body: { html: '<p>Your bot signs in as <strong>Bot of Sam</strong> (<code>bot_sam</code>) with this token. It replaces any earlier one, so keep it secret.</p><pre><code>apron_bot_h58Ecmun2BeA4ZG2PTgpsfyzknAGbt8Mn8seiWtiT3E</code><button type="button" class="ap-btn ap-btn-sm ap-notice-copy">Copy</button></pre>', markdown: true } });
+  add(A.TimelineDivider, { kind: 'date', label: 'Shared names', sticky: false });
+  // Where two people share a name, both carry their @user_id.
+  msg({ id: '10', sender: { user_id: 'alex.r', name: 'Alex', handle: 'alex.r', hue: 300 }, time: '14:12', body: { html: 'Two of us are called Alex here,' } });
+  msg({ id: '11', sender: { user_id: 'guest_7', name: 'Alex', handle: 'guest_7', roles: ['admin'] }, time: '14:12', body: { html: 'so both names carry their @user_id.' } });
 </script>
 </body>
 </html>

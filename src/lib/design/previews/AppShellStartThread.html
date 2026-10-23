@@ -27,10 +27,12 @@
   add(A.RoomHeader, { room: 'ops', name: 'Ops', topic: 'Deploys and incidents', onedit: noop }, $('head'));
   var tl = $('tl');
   add(A.TimelineDivider, { kind: 'date', label: 'Today' }, tl);
-  add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.' }, tl);
-  add(A.Message, { sender: bob, time: '14:04', highlighted: true, children: A.html('<p>Worker <code>1.9.0</code> crash-looped after the deploy. Rolled back to <code>1.8.3</code>?</p><p>The trace points at the new queue client:</p><pre><code>QueueError: lease expired (attempt 3/3)</code></pre>'),
-    actions: A.part(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Start thread', glyph: 'Thread' }], onmore: noop }) }, tl);
-  add(A.Message, { sender: dana, time: '14:06', text: 'Looking.' }, tl);
+  // Start thread, from a message's toolbar, opens the form; hover a message for it.
+  var caps = { reply: true, edit: false, startThread: true, select: false, removeReply: false, react: true, link: true };
+  function msg(view) { view.caps = caps; return add(A.Message, { view: view, on: {} }, tl); }
+  msg({ sender: alice, time: '14:02', body: { html: 'Deploy is green, rolling to prod now.' } });
+  msg({ sender: bob, time: '14:04', highlighted: true, body: { markdown: true, html: '<p>Worker <code>1.9.0</code> crash-looped after the deploy. Rolled back to <code>1.8.3</code>?</p><p>The trace points at the new queue client:</p><pre><code>QueueError: lease expired (attempt 3/3)</code></pre>' } });
+  msg({ sender: dana, time: '14:06', body: { html: 'Looking.' } });
   add(A.Composer, { room: 'Ops', canUpload: true }, $('foot'));
   add(A.RoomForm, {
     open: true,

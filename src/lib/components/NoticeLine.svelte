@@ -1,13 +1,14 @@
+<script module lang="ts">
+	const TESTIDS = { row: 'notice' };
+</script>
+
 <script lang="ts">
 	import type { Notice } from '$lib/protocol/client';
-	import { renderMarkdown, renderPlain } from '$lib/protocol/markdown';
-	import { systemScope } from '$lib/protocol/types';
-	import DesignMessage from '$lib/design/components/Message.svelte';
-	import { copyCode } from '$lib/ui/copy-code';
-	import { directory } from '$lib/ui/directory.svelte';
-	import { highlightCode } from '$lib/ui/highlight';
+	import Message from '$lib/design/components/Message.svelte';
+	import type { MessageHandlers } from '$lib/design/components/types';
+	import { decorateCode } from '$lib/ui/copy-code';
+	import { noticeView } from '$lib/ui/message-view';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
-	import { idMillis } from '$lib/ui/time';
 
 	/**
 	 * A transient notice (PROTOCOL.md §3.5, Appendix A.1): a `message` without
@@ -20,22 +21,11 @@
 	 */
 	let { notice, onopenroom }: { notice: Notice; onopenroom: (roomId: string) => void } = $props();
 
-	let text = $derived(typeof notice.body?.text === 'string' ? notice.body.text : '');
-	let markdown = $derived(notice.body?.format === 'markdown');
-	let body = $derived(markdown ? renderMarkdown(text, directory.resolve, directory.resolveRoom) : renderPlain(text, directory.resolve, directory.resolveRoom));
-
-	function click(event: MouseEvent): void {
-		const roomLink = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-room-id]');
-		if (roomLink?.dataset.roomId) onopenroom(roomLink.dataset.roomId);
-		else openProfileFrom(event.target);
-	}
+	const on: MessageHandlers = {
+		openRoom: (roomId) => onopenroom(roomId),
+		openProfile: openProfileFrom,
+		code: decorateCode
+	};
 </script>
 
-{#snippet noticeText()}
-	<div class={['ap-msg-text', !markdown && 'ap-msg-plain']} use:copyCode={body} use:highlightCode={body}>{@html body}</div>
-{/snippet}
-
-<DesignMessage
-	data-timeline-item="" data-testid="notice" system scope={systemScope(notice.from.user_id) ?? 'private'} sender={notice.from}
-	timestamp={idMillis(String(notice.at))} body={noticeText} onclick={click}
-/>
+<Message view={noticeView(notice)} {on} testids={TESTIDS} />

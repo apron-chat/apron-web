@@ -37,3 +37,11 @@ class ReactorsState {
 }
 
 export const reactorsList = new ReactorsState();
+
+/**
+ * Lists who reacted with `emoji` beside its chip, read from the message's
+ * current chips (`chips`) as the list draws, so the open list follows changes.
+ */
+export function showReactors(anchor: HTMLElement, emoji: string, chips: () => readonly { emoji: string; reactors: Identity[] }[]): void {
+	reactorsList.open({ anchor, emoji, reactors: () => chips().find((chip) => chip.emoji === emoji)?.reactors ?? [] });
+}

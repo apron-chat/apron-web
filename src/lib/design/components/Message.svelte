@@ -1,216 +1,199 @@
-<script lang="ts">
-	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
-	import Avatar from './Avatar.svelte';
-	import Embed from './Embed.svelte';
-	import ReactionBar from './ReactionBar.svelte';
-	import ReplyPreview from './ReplyPreview.svelte';
-	import RoleBadges from './RoleBadges.svelte';
-	import type { EmbedProps, ReactionChip, ReplyPreviewProps, Sender } from './types';
-	import { chain, times, uid } from './util';
+<script module lang="ts">
+	import type { MessageHandlers } from './types';
 
-	/** Other attributes (`data-*`, event handlers, `class`) go on the row's `<article>`: yours win, classes merge, and `onclick` runs before the row's own. */
-	interface Props extends HTMLAttributes<HTMLElement> {
-		/** Omit only for a system line about the room itself (room records carry no sender). A `~private` notice has no `messageId`: render it, never store it (§3.5). */
-		messageId?: string;
-		sender?: Sender;
-		/**
-		 * Show `@user_id` beside the name, the protocol's `Name (@user_id)` (§3.3), where it tells people apart: pass
-		 * `true` when another user shown has the same display name. Off by default, in both densities: a handle that
-		 * merely differs from the name says nothing the name doesn't. Shown, it's needed, so it stays whole: the name and
-		 * the badges give way before it.
-		 */
-		handle?: boolean;
-		/** Plain text body. For Markdown, render + sanitize yourself and pass `children`. */
-		text?: string;
-		children?: Snippet;
-		embeds?: EmbedProps[];
-		/** Replaces the text and embeds, such as with your own renderers or an editor. Not shown on a tombstone. */
-		body?: Snippet;
-		/** Replaces the avatar in the gutter, such as with a button that opens the sender's profile. */
-		avatar?: Snippet;
-		/** Replaces the sender's name and `@handle` in the header. */
-		name?: Snippet;
-		/** Epoch ms of the creation `log_id` (the `message_id`). */
-		timestamp?: number;
-		/** Pre-formatted time; overrides the short time `timestamp` renders. */
-		time?: string;
-		/** Continuation of the previous sender's group: no avatar or name. Ignored on a reply, whose quote leads into its avatar. */
-		grouped?: boolean;
-		status?: 'sent' | 'pending' | 'failed';
-		onretry?: () => void;
-		/** `log_id !== message_id`: the snapshot is not the creation. */
-		edited?: boolean;
-		/** Tombstone (§4.4): body and reactions hidden. */
-		deleted?: boolean;
-		/** Render as a system message. Defaults to true when `sender.user_id` starts with "~" (Appendix A.1). */
-		system?: boolean;
-		/** Who else received a system notice (Appendix A.1); derived from `~server`, `~room`, `~private`. */
-		scope?: 'server' | 'room' | 'private';
-		/** `body.mentions` lists the viewer's `user_id` (§3.5) — never decided from the text. */
-		mention?: boolean;
-		/** First render after the mention ARRIVED: one ring pulse. */
-		pinged?: boolean;
-		highlighted?: boolean;
-		density?: 'cozy' | 'compact';
-		/** Hover/focus toolbar, usually a <MessageActions>. Omit when the server allows nothing, and on a tombstone unless something applies to it (Remove reply). */
-		actions?: Snippet;
-		/** Under the body — such as the <ThreadMarker> card of a thread started from this message. */
-		footer?: Snippet;
-		/** The message `reply_to` names (§3.5), resolved by you — may be in another room. */
-		replyTo?: ReplyPreviewProps;
-		/** Replaces the quote's <ReplyPreview>, such as for a message you can't resolve; makes it a reply as `replyTo` does. */
-		reply?: Snippet;
-		onjumpto?: () => void;
-		reactions?: ReactionChip[];
-		reacting?: boolean;
-		canReact?: boolean;
-		onreact?: (emoji: string) => void;
-		onopenreact?: () => void;
-		onclosereact?: () => void;
-		/** Bulk-select mode: a check column appears, the whole row toggles, hover actions hide. Pair with <SelectionBar>. */
-		selectMode?: boolean;
-		selected?: boolean;
-		onselect?: (e: Event) => void;
-		/** Runs before the select-mode row toggle; call `preventDefault()` to replace the toggle. */
-		onclick?: (e: MouseEvent) => void;
-	}
-	let {
-		messageId, sender, handle, text, children, embeds, body, avatar, name: nameSnippet, timestamp, time, grouped: groupedProp, status = 'sent', onretry, edited, deleted,
-		system: systemProp, scope: scopeProp, mention, pinged, highlighted, density = 'cozy', actions, footer, replyTo, reply, onjumpto,
-		reactions, reacting, canReact, onreact, onopenreact, onclosereact, selectMode, selected, onselect, onclick, class: className, ...rest
-	}: Props = $props();
+	const LONG_PRESS_MS = 500;
+	const NONE: MessageHandlers = {};
+	/** The one touch long press in progress, page-wide: a second finger elsewhere starts over. */
+	let press: ReturnType<typeof setTimeout> | undefined;
 
-	const s = $derived(sender || ({} as Partial<Sender>));
-	const sid = $derived(uid(s));
-	const name = $derived(s.name || sid);
-	const system = $derived(systemProp ?? String(sid || '').startsWith('~'));
-	const scope = $derived(scopeProp || (sid === '~server' ? 'server' : sid === '~room' ? 'room' : sid === '~private' ? 'private' : undefined));
-	const showHandle = $derived(!!sid && handle === true);
-	const quoted = $derived((!!replyTo || !!reply) && !deleted);
-	const grouped = $derived(groupedProp && !quoted);
-	const t = $derived(times(timestamp, time));
-	const sel = $derived(!!selectMode);
-	const noticeTitle = $derived(s.name && s.name !== sid ? `${s.name} (${sid})` : sid);
-	const cls = $derived(['ap-msg', grouped && 'ap-msg-grouped', status === 'pending' && 'ap-msg-pending', mention && 'ap-msg-mention', pinged && 'ap-msg-pinged', highlighted && 'ap-msg-highlighted', sel && 'ap-msg-selectable', sel && selected && 'ap-msg-selected', density === 'compact' && 'ap-msg-compact']);
-	const hasMeta = $derived((edited && !deleted) || status === 'pending');
-
-	function rowClick(e: MouseEvent, selecting: boolean) {
-		if (!selecting) return;
-		if ((e.target as Element)?.closest?.('a, button, input, textarea')) return;
-		onselect?.(e);
-	}
-	/**
-	 * The row's click: yours first, then the select-mode toggle, which answers to the mode the click began in. Your
-	 * handler may switch select mode on (a shift-click that picks this message), and that same click must not then
-	 * toggle it back off.
-	 */
-	function click(e: MouseEvent) {
-		const selecting = sel;
-		chain((event: MouseEvent) => rowClick(event, selecting), onclick)?.(e);
-	}
-	function checkKey(e: KeyboardEvent) {
-		if (e.key === ' ' || e.key === 'Enter') {
-			e.preventDefault();
-			onselect?.(e);
-		}
+	function cancelPress(): void {
+		if (!press) return;
+		clearTimeout(press);
+		press = undefined;
 	}
 </script>
 
-{#snippet textBody(tag: 'div' | 'span')}
-	<svelte:element this={tag} class="ap-msg-text">{#if children}{@render children()}{:else}{text}{/if}</svelte:element>
-{/snippet}
-{#snippet tomb()}<span class="ap-msg-tomb">Message deleted</span>{/snippet}
-{#snippet timeEl(text: string | undefined, className?: string)}
-	{#if text}<time class={className} datetime={t.iso} title={t.exact}>{text}</time>{/if}
-{/snippet}
-{#snippet meta()}{#if edited && !deleted}<span>edited</span>{/if}{#if status === 'pending'}<span>Sending…</span>{/if}{/snippet}
-{#snippet quote()}{#if quoted}<div class="ap-msg-reply">{#if reply}{@render reply()}{:else if replyTo}<ReplyPreview onjump={onjumpto} {...replyTo} />{/if}</div>{/if}{/snippet}
-{#snippet embedList()}
-	{#if embeds && embeds.length}<div class="ap-msg-embeds">{#each embeds as e, i (e.embed_id || i)}<Embed {...e} />{/each}</div>{/if}
-{/snippet}
-{#snippet failed()}
-	{#if status === 'failed'}<div class="ap-msg-failed">Not sent · <button type="button" class="ap-link" onclick={onretry}>Retry</button></div>{/if}
-{/snippet}
-{#snippet check()}
-	{#if sel}<span class="ap-msg-check" role="checkbox" aria-checked={!!selected} aria-label="Select message" tabindex="0" onkeydown={checkKey}>{selected ? '✓' : ''}</span>{/if}
-{/snippet}
-{#snippet senderName()}
-	{#if nameSnippet}{@render nameSnippet()}
-	{:else}<span class="ap-msg-sender" title={name}>{name}</span>{#if showHandle}<span class="ap-msg-handle">@{sid}</span>{/if}{/if}
-{/snippet}
-{#snippet actionBar()}
-	{#if actions && !sel}<div class="ap-msg-actions">{@render actions()}</div>{/if}
-{/snippet}
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+	import Avatar from './Avatar.svelte';
+	import MessageActions from './MessageActions.svelte';
+	import MessageEmbeds from './MessageEmbeds.svelte';
+	import ReactionBar from './ReactionBar.svelte';
+	import ReplyPreview from './ReplyPreview.svelte';
+	import RoleBadges from './RoleBadges.svelte';
+	import type { MessageAction, MessageEmbed, MessageTestids, MessageView } from './types';
+	import { times } from './util';
 
-{#if system && !sel && scope}
+	/**
+	 * One message row, drawn from a MessageView. The header, body and reactions are its own; the quote, the embeds, the
+	 * hover toolbar and the editor are parts it adds only to the rows that have them. The toolbar is built the first
+	 * time a pointer or focus reaches the row, since it only shows then.
+	 */
+	interface Props {
+		view: MessageView;
+		on?: MessageHandlers;
+		testids?: MessageTestids;
+		/** In place of the body while the message is being edited, such as your MessageEditor. Pass it to that row only. */
+		editor?: Snippet<[MessageView]>;
+		/** Draws one embed, in place of the design system's Embed. */
+		embed?: Snippet<[MessageEmbed]>;
+	}
+	let { view, on = NONE, testids, editor, embed }: Props = $props();
+
+	let engaged = $state(false);
+
+	const t = $derived(times(view.timestamp, view.time));
+	const quoted = $derived(Boolean(view.reply) && !view.deleted);
+	const grouped = $derived(view.grouped && !quoted);
+	/** A check column: select mode, on a message you may pick. */
+	const checkable = $derived(Boolean(view.selecting && view.caps?.select));
+	const caps = $derived(view.caps);
+	const toolbar = $derived(engaged && !view.editing && !view.selecting && caps !== undefined && (caps.reply || caps.edit || caps.removeReply || caps.react || caps.startThread || caps.link));
+
+	/** The toolbar's actions, in order; the rarer ones wait behind ⋯. */
+	function actions(): { items: MessageAction[]; more?: MessageAction[] } {
+		const can = caps!;
+		const items: MessageAction[] = [];
+		if (view.deleted && can.removeReply) items.push({ id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) });
+		if (can.reply) items.push({ id: 'reply', label: 'Reply to message', glyph: 'Reply', onclick: () => on.reply?.(view) });
+		if (can.react && !view.deleted) {
+			items.push({ id: 'react', label: 'React', title: 'React', popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) });
+		}
+		if (can.startThread) items.push({ id: 'thread', label: 'Start thread', title: 'Start thread', onclick: () => on.startThread?.(view) });
+		if (can.edit) items.push({ id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', onclick: () => on.edit?.(view) });
+		if (!can.edit && !can.link) return { items };
+		const more: MessageAction[] = [];
+		if (can.edit && view.reply) more.push({ id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) });
+		if (can.edit && can.select) more.push({ id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', testid: testids?.select, onclick: () => on.beginSelect?.(view) });
+		if (can.link) more.push({ id: 'link', label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', done: { label: 'Link copied', glyph: 'Copied' }, onclick: () => on.copyLink?.(view) });
+		if (can.edit) more.push({ id: 'delete', label: 'Delete message', title: 'Delete', glyph: 'Delete', danger: true, onclick: () => on.delete?.(view) });
+		return { items, more };
+	}
+
+	/**
+	 * A click: a room mention opens it; outside select mode a person (a mention, the sender's name or avatar) opens
+	 * their profile; in select mode it picks the message, a shift-click filling the range; else a shift-click starts
+	 * select mode with it picked.
+	 */
+	function click(event: MouseEvent): void {
+		const target = event.target as HTMLElement | null;
+		const room = target?.closest?.<HTMLElement>('[data-room-id]');
+		if (room?.dataset.roomId) {
+			on.openRoom?.(room.dataset.roomId);
+			return;
+		}
+		if (!view.selecting && on.openProfile?.(event.target)) return;
+		if (target?.closest?.('a, button:not([data-user-id]), input, textarea, select')) return;
+		if (view.selecting) {
+			if (!view.caps?.select) return;
+			event.preventDefault();
+			on.select?.(view, event.shiftKey);
+			return;
+		}
+		if (event.shiftKey && view.caps?.select) on.beginSelect?.(view);
+	}
+
+	/** Keyboard: `x` on a focused message picks it, the same as a shift-click. */
+	function keydown(event: KeyboardEvent): void {
+		if (event.key !== 'x' || event.metaKey || event.ctrlKey || event.altKey || !view.caps?.select) return;
+		if ((event.target as HTMLElement | null)?.closest?.('input, textarea, select')) return;
+		event.preventDefault();
+		if (view.selecting) on.select?.(view, false);
+		else on.beginSelect?.(view);
+	}
+
+	function checkKey(event: KeyboardEvent): void {
+		if (event.key !== ' ' && event.key !== 'Enter') return;
+		event.preventDefault();
+		on.select?.(view, false);
+	}
+
+	/** Touch has no hover or shift: a long press starts select mode instead, unless it's on a chip, which lists who reacted. */
+	function pointerdown(event: PointerEvent): void {
+		cancelPress();
+		if (event.pointerType !== 'touch' || view.selecting || view.editing || !view.caps?.select) return;
+		if ((event.target as HTMLElement | null)?.closest?.('.ap-rchip')) return;
+		const row = event.currentTarget as HTMLElement;
+		press = setTimeout(() => {
+			press = undefined;
+			if (row.isConnected) on.beginSelect?.(view);
+		}, LONG_PRESS_MS);
+	}
+
+	function engage(): void {
+		engaged = true;
+	}
+
+	/** Its code blocks, decorated by `on.code` (a notice's get Copy buttons), again whenever the body changes. */
+	function code(node: HTMLElement): void | (() => void) {
+		void view.body?.html;
+		return on.code?.(node, Boolean(view.system && view.scope));
+	}
+</script>
+
+<!-- Every row marks itself a timeline item, for whoever scrolls the timeline. -->
+{#if view.system && view.scope}
 	<!-- A scoped notice: a left-aligned card titled by its sender as the server names it (§3.3). -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article data-message-id={messageId} data-scope={scope} tabindex="-1" {...rest} class={['ap-notice', scope === 'private' && 'ap-notice-private', className]} {onclick}>
-		<div class="ap-notice-head"><span class="ap-notice-title">{noticeTitle}</span>{@render timeEl(t.short, 'ap-notice-time')}</div>
-		<div class="ap-notice-body">{#if deleted}{@render tomb()}{:else if body}{@render body()}{:else}{@render textBody('div')}{/if}</div>
+	<article class={['ap-notice', view.scope === 'private' && 'ap-notice-private']} data-message-id={view.id} data-scope={view.scope} data-timeline-item="" data-testid={testids?.row} tabindex="-1" onclick={click}>
+		<div class="ap-notice-head"><span class="ap-notice-title">{view.sender.name}</span>{#if t.short}<time class="ap-notice-time" datetime={t.iso} title={t.exact}>{t.short}</time>{/if}</div>
+		<div class="ap-notice-body">{#if view.deleted}<span class="ap-msg-tomb">Message deleted</span>{:else}<div class={['ap-msg-text', !view.body?.markdown && 'ap-msg-plain']} {@attach view.body?.code && code}>{@html view.body?.html ?? ''}</div>{/if}</div>
 	</article>
-{:else if system && !sel}
+{:else if view.system}
+	<!-- Another system identity (Appendix A.1): a quiet centered line, no avatar, actions or grouping. -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article data-message-id={messageId} tabindex="-1" {...rest} class={['ap-msg', 'ap-msg-system', className]} {onclick}>
-		{#if sender}<span class="ap-msg-system-who">{name}</span>{/if}
-		<div class="ap-msg-system-body">{#if deleted}{@render tomb()}{:else if body}{@render body()}{:else}{@render textBody('div')}{/if}</div>
-		{@render timeEl(t.short, 'ap-msg-system-time')}
-	</article>
-{:else if density === 'compact'}
-	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article data-message-id={messageId} tabindex="-1" {...rest} class={[cls, className]} onclick={click}>
-		{@render quote()}
-		{@render check()}
-		<time class="ap-msg-ctime" datetime={t.iso} title={t.exact}>{t.short}</time>
-		<div class="ap-msg-main">
-			{@render senderName()}
-			<RoleBadges roles={s.roles} />
-			{#if deleted}{@render tomb()}{:else if body}
-				{@render body()}
-				{#if hasMeta}<span class="ap-msg-meta">{@render meta()}</span>{/if}
-				{@render failed()}
-			{:else}
-				{@render textBody('span')}
-				{#if hasMeta}<span class="ap-msg-meta">{@render meta()}</span>{/if}
-				{@render embedList()}
-				{@render failed()}
-			{/if}
-			{@render footer?.()}
-		</div>
-		{@render actionBar()}
+	<article class="ap-msg ap-msg-system" data-message-id={view.id} data-timeline-item="" data-testid={testids?.row} tabindex="-1" onclick={click}>
+		<span class="ap-msg-system-who">{view.sender.name}</span>
+		<div class="ap-msg-system-body">{#if view.deleted}<span class="ap-msg-tomb">Message deleted</span>{:else}<div class={['ap-msg-text', !view.body?.markdown && 'ap-msg-plain']} {@attach view.body?.code && code}>{@html view.body?.html ?? ''}</div>{/if}</div>
+		{#if t.short}<time class="ap-msg-system-time" datetime={t.iso} title={t.exact}>{t.short}</time>{/if}
 	</article>
 {:else}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article data-message-id={messageId} tabindex="-1" {...rest} class={[cls, className]} onclick={click}>
-		{@render quote()}
-		{@render check()}
+	<article
+		class={['ap-msg', grouped && 'ap-msg-grouped', view.mention && 'ap-msg-mention', view.pinged && 'ap-msg-pinged', view.highlighted && 'ap-msg-highlighted', checkable && 'ap-msg-selectable', checkable && view.selected && 'ap-msg-selected']}
+		data-message-id={view.id}
+		data-timeline-item=""
+		data-testid={testids?.row}
+		tabindex="-1"
+		onclick={click}
+		onkeydown={keydown}
+		onpointerenter={engage}
+		onfocusin={engage}
+		onpointerdown={pointerdown}
+		onpointerup={cancelPress}
+		onpointermove={cancelPress}
+		onpointercancel={cancelPress}
+	>
+		{#if quoted}<div class="ap-msg-reply"><ReplyPreview reply={view.reply!} onjump={on.jump} data-testid={testids?.reply} /></div>{/if}
+		{#if checkable}<span class="ap-msg-check" role="checkbox" aria-checked={Boolean(view.selected)} aria-label="Select message" tabindex="0" onkeydown={checkKey}>{view.selected ? '✓' : ''}</span>{/if}
 		<div class="ap-msg-gutter">
 			{#if grouped}<time class="ap-msg-hovertime" datetime={t.iso} title={t.exact}>{t.compact}</time>
-			{:else if avatar}{@render avatar()}
-			{:else}<Avatar {name} src={s.avatar} />{/if}
+			{:else}
+				<!-- The sender's name and avatar open their profile (`on.openProfile`): the name is the keyboard's way in; the avatar is a second target for the pointer. -->
+				<button class="ap-msg-who" type="button" tabindex="-1" aria-hidden="true" data-user-id={view.sender.user_id}><Avatar name={view.sender.name} src={view.sender.avatar} hue={view.sender.hue} /></button>
+			{/if}
 		</div>
 		<div class="ap-msg-main">
 			{#if !grouped}
 				<header class="ap-msg-head">
-					{@render senderName()}
-					<RoleBadges roles={s.roles} />
-					<span class="ap-msg-meta">{@render timeEl(t.short)}{@render meta()}</span>
+					<button class="ap-msg-sender ap-msg-who" type="button" data-user-id={view.sender.user_id} aria-haspopup="dialog" title="Show profile">{view.sender.name}</button>
+					{#if view.sender.handle}<span class="ap-msg-handle" data-testid={testids?.handle}>@{view.sender.handle}</span>{/if}
+					{#if view.sender.roles?.length}<RoleBadges roles={view.sender.roles} />{/if}
+					<span class="ap-msg-meta">{#if t.short}<time datetime={t.iso} title={t.exact}>{t.short}</time>{/if}</span>
 				</header>
-			{:else if hasMeta}<div class="ap-msg-meta">{@render meta()}</div>{/if}
-			{#if deleted}<div class="ap-msg-tomb">Message deleted</div>{:else}
-				{#if body}{@render body()}
-				{:else}
-					{#if children || text != null}{@render textBody('div')}{/if}
-					{@render embedList()}
-				{/if}
-				{@render failed()}
-				{#if (reactions && reactions.length) || reacting}
-					<ReactionBar reactions={reactions || []} open={reacting} disabled={canReact === false} ontoggle={onreact} onopen={onopenreact} onclose={onclosereact} />
-				{/if}
 			{/if}
-			{@render footer?.()}
+			{#if view.deleted}<div class="ap-msg-tomb">Message deleted</div>
+			{:else if editor}{@render editor(view)}
+			{:else}
+				<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
+				{#if view.body}<div class={['ap-msg-text', view.body.markdown ? 'ap-msg-markdown' : 'ap-msg-plain']} {@attach view.body.code && code}>{@html view.body.html}</div>{/if}
+				{#if view.embeds?.length}<MessageEmbeds embeds={view.embeds} {embed} onremove={(item) => on.removeEmbed?.(view, item)} />{/if}
+			{/if}
+			{#if !view.deleted && view.reactions?.length}<ReactionBar reactions={view.reactions} disabled={!caps?.react} add={false} ontoggle={(emoji) => on.react?.(view, emoji)} onreactors={(emoji, chip) => on.reactors?.(view, emoji, chip)} data-testid={testids?.reactions} chipTestid={testids?.chip} />{/if}
 		</div>
-		{@render actionBar()}
+		{#if toolbar}
+			{@const { items, more } = actions()}
+			<div class="ap-msg-actions"><MessageActions {items} {more} /></div>
+		{/if}
 	</article>
 {/if}

@@ -23,7 +23,10 @@
     membersToggle: A.part(A.PanelToggle, { side: 'right', panel: 'member list', open: true }),
     membersHandle: A.part(A.PanelHandle, { side: 'right', name: 'member list' })
   });
-  var acts = function () { return A.part(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }, { label: 'Start thread', glyph: 'Thread' }], onmore: noop }); };
+  // Hover a message for its toolbar, from what the viewer may do.
+  var caps = { reply: true, edit: false, startThread: true, select: false, removeReply: false, react: true, link: true };
+  var mine = { reply: true, edit: true, startThread: false, select: true, removeReply: false, react: true, link: true };
+  function msg(view, at) { view.caps = view.caps || caps; return add(A.Message, { view: view, on: {} }, at); }
   function side(activeThread) {
     var rooms = [
       { room: 'general', name: 'General' }, { room: 'ops', name: 'Ops', active: !activeThread },
@@ -38,14 +41,14 @@
   add(A.RoomHeader, { room: 'ops', name: 'Ops', topic: 'Deploys and incidents', onedit: noop }, $('head'));
   var tl = $('tl');
   add(A.TimelineDivider, { kind: 'date', label: 'Today' }, tl);
-  add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.', actions: acts(),
-    footer: A.part(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', unread: 2, lastReply: '12m', participants: [bob, dana, me], summary: 'Worker 1.9.0 crash-looped; rolled back to 1.8.3', latest: { sender: me, text: 'Re-running the migration now.' } }) }, tl);
-  add(A.Message, { sender: bob, time: '14:05', mention: true, children: A.html('<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> migration 0042 is holding a lock, can you look?</p>'),
-    footer: A.part(A.ThreadMarker, { thread: 'mig-0042', name: 'Migration 0042', lastReply: '3h', participants: [dana, me], summary: 'Lock held on accounts table by a stale worker' }) }, tl);
-  add(A.Message, { sender: dana, time: '14:21', text: 'Moved the worker chatter into Deploy.' }, tl);
+  msg({ sender: alice, time: '14:02', body: { html: 'Deploy is green, rolling to prod now.' } }, tl);
+  add(A.ThreadMarker, { row: true, thread: 'deploy', name: 'Deploy', unread: 2, lastReply: '12m', participants: [bob, dana, me], summary: 'Worker 1.9.0 crash-looped; rolled back to 1.8.3', latest: { sender: me, text: 'Re-running the migration now.' } }, tl);
+  msg({ sender: bob, time: '14:05', mention: true, body: { markdown: true, html: '<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> migration 0042 is holding a lock, can you look?</p>' } }, tl);
+  add(A.ThreadMarker, { row: true, thread: 'mig-0042', name: 'Migration 0042', lastReply: '3h', participants: [dana, me], summary: 'Lock held on accounts table by a stale worker' }, tl);
+  msg({ sender: dana, time: '14:21', body: { html: 'Moved the worker chatter into Deploy.' } }, tl);
   add(A.ThreadMarker, { thread: 'deploy', name: 'Deploy', moved: true }, tl);
   add(A.TimelineDivider, { kind: 'new' }, tl);
-  add(A.Message, { sender: bob, time: '14:31', text: 'Retro at 16:00, same link as last week.', replyTo: { messageId: '1724803000000', sender: dana, snippet: 'Should we do the retro today or wait for the write-up?' } }, tl);
+  msg({ sender: bob, time: '14:31', body: { html: 'Retro at 16:00, same link as last week.' }, reply: { id: '1724803000000', name: dana.name, snippet: ['Should we do the retro today or wait for the write-up?'] } }, tl);
   add(A.TypingIndicator, { names: ['Dana'] }, $('foot'));
   add(A.Composer, { room: 'Ops', canUpload: true }, $('foot'));
 </script>

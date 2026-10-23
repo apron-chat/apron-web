@@ -8,10 +8,10 @@
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' };
-  add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.' });
+  add(A.Message, { view: { sender: alice, time: '14:02', body: { html: 'Deploy is green, rolling to prod now.' } } });
   // Join and leave lines are the quietest: their time shows on hover.
   add(A.SystemLine, { quiet: true, text: 'Dana and Sam joined · Lee left', time: '14:03' });
-  add(A.Message, { sender: bob, time: '14:05', text: 'Worker pods are restarting in a loop.' });
+  add(A.Message, { view: { sender: bob, time: '14:05', body: { html: 'Worker pods are restarting in a loop.' } } });
   add(A.SystemLine, { time: '14:06', children: A.html('Thread renamed to <span class="ap-msg-text">“Worker crash loop”</span>') });
 </script>
 </body>

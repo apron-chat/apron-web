@@ -9,11 +9,14 @@
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' }, dana = { user_id: 'dana', name: 'Dana' };
   var none = function () {};
-  add(A.Message, { sender: alice, time: '14:02', text: 'Deploy is green, rolling to prod now.', selectMode: true });
-  add(A.Message, { sender: bob, time: '14:04', text: 'Worker pods are restarting in a loop.', selectMode: true, selected: true });
-  add(A.Message, { sender: bob, time: '14:04', grouped: true, text: 'Crash is in the new queue client.', selectMode: true, selected: true });
-  add(A.Message, { sender: dana, time: '14:20', text: 'Rolled back worker to 1.8.3.', selectMode: true, selected: true });
-  add(A.Message, { sender: alice, time: '14:31', text: 'Retro at 16:00, same link as last week.', selectMode: true });
+  // In select mode, a message you may pick (`caps.select`) shows a check.
+  var pick = { reply: false, edit: false, startThread: false, select: true, removeReply: false, react: false, link: false };
+  function msg(view) { view.selecting = true; view.caps = pick; return add(A.Message, { view: view }); }
+  msg({ sender: alice, time: '14:02', body: { html: 'Deploy is green, rolling to prod now.' } });
+  msg({ sender: bob, time: '14:04', body: { html: 'Worker pods are restarting in a loop.' }, selected: true });
+  msg({ sender: bob, time: '14:04', grouped: true, body: { html: 'Crash is in the new queue client.' }, selected: true });
+  msg({ sender: dana, time: '14:20', body: { html: 'Rolled back worker to 1.8.3.' }, selected: true });
+  msg({ sender: alice, time: '14:31', body: { html: 'Retro at 16:00, same link as last week.' } });
   add(A.SelectionBar, { count: 3, threads: [{ thread: 'deploy', name: 'Deploy' }, { thread: 'mig-0042', name: 'Migration 0042' }], onselectrange: none, onnewthread: none });
   add(A.SelectionBar, { count: 3, status: 'saving' });
   // In a thread: the menu offers the room first. Without onnewthread (no capability `rooms`) there is no New thread.
