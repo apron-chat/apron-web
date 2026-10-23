@@ -155,6 +155,15 @@ export interface AttachmentFile {
 	src?: string;
 }
 
+/** What a Composer hands its `field` snippet: how your own field reads, as its textarea would. */
+export interface ComposerField {
+	/** The placeholder: the Composer's `placeholder`, else "Message {room}" or "Reply in {thread}". */
+	placeholder: string;
+	disabled: boolean;
+	/** The draft is a command (`canCommand`): the field is set in monospace by the Composer. */
+	command: boolean;
+}
+
 /** A room or thread a `#` can name, in the MentionPicker. */
 export interface PickerRoom {
 	id: string;

@@ -19,6 +19,7 @@ export { default as TimelineDivider } from './TimelineDivider.svelte';
 export { default as TimelineLoading } from './TimelineLoading.svelte';
 export { default as TypingIndicator } from './TypingIndicator.svelte';
 export { default as Composer } from './Composer.svelte';
+export { default as ComposerEditable } from './ComposerEditable.svelte';
 export { default as Attachments } from './Attachments.svelte';
 export { default as AttachmentTile } from './AttachmentTile.svelte';
 export { default as RoomItem } from './RoomItem.svelte';

@@ -2,6 +2,7 @@
 import { createRawSnippet, flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
+import ComposerEditable from './ComposerEditable.svelte';
 
 let instance: ReturnType<typeof mount> | undefined;
 
@@ -14,34 +15,69 @@ afterEach(() => {
 const html = (markup: string) => createRawSnippet(() => ({ render: () => markup }));
 const testid = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
 
-function render(props: Record<string, unknown>) {
-	instance = mount(Composer, { target: document.body, props: { room: 'Ops', ...props } });
+/** The app's test ids, as it passes them. */
+const testids = { replyTestid: 'reply-draft', attachmentsTestid: 'staged-files', previewsTestid: 'link-previews', fileInputTestid: 'attach-input', commandTestid: 'command-tag', emojiTestid: 'emoji-button', sendTestid: 'send-button' };
+
+function render(props: Record<string, unknown>, component: typeof Composer | typeof ComposerEditable = Composer) {
+	instance = mount(component, { target: document.body, props: component === Composer ? { room: 'Ops', ...testids, ...props } : props });
 	flushSync();
 }
 
 describe('Composer', () => {
-	it('disables Send on an empty draft unless told it has something to send', () => {
+	it('disables Send on an empty draft unless told it has something to send, or it has files', () => {
 		render({});
 		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(true);
 		unmount(instance!);
 		render({ canSend: true });
 		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(false);
+		unmount(instance!);
+		render({ attachments: html('<div class="ap-attachment">tile</div>') });
+		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(false);
+		unmount(instance!);
+		render({ value: 'hi', canSend: false });
+		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(true);
 	});
 
-	it('takes your word on whether the draft is a command', () => {
-		render({ value: '/kick ada', canCommand: true, command: false });
+	it('reads a draft starting with one "/" as a command, where the server takes commands', () => {
+		render({ value: '/kick ada', canCommand: true });
+		expect(testid('command-tag')).not.toBeNull();
+		expect(testid('send-button')?.getAttribute('aria-label')).toBe('Run command');
+		unmount(instance!);
+		render({ value: '//kick ada', canCommand: true });
 		expect(testid('command-tag')).toBeNull();
 		expect(testid('send-button')?.textContent).toBe('Send');
 		unmount(instance!);
-		render({ value: 'plain', command: true });
-		expect(testid('command-tag')).not.toBeNull();
-		expect(testid('send-button')?.getAttribute('aria-label')).toBe('Run command');
+		render({ value: '/kick ada' });
+		expect(testid('command-tag')).toBeNull();
+	});
+
+	it('puts your attributes on its textarea, its class merged', () => {
+		const onkeydown = vi.fn();
+		render({ id: 'message-input', 'data-testid': 'message-input', class: 'mine', onkeydown });
+		const field = testid('message-input')!;
+		expect(field.tagName).toBe('TEXTAREA');
+		expect(field.id).toBe('message-input');
+		expect([...field.classList]).toEqual(['ap-composer-field', 'mine']);
+		field.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+		expect(onkeydown).toHaveBeenCalledOnce();
+	});
+
+	it('draws your own field in place of the textarea, with its placeholder and state', () => {
+		const field = createRawSnippet((state: () => { placeholder: string; disabled: boolean; command: boolean }) => ({
+			render: () => `<div class="mine" data-placeholder="${state().placeholder}" data-disabled="${state().disabled}" data-command="${state().command}"></div>`
+		}));
+		render({ field, value: '/me', canCommand: true, disabled: true });
+		expect(document.querySelector('textarea')).toBeNull();
+		const mine = document.querySelector<HTMLElement>('.mine')!;
+		expect(mine.dataset).toMatchObject({ placeholder: 'Message Ops', disabled: 'true', command: 'true' });
 	});
 
 	it('draws an empty editable for you to fill, with your attributes and the placeholder while empty', () => {
 		const onkeydown = vi.fn();
-		render({ editable: true, empty: true, fieldProps: { id: 'message-input', 'data-testid': 'message-input', onkeydown } });
+		render({ placeholder: 'Message Ops', empty: true, id: 'message-input', 'data-testid': 'message-input', class: 'mine', onkeydown }, ComposerEditable);
 		const field = testid('message-input')!;
+		expect(field.classList.contains('mine')).toBe(true);
+		expect(field.getAttribute('role')).toBe('textbox');
 		expect(field.tagName).toBe('DIV');
 		expect(field.id).toBe('message-input');
 		expect(field.getAttribute('aria-label')).toBe('Message');
@@ -102,7 +138,7 @@ describe('Composer', () => {
 		expect(field.getAttribute('dir')).toBe('auto');
 		expect(field.getAttribute('placeholder')).toBe('Reply in Untitled');
 		unmount(instance!);
-		render({ editable: true, empty: true });
+		render({ empty: true }, ComposerEditable);
 		expect(document.querySelector('.ap-composer-editable')?.getAttribute('dir')).toBe('auto');
 	});
 });

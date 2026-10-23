@@ -285,7 +285,7 @@
 				aria-haspopup="dialog"
 				aria-expanded={reacting}
 				bind:this={reactButton}
-				use:emojiAnchor
+				{@attach emojiAnchor}
 				onclick={() => act(openReact)}
 			>React</button>
 		{/if}

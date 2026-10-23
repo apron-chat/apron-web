@@ -5,9 +5,11 @@
 	 * (x) on its corner takes it off.
 	 */
 	import { tick } from 'svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
 	import FileGlyph from './FileGlyph.svelte';
 
-	interface Props {
+	/** Other attributes (`data-*`, a `class`) go on the tile. */
+	interface Props extends HTMLAttributes<HTMLDivElement> {
 		name: string;
 		/** Under the name: the size it goes out at, "Preparing…", or what it is. */
 		detail?: string;
@@ -26,7 +28,7 @@
 		/** `data-testid` on the name and detail. */
 		labelTestid?: string;
 	}
-	let { name, detail, kind = 'file', src, onrename, onremove, removeLabel, labelTestid }: Props = $props();
+	let { name, detail, kind = 'file', src, onrename, onremove, removeLabel, labelTestid, class: className, ...rest }: Props = $props();
 
 	/** Long names lose their middle, not their end: the last characters, such as the extension, stay in view. */
 	const TAIL = 8;
@@ -95,7 +97,7 @@
 	{/if}
 {/snippet}
 
-<div class={['ap-attachment', renaming && 'ap-attachment-renaming']}>
+<div {...rest} class={['ap-attachment', renaming && 'ap-attachment-renaming', className]}>
 	{#if kind === 'image'}
 		<figure class="ap-embed ap-attachment-thumb" title={renaming ? undefined : detail ? `${name} · ${detail}` : name}>
 			<img {src} alt={name} />

@@ -6,7 +6,7 @@
 	import { emojiQuery as findEmojiQuery, searchEmoji, type EmojiQuery, type EmojiSuggestion } from '$lib/ui/emoji-autocomplete';
 	import { roomQuery as findRoomQuery, searchRooms, type RoomQuery, type RoomSuggestion } from '$lib/ui/room-autocomplete';
 	import type { EmojiMartData } from '@emoji-mart/data';
-	import { emojiPicker, loadEmojiData } from '$lib/ui/emoji-picker.svelte';
+	import { emojiAnchor, emojiPicker, loadEmojiData } from '$lib/ui/emoji-picker.svelte';
 	import { isCommand } from '$lib/ui/commands';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { findGitHubLinks, linkPreviews } from '$lib/ui/link-previews';
@@ -19,6 +19,8 @@
 	import Embed from './embeds/Embed.svelte';
 	import StagedFile from './StagedFile.svelte';
 	import DesignComposer from '$lib/design/components/Composer.svelte';
+	import ComposerEditable from '$lib/design/components/ComposerEditable.svelte';
+	import type { ComposerField } from '$lib/design/components/types';
 
 	const MENTION_MATCHES_MAX = 8;
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
@@ -83,7 +85,7 @@
 	/** Unique per composer, for the open picker's ID. */
 	const uid = $props.id();
 	const pickerId = `${uid}-suggestions`;
-	let field = $state<HTMLElement | undefined>();
+	let field = $state<HTMLDivElement | undefined>();
 	let emojiButton = $state<HTMLButtonElement | undefined>();
 	/** The selection in the draft text when the field last lost focus: where a picked emoji goes. */
 	let lastSelection: { start: number; end: number } | undefined;
@@ -201,11 +203,8 @@
 	}
 
 	$effect(() => () => stopRecording(false));
-	// The emoji picker lets go of its button when the button goes.
-	$effect(() => {
-		const button = emojiButton;
-		if (button) return () => emojiPicker.release(button);
-	});
+	// The emoji picker lets go of its button when the button goes (`emojiAnchor`, as on a message's React).
+	$effect(() => (emojiButton ? emojiAnchor(emojiButton) : undefined));
 
 	// A draft set from outside (a room's saved draft, a cleared field) is drawn with its mentions as chips.
 	$effect(() => {
@@ -346,12 +345,12 @@
 		if (typed) oninput();
 	}
 
-	/** Chips finished mentions; `final` when sending, so one at the very end counts too. */
-	/** A named handler, not an arrow in fieldProps: the field keeps one listener as fieldProps is rebuilt while typing. */
+	/** A named handler, not an arrow in the field's markup: the field keeps one listener as its attributes change while typing. */
 	function compositionEnd(): void {
 		collapse(false);
 	}
 
+	/** Chips finished mentions; `final` when sending, so one at the very end counts too. */
 	function collapse(final: boolean): void {
 		if (!field) return;
 		const { parts, caret } = readDraft(field);
@@ -620,8 +619,7 @@
 	{placeholder}
 	{value}
 	{disabled}
-	{command}
-	canSend={Boolean(value.trim()) || files.length > 0}
+	{canCommand}
 	{canUpload}
 	{canRecord}
 	{onfiles}
@@ -630,24 +628,7 @@
 	{recording}
 	recordingTime={clockLabel(recordSeconds ?? 0)}
 	onsend={send}
-	editable
-	{empty}
-	bind:field
-	fieldProps={{
-		id: 'message-input',
-		'data-testid': 'message-input',
-		'aria-autocomplete': 'list',
-		'aria-controls': completion ? pickerId : undefined,
-		'aria-activedescendant': completion?.count ? `${pickerId}-${activeIndex}` : undefined,
-		onbeforeinput: beforeinput,
-		oninput: input,
-		oncompositionend: compositionEnd,
-		onkeydown: keydown,
-		onkeyup: refreshQuery,
-		onclick: refreshQuery,
-		onblur: blur,
-		onpaste: paste
-	}}
+	field={editable}
 	onemoji={openEmoji}
 	{emojiOpen}
 	bind:emojiButton
@@ -659,8 +640,36 @@
 	{preview}
 	onremovepreview={(index) => dismissPreview(previews[index]?.url ?? '')}
 	{picker}
+	replyTestid="reply-draft"
+	attachmentsTestid="staged-files"
+	previewsTestid="link-previews"
+	fileInputTestid="attach-input"
+	commandTestid="command-tag"
+	emojiTestid="emoji-button"
+	sendTestid="send-button"
 />
 
+{#snippet editable({ placeholder, disabled }: ComposerField)}
+	<ComposerEditable
+		{placeholder}
+		{disabled}
+		{empty}
+		bind:element={field}
+		id="message-input"
+		data-testid="message-input"
+		aria-autocomplete="list"
+		aria-controls={completion ? pickerId : undefined}
+		aria-activedescendant={completion?.count ? `${pickerId}-${activeIndex}` : undefined}
+		onbeforeinput={beforeinput}
+		oninput={input}
+		oncompositionend={compositionEnd}
+		onkeydown={keydown}
+		onkeyup={refreshQuery}
+		onclick={refreshQuery}
+		onblur={blur}
+		onpaste={paste}
+	/>
+{/snippet}
 {#snippet replyText()}<MentionText text={reply?.text ?? ''} />{/snippet}
 {#snippet staged()}
 	{#each files as staged (staged.id)}
@@ -670,10 +679,10 @@
 {#snippet preview(index: number)}<Embed embed={previews[index]} />{/snippet}
 {#snippet picker()}
 	{#if pickerOpen}
-		<AutocompletePicker id={pickerId} query={query ?? ''} people={matches} active={activeIndex} testid="mention-picker" onpick={(index) => pick(matches[index])} onhover={(index) => (active = index)} />
+		<AutocompletePicker id={pickerId} query={query ?? ''} people={matches} active={activeIndex} data-testid="mention-picker" onpick={(index) => pick(matches[index])} onhover={(index) => (active = index)} />
 	{:else if roomPickerOpen}
-		<AutocompletePicker id={pickerId} query={roomFound?.query ?? ''} rooms={roomMatches} active={activeIndex} testid="room-autocomplete" onpick={(index) => pickRoom(roomMatches[index])} onhover={(index) => (active = index)} />
+		<AutocompletePicker id={pickerId} query={roomFound?.query ?? ''} rooms={roomMatches} active={activeIndex} data-testid="room-autocomplete" onpick={(index) => pickRoom(roomMatches[index])} onhover={(index) => (active = index)} />
 	{:else if emojiPickerOpen}
-		<AutocompletePicker id={pickerId} query={emojiFound?.query ?? ''} emoji={emojiMatches} active={activeIndex} testid="emoji-autocomplete" onpick={(index) => pickEmoji(emojiMatches[index])} onhover={(index) => (active = index)} />
+		<AutocompletePicker id={pickerId} query={emojiFound?.query ?? ''} emoji={emojiMatches} active={activeIndex} data-testid="emoji-autocomplete" onpick={(index) => pickEmoji(emojiMatches[index])} onhover={(index) => (active = index)} />
 	{/if}
 {/snippet}

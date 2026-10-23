@@ -5,7 +5,7 @@
 	import AttachmentTile from './AttachmentTile.svelte';
 	import type { AttachmentFile } from './types';
 
-	/** Other attributes (`data-*`, a different `aria-label`) go on the row. */
+	/** Other attributes (`data-*`, a different `aria-label`, a `class`) go on the row. */
 	interface Props extends HTMLAttributes<HTMLDivElement> {
 		/**
 		 * The draft's files, in the order they will be sent. `size` is the size they go out at, after an image is
@@ -19,11 +19,11 @@
 		/** Your own tiles in place of `files`', such as AttachmentTiles whose previews you manage. */
 		children?: Snippet;
 	}
-	let { files = [], onremove, onrename, children, ...rest }: Props = $props();
+	let { files = [], onremove, onrename, children, class: className, ...rest }: Props = $props();
 </script>
 
 {#if children || files.length > 0}
-	<div class="ap-attachments" aria-label="Files to send" {...rest}>
+	<div aria-label="Files to send" {...rest} class={['ap-attachments', className]}>
 		{#if children}{@render children()}
 		{:else}
 			{#each files as file, index (index)}

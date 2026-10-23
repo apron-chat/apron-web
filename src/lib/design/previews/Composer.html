@@ -14,7 +14,7 @@
   add(A.Composer, { room: 'Ops', canUpload: true, onemoji: emoji, canCommand: true, value: '/kick @guest_1234 spamming' });
   add(A.Composer, { room: 'Ops', canUpload: true, onemoji: emoji, value: 'Here is the plan: https://github.com/apron/web/pull/12',
     reply: { name: 'Dana', text: 'Can someone write down the rollout?' }, oncancelreply: function () {},
-    files: [{ kind: 'file', name: 'rollout-plan.pdf', size: '84 KB' }], onremovefile: function () {}, onrenamefile: function () {},
+    attachments: A.part(A.AttachmentTile, { kind: 'file', name: 'rollout-plan.pdf', detail: '84 KB', onremove: function () {}, onrename: function () {} }),
     previews: [{ kind: 'link', url: 'https://github.com/apron/web/pull/12', og: { site_name: 'GitHub · apron/web', title: 'Pull request #12' } }], onremovepreview: function () {} });
 </script>
 </body>

@@ -48,9 +48,9 @@ describe('the emoji picker controller', () => {
 		const mine = trigger();
 		const other = trigger();
 		emojiPicker.toggle({ anchor: other, onpick: () => {} });
-		emojiAnchor(mine).destroy();
+		emojiAnchor(mine)();
 		expect(emojiPicker.isOpenFor(other)).toBe(true);
-		emojiAnchor(other).destroy();
+		emojiAnchor(other)();
 		expect(emojiPicker.current).toBeUndefined();
 	});
 });

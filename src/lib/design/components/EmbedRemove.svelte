@@ -5,15 +5,18 @@
 	 * touch screens.
 	 */
 	import X from '@lucide/svelte/icons/x';
+	import type { HTMLButtonAttributes } from 'svelte/elements';
+	import { chain } from './util';
 
-	interface Props {
+	/** Other attributes (`data-*`, a `class`) go on the button; an `onclick` of yours runs first, and `preventDefault()` there skips `onremove`. */
+	interface Props extends HTMLButtonAttributes {
 		/** What it takes off, for its tooltip and screen readers, such as "Remove preview". */
 		label: string;
 		onremove?: () => void;
 	}
-	let { label, onremove }: Props = $props();
+	let { label, onremove, class: className, onclick, ...rest }: Props = $props();
 </script>
 
-<button class="ap-embed-remove" type="button" aria-label={label} title={label} onclick={onremove}>
+<button type="button" aria-label={label} title={label} {...rest} class={['ap-embed-remove', className]} onclick={chain(onremove, onclick)}>
 	<X size={12} strokeWidth={2.5} aria-hidden="true" />
 </button>

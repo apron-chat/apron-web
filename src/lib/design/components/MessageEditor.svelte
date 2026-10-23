@@ -5,22 +5,29 @@
 	 * keeps its own), and Enter in the text saves (Shift+Enter breaks the line).
 	 */
 	import type { Snippet } from 'svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
 	import Attachments from './Attachments.svelte';
 	import Button from './Button.svelte';
+	import { enterAction } from './compose';
+	import { chain } from './util';
 
-	interface Props {
+	/**
+	 * Other attributes (`data-*`, a `class`) go on the editor. An `onkeydown` of yours runs first, for every key in it;
+	 * `preventDefault()` there keeps Escape from cancelling.
+	 */
+	interface Props extends HTMLAttributes<HTMLDivElement> {
 		/** The text; `bind:value`. */
 		value?: string;
 		/** The message's files over the text, usually AttachmentTiles, each removable and maybe renamable. */
 		attachments?: Snippet;
 		/** False disables Save: a message keeps text or an embed (§3.5); emptied, it's deleted instead. */
 		canSave?: boolean;
-		/** A phone or tablet: Enter breaks the line as it does there, and the keyboard hint is hidden. */
+		/** A phone or tablet: Enter breaks the line as it does there (`enterAction`), and the keyboard hint is hidden. */
 		handheld?: boolean;
 		onsave?: () => void;
 		oncancel?: () => void;
 	}
-	let { value = $bindable(''), attachments, canSave = true, handheld = false, onsave, oncancel }: Props = $props();
+	let { value = $bindable(''), attachments, canSave = true, handheld = false, onsave, oncancel, class: className, onkeydown, ...rest }: Props = $props();
 
 	let field = $state<HTMLTextAreaElement | undefined>();
 
@@ -46,14 +53,14 @@
 	}
 
 	function fieldKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Enter' || event.isComposing || event.shiftKey || handheld) return;
+		if (event.key !== 'Enter' || event.isComposing || enterAction(event, handheld) !== 'send') return;
 		event.preventDefault();
 		onsave?.();
 	}
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="ap-msgedit" data-testid="message-editor" onkeydown={keydown}>
+<div {...rest} class={['ap-msgedit', className]} onkeydown={chain(keydown, onkeydown)}>
 	{#if attachments}<Attachments aria-label="Attachments">{@render attachments()}</Attachments>{/if}
 	<textarea class="ap-msgedit-field" aria-label="Edit message" rows="1" dir="auto" bind:this={field} bind:value onkeydown={fieldKeydown}></textarea>
 	<div class="ap-msgedit-foot">

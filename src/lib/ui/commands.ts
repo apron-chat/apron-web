@@ -1,4 +1,5 @@
 import { TEXT_ID, textId } from '$lib/protocol/markdown';
+import { isCommand } from '$lib/design/components/compose';
 
 /**
  * What the composer does with its text (PROTOCOL.md §4.1). With capability `command`,
@@ -21,10 +22,8 @@ export type ComposerAction =
 	/** `room_join` with the `user_id` of the user to add (§4.2.2). */
 	| { kind: 'invite'; user: string };
 
-/** Composer text that is a command: one leading `/`, not `//`. */
-export function isCommand(text: string): boolean {
-	return text.startsWith('/') && !text.startsWith('//');
-}
+/** Composer text that is a command: one leading `/`, not `//`. The design system's Composer reads it the same way. */
+export { isCommand };
 
 /** A lone user argument, written `@user_id` or as the bare ID, as a mention chip sends it (Appendix A.3). */
 const USER_ARGUMENT = new RegExp(`^@?(${TEXT_ID.source})[.+@:-]*$`);
