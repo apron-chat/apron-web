@@ -1,9 +1,11 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
 	import StatusDot from './StatusDot.svelte';
 	import type { Presence } from './types';
 	import { initials, presence } from './util';
 
-	interface Props {
+	/** Other attributes (`data-*`, `class`, …) go on its outermost element: the image or initials, or the box holding them and the status dot. */
+	interface Props extends HTMLAttributes<HTMLElement> {
 		name?: string;
 		user_id?: string;
 		src?: string;
@@ -13,21 +15,21 @@
 		/** The dot's tooltip, instead of the status's own words ("Invisible · others see you as offline"). */
 		statusLabel?: string;
 	}
-	let { name, user_id, src, size = 'md', status, statusLabel }: Props = $props();
+	let { name, user_id, src, size = 'md', status, statusLabel, class: className, ...rest }: Props = $props();
 	const shown = $derived(name || user_id || '?');
 	const dot = $derived(presence(status) !== undefined);
 </script>
 
-{#snippet face()}
+{#snippet face(attributes: HTMLAttributes<HTMLElement>)}
 	{#if src}
-		<img class="ap-avatar ap-avatar-{size}" {src} alt="" />
+		<img alt="" {...attributes} class={['ap-avatar', `ap-avatar-${size}`, attributes.class]} {src} />
 	{:else}
-		<span class="ap-avatar ap-avatar-{size}" aria-hidden="true">{initials(shown)}</span>
+		<span aria-hidden="true" {...attributes} class={['ap-avatar', `ap-avatar-${size}`, attributes.class]}>{initials(shown)}</span>
 	{/if}
 {/snippet}
 
 {#if dot}
-	<span class="ap-avatar-status ap-avatar-status-{size}">{@render face()}<StatusDot {status} {size} label={statusLabel} decorative /></span>
+	<span {...rest} class={['ap-avatar-status', `ap-avatar-status-${size}`, className]}>{@render face({})}<StatusDot {status} {size} label={statusLabel} decorative /></span>
 {:else}
-	{@render face()}
+	{@render face({ ...rest, class: className })}
 {/if}

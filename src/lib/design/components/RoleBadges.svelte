@@ -106,23 +106,24 @@
 
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
 	import { fitRoles, rolePeek, ROLE_PEEK, ROLE_STACK_MAX } from './util';
 
 	/**
 	 * A user's `roles` (§3.3): server-assigned labels, shown beside the name as
 	 * badges and never as part of it. "admin" and "bot" have their own colors;
-	 * other roles show as written. Roles grant nothing on the client.
+	 * other roles show as written. Roles grant nothing on the client. Other
+	 * attributes (`data-testid`, `class`, …) go on the row of badges.
 	 */
-	interface Props {
+	interface Props extends HTMLAttributes<HTMLSpanElement> {
 		roles?: string[];
-		testid?: string;
 		/**
 		 * What happens to badges that don't fit the row: `drop` them whole, or `stack` them as layers behind the last
 		 * badge that fits. Defaults to the `--ap-role-overflow` token (`drop` where it's unset).
 		 */
 		overflow?: 'drop' | 'stack';
 	}
-	let { roles = [], testid, overflow }: Props = $props();
+	let { roles = [], overflow, class: className, ...rest }: Props = $props();
 	const shown = $derived([...new Set(roles.filter((role) => typeof role === 'string' && role.trim()))]);
 
 	let row = $state<HTMLElement>();
@@ -192,7 +193,7 @@
 </script>
 
 {#if shown.length}
-	<span class={['ap-roles', stack && 'ap-roles-stack', stack && fit.shown === 0 && 'ap-roles-gone']} data-testid={testid} bind:this={row}>{#each shown as role, i (role)}<span
+	<span {...rest} class={['ap-roles', stack && 'ap-roles-stack', stack && fit.shown === 0 && 'ap-roles-gone', className]} bind:this={row}>{#each shown as role, i (role)}<span
 			class={['ap-role', role === 'admin' && 'ap-role-admin', role === 'bot' && 'ap-role-bot', stack && i === last && behind.length && 'ap-role-stacked', stack && i > last && 'ap-role-behind']}
 			style:max-width={stack && i === last && fit.room !== undefined ? `${fit.room}px` : undefined}
 			style:box-shadow={stack && i === last && behind.length ? layers(behind) : undefined}

@@ -26,7 +26,7 @@
 	<!-- The menu's open state lives on the selection, so the page can close it (Escape, or a move starting). -->
 	<DesignSelectionBar
 		{count} threads={destinations} room={parentRoom} status={current.saving ? 'saving' : 'idle'} denied={current.denied}
-		bind:open={selection.menuOpen} testid="selection-bar" newThreadTestid="new-thread"
+		bind:open={selection.menuOpen} data-testid="selection-bar" newThreadTestid="new-thread"
 		{onmove} onnewthread={canCreateThread ? onnewthread : undefined} onselectrange={count > 1 && !current.saving ? onfill : undefined} {oncancel}
 	/>
 {/if}

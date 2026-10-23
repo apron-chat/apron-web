@@ -15,4 +15,4 @@
 	});
 </script>
 
-<DesignRoleBadges {roles} testid="roles" />
+<DesignRoleBadges {roles} data-testid="roles" />

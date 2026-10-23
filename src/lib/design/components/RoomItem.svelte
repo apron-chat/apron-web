@@ -48,6 +48,6 @@
 	{...rest} {room} noun="room" label={shown} private={isPrivate} {active} {onselect} {onleave} {lines} start={onnewthread ? start : undefined}
 	class={[(unread || mentions) && 'ap-room-unread', className]}
 >
-	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="message" testid={unreadTestid} />
+	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="message" data-testid={unreadTestid} />
 	{#if loading}<span class="ap-room-loading" aria-label="Loading history">…</span>{/if}
 </RoomRow>

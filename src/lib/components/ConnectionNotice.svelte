@@ -25,7 +25,7 @@
 	<span class="ap-sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
 {:else if session.connection !== 'connected'}
 	<div class="ap-shell-banner">
-		<StatusBanner tone={session.connection === 'connecting' ? 'warn' : 'danger'} testid="connection-status" live>
+		<StatusBanner tone={session.connection === 'connecting' ? 'warn' : 'danger'} textTestid="connection-status" live>
 			{statusLabel(snapshot, session.stalled)}
 			{#snippet action()}
 				{#if session.reconnectNeedsAttention}

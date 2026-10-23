@@ -18,7 +18,7 @@ function render(props: Record<string, unknown>) {
 
 describe('StatusBanner', () => {
 	it('takes a tone, role and words of its own, without a connection state', () => {
-		render({ tone: 'none', role: 'alert', live: true, testid: 'words', children: createRawSnippet(() => ({ render: () => '<span>Rate limited</span>' })) });
+		render({ tone: 'none', role: 'alert', live: true, textTestid: 'words', children: createRawSnippet(() => ({ render: () => '<span>Rate limited</span>' })) });
 		expect(document.querySelector('.ap-status')?.getAttribute('role')).toBe('alert');
 		expect(document.querySelector('.ap-status-dot')?.className).toBe('ap-status-dot');
 		const words = document.querySelector('[data-testid=words]');

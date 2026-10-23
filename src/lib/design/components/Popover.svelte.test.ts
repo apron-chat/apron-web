@@ -50,19 +50,19 @@ describe('ProfileCard', () => {
 	const status = () => document.querySelector('[data-testid="profile-status"]');
 
 	it('says a known status in words, an unknown one as written, and none without one (§4.5)', () => {
-		render(ProfileCard, { userId: 'bo', name: 'Bo', status: 'dnd' });
+		render(ProfileCard, { userId: 'bo', name: 'Bo', status: 'dnd', statusTestid: 'profile-status' });
 		expect(status()?.textContent).toBe('Do not disturb');
 		unmount(instance!);
-		render(ProfileCard, { userId: 'eve', status: 'in a meeting' });
+		render(ProfileCard, { userId: 'eve', status: 'in a meeting', statusTestid: 'profile-status' });
 		expect(status()?.textContent).toBe('Unknown status: in a meeting');
 		expect(status()?.querySelector('code')?.textContent).toBe('in a meeting');
 		unmount(instance!);
-		render(ProfileCard, { userId: 'cy' });
+		render(ProfileCard, { userId: 'cy', statusTestid: 'profile-status' });
 		expect(status()).toBeNull();
 	});
 
 	it('takes the status in your words when given, and is labeled by the name, else the user_id', () => {
-		const box = render(ProfileCard, { userId: 'ada', you: true, status: 'invisible', statusLabel: 'Invisible · others see you as offline' });
+		const box = render(ProfileCard, { userId: 'ada', you: true, status: 'invisible', statusLabel: 'Invisible · others see you as offline', statusTestid: 'profile-status' });
 		expect(status()?.textContent).toBe('Invisible · others see you as offline');
 		expect(box.getAttribute('aria-label')).toBe('Profile of ada');
 		expect(box.querySelector('.ap-profcard-you')).not.toBeNull();
@@ -85,12 +85,23 @@ describe('ReactorsPopover', () => {
 	it('counts the reactions, and shows @user_id only where it is asked for, to tell people apart', () => {
 		const box = render(ReactorsPopover, {
 			emoji: '👍',
-			reactors: [{ user_id: 'you', name: 'You', you: true }, { user_id: 'linus' }, { user_id: 'grace', name: 'grace', handle: true }]
+			reactors: [{ user_id: 'you', name: 'You', you: true }, { user_id: 'linus' }, { user_id: 'grace', name: 'grace', handle: true }],
+			rowTestid: 'reactor'
 		});
 		expect(box.getAttribute('aria-label')).toBe('3 reactions with 👍');
 		const rows = [...box.querySelectorAll<HTMLElement>('[data-testid="reactor"]')];
 		expect(rows.map((row) => row.dataset.userId)).toEqual(['you', 'linus', 'grace']);
 		expect(rows.map((row) => row.querySelector('.ap-reactors-handle')?.textContent ?? '')).toEqual(['', '', '@grace']);
 		expect(rows[0].querySelector('.ap-reactors-nameline')?.textContent).toBe('You(you)');
+	});
+
+	it('keeps each person’s row, by user_id, as the list changes order', () => {
+		const props = $state({ emoji: '👍', reactors: [{ user_id: 'ada' }, { user_id: 'bo' }], rowTestid: 'reactor' });
+		const box = render(ReactorsPopover, props);
+		const ada = box.querySelector('[data-user-id="ada"]');
+		props.reactors = [{ user_id: 'bo' }, { user_id: 'ada' }];
+		flushSync();
+		expect([...box.querySelectorAll<HTMLElement>('[data-testid="reactor"]')].map((row) => row.dataset.userId)).toEqual(['bo', 'ada']);
+		expect(box.querySelector('[data-user-id="ada"]')).toBe(ada);
 	});
 });

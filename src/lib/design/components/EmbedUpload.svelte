@@ -1,10 +1,12 @@
 <script lang="ts">
-	/* upload (§4.8.4, writes §4.8.3): pending while url is absent; og.video / og.audio / og.image preview; else a file card */
+	/* upload (§4.8.4, writes §4.8.3): pending while url is absent; og.video / og.audio / og.image preview; else a file card.
+	   Other attributes go on whichever of those shows. */
 	import FileIcon from '@lucide/svelte/icons/file';
-	import type { EmbedProps } from './types';
-	import { ogRatio, plainClick, safeHttp } from './util';
+	import type { EmbedComponentProps } from './types';
+	import { embedAttributes, ogRatio, plainClick, safeHttp } from './util';
 
-	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, caption, onview, link, testid }: EmbedProps = $props();
+	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, caption, onview, link, ...rest }: EmbedComponentProps = $props();
+	const attributes = $derived(embedAttributes(rest));
 	const url = $derived(safeHttp(rawUrl));
 	const title = $derived(rawTitle || og.title || 'File');
 	const pct = $derived(progress != null ? Math.round(progress * 100) : null);
@@ -17,7 +19,7 @@
 {#snippet glyph()}<span class="ap-embed-fileglyph"><FileIcon size={20} aria-hidden="true" /></span>{/snippet}
 
 {#if !url}
-	<div class="ap-embed ap-embed-card ap-embed-pending" role="status" data-testid={testid}>
+	<div role="status" {...attributes} class={['ap-embed', 'ap-embed-card', 'ap-embed-pending', attributes.class]}>
 		{@render glyph()}
 		<span class="ap-embed-cardtext">
 			<span class="ap-embed-title">{title}</span>
@@ -26,24 +28,24 @@
 		{#if pct != null && !failed}<span class="ap-embed-progress" aria-hidden="true"><i style:width="{pct}%"></i></span>{/if}
 	</div>
 {:else if video}
-	<figure class="ap-embed ap-embed-figure" data-testid={testid}>
+	<figure {...attributes} class={['ap-embed', 'ap-embed-figure', attributes.class]}>
 		<!-- svelte-ignore a11y_media_has_caption -->
 		<video class="ap-embed-media" src={video} poster={image} controls preload="metadata" style={ogRatio(og.video) || ogRatio(og.image)}></video>
 		<figcaption class="ap-embed-caption"><a href={url} download={title} target="_blank" rel="noreferrer noopener">{title}</a></figcaption>
 	</figure>
 {:else if audio}
-	<div class="ap-embed ap-embed-card ap-embed-audiocard" data-testid={testid}>
+	<div {...attributes} class={['ap-embed', 'ap-embed-card', 'ap-embed-audiocard', attributes.class]}>
 		<span class="ap-embed-title">{title}</span>
 		<audio class="ap-embed-audio" src={audio} controls preload="none"></audio>
 	</div>
 {:else if image}
-	<figure class="ap-embed ap-embed-figure" data-testid={testid}>
+	<figure {...attributes} class={['ap-embed', 'ap-embed-figure', attributes.class]}>
 		<a {...link} href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener" aria-haspopup={onview ? 'dialog' : undefined} title={onview ? `View ${title}` : undefined}
 			onclick={(event) => { if (onview && plainClick(event)) { event.preventDefault(); onview(event); } }}><img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} /></a>
 		{#if caption !== false}<figcaption class="ap-embed-caption">{title}</figcaption>{/if}
 	</figure>
 {:else}
-	<a class="ap-embed ap-embed-card ap-embed-file" href={url} download={title} target="_blank" rel="noreferrer noopener" data-testid={testid}>
+	<a href={url} download={title} target="_blank" rel="noreferrer noopener" {...attributes} class={['ap-embed', 'ap-embed-card', 'ap-embed-file', attributes.class]}>
 		{@render glyph()}
 		<span class="ap-embed-cardtext">
 			<span class="ap-embed-title">{title}</span>

@@ -1,5 +1,5 @@
 /* Shared helpers for the presentational components. No protocol state: everything arrives as props. */
-import type { Presence } from './types';
+import type { EmbedAttributes, EmbedComponentProps, EmbedProps, Presence } from './types';
 
 /** A user object (§3.3). `user_id` is stable; `name` falls back to it; `avatar` is optional (§4.8.6). */
 export interface Sender {
@@ -182,6 +182,19 @@ export function times(timestamp?: number, time?: string): Times {
 /** Only https/http, small inline images, local blob: previews and in-page anchors are rendered. */
 export function safeHttp(u: unknown): string | undefined {
 	return typeof u === 'string' && /^(https?:|data:image\/(png|jpeg|gif|webp);base64,|blob:|#)/i.test(u) ? u : undefined;
+}
+
+/** Every field of EmbedProps, so an Embed component can tell the embed's own from the attributes for its root. */
+const EMBED_FIELDS: Record<keyof EmbedProps, true> = {
+	embed_id: true, kind: true, url: true, title: true, og: true, progress: true, failed: true, detail: true, caption: true, onview: true, link: true,
+	format: true, text: true, done: true, truncated: true, status: true, children: true, attach: true, height: true, live: true, onactivate: true, html: true
+};
+
+/** An Embed component's props less the embed's fields: the attributes (`data-testid`, `class`, …) that go on its root. */
+export function embedAttributes(props: Partial<EmbedComponentProps>): EmbedAttributes {
+	const attributes: Record<string, unknown> = {};
+	for (const key of Object.keys(props)) if (!(key in EMBED_FIELDS)) attributes[key] = props[key as keyof EmbedComponentProps];
+	return attributes as EmbedAttributes;
 }
 
 export function ogRatio(m?: { width?: number; height?: number }): string | undefined {

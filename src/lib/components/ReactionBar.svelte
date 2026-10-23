@@ -20,4 +20,4 @@
 </script>
 
 <!-- A right-click, the context menu key or a long press on a chip lists who reacted; the message's React action opens the picker. -->
-<DesignReactionBar reactions={chips} disabled={!enabled} add={false} {ontoggle} onreactors={showReactors} testid="reactions" chipTestid="reaction-chip" />
+<DesignReactionBar reactions={chips} disabled={!enabled} add={false} {ontoggle} onreactors={showReactors} data-testid="reactions" chipTestid="reaction-chip" />

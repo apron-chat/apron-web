@@ -39,14 +39,23 @@ describe('Message', () => {
 		expect(row.querySelector('.ap-msg-main .ap-msg-text')?.className).toBe('ap-msg-text mine-body');
 	});
 
-	it('puts other attributes on the row, and your onclick replaces the select-mode toggle', () => {
-		const onclick = vi.fn();
+	it('puts other attributes on the row, and your onclick replaces the select-mode toggle by preventing its default', () => {
+		const onclick = vi.fn((event: MouseEvent) => event.preventDefault());
 		const onselect = vi.fn();
-		const row = render({ text: 'hi', selectMode: true, onselect, onclick, 'data-timeline-item': '' });
+		const row = render({ text: 'hi', selectMode: true, onselect, onclick, 'data-timeline-item': '', class: 'mine' });
 		expect(row.hasAttribute('data-timeline-item')).toBe(true);
+		expect(row.classList.contains('ap-msg')).toBe(true);
+		expect(row.classList.contains('mine')).toBe(true);
 		row.click();
 		expect(onclick).toHaveBeenCalledOnce();
 		expect(onselect).not.toHaveBeenCalled();
+	});
+
+	it('runs your onclick before the select-mode toggle when it lets the click through', () => {
+		const calls: string[] = [];
+		const row = render({ text: 'hi', selectMode: true, onselect: () => calls.push('select'), onclick: () => calls.push('yours') });
+		row.click();
+		expect(calls).toEqual(['yours', 'select']);
 	});
 
 	it('shows actions on a tombstone when you give them, and the handle when asked even if it matches the name', () => {

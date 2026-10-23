@@ -24,7 +24,7 @@
 	{@const connected = session.connection === 'connected'}
 	<EmptyState title={connected ? 'No room open' : undefined} detail={connected ? 'Pick a room from the list.' : undefined}>
 		{#if !connected}
-			<StatusBanner tone={session.connection === 'offline' ? 'danger' : 'warn'} testid="connection-status" live>{statusLabel(snapshot, session.stalled)}</StatusBanner>
+			<StatusBanner tone={session.connection === 'offline' ? 'danger' : 'warn'} textTestid="connection-status" live>{statusLabel(snapshot, session.stalled)}</StatusBanner>
 		{:else}
 			<span class="ap-sr" data-testid="connection-status" role="status" aria-live="polite">Connected</span>
 		{/if}

@@ -36,7 +36,7 @@ describe('SelectionBar', () => {
 		render({ room: 'general' });
 		expect(buttons()).toEqual(['Cancel', 'Move to thread ▾']);
 		unmount(instance!);
-		render({ onnewthread: vi.fn(), onselectrange: vi.fn(), newThreadTestid: 'new', testid: 'bar' });
+		render({ onnewthread: vi.fn(), onselectrange: vi.fn(), newThreadTestid: 'new', 'data-testid': 'bar' });
 		expect(buttons()).toEqual(['Select between', 'Cancel', 'New thread']);
 		expect(document.querySelector('[data-testid=bar]')?.getAttribute('role')).toBe('toolbar');
 		expect(document.querySelector('[data-testid=new]')?.textContent).toBe('New thread');

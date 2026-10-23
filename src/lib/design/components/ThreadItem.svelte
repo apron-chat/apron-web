@@ -64,13 +64,13 @@
 	const quiet = $derived(!active && !unjoined && !unread && !mentions);
 </script>
 
-{#snippet lines()}<ThreadLines {summary} {latest} testid={linesTestid} />{/snippet}
+{#snippet lines()}<ThreadLines {summary} {latest} summaryTestid={linesTestid && `${linesTestid}-summary`} latestTestid={linesTestid && `${linesTestid}-latest`} />{/snippet}
 
 <RoomRow
 	{...rest} room={thread} noun="thread" label={shown} {tip} private={isPrivate} {active} nested framed {onselect} {onleave} {onjoin} {lines}
 	class={[(unread || mentions) && 'ap-room-unread', unjoined && 'ap-room-unjoined', mention && 'ap-room-mention', quiet && 'ap-room-quiet', className]}
 >
-	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="reply" testid={unreadTestid} />
+	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="reply" data-testid={unreadTestid} />
 	{#if count !== undefined}<small class="ap-room-count" aria-label={`${count} ${count === 1 ? 'message' : 'messages'}`}>{count}</small>
 	{:else if ago?.text}<time class="ap-room-ago" data-testid={agoTestid} datetime={ago.datetime} title={ago.title}>{ago.text}</time>{/if}
 </RoomRow>

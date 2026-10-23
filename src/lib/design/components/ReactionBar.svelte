@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
 	import type { ReactionChip } from './types';
 
 	const PALETTE = ['👍', '❤️', '😂', '🎉', '😮', '😢', '👀', '✅'];
@@ -6,7 +7,8 @@
 	/** A touch that drifts further than this is a scroll, not a long press. */
 	const SLOP_PX = 10;
 
-	interface Props {
+	/** Other attributes (`data-testid`, `class`, …) go on the group of chips. */
+	interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'ontoggle'> {
 		reactions: ReactionChip[];
 		/** The palette is open under the message. */
 		open?: boolean;
@@ -24,12 +26,10 @@
 		 * The click that ends a long press doesn't toggle.
 		 */
 		onreactors?: (emoji: string, chip: HTMLElement) => void;
-		/** A `data-testid` for the group of chips. */
-		testid?: string;
 		/** A `data-testid` for each chip, which also carries its emoji as `data-emoji`. */
 		chipTestid?: string;
 	}
-	let { reactions, open, palette = PALETTE, disabled, ontoggle, add = true, onopen, onclose, onreactors, testid, chipTestid }: Props = $props();
+	let { reactions, open, palette = PALETTE, disabled, ontoggle, add = true, onopen, onclose, onreactors, chipTestid, class: className, ...rest }: Props = $props();
 	const chips = $derived((reactions || []).filter((r) => r.count > 0));
 	const picks = $derived([...new Set(palette)]);
 	const mine = $derived(new Set(chips.filter((c) => c.mine).map((c) => c.emoji)));
@@ -88,7 +88,7 @@
 </script>
 
 {#if chips.length > 0}
-	<div class="ap-reactions" role="group" aria-label="Reactions" data-testid={testid}>
+	<div role="group" aria-label="Reactions" {...rest} class={['ap-reactions', className]}>
 		{#each chips as c (c.emoji)}
 			<button
 				type="button"

@@ -170,7 +170,10 @@
 		if (!selecting && openProfileFrom(mouse.target)) return;
 		if ((mouse.target as HTMLElement | null)?.closest('a, button:not([data-user-id]), input, textarea, select')) return;
 		if (selecting) {
-			if (caps.select) onselect(mouse.shiftKey);
+			if (!caps.select) return;
+			// Handled here, with the range a shift-click fills: the design system's own toggle stands down.
+			mouse.preventDefault();
+			onselect(mouse.shiftKey);
 			return;
 		}
 		if (mouse.shiftKey && caps.select) onbeginselect();

@@ -21,7 +21,7 @@ function detail(): string | null | undefined {
 
 describe('EmbedUpload', () => {
 	it('says what is pending: its size, its progress, or why it failed', () => {
-		instance = mount(EmbedUpload, { target: document.body, props: { kind: 'upload', title: 'a.png', detail: '960 × 600', progress: 0.5, testid: 'pending' } });
+		instance = mount(EmbedUpload, { target: document.body, props: { kind: 'upload', title: 'a.png', detail: '960 × 600', progress: 0.5, 'data-testid': 'pending' } });
 		flushSync();
 		expect(detail()).toBe('960 × 600 · Uploading · 50%');
 		expect(document.querySelector('[data-testid="pending"] .ap-embed-progress')).not.toBeNull();

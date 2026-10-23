@@ -19,9 +19,12 @@ function render(props: Record<string, unknown>) {
 const one = (selector: string) => document.querySelector(selector);
 
 describe('ThreadMarker', () => {
-	it('names its parts by the testid prefix, and dates its last reply when given the time', () => {
+	it('takes the card\'s data-testid as an attribute and its parts\' by name, and dates its last reply when given the time', () => {
 		const at = Date.UTC(2026, 8, 14, 9, 30);
-		render({ testid: 'thread', unread: 2, lastReply: '9h', lastReplyAt: at, summary: 'Lock held', latest: { sender: 'Ada', text: 'done' }, 'data-timeline-item': '' });
+		render({
+			'data-testid': 'thread-card', unreadTestid: 'thread-unread', lastReplyTestid: 'thread-last-reply', latestTestid: 'thread-preview-latest',
+			unread: 2, lastReply: '9h', lastReplyAt: at, summary: 'Lock held', latest: { sender: 'Ada', text: 'done' }, 'data-timeline-item': ''
+		});
 		const card = one('[data-testid=thread-card]')!;
 		expect(card.tagName).toBe('BUTTON');
 		expect(card.getAttribute('data-thread')).toBe('t1');

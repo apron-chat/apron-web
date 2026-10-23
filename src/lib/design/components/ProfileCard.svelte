@@ -49,10 +49,18 @@
 		element?: HTMLDivElement;
 		/** The Popover's rendered height in px, bindable. */
 		offsetHeight?: number;
+		/** A `data-testid` for the `@user_id`. */
+		handleTestid?: string;
+		/** A `data-testid` for the status in words. */
+		statusTestid?: string;
+		/** A `data-testid` for the row of roles. */
+		rolesTestid?: string;
+		/** A `data-testid` for the membership note. */
+		membershipTestid?: string;
 	}
 	let {
 		userId, name, src, avatar, you = false, status, statusLabel, roles, sharesName = false, membership, onmention, oncopyid, onaddtoroom, adding = false, note,
-		element = $bindable(), offsetHeight = $bindable(0), class: className, ...rest
+		element = $bindable(), offsetHeight = $bindable(0), handleTestid, statusTestid, rolesTestid, membershipTestid, class: className, ...rest
 	}: Props = $props();
 	const shownName = $derived(name || userId);
 	const shown = $derived(presence(status));
@@ -66,19 +74,19 @@
 				<span class="ap-profcard-name">{shownName}</span>
 				{#if you}<span class="ap-profcard-you">(you)</span>{/if}
 			</div>
-			<div class="ap-profcard-handle" data-testid="profile-handle">@{userId}</div>
+			<div class="ap-profcard-handle" data-testid={handleTestid}>@{userId}</div>
 			{#if shown === 'unknown'}
-				<div class="ap-profcard-status" data-testid="profile-status">Unknown status: <code class="ap-profcard-literal">{status}</code></div>
+				<div class="ap-profcard-status" data-testid={statusTestid}>Unknown status: <code class="ap-profcard-literal">{status}</code></div>
 			{:else if shown}
-				<div class="ap-profcard-status" data-testid="profile-status">{statusLabel ?? presenceLabel(status)}</div>
+				<div class="ap-profcard-status" data-testid={statusTestid}>{statusLabel ?? presenceLabel(status)}</div>
 			{/if}
-			<RoleBadges {roles} testid="roles" overflow="drop" />
+			<RoleBadges {roles} data-testid={rolesTestid} overflow="drop" />
 		</div>
 	</div>
 	{#if sharesName}
 		<p class="ap-profcard-warn" role="note">Another user also shows as <strong>{shownName}</strong>. Check the @user_id.</p>
 	{/if}
-	{#if membership}<p class="ap-profcard-note" data-testid="profile-membership">{membership}</p>{/if}
+	{#if membership}<p class="ap-profcard-note" data-testid={membershipTestid}>{membership}</p>{/if}
 	<div class="ap-profcard-actions">
 		{#if onmention}<Button size="sm" onclick={onmention}>Mention</Button>{/if}
 		{#if oncopyid}<Button variant="ghost" size="sm" onclick={oncopyid}>Copy @user_id</Button>{/if}

@@ -21,17 +21,19 @@
 		element?: HTMLDivElement;
 		/** The Popover's rendered height in px, bindable. */
 		offsetHeight?: number;
+		/** A `data-testid` for each person's row, which also carries their `data-user-id`. */
+		rowTestid?: string;
 	}
-	let { emoji, reactors, avatar, element = $bindable(), offsetHeight = $bindable(0), class: className, ...rest }: Props = $props();
+	let { emoji, reactors, avatar, element = $bindable(), offsetHeight = $bindable(0), rowTestid, class: className, ...rest }: Props = $props();
 	const count = $derived(`${reactors.length} ${reactors.length === 1 ? 'reaction' : 'reactions'}`);
 </script>
 
 <Popover aria-label={`${count} with ${emoji}`} {...rest} class={['ap-reactors', className]} bind:element bind:offsetHeight>
 	<div class="ap-reactors-head"><span class="ap-reactors-emoji" aria-hidden="true">{emoji}</span><span>{count}</span></div>
 	<ul class="ap-reactors-list">
-		{#each reactors as reactor, i (i)}
+		{#each reactors as reactor (reactor.user_id)}
 			{@const name = reactor.name || reactor.user_id}
-			<li class="ap-reactors-row" data-testid="reactor" data-user-id={reactor.user_id}>
+			<li class="ap-reactors-row" data-testid={rowTestid} data-user-id={reactor.user_id}>
 				{#if avatar}{@render avatar(reactor)}{:else}<Avatar {name} user_id={reactor.user_id} src={reactor.avatar} />{/if}
 				<div class="ap-reactors-names">
 					<div class="ap-reactors-nameline"><span class="ap-reactors-name">{name}</span>{#if reactor.you}<span class="ap-reactors-muted">(you)</span>{/if}</div>

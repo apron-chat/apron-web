@@ -1,5 +1,5 @@
 import type { Snippet } from 'svelte';
-import type { HTMLAttributes } from 'svelte/elements';
+import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements';
 import type { Sender } from './util';
 export type { Sender };
 
@@ -51,9 +51,13 @@ export interface EmbedProps {
 	onactivate?: () => void;
 	/** html: ALREADY SANITIZED markup (DOMPurify or equivalent). */
 	html?: string;
-	/** A `data-testid` for the embed's root. */
-	testid?: string;
 }
+
+/** Attributes for an Embed component's root (`data-testid`, `class`, …), beside the embed's own fields. */
+export type EmbedAttributes = Omit<HTMLAttributes<HTMLElement>, keyof EmbedProps>;
+
+/** An Embed component's props: the embed's fields, and attributes for its root. */
+export type EmbedComponentProps = EmbedProps & EmbedAttributes;
 
 /** One chip per emoji, aggregated by you from the reaction sets (§4.7). */
 export interface ReactionChip {
@@ -68,12 +72,16 @@ export interface ReactionChip {
 	label?: string;
 }
 
-/** A quoted message: who wrote it and a one-line snippet (you shorten it — ~120 chars, first line, no Markdown). */
-export interface ReplyPreviewProps {
+/**
+ * A quoted message: who wrote it and a one-line snippet (you shorten it — ~120 chars, first line, no Markdown). Other
+ * attributes (`data-*`, `class`, …) go on ReplyPreview's button.
+ */
+export interface ReplyPreviewProps extends HTMLButtonAttributes {
 	messageId: string;
 	sender: Sender;
 	snippet?: string;
 	deleted?: boolean;
+	/** A click on it, after your `onclick`, which can `preventDefault()` to keep it from jumping. */
 	onjump?: () => void;
 }
 

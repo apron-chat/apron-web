@@ -156,6 +156,7 @@
 		caption={request.caption}
 		{status}
 		data-testid="emoji-picker"
+		captionTestid="emoji-picker-caption"
 		data-state={status}
 		bind:element={box}
 		bind:mount

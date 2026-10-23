@@ -98,6 +98,7 @@
 		emoji={request.emoji}
 		reactors={rows}
 		data-testid="reactors"
+		rowTestid="reactor"
 		bind:element={box}
 		bind:offsetHeight={measured}
 		onkeydown={keydown}

@@ -13,4 +13,4 @@
 </script>
 
 <!-- The mention bar centred above the composer, or the jump-to-latest button floating over the timeline's corner. -->
-<DesignJumpBar docked {count} {mentions} {onjump} {onjumpmention} testid="jump-button" />
+<DesignJumpBar docked {count} {mentions} {onjump} {onjumpmention} buttonTestid="jump-button" />

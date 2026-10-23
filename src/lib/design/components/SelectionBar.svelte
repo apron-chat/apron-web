@@ -1,9 +1,11 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
 	import Button from './Button.svelte';
 	import TypingDots from './TypingDots.svelte';
 	import { roomName, roomNameTip } from './util';
 
-	interface Props {
+	/** Other attributes (`data-testid`, `class`, …) go on the bar. */
+	interface Props extends HTMLAttributes<HTMLDivElement> {
 		count: number;
 		/** Threads to move to, each by `room_id` and `title` ("Untitled" without one, with its `room_id` on hover). */
 		threads?: Array<{ thread: string; name?: string }>;
@@ -21,12 +23,10 @@
 		denied?: { failed: number; total: number };
 		/** Whether the Move to thread menu is open. Bindable, so you can close it yourself (on Escape, or once a move starts). */
 		open?: boolean;
-		/** `data-testid` on the bar. */
-		testid?: string;
 		/** `data-testid` on New thread. */
 		newThreadTestid?: string;
 	}
-	let { count, threads = [], room, onmove, onnewthread, oncancel, onselectrange, status = 'idle', denied, open = $bindable(false), testid, newThreadTestid }: Props = $props();
+	let { count, threads = [], room, onmove, onnewthread, oncancel, onselectrange, status = 'idle', denied, open = $bindable(false), newThreadTestid, class: className, ...rest }: Props = $props();
 	const saving = $derived(status === 'saving');
 	const hasMenu = $derived(threads.length > 0 || room !== undefined);
 
@@ -36,7 +36,7 @@
 	}
 </script>
 
-<div class="ap-selbar" role="toolbar" aria-label="Selected messages" data-testid={testid}>
+<div role="toolbar" aria-label="Selected messages" {...rest} class={['ap-selbar', className]}>
 	<span class="ap-selbar-info">
 		<span class="ap-selbar-count">{count === 1 ? '1 message selected' : `${count} messages selected`}</span>
 		{#if onselectrange}<button type="button" class="ap-link" onclick={onselectrange} disabled={saving}>Select between</button>{/if}

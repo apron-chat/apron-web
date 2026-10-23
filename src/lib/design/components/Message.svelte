@@ -7,9 +7,9 @@
 	import ReplyPreview from './ReplyPreview.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 	import type { EmbedProps, ReactionChip, ReplyPreviewProps, Sender } from './types';
-	import { times, uid } from './util';
+	import { chain, times, uid } from './util';
 
-	/** Other attributes (`data-*`, event handlers) go on the row's `<article>`. */
+	/** Other attributes (`data-*`, event handlers, `class`) go on the row's `<article>`: yours win, classes merge, and `onclick` runs before the row's own. */
 	interface Props extends HTMLAttributes<HTMLElement> {
 		/** Omit only for a system line about the room itself (room records carry no sender). A `~private` notice has no `messageId`: render it, never store it (§3.5). */
 		messageId?: string;
@@ -73,13 +73,13 @@
 		selectMode?: boolean;
 		selected?: boolean;
 		onselect?: (e: Event) => void;
-		/** Replaces the select-mode row toggle. */
+		/** Runs before the select-mode row toggle; call `preventDefault()` to replace the toggle. */
 		onclick?: (e: MouseEvent) => void;
 	}
 	let {
 		messageId, sender, handle, text, children, embeds, body, avatar, name: nameSnippet, timestamp, time, grouped: groupedProp, status = 'sent', onretry, edited, deleted,
 		system: systemProp, scope: scopeProp, mention, pinged, highlighted, density = 'cozy', actions, footer, replyTo, reply, onjumpto,
-		reactions, reacting, palette, canReact, onreact, onopenreact, onclosereact, selectMode, selected, onselect, onclick, ...rest
+		reactions, reacting, palette, canReact, onreact, onopenreact, onclosereact, selectMode, selected, onselect, onclick, class: className, ...rest
 	}: Props = $props();
 
 	const s = $derived(sender || ({} as Partial<Sender>));
@@ -138,20 +138,20 @@
 {#if system && !sel && scope}
 	<!-- A scoped notice: a left-aligned card titled by its sender as the server names it (§3.3). -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article {...rest} class={['ap-notice', scope === 'private' && 'ap-notice-private']} data-message-id={messageId} data-scope={scope} tabindex="-1" {onclick}>
+	<article data-message-id={messageId} data-scope={scope} tabindex="-1" {...rest} class={['ap-notice', scope === 'private' && 'ap-notice-private', className]} {onclick}>
 		<div class="ap-notice-head"><span class="ap-notice-title">{noticeTitle}</span>{@render timeEl(t.short, 'ap-notice-time')}</div>
 		<div class="ap-notice-body">{#if deleted}{@render tomb()}{:else if body}{@render body()}{:else}{@render textBody('div')}{/if}</div>
 	</article>
 {:else if system && !sel}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article {...rest} class="ap-msg ap-msg-system" data-message-id={messageId} tabindex="-1" {onclick}>
+	<article data-message-id={messageId} tabindex="-1" {...rest} class={['ap-msg', 'ap-msg-system', className]} {onclick}>
 		{#if sender}<span class="ap-msg-system-who">{name}</span>{/if}
 		<div class="ap-msg-system-body">{#if deleted}{@render tomb()}{:else if body}{@render body()}{:else}{@render textBody('div')}{/if}</div>
 		{@render timeEl(t.short, 'ap-msg-system-time')}
 	</article>
 {:else if density === 'compact'}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article {...rest} class={cls} data-message-id={messageId} tabindex="-1" onclick={onclick ?? rowClick}>
+	<article data-message-id={messageId} tabindex="-1" {...rest} class={[cls, className]} onclick={chain(rowClick, onclick)}>
 		{@render quote()}
 		{@render check()}
 		<time class="ap-msg-ctime" datetime={t.iso} title={t.exact}>{t.short}</time>
@@ -174,7 +174,7 @@
 	</article>
 {:else}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article {...rest} class={cls} data-message-id={messageId} tabindex="-1" onclick={onclick ?? rowClick}>
+	<article data-message-id={messageId} tabindex="-1" {...rest} class={[cls, className]} onclick={chain(rowClick, onclick)}>
 		{@render quote()}
 		{@render check()}
 		<div class="ap-msg-gutter">
