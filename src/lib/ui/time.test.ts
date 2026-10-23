@@ -11,6 +11,8 @@ beforeAll(async () => {
 	vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) {
 		return new Format(locale ?? 'en-US', options);
 	} as typeof Intl.DateTimeFormat);
+	// A fresh copy: another file in this worker may have made the formats already, in its own zone.
+	vi.resetModules();
 	time = await import('./time');
 });
 afterAll(() => {

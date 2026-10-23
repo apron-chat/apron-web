@@ -49,7 +49,7 @@
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
-	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
+	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { WIDE_MIN } from '$lib/ui/breakpoints';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
@@ -223,10 +223,10 @@
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
 	const tabId = Math.random().toString(36).slice(2);
 	const selection = new MessageSelection();
-	/** The rooms list's width (by default tokens.css's --sidebar-w) and whether it's collapsed. */
-	const sidebar = new SidebarLayout({ side: 'left', defaultWidth: 248, minWidth: 160, maxWidth: 480, load: loadSidebarPrefs, save: saveSidebarPrefs });
-	/** The member list's width (by default tokens.css's --member-list-w) and, on wide screens, whether it's collapsed. */
-	const memberList = new SidebarLayout({ side: 'right', defaultWidth: 240, minWidth: 180, maxWidth: 420, load: loadMemberListPrefs, save: saveMemberListPrefs });
+	/** The rooms list's width and whether it's collapsed. */
+	const sidebar = new SidebarLayout({ side: 'left', ...ROOMS_LIST_WIDTHS, load: loadSidebarPrefs, save: saveSidebarPrefs });
+	/** The member list's width and, on wide screens, whether it's collapsed. */
+	const memberList = new SidebarLayout({ side: 'right', ...MEMBER_LIST_WIDTHS, load: loadMemberListPrefs, save: saveMemberListPrefs });
 
 	/** `/__preview` passes its in-memory server's sockets; every other visit connects for real. */
 	let { webSocketFactory }: { webSocketFactory?: WebSocketFactory } = $props();

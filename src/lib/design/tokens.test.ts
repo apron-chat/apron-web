@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS } from '$lib/ui/sidebar.svelte';
 
 // Read from disk: Vitest hands CSS imports, `?raw` ones included, over empty. (The app has no Node types: hence the indirection.)
 const fsModule = 'node:fs';
@@ -163,11 +164,9 @@ function components(): string[] {
 // The page starts its side panels at the tokens' widths, before any width you dragged them to.
 describe('side panel widths', () => {
 	const dark = tokens(':root {');
-	const page = readFileSync(new URL('../../routes/+page.svelte', import.meta.url), 'utf8');
-	const start = (side: string) => page.match(new RegExp(`side: '${side}', defaultWidth: (\\d+)`))?.[1];
 
 	it('opens the rooms list at --sidebar-w and the member list at --member-list-w', () => {
-		expect(`${start('left')}px`).toBe(dark.get('--sidebar-w'));
-		expect(`${start('right')}px`).toBe(dark.get('--member-list-w'));
+		expect(`${ROOMS_LIST_WIDTHS.defaultWidth}px`).toBe(dark.get('--sidebar-w'));
+		expect(`${MEMBER_LIST_WIDTHS.defaultWidth}px`).toBe(dark.get('--member-list-w'));
 	});
 });
