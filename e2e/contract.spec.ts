@@ -36,10 +36,7 @@ const OUT_OF_REACH: Record<string, string> = {
  * Entries the interop suite uses that this app no longer renders: real breaks, reported to fix on one side
  * or the other, and tested (as fixme) below rather than failing every run.
  */
-const KNOWN_BREAKS: Record<string, string> = {
-	'li.member[data-user]':
-		'The member list renders `li.ap-member[data-user]` since 6996d02 (the design system’s MemberList); interop push.spec.ts:599 still finds a member’s status dot by `li.member`.'
-};
+const KNOWN_BREAKS: Record<string, string> = {};
 
 const seen: Seen[] = existsSync(SEEN_DIR) ? readdirSync(SEEN_DIR).map((f) => JSON.parse(readFileSync(join(SEEN_DIR, f), 'utf8'))) : [];
 const ran = new Set(seen.map((s) => s.scene));
