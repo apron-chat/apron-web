@@ -7,12 +7,6 @@ const { readFileSync, readdirSync } = await import(/* @vite-ignore */ fsModule) 
 const folder = new URL('./components/', import.meta.url);
 const components = readdirSync(folder).filter((file) => file.endsWith('.svelte')).sort();
 
-/**
- * Files another branch is converting to explicit props (the message row's rebuild), skipped until it lands. This is
- * not a list of components allowed to spread: once a file here has no spread without its reason, delete its entry.
- */
-const CONVERTING = new Set(['Avatar.svelte', 'Message.svelte', 'MessageActions.svelte', 'ReactionBar.svelte', 'ReplyPreview.svelte', 'RoleBadges.svelte']);
-
 /** The comment that lets a spread stay, right before what it is on: `<!-- spread: why -->`. */
 const REASON = /^\s*spread:\s*\S/;
 
@@ -61,7 +55,6 @@ function unjustified(source: string): string[] {
 describe('design components', () => {
 	it('spread nothing onto an element or component without a `<!-- spread: why -->` comment right before it', () => {
 		const offenders = components
-			.filter((file) => !CONVERTING.has(file))
 			.flatMap((file) => unjustified(readFileSync(new URL(file, folder), 'utf8')).map((where) => `${file}:${where}`));
 		// Declare the props a component takes (`class`, `testid`, an `id`, the handlers its callers use) instead. A spread
 		// stays only where the component stands in for one element any of whose attributes is the caller's, saying so.
