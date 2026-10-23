@@ -124,6 +124,7 @@ Results, traces and the report go to `.qa/e2e/`. There are no retries: a test th
 |---|---|
 | `composer.spec.ts` | Mentions: `@ad`, the arrow keys and Tab make a chip that goes out as `@ada` with `mentions: ["ada"]`; Escape dismisses the picker so Enter sends the text; Backspace after a chip gives back the name; on a phone Enter is a new line. |
 | `layout.spec.ts` | At 1280, 900, 390, 360 and 320px, light and dark, with long names and four roles: no role badge sliced, a name gives way only down to `--ap-name-min`, a message header is one line, nothing scrolls sideways; under 960px the member list overlays the conversation. |
+| `messages.spec.ts` | A message row's controls as the page wires them: React opens the picker (its `aria-expanded` follows it) and the pick reacts to that message, a chip lists who reacted, Reply fills the composer's reply, a shift-click in select mode picks the range, an image opens full screen; a shared name's handle carries the `sender-handle` test id. |
 | `navigation.spec.ts` | Room, thread and message links; Back and Forward through rooms and threads, also to a thread left since; the phone's rooms list as a history entry. |
 | `privacy.spec.ts` | A server that drops `private` from a new room or thread: the app says so and doesn't open it to post in. |
 | `a11y.spec.ts` | axe-core on connect, room, preferences and thread, desktop and phone: no serious or critical violation beyond `e2e/a11y-baseline.json` (per rule, by count). After fixing some, `E2E_UPDATE_A11Y=1 npm run e2e -- a11y` lowers the baseline; commit it. |

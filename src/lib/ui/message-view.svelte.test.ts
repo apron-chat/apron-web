@@ -111,6 +111,10 @@ describe('messageView', () => {
 		expect(highlighted).not.toBe(first);
 		expect(highlighted.highlighted).toBe(true);
 		expect(messageView(event, row({ highlighted: true, caps: { ...NONE, reply: true } }), context()).caps?.reply).toBe(true);
+		const chip = { emoji: '👍', count: 1, mine: false, title: 'Ada', label: '👍 1 reaction. Add yours', reactors: [] };
+		const reacted = messageView(event, row({ reactions: [chip] }), context());
+		expect(messageView(event, row({ reactions: [{ ...chip }] }), context())).toBe(reacted);
+		expect(messageView(event, row({ reactions: [{ ...chip, count: 2 }] }), context()).reactions?.[0].count).toBe(2);
 	});
 
 	it('follows a rename, read where it is tracked', () => {

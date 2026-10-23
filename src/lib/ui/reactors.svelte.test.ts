@@ -67,4 +67,17 @@ describe('who reacted', () => {
 		expect(document.querySelector('[data-testid="reactors"]')).toBeNull();
 		expect(document.activeElement).toBe(chip);
 	});
+
+	it('follows the message’s chips while it is open', () => {
+		let chips = $state(chipsOf([bob]));
+		dom.render(ReactorsPopover);
+		const anchor = document.createElement('button');
+		document.body.append(anchor);
+		showReactors(anchor, '👍', () => chips);
+		flushSync();
+		expect(reactors()).toEqual(['bob']);
+		chips = chipsOf([ada, bob]);
+		flushSync();
+		expect(reactors()).toEqual(['ada', 'bob']);
+	});
 });

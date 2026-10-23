@@ -174,6 +174,15 @@ describe('a message row’s toolbar', () => {
 		expect([on.beginSelect, on.removeReply].map((handler) => handler.mock.calls.length)).toEqual([1, 1]);
 	});
 
+	it('offers Remove reply under ⋯ only on a reply', () => {
+		const row = render({ caps: ALL });
+		engage(row);
+		dom.button('More actions').click();
+		flushSync();
+		expect(dom.queryByRole('button', 'Remove reply reference')).toBeNull();
+		expect(dom.button('Delete message')).not.toBeNull();
+	});
+
 	it('offers nothing but what applies to a tombstone, and nothing in select mode', () => {
 		let row = render({ deleted: true, caps: { ...NONE, removeReply: true } });
 		engage(row);
@@ -260,6 +269,7 @@ describe('select gestures', () => {
 		// The sender's name picks it too: no profile in select mode.
 		click(dom.button('Ada'));
 		expect(openProfile).not.toHaveBeenCalled();
+		dom.press(dom.byRole('checkbox', 'Select message'), 'a');
 		dom.press(dom.byRole('checkbox', 'Select message'), ' ');
 		expect(select.mock.calls.map(([, range]) => range)).toEqual([false, true, false, false]);
 		dom.press(row, 'x');
