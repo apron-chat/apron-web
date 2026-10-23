@@ -18,10 +18,10 @@ describe('SettingRow', () => {
 	});
 
 	it('puts `below` under the whole row, the title and control in a row of their own', () => {
-		render(SettingRow, { title: 'Status', hint: 'Online.', hintTestid: 'status-hint', class: 'ap-status-pick', control: html('<span>Menu</span>'), below: html('<div class="answer">Answered</div>') });
+		render(SettingRow, { title: 'Status', hint: 'Online.', class: 'ap-status-pick', control: html('<span>Menu</span>'), below: html('<div class="answer">Answered</div>') });
 		const outer = document.querySelector('.ap-status-pick')!;
 		expect(outer.classList.contains('ap-pref-setting')).toBe(false);
 		expect([...outer.children].map((child) => child.className)).toEqual(['ap-pref-setting-row', 'answer']);
-		expect(outer.querySelector('[data-testid="status-hint"]')?.textContent).toBe('Online.');
+		expect(outer.firstElementChild?.textContent).toContain('Online.');
 	});
 });

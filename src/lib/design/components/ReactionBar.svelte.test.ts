@@ -12,14 +12,8 @@ afterEach(() => {
 function render(props: Record<string, unknown> = {}) {
 	const ontoggle = vi.fn();
 	const onreactors = vi.fn();
-	dom.render(ReactionBar, { reactions: [{ emoji: '👍', count: 2, mine: true, who: 'You and Ada' }], ontoggle, onreactors, chipTestid: 'chip', ...props });
-	return { chip: document.querySelector<HTMLButtonElement>('[data-testid="chip"]')!, ontoggle, onreactors };
-}
-
-function touch(type: string, target: Element, y = 0): void {
-	const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 0, clientY: y, detail: 1 });
-	Object.defineProperty(event, 'pointerType', { value: 'touch' });
-	target.dispatchEvent(event);
+	dom.render(ReactionBar, { reactions: [{ emoji: '👍', count: 2, mine: true, who: 'You and Ada' }], ontoggle, onreactors, ...props });
+	return { chip: dom.byRole('group', 'Reactions').querySelector<HTMLButtonElement>('button[data-emoji]')!, ontoggle, onreactors };
 }
 
 describe('ReactionBar', () => {
@@ -39,20 +33,20 @@ describe('ReactionBar', () => {
 		expect(onreactors).toHaveBeenLastCalledWith('👍', chip);
 
 		onreactors.mockClear();
-		touch('pointerdown', chip);
+		dom.touch('pointerdown', chip);
 		vi.advanceTimersByTime(500);
 		expect(onreactors).toHaveBeenCalledWith('👍', chip);
-		touch('pointerup', chip);
+		dom.touch('pointerup', chip);
 		chip.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
 		expect(ontoggle).not.toHaveBeenCalled();
 
 		// A touch that moves is a scroll; a tap toggles.
 		onreactors.mockClear();
-		touch('pointerdown', chip);
-		touch('pointermove', chip, 30);
+		dom.touch('pointerdown', chip);
+		dom.touch('pointermove', chip, 0, 30);
 		vi.advanceTimersByTime(500);
 		expect(onreactors).not.toHaveBeenCalled();
-		touch('pointerup', chip);
+		dom.touch('pointerup', chip);
 		chip.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
 		expect(ontoggle).toHaveBeenCalledWith('👍');
 	});
@@ -72,14 +66,14 @@ describe('ReactionBar', () => {
 		expect(ontoggle).not.toHaveBeenCalled();
 		chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		expect(onreactors).toHaveBeenCalledOnce();
-		expect(document.querySelector('.ap-rchip-add')).toBeNull();
+		expect(dom.queryByRole('button', 'Add a reaction')).toBeNull();
 	});
 
 	it('shows the + button unless add is false', () => {
 		render();
-		expect(document.querySelector('.ap-rchip-add')).not.toBeNull();
+		expect(dom.queryByRole('button', 'Add a reaction')).not.toBeNull();
 		dom.unmount();
 		render({ add: false });
-		expect(document.querySelector('.ap-rchip-add')).toBeNull();
+		expect(dom.queryByRole('button', 'Add a reaction')).toBeNull();
 	});
 });

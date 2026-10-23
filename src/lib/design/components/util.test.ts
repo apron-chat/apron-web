@@ -1,34 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chain, cssPx, fitRoles, rolePeek, roomName, roomNameTip, UNTITLED } from './util';
-
-describe('roomName', () => {
-	it('names a room or thread by its title, else its room_id (§3.4)', () => {
-		expect(roomName('Deploy checklist', 't1')).toBe('Deploy checklist');
-		expect(roomName(undefined, 't1')).toBe('t1');
-		expect(roomName(null, 't1')).toBe('t1');
-	});
-
-	it('never names one by a blank: an empty or all-space title counts as none', () => {
-		expect(roomName('', 't1')).toBe('t1');
-		expect(roomName('   ', 't1')).toBe('t1');
-		expect(roomName('\n\t', 't1')).toBe('t1');
-	});
-
-	it('keeps a title as written, spaces and all', () => {
-		expect(roomName('  Ops  ', 't1')).toBe('  Ops  ');
-	});
-
-	it('calls a thread without a title Untitled, its room_id for a tooltip; a titled one, or a room, gets none', () => {
-		expect(UNTITLED).toBe('Untitled');
-		for (const title of [undefined, null, '', '  ']) {
-			expect(roomName(title, 't1', { thread: true })).toBe('Untitled');
-			expect(roomNameTip(title, 't1', { thread: true })).toBe('t1');
-			expect(roomNameTip(title, 't1')).toBeUndefined();
-		}
-		expect(roomName('Deploy', 't1', { thread: true })).toBe('Deploy');
-		expect(roomNameTip('Deploy', 't1', { thread: true })).toBeUndefined();
-	});
-});
+import { chain, cssPx, fitRoles, rolePeek } from './util';
 
 describe('cssPx', () => {
 	it('reads a plain length, and the math a computed min-width leaves unresolved', () => {

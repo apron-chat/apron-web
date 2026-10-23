@@ -2,6 +2,21 @@ import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 
+// Node's fs, without Node's types (the app has none): only to sort the test files below.
+const fsModule = 'node:fs';
+const fs = (await import(/* @vite-ignore */ fsModule)) as { readdirSync(path: URL, options: { recursive: true }): string[]; readFileSync(path: URL, encoding: 'utf8'): string };
+const src = new URL('./src/', import.meta.url);
+
+/**
+ * The node tests that mock a module (`vi.mock`). A mock takes only where the module is imported afresh, so these
+ * run isolated, each file in a fresh module graph; the other node tests share their worker's modules, which takes
+ * about half the time. Found by reading the files, so a new test that mocks is isolated without listing it here.
+ */
+const MOCKING = fs.readdirSync(src, { recursive: true })
+	.filter((path) => path.endsWith('.test.ts') && !path.endsWith('.svelte.test.ts'))
+	.filter((path) => /\bvi\.(doMock|mock)\(/.test(fs.readFileSync(new URL(path, src), 'utf8')))
+	.map((path) => `src/${path.replaceAll('\\', '/')}`);
+
 export default defineConfig({
 	plugins: [
 		sveltekit({
@@ -16,7 +31,8 @@ export default defineConfig({
 	],
 	test: {
 		projects: [
-			{ extends: true, test: { name: 'unit', include: ['src/**/*.test.ts'], exclude: ['src/**/*.svelte.test.ts'] } },
+			{ extends: true, test: { name: 'unit', include: ['src/**/*.test.ts'], exclude: ['src/**/*.svelte.test.ts', ...MOCKING], isolate: false } },
+			{ extends: true, test: { name: 'mocking', include: MOCKING.length ? MOCKING : ['no-such-file'] } },
 			// Rune tests need Svelte's client compile and runtime, where effects run.
 			{ extends: true, resolve: { conditions: ['browser'] }, test: { name: 'runes', include: ['src/**/*.svelte.test.ts'], environment: './src/lib/test/runes-environment.ts' } }
 		]

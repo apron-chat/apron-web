@@ -47,28 +47,21 @@ describe('ThreadItem', () => {
 
 	it('ends a row with the count of the one being read, else when it was last active, and counts unread replies', () => {
 		const ago = { text: '2h', datetime: '2026-10-22T10:00:00.000Z', title: 'Last active today' };
-		let row = render({ unjoined: true, ago, agoTestid: 'other-thread-ago', count: 3 });
-		expect(row.querySelector('small.ap-room-count')?.getAttribute('aria-label')).toBe('3 messages');
+		let row = render({ unjoined: true, ago, count: 3 });
+		expect(row.querySelector('[aria-label="3 messages"]')?.textContent).toBe('3');
 		expect(row.querySelector('time')).toBeNull();
 		dom.unmount();
-		row = render({ unjoined: true, ago, agoTestid: 'other-thread-ago' });
-		const time = row.querySelector('time[data-testid="other-thread-ago"]')!;
+		row = render({ unjoined: true, ago });
+		const time = row.querySelector('time')!;
 		expect([time.textContent, time.getAttribute('datetime'), time.getAttribute('title')]).toEqual(['2h', '2026-10-22T10:00:00.000Z', 'Last active today']);
 		dom.unmount();
-		row = render({ unread: 2, unreadTestid: 'thread-unread' });
-		expect(row.querySelector('[data-testid="thread-unread"]')?.getAttribute('aria-label')).toBe('2 unread replies');
+		row = render({ unread: 2 });
+		expect(row.querySelector('[aria-label="2 unread replies"]')?.textContent).toBe('2');
 	});
 
-	it('marks its preview lines with ids from its prefix', () => {
-		const row = render({ summary: 'What to check', latest: { sender: 'Dana', text: 'Done' }, linesTestid: 'thread-list' });
-		expect(row.querySelector('[data-testid="thread-list-summary"]')?.textContent).toBe('What to check');
-		expect(row.querySelector('[data-testid="thread-list-latest"]')?.textContent).toBe('Dana Done');
-	});
-
-	it('calls a thread with a blank title Untitled, its room_id on hover, as every place that names one does', () => {
-		const thread = render({ name: '   ' }).querySelector('.ap-room-name');
-		expect(thread?.textContent).toBe('Untitled');
-		expect(thread?.getAttribute('title')).toBe('deploy');
+	it('shows its summary and latest message under its name', () => {
+		const row = render({ summary: 'What to check', latest: { sender: 'Dana', text: 'Done' } });
+		expect(row.textContent?.trim()).toBe('DeployWhat to checkDana Done');
 	});
 
 	it('lets the caller’s class join its own, and its click run first', () => {

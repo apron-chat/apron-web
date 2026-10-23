@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 // Read from disk: Vitest hands CSS imports, `?raw` ones included, over empty. (The app has no Node types: hence the indirection.)
 const fsModule = 'node:fs';
-const { readFileSync } = await import(/* @vite-ignore */ fsModule) as { readFileSync: (path: URL, encoding: 'utf8') => string };
+const fs = await import(/* @vite-ignore */ fsModule);
+const { readFileSync } = fs as { readFileSync: (path: URL, encoding: 'utf8') => string };
 const css = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8');
 
 /** The custom properties a block declares, comments aside: the first `:root {` (dark, the reference), or a light one. */
@@ -136,15 +137,28 @@ describe('apron.css', () => {
 	});
 
 	// So a tone (ap-tone-ok, -warn, -danger) wins over a note's own color, wherever the note's rule sits.
-	it('colors every status note through --ap-tone', () => {
-		const notes = ['.ap-profedit-hint', '.ap-profedit-note', '.ap-pref-note', '.ap-pref-help', '.ap-profcard-note', '.ap-memberlist-note', '.ap-roomform-note', '.ap-sect-note', '.ap-nudge-note', '.ap-font-status'];
-		for (const note of notes) {
-			const colors = declarations.filter((d) => d.property === 'color' && d.selector.split(',').some((part) => part.trim() === note));
-			expect(colors.length, note).toBeGreaterThan(0);
-			for (const color of colors) expect(color.value, where(color)).toMatch(/^var\(--ap-tone, /);
-		}
+	it('colors every note, hint, help and status line through --ap-tone, and whatever a component tones', () => {
+		/** Lines named so that aren't notes a tone applies to: they keep their color inside a toned section. */
+		const untoned = ['.ap-profcard-status', '.ap-emojipop-status', '.ap-checklist-note', '.ap-selbar-status', '.ap-menu-hint', '.ap-msgedit-hint'];
+		/** Each element a component's markup gives a tone class: its other classes. */
+		const toned = components().flatMap((markup) => [...markup.matchAll(/class=(?:"([^"]*\bap-tone-[^"]*)"|\{\[([^\]]*'ap-tone-[^\]]*)\]\})/g)])
+			.map(([, plain, list]) => [...(plain ?? list).matchAll(/\b(ap-(?!tone-)[a-z-]+)/g)].map(([, name]) => `.${name}`));
+		expect(toned.length).toBeGreaterThan(5);
+		const named = (part: string) => !untoned.includes(part) && /^\.ap-[a-z-]+-(note|hint|help|status)$/.test(part);
+		/** A rule for a note itself: a selector that ends at a note's class, or at a class a component tones. */
+		const colors = declarations.filter((d) => d.property === 'color' && d.selector.split(/,(?![^(]*\))/).some((part) => named(part.trim()) || toned.flat().includes(part.trim())));
+		expect(colors.length).toBeGreaterThanOrEqual(10);
+		expect(colors.filter((d) => !/^var\(--ap-tone, /.test(d.value)).map(where)).toEqual([]);
+		// Every element a component tones has a class colored so.
+		expect(toned.filter((classes) => !colors.some((d) => d.selector.split(',').some((part) => classes.includes(part.trim()))))).toEqual([]);
 	});
 });
+
+/** The markup of every component, the design system's and the app's. */
+function components(): string[] {
+	const { readdirSync } = fs as unknown as { readdirSync: (path: URL) => string[] };
+	return ['./components/', '../components/'].flatMap((dir) => readdirSync(new URL(dir, import.meta.url)).filter((name) => name.endsWith('.svelte')).map((name) => readFileSync(new URL(dir + name, import.meta.url), 'utf8')));
+}
 
 // The page starts its side panels at the tokens' widths, before any width you dragged them to.
 describe('side panel widths', () => {

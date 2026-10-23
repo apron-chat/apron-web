@@ -17,7 +17,6 @@ const bob: Identity = { user_id: 'bob', name: 'Bob' };
 
 // jsdom has no ResizeObserver, which `bind:offsetHeight` uses.
 beforeEach(() => {
-	vi.useFakeTimers();
 	dom.stubResizeObserver();
 	const snapshot: ClientSnapshot = { ...blankSnapshot(), authenticated: true, you, users: { you, ada, bob }, recordedUsers: {}, userAliases: {} };
 	directory.apply(snapshot, undefined);
@@ -27,7 +26,6 @@ afterEach(() => {
 	reactorsList.close();
 	directory.forget();
 	vi.unstubAllGlobals();
-	vi.useRealTimers();
 });
 
 function chipsOf(users: Identity[], emoji = '👍'): ReactionChip[] {
@@ -55,31 +53,6 @@ describe('ReactionBar reactors', () => {
 		expect(reactors()).toEqual(['you', 'ada', 'bob']);
 		expect(document.querySelector('[data-testid="reactors"]')?.getAttribute('aria-label')).toBe('3 reactions with 👍');
 		expect(ontoggle).not.toHaveBeenCalled();
-	});
-
-	it('lists who reacted on a long press, and the click that ends it does not toggle', () => {
-		const { chip, ontoggle } = render(chipsOf([ada]));
-		dom.touch('pointerdown', chip);
-		vi.advanceTimersByTime(500);
-		flushSync();
-		expect(reactors()).toEqual(['ada']);
-		dom.touch('pointerup', chip);
-		chip.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
-		expect(ontoggle).not.toHaveBeenCalled();
-		// A tap still toggles.
-		dom.touch('pointerdown', chip);
-		dom.touch('pointerup', chip);
-		chip.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
-		expect(ontoggle).toHaveBeenCalledWith('👍');
-	});
-
-	it('treats a touch that moves as a scroll', () => {
-		const { chip } = render(chipsOf([ada]));
-		dom.touch('pointerdown', chip, 0, 0);
-		dom.touch('pointermove', chip, 0, 30);
-		vi.advanceTimersByTime(500);
-		flushSync();
-		expect(document.querySelector('[data-testid="reactors"]')).toBeNull();
 	});
 
 	it('lists who reacted when you can not react, and Escape closes it', () => {

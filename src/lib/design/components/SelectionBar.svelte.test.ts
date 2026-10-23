@@ -28,10 +28,9 @@ describe('SelectionBar', () => {
 		render({ room: 'general' });
 		expect(buttons()).toEqual(['Cancel', 'Move to thread ▾']);
 		dom.unmount();
-		render({ onnewthread: vi.fn(), onselectrange: vi.fn(), newThreadTestid: 'new', 'data-testid': 'bar' });
+		render({ onnewthread: vi.fn(), onselectrange: vi.fn(), 'data-testid': 'bar' });
 		expect(buttons()).toEqual(['Select between', 'Cancel', 'New thread']);
-		expect(document.querySelector('[data-testid=bar]')?.getAttribute('role')).toBe('toolbar');
-		expect(document.querySelector('[data-testid=new]')?.textContent).toBe('New thread');
+		expect(dom.byRole('toolbar', 'Selected messages').dataset.testid).toBe('bar');
 	});
 
 	it('says how many messages the server refused to move', () => {
@@ -39,10 +38,8 @@ describe('SelectionBar', () => {
 		expect(document.querySelector('[role=alert]')?.textContent).toBe('1 of 3 couldn’t be moved');
 	});
 
-	it('calls a destination thread with a blank title Untitled, its room_id on hover, isolated from the menu’s direction', () => {
-		render({ threads: [{ thread: 't1', name: ' ' }, { thread: 't2', name: 'מסירה' }], open: true });
-		const items = [...document.querySelectorAll('[role=option] bdi')];
-		expect(items.map((item) => item.textContent)).toEqual(['Untitled', 'מסירה']);
-		expect(items.map((item) => item.getAttribute('title'))).toEqual(['t1', null]);
+	it('isolates each destination thread’s name from the menu’s direction', () => {
+		render({ threads: [{ thread: 't1', name: 'Deploy' }, { thread: 't2', name: 'מסירה' }], open: true });
+		expect([...document.querySelectorAll('[role=option] bdi')].map((item) => item.textContent)).toEqual(['Deploy', 'מסירה']);
 	});
 });

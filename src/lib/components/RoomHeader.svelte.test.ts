@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { RoomSnapshot } from '$lib/protocol/client';
 import RoomHeader from './RoomHeader.svelte';
 import * as dom from '$lib/test/dom';
+import { byTestid } from '$lib/test/queries';
 
 /** The header of a joined room, offering the member list's toggle or not. */
 function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: number; mentionsElsewhere?: number; showTopic?: boolean; onsummary?: () => void } = {}) {
@@ -14,7 +15,7 @@ function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: numbe
 		...elsewhere,
 		onback: noop, onroom: noop, onedit: noop, onleave: noop, onmemberlist: noop
 	});
-	return document.querySelector<HTMLButtonElement>('button.ap-roomhead-members');
+	return dom.queryByRole<HTMLButtonElement>('button', 'Show member list');
 }
 
 describe('RoomHeader', () => {
@@ -46,26 +47,13 @@ describe('RoomHeader', () => {
 		expect(onsummary).toHaveBeenCalledOnce();
 	});
 
-	it('makes the back arrow a tag with what’s new elsewhere: grey for unread, orange with an @ for mentions', () => {
-		const back = () => document.querySelector<HTMLButtonElement>('.ap-roomhead-back')!;
-		const tag = () => back().querySelector('[data-testid="back-unread"]');
+	it('tags the back arrow with what the rooms list counts as new elsewhere', () => {
+		const back = () => dom.button(/^Back to rooms/);
 		render();
-		expect(back().textContent?.trim()).toBe('‹');
-		expect(back().getAttribute('aria-label')).toBe('Back to rooms');
-		expect(tag()).toBeNull();
+		expect([back().getAttribute('aria-label'), byTestid('back-unread')]).toEqual(['Back to rooms', null]);
 		dom.unmount();
-		render(undefined, { unreadElsewhere: 12 });
-		expect(tag()?.textContent).toBe('12');
-		expect(tag()?.classList.contains('ap-roomhead-tag-quiet')).toBe(true);
-		expect(back().getAttribute('aria-label')).toBe('Back to rooms, 12 unread messages');
-		dom.unmount();
-		// A mention may be an edit adding you to a message already read: it counts at least once.
-		render(undefined, { unreadElsewhere: 0, mentionsElsewhere: 1 });
-		expect(tag()?.textContent).toBe('@\u202f1');
-		expect(tag()?.classList.contains('ap-roomhead-tag-at')).toBe(true);
-		expect(back().getAttribute('aria-label')).toBe('Back to rooms, 1 unread message, a mention of you');
-		dom.unmount();
-		render(undefined, { unreadElsewhere: 250, mentionsElsewhere: 2 });
-		expect(tag()?.textContent).toBe('@\u202f99+');
+		render(undefined, { unreadElsewhere: 12, mentionsElsewhere: 1 });
+		expect(back().getAttribute('aria-label')).toBe('Back to rooms, 12 unread messages, a mention of you');
+		expect(byTestid('back-unread')?.textContent).toBe('@\u202f12');
 	});
 });

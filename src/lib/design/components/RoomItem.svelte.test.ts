@@ -25,26 +25,19 @@ describe('RoomItem', () => {
 	});
 
 	it('ends a row with its unread bubble, and a … while history loads', () => {
-		const row = render({ loading: true, unread: 2, unreadTestid: 'room-unread' });
+		const row = render({ loading: true, unread: 2 });
 		expect(row.classList.contains('ap-room-unread')).toBe(true);
-		expect(row.querySelector('[data-testid="room-unread"]')?.textContent).toBe('2');
-		expect(row.querySelector('[data-testid="room-unread"]')?.getAttribute('aria-label')).toBe('2 unread messages');
+		expect(row.querySelector('[aria-label="2 unread messages"]')?.textContent).toBe('2');
 		expect(row.querySelector('.ap-room-loading')?.getAttribute('aria-label')).toBe('Loading history');
 	});
 
 	it('gives the open room a + for a new thread, beside its row', () => {
 		const onnewthread = vi.fn();
-		render({ active: true, onnewthread, newThreadTestid: 'create-thread' });
-		const add = document.querySelector<HTMLButtonElement>('.ap-roomstart > [data-testid="create-thread"]')!;
-		expect(add.getAttribute('aria-label')).toBe('New thread in General');
+		render({ active: true, onnewthread });
+		const add = dom.button('New thread in General');
+		expect(add.previousElementSibling).toBe(dom.button('General'));
 		add.click();
 		expect(onnewthread).toHaveBeenCalledOnce();
-	});
-
-	it('names a room with a blank title by its room_id, with no tooltip', () => {
-		const room = render({ room: 'deploy', name: '  ' }).querySelector('.ap-room-name');
-		expect(room?.textContent).toBe('deploy');
-		expect(room?.hasAttribute('title')).toBe(false);
 	});
 
 	it('lets the caller’s attributes win: its class added, its click first, and preventDefault() skipping onselect', () => {

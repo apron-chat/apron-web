@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import Callout from './Callout.svelte';
-import { render } from '$lib/test/dom';
+import { byRole, render } from '$lib/test/dom';
 
 describe('Callout', () => {
 	it('is a note within its section, not a landmark', () => {
@@ -15,8 +15,8 @@ describe('Callout', () => {
 
 	it('takes the caller’s attributes on its root, merging its class', () => {
 		render(Callout, { title: 'Install Apron', class: 'extra', 'data-testid': 'install', role: 'alert' });
-		const callout = document.querySelector('[data-testid="install"]')!;
+		const callout = byRole('alert');
 		expect(callout.className).toBe('ap-callout extra');
-		expect(callout.getAttribute('role')).toBe('alert');
+		expect(callout.dataset.testid).toBe('install');
 	});
 });

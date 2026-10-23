@@ -4,49 +4,51 @@ import { describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
 import ComposerEditable from './ComposerEditable.svelte';
 import * as dom from '$lib/test/dom';
-
-const testid = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
-
-/** The app's test ids, as it passes them. */
-const testids = { replyTestid: 'reply-draft', attachmentsTestid: 'staged-files', previewsTestid: 'link-previews', fileInputTestid: 'attach-input', commandTestid: 'command-tag', emojiTestid: 'emoji-button', sendTestid: 'send-button' };
+import { queryByText } from '$lib/test/queries';
 
 function render(props: Record<string, unknown>, component: typeof Composer | typeof ComposerEditable = Composer) {
-	dom.render(component, component === Composer ? { room: 'Ops', ...testids, ...props } : props);
+	dom.render(component, component === Composer ? { room: 'Ops', ...props } : props);
 }
+
+const send = () => dom.queryByRole<HTMLButtonElement>('button', /^(Send message|Run command)$/)!;
+/** The Command tag a command draft shows. */
+const commandTag = () => queryByText('Command');
 
 describe('Composer', () => {
 	it('disables Send on an empty draft unless told it has something to send, or it has files', () => {
 		render({});
-		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(true);
+		expect(send().disabled).toBe(true);
 		dom.unmount();
 		render({ canSend: true });
-		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(false);
+		expect(send().disabled).toBe(false);
 		dom.unmount();
 		render({ attachments: dom.html('<div class="ap-attachment">tile</div>') });
-		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(false);
+		expect(send().disabled).toBe(false);
 		dom.unmount();
 		render({ value: 'hi', canSend: false });
-		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(true);
+		expect(send().disabled).toBe(true);
 	});
 
 	it('reads a draft starting with one "/" as a command, where the server takes commands', () => {
 		render({ value: '/kick ada', canCommand: true });
-		expect(testid('command-tag')).not.toBeNull();
-		expect(testid('send-button')?.getAttribute('aria-label')).toBe('Run command');
+		expect(commandTag()).not.toBeNull();
+		expect([send().getAttribute('aria-label'), send().textContent]).toEqual(['Run command', 'Run']);
+		expect(dom.queryByRole('textbox', 'Command')).not.toBeNull();
 		dom.unmount();
 		render({ value: '//kick ada', canCommand: true });
-		expect(testid('command-tag')).toBeNull();
-		expect(testid('send-button')?.textContent).toBe('Send');
+		expect(commandTag()).toBeNull();
+		expect([send().getAttribute('aria-label'), send().textContent]).toEqual(['Send message', 'Send']);
 		dom.unmount();
 		render({ value: '/kick ada' });
-		expect(testid('command-tag')).toBeNull();
+		expect(commandTag()).toBeNull();
 	});
 
 	it('puts your attributes on its textarea, its class merged', () => {
 		const onkeydown = vi.fn();
 		render({ id: 'message-input', 'data-testid': 'message-input', class: 'mine', onkeydown });
-		const field = testid('message-input')!;
+		const field = dom.byRole('textbox', 'Message');
 		expect(field.tagName).toBe('TEXTAREA');
+		expect(field.dataset.testid).toBe('message-input');
 		expect(field.id).toBe('message-input');
 		expect([...field.classList]).toEqual(['ap-composer-field', 'mine']);
 		field.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
@@ -66,12 +68,11 @@ describe('Composer', () => {
 	it('draws an empty editable for you to fill, with your attributes and the placeholder while empty', () => {
 		const onkeydown = vi.fn();
 		render({ placeholder: 'Message Ops', empty: true, id: 'message-input', 'data-testid': 'message-input', class: 'mine', onkeydown }, ComposerEditable);
-		const field = testid('message-input')!;
+		const field = dom.byRole('textbox', 'Message');
 		expect(field.classList.contains('mine')).toBe(true);
-		expect(field.getAttribute('role')).toBe('textbox');
 		expect(field.tagName).toBe('DIV');
 		expect(field.id).toBe('message-input');
-		expect(field.getAttribute('aria-label')).toBe('Message');
+		expect(field.dataset.testid).toBe('message-input');
 		expect(field.dataset.placeholder).toBe('Message Ops');
 		expect(field.classList.contains('ap-composer-editable-empty')).toBe(true);
 		expect(field.childNodes).toHaveLength(0);
@@ -82,7 +83,11 @@ describe('Composer', () => {
 	it('opens a file picker for onfiles and hands over what was picked', () => {
 		const onfiles = vi.fn();
 		render({ canUpload: true, canRecord: false, onfiles });
-		const input = testid('attach-input') as HTMLInputElement;
+		const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+		expect(dom.button('Attach a file').disabled).toBe(false);
+		const opened = vi.spyOn(input, 'click');
+		dom.button('Attach a file').click();
+		expect(opened).toHaveBeenCalledOnce();
 		const file = new File(['hi'], 'notes.txt', { type: 'text/plain' });
 		Object.defineProperty(input, 'files', { value: [file], configurable: true });
 		input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -101,35 +106,35 @@ describe('Composer', () => {
 			preview: createRawSnippet((index: () => number) => ({ render: () => `<div class="ap-embed">preview ${index()}</div>` })),
 			onremovepreview
 		});
-		expect(testid('reply-draft')?.textContent).toContain('Replying to Ada: rendered');
-		(testid('reply-draft')!.querySelector('button') as HTMLButtonElement).click();
+		expect(dom.byRole('status', /^Replying to Ada/).textContent).toContain('Replying to Ada: rendered');
+		dom.button('Cancel reply').click();
 		expect(oncancelreply).toHaveBeenCalledOnce();
-		expect(testid('staged-files')?.textContent).toBe('tile');
-		const previews = testid('link-previews')!;
+		expect(document.querySelector('[aria-label="Files to send"]')?.textContent).toBe('tile');
+		const previews = document.querySelector('[aria-label="Link previews to send"]')!;
 		expect([...previews.querySelectorAll('.ap-embed')].map((node) => node.textContent)).toEqual(['preview 0', 'preview 1']);
-		previews.querySelectorAll<HTMLButtonElement>('.ap-embed-remove')[1].click();
+		[...previews.querySelectorAll('button')].filter((button) => button.getAttribute('aria-label') === 'Remove preview')[1].click();
 		expect(onremovepreview).toHaveBeenCalledWith(1);
 	});
 
 	it('holds Attach, the emoji button and Send while recording, and shows the emoji picker open', () => {
 		render({ canUpload: true, recording: true, recordingTime: '0:07', onemoji: () => {}, emojiOpen: true, canSend: true });
-		expect(document.querySelector('.ap-composer-rectime')?.textContent).toBe('0:07');
-		expect(document.querySelector<HTMLButtonElement>('[aria-label="Attach a file"]')!.disabled).toBe(true);
-		expect(document.querySelector<HTMLButtonElement>('[aria-label="Stop recording"]')!.disabled).toBe(false);
-		const emoji = testid('emoji-button') as HTMLButtonElement;
+		expect(dom.byRole('status').textContent).toBe('Recording 0:07');
+		expect(dom.button('Attach a file').disabled).toBe(true);
+		expect(dom.button('Stop recording').disabled).toBe(false);
+		const emoji = dom.button('Insert emoji');
 		expect(emoji.disabled).toBe(true);
 		expect(emoji.getAttribute('aria-expanded')).toBe('true');
 		expect(emoji.classList.contains('ap-iconbtn-on')).toBe(true);
-		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(true);
+		expect(send().disabled).toBe(true);
 	});
 
-	it('takes the direction of what is typed, in either field, and calls a blank-titled thread Untitled', () => {
-		render({ thread: { thread: 't1', name: '' } });
-		const field = document.querySelector('.ap-composer-field')!;
+	it('takes the direction of what is typed, in either field, and names the thread a reply goes to', () => {
+		render({ thread: { thread: 't1', name: 'Deploy' } });
+		const field = dom.byRole('textbox', 'Message');
 		expect(field.getAttribute('dir')).toBe('auto');
-		expect(field.getAttribute('placeholder')).toBe('Reply in Untitled');
+		expect(field.getAttribute('placeholder')).toBe('Reply in Deploy');
 		dom.unmount();
 		render({ empty: true }, ComposerEditable);
-		expect(document.querySelector('.ap-composer-editable')?.getAttribute('dir')).toBe('auto');
+		expect(dom.byRole('textbox', 'Message').getAttribute('dir')).toBe('auto');
 	});
 });

@@ -13,9 +13,9 @@ function detail(): string | null | undefined {
 
 describe('EmbedUpload', () => {
 	it('says what is pending: its size, its progress, or why it failed', () => {
-		render(EmbedUpload, { kind: 'upload', title: 'a.png', detail: '960 × 600', progress: 0.5, 'data-testid': 'pending' });
+		render(EmbedUpload, { kind: 'upload', title: 'a.png', detail: '960 × 600', progress: 0.5 });
 		expect(detail()).toBe('960 × 600 · Uploading · 50%');
-		expect(document.querySelector('[data-testid="pending"] .ap-embed-progress')).not.toBeNull();
+		expect(document.querySelector('.ap-embed-progress')).not.toBeNull();
 		unmount();
 		render(EmbedUpload, { kind: 'upload', title: 'a.png', detail: '960 × 600', progress: 0.5, failed: 'too large' });
 		expect(detail()).toBe('Upload failed · too large');
@@ -35,6 +35,15 @@ describe('EmbedUpload', () => {
 });
 
 describe('EmbedFrame', () => {
+	it('keeps its own sandbox, referrer policy and permissions over any the caller passes', () => {
+		render(EmbedFrame, { kind: 'iframe', url: 'https://view.example/live', live: true, sandbox: 'allow-scripts allow-same-origin allow-top-navigation', referrerpolicy: 'unsafe-url', allow: 'camera; microphone', class: 'mine' } as never);
+		const frame = document.querySelector('iframe')!;
+		expect(frame.getAttribute('sandbox')).toBe('allow-scripts');
+		expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer');
+		expect(frame.getAttribute('allow')).toBe('');
+		expect(frame.classList.contains('mine')).toBe(true);
+	});
+
 	it('is a fallback card without a usable address', () => {
 		render(EmbedFrame, { kind: 'iframe', url: 'javascript:alert(1)' });
 		expect(document.querySelector('.ap-embed-fallback .ap-embed-kind')?.textContent).toBe('iframe');

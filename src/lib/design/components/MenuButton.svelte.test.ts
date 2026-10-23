@@ -111,25 +111,23 @@ describe('MenuButton', () => {
 		expect(items()).toHaveLength(3);
 	});
 
-	it('draws an icon button named by its label, and marks the items for tests', async () => {
+	it('draws an icon button named by its label, on while open', async () => {
 		const icon = createRawSnippet(() => ({ render: () => '<svg aria-hidden="true"></svg>' }));
-		const actions = [{ value: 'edit', label: 'Edit room', testid: 'edit-room' }, { value: 'leave', label: 'Leave room', testid: 'leave-room' }];
-		dom.render(MenuButton, { label: 'Room actions', icon, buttonTestid: 'room-actions', choices: actions, onselect: vi.fn() });
-		const trigger = document.querySelector<HTMLButtonElement>('[data-testid="room-actions"]')!;
-		expect(trigger.classList.contains('ap-iconbtn')).toBe(true);
-		expect(trigger.getAttribute('aria-label')).toBe('Room actions');
-		expect(trigger.textContent).toBe('');
+		const actions = [{ value: 'edit', label: 'Edit room' }, { value: 'leave', label: 'Leave room' }];
+		dom.render(MenuButton, { label: 'Room actions', icon, choices: actions, onselect: vi.fn() });
+		const trigger = dom.button('Room actions');
+		expect([trigger.classList.contains('ap-iconbtn'), trigger.textContent]).toEqual([true, '']);
 		trigger.click();
 		flushSync();
 		await tick();
 		expect(trigger.classList.contains('ap-iconbtn-on')).toBe(true);
-		expect(document.querySelector('[data-testid="leave-room"]')?.textContent).toBe('Leave room');
+		expect(items().map((item) => item.textContent)).toEqual(['Edit room', 'Leave room']);
 	});
 
 	it('runs a caller’s onkeydown first, which can keep its own keys from running', async () => {
 		const onkeydown = vi.fn((event: KeyboardEvent) => { if (event.key === 'ArrowDown') event.preventDefault(); });
-		dom.render(MenuButton, { label: 'Pause…', choices, onselect: vi.fn(), onkeydown, 'data-testid': 'pause' });
-		const trigger = document.querySelector<HTMLButtonElement>('[data-testid="pause"] > button')!;
+		dom.render(MenuButton, { label: 'Pause…', choices, onselect: vi.fn(), onkeydown });
+		const trigger = dom.button('Pause…');
 		trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 		flushSync();
 		await tick();

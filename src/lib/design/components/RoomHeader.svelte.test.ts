@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import RoomHeader from './RoomHeader.svelte';
 import * as dom from '$lib/test/dom';
+import { byText } from '$lib/test/queries';
 
 function render(props: Record<string, unknown>) {
 	dom.render(RoomHeader, { room: 'ops', name: 'Ops', ...props });
@@ -21,25 +22,44 @@ describe('RoomHeader', () => {
 		render({ topic: 'Deploys', replies: { count: 1 } });
 		expect(sub()).toEqual(['1 reply']);
 		dom.unmount();
-		render({ topic: 'Deploys', topicTitle: 'Deploys and incidents', topicTestid: 'room-description' });
-		expect(document.querySelector('[data-testid="room-description"]')?.getAttribute('title')).toBe('Deploys and incidents');
+		render({ topic: 'Deploys', topicTitle: 'Deploys and incidents' });
+		expect(sub()).toEqual(['Deploys']);
+		expect(byText('Deploys').title).toBe('Deploys and incidents');
 	});
 
 	it('puts Edit and Leave in a ⋯ menu named for the room or thread, and Join and the member list beside it', () => {
 		const onjoin = vi.fn();
-		render({ thread: 'deploy', threadName: 'Deploy', onedit: () => {}, onleave: () => {}, canJoin: true, onjoin, onmemberlist: () => {}, memberListOpen: true, busy: true, actionsTestid: 'room-actions', joinTestid: 'join-room' });
-		const menu = document.querySelector<HTMLButtonElement>('[data-testid="room-actions"]')!;
-		expect(menu.getAttribute('aria-label')).toBe('Thread actions');
-		expect(menu.disabled).toBe(true);
-		const join = document.querySelector<HTMLButtonElement>('[data-testid="join-room"]')!;
-		expect([join.getAttribute('aria-label'), join.disabled]).toEqual(['Join thread', true]);
-		const members = document.querySelector('.ap-roomhead-members')!;
-		expect([members.getAttribute('aria-label'), members.classList.contains('ap-iconbtn-on')]).toEqual(['Hide member list', true]);
-		expect(document.querySelector('.ap-roomhead-crumb')?.getAttribute('aria-label')).toBe('Back to room');
+		render({ thread: 'deploy', threadName: 'Deploy', onedit: () => {}, onleave: () => {}, canJoin: true, onjoin, onmemberlist: () => {}, memberListOpen: true, busy: true });
+		expect(dom.button('Thread actions').disabled).toBe(true);
+		expect(dom.button('Join thread').disabled).toBe(true);
+		const members = dom.button('Hide member list');
+		expect([members.getAttribute('aria-expanded'), members.classList.contains('ap-iconbtn-on')]).toEqual(['true', true]);
+		expect(dom.queryByRole('button', 'Back to room')).not.toBeNull();
 		dom.unmount();
-		render({ onjoin, actionsTestid: 'room-actions', joinTestid: 'join-room' });
+		render({ onjoin });
 		// Join shows only where it's offered (`canJoin`), not wherever there's an `onjoin`.
-		expect(document.querySelector('[data-testid="room-actions"], [data-testid="join-room"], .ap-roomhead-members, .ap-roomhead-back')).toBeNull();
+		expect([...document.querySelectorAll('button')]).toEqual([]);
+	});
+
+	it('makes the back arrow a tag with what’s new elsewhere: grey for unread, orange with an @ for mentions, capped at 99+', () => {
+		const back = () => dom.button(/^Back to rooms/);
+		/** The tag on the back arrow: what it shows, and whether it's the quiet or the @ kind. */
+		const tag = () => {
+			const shown = back().firstElementChild;
+			return shown && [shown.textContent, shown.classList.contains('ap-roomhead-tag-quiet') ? 'quiet' : shown.classList.contains('ap-roomhead-tag-at') ? 'at' : ''];
+		};
+		render({ onback: vi.fn() });
+		expect([back().getAttribute('aria-label'), back().textContent?.trim(), tag()]).toEqual(['Back to rooms', '‹', null]);
+		dom.unmount();
+		render({ onback: vi.fn(), unreadElsewhere: 12 });
+		expect([back().getAttribute('aria-label'), tag()]).toEqual(['Back to rooms, 12 unread messages', ['12', 'quiet']]);
+		dom.unmount();
+		// A mention may be an edit adding you to a message already read: it counts at least once.
+		render({ onback: vi.fn(), mentionsElsewhere: 1 });
+		expect([back().getAttribute('aria-label'), tag()]).toEqual(['Back to rooms, 1 unread message, a mention of you', ['@\u202f1', 'at']]);
+		dom.unmount();
+		render({ onback: vi.fn(), unreadElsewhere: 250, mentionsElsewhere: 2 });
+		expect([back().getAttribute('aria-label'), tag()]).toEqual(['Back to rooms, 250 unread messages, 2 mentions of you', ['@\u202f99+', 'at']]);
 	});
 
 	it('lets the caller’s attributes go on the header, its class added', () => {
@@ -47,15 +67,7 @@ describe('RoomHeader', () => {
 		expect([header.dataset.testid, header.classList.contains('ap-roomhead'), header.classList.contains('ap-roomhead-private'), header.classList.contains('mine')]).toEqual(['room-header', true, true, true]);
 	});
 
-	it('names a blank-titled room by its room_id and calls a blank-titled thread Untitled, its room_id on hover, and isolates who is typing', () => {
-		render({ name: ' ', thread: 't1', threadName: '', onroom: vi.fn() });
-		expect(document.querySelector('.ap-roomhead-crumb')?.textContent).toBe('ops');
-		expect(document.querySelector('h1 bdi')?.textContent).toBe('Untitled');
-		expect(document.querySelector('h1 bdi')?.getAttribute('title')).toBe('t1');
-		dom.unmount();
-		render({ thread: 't1', threadName: 'Deploy', onroom: vi.fn() });
-		expect(document.querySelector('h1 bdi')?.hasAttribute('title')).toBe(false);
-		dom.unmount();
+	it('isolates the name of who is typing', () => {
 		render({ typing: ['محمد'] });
 		expect(document.querySelector('.ap-roomhead-typing bdi')?.textContent).toBe('محمد');
 		expect(sub()).toEqual(['محمد is typing…']);
