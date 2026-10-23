@@ -36,7 +36,7 @@ describe('MenuButton', () => {
 		expect(document.activeElement).toBe(trigger);
 	});
 
-	it('opens from the keyboard with the arrows, moves through the choices, and closes with Escape', async () => {
+	it('opens from the keyboard with the arrows, moves through the choices, and closes with Escape, or Tab, its items out of the tab order', async () => {
 		const { trigger } = render();
 		trigger.focus();
 		key(trigger, 'ArrowUp');
@@ -55,6 +55,14 @@ describe('MenuButton', () => {
 		flushSync();
 		await tick();
 		expect(document.activeElement).toBe(items()[0]);
+		// Its items are out of the tab order: Tab closes it with focus back on the button, to move on from there.
+		expect(items().map((item) => item.tabIndex)).toEqual([-1, -1, -1]);
+		key(items()[0], 'ArrowDown');
+		key(items()[1], 'Tab');
+		flushSync();
+		expect(items()).toEqual([]);
+		expect(trigger.getAttribute('aria-expanded')).toBe('false');
+		expect(document.activeElement).toBe(trigger);
 	});
 
 	it('as a picker, checks the selected choice, opens on it, and draws a lead before each label', async () => {
@@ -73,20 +81,6 @@ describe('MenuButton', () => {
 		expect(document.querySelector('[role="menu"]')?.getAttribute('aria-label')).toBe('Pause: 8 hours');
 		radios[2].click();
 		expect(onselect).toHaveBeenCalledWith('resume');
-	});
-
-	it('keeps its items out of the tab order, and on Tab closes with focus back on the button, to move on from there', async () => {
-		const { trigger } = render();
-		trigger.click();
-		flushSync();
-		await tick();
-		expect(items().map((item) => item.tabIndex)).toEqual([-1, -1, -1]);
-		key(items()[1], 'ArrowDown');
-		key(items()[2], 'Tab');
-		flushSync();
-		expect(items()).toEqual([]);
-		expect(trigger.getAttribute('aria-expanded')).toBe('false');
-		expect(document.activeElement).toBe(trigger);
 	});
 
 	it('while busy, keeps focus and stays closed instead of being disabled', async () => {

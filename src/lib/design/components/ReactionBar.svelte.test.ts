@@ -25,7 +25,7 @@ describe('ReactionBar', () => {
 		expect([chip.title, chip.getAttribute('aria-label')]).toEqual(['Ada reacted', '1 reaction with 🎉']);
 	});
 
-	it('shows who reacted on a right-click or a long press, and the click that ends a long press does not toggle', () => {
+	it('shows who reacted on a right-click or a long press, where it can, and the click that ends a long press does not toggle', () => {
 		const { chip, ontoggle, onreactors } = render();
 		const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
 		chip.dispatchEvent(menu);
@@ -49,16 +49,15 @@ describe('ReactionBar', () => {
 		dom.touch('pointerup', chip);
 		chip.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
 		expect(ontoggle).toHaveBeenCalledWith('👍');
+		dom.unmount();
+		// Without onreactors, the context menu is the browser's.
+		const plain = render({ onreactors: undefined }).chip;
+		const kept = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+		plain.dispatchEvent(kept);
+		expect(kept.defaultPrevented).toBe(false);
 	});
 
-	it('keeps the context menu without onreactors', () => {
-		const { chip } = render({ onreactors: undefined });
-		const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
-		chip.dispatchEvent(menu);
-		expect(menu.defaultPrevented).toBe(false);
-	});
-
-	it('leaves disabled chips focusable and showing who reacted, without toggling or the + button', () => {
+	it('leaves disabled chips focusable and showing who reacted, without toggling or the + button, which shows otherwise unless add is false', () => {
 		const { chip, ontoggle, onreactors } = render({ disabled: true });
 		expect(chip.disabled).toBe(false);
 		expect(chip.getAttribute('aria-disabled')).toBe('true');
@@ -67,9 +66,8 @@ describe('ReactionBar', () => {
 		chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		expect(onreactors).toHaveBeenCalledOnce();
 		expect(dom.queryByRole('button', 'Add a reaction')).toBeNull();
-	});
-
-	it('shows the + button unless add is false', () => {
+		dom.unmount();
+		// The + button shows otherwise, unless add is false.
 		render();
 		expect(dom.queryByRole('button', 'Add a reaction')).not.toBeNull();
 		dom.unmount();

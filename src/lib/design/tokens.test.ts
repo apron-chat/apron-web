@@ -41,17 +41,21 @@ describe('private colors', () => {
 	const dark = tokens(':root {');
 	const light = tokens(":root[data-theme='light'] {");
 
-	for (const [theme, values] of [['dark', dark], ['light', light]] as const) {
-		it(`sets plum, ink and muted ink at 4.5:1 or more on a private ${theme} card`, () => {
+	const themes = [['dark', dark], ['light', light]] as const;
+
+	it('sets plum, ink and muted ink at 4.5:1 or more on a private card, dark and light', () => {
+		for (const [theme, values] of themes) {
 			const ground = color('--private-soft', values, dark);
 			for (const ink of ['--private', '--ink', '--ink-muted']) expect(contrast(color(ink, values, dark), ground), `${ink} ${theme}`).toBeGreaterThanOrEqual(4.5);
-		});
+		}
+	});
 
-		it(`sets ink at 4.5:1 or more on a ${theme} card's quiet unread bubble, denim or plum`, () => {
+	it('sets ink at 4.5:1 or more on a card\'s quiet unread bubble, denim or plum, dark and light', () => {
+		for (const [theme, values] of themes) {
 			const keep = parseFloat(color('--count-shade', values, dark)) / 100;
 			for (const card of ['--denim-soft', '--private-soft']) expect(contrast(color('--ink', values, dark), shade(color(card, values, dark), keep)), `${card} ${theme}`).toBeGreaterThanOrEqual(4.5);
-		});
-	}
+		}
+	});
 });
 
 // Light is written twice, for the system's preference and for Preferences' choice (pure CSS can't share one block).
@@ -60,11 +64,8 @@ describe('light theme', () => {
 	const system = tokens(":root:not([data-theme='dark']) {");
 	const chosen = tokens(":root[data-theme='light'] {");
 
-	it('declares the same tokens, to the same values, whether the system prefers it or Preferences picks it', () => {
+	it('declares the same tokens, to the same values, whether the system prefers it or Preferences picks it, overriding only tokens the dark theme declares', () => {
 		expect(Object.fromEntries(system)).toEqual(Object.fromEntries(chosen));
-	});
-
-	it('only overrides tokens the dark theme declares', () => {
 		for (const name of chosen.keys()) expect(dark.has(name), name).toBe(true);
 	});
 });
@@ -74,12 +75,12 @@ describe('presence colors', () => {
 	const light = tokens(":root[data-theme='light'] {");
 	const grounds = ['--bg-rail', '--bg-000', '--bg-100', '--bg-200', '--bg-300'];
 
-	for (const [theme, values] of [['dark', dark], ['light', light]] as const) {
-		it(`draws the offline ring at 3:1 or more on every ${theme} ground`, () => {
+	it('draws the offline ring at 3:1 or more on every ground, dark and light', () => {
+		for (const [theme, values] of [['dark', dark], ['light', light]] as const) {
 			const ring = color('--presence-offline', values, dark);
 			for (const ground of grounds) expect(contrast(ring, color(ground, values, dark)), `${ground} ${theme}`).toBeGreaterThanOrEqual(3);
-		});
-	}
+		}
+	});
 });
 
 // apron.css against the scales: a value a redesign retunes in tokens.css, never one written out in a rule.

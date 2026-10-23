@@ -9,23 +9,18 @@ function render(props: { side: 'left' | 'right'; panel: string; open: boolean; o
 }
 
 describe('PanelToggle', () => {
-	it('offers to hide its panel while it shows, in its corner', () => {
+	it('offers to hide its panel while it shows, and to show it once it is shut, in its corner, asking to toggle it when pressed', () => {
 		const toggle = render({ side: 'left', panel: 'rooms', open: true });
 		expect(toggle.getAttribute('aria-label')).toBe('Hide rooms');
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		expect(toggle.classList.contains('ap-shell-toggle-left')).toBe(true);
-	});
-
-	it('offers to show it once it is shut', () => {
-		const toggle = render({ side: 'right', panel: 'member list', open: false });
-		expect(toggle.getAttribute('aria-label')).toBe('Show member list');
-		expect(toggle.getAttribute('aria-expanded')).toBe('false');
-		expect(toggle.classList.contains('ap-shell-toggle-right')).toBe(true);
-	});
-
-	it('asks to toggle its panel when pressed', () => {
+		dom.unmount();
 		const ontoggle = vi.fn();
-		render({ side: 'left', panel: 'rooms', open: true, ontoggle }).click();
+		const shut = render({ side: 'right', panel: 'member list', open: false, ontoggle });
+		expect(shut.getAttribute('aria-label')).toBe('Show member list');
+		expect(shut.getAttribute('aria-expanded')).toBe('false');
+		expect(shut.classList.contains('ap-shell-toggle-right')).toBe(true);
+		shut.click();
 		expect(ontoggle).toHaveBeenCalledOnce();
 	});
 });

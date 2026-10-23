@@ -12,7 +12,7 @@ function render(props: Record<string, unknown>) {
 const sub = () => [...document.querySelectorAll('.ap-roomhead-text .ap-roomhead-sub')].map((line) => line.textContent);
 
 describe('RoomHeader', () => {
-	it('says who’s typing, else a thread’s replies, else the topic', () => {
+	it('says who’s typing, their name isolated, else a thread’s replies, else the topic', () => {
 		render({ topic: 'Deploys', topicTitle: 'Deploys and incidents', typing: ['Alice'], replies: { count: 3 } });
 		expect(sub()).toEqual(['Alice is typing…']);
 		dom.unmount();
@@ -25,6 +25,11 @@ describe('RoomHeader', () => {
 		render({ topic: 'Deploys', topicTitle: 'Deploys and incidents' });
 		expect(sub()).toEqual(['Deploys']);
 		expect(byText('Deploys').title).toBe('Deploys and incidents');
+		dom.unmount();
+		// The name of who is typing is isolated.
+		render({ typing: ['محمد'] });
+		expect(document.querySelector('.ap-roomhead-typing bdi')?.textContent).toBe('محمد');
+		expect(sub()).toEqual(['محمد is typing…']);
 	});
 
 	it('puts Edit and Leave in a ⋯ menu named for the room or thread, and Join and the member list beside it', () => {
@@ -65,11 +70,5 @@ describe('RoomHeader', () => {
 	it('lets the caller’s attributes go on the header, its class added', () => {
 		const header = render({ class: 'mine', private: true, 'data-testid': 'room-header' });
 		expect([header.dataset.testid, header.classList.contains('ap-roomhead'), header.classList.contains('ap-roomhead-private'), header.classList.contains('mine')]).toEqual(['room-header', true, true, true]);
-	});
-
-	it('isolates the name of who is typing', () => {
-		render({ typing: ['محمد'] });
-		expect(document.querySelector('.ap-roomhead-typing bdi')?.textContent).toBe('محمد');
-		expect(sub()).toEqual(['محمد is typing…']);
 	});
 });

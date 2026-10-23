@@ -23,7 +23,7 @@ describe('MentionPicker', () => {
 		expect(onpick).toHaveBeenCalledWith({ user_id: 'amanda' }, 2);
 	});
 
-	it('lists rooms or emoji instead when given them', () => {
+	it('lists rooms or emoji instead when given them, and says what an empty list means for each kind', () => {
 		let list = render({ query: 'de', rooms: [{ id: 'deploy', title: 'Deploy' }] });
 		expect(list.getAttribute('aria-label')).toBe('Room suggestions');
 		expect(rows(list)).toEqual(['Deploy #deploy Tab']);
@@ -32,9 +32,8 @@ describe('MentionPicker', () => {
 		list = render({ query: 'smi', emoji: [{ id: 'smile', native: '😄', name: 'Smiling Face' }] });
 		expect(list.getAttribute('aria-label')).toBe('Emoji suggestions');
 		expect(rows(list)).toEqual(['😄 :smile: Smiling Face Tab']);
-	});
-
-	it('says what an empty list means for each kind', () => {
+		dom.unmount();
+		// An empty list says what it means for each kind.
 		expect(render({ query: '' }).textContent).toBe('People in this room');
 		dom.unmount();
 		expect(render({ query: 'Zed' }).textContent).toBe('No one here matches “Zed”');

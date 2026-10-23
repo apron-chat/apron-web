@@ -17,14 +17,13 @@ const sections: MemberListSection[] = [
 ];
 
 describe('MemberList', () => {
-	it('says when the count is more than it lists', () => {
+	it('says when the count is more than it lists, a line in place of a listing, and No members listed for an empty one', () => {
 		render({ room: 'General', count: 5, sections });
 		expect(document.querySelector('.ap-memberlist-head')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Members 5');
 		expect(queryByText('Showing 3 of 5: the most recently active')).not.toBeNull();
 		expect(document.querySelector('ul')?.getAttribute('aria-label')).toBe('Online in General');
-	});
-
-	it('shows a line in place of a listing, and No members listed for an empty one', () => {
+		dom.unmount();
+		// A line in place of a listing, and No members listed for an empty one.
 		render({ empty: 'Loading members…' });
 		expect(document.querySelector('.ap-memberlist-body')?.textContent?.trim()).toBe('Loading members…');
 		dom.unmount();
@@ -47,7 +46,7 @@ describe('MemberList', () => {
 		expect(document.querySelectorAll('li.ap-member')).toHaveLength(2);
 	});
 
-	it('offers removing everyone but you', () => {
+	it('marks you, isolating each name, and offers removing everyone else', () => {
 		const onremove = vi.fn();
 		render({ sections, onremove });
 		const rows = [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
@@ -55,6 +54,12 @@ describe('MemberList', () => {
 		expect(rows[0].textContent).toContain('(you)');
 		dom.button('Remove Bo').click();
 		expect(onremove).toHaveBeenCalledWith('bo');
+		dom.unmount();
+		// Each name is isolated, so one written right to left can't carry the handle or (you) across it.
+		render({ sections: [{ key: 'members', label: 'Members', people: [{ user_id: 'mo', name: 'محمد', you: true }] }] });
+		const name = document.querySelector('.ap-member-name')!;
+		expect(name.querySelector('bdi')?.textContent).toBe('محمد');
+		expect(name.textContent).toBe('محمد(you)');
 	});
 
 	it('dims offline members only, saying each status in words on hover and to a screen reader; an unknown one is not offline (§4.5)', () => {
@@ -88,12 +93,5 @@ describe('MemberList', () => {
 		render({ empty: 'Loading members…', onaddtoggle: () => {}, addOpen: true, addForm: addForm({}) });
 		expect(document.querySelector('.ap-memberlist-addtoggle')).toBeNull();
 		expect(document.querySelector('form')).toBeNull();
-	});
-
-	it('isolates each name, so one written right to left can’t carry the handle or (you) across it', () => {
-		render({ sections: [{ key: 'members', label: 'Members', people: [{ user_id: 'mo', name: 'محمد', you: true }] }] });
-		const name = document.querySelector('.ap-member-name')!;
-		expect(name.querySelector('bdi')?.textContent).toBe('محمد');
-		expect(name.textContent).toBe('محمد(you)');
 	});
 });

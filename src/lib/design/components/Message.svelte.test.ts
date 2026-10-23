@@ -30,7 +30,7 @@ describe('Message', () => {
 		expect(row.querySelector('.ap-msg-main .ap-msg-text')?.className).toBe('ap-msg-text mine-body');
 	});
 
-	it('puts other attributes on the row, and your onclick replaces the select-mode toggle by preventing its default', () => {
+	it('puts other attributes on the row, and runs your onclick before the select-mode toggle, which it replaces by preventing its default', () => {
 		const onclick = vi.fn((event: MouseEvent) => event.preventDefault());
 		const onselect = vi.fn();
 		const row = render({ text: 'hi', selectMode: true, onselect, onclick, 'data-timeline-item': '', class: 'mine' });
@@ -40,6 +40,11 @@ describe('Message', () => {
 		row.click();
 		expect(onclick).toHaveBeenCalledOnce();
 		expect(onselect).not.toHaveBeenCalled();
+		dom.unmount();
+		// One that lets the click through runs before the toggle.
+		const calls: string[] = [];
+		render({ text: 'hi', selectMode: true, onselect: () => calls.push('select'), onclick: () => calls.push('yours') }).click();
+		expect(calls).toEqual(['yours', 'select']);
 	});
 
 	it('lets your onclick switch select mode on without that same click toggling the row back off', () => {
@@ -58,21 +63,13 @@ describe('Message', () => {
 		expect(onselect).toHaveBeenCalledOnce();
 	});
 
-	it('runs your onclick before the select-mode toggle when it lets the click through', () => {
-		const calls: string[] = [];
-		const row = render({ text: 'hi', selectMode: true, onselect: () => calls.push('select'), onclick: () => calls.push('yours') });
-		row.click();
-		expect(calls).toEqual(['yours', 'select']);
-	});
-
-	it('shows actions on a tombstone when you give them, and the handle when asked even if it matches the name', () => {
+	it('shows actions on a tombstone when you give them, and the handle only when asked, even if it matches the name', () => {
 		const row = render({ deleted: true, sender: { user_id: 'ada', name: 'ada' }, handle: true, actions: dom.html('<button>Remove reply</button>') });
 		expect(row.querySelector('.ap-msg-tomb')).not.toBeNull();
 		expect(row.querySelector('.ap-msg-actions')?.textContent).toBe('Remove reply');
 		expect(row.querySelector('.ap-msg-handle')?.textContent).toBe('@ada');
-	});
-
-	it('shows no handle by default, though it differs from the name: only where it tells people apart', () => {
+		dom.unmount();
+		// None by default, though it differs from the name: only where it tells people apart.
 		expect(render({ sender: { user_id: 'bart', name: 'Bart' }, text: 'hi' }).querySelector('.ap-msg-handle')).toBeNull();
 		dom.unmount();
 		expect(render({ density: 'compact', sender: { user_id: 'bart', name: 'Bart' }, text: 'hi' }).querySelector('.ap-msg-handle')).toBeNull();

@@ -50,13 +50,13 @@ const rows: Array<[where: string, component: Component<any>, props: Record<strin
 	}, ['ops', 'Open ops']]
 ];
 
-describe('naming a room or thread with a blank title', () => {
-	it.each(rows)('%s', (_where, component, props, read, expected) => {
-		dom.render(component, props);
-		expect(read()).toEqual(expected);
-	});
-
-	it('gives a titled thread no tooltip', () => {
+describe('naming a room or thread', () => {
+	it('names one with a blank title by the one rule wherever it shows, and gives a titled thread no tooltip', () => {
+		for (const [where, component, props, read, expected] of rows) {
+			dom.render(component, props);
+			expect(read(), where).toEqual(expected);
+			dom.unmount();
+		}
 		dom.render(RoomHeader, { room: 'ops', name: 'Ops', thread: 't1', threadName: 'Deploy', onroom: vi.fn() });
 		expect(shown('Deploy')).toEqual(['Deploy', null]);
 	});

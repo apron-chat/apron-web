@@ -55,7 +55,7 @@ describe('Composer', () => {
 		expect(onkeydown).toHaveBeenCalledOnce();
 	});
 
-	it('draws your own field in place of the textarea, with its placeholder and state', () => {
+	it('draws your own field in place of the textarea, with its placeholder and state, or an empty editable for you to fill, with your attributes', () => {
 		const field = createRawSnippet((state: () => { placeholder: string; disabled: boolean; command: boolean }) => ({
 			render: () => `<div class="mine" data-placeholder="${state().placeholder}" data-disabled="${state().disabled}" data-command="${state().command}"></div>`
 		}));
@@ -63,20 +63,19 @@ describe('Composer', () => {
 		expect(document.querySelector('textarea')).toBeNull();
 		const mine = document.querySelector<HTMLElement>('.mine')!;
 		expect(mine.dataset).toMatchObject({ placeholder: 'Message Ops', disabled: 'true', command: 'true' });
-	});
-
-	it('draws an empty editable for you to fill, with your attributes and the placeholder while empty', () => {
+		dom.unmount();
+		// Or an empty editable for you to fill, with your attributes and the placeholder while empty.
 		const onkeydown = vi.fn();
 		render({ placeholder: 'Message Ops', empty: true, id: 'message-input', 'data-testid': 'message-input', class: 'mine', onkeydown }, ComposerEditable);
-		const field = dom.byRole('textbox', 'Message');
-		expect(field.classList.contains('mine')).toBe(true);
-		expect(field.tagName).toBe('DIV');
-		expect(field.id).toBe('message-input');
-		expect(field.dataset.testid).toBe('message-input');
-		expect(field.dataset.placeholder).toBe('Message Ops');
-		expect(field.classList.contains('ap-composer-editable-empty')).toBe(true);
-		expect(field.childNodes).toHaveLength(0);
-		field.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+		const editable = dom.byRole('textbox', 'Message');
+		expect(editable.classList.contains('mine')).toBe(true);
+		expect(editable.tagName).toBe('DIV');
+		expect(editable.id).toBe('message-input');
+		expect(editable.dataset.testid).toBe('message-input');
+		expect(editable.dataset.placeholder).toBe('Message Ops');
+		expect(editable.classList.contains('ap-composer-editable-empty')).toBe(true);
+		expect(editable.childNodes).toHaveLength(0);
+		editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
 		expect(onkeydown).toHaveBeenCalledOnce();
 	});
 

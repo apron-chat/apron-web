@@ -138,11 +138,15 @@ const rows: Row[] = [
 ];
 
 describe('named test-id props', () => {
-	it.each(rows)('%s: put each id on the part it names, and nowhere else', async (name, component, props, parts, act) => {
-		dom.render(component, props);
-		await act?.();
-		for (const [id, part] of Object.entries(parts)) expect([...document.querySelectorAll(`[data-testid="${id}"]`)], `${name}: ${id}`).toEqual([part()].flat());
-		const ids = new Set([...document.querySelectorAll('[data-testid]')].map((element) => element.getAttribute('data-testid')));
-		expect([...ids].sort(), name).toEqual(Object.keys(parts).sort());
+	it('put each id on the part it names, and nowhere else, in every component that takes them', async () => {
+		for (const [name, component, props, parts, act] of rows) {
+			dom.render(component, props);
+			await act?.();
+			for (const [id, part] of Object.entries(parts)) expect([...document.querySelectorAll(`[data-testid="${id}"]`)], `${name}: ${id}`).toEqual([part()].flat());
+			const ids = new Set([...document.querySelectorAll('[data-testid]')].map((element) => element.getAttribute('data-testid')));
+			expect([...ids].sort(), name).toEqual(Object.keys(parts).sort());
+			dom.unmount();
+			document.body.innerHTML = '';
+		}
 	});
 });

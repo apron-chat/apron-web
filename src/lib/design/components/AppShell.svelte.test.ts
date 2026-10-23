@@ -12,7 +12,7 @@ function render(props: Record<string, unknown>) {
 }
 
 describe('AppShell', () => {
-	it('sizes the rooms column to its width, and to nothing while shut', () => {
+	it('sizes the rooms column to its width, or --sidebar-w, and to nothing while shut', () => {
 		let shell = render({ sideWidth: 300 });
 		expect(shell.style.getPropertyValue('--side-col')).toBe('300px');
 		expect(shell.style.getPropertyValue('--rooms-w')).toBe('300px');
@@ -21,10 +21,9 @@ describe('AppShell', () => {
 		expect(shell.style.getPropertyValue('--side-col')).toBe('0px');
 		expect(shell.style.getPropertyValue('--rooms-w')).toBe('300px');
 		expect(shell.classList.contains('ap-shell-side-shut')).toBe(true);
-	});
-
-	it('keeps the rooms list at --sidebar-w while shut when no width is given', () => {
-		const shell = render({ sideCollapsed: true });
+		dom.unmount();
+		// Without a width, the rooms list keeps --sidebar-w.
+		shell = render({ sideCollapsed: true });
 		expect(shell.style.getPropertyValue('--side-col')).toBe('0px');
 		expect(shell.style.getPropertyValue('--sidebar-w')).toBe('');
 		expect(shell.style.getPropertyValue('--rooms-w')).toBe('');

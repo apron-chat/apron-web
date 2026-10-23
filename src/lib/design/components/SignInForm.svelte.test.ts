@@ -16,14 +16,13 @@ const fields = () => [
 ];
 
 describe('SignInForm', () => {
-	it('labels the schemes it knows, and an unknown one by its name', () => {
+	it('labels the schemes it knows, and an unknown one by its name, and shows the fields each takes, the display name only where asked', () => {
 		render({ schemes: ['webauthn', 'external', 'ext:sso'], scheme: 'external' });
 		const tabs = [...document.querySelectorAll('[role="radio"]')];
 		expect(tabs.map((tab) => tab.textContent)).toEqual(['Passkey', 'External', 'ext:sso']);
 		expect(tabs.map((tab) => tab.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
-	});
-
-	it('shows the fields the scheme takes, and the display name only where asked', () => {
+		dom.unmount();
+		// Each shows the fields it takes, and the display name only where asked.
 		render({ scheme: 'token', askName: false });
 		expect(fields()).toEqual(['Token']);
 		dom.unmount();

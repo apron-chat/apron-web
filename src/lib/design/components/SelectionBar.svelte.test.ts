@@ -11,11 +11,12 @@ function render(props: Record<string, unknown>) {
 const buttons = () => [...document.querySelectorAll('button')].map((button) => button.textContent);
 
 describe('SelectionBar', () => {
-	it('offers the room first in the menu, and closes it on a pick', () => {
+	it('offers the room first in the menu, each thread’s name isolated from its direction, and closes it on a pick', () => {
 		const onmove = vi.fn();
-		render({ room: 'general', threads: [{ thread: 't1', name: 'Deploy' }], open: true, onmove });
+		render({ room: 'general', threads: [{ thread: 't1', name: 'Deploy' }, { thread: 't2', name: 'מסירה' }], open: true, onmove });
 		const items = [...document.querySelectorAll('[role=option]')];
-		expect(items.map((item) => item.textContent)).toEqual(['Move to room', 'Deploy']);
+		expect(items.map((item) => item.textContent)).toEqual(['Move to room', 'Deploy', 'מסירה']);
+		expect([...document.querySelectorAll('[role=option] bdi')].map((item) => item.textContent)).toEqual(['Deploy', 'מסירה']);
 		expect(items[1].getAttribute('data-thread')).toBe('t1');
 		expect(document.querySelector('[role=listbox]')?.getAttribute('aria-label')).toBe('Move to thread');
 		(items[0] as HTMLButtonElement).click();
@@ -36,10 +37,5 @@ describe('SelectionBar', () => {
 	it('says how many messages the server refused to move', () => {
 		render({ denied: { failed: 1, total: 3 } });
 		expect(document.querySelector('[role=alert]')?.textContent).toBe('1 of 3 couldn’t be moved');
-	});
-
-	it('isolates each destination thread’s name from the menu’s direction', () => {
-		render({ threads: [{ thread: 't1', name: 'Deploy' }, { thread: 't2', name: 'מסירה' }], open: true });
-		expect([...document.querySelectorAll('[role=option] bdi')].map((item) => item.textContent)).toEqual(['Deploy', 'מסירה']);
 	});
 });

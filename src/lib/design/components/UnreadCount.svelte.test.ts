@@ -9,16 +9,15 @@ function render(props: { unread: number; mentions: number; noun?: 'message' | 'r
 }
 
 describe('UnreadCount', () => {
-	it('counts unread messages in grey, and turns orange with an @ when they include a mention', () => {
+	it('counts unread messages in grey, up to 99+, and turns orange with an @ when they include a mention, an edit’s too; nothing with nothing new', () => {
 		const quiet = render({ unread: 12, mentions: 0 })!;
 		expect([quiet.className, quiet.textContent, quiet.getAttribute('aria-label')]).toEqual(['ap-count ap-count-quiet', '12', '12 unread messages']);
 		expect(quiet.title).toBe('12 unread messages');
 		dom.unmount();
 		const mention = render({ unread: 12, mentions: 2 })!;
 		expect([mention.className, mention.textContent, mention.getAttribute('aria-label')]).toEqual(['ap-count ap-count-at', '@ 12', '12 unread messages, 2 mentions of you']);
-	});
-
-	it('shows nothing with nothing new, caps at 99+, and counts a mention added by an edit', () => {
+		dom.unmount();
+		// Nothing with nothing new; capped at 99+; a mention added by an edit counts.
 		expect(render({ unread: 0, mentions: 0 })).toBeNull();
 		dom.unmount();
 		expect(render({ unread: 250, mentions: 0 })?.textContent).toBe('99+');

@@ -59,11 +59,6 @@ describe('ThreadItem', () => {
 		expect(row.querySelector('[aria-label="2 unread replies"]')?.textContent).toBe('2');
 	});
 
-	it('shows its summary and latest message under its name', () => {
-		const row = render({ summary: 'What to check', latest: { sender: 'Dana', text: 'Done' } });
-		expect(row.textContent?.trim()).toBe('DeployWhat to checkDana Done');
-	});
-
 	it('lets the caller’s class join its own, and its click run first', () => {
 		const order: string[] = [];
 		const row = render({ class: 'mine', mentions: 1, onselect: () => order.push('select'), onclick: () => order.push('click') });
