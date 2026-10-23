@@ -34,8 +34,25 @@ const ALLOWED = {
 	ALLOW_DATA_ATTR: false
 };
 
+/** Sanitized markup kept for reuse, by the markup it was made from, least recently used first. */
+const SANITIZED_SIZE = 1000;
+const sanitized = new Map<string, string>();
+
+/**
+ * The markup, sanitized. DOMPurify parses every call into a document of its own, and the same body is sanitized
+ * each time its row renders (a room reopened, a held view replaced by the live one, a reply's quote); the same
+ * markup always sanitizes to the same result, so each is kept.
+ */
 function sanitize(html: string): string {
-	return DOMPurify.sanitize(html, ALLOWED);
+	let clean = sanitized.get(html);
+	if (clean !== undefined) {
+		sanitized.delete(html);
+	} else {
+		clean = DOMPurify.sanitize(html, ALLOWED);
+		if (sanitized.size >= SANITIZED_SIZE) sanitized.delete(sanitized.keys().next().value!);
+	}
+	sanitized.set(html, clean);
+	return clean;
 }
 
 /**
