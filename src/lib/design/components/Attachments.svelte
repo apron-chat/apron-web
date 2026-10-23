@@ -1,12 +1,11 @@
 <script lang="ts">
 	/* upload embeds still on the draft (§4.8.4): shown above the Composer, each removable and renamable, until the message is sent */
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import AttachmentTile from './AttachmentTile.svelte';
 	import type { AttachmentFile } from './types';
 
-	/** Other attributes (`data-*`, a different `aria-label`, a `class`) go on the row. */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		/**
 		 * The draft's files, in the order they will be sent. `size` is the size they go out at, after an image is
 		 * shrunk; until it is known pass `preparing`. `src` previews an image or audio clip (an object URL).
@@ -18,12 +17,18 @@
 		onrename?: (index: number, name: string) => void;
 		/** Your own tiles in place of `files`', such as AttachmentTiles whose previews you manage. */
 		children?: Snippet;
+		/** Names the row (its `aria-label`): "Files to send" by default. */
+		label?: string;
+		/** Classes for the row, added to its own. */
+		class?: ClassValue;
+		/** A `data-testid` for the row. */
+		testid?: string;
 	}
-	let { files = [], onremove, onrename, children, class: className, ...rest }: Props = $props();
+	let { files = [], onremove, onrename, children, label = 'Files to send', class: className, testid }: Props = $props();
 </script>
 
 {#if children || files.length > 0}
-	<div aria-label="Files to send" {...rest} class={['ap-attachments', className]}>
+	<div aria-label={label} data-testid={testid} class={['ap-attachments', className]}>
 		{#if children}{@render children()}
 		{:else}
 			{#each files as file, index (index)}

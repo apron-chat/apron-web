@@ -5,17 +5,12 @@
 	 * keeps its own), and Enter in the text saves (Shift+Enter breaks the line).
 	 */
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import Attachments from './Attachments.svelte';
 	import Button from './Button.svelte';
 	import { enterAction } from './compose';
-	import { chain } from './util';
 
-	/**
-	 * Other attributes (`data-*`, a `class`) go on the editor. An `onkeydown` of yours runs first, for every key in it;
-	 * `preventDefault()` there keeps Escape from cancelling.
-	 */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		/** The text; `bind:value`. */
 		value?: string;
 		/** The message's files over the text, usually AttachmentTiles, each removable and maybe renamable. */
@@ -26,8 +21,12 @@
 		handheld?: boolean;
 		onsave?: () => void;
 		oncancel?: () => void;
+		/** Classes for the editor, added to its own. */
+		class?: ClassValue;
+		/** A `data-testid` for the editor. */
+		testid?: string;
 	}
-	let { value = $bindable(''), attachments, canSave = true, handheld = false, onsave, oncancel, class: className, onkeydown, ...rest }: Props = $props();
+	let { value = $bindable(''), attachments, canSave = true, handheld = false, onsave, oncancel, class: className, testid }: Props = $props();
 
 	let field = $state<HTMLTextAreaElement | undefined>();
 
@@ -60,8 +59,8 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div {...rest} class={['ap-msgedit', className]} onkeydown={chain(keydown, onkeydown)}>
-	{#if attachments}<Attachments aria-label="Attachments">{@render attachments()}</Attachments>{/if}
+<div data-testid={testid} class={['ap-msgedit', className]} onkeydown={keydown}>
+	{#if attachments}<Attachments label="Attachments">{@render attachments()}</Attachments>{/if}
 	<textarea class="ap-msgedit-field" aria-label="Edit message" rows="1" dir="auto" bind:this={field} bind:value onkeydown={fieldKeydown}></textarea>
 	<div class="ap-msgedit-foot">
 		{#if !handheld}<span class="ap-msgedit-hint"><kbd>Esc</kbd> to cancel · <kbd>Enter</kbd> to save</span>{/if}

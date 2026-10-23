@@ -10,8 +10,8 @@
   function body(title, text) {
     return A.html('<div style="display:flex;flex-direction:column;gap:8px;padding:16px;font-size:var(--text-ui);line-height:var(--leading-ui)"><strong>' + title + '</strong><span style="color:var(--ink-muted)">' + text + '</span></div>');
   }
-  A.render(A.Popover, document.body, { 'aria-label': 'A popover', mode: 'popover', top: 52, left: 16, width: 280, children: body('A popover', 'Placed below what opened it, clear of the viewport’s edges. You place it and close it.') });
-  A.render(A.Popover, document.body, { 'aria-label': 'A sheet', mode: 'sheet', children: body('A bottom sheet', 'On a phone: along the bottom, full width, clear of the home indicator.') });
+  A.render(A.Popover, document.body, { label: 'A popover', mode: 'popover', top: 52, left: 16, width: 280, children: body('A popover', 'Placed below what opened it, clear of the viewport’s edges. You place it and close it.') });
+  A.render(A.Popover, document.body, { label: 'A sheet', mode: 'sheet', children: body('A bottom sheet', 'On a phone: along the bottom, full width, clear of the home indicator.') });
 </script>
 </body>
 </html>

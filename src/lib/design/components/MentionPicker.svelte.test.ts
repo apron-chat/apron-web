@@ -13,7 +13,7 @@ const rows = (list: HTMLElement) => [...list.querySelectorAll('[role="option"]')
 describe('MentionPicker', () => {
 	it('lists people, marking the query in names and IDs, with option IDs for the field', () => {
 		const onpick = vi.fn();
-		const list = render({ id: 'pick', query: 'Da', active: 1, onpick, 'data-testid': 'mention-picker', people: [{ user_id: 'dana', name: 'Dana' }, { user_id: 'dave.k', name: ' Dave Kim ' }, { user_id: 'amanda' }] });
+		const list = render({ id: 'pick', query: 'Da', active: 1, onpick, testid: 'mention-picker', people: [{ user_id: 'dana', name: 'Dana' }, { user_id: 'dave.k', name: ' Dave Kim ' }, { user_id: 'amanda' }] });
 		expect(list.getAttribute('aria-label')).toBe('Mention someone');
 		expect(list.dataset.testid).toBe('mention-picker');
 		expect(rows(list)).toEqual(['D Dana @dana', 'DK Dave Kim @dave.k Tab', 'A amanda']);

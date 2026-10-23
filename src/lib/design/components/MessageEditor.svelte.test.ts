@@ -28,17 +28,11 @@ describe('MessageEditor', () => {
 		expect(onsave).toHaveBeenCalledOnce();
 	});
 
-	it('takes your attributes on its root, its class merged, and your keydown first, which can keep Escape from cancelling', () => {
+	it('takes a class and a test id on its root, and Escape anywhere in it cancels', () => {
 		const oncancel = vi.fn();
-		let keep = false;
-		const onkeydown = vi.fn((event: KeyboardEvent) => { if (keep) event.preventDefault(); });
-		const root = render({ oncancel, onkeydown, class: 'mine', 'data-testid': 'message-editor' });
+		const root = render({ oncancel, class: 'mine', testid: 'message-editor' });
 		expect(root.dataset.testid).toBe('message-editor');
 		expect([...root.classList]).toEqual(['ap-msgedit', 'mine']);
-		key(root.querySelector('textarea')!, { key: 'Escape' });
-		expect(onkeydown).toHaveBeenCalledOnce();
-		expect(oncancel).toHaveBeenCalledOnce();
-		keep = true;
 		key(root.querySelector('textarea')!, { key: 'Escape' });
 		expect(oncancel).toHaveBeenCalledOnce();
 	});

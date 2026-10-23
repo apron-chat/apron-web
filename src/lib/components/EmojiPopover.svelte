@@ -155,8 +155,7 @@
 		height={placement.height}
 		caption={request.caption}
 		{status}
-		data-testid="emoji-picker"
-		data-state={status}
+		testid="emoji-picker"
 		bind:element={box}
 		bind:mount
 		onkeydowncapture={keydown}

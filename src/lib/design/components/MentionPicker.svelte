@@ -1,13 +1,13 @@
 <script lang="ts">
 	/* Above the Composer while you type `@name` (people), `#room` (rooms and threads) or `:shortcode` (emoji); ↑ ↓ move, Tab or Enter takes one. */
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
 	import type { PickerEmoji, PickerRoom, Sender } from './types';
 	import { uid } from './util';
 
-	/** Other attributes (`data-*`, a `class`) go on the list; its `role` stays the listbox its options need. */
-	interface Props extends HTMLAttributes<HTMLElement> {
+	/** The list is a listbox, as its options need. */
+	interface Props {
 		/** What has been typed after the `@`, `#` or `:`; in a person's name and ID it reads in accent. */
 		query?: string;
 		/** `@`: who can be named. The list shows `rooms` instead when given, else `emoji`. */
@@ -25,8 +25,12 @@
 		id?: string;
 		/** Replaces a person's avatar, such as with one tinted by their ID. */
 		avatar?: Snippet<[Sender]>;
+		/** Classes for the list, added to its own. */
+		class?: ClassValue;
+		/** A `data-testid` for the list. */
+		testid?: string;
 	}
-	let { query = '', people = [], rooms, emoji, active = 0, onpick, onhover, id, avatar, class: className, ...rest }: Props = $props();
+	let { query = '', people = [], rooms, emoji, active = 0, onpick, onhover, id, avatar, class: className, testid }: Props = $props();
 
 	const kind = $derived(rooms ? 'rooms' : emoji ? 'emoji' : 'people');
 	const items: (Sender | PickerRoom | PickerEmoji)[] = $derived(rooms ?? emoji ?? people);
@@ -52,10 +56,10 @@
 {#snippet mark(text: string, prefix = '')}{@const m = split(text)}{#if m}{prefix}{m[0]}<mark class="ap-mpick-hit">{m[1]}</mark>{m[2]}{:else}{prefix}{text}{/if}{/snippet}
 
 {#if !items.length}
-	<!-- `role` after the spread: the options inside need a listbox around them. -->
-	<div {id} aria-label={listLabel} {...rest} class={['ap-mpick', className]} role="listbox"><div class="ap-mpick-empty">{emptyText}</div></div>
+	<!-- A listbox even with no options, as the field's `aria-controls` names it. -->
+	<div {id} aria-label={listLabel} data-testid={testid} class={['ap-mpick', className]} role="listbox"><div class="ap-mpick-empty">{emptyText}</div></div>
 {:else}
-	<ul {id} aria-label={listLabel} {...rest} class={['ap-mpick', className]} role="listbox" bind:this={list}>
+	<ul {id} aria-label={listLabel} data-testid={testid} class={['ap-mpick', className]} role="listbox" bind:this={list}>
 		{#each items as item, i (key(item, i))}
 			<li id={id && `${id}-${i}`} role="option" aria-selected={i === active} class={['ap-mpick-item', i === active && 'ap-mpick-active']} onmousedown={(e) => { e.preventDefault(); onpick?.(item, i); }} onmouseenter={() => onhover?.(i)}>
 				{#if 'user_id' in item}

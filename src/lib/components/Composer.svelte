@@ -679,7 +679,7 @@
 {#snippet preview(index: number)}<Embed embed={previews[index]} />{/snippet}
 {#snippet picker()}
 	{#if pickerOpen}
-		<AutocompletePicker id={pickerId} query={query ?? ''} people={matches} active={activeIndex} data-testid="mention-picker" onpick={(index) => pick(matches[index])} onhover={(index) => (active = index)} />
+		<AutocompletePicker id={pickerId} query={query ?? ''} people={matches} active={activeIndex} testid="mention-picker" onpick={(index) => pick(matches[index])} onhover={(index) => (active = index)} />
 	{:else if roomPickerOpen}
 		<AutocompletePicker id={pickerId} query={roomFound?.query ?? ''} rooms={roomMatches} active={activeIndex} onpick={(index) => pickRoom(roomMatches[index])} onhover={(index) => (active = index)} />
 	{:else if emojiPickerOpen}

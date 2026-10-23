@@ -1,5 +1,5 @@
 import type { Snippet } from 'svelte';
-import type { ClassValue, HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements';
+import type { ClassValue } from 'svelte/elements';
 import type { Sender } from './util';
 export type { Sender };
 

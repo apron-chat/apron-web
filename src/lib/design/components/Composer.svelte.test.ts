@@ -43,16 +43,11 @@ describe('Composer', () => {
 		expect(commandTag()).toBeNull();
 	});
 
-	it('puts your attributes on its textarea, its class merged', () => {
-		const onkeydown = vi.fn();
-		render({ id: 'message-input', 'data-testid': 'message-input', class: 'mine', onkeydown });
+	it('puts your class on its textarea, beside its own', () => {
+		render({ class: 'mine' });
 		const field = dom.byRole('textbox', 'Message');
 		expect(field.tagName).toBe('TEXTAREA');
-		expect(field.dataset.testid).toBe('message-input');
-		expect(field.id).toBe('message-input');
 		expect([...field.classList]).toEqual(['ap-composer-field', 'mine']);
-		field.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
-		expect(onkeydown).toHaveBeenCalledOnce();
 	});
 
 	it('draws your own field in place of the textarea, with its placeholder and state, or an empty editable for you to fill, with your attributes', () => {

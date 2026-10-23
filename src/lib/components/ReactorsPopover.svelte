@@ -98,7 +98,7 @@
 		width={placement.mode === 'popover' ? WIDTH : undefined}
 		emoji={request.emoji}
 		reactors={rows}
-		data-testid="reactors"
+		testid="reactors"
 		rowTestid="reactor"
 		bind:element={box}
 		bind:offsetHeight={measured}

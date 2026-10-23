@@ -5,11 +5,10 @@
 	 * (x) on its corner takes it off.
 	 */
 	import { tick } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import FileGlyph from './FileGlyph.svelte';
 
-	/** Other attributes (`data-*`, a `class`) go on the tile. */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		name: string;
 		/** Under the name: the size it goes out at, "Preparing…", or what it is. */
 		detail?: string;
@@ -27,8 +26,10 @@
 		removeLabel?: string;
 		/** `data-testid` on the name and detail. */
 		labelTestid?: string;
+		/** Classes for the tile, added to its own. */
+		class?: ClassValue;
 	}
-	let { name, detail, kind = 'file', src, onrename, onremove, removeLabel, labelTestid, class: className, ...rest }: Props = $props();
+	let { name, detail, kind = 'file', src, onrename, onremove, removeLabel, labelTestid, class: className }: Props = $props();
 
 	/** Long names lose their middle, not their end: the last characters, such as the extension, stay in view. */
 	const TAIL = 8;
@@ -97,7 +98,7 @@
 	{/if}
 {/snippet}
 
-<div {...rest} class={['ap-attachment', renaming && 'ap-attachment-renaming', className]}>
+<div class={['ap-attachment', renaming && 'ap-attachment-renaming', className]}>
 	{#if kind === 'image'}
 		<figure class="ap-embed ap-attachment-thumb" title={renaming ? undefined : detail ? `${name} · ${detail}` : name}>
 			<img {src} alt={name} />

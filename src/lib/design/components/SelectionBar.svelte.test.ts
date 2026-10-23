@@ -29,7 +29,7 @@ describe('SelectionBar', () => {
 		render({ room: 'general' });
 		expect(buttons()).toEqual(['Cancel', 'Move to thread ▾']);
 		dom.unmount();
-		render({ onnewthread: vi.fn(), onselectrange: vi.fn(), 'data-testid': 'bar' });
+		render({ onnewthread: vi.fn(), onselectrange: vi.fn(), testid: 'bar' });
 		expect(buttons()).toEqual(['Select between', 'Cancel', 'New thread']);
 		expect(dom.byRole('toolbar', 'Selected messages').dataset.testid).toBe('bar');
 	});

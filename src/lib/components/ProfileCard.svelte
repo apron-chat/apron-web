@@ -173,7 +173,7 @@
 		onaddtoroom={canAdd ? add : undefined}
 		adding={busy}
 		{note}
-		data-testid="profile-card"
+		testid="profile-card"
 		statusTestid="profile-status"
 		rolesTestid="roles"
 		bind:element={box}

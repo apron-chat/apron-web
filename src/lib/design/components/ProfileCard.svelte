@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
 	import Button from './Button.svelte';
 	import Popover from './Popover.svelte';
@@ -12,10 +12,9 @@
 	 * Who a mention, a sender or a member is, in a Popover: their avatar, name,
 	 * `@user_id` (always, here: this is where people check who someone really
 	 * is, §3.3), status, roles, and whether they're in the open room, with what
-	 * you can do about them. Other attributes (`data-*`, event handlers) go on
-	 * the Popover.
+	 * you can do about them.
 	 */
-	interface Props extends HTMLAttributes<HTMLDivElement>, PopoverPlacement {
+	interface Props extends PopoverPlacement {
 		userId: string;
 		/** Display name; falls back to `userId`. */
 		name?: string;
@@ -47,6 +46,14 @@
 		element?: HTMLDivElement;
 		/** The Popover's rendered height in px, bindable. */
 		offsetHeight?: number;
+		/** Classes for the Popover, added to its own. */
+		class?: ClassValue;
+		/** A `data-testid` for the Popover. */
+		testid?: string;
+		/** Keys in the card, such as Escape to close it. */
+		onkeydown?: (event: KeyboardEvent) => void;
+		/** Focus leaving something in the card, such as to close it when focus leaves it altogether. */
+		onfocusout?: (event: FocusEvent) => void;
 		/** A `data-testid` for the status in words. */
 		statusTestid?: string;
 		/** A `data-testid` for the row of roles. */
@@ -54,13 +61,13 @@
 	}
 	let {
 		userId, name, avatar, you = false, status, statusLabel, roles, sharesName = false, membership, onmention, oncopyid, onaddtoroom, adding = false, note,
-		element = $bindable(), offsetHeight = $bindable(0), statusTestid, rolesTestid, class: className, ...rest
+		element = $bindable(), offsetHeight = $bindable(0), statusTestid, rolesTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout
 	}: Props = $props();
 	const shownName = $derived(name || userId);
 	const shown = $derived(presence(status));
 </script>
 
-<Popover aria-label={`Profile of ${shownName}`} {...rest} class={['ap-profcard', className]} bind:element bind:offsetHeight>
+<Popover label={`Profile of ${shownName}`} {mode} {top} {left} {width} {height} class={['ap-profcard', className]} {testid} {onkeydown} {onfocusout} bind:element bind:offsetHeight>
 	<div class="ap-profcard-who">
 		{#if avatar}{@render avatar()}{:else}<Avatar name={shownName} user_id={userId} size="lg" {status} {statusLabel} />{/if}
 		<div class="ap-profcard-names">

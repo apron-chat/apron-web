@@ -1,11 +1,10 @@
 <script lang="ts">
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import Button from './Button.svelte';
 	import TypingDots from './TypingDots.svelte';
 	import { roomName, roomNameTip } from './util';
 
-	/** Other attributes (`data-testid`, `class`, …) go on the bar. */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		count: number;
 		/** Threads to move to, each by `room_id` and `title` ("Untitled" without one, with its `room_id` on hover). */
 		threads?: Array<{ thread: string; name?: string }>;
@@ -25,8 +24,12 @@
 		open?: boolean;
 		/** `data-testid` on New thread. */
 		newThreadTestid?: string;
+		/** Classes for the bar, added to its own. */
+		class?: ClassValue;
+		/** A `data-testid` for the bar. */
+		testid?: string;
 	}
-	let { count, threads = [], room, onmove, onnewthread, oncancel, onselectrange, status = 'idle', denied, open = $bindable(false), newThreadTestid, class: className, ...rest }: Props = $props();
+	let { count, threads = [], room, onmove, onnewthread, oncancel, onselectrange, status = 'idle', denied, open = $bindable(false), newThreadTestid, class: className, testid }: Props = $props();
 	const saving = $derived(status === 'saving');
 	const hasMenu = $derived(threads.length > 0 || room !== undefined);
 
@@ -36,7 +39,7 @@
 	}
 </script>
 
-<div role="toolbar" aria-label="Selected messages" {...rest} class={['ap-selbar', className]}>
+<div role="toolbar" aria-label="Selected messages" data-testid={testid} class={['ap-selbar', className]}>
 	<span class="ap-selbar-info">
 		<span class="ap-selbar-count">{count === 1 ? '1 message selected' : `${count} messages selected`}</span>
 		{#if onselectrange}<button type="button" class="ap-link" onclick={onselectrange} disabled={saving}>Select between</button>{/if}

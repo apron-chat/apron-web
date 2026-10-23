@@ -57,7 +57,7 @@
 	}
 </script>
 
-<DesignMessageEditor data-testid="message-editor" bind:value={draft} {canSave} handheld={onHandheld} onsave={save} {oncancel} attachments={shown.length > 0 ? tiles : undefined} />
+<DesignMessageEditor testid="message-editor" bind:value={draft} {canSave} handheld={onHandheld} onsave={save} {oncancel} attachments={shown.length > 0 ? tiles : undefined} />
 
 {#snippet tiles()}
 	{#each shown as embed, index (embed.embed_id ?? index)}

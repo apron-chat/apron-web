@@ -8,7 +8,7 @@
 	import Smile from '@lucide/svelte/icons/smile';
 	import Square from '@lucide/svelte/icons/square';
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import Attachments from './Attachments.svelte';
 	import Button from './Button.svelte';
 	import Embed from './Embed.svelte';
@@ -17,11 +17,7 @@
 	import type { ComposerField, EmbedProps } from './types';
 	import { roomName } from './util';
 
-	/**
-	 * Other attributes (an `id`, `aria-*`, `data-*`, its event handlers, a `class`) go on the default field, the
-	 * textarea; a `field` of your own takes them itself.
-	 */
-	interface Props extends Omit<HTMLAttributes<HTMLTextAreaElement>, 'oninput'> {
+	interface Props {
 		room?: string;
 		placeholder?: string;
 		/** The draft; `bind:value` in Svelte. With your own `field`, keep it up to date from what the field shows. */
@@ -87,11 +83,13 @@
 		emojiTestid?: string;
 		/** `data-testid` on Send. */
 		sendTestid?: string;
+		/** Classes for the default field, the textarea, added to its own; a `field` of your own takes its own. */
+		class?: ClassValue;
 	}
 	let {
 		room, placeholder, value = $bindable(''), oninput, onsend, canSend, canUpload, onfiles, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
-		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, emojiTestid, sendTestid, class: className, ...rest
+		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, emojiTestid, sendTestid, class: className
 	}: Props = $props();
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
@@ -112,12 +110,12 @@
 		<Button variant="ghost" size="sm" aria-label="Cancel reply" onclick={oncancelreply} label="Cancel reply" />
 	</div>
 {/if}
-{#if attachments}<Attachments data-testid={attachmentsTestid}>{@render attachments()}</Attachments>{/if}
+{#if attachments}<Attachments testid={attachmentsTestid}>{@render attachments()}</Attachments>{/if}
 {#if previews && previews.length > 0}
 	<div class="ap-composer-previews" data-testid={previewsTestid} aria-label="Link previews to send">
 		{#each previews as embed, index (embed.url ?? index)}
 			<div class="ap-composer-preview">
-				{#if preview}{@render preview(index)}{:else}<Embed {...embed} />{/if}
+				{#if preview}{@render preview(index)}{:else}<!-- spread: an embed record; its fields are Embed's own props --><Embed {...embed} />{/if}
 				{#if onremovepreview}<EmbedRemove label="Remove preview" onremove={() => onremovepreview(index)} />{/if}
 			</div>
 		{/each}
@@ -147,7 +145,7 @@
 			{#if cmd}<span class="ap-composer-cmdtag" data-testid={commandTestid} title="Sent to the server, not posted">Command</span>{/if}
 			{#if field}{@render field({ placeholder: ph, disabled: !!disabled, command: cmd })}
 			{:else}
-				<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : 'Message'} {...rest} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>
+				<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : 'Message'} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>
 			{/if}
 		{/if}
 		{#if onemoji}
