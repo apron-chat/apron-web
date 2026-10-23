@@ -1,11 +1,12 @@
 /**
- * Code the page renders only on demand (a dialog, an editor), loaded apart from the page's own: `component` is
- * undefined until `load()` has fetched it, and then stays, so later opens render at once. Each one is also fetched
- * shortly after the page settles (`prefetchLazy`), so the first open rarely waits on the network, and a tab that was
- * opened before a deploy already holds it. A failed load is forgotten, so the next `load()` tries again.
+ * Code the page renders only on demand (a dialog, an editor), loaded apart from the page's own. Reading `component`
+ * asks for it: undefined until it has loaded, then the component, which stays, so later opens render at once (render
+ * it as `{#if open && lazy.component}`). Each one is also fetched shortly after the page settles (`prefetchLazy`), so
+ * the first open rarely waits on the network, and a tab opened before a deploy already holds it. A failed load is
+ * forgotten, so the next read tries again.
  */
 export class Lazy<T> {
-	component = $state<T>();
+	#component = $state<T>();
 	#loading?: Promise<T>;
 	#load: () => Promise<{ default: T }>;
 
@@ -14,9 +15,14 @@ export class Lazy<T> {
 		registered.push(this);
 	}
 
+	get component(): T | undefined {
+		if (this.#component === undefined) this.load().catch(() => undefined);
+		return this.#component;
+	}
+
 	load(): Promise<T> {
 		this.#loading ??= this.#load().then(
-			(module) => (this.component = module.default),
+			(module) => (this.#component = module.default),
 			(error) => {
 				this.#loading = undefined;
 				throw error;

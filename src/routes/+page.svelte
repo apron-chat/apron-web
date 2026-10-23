@@ -1,3 +1,12 @@
+<script module lang="ts">
+	import { Lazy } from '$lib/ui/lazy.svelte';
+
+	// Dialogs the page opens only on demand: their code loads apart from the page's.
+	const roomEditor = new Lazy(() => import('$lib/components/RoomEditor.svelte'));
+	const newThreadDialog = new Lazy(() => import('$lib/components/NewThreadDialog.svelte'));
+	const signInLinkDialog = new Lazy(() => import('$lib/components/SignInLinkDialog.svelte'));
+</script>
+
 <script lang="ts">
 	import { onMount, tick, untrack } from 'svelte';
 	import { createAttachmentKey, fromAction } from 'svelte/attachments';
@@ -31,8 +40,6 @@
 	import Toasts from '$lib/components/Toasts.svelte';
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
 	import ThreadSummary from '$lib/components/ThreadSummary.svelte';
-	import RoomEditor from '$lib/components/RoomEditor.svelte';
-	import NewThreadDialog from '$lib/components/NewThreadDialog.svelte';
 	import TypingDots from '$lib/design/components/TypingDots.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
@@ -64,7 +71,6 @@
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
-	import SignInLinkDialog from '$lib/components/SignInLinkDialog.svelte';
 	import { idMillis } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
@@ -2279,7 +2285,8 @@
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
 </svelte:head>
 
-{#if client && links.asked}
+{#if client && links.asked && signInLinkDialog.component}
+	{@const SignInLinkDialog = signInLinkDialog.component}
 	<!-- Signed in here, guests too, where a link can add a way in (`addAs`): the link may have been sent for that. -->
 	<SignInLinkDialog
 		link={links.asked}
@@ -2360,7 +2367,8 @@
 				{mentionsElsewhere}
 				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
 			/>
-			{#if roomEditorOpen && editTarget}
+			{#if roomEditorOpen && editTarget && roomEditor.component}
+				{@const RoomEditor = roomEditor.component}
 				{#key editTarget.id}
 					<RoomEditor client={client!} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} onclose={() => (roomEditorOpen = false)} />
 				{/key}
@@ -2497,8 +2505,9 @@
 		so the + on a room's row would open nothing. It floats over whichever pane is up; the new thread opens in the
 		conversation pane once it exists.
 	-->
-	{#if newThread}
+	{#if newThread && newThreadDialog.component}
 		{@const start = newThread}
+		{@const NewThreadDialog = newThreadDialog.component}
 		{#key start}
 			<NewThreadDialog room={start.room} title={start.title} summary={start.summary} moving={start.moving}
 				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}

@@ -175,7 +175,6 @@
 		open = false;
 		preferencesMounted = true;
 		preferencesOpen = true;
-		preferences.load().catch(() => undefined);
 	}
 
 	/** A handle the user typed in the editor, as opposed to the one it opened with. */

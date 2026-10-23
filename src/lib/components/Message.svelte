@@ -1,3 +1,10 @@
+<script module lang="ts">
+	import { Lazy } from '$lib/ui/lazy.svelte';
+
+	/** The editor's code, which loads apart from the page's: until it has, an edited message shows as it is. */
+	const messageEditor = new Lazy(() => import('./MessageEditor.svelte'));
+</script>
+
 <script lang="ts">
 	import type { EmbedEdits, UploadState } from '$lib/protocol/client';
 	import { renderMarkdown, renderPlain } from '$lib/protocol/markdown';
@@ -17,7 +24,6 @@
 	import { systemScope } from '$lib/protocol/types';
 	import Embed from './embeds/Embed.svelte';
 	import EmbedRemove from '$lib/design/components/EmbedRemove.svelte';
-	import MessageEditor from './MessageEditor.svelte';
 
 	const LONG_PRESS_MS = 500;
 
@@ -242,7 +248,8 @@
 	<div class="ap-msg-text" class:ap-msg-plain={event.body?.format !== 'markdown'} use:highlightCode={body}>{@html body}</div>
 {/snippet}
 {#snippet content()}
-	{#if editing}
+	{#if editing && messageEditor.component}
+		{@const MessageEditor = messageEditor.component}
 		<MessageEditor {text} {embeds} {uploads} {onsave} oncancel={oncanceledit} />
 	{:else}
 		{#if text}

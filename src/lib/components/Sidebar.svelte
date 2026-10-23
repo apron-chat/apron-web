@@ -1,3 +1,10 @@
+<script module lang="ts">
+	import { Lazy } from '$lib/ui/lazy.svelte';
+
+	/** The new-room dialog's code, which loads apart from the page's. */
+	const newRoomDialog = new Lazy(() => import('./NewRoomDialog.svelte'));
+</script>
+
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
@@ -7,7 +14,6 @@
 	import type { PausedUntil } from '$lib/ui/pause';
 	import { sidebarRooms, threadsWithNews, type ThreadEntry } from '$lib/ui/timeline';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
-	import NewRoomDialog from './NewRoomDialog.svelte';
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
 	import RoomItem from '$lib/design/components/RoomItem.svelte';
@@ -147,5 +153,5 @@
 	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} />
 </aside>
 
-{#if createOpen}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}
+{#if createOpen && newRoomDialog.component}{@const NewRoomDialog = newRoomDialog.component}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}
 
