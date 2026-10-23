@@ -8,7 +8,8 @@
 	import { profileCard } from '$lib/ui/profile-card.svelte';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import ProfileCard from '$lib/design/components/ProfileCard.svelte';
-	import Avatar from './Avatar.svelte';
+	import Avatar from '$lib/design/components/Avatar.svelte';
+	import { hueOf } from '$lib/ui/messages';
 
 	/**
 	 * Who a mention, a sender or a member is: the design system's ProfileCard,
@@ -180,6 +181,6 @@
 		onkeydown={keydown}
 		onfocusout={focusout}
 	>
-		{#snippet avatar()}<Avatar {name} id={userId} src={directory.avatar(person)} size="lg" {status} statusLabel={me ? ownStatusLabel(status) : undefined} />{/snippet}
+		{#snippet avatar()}<Avatar {name} hue={hueOf(userId)} src={directory.avatar(person)} size="lg" {status} statusLabel={me ? ownStatusLabel(status) : undefined} />{/snippet}
 	</ProfileCard>
 {/if}

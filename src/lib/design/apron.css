@@ -56,6 +56,13 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-avatar-md { width: var(--avatar-md); height: var(--avatar-md); font-size: 12px; }
 .ap-avatar-sm { width: var(--avatar-sm); height: var(--avatar-sm); font-size: 9px; }
 .ap-avatar-lg { width: var(--avatar-lg); height: var(--avatar-lg); font-size: 18px; }
+/* An avatar's initials tinted by its `hue`: muted, at a fixed lightness per theme, so every hue reads the same and none competes with the accent. */
+.ap-avatar-hued { background: oklch(0.33 0.06 var(--avatar-hue)); color: oklch(0.86 0.08 var(--avatar-hue)); }
+@media (prefers-color-scheme: light) {
+	:root:not([data-theme='dark']) .ap-avatar-hued { background: oklch(0.92 0.045 var(--avatar-hue)); color: oklch(0.42 0.12 var(--avatar-hue)); }
+}
+:root[data-theme='light'] .ap-avatar-hued { background: oklch(0.92 0.045 var(--avatar-hue)); color: oklch(0.42 0.12 var(--avatar-hue)); }
+:root[data-theme='dark'] .ap-avatar-hued { background: oklch(0.33 0.06 var(--avatar-hue)); color: oklch(0.86 0.08 var(--avatar-hue)); }
 
 /* StatusDot — a user's status (§4.5). Shape says it as well as color: online a dot, idle a crescent, dnd a dot with a
    bar, offline a hollow ring; no status, nothing. Its cut-outs are masks, so whatever is behind shows through. */

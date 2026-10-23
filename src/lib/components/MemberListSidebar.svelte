@@ -12,7 +12,8 @@
 	import MemberList from '$lib/design/components/MemberList.svelte';
 	import type { MemberListPerson, MemberListSection } from '$lib/design/components/types';
 	import { byStatus, ownStatusLabel } from '$lib/ui/user-status';
-	import Avatar from './Avatar.svelte';
+	import Avatar from '$lib/design/components/Avatar.svelte';
+	import { hueOf } from '$lib/ui/messages';
 	import RoleBadges from './RoleBadges.svelte';
 
 	interface Props {
@@ -165,6 +166,6 @@
 	{#snippet addForm(id)}
 		<AddMemberForm bind:this={form} {id} bind:value={adding} candidates={candidates.map((user) => ({ user_id: user.user_id, name: directory.name(user) }))} {busy} onadd={add} ondismiss={closeAdd} />
 	{/snippet}
-	{#snippet avatar(member)}<Avatar name={member.name ?? member.user_id} id={member.user_id} src={member.avatar} size="sm" status={member.status} statusLabel={member.statusLabel} />{/snippet}
+	{#snippet avatar(member)}<Avatar name={member.name ?? member.user_id} hue={hueOf(member.user_id)} src={member.avatar} size="sm" status={member.status} statusLabel={member.statusLabel} />{/snippet}
 	{#snippet roles(member)}<RoleBadges user={byId.get(member.user_id)} />{/snippet}
 </MemberList>

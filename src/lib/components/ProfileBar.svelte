@@ -16,7 +16,8 @@
 	import ProfileEditor from '$lib/design/components/ProfileEditor.svelte';
 	import { ownStatusLabel } from '$lib/ui/user-status';
 	import { signOutThen, type SignOutHandler } from '$lib/ui/sign-in';
-	import Avatar from './Avatar.svelte';
+	import Avatar from '$lib/design/components/Avatar.svelte';
+	import { hueOf } from '$lib/ui/messages';
 	import TypingDots from '$lib/design/components/TypingDots.svelte';
 
 	type Status = 'idle' | 'saving' | 'altered' | 'declined';
@@ -313,10 +314,10 @@
 
 <!-- The design system's ProfileBar and ProfileEditor draw it; the app fills in its avatar, and the ways to sign in this server offers. -->
 {#snippet barAvatar()}
-	<Avatar name={you?.name || you?.user_id || '?'} id={you?.user_id} src={avatar} status={ownStatus} statusLabel={ownLabel} />
+	<Avatar name={you?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={ownStatus} statusLabel={ownLabel} />
 {/snippet}
 {#snippet face()}
-	<Avatar name={draft || you?.user_id || '?'} id={you?.user_id} src={avatar} size="lg" status={ownStatus} statusLabel={ownLabel} />
+	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" status={ownStatus} statusLabel={ownLabel} />
 {/snippet}
 {#snippet signin()}
 	{#if snapshot.authBusy && !addEmail?.busy}

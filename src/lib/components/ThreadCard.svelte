@@ -4,7 +4,8 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { designTitle, threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
 	import { idMillis, idSince } from '$lib/ui/time';
-	import Avatar from './Avatar.svelte';
+	import Avatar from '$lib/design/components/Avatar.svelte';
+	import { hueOf } from '$lib/ui/messages';
 
 	/** A thread's card in its parent room: faces, title (ellipsized), what's new in it and when it was last replied to (at the right), all on one row, then its summary (in plum when it's private) and newest message, as its sidebar row shows them. */
 	let { entry, unread = 0, mentions = 0, onopen }: {
@@ -22,7 +23,7 @@
 <!-- The design system's ThreadMarker, on a row of its own; the app fills in the faces, hued by user ID as everywhere else. -->
 {#snippet faces()}
 	{#each entry.participants as participant (participant.user_id)}
-		<Avatar name={directory.name(participant)} id={directory.person(participant)?.user_id} src={directory.avatar(participant)} size="sm" />
+		<Avatar name={directory.name(participant)} hue={hueOf(directory.person(participant)?.user_id)} src={directory.avatar(participant)} size="sm" />
 	{/each}
 {/snippet}
 

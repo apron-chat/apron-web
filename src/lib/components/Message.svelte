@@ -7,12 +7,12 @@
 	import { emojiAnchor, emojiPicker } from '$lib/ui/emoji-picker.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
-	import { embedsOf, isSystem, replySnippet, senderName, textOf } from '$lib/ui/messages';
+	import { embedsOf, hueOf, isSystem, replySnippet, senderName, textOf } from '$lib/ui/messages';
 	import type { ReactionChip } from '$lib/ui/reactions';
 	import { eventTime, idMillis } from '$lib/ui/time';
 	import { copyCode } from '$lib/ui/copy-code';
 	import DesignMessage from '$lib/design/components/Message.svelte';
-	import Avatar from './Avatar.svelte';
+	import Avatar from '$lib/design/components/Avatar.svelte';
 	import MentionText from './MentionText.svelte';
 	import ReactionBar from './ReactionBar.svelte';
 	import { systemScope } from '$lib/protocol/types';
@@ -212,7 +212,7 @@
 <!-- The design system's Message draws the row; the app fills in who the sender is, the quote, the body and the toolbar. -->
 {#snippet avatar()}
 	<!-- The name beside it is the keyboard's way in; the avatar is a second target for the pointer. -->
-	<button class="ap-msg-who" type="button" tabindex="-1" aria-hidden="true" data-user-id={handle}><Avatar {name} id={directory.person(event.from)?.user_id} src={directory.avatar(event.from)} /></button>
+	<button class="ap-msg-who" type="button" tabindex="-1" aria-hidden="true" data-user-id={handle}><Avatar {name} hue={hueOf(directory.person(event.from)?.user_id)} src={directory.avatar(event.from)} /></button>
 {/snippet}
 {#snippet sender()}
 	<button class="ap-msg-sender ap-msg-who" type="button" data-user-id={handle} aria-haspopup="dialog" title="Show profile">{name}</button>
@@ -223,7 +223,7 @@
 	{#if replyTarget}
 		{@const targetName = senderName(replyTarget)}
 		<button class="ap-reply" data-testid="reply-reference" type="button" aria-label={`Replying to ${targetName}. Jump to their message`} onclick={() => onjump(replyTarget.message_id)}>
-			<Avatar name={targetName} id={directory.person(replyTarget.from)?.user_id} src={directory.avatar(replyTarget.from)} size="sm" />
+			<Avatar name={targetName} hue={hueOf(directory.person(replyTarget.from)?.user_id)} src={directory.avatar(replyTarget.from)} size="sm" />
 			<span class="ap-reply-who">{targetName}</span>
 			<span class="ap-reply-text">{#if replyTarget.deleted}<em>Message deleted</em>{:else}<MentionText text={replySnippet(replyTarget)} />{/if}</span>
 		</button>

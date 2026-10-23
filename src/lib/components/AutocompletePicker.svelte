@@ -4,7 +4,8 @@
 	import type { EmojiSuggestion } from '$lib/ui/emoji-autocomplete';
 	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import Avatar from './Avatar.svelte';
+	import Avatar from '$lib/design/components/Avatar.svelte';
+	import { hueOf } from '$lib/ui/messages';
 
 	/**
 	 * The composer's autocomplete (the design system's `MentionPicker`): the
@@ -31,7 +32,7 @@
 </script>
 
 {#snippet face(person: { user_id: string; name?: string; avatar?: string })}
-	<Avatar name={person.name?.trim() || person.user_id} id={person.user_id} src={person.avatar} size="sm" />
+	<Avatar name={person.name?.trim() || person.user_id} hue={hueOf(person.user_id)} src={person.avatar} size="sm" />
 {/snippet}
 
 <MentionPicker {id} {query} people={senders} {rooms} {emoji} {active} avatar={face} {...rest} onpick={(_, index) => onpick(index)} {onhover} />

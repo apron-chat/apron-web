@@ -5,7 +5,8 @@
 	import { reactorsList } from '$lib/ui/reactors.svelte';
 	import ReactorsPopover from '$lib/design/components/ReactorsPopover.svelte';
 	import type { Reactor } from '$lib/design/components/types';
-	import Avatar from './Avatar.svelte';
+	import Avatar from '$lib/design/components/Avatar.svelte';
+	import { hueOf } from '$lib/ui/messages';
 
 	/**
 	 * Who reacted with an emoji, for the chip long-pressed or right-clicked:
@@ -104,6 +105,6 @@
 		onkeydown={keydown}
 		onfocusout={focusout}
 	>
-		{#snippet avatar(reactor)}<Avatar name={reactor.name ?? reactor.user_id} id={reactor.user_id} src={reactor.avatar} />{/snippet}
+		{#snippet avatar(reactor)}<Avatar name={reactor.name ?? reactor.user_id} hue={hueOf(reactor.user_id)} src={reactor.avatar} />{/snippet}
 	</ReactorsPopover>
 {/if}
