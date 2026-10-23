@@ -120,6 +120,22 @@ describe('one explicit ceremony per tap', () => {
 		await pending;
 	});
 
+	it('records a guest who joins after a passkey account signs out as a token’s session', async () => {
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
+		const { client, socket, snap, latest } = await connect([], { auth: ['webauthn', 'guest', 'token'], storage });
+		const pending = client.usePasskey('login', undefined);
+		await ceremony(socket, { user_id: 'u_1', name: 'Existing' });
+		await pending;
+		expect(snap().signedInWith).toBe('webauthn');
+		await socket.reply('room_list', { joined: [] });
+		await client.signOut();
+		await vi.advanceTimersByTimeAsync(5_000);
+		await latest().greet([], { auth: ['webauthn', 'guest', 'token'], token: 'st_guest' });
+		// Only the guest token gets back in: worth adding another way, not a passkey's session.
+		expect(snap().signedInWith).toBe('token');
+		expect(storage.get('apron.signin:ws://fake.test/')).toBe('token');
+	});
+
 	it('is busy from the tap on, before the server is asked for a challenge', async () => {
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
 		const { client, socket } = await connected();
