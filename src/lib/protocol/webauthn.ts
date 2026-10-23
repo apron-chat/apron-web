@@ -88,6 +88,10 @@ export function credentialJSON(credential: PublicKeyCredential): JsonObject {
 	if (!isJsonObject(json) || !isJsonObject(json.response)) return use(fields, { source: 'fields', note: 'toJSON gave no response object' });
 	const differing = disagreements(json, fields);
 	if (differing.length) return use(fields, { source: 'fields', note: `toJSON disagrees with the credential's own fields: ${differing.join(', ')}` });
+	// Required in WebAuthn JSON, but 1Password's toJSON (Chrome on macOS) can leave it out.
+	if (!isJsonObject(json.clientExtensionResults)) {
+		return use({ ...json, clientExtensionResults: fields.clientExtensionResults }, { source: 'toJSON', note: 'toJSON gave no clientExtensionResults; the credential\'s own are sent' });
+	}
 	return use(json, { source: 'toJSON' });
 }
 
