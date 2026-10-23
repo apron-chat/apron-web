@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '$lib/protocol/types';
-import { avatarHue, mayMove, mentionsMe, mentionsOf, typingLine } from './messages';
+import { avatarHue, mayMove, mentionsMe, mentionsOf } from './messages';
 
 describe('avatarHue', () => {
 	it('gives each user_id one stable hue and spreads different IDs apart, even ones a character apart', () => {
@@ -27,15 +27,6 @@ describe('mentionsMe', () => {
 		// Never your own messages or tombstones.
 		expect(mentionsMe(event({ text: 'hi', mentions: ['guest_me'] }, 'guest_me'), me)).toBe(false);
 		expect(mentionsMe({ ...event(undefined), deleted: true }, me)).toBe(false);
-	});
-});
-
-describe('typingLine', () => {
-	it('names one or two people and counts past that', () => {
-		expect(typingLine([])).toBe('');
-		expect(typingLine(['Ada'])).toBe('Ada is typing…');
-		expect(typingLine(['Ada', 'Bo'])).toBe('Ada and Bo are typing…');
-		expect(typingLine(['Ada', 'Bo', 'Cy'])).toBe('Several people are typing…');
 	});
 });
 

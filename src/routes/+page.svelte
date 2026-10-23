@@ -39,7 +39,8 @@
 	import Toasts from '$lib/components/Toasts.svelte';
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
 	import ThreadSummary from '$lib/components/ThreadSummary.svelte';
-	import TypingDots from '$lib/design/components/TypingDots.svelte';
+	import TimelineDivider from '$lib/design/components/TimelineDivider.svelte';
+	import TypingIndicator from '$lib/design/components/TypingIndicator.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import { composerAction } from '$lib/ui/commands';
@@ -51,7 +52,7 @@
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
 	import { ReadPositions } from '$lib/ui/read-positions';
-	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, textOf, typingLine } from '$lib/ui/messages';
+	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, textOf } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
@@ -2467,7 +2468,7 @@
 			<div class="ap-timeline" bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
 				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown} testid="floating-day" />
 				{#if snapshot.showReconnectDivider}
-					<div class="ap-divider ap-divider-gap" role="separator" data-testid="reconnect-divider"><span>Reconnected · earlier messages aren’t available</span></div>
+					<TimelineDivider kind="gap" testid="reconnect-divider" />
 				{/if}
 				<!-- No messages yet: placeholders, not thread cards on their own. -->
 				{#if (messages.length === 0 || paneHeldBack) && paneCatchingUp}
@@ -2477,7 +2478,7 @@
 				{:else}
 					{#each shownTimeline as item (item.key)}
 						{#if item.kind === 'date'}
-							<div class="ap-divider ap-divider-date" role="separator"><span>{item.label}</span></div>
+							<TimelineDivider label={item.label} sticky={false} />
 						{:else if item.kind === 'thread'}
 							<ThreadCard entry={item.entry} unread={unread.byRoom[item.entry.id]} mentions={mentions.byRoom[item.entry.id]} onopen={() => openThreadCard(item.entry.id)} />
 						{:else if item.kind === 'notice'}
@@ -2500,7 +2501,7 @@
 								caps: capsFor(event)
 							}, messageContext)}
 							{#if event.message_id === newDividerBefore}
-								<div class="ap-divider ap-divider-new" role="separator" data-testid="new-divider"><span>New</span></div>
+								<TimelineDivider kind="new" testid="new-divider" />
 							{/if}
 							<Message {view} on={messageHandlers} testids={MESSAGE_TESTIDS} editor={view.editing && messageEditor.component ? editMessage : undefined} embed={messageEmbed} />
 						{/if}
@@ -2515,12 +2516,7 @@
 			<div class="ap-shell-nudge-inline" aria-live="polite">
 				{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />{/if}
 			</div>
-			<div class="ap-typing ap-shell-typing" aria-live="polite">
-				{#if typingNames.length > 0}
-					<TypingDots />
-					{typingLine(typingNames)}
-				{/if}
-			</div>
+			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
 			{#if checkingShown && timeline.length > 0}<TimelineLoading float label={quietReconnect ? statusLabel(snapshot, session.stalled) : activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} />{/if}
 
