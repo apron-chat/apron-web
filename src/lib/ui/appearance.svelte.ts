@@ -57,11 +57,12 @@ function applyAppearance(preferences: AppearancePreferences): void {
 	setFont(root, '--font-sans', preferences.interfaceFont, 'var(--font-sans-system)');
 	setFont(root, '--font-chat', preferences.chatFont, 'var(--font-sans)');
 	setFont(root, '--font-mono', preferences.monoFont, 'var(--font-mono-system)');
-	// The browser's own chrome takes the chosen theme's ground too; System restores app.html's.
-	const ground = getComputedStyle(root).getPropertyValue('--bg-100').trim();
+	// The browser's own chrome takes the chosen theme's ground too; System restores app.html's. Only a chosen theme
+	// reads it: reading computed style here would lay out the page before it has rendered.
+	const ground = preferences.mode === 'system' ? '' : getComputedStyle(root).getPropertyValue('--bg-100').trim();
 	for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
 		meta.dataset.system ??= meta.content;
-		meta.content = preferences.mode === 'system' || !ground ? meta.dataset.system : ground;
+		meta.content = !ground ? meta.dataset.system : ground;
 	}
 }
 
