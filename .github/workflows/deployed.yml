@@ -1,0 +1,35 @@
+name: Deployed
+
+# Reacts with ✅ to the announcements of pull requests once they are live on
+# web.apron.chat, as the same bot that announce.yml posts them as. Cloudflare
+# Workers Builds posts a check run on every commit it builds; the one on main
+# is the production deploy, and branch Previews are left out. Without the
+# APRON_BOT_TOKEN secret the job succeeds without reacting.
+#
+# check_run workflows run from main's copy of this file, with github.sha set
+# to main's latest commit, so the deployed commit is the check run's head_sha.
+on:
+  check_run:
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  deployed:
+    if: >-
+      github.event.check_run.name == 'Workers Builds: apron-web' &&
+      github.event.check_run.conclusion == 'success' &&
+      github.event.check_run.check_suite.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # The announcing bot's token, so it reacts to its own announcements.
+    environment: announce
+    steps:
+      - uses: apron-chat/apron-pr-bot/deployed@main
+        with:
+          server-url: wss://server.apron.chat/
+          token: ${{ secrets.APRON_BOT_TOKEN }}
+          # Optional; the room the announcements are in, `general` when unset.
+          room-id: ${{ vars.APRON_ROOM_ID }}
+          sha: ${{ github.event.check_run.head_sha }}
