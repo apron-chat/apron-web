@@ -51,6 +51,23 @@ describe('Message', () => {
 		expect(onselect).not.toHaveBeenCalled();
 	});
 
+	it('lets your onclick switch select mode on without that same click toggling the row back off', () => {
+		// A shift-click: your handler starts select mode with this message picked, as the app does.
+		const props = $state<Record<string, unknown>>({ messageId: '1', sender, timestamp: 1710000000000, text: 'hi', selectMode: false });
+		const onselect = vi.fn();
+		props.onselect = onselect;
+		props.onclick = () => { props.selectMode = true; };
+		instance = mount(Message, { target: document.body, props });
+		flushSync();
+		document.querySelector('article')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true }));
+		flushSync();
+		expect(props.selectMode).toBe(true);
+		expect(onselect).not.toHaveBeenCalled();
+		// The next click, made in select mode, toggles as usual.
+		document.querySelector('article')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		expect(onselect).toHaveBeenCalledOnce();
+	});
+
 	it('runs your onclick before the select-mode toggle when it lets the click through', () => {
 		const calls: string[] = [];
 		const row = render({ text: 'hi', selectMode: true, onselect: () => calls.push('select'), onclick: () => calls.push('yours') });

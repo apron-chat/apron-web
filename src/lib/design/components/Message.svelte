@@ -96,10 +96,19 @@
 	const cls = $derived(['ap-msg', grouped && 'ap-msg-grouped', status === 'pending' && 'ap-msg-pending', mention && 'ap-msg-mention', pinged && 'ap-msg-pinged', highlighted && 'ap-msg-highlighted', sel && 'ap-msg-selectable', sel && selected && 'ap-msg-selected', density === 'compact' && 'ap-msg-compact']);
 	const hasMeta = $derived((edited && !deleted) || status === 'pending');
 
-	function rowClick(e: MouseEvent) {
-		if (!sel) return;
+	function rowClick(e: MouseEvent, selecting: boolean) {
+		if (!selecting) return;
 		if ((e.target as Element)?.closest?.('a, button, input, textarea')) return;
 		onselect?.(e);
+	}
+	/**
+	 * The row's click: yours first, then the select-mode toggle, which answers to the mode the click began in. Your
+	 * handler may switch select mode on (a shift-click that picks this message), and that same click must not then
+	 * toggle it back off.
+	 */
+	function click(e: MouseEvent) {
+		const selecting = sel;
+		chain((event: MouseEvent) => rowClick(event, selecting), onclick)?.(e);
 	}
 	function checkKey(e: KeyboardEvent) {
 		if (e.key === ' ' || e.key === 'Enter') {
@@ -151,7 +160,7 @@
 	</article>
 {:else if density === 'compact'}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article data-message-id={messageId} tabindex="-1" {...rest} class={[cls, className]} onclick={chain(rowClick, onclick)}>
+	<article data-message-id={messageId} tabindex="-1" {...rest} class={[cls, className]} onclick={click}>
 		{@render quote()}
 		{@render check()}
 		<time class="ap-msg-ctime" datetime={t.iso} title={t.exact}>{t.short}</time>
@@ -174,7 +183,7 @@
 	</article>
 {:else}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<article data-message-id={messageId} tabindex="-1" {...rest} class={[cls, className]} onclick={chain(rowClick, onclick)}>
+	<article data-message-id={messageId} tabindex="-1" {...rest} class={[cls, className]} onclick={click}>
 		{@render quote()}
 		{@render check()}
 		<div class="ap-msg-gutter">
