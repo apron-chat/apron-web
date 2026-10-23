@@ -1,8 +1,9 @@
 # Visual and performance QA
 
 Screenshots, pixel diffs and perf comparisons of the app on `/__preview`, which runs the full client
-against the in-memory server (`src/lib/preview/memory-server.ts`), so nothing needs a backend. It runs
-locally, not in CI. Everything it writes goes under `.qa/` (gitignored).
+against the in-memory server (`src/lib/preview/memory-server.ts`), so nothing needs a backend; and the
+browser tests in `e2e/` (`npm run e2e`, [below](#npm-run-e2e-the-browser-tests)). They run locally, not in
+CI. Everything they write goes under `.qa/` (gitignored).
 
 ```sh
 npm run qa -- ab --base main                        # the redesign workflow (below)
@@ -100,3 +101,62 @@ elsewhere, `send` presses Send (Enter inserts a newline on phones), `roomsPane`,
 `showMembers` and `rename` handle the one-pane layout under 720px, and `react` taps the picker's search
 on touch. `t` carries `viewport`, `theme`, `touch` and `narrow`. Check a new suite with
 `npm run qa -- shoot --suite threads --url <served build>` and look at the PNGs before relying on it.
+
+## `npm run e2e`: the browser tests
+
+`e2e/` holds Playwright tests (`@playwright/test`, in the same Chromium as the QA scripts) for what only a
+real browser shows: contenteditable keys, layout geometry, history, focus and accessibility. They run
+against the built `/__preview`, so they need no backend either. Like the rest of `scripts/qa`, they run
+locally, not in CI.
+
+```sh
+npm run e2e                                    # build, serve build/, run everything (about 75 s)
+npm run e2e -- composer layout                 # build, then only these spec files
+npx playwright test -c e2e/playwright.config.ts navigation   # without rebuilding
+npx playwright test -c e2e/playwright.config.ts --ui         # step through, with the page alongside
+npx playwright show-report .qa/e2e/report                    # after a run: traces of what failed
+```
+
+`E2E_BUILD=<dir>` serves another build (a snapshot, a mutant); `E2E_URL=<url>` uses one already served.
+Results, traces and the report go to `.qa/e2e/`. There are no retries: a test that fails once is a finding.
+
+| Spec | Checks |
+|---|---|
+| `composer.spec.ts` | Mentions: `@ad`, the arrow keys and Tab make a chip that goes out as `@ada` with `mentions: ["ada"]`; Escape dismisses the picker so Enter sends the text; Backspace after a chip gives back the name; on a phone Enter is a new line. |
+| `layout.spec.ts` | At 1280, 900, 390, 360 and 320px, light and dark, with long names and four roles: no role badge sliced, a name gives way only down to `--ap-name-min`, a message header is one line, nothing scrolls sideways; under 960px the member list overlays the conversation. |
+| `navigation.spec.ts` | Room, thread and message links; Back and Forward through rooms and threads, also to a thread left since; the phone's rooms list as a history entry. |
+| `privacy.spec.ts` | A server that drops `private` from a new room or thread: the app says so and doesn't open it to post in. |
+| `a11y.spec.ts` | axe-core on connect, room, preferences and thread, desktop and phone: no serious or critical violation beyond `e2e/a11y-baseline.json` (per rule, by count). After fixing some, `E2E_UPDATE_A11Y=1 npm run e2e -- a11y` lowers the baseline; commit it. |
+| `contract-scenes.spec.ts`, `contract.spec.ts` | The interop contract, below. |
+
+Tests drive the app as a user does (roles and names, the test ids interop relies on) and assert the wire from
+the frames the memory server recorded (`preview.sent('message')`). The memory server
+(`src/lib/preview/memory-server.ts`) takes knobs from `window.__APRON_PREVIEW__`, which the `preview` fixture
+sets from `test.use({ knobs })`: `seed: 'rich'` (long names with four roles, a name clash, avatars, a reply, a
+mention of you, an embed of each kind, a room to browse), `dropPrivate: 'rooms' | 'threads'`, and
+`capabilities` to add (`embed:upload`, `status`). With knobs set the server is `window.__apronPreview`
+(`frames`, `post(room, from, body)` for a message from someone else); without them the preview is the demo,
+unchanged. `preview.openRoot()` opens `/` instead, against a scripted WebSocket server (`e2e/mock-server.ts`)
+for the connect screen and sign-in; every request off the machine is refused, so no test reaches a real server.
+
+### The interop contract
+
+apron-server-go's browser suite (`tests/interop`) finds this app's elements by test ids, accessible names and
+CSS selectors. `npm run qa -- contract --from <apron-server-go>/tests/interop` (or `APRON_INTEROP_DIR`) reads
+them from its specs into `e2e/interop-contract.json`, each with the interop lines that use it; commit the file.
+`contract-scenes.spec.ts` walks the app through the states those tests reach and records what each shows;
+`contract.spec.ts` then fails for any entry no scene showed, naming the interop tests that would break. When
+one fails: keep the id or name, or change it in both repositories; or, if the state just isn't reached, add a
+scene, or list it in `OUT_OF_REACH` with why (those are checked more weakly: their text must still be in the
+built bundle). `KNOWN_BREAKS` lists real mismatches, as `test.fixme`, until one side is fixed. With
+apron-server-go checked out beside this repository (or `APRON_INTEROP_DIR` set), the check also fails when
+`interop-contract.json` is stale; `npm run qa -- contract --check` says the same.
+
+### In CI
+
+Not wired up, by choice. It would take: a job that runs `npx playwright install --with-deps chromium` (or
+caches `~/.cache/ms-playwright`) and sets `QA_CHROMIUM` or leaves playwright-core's lookup to find it; `npm
+run e2e` with `--reporter=github,html` and the `.qa/e2e/` report and traces uploaded as artifacts; about 2
+minutes on 2 cores. The axe and layout results depend on the fonts installed, so the baseline would need
+regenerating on the CI image (or the image's fonts pinned), and the contract freshness check would need
+apron-server-go checked out next to it (or it skips).

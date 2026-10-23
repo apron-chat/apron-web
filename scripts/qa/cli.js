@@ -3,12 +3,13 @@
  * Visual and performance QA against the in-memory /__preview route. `npm run qa -- help` lists the
  * commands; scripts/qa/README.md explains the workflow and how to add a suite.
  */
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { ab } from './lib/ab.js';
 import { int, list, parseArgs } from './lib/args.js';
 import { launch } from './lib/browser.js';
 import { compareDirs, diffDirs, formatDiff, summarize } from './lib/images.js';
+import { extractInteropContract, interopDir } from './lib/interop-contract.js';
 import { formatPerf, formatProfile, runPerf, runProfile, selectProbes } from './lib/perf.js';
 import { writeReport } from './lib/report.js';
 import { serveDir } from './lib/serve.js';
@@ -37,13 +38,16 @@ const HELP = `npm run qa -- <command> [options]
   sheet <spec.json>      Render hand-picked before/after panels (title, note, crop box, scale) to a PNG.
                          [--out <spec>.png]
   serve <build dir>      Serve a build on a port (default: a free one). [--port n]
+  contract               Read what apron-server-go's interop suite relies on (test ids, accessible names,
+                         selectors) from its specs into e2e/interop-contract.json, for e2e/contract.spec.ts.
+                         [--from <apron-server-go>/tests/interop, or APRON_INTEROP_DIR] [--check]
   suites                 List suites, their scenes and job counts (a job shoots one or more PNGs).
   clean                  Remove .qa/snap (cached builds); --all removes all of .qa.
 
 Filters match any part of a shot id, <scene>--<viewport>--<theme>; commas give several.
 Chromium: QA_CHROMIUM, else playwright-core's build under PLAYWRIGHT_BROWSERS_PATH.`;
 
-const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help'];
+const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check'];
 const MULTI = ['url', 'label', 'build', 'suite', 'filter', 'only'];
 
 async function main() {
@@ -169,6 +173,21 @@ async function main() {
 			const s = await serveDir(dir, { port: int(o.port, 0) });
 			console.log(`serving ${dir} at ${s.url}/__preview (Ctrl-C stops)`);
 			await new Promise(() => {});
+			return 0;
+		}
+		case 'contract': {
+			const dir = interopDir(repo, o.from);
+			if (!dir) throw new Error('no interop suite found: pass --from <apron-server-go>/tests/interop or set APRON_INTEROP_DIR');
+			const out = join(repo, 'e2e', 'interop-contract.json');
+			const text = `${JSON.stringify({ from: 'apron-server-go/tests/interop', ...extractInteropContract(dir) }, null, '\t')}\n`;
+			const counts = (c) => `${Object.keys(c.testIds).length} test ids, ${Object.keys(c.names).length} names, ${Object.keys(c.selectors).length} selectors`;
+			if (o.check) {
+				const same = existsSync(out) && readFileSync(out, 'utf8') === text;
+				console.log(same ? `${relative(process.cwd(), out)} is current with ${dir}` : `${relative(process.cwd(), out)} is stale: run \`npm run qa -- contract --from ${dir}\``);
+				return same ? 0 : 1;
+			}
+			writeFileSync(out, text);
+			console.log(`${relative(process.cwd(), out)}: ${counts(JSON.parse(text))}, from ${dir}`);
 			return 0;
 		}
 		case 'suites': {

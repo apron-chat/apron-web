@@ -1,0 +1,1349 @@
+{
+	"from": "apron-server-go/tests/interop",
+	"testIds": {
+		"attach-input": [
+			"reference.spec.ts:73",
+			"reference.spec.ts:87"
+		],
+		"avatar-input": [
+			"reference.spec.ts:180"
+		],
+		"browse-rooms": [
+			"perf.spec.ts:133",
+			"reference.spec.ts:267"
+		],
+		"command-tag": [
+			"reference.spec.ts:203",
+			"reference.spec.ts:222 (absent)"
+		],
+		"connect-name-input": [
+			"webauthn.spec.ts:154"
+		],
+		"connection-status": [
+			"chat.spec.ts:566",
+			"chat.spec.ts:660",
+			"test-helpers.ts:11",
+			"webauthn.spec.ts:53",
+			"webauthn.spec.ts:96",
+			"webauthn.spec.ts:103",
+			"webauthn.spec.ts:109",
+			"webauthn.spec.ts:181"
+		],
+		"display-name-input": [
+			"test-helpers.ts:80",
+			"webauthn.spec.ts:150"
+		],
+		"edit-room": [
+			"chat.spec.ts:80",
+			"chat.spec.ts:87",
+			"chat.spec.ts:112",
+			"responsive.spec.ts:25"
+		],
+		"floating-day": [
+			"chat.spec.ts:242"
+		],
+		"join-room": [
+			"chat.spec.ts:629",
+			"chat.spec.ts:694",
+			"chat.spec.ts:712",
+			"test-helpers.ts:167"
+		],
+		"jump-button": [
+			"chat.spec.ts:853",
+			"chat.spec.ts:861",
+			"chat.spec.ts:969",
+			"chat.spec.ts:974"
+		],
+		"leave-room": [
+			"chat.spec.ts:695",
+			"chat.spec.ts:713",
+			"reference.spec.ts:250",
+			"reference.spec.ts:264",
+			"test-helpers.ts:172"
+		],
+		"membership-line": [
+			"chat.spec.ts:421"
+		],
+		"mention-picker": [
+			"chat.spec.ts:798"
+		],
+		"message-list": [
+			"chat.spec.ts:210",
+			"chat.spec.ts:232",
+			"chat.spec.ts:852",
+			"chat.spec.ts:966"
+		],
+		"more-threads": [
+			"reference.spec.ts:254"
+		],
+		"new-divider": [
+			"reference.spec.ts:295"
+		],
+		"new-thread": [
+			"chat.spec.ts:1020"
+		],
+		"notice": [
+			"reference.spec.ts:207",
+			"reference.spec.ts:216"
+		],
+		"pane-summary": [
+			"chat.spec.ts:45",
+			"chat.spec.ts:116 (absent)",
+			"chat.spec.ts:161",
+			"responsive.spec.ts:44",
+			"responsive.spec.ts:61",
+			"responsive.spec.ts:80"
+		],
+		"reaction-chip": [
+			"chat.spec.ts:772 (absent)",
+			"chat.spec.ts:773 (absent)",
+			"chat.spec.ts:774 (absent)",
+			"chat.spec.ts:1137",
+			"responsive.spec.ts:106",
+			"test-helpers.ts:118"
+		],
+		"reactions": [
+			"responsive.spec.ts:107"
+		],
+		"remove-avatar": [
+			"reference.spec.ts:183",
+			"reference.spec.ts:190"
+		],
+		"reply-draft": [
+			"chat.spec.ts:47",
+			"chat.spec.ts:277",
+			"chat.spec.ts:279 (absent)",
+			"chat.spec.ts:286 (absent)",
+			"chat.spec.ts:319",
+			"chat.spec.ts:352",
+			"chat.spec.ts:355 (absent)",
+			"chat.spec.ts:358",
+			"chat.spec.ts:376",
+			"responsive.spec.ts:62"
+		],
+		"reply-reference": [
+			"chat.spec.ts:67",
+			"chat.spec.ts:155",
+			"chat.spec.ts:156 (absent)",
+			"chat.spec.ts:285",
+			"chat.spec.ts:289",
+			"chat.spec.ts:291",
+			"chat.spec.ts:296",
+			"chat.spec.ts:298 (absent)",
+			"chat.spec.ts:299 (absent)",
+			"chat.spec.ts:322",
+			"chat.spec.ts:329",
+			"chat.spec.ts:331",
+			"chat.spec.ts:334",
+			"chat.spec.ts:338",
+			"chat.spec.ts:362",
+			"chat.spec.ts:375",
+			"chat.spec.ts:379",
+			"chat.spec.ts:388",
+			"responsive.spec.ts:66",
+			"responsive.spec.ts:79"
+		],
+		"room-actions": [
+			"test-helpers.ts:153"
+		],
+		"room-directory": [
+			"perf.spec.ts:134",
+			"reference.spec.ts:268",
+			"reference.spec.ts:269"
+		],
+		"room-list": [
+			"perf.spec.ts:135",
+			"perf.spec.ts:137",
+			"reference.spec.ts:265 (absent)",
+			"reference.spec.ts:266"
+		],
+		"selection-bar": [
+			"chat.spec.ts:1003",
+			"chat.spec.ts:1030 (absent)",
+			"test-helpers.ts:98"
+		],
+		"send-button": [
+			"reference.spec.ts:75",
+			"reference.spec.ts:89"
+		],
+		"sender-handle": [
+			"reference.spec.ts:235"
+		],
+		"server-url-input": [
+			"webauthn.spec.ts:179"
+		],
+		"staged-files": [
+			"reference.spec.ts:74",
+			"reference.spec.ts:88"
+		],
+		"stream-embed": [
+			"reference.spec.ts:116"
+		],
+		"thread-card": [
+			"chat.spec.ts:48",
+			"chat.spec.ts:49",
+			"chat.spec.ts:166",
+			"chat.spec.ts:202",
+			"chat.spec.ts:235",
+			"chat.spec.ts:601",
+			"chat.spec.ts:661",
+			"chat.spec.ts:1036",
+			"reference.spec.ts:246",
+			"responsive.spec.ts:37",
+			"responsive.spec.ts:73",
+			"test-helpers.ts:160"
+		],
+		"thread-last-reply": [
+			"chat.spec.ts:70"
+		],
+		"thread-list": [
+			"chat.spec.ts:332 (absent)",
+			"chat.spec.ts:349",
+			"chat.spec.ts:598",
+			"chat.spec.ts:623",
+			"chat.spec.ts:926",
+			"chat.spec.ts:1025",
+			"chat.spec.ts:1038",
+			"reference.spec.ts:245",
+			"reference.spec.ts:260",
+			"responsive.spec.ts:58",
+			"responsive.spec.ts:59",
+			"responsive.spec.ts:77",
+			"test-helpers.ts:133",
+			"test-helpers.ts:159",
+			"test-helpers.ts:164"
+		],
+		"thread-preview-latest": [
+			"chat.spec.ts:52",
+			"chat.spec.ts:72"
+		],
+		"thread-preview-summary": [
+			"chat.spec.ts:50",
+			"chat.spec.ts:51",
+			"chat.spec.ts:166",
+			"responsive.spec.ts:39"
+		],
+		"thread-renamed": [
+			"chat.spec.ts:95",
+			"chat.spec.ts:99"
+		],
+		"thread-unread": [
+			"chat.spec.ts:928"
+		]
+	},
+	"names": {
+		"button \"Alert when it’s closed, too\" (substring)": {
+			"roles": [
+				"button"
+			],
+			"name": "Alert when it’s closed, too",
+			"exact": false,
+			"at": [
+				"push.spec.ts:532"
+			]
+		},
+		"button \"Back to room\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Back to room",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:68",
+				"chat.spec.ts:100",
+				"chat.spec.ts:164",
+				"chat.spec.ts:179",
+				"chat.spec.ts:230",
+				"chat.spec.ts:261",
+				"chat.spec.ts:320",
+				"chat.spec.ts:354",
+				"chat.spec.ts:382 (absent)",
+				"chat.spec.ts:609",
+				"chat.spec.ts:632",
+				"chat.spec.ts:652",
+				"chat.spec.ts:697",
+				"chat.spec.ts:700",
+				"chat.spec.ts:704",
+				"chat.spec.ts:925",
+				"chat.spec.ts:1034",
+				"reference.spec.ts:261",
+				"reference.spec.ts:291",
+				"reference.spec.ts:293",
+				"responsive.spec.ts:36",
+				"responsive.spec.ts:69",
+				"test-helpers.ts:131"
+			]
+		},
+		"button \"Back to rooms\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Back to rooms",
+			"exact": true,
+			"at": [
+				"responsive.spec.ts:57",
+				"responsive.spec.ts:76"
+			]
+		},
+		"button \"Cancel reply\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Cancel reply",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:278"
+			]
+		},
+		"button \"Cancel\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Cancel",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:85",
+				"reference.spec.ts:184",
+				"test-helpers.ts:90",
+				"webauthn.spec.ts:133",
+				"webauthn.spec.ts:177"
+			]
+		},
+		"button \"Connect\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Connect",
+			"exact": true,
+			"at": [
+				"webauthn.spec.ts:180"
+			]
+		},
+		"button \"Connection settings\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Connection settings",
+			"exact": true,
+			"at": [
+				"webauthn.spec.ts:178"
+			]
+		},
+		"button \"Create account with passkey\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Create account with passkey",
+			"exact": true,
+			"at": [
+				"push.spec.ts:169",
+				"webauthn.spec.ts:34"
+			]
+		},
+		"button \"Delete message\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Delete message",
+			"exact": true,
+			"at": [
+				"responsive.spec.ts:134",
+				"test-helpers.ts:73"
+			]
+		},
+		"button \"Edit message\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Edit message",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:490",
+				"chat.spec.ts:1011 (absent)",
+				"test-helpers.ts:64"
+			]
+		},
+		"button \"Insert emoji\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Insert emoji",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:1061",
+				"responsive.spec.ts:144"
+			]
+		},
+		"button \"Load live view\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Load live view",
+			"exact": true,
+			"at": [
+				"reference.spec.ts:151"
+			]
+		},
+		"button \"More actions\"": {
+			"roles": [
+				"button"
+			],
+			"name": "More actions",
+			"exact": true,
+			"at": [
+				"test-helpers.ts:59"
+			]
+		},
+		"button \"Move 3 messages\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Move 3 messages",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:1023"
+			]
+		},
+		"button \"Move to thread ▾\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Move to thread ▾",
+			"exact": true,
+			"at": [
+				"test-helpers.ts:100"
+			]
+		},
+		"button \"React\"": {
+			"roles": [
+				"button"
+			],
+			"name": "React",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:776 (absent)",
+				"chat.spec.ts:1115",
+				"chat.spec.ts:1129",
+				"chat.spec.ts:1138",
+				"responsive.spec.ts:98",
+				"test-helpers.ts:112"
+			]
+		},
+		"button \"Remove reply reference\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Remove reply reference",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:297",
+				"responsive.spec.ts:127",
+				"responsive.spec.ts:136",
+				"responsive.spec.ts:137 (absent)"
+			]
+		},
+		"button \"Reply to message\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Reply to message",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:151",
+				"chat.spec.ts:276",
+				"chat.spec.ts:280",
+				"chat.spec.ts:311",
+				"chat.spec.ts:368",
+				"chat.spec.ts:371",
+				"reference.spec.ts:307",
+				"responsive.spec.ts:122"
+			]
+		},
+		"button \"Resume\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Resume",
+			"exact": true,
+			"at": [
+				"push.spec.ts:435",
+				"push.spec.ts:661"
+			]
+		},
+		"button \"Run command\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Run command",
+			"exact": true,
+			"at": [
+				"reference.spec.ts:201"
+			]
+		},
+		"button \"Save changes\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Save changes",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:500 (absent)",
+				"test-helpers.ts:68"
+			]
+		},
+		"button \"Save\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Save",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:89",
+				"chat.spec.ts:115",
+				"responsive.spec.ts:34",
+				"test-helpers.ts:81"
+			]
+		},
+		"button \"Send message\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Send message",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:360",
+				"chat.spec.ts:377",
+				"chat.spec.ts:386",
+				"chat.spec.ts:817",
+				"chat.spec.ts:1099",
+				"reference.spec.ts:223",
+				"test-helpers.ts:18"
+			]
+		},
+		"button \"Show member list\" (substring)": {
+			"roles": [
+				"button"
+			],
+			"name": "Show member list",
+			"exact": false,
+			"at": [
+				"push.spec.ts:597"
+			]
+		},
+		"button \"Sign in with a passkey\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Sign in with a passkey",
+			"exact": true,
+			"at": [
+				"push.spec.ts:166",
+				"push.spec.ts:177",
+				"webauthn.spec.ts:22",
+				"webauthn.spec.ts:54",
+				"webauthn.spec.ts:151"
+			]
+		},
+		"button \"Sign in with passkey\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Sign in with passkey",
+			"exact": true,
+			"at": [
+				"push.spec.ts:179",
+				"webauthn.spec.ts:35"
+			]
+		},
+		"button \"Sign out\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Sign out",
+			"exact": true,
+			"at": [
+				"push.spec.ts:489",
+				"webauthn.spec.ts:52"
+			]
+		},
+		"button \"Signing in…\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Signing in…",
+			"exact": true,
+			"at": [
+				"webauthn.spec.ts:176"
+			]
+		},
+		"button \"Start thread\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Start thread",
+			"exact": true,
+			"at": [
+				"test-helpers.ts:127",
+				"test-helpers.ts:129"
+			]
+		},
+		"button \"🎉\"": {
+			"roles": [
+				"button"
+			],
+			"name": "🎉",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:1081",
+				"responsive.spec.ts:151"
+			]
+		},
+		"button \"👍\"": {
+			"roles": [
+				"button"
+			],
+			"name": "👍",
+			"exact": true,
+			"at": [
+				"responsive.spec.ts:104"
+			]
+		},
+		"button \"🥑\"": {
+			"roles": [
+				"button"
+			],
+			"name": "🥑",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:1130",
+				"chat.spec.ts:1139"
+			]
+		},
+		"button /^Open preferences/": {
+			"roles": [
+				"button"
+			],
+			"name": {
+				"regex": "^Open preferences",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:308",
+				"push.spec.ts:419",
+				"push.spec.ts:434",
+				"push.spec.ts:528",
+				"push.spec.ts:549",
+				"push.spec.ts:642",
+				"push.spec.ts:660"
+			]
+		},
+		"button /^Open preferences\\. Notifications paused/": {
+			"roles": [
+				"button"
+			],
+			"name": {
+				"regex": "^Open preferences\\. Notifications paused",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:659"
+			]
+		},
+		"button /^Pause/": {
+			"roles": [
+				"button"
+			],
+			"name": {
+				"regex": "^Pause",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:420",
+				"push.spec.ts:644"
+			]
+		},
+		"button /^Your profile on/": {
+			"roles": [
+				"button"
+			],
+			"name": {
+				"regex": "^Your profile on",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:165",
+				"push.spec.ts:176",
+				"push.spec.ts:488",
+				"push.spec.ts:548",
+				"reference.spec.ts:178",
+				"reference.spec.ts:189",
+				"test-helpers.ts:78",
+				"test-helpers.ts:87",
+				"webauthn.spec.ts:6"
+			]
+		},
+		"button /jump to latest$/i": {
+			"roles": [
+				"button"
+			],
+			"name": {
+				"regex": "jump to latest$",
+				"flags": "i"
+			},
+			"exact": false,
+			"at": [
+				"chat.spec.ts:231"
+			]
+		},
+		"button /status/i": {
+			"roles": [
+				"button"
+			],
+			"name": {
+				"regex": "status",
+				"flags": "i"
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:557"
+			]
+		},
+		"combobox /status/i": {
+			"roles": [
+				"combobox"
+			],
+			"name": {
+				"regex": "status",
+				"flags": "i"
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:557"
+			]
+		},
+		"dialog \"Edit profile\"": {
+			"roles": [
+				"dialog"
+			],
+			"name": "Edit profile",
+			"exact": true,
+			"at": [
+				"reference.spec.ts:179",
+				"test-helpers.ts:79",
+				"test-helpers.ts:88"
+			]
+		},
+		"dialog \"Edit profile\" (substring)": {
+			"roles": [
+				"dialog"
+			],
+			"name": "Edit profile",
+			"exact": false,
+			"at": [
+				"push.spec.ts:166",
+				"push.spec.ts:176",
+				"push.spec.ts:177",
+				"push.spec.ts:489",
+				"push.spec.ts:548",
+				"webauthn.spec.ts:7"
+			]
+		},
+		"dialog \"Edit thread\"": {
+			"roles": [
+				"dialog"
+			],
+			"name": "Edit thread",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:81",
+				"chat.spec.ts:113",
+				"responsive.spec.ts:34"
+			]
+		},
+		"dialog \"Emoji picker\"": {
+			"roles": [
+				"dialog"
+			],
+			"name": "Emoji picker",
+			"exact": true,
+			"at": [
+				"test-helpers.ts:178"
+			]
+		},
+		"dialog \"Move to a new thread\"": {
+			"roles": [
+				"dialog"
+			],
+			"name": "Move to a new thread",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:1021"
+			]
+		},
+		"dialog \"Preferences\" (substring)": {
+			"roles": [
+				"dialog"
+			],
+			"name": "Preferences",
+			"exact": false,
+			"at": [
+				"push.spec.ts:309",
+				"push.spec.ts:529",
+				"push.spec.ts:549",
+				"push.spec.ts:643"
+			]
+		},
+		"dialog \"Start thread\"": {
+			"roles": [
+				"dialog"
+			],
+			"name": "Start thread",
+			"exact": true,
+			"at": [
+				"test-helpers.ts:128"
+			]
+		},
+		"form \"Sign in\" (substring)": {
+			"roles": [
+				"form"
+			],
+			"name": "Sign in",
+			"exact": false,
+			"at": [
+				"push.spec.ts:167",
+				"push.spec.ts:178",
+				"webauthn.spec.ts:8"
+			]
+		},
+		"heading \"General\"": {
+			"roles": [
+				"heading"
+			],
+			"name": "General",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:1096",
+				"reference.spec.ts:270",
+				"test-helpers.ts:10"
+			]
+		},
+		"heading \"Preferences\" (substring)": {
+			"roles": [
+				"heading"
+			],
+			"name": "Preferences",
+			"exact": false,
+			"at": [
+				"push.spec.ts:311"
+			]
+		},
+		"main \"Conversation\" (substring)": {
+			"roles": [
+				"main"
+			],
+			"name": "Conversation",
+			"exact": false,
+			"at": [
+				"chat.spec.ts:603",
+				"chat.spec.ts:1096",
+				"reference.spec.ts:270",
+				"test-helpers.ts:10"
+			]
+		},
+		"menuitem /For 1 hour/": {
+			"roles": [
+				"menuitem"
+			],
+			"name": {
+				"regex": "For 1 hour",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:645"
+			]
+		},
+		"menuitem /Until I resume/": {
+			"roles": [
+				"menuitem"
+			],
+			"name": {
+				"regex": "Until I resume",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:421"
+			]
+		},
+		"option \"Move to room\"": {
+			"roles": [
+				"option"
+			],
+			"name": "Move to room",
+			"exact": true,
+			"at": [
+				"test-helpers.ts:101"
+			]
+		},
+		"option /For 1 hour/": {
+			"roles": [
+				"option"
+			],
+			"name": {
+				"regex": "For 1 hour",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:645"
+			]
+		},
+		"option /Until I resume/": {
+			"roles": [
+				"option"
+			],
+			"name": {
+				"regex": "Until I resume",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:421"
+			]
+		},
+		"radio \"Passkey\"": {
+			"roles": [
+				"radio"
+			],
+			"name": "Passkey",
+			"exact": true,
+			"at": [
+				"webauthn.spec.ts:24"
+			]
+		},
+		"radio /^Create account/": {
+			"roles": [
+				"radio"
+			],
+			"name": {
+				"regex": "^Create account",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:168",
+				"webauthn.spec.ts:32"
+			]
+		},
+		"radiogroup \"Passkey\"": {
+			"roles": [
+				"radiogroup"
+			],
+			"name": "Passkey",
+			"exact": true,
+			"at": [
+				"push.spec.ts:168",
+				"webauthn.spec.ts:32"
+			]
+		},
+		"radio|menuitemradio|menuitem|option /do not disturb/i": {
+			"roles": [
+				"radio",
+				"menuitemradio",
+				"menuitem",
+				"option"
+			],
+			"name": {
+				"regex": "do not disturb",
+				"flags": "i"
+			},
+			"exact": false,
+			"at": [
+				"push.spec.ts:556"
+			]
+		},
+		"switch \"Notifications\"": {
+			"roles": [
+				"switch"
+			],
+			"name": "Notifications",
+			"exact": true,
+			"at": [
+				"push.spec.ts:310",
+				"push.spec.ts:530"
+			]
+		},
+		"textbox \"Edit message\"": {
+			"roles": [
+				"textbox"
+			],
+			"name": "Edit message",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:491",
+				"test-helpers.ts:65"
+			]
+		},
+		"textbox \"Message\"": {
+			"roles": [
+				"textbox"
+			],
+			"name": "Message",
+			"exact": true,
+			"at": [
+				"test-helpers.ts:4"
+			]
+		},
+		"textbox \"Thread summary\"": {
+			"roles": [
+				"textbox"
+			],
+			"name": "Thread summary",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:114",
+				"responsive.spec.ts:28"
+			]
+		},
+		"textbox \"Thread title\"": {
+			"roles": [
+				"textbox"
+			],
+			"name": "Thread title",
+			"exact": true,
+			"at": [
+				"chat.spec.ts:82",
+				"chat.spec.ts:1022",
+				"responsive.spec.ts:26"
+			]
+		}
+	},
+	"selectors": {
+		"#ap-pref-notifications-note": [
+			"push.spec.ts:531"
+		],
+		".ap-divider-date": [
+			"chat.spec.ts:247"
+		],
+		".ap-embed-fallback .ap-embed-kind": [
+			"reference.spec.ts:160"
+		],
+		".ap-embed-fallback a": [
+			"reference.spec.ts:161"
+		],
+		".ap-embed-html b": [
+			"reference.spec.ts:156"
+		],
+		".ap-embed-livebadge": [
+			"reference.spec.ts:120"
+		],
+		".ap-embed-streamhead": [
+			"reference.spec.ts:131"
+		],
+		".ap-jumpbar-at": [
+			"chat.spec.ts:976"
+		],
+		".ap-jumpfab": [
+			"chat.spec.ts:970"
+		],
+		".ap-mention": [
+			"chat.spec.ts:802",
+			"chat.spec.ts:810",
+			"chat.spec.ts:814 (absent)",
+			"chat.spec.ts:816",
+			"chat.spec.ts:831 (absent)",
+			"chat.spec.ts:1057",
+			"chat.spec.ts:1086",
+			"chat.spec.ts:1102"
+		],
+		".ap-mention-me": [
+			"chat.spec.ts:822 (absent)",
+			"chat.spec.ts:825",
+			"reference.spec.ts:306"
+		],
+		".ap-mention[data-user-id]": [
+			"chat.spec.ts:811",
+			"chat.spec.ts:821"
+		],
+		".ap-mpick-hit": [
+			"chat.spec.ts:800"
+		],
+		".ap-msg-embeds": [
+			"reference.spec.ts:59"
+		],
+		".ap-msg-gutter img.ap-avatar": [
+			"reference.spec.ts:182",
+			"reference.spec.ts:191 (absent)"
+		],
+		".ap-msg-gutter span.ap-avatar": [
+			"reference.spec.ts:192"
+		],
+		".ap-msg-meta time": [
+			"chat.spec.ts:859"
+		],
+		".ap-msg-sender": [
+			"reference.spec.ts:187",
+			"reference.spec.ts:234"
+		],
+		".ap-msg-system-body": [
+			"chat.spec.ts:429",
+			"chat.spec.ts:435",
+			"chat.spec.ts:442",
+			"chat.spec.ts:451"
+		],
+		".ap-msg-text": [
+			"chat.spec.ts:147",
+			"chat.spec.ts:1101"
+		],
+		".ap-notice-title": [
+			"reference.spec.ts:210"
+		],
+		".ap-profedit-hint code": [
+			"test-helpers.ts:89"
+		],
+		".ap-roomhead-sub": [
+			"chat.spec.ts:203"
+		],
+		".ap-tline-text": [
+			"chat.spec.ts:58",
+			"chat.spec.ts:118",
+			"chat.spec.ts:123",
+			"chat.spec.ts:166",
+			"responsive.spec.ts:39"
+		],
+		"[data-join=\"general\"]": [
+			"reference.spec.ts:269"
+		],
+		"[data-join]": [
+			"perf.spec.ts:134",
+			"reference.spec.ts:253"
+		],
+		"[data-other-thread]": [
+			"reference.spec.ts:258"
+		],
+		"[data-testid=\"reaction-chip\"][data-emoji]": [
+			"test-helpers.ts:118"
+		],
+		"[data-testid=\"room-list\"] button[data-room=\"general\"]": [
+			"perf.spec.ts:137"
+		],
+		"[data-testid=\"room-list\"] button[data-room]": [
+			"perf.spec.ts:135"
+		],
+		"[data-testid=\"thread-card\"][data-thread]": [
+			"chat.spec.ts:48",
+			"chat.spec.ts:49",
+			"chat.spec.ts:166",
+			"chat.spec.ts:202",
+			"chat.spec.ts:235",
+			"chat.spec.ts:601",
+			"chat.spec.ts:661",
+			"chat.spec.ts:1036",
+			"reference.spec.ts:246",
+			"responsive.spec.ts:73",
+			"test-helpers.ts:160"
+		],
+		"[data-testid=\"thread-list\"] button[data-thread]": [
+			"chat.spec.ts:349",
+			"chat.spec.ts:598",
+			"chat.spec.ts:623",
+			"chat.spec.ts:926",
+			"chat.spec.ts:1038",
+			"reference.spec.ts:245",
+			"responsive.spec.ts:58",
+			"responsive.spec.ts:59",
+			"responsive.spec.ts:77",
+			"test-helpers.ts:159"
+		],
+		"[data-testid=\"thread-list\"] button[data-thread][aria-current=\"page\"]": [
+			"chat.spec.ts:332 (absent)",
+			"chat.spec.ts:1025",
+			"reference.spec.ts:260",
+			"test-helpers.ts:133",
+			"test-helpers.ts:164"
+		],
+		"a.ap-embed-file": [
+			"reference.spec.ts:90"
+		],
+		"article.ap-msg-selected": [
+			"chat.spec.ts:1008"
+		],
+		"article[data-message-id]": [
+			"chat.spec.ts:54",
+			"chat.spec.ts:104",
+			"chat.spec.ts:119",
+			"chat.spec.ts:158",
+			"chat.spec.ts:204",
+			"chat.spec.ts:284",
+			"chat.spec.ts:294",
+			"chat.spec.ts:314",
+			"chat.spec.ts:315",
+			"chat.spec.ts:338",
+			"chat.spec.ts:347",
+			"chat.spec.ts:367",
+			"chat.spec.ts:479",
+			"chat.spec.ts:567",
+			"chat.spec.ts:599",
+			"chat.spec.ts:604",
+			"chat.spec.ts:607 (absent)",
+			"chat.spec.ts:617",
+			"chat.spec.ts:618 (absent)",
+			"chat.spec.ts:619",
+			"chat.spec.ts:636",
+			"chat.spec.ts:637",
+			"chat.spec.ts:663",
+			"chat.spec.ts:668 (absent)",
+			"chat.spec.ts:709 (absent)",
+			"chat.spec.ts:715",
+			"chat.spec.ts:734",
+			"chat.spec.ts:735",
+			"chat.spec.ts:761",
+			"chat.spec.ts:1035 (absent)",
+			"chat.spec.ts:1037 (absent)",
+			"chat.spec.ts:1112",
+			"perf.spec.ts:136",
+			"perf.spec.ts:138",
+			"reference.spec.ts:59",
+			"responsive.spec.ts:70",
+			"responsive.spec.ts:74 (absent)",
+			"responsive.spec.ts:79",
+			"responsive.spec.ts:96",
+			"responsive.spec.ts:126",
+			"test-helpers.ts:22",
+			"test-helpers.ts:32",
+			"webauthn.spec.ts:76"
+		],
+		"article[data-message-id] + [data-testid=\"membership-line\"]": [
+			"chat.spec.ts:421"
+		],
+		"body": [
+			"push.spec.ts:572"
+		],
+		"button.ap-mention-room[data-room-id=\"general\"]": [
+			"reference.spec.ts:299"
+		],
+		"button[data-room]": [
+			"reference.spec.ts:266"
+		],
+		"code": [
+			"webauthn.spec.ts:14"
+		],
+		"em-emoji-picker": [
+			"chat.spec.ts:1079"
+		],
+		"em-emoji-picker input[type=\"search\"]": [
+			"chat.spec.ts:1069",
+			"test-helpers.ts:185"
+		],
+		"figcaption": [
+			"reference.spec.ts:82"
+		],
+		"figure.ap-embed-figure img.ap-embed-media": [
+			"reference.spec.ts:79"
+		],
+		"iframe.ap-embed-frame": [
+			"reference.spec.ts:152"
+		],
+		"li.member[data-user]": [
+			"push.spec.ts:599"
+		],
+		"option": [
+			"push.spec.ts:566"
+		],
+		"pre": [
+			"reference.spec.ts:119",
+			"reference.spec.ts:122",
+			"reference.spec.ts:132"
+		],
+		"pre .ap-term-fg2": [
+			"reference.spec.ts:125",
+			"reference.spec.ts:127",
+			"reference.spec.ts:133"
+		],
+		"small": [
+			"chat.spec.ts:628",
+			"chat.spec.ts:645",
+			"chat.spec.ts:651",
+			"chat.spec.ts:670",
+			"chat.spec.ts:1041"
+		],
+		"time": [
+			"chat.spec.ts:430"
+		],
+		"time.ap-msg-hovertime": [
+			"chat.spec.ts:860"
+		]
+	},
+	"readme": [
+		"Message",
+		"Send message",
+		"article[data-message-id]",
+		"Edit message",
+		"Save changes",
+		"Delete message",
+		"Message deleted"
+	],
+	"absent": {
+		"testIds": {
+			"message-input": [
+				"chat.spec.ts:1005 (absent)"
+			],
+			"reconnect-divider": [
+				"chat.spec.ts:57 (absent)",
+				"chat.spec.ts:78 (absent)"
+			]
+		},
+		"names": {
+			"label \"Loading history\"": {
+				"roles": [
+					"label"
+				],
+				"name": "Loading history",
+				"exact": true,
+				"at": [
+					"webauthn.spec.ts:90 (absent)",
+					"webauthn.spec.ts:98 (absent)",
+					"webauthn.spec.ts:105 (absent)"
+				]
+			}
+		},
+		"selectors": {
+			".ap-avatar, button": [
+				"chat.spec.ts:431 (absent)"
+			],
+			".ap-embed-html script": [
+				"reference.spec.ts:157 (absent)"
+			],
+			"button[data-room=\"general\"]": [
+				"reference.spec.ts:265 (absent)"
+			],
+			"em": [
+				"chat.spec.ts:150 (absent)",
+				"chat.spec.ts:163 (absent)"
+			]
+		}
+	},
+	"dynamic": {
+		"button named new RegExp(`^Your profile on .*: ${handle}[,.]`)": [
+			"reference.spec.ts:231"
+		],
+		"button named new RegExp(`^Your profile on .*: ${name}[,.]`)": [
+			"test-helpers.ts:82"
+		],
+		"choices(…, label)": [
+			"push.spec.ts:563",
+			"push.spec.ts:572"
+		],
+		"option named new RegExp(handle)": [
+			"chat.spec.ts:799"
+		],
+		"pickFromEmojiPicker(…, emoji)": [
+			"test-helpers.ts:113"
+		]
+	}
+}
