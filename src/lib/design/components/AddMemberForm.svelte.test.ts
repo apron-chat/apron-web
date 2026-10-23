@@ -35,11 +35,12 @@ describe('AddMemberForm', () => {
 		expect(ondismiss).toHaveBeenCalledOnce();
 	});
 
-	it('runs the caller’s submit first, which can take it over with preventDefault()', () => {
+	it('takes a class beside its own, and its submit stays its own', () => {
 		const onadd = vi.fn();
-		const form = render({ value: 'cy', class: 'mine', onadd, onsubmit: (event: SubmitEvent) => event.preventDefault() });
-		expect(form.classList.contains('mine')).toBe(true);
-		submit(form);
-		expect(onadd).not.toHaveBeenCalled();
+		const form = render({ value: 'cy', class: 'mine', onadd });
+		expect([form.classList.contains('ap-memberlist-add'), form.classList.contains('mine')]).toEqual([true, true]);
+		const event = new SubmitEvent('submit', { cancelable: true });
+		form.dispatchEvent(event);
+		expect([event.defaultPrevented, onadd.mock.calls]).toEqual([true, [['cy']]]);
 	});
 });

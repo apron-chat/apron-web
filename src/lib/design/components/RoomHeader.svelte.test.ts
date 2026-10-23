@@ -67,8 +67,8 @@ describe('RoomHeader', () => {
 		expect([back().getAttribute('aria-label'), tag()]).toEqual(['Back to rooms, 250 unread messages, 2 mentions of you', ['@\u202f99+', 'at']]);
 	});
 
-	it('lets the caller’s attributes go on the header, its class added', () => {
-		const header = render({ class: 'mine', private: true, 'data-testid': 'room-header' });
-		expect([header.dataset.testid, header.classList.contains('ap-roomhead'), header.classList.contains('ap-roomhead-private'), header.classList.contains('mine')]).toEqual(['room-header', true, true, true]);
+	it('takes a class on the header beside its own', () => {
+		const header = render({ class: 'mine', private: true });
+		expect([header.classList.contains('ap-roomhead'), header.classList.contains('ap-roomhead-private'), header.classList.contains('mine')]).toEqual([true, true, true]);
 	});
 });

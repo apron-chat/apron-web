@@ -1,9 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 
-	/** Other attributes (`data-testid`, `data-*`) go on the group, the caller's winning and its class added. */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		/** The room's title, for the group's label: "Threads in <room>". */
 		room: string;
 		/** The rows of its threads you've joined (<ThreadItem>s), along a solid guide down from the room. */
@@ -21,8 +20,12 @@
 		/** A `data-testid` for the Other threads heading's toggle, and one for the "N more…" row. */
 		othersToggleTestid?: string;
 		moreTestid?: string;
+		/** Classes for the group, added to its own. */
+		class?: ClassValue;
+		/** A `data-testid` for the group. */
+		testid?: string;
 	}
-	let { room, joined, others = 0, otherRows, othersOpen = $bindable(true), ontoggleothers, more = 0, onmore, othersToggleTestid, moreTestid, class: className, ...rest }: Props = $props();
+	let { room, joined, others = 0, otherRows, othersOpen = $bindable(true), ontoggleothers, more = 0, onmore, othersToggleTestid, moreTestid, class: className, testid }: Props = $props();
 
 	function toggle(): void {
 		othersOpen = !othersOpen;
@@ -30,7 +33,7 @@
 	}
 </script>
 
-<div role="group" aria-label="Threads in {room}" {...rest} class={['ap-threads', className]}>
+<div role="group" aria-label="Threads in {room}" data-testid={testid} class={['ap-threads', className]}>
 	{#if joined}<div class="ap-threads-joined">{@render joined()}</div>{/if}
 	{#if others > 0}
 		<!-- A heading that folds, like a SidebarSection: these deliver nothing live (§3.4), so they have no counts or previews. -->

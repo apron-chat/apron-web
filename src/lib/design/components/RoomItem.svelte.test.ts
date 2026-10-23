@@ -12,7 +12,7 @@ function render(props: Record<string, unknown>) {
 describe('RoomItem', () => {
 	it('names its actions for what they act on, Leave and the open room’s + for a new thread, in a row that makes room for them', () => {
 		const onleave = vi.fn();
-		const row = render({ 'data-room': 'general', title: 'Open it', onleave });
+		const row = render({ title: 'Open it', onleave });
 		expect(row.dataset.room).toBe('general');
 		expect(row.title).toBe('Open it');
 		const leave = document.querySelector<HTMLButtonElement>('.ap-roomrow > .ap-room-exit')!;
@@ -39,17 +39,20 @@ describe('RoomItem', () => {
 		expect(row.querySelector('.ap-room-loading')?.getAttribute('aria-label')).toBe('Loading history');
 	});
 
-	it('lets the caller’s attributes win: its class added, its click first, and preventDefault() skipping onselect', () => {
+	it('takes a class beside its own, and a click picks it', () => {
 		const onselect = vi.fn();
-		const order: string[] = [];
-		let row = render({ active: true, class: 'mine', 'aria-current': 'true', onselect: () => order.push('select'), onclick: () => order.push('click') });
+		const row = render({ active: true, class: 'mine', onselect });
 		expect([row.classList.contains('ap-room'), row.classList.contains('ap-room-active'), row.classList.contains('mine')]).toEqual([true, true, true]);
-		expect(row.getAttribute('aria-current')).toBe('true');
+		expect(row.getAttribute('aria-current')).toBe('page');
 		row.click();
-		expect(order).toEqual(['click', 'select']);
+		expect(onselect).toHaveBeenCalledOnce();
+	});
+
+	it('names its room in data-room, or in data-join when it is listed to join', () => {
+		let row = render({});
+		expect([row.dataset.room, row.dataset.join]).toEqual(['general', undefined]);
 		dom.unmount();
-		row = render({ onselect, onclick: (event: MouseEvent) => event.preventDefault() });
-		row.click();
-		expect(onselect).not.toHaveBeenCalled();
+		row = render({ listed: true, topic: '12 members · Join' });
+		expect([row.dataset.room, row.dataset.join]).toEqual([undefined, 'general']);
 	});
 });

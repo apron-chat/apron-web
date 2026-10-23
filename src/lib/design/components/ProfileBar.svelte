@@ -2,13 +2,12 @@
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import Settings from '@lucide/svelte/icons/settings';
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
 	import type { Sender } from './types';
 	import { presenceLabel, uid } from './util';
 
-	/** Extra attributes go on the bar. */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		/** Your identity on the active backend: `you` from `auth`, merged with every later `user` notification carrying `you` (§3.3). */
 		you?: Sender;
 		/** Shown in place of your name before there is a `you`, such as "Signing in…" or "Not signed in". */
@@ -33,15 +32,17 @@
 		preferencesButton?: HTMLButtonElement;
 		/** Rendered in the bar, such as the dialog the gear opens. */
 		children?: Snippet;
+		/** Classes for the bar, added to its own. */
+		class?: ClassValue;
 	}
-	let { you, placeholder, backend, note, status, statusLabel, avatar, open, onedit, editor, onpreferences, paused, preferencesButton = $bindable(), children, class: className, ...rest }: Props = $props();
+	let { you, placeholder, backend, note, status, statusLabel, avatar, open, onedit, editor, onpreferences, paused, preferencesButton = $bindable(), children, class: className }: Props = $props();
 	const name = $derived(you?.name || uid(you) || placeholder || '');
 	/** The placeholder in a sentence: "Signing in…" says "signing in". */
 	const label = $derived(you?.name || uid(you) || (placeholder ?? '').replace(/…$/, '').toLowerCase());
 	const statusWords = $derived(status ? (statusLabel ?? presenceLabel(status) ?? '').toLowerCase() : '');
 </script>
 
-<div {...rest} class={['ap-profile', className]}>
+<div class={['ap-profile', className]}>
 	{#if open && editor}<div class="ap-profile-pop" role="dialog" aria-label="Edit profile">{@render editor()}</div>{/if}
 	{@render children?.()}
 	<button type="button" class={['ap-profile-me', open && 'ap-profile-open']} aria-haspopup="dialog" aria-expanded={!!open} aria-label="Your profile on {backend || 'this backend'}: {label}{statusWords ? `, ${statusWords}` : ''}. Edit" onclick={onedit}>

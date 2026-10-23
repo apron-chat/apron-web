@@ -118,14 +118,10 @@ describe('MenuButton', () => {
 		expect(items().map((item) => item.textContent)).toEqual(['Edit room', 'Leave room']);
 	});
 
-	it('runs a caller’s onkeydown first, which can keep its own keys from running', async () => {
-		const onkeydown = vi.fn((event: KeyboardEvent) => { if (event.key === 'ArrowDown') event.preventDefault(); });
-		dom.render(MenuButton, { label: 'Pause…', choices, onselect: vi.fn(), onkeydown });
+	it('takes a class on its box beside its own, and opens from the arrow keys', async () => {
+		dom.render(MenuButton, { label: 'Pause…', choices, onselect: vi.fn(), class: 'mine' });
 		const trigger = dom.button('Pause…');
-		trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-		flushSync();
-		await tick();
-		expect(onkeydown).toHaveBeenCalledOnce();
+		expect([...trigger.parentElement!.classList]).toEqual(['ap-menubtn', 'mine']);
 		expect(items()).toHaveLength(0);
 		key(trigger, 'ArrowUp');
 		flushSync();

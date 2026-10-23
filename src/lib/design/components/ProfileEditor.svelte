@@ -1,12 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLFormAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
 	import Button from './Button.svelte';
-	import { chain } from './util';
 
-	/** The profile form. Extra attributes go on the form; an `onsubmit` runs before its own Save (`preventDefault()` skips that). */
-	interface Props extends Omit<HTMLFormAttributes, 'oninput'> {
+	/** The profile form. */
+	interface Props {
 		userId: string;
 		/** Display name — sent as `me` `{name}` (§3.3); `you.name` in the result is the answer. `bind:name` in Svelte. */
 		name?: string;
@@ -49,11 +48,13 @@
 		removeAvatarTestid?: string;
 		avatarFileTestid?: string;
 		nameTestid?: string;
+		/** Classes for the form, added to its own. */
+		class?: ClassValue;
 	}
 	let {
 		userId, name = $bindable(''), oninput, avatar, face, canUpload, onavatarfile, onremoveavatar, avatarBusy, avatarError, offline,
 		status = 'idle', serverName, declinedNote, onsave, oncancel, signin, dialog = true,
-		changeAvatarTestid, removeAvatarTestid, avatarFileTestid, nameTestid, class: className, onsubmit, ...rest
+		changeAvatarTestid, removeAvatarTestid, avatarFileTestid, nameTestid, class: className
 	}: Props = $props();
 	const saving = $derived(status === 'saving');
 	let fileInput = $state<HTMLInputElement | undefined>();
@@ -71,7 +72,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-<form role={dialog ? 'dialog' : undefined} aria-label={dialog ? 'Edit profile' : undefined} {...rest} class={['ap-profedit', className]} onsubmit={chain(save, onsubmit)}>
+<form role={dialog ? 'dialog' : undefined} aria-label={dialog ? 'Edit profile' : undefined} class={['ap-profedit', className]} onsubmit={save}>
 	<div class="ap-profedit-top">
 		{#if face}{@render face()}{:else}<Avatar name={name || userId} src={avatar} size="lg" />{/if}
 		<div class="ap-profedit-av">

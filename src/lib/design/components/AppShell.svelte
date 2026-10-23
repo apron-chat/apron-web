@@ -1,17 +1,19 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { Attachment } from 'svelte/attachments';
+	import type { ClassValue } from 'svelte/elements';
 
-	/** Other attributes (`data-*`, `aria-*`) go on the shell's grid, the caller's winning: its class is added, and its style after the shell's own. */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		/** The BackendRail, in a column of its own at the left; omit it for one backend. Hidden under 720px. */
 		rail?: Snippet;
 		/** The rooms list: an `<aside class="ap-shell-side">` holding an `ap-shell-sidehead`, an `ap-shell-sidebody` and a ProfileBar. */
 		side?: Snippet;
 		/** The main pane's contents: a RoomHeader, the `ap-timeline`, a TypingIndicator, the Composer. */
 		main?: Snippet;
-		/** Attributes for the main pane's `<main>`: its `aria-label`, handlers, or an attachment, such as one taking files dropped on it. Its class is added to the pane's own. */
-		mainAttrs?: HTMLAttributes<HTMLElement>;
+		/** Names the main pane's `<main>` (its `aria-label`), such as "Conversation". */
+		mainLabel?: string;
+		/** An attachment for the main pane's `<main>`, such as one taking files dropped on it. */
+		mainAttach?: Attachment<HTMLElement>;
 		/** The MemberList: a column of its own with `membersWide`, else over the conversation, sliding in from the right. */
 		members?: Snippet;
 		/** The rooms list's <PanelToggle>, in the window's top-left corner: the header beside it keeps clear of it. */
@@ -56,26 +58,26 @@
 		 * composer on the keyboard, rather than the browser panning the page up under the status bar.
 		 */
 		viewport?: boolean;
+		/** Classes for the shell's grid, added to its own. */
+		class?: ClassValue;
 	}
 	let {
-		rail, side, main, mainAttrs, members, sideToggle, sideHandle, membersToggle, membersHandle, nudge, children,
+		rail, side, main, mainLabel, mainAttach, members, sideToggle, sideHandle, membersToggle, membersHandle, nudge, children,
 		sideCollapsed = false, membersOpen = false, membersWide = false, pane, sideWidth, membersWidth, resizing = false, slides = false, viewport = false,
-		class: className, style, ...rest
+		class: className
 	}: Props = $props();
 
 	const px = (n: number | undefined) => (n === undefined ? undefined : `${n}px`);
 	/** The member list's column: nothing while it's shut or overlaid, kept at 0 so it can slide. */
 	const membersTrack = $derived(membersWide && membersOpen ? (px(membersWidth) ?? 'var(--member-list-w)') : '0px');
-	/** The shell's own custom properties, then the caller's style, which wins. */
+	/** The shell's own custom properties. */
 	const shellStyle = $derived([
 		['--side-col', sideCollapsed ? '0px' : px(sideWidth)], ['--rooms-w', px(sideWidth)], ['--member-list-w', px(membersWidth)], ['--member-list-track', membersTrack]
-	].filter(([, value]) => value !== undefined).map(([name, value]) => `${name}: ${value}`).concat(style ? [style] : []).join('; ') || undefined);
-	const { class: mainClass, ...mainRest } = $derived(mainAttrs ?? {});
+	].filter(([, value]) => value !== undefined).map(([name, value]) => `${name}: ${value}`).join('; ') || undefined);
 </script>
 
 <div
 	data-pane={pane}
-	{...rest}
 	class={[
 		'ap-shell', !rail && 'ap-shell-norail', viewport && 'ap-shell-viewport', slides && 'ap-shell-slides', sideCollapsed && 'ap-shell-side-shut',
 		resizing && 'ap-shell-resizing', membersOpen && 'ap-shell-members-open', membersWide && 'ap-shell-members-wide',
@@ -88,7 +90,7 @@
 	{@render side?.()}
 	{@render sideHandle?.()}
 	{#if nudge}<div class="ap-shell-nudge" aria-live="polite">{@render nudge()}</div>{/if}
-	{#if main}<main {...mainRest} class={['ap-shell-main', mainClass]}>{@render main()}</main>{/if}
+	{#if main}<main aria-label={mainLabel} class="ap-shell-main" {@attach mainAttach}>{@render main()}</main>{/if}
 	{@render membersToggle?.()}
 	{@render members?.()}
 	{@render membersHandle?.()}

@@ -28,7 +28,7 @@
 {/snippet}
 
 <ThreadMarker
-	row data-timeline-item="" data-testid="thread-card" thread={entry.id} name={designTitle(entry)} private={entry.private} {unread} {mentions}
+	row timelineItem testid="thread-card" thread={entry.id} name={designTitle(entry)} private={entry.private} {unread} {mentions}
 	faces={entry.participants.length > 0 ? faces : undefined} {summary} {latest} lastReply={since || undefined} lastReplyAt={idMillis(entry.lastReplyId ?? '')} {onopen}
 	unreadTestid="thread-unread" lastReplyTestid="thread-last-reply" summaryTestid="thread-preview-summary" latestTestid="thread-preview-latest"
 />

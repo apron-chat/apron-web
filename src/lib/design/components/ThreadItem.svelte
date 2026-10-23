@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { HTMLButtonAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import RoomRow from './RoomRow.svelte';
 	import ThreadLines from './ThreadLines.svelte';
 	import UnreadCount from './UnreadCount.svelte';
@@ -7,11 +7,10 @@
 
 	/**
 	 * A thread's row (a room with a `parent_room_id`), indented under its parent's <RoomItem>, as in a <ThreadList>.
-	 * It always sits in a `.ap-roomrow`, which makes room for its door on hover, whether or not it has one. Other
-	 * attributes (`data-*`, `title`) go on the row's button, the caller's winning: its class is added, and its
-	 * `onclick` runs before `onselect` (`preventDefault()` skips `onselect`).
+	 * It always sits in a `.ap-roomrow`, which makes room for its door on hover, whether or not it has one. The row's
+	 * button names the thread in `data-thread`, or, `unjoined`, in `data-other-thread` (and `data-thread` while open).
 	 */
-	interface Props extends HTMLButtonAttributes {
+	interface Props {
 		/** The thread's `room_id`. */
 		thread: string;
 		/** Its `title`; without one it's called "Untitled", with its `room_id` on hover. */
@@ -52,10 +51,14 @@
 		/** A `data-testid` for its time, and one for its unread bubble. */
 		agoTestid?: string;
 		unreadTestid?: string;
+		/** The row's tooltip, such as what picking an unjoined thread does. */
+		title?: string;
+		/** Classes for the row's button, added to its own. */
+		class?: ClassValue;
 	}
 	let {
 		thread, name, private: isPrivate, active, unjoined = false, unread, mentions, summary, latest, ago, count, onselect, onleave, onjoin,
-		linesTestid, agoTestid, unreadTestid, class: className, ...rest
+		linesTestid, agoTestid, unreadTestid, title, class: className
 	}: Props = $props();
 	const shown = $derived(roomName(name, thread, { thread: true }));
 	const tip = $derived(roomNameTip(name, thread, { thread: true }));
@@ -67,10 +70,10 @@
 {#snippet lines()}<ThreadLines {summary} {latest} summaryTestid={linesTestid && `${linesTestid}-summary`} latestTestid={linesTestid && `${linesTestid}-latest`} />{/snippet}
 
 <RoomRow
-	{...rest} room={thread} noun="thread" label={shown} {tip} private={isPrivate} {active} nested framed {onselect} {onleave} {onjoin} {lines}
+	room={thread} noun="thread" label={shown} {tip} private={isPrivate} {active} nested framed listed={unjoined} {title} {onselect} {onleave} {onjoin} {lines}
 	class={[(unread || mentions) && 'ap-room-unread', unjoined && 'ap-room-unjoined', mention && 'ap-room-mention', quiet && 'ap-room-quiet', className]}
 >
-	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="reply" data-testid={unreadTestid} />
+	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="reply" testid={unreadTestid} />
 	{#if count !== undefined}<small class="ap-room-count" aria-label={`${count} ${count === 1 ? 'message' : 'messages'}`}>{count}</small>
 	{:else if ago?.text}<time class="ap-room-ago" data-testid={agoTestid} datetime={ago.datetime} title={ago.title}>{ago.text}</time>{/if}
 </RoomRow>

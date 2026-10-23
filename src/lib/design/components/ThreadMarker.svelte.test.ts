@@ -11,10 +11,10 @@ function render(props: Record<string, unknown>) {
 const one = (selector: string) => document.querySelector(selector);
 
 describe('ThreadMarker', () => {
-	it('is a button carrying your attributes that opens the thread, and dates its last reply, after what is new, when given the time', () => {
+	it('is a button naming the thread that opens it, a timeline row when asked, and dates its last reply, after what is new, when given the time', () => {
 		const at = Date.UTC(2026, 8, 14, 9, 30);
 		const onopen = vi.fn();
-		render({ 'data-testid': 'thread-card', 'data-timeline-item': '', unread: 2, lastReply: '9h', lastReplyAt: at, summary: 'Lock held', latest: { sender: 'Ada', text: 'done' }, onopen });
+		render({ testid: 'thread-card', timelineItem: true, unread: 2, lastReply: '9h', lastReplyAt: at, summary: 'Lock held', latest: { sender: 'Ada', text: 'done' }, onopen });
 		const card = dom.button(/^Deploy/);
 		expect([card.dataset.testid, card.dataset.thread, card.hasAttribute('data-timeline-item')]).toEqual(['thread-card', 't1', true]);
 		const time = card.querySelector('time')!;

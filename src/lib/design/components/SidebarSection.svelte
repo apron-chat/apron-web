@@ -1,10 +1,9 @@
 <script lang="ts">
 	import Plus from '@lucide/svelte/icons/plus';
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 
-	/** Other attributes (`data-testid`, `data-*`) go on its `<section>`, the caller's winning and its class added. */
-	interface Props extends Omit<HTMLAttributes<HTMLElement>, 'ontoggle'> {
+	interface Props {
 		/** Its heading. */
 		title: string;
 		/** Controlled; omit to let the section keep its own state. `bind:open` works too. */
@@ -21,15 +20,17 @@
 		toggleTestid?: string;
 		bodyTestid?: string;
 		children?: Snippet;
+		/** Classes for its `<section>`, added to its own. */
+		class?: ClassValue;
 	}
-	let { title, open = $bindable(true), ontoggle, collapsible = true, onadd, addLabel, loading, toggleTestid, bodyTestid, children, class: className, ...rest }: Props = $props();
+	let { title, open = $bindable(true), ontoggle, collapsible = true, onadd, addLabel, loading, toggleTestid, bodyTestid, children, class: className }: Props = $props();
 	function toggle() {
 		open = !open;
 		ontoggle?.(open);
 	}
 </script>
 
-<section {...rest} class={['ap-sect', !open && 'ap-sect-closed', className]}>
+<section class={['ap-sect', !open && 'ap-sect-closed', className]}>
 	<div class="ap-sect-head">
 		{#if collapsible}
 			<button type="button" class="ap-sect-toggle" aria-expanded={open} data-testid={toggleTestid} onclick={toggle}><span class="ap-sect-caret" aria-hidden="true">▾</span>{title}</button>

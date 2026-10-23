@@ -3,16 +3,16 @@
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogIn from '@lucide/svelte/icons/log-in';
 	import type { Snippet } from 'svelte';
-	import type { HTMLButtonAttributes } from 'svelte/elements';
-	import { chain } from './util';
+	import type { ClassValue } from 'svelte/elements';
 
 	/**
 	 * The row RoomItem and ThreadItem share (not exported): the button with the name, a lock when private, what goes
-	 * under the name and what ends the row, and the door out or in beside it. Other attributes go on the button, the
-	 * caller's winning, its class merged and its `onclick` run before `onselect` (`preventDefault()` skips it).
+	 * under the name and what ends the row, and the door out or in beside it. The button names its room: a room's in
+	 * `data-room`, or `data-join` while `listed`; a thread's in `data-thread`, or `data-other-thread` while `listed`
+	 * (with `data-thread` too while it's open).
 	 */
-	interface Props extends HTMLButtonAttributes {
-		/** Its `room_id`, which its door names in `data-leave` or `data-join`. */
+	interface Props {
+		/** Its `room_id`, which its button names, and its door in `data-leave` or `data-join`. */
 		room: string;
 		/** What it is, for its door's tooltip: "Leave thread". */
 		noun: 'room' | 'thread';
@@ -25,6 +25,12 @@
 		nested?: boolean;
 		/** Always in a `.ap-roomrow`, which makes room for its door on hover, whether or not it has one. */
 		framed?: boolean;
+		/** Not yours yet: a room listed under Browse rooms, a thread you haven't joined. */
+		listed?: boolean;
+		/** The button's tooltip. */
+		title?: string;
+		/** Classes for the button, added to its own. */
+		class?: ClassValue;
 		onselect?: () => void;
 		/** The door out, on hover or focus. */
 		onleave?: (e: MouseEvent) => void;
@@ -37,11 +43,17 @@
 		/** After the button, where it has no door: the open room's +. */
 		start?: Snippet;
 	}
-	let { room, noun, label, tip, private: isPrivate, active, nested, framed, onselect, onleave, onjoin, lines, children, start, class: className, onclick, ...rest }: Props = $props();
+	let { room, noun, label, tip, private: isPrivate, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lines, children, start, class: className }: Props = $props();
+	const thread = $derived(noun === 'thread');
 </script>
 
 {#snippet row()}
-	<button type="button" aria-current={active ? 'page' : undefined} {...rest} class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', className]} onclick={chain(onselect, onclick)}>
+	<button
+		type="button" aria-current={active ? 'page' : undefined} {title}
+		data-room={thread || listed ? undefined : room} data-join={!thread && listed ? room : undefined}
+		data-thread={thread && (!listed || active) ? room : undefined} data-other-thread={thread && listed ? room : undefined}
+		class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', className]} onclick={onselect}
+	>
 		<span class="ap-room-text"><span class="ap-room-name" title={tip}>{label}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>{@render lines?.()}</span>
 		{@render children?.()}
 	</button>

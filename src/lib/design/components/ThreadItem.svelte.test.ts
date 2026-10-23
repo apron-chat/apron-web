@@ -24,7 +24,7 @@ describe('ThreadItem', () => {
 
 	it('sits in a row that makes room for its action, and names Leave and Join for what they act on', () => {
 		const onleave = vi.fn();
-		const row = render({ 'data-thread': 'deploy', title: 'Open it', onleave });
+		const row = render({ title: 'Open it', onleave });
 		expect(row.classList.contains('ap-room-nested')).toBe(true);
 		expect(row.dataset.thread).toBe('deploy');
 		expect(row.title).toBe('Open it');
@@ -59,12 +59,21 @@ describe('ThreadItem', () => {
 		expect(row.querySelector('[aria-label="2 unread replies"]')?.textContent).toBe('2');
 	});
 
-	it('lets the caller’s class join its own, and its click run first', () => {
-		const order: string[] = [];
-		const row = render({ class: 'mine', mentions: 1, onselect: () => order.push('select'), onclick: () => order.push('click') });
+	it('lets the caller’s class join its own, and a click picks it', () => {
+		const onselect = vi.fn();
+		const row = render({ class: 'mine', mentions: 1, onselect });
 		expect(states(row)).toEqual(['ap-room-unread', 'ap-room-mention']);
 		expect(row.classList.contains('mine')).toBe(true);
 		row.click();
-		expect(order).toEqual(['click', 'select']);
+		expect(onselect).toHaveBeenCalledOnce();
+	});
+
+	it('names its thread in data-thread, or, unjoined, in data-other-thread, and data-thread too while it is open', () => {
+		const names = (row: HTMLElement) => [row.dataset.thread, row.dataset.otherThread];
+		expect(names(render({}))).toEqual(['deploy', undefined]);
+		dom.unmount();
+		expect(names(render({ unjoined: true }))).toEqual([undefined, 'deploy']);
+		dom.unmount();
+		expect(names(render({ unjoined: true, active: true }))).toEqual(['deploy', 'deploy']);
 	});
 });

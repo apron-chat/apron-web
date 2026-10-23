@@ -5,12 +5,11 @@
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import Users from '@lucide/svelte/icons/users';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import MenuButton from './MenuButton.svelte';
 	import { count99, roomName, roomNameTip } from './util';
 
-	/** Other attributes (`data-testid`, `data-*`) go on its `<header>`, the caller's winning and its class added. */
-	interface Props extends HTMLAttributes<HTMLElement> {
+	interface Props {
 		room: string;
 		/** the room record's `title`, falling back to `room_id` (§3.4) */
 		name?: string;
@@ -58,11 +57,13 @@
 		actionsTestid?: string;
 		editTestid?: string;
 		leaveTestid?: string;
+		/** Classes for its `<header>`, added to its own. */
+		class?: ClassValue;
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
 		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, busy = false, onsummary,
-		tagTestid, topicTestid, joinTestid, summaryTestid, actionsTestid, editTestid, leaveTestid, class: className, ...rest
+		tagTestid, topicTestid, joinTestid, summaryTestid, actionsTestid, editTestid, leaveTestid, class: className
 	}: Props = $props();
 	const noun = $derived(thread ? 'thread' : 'room');
 	/** What's new elsewhere: a mention may be an edit adding you to a read message, so it counts at least once. */
@@ -83,7 +84,7 @@
 	}
 </script>
 
-<header {...rest} class={['ap-roomhead', isPrivate && 'ap-roomhead-private', className]}>
+<header class={['ap-roomhead', isPrivate && 'ap-roomhead-private', className]}>
 	{#if onback}
 		<button type="button" class={['ap-roomhead-back', elsewhere > 0 && 'ap-roomhead-back-tagged']} aria-label={backLabel} onclick={onback}>
 			{#if elsewhere > 0}<span class={['ap-roomhead-tag', mentionsElsewhere ? 'ap-roomhead-tag-at' : 'ap-roomhead-tag-quiet']} data-testid={tagTestid} aria-hidden="true">{#if mentionsElsewhere}@&#8239;{/if}{count99(elsewhere)}</span>{:else}‹{/if}

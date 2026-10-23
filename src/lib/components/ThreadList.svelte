@@ -71,7 +71,7 @@
 			thread={entry.id} name={designTitle(entry)} private={entry.private} active={open}
 			unread={open ? 0 : (unread[entry.id] ?? 0)} mentions={open ? 0 : (mentions[entry.id] ?? 0)}
 			summary={threadSummaryText(entry)} latest={threadLatest(entry)} linesTestid="thread-list" unreadTestid="thread-unread"
-			data-thread={entry.id} onselect={() => onthread(entry.id)} onleave={canJoin ? () => onleave(entry.id) : undefined}
+			onselect={() => onthread(entry.id)} onleave={canJoin ? () => onleave(entry.id) : undefined}
 		/>
 	{/each}
 {/snippet}
@@ -84,14 +84,14 @@
 			thread={other.id} name={designTitle(other)} private={other.private} unjoined active={open} summary={other.summary} linesTestid="other-thread"
 			count={open ? reading?.count : undefined}
 			ago={last !== undefined ? { text: idAgo(last, minuteNow()), datetime: idIso(last), title: `Last active ${idDateTime(last)}` } : undefined} agoTestid="other-thread-ago"
-			data-other-thread={other.id} data-thread={open ? other.id : undefined} title={open ? undefined : `Read ${other.title} without joining`}
+			title={open ? undefined : `Read ${other.title} without joining`}
 			onselect={() => (open ? onthread(other.id) : onopen(other.id))} onjoin={canJoin ? () => onjoin(other.id) : undefined}
 		/>
 	{/each}
 {/snippet}
 
 <DesignThreadList
-	data-testid="thread-list"
+	testid="thread-list"
 	room={roomTitle}
 	joined={joined.length > 0 ? joinedRows : undefined}
 	others={allOthers.length}

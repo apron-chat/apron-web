@@ -1,16 +1,15 @@
 <script lang="ts">
 	import Plus from '@lucide/svelte/icons/plus';
-	import type { HTMLButtonAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import RoomRow from './RoomRow.svelte';
 	import UnreadCount from './UnreadCount.svelte';
 	import { roomName } from './util';
 
 	/**
 	 * A room's row in the rooms list, or a listed room's under Browse rooms (with its `topic`, joined by picking it).
-	 * A thread's row is a <ThreadItem>. Other attributes (`data-*`, `title`) go on the row's button, the caller's
-	 * winning: its class is added, and its `onclick` runs before `onselect` (`preventDefault()` skips `onselect`).
+	 * A thread's row is a <ThreadItem>. The row's button names the room in `data-room`, or in `data-join` while `listed`.
 	 */
-	interface Props extends HTMLButtonAttributes {
+	interface Props {
 		room: string;
 		/** `title`, falling back to `room_id` (§3.4) */
 		name?: string;
@@ -31,11 +30,17 @@
 		onleave?: (e: MouseEvent) => void;
 		/** A + at the end of the open room's row, always shown, that starts a thread in it (where there is no `onleave`). */
 		onnewthread?: () => void;
+		/** Listed under Browse rooms, and joined by picking it, rather than one of your rooms. */
+		listed?: boolean;
+		/** The row's tooltip, such as an untitled room's `room_id`. */
+		title?: string;
 		/** A `data-testid` for its unread bubble, and one for its +. */
 		unreadTestid?: string;
 		newThreadTestid?: string;
+		/** Classes for the row's button, added to its own. */
+		class?: ClassValue;
 	}
-	let { room, name, topic, private: isPrivate, unread, mentions, active, loading, onselect, onleave, onnewthread, unreadTestid, newThreadTestid, class: className, ...rest }: Props = $props();
+	let { room, name, topic, private: isPrivate, unread, mentions, active, loading, onselect, onleave, onnewthread, listed, title, unreadTestid, newThreadTestid, class: className }: Props = $props();
 	const shown = $derived(roomName(name, room));
 </script>
 
@@ -45,9 +50,9 @@
 {/snippet}
 
 <RoomRow
-	{...rest} {room} noun="room" label={shown} private={isPrivate} {active} {onselect} {onleave} {lines} start={onnewthread ? start : undefined}
+	{room} noun="room" label={shown} private={isPrivate} {active} {listed} {title} {onselect} {onleave} {lines} start={onnewthread ? start : undefined}
 	class={[(unread || mentions) && 'ap-room-unread', className]}
 >
-	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="message" data-testid={unreadTestid} />
+	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="message" testid={unreadTestid} />
 	{#if loading}<span class="ap-room-loading" aria-label="Loading history">…</span>{/if}
 </RoomRow>

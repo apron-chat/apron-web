@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
-	import { chain } from './util';
+	import type { ClassValue } from 'svelte/elements';
 
 	/** One choice of a MenuButton: its value, a label, and an optional muted hint after it. */
 	interface MenuChoice {
@@ -12,11 +11,8 @@
 		testid?: string;
 	}
 
-	/**
-	 * Extra attributes go on its box (the button and the menu); an `onkeydown` there runs before its own keys
-	 * (`preventDefault()` skips them). Its `onselect` is the choice's, not the DOM event.
-	 */
-	interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onselect'> {
+	/** A button that opens a menu of choices. Its `onselect` is the choice's, not the DOM event. */
+	interface Props {
 		/** The button's text; with `icon`, its name for screen readers and its tooltip. */
 		label: string;
 		/** Draws the button as an icon button instead, such as ⋯ for more actions. */
@@ -41,10 +37,12 @@
 		lead?: Snippet<[string]>;
 		/** Words for screen readers instead of `label`, such as "Status: Online". */
 		ariaLabel?: string;
+		/** Classes for its box (the button and the menu), added to its own. */
+		class?: ClassValue;
 	}
 	let {
 		label, icon, buttonTestid, choices, onselect, disabled = false, busy = false, open = $bindable(false), selected, lead, ariaLabel,
-		class: className, onkeydown, ...rest
+		class: className
 	}: Props = $props();
 
 	let root = $state<HTMLElement | undefined>();
@@ -112,7 +110,7 @@
 
 <svelte:window onpointerdown={outside} />
 
-<div role="presentation" {...rest} class={['ap-menubtn', className]} bind:this={root} onkeydown={chain(keydown, onkeydown)}>
+<div role="presentation" class={['ap-menubtn', className]} bind:this={root} onkeydown={keydown}>
 	{#if icon}
 		<button bind:this={trigger} type="button" class={['ap-iconbtn', open && 'ap-iconbtn-on']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel ?? label} title={label} data-testid={buttonTestid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{@render icon()}</button>
 	{:else}

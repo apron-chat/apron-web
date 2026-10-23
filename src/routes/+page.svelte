@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { messageEditor, newThreadDialog, roomEditor, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
-	import { createAttachmentKey, fromAction } from 'svelte/attachments';
+	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
@@ -419,8 +419,8 @@
 	let canAttach = $derived(canCompose && snapshot.capabilities['embed:upload'] && !selection.active);
 	/** Files are being dragged over the conversation. */
 	let dropping = $state(false);
-	/** The conversation pane's `<main>`: its label, and the files dropped on it. */
-	const mainAttrs = { 'aria-label': 'Conversation', [createAttachmentKey()]: fromAction(fileDrop, () => ({ enabled: canAttach, onfiles: stageFiles, onactive: (active: boolean) => (dropping = active) })) };
+	/** Files dropped on the conversation pane's `<main>`. */
+	const dropFiles = fromAction(fileDrop, () => ({ enabled: canAttach, onfiles: stageFiles, onactive: (active: boolean) => (dropping = active) }));
 	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...messages], session.you, paneRoom?.members));
 	let roomSuggestions = $derived.by(() => {
 		const rooms = new Map<string, { id: string; title: string }>();
@@ -2395,7 +2395,8 @@
 	pane={mobilePane}
 	sideWidth={sidebar.width}
 	membersWidth={memberList.width}
-	{mainAttrs}
+	mainLabel="Conversation"
+	mainAttach={dropFiles}
 	membersToggle={memberListWide ? membersToggle : undefined}
 	membersHandle={memberListWide ? membersHandle : undefined}
 >

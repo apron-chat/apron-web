@@ -37,14 +37,14 @@ describe('AppShell', () => {
 		expect(render({ membersWidth: 240, membersOpen: true }).style.getPropertyValue('--member-list-track')).toBe('0px');
 	});
 
-	it('renders its parts in order, the main pane in a <main> with its attributes', () => {
+	it('renders its parts in order, the main pane in a <main> named by its label', () => {
 		const shell = render({
 			pane: 'rooms',
 			sideToggle: markup('<button id="toggle"></button>'),
 			side: markup('<aside id="side"></aside>'),
 			nudge: markup('<div id="offer"></div>'),
 			main: markup('<div id="pane"></div>'),
-			mainAttrs: { 'aria-label': 'Conversation' },
+			mainLabel: 'Conversation',
 			members: markup('<aside id="members"></aside>')
 		});
 		expect(shell.dataset.pane).toBe('rooms');
@@ -57,13 +57,12 @@ describe('AppShell', () => {
 		expect(main.querySelector('#pane')).not.toBeNull();
 	});
 
-	it('lets the caller’s attributes win: classes added, its style after the shell’s own', () => {
-		const shell = render({
-			pane: 'rooms', sideWidth: 300, class: 'mine', 'data-pane': 'main', style: '--rooms-w: 280px; color: red',
-			main: markup('<div></div>'), mainAttrs: { class: 'pane' }
-		});
+	it('takes a class beside its own, and an attachment for the main pane', () => {
+		const attached: Element[] = [];
+		const shell = render({ pane: 'main', sideWidth: 300, class: 'mine', main: markup('<div></div>'), mainAttach: (node: Element) => { attached.push(node); } });
 		expect([shell.classList.contains('ap-shell'), shell.classList.contains('mine'), shell.dataset.pane]).toEqual([true, true, 'main']);
-		expect([shell.style.getPropertyValue('--side-col'), shell.style.getPropertyValue('--rooms-w'), shell.style.color]).toEqual(['300px', '280px', 'red']);
-		expect(shell.querySelector('main')?.className).toBe('ap-shell-main pane');
+		expect(shell.style.getPropertyValue('--rooms-w')).toBe('300px');
+		const main = shell.querySelector('main')!;
+		expect([main.className, attached]).toEqual(['ap-shell-main', [main]]);
 	});
 });

@@ -1,23 +1,24 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import X from '@lucide/svelte/icons/x';
 	/**
 	 * A room's or thread's `description` (§3.4), pinned under the header: rendered + sanitized Markdown as `children`,
 	 * or plain `summary`, beside the summary icon in a column of its own. It previews three lines, fading out where
-	 * it's cut; a click on the text opens the rest and folds it again, and × (`ondismiss`) puts it away. Other
-	 * attributes (`data-*`, `class`, …) go on its `<section>`.
+	 * it's cut; a click on the text opens the rest and folds it again, and × (`ondismiss`) puts it away.
 	 */
-	interface Props extends HTMLAttributes<HTMLElement> {
+	interface Props {
 		summary?: string;
 		children?: Snippet;
 		/** Names the region: "Thread summary" or "Room summary". */
 		label?: string;
 		/** Offer × to put the summary away. */
 		ondismiss?: () => void;
+		/** Classes for its `<section>`, added to its own. */
+		class?: ClassValue;
 	}
-	let { summary, children, label = 'Thread summary', ondismiss, class: className, ...rest }: Props = $props();
+	let { summary, children, label = 'Thread summary', ondismiss, class: className }: Props = $props();
 	let expanded = $state(false);
 	let boxHeight = $state(0);
 	let textHeight = $state(0);
@@ -49,7 +50,7 @@
 	}
 </script>
 
-<section aria-label={label} {...rest} class={['ap-summary', ondismiss && 'ap-summary-closable', className]}>
+<section aria-label={label} class={['ap-summary', ondismiss && 'ap-summary-closable', className]}>
 	<!-- The region's label already says it's a summary; the icon's title says so to the pointer. -->
 	<span class="ap-summary-icon" title="Summary"><TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /></span>
 	<!-- The pointer opens it from the text itself; the keyboard has the toggle, which shows only as a focus ring around the summary. -->

@@ -117,7 +117,7 @@
 					<RoomItem
 						room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={room.private} active={current}
 						unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering}
-						data-room={room.id} onselect={() => onroom(room)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
+						onselect={() => onroom(room)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
 					/>
 					{#if active}
 						<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
@@ -138,7 +138,7 @@
 				{#each unjoined as listing (listing.id)}
 					<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
 					{@const members = listing.memberCount ?? listing.members.length}
-					<RoomItem room={listing.id} name={listing.title} topic={`${members > 0 ? `${members} ${members === 1 ? 'member' : 'members'} · ` : ''}${action}`} data-join={listing.id} onselect={() => onjoin(listing.id)} />
+					<RoomItem room={listing.id} name={listing.title} topic={`${members > 0 ? `${members} ${members === 1 ? 'member' : 'members'} · ` : ''}${action}`} listed onselect={() => onjoin(listing.id)} />
 				{/each}
 				{#if listError}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
 			</SidebarSection>

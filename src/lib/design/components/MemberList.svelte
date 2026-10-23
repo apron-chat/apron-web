@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import Plus from '@lucide/svelte/icons/plus';
 	import UserMinus from '@lucide/svelte/icons/user-minus';
 	import Avatar from './Avatar.svelte';
@@ -8,8 +8,7 @@
 	import type { MemberListPerson, MemberListSection } from './types';
 	import { presence, presenceLabel } from './util';
 
-	/** Other attributes (`data-testid`, `data-*`) go on its `<aside>`, the caller's winning and its class added. */
-	interface Props extends Omit<HTMLAttributes<HTMLElement>, 'placeholder'> {
+	interface Props {
 		/** Showing. Shut, it stays in the layout, hidden from everyone, so AppShell can slide it. */
 		open?: boolean;
 		/** The room's or thread's title, which each list's label names. */
@@ -49,10 +48,12 @@
 		countTestid?: string;
 		bodyTestid?: string;
 		truncatedTestid?: string;
+		/** Classes for its `<aside>`, added to its own. */
+		class?: ClassValue;
 	}
 	let {
 		open = true, room, count, sections, empty, placeholder = false, shut = [], ontogglesection, onprofile, onremove,
-		onaddtoggle, addOpen = false, addForm, busy = false, note, remark, avatar, roles, countTestid, bodyTestid, truncatedTestid, class: className, ...rest
+		onaddtoggle, addOpen = false, addForm, busy = false, note, remark, avatar, roles, countTestid, bodyTestid, truncatedTestid, class: className
 	}: Props = $props();
 
 	const uid = $props.id();
@@ -65,7 +66,7 @@
 	}
 </script>
 
-<aside aria-label="Room member list" {...rest} class={['ap-memberlist', open && 'ap-memberlist-open', className]}>
+<aside aria-label="Room member list" class={['ap-memberlist', open && 'ap-memberlist-open', className]}>
 	<div class="ap-memberlist-head">
 		<span role="heading" aria-level="2">Members</span>
 		{#if count !== undefined}<span class="ap-memberlist-count" data-testid={countTestid}>{count}</span>{/if}

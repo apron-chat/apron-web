@@ -1,14 +1,14 @@
 <script lang="ts">
-	import type { HTMLAttributes } from 'svelte/elements';
-	import { chain } from './util';
+	import type { ClassValue } from 'svelte/elements';
 
 	/**
 	 * The form for adding a member to a room (`room_join` with `user_id`, §4.2.2): a field for their `@user_id`, with
 	 * suggestions, and Add. A <MemberList> shows it atop its list, raised like a popover in place, through its `addForm`
-	 * snippet, which hands it the `id` the list's + controls. Other attributes go on the `<form>`, the caller's winning
-	 * and its class added; its `onsubmit` runs first, and calling `preventDefault()` there skips the form's own (`onadd`).
+	 * snippet, which hands it the `id` the list's + controls: give it to the form.
 	 */
-	interface Props extends HTMLAttributes<HTMLFormElement> {
+	interface Props {
+		/** The form's id: the one MemberList's `addForm` hands over, which its + names in `aria-controls`. */
+		id?: string;
 		/** The field's text. `bind:value` works. */
 		value?: string;
 		/** People to suggest, by `user_id`. */
@@ -19,8 +19,10 @@
 		ondismiss?: () => void;
 		/** An add is under way: the field and Add wait. */
 		busy?: boolean;
+		/** Classes for the `<form>`, added to its own. */
+		class?: ClassValue;
 	}
-	let { value = $bindable(''), candidates = [], onadd, ondismiss, busy = false, class: className, onsubmit, ...rest }: Props = $props();
+	let { id, value = $bindable(''), candidates = [], onadd, ondismiss, busy = false, class: className }: Props = $props();
 
 	const uid = $props.id();
 	let field = $state<HTMLInputElement | undefined>();
@@ -36,7 +38,7 @@
 	}
 </script>
 
-<form aria-label="Add a member" {...rest} class={['ap-memberlist-add', className]} onsubmit={chain(submit, onsubmit)}>
+<form {id} aria-label="Add a member" class={['ap-memberlist-add', className]} onsubmit={submit}>
 	<label class="ap-sr" for={`${uid}-user`}>User to add</label>
 	<div class="ap-memberlist-addrow">
 		<input id={`${uid}-user`} bind:this={field} class="ap-field" list="member-candidates" placeholder="@user_id" bind:value disabled={busy} autocomplete="off" spellcheck="false" onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); ondismiss?.(); } }} />
