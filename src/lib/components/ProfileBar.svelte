@@ -54,6 +54,8 @@
 
 	let open = $state(false);
 	let preferencesOpen = $state(false);
+	/** Preferences mounts the first time it opens and then stays, so nothing of it renders or runs on a page that never opens it. */
+	let preferencesMounted = $state(false);
 	let preferencesTrigger = $state<HTMLButtonElement | undefined>();
 	let draft = $state('');
 	let status = $state<Status>('idle');
@@ -165,6 +167,7 @@
 
 	function showPreferences(): void {
 		open = false;
+		preferencesMounted = true;
 		preferencesOpen = true;
 	}
 
@@ -422,11 +425,13 @@
 	{paused}
 	bind:preferencesButton={preferencesTrigger}
 >
-	<PreferencesDialog
-		bind:open={preferencesOpen}
-		{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
-		{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
-		status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
-		onclosed={() => preferencesTrigger?.focus()}
-	/>
+	{#if preferencesMounted}
+		<PreferencesDialog
+			bind:open={preferencesOpen}
+			{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
+			{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
+			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
+			onclosed={() => preferencesTrigger?.focus()}
+		/>
+	{/if}
 </DesignProfileBar>
