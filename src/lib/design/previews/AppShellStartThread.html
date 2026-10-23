@@ -19,10 +19,10 @@
   });
   var rooms = [
     { room: 'general', name: 'General' }, { room: 'ops', name: 'Ops', active: true },
-    { room: 'deploy', name: 'Deploy', nested: true }, { room: 'oncall', name: 'On-call rotation', nested: true },
+    { thread: 'deploy', name: 'Deploy' }, { thread: 'oncall', name: 'On-call rotation' },
     { room: 'design', name: 'Design', unread: 4 }, { room: 'random', name: 'Random' }];
   add(A.BackendRail, { active: 'work', onadd: noop, backends: [{ id: 'home', label: 'Home lab' }, { id: 'work', label: 'Work' }] }, $('rail'));
-  add(A.SidebarSection, { title: 'Rooms', children: A.parts.apply(null, rooms.map(function (r) { r.onleave = noop; return A.part(A.RoomItem, r); })) }, $('sidebody'));
+  add(A.SidebarSection, { title: 'Rooms', children: A.parts.apply(null, rooms.map(function (r) { r.onleave = noop; return A.part(r.thread ? A.ThreadItem : A.RoomItem, r); })) }, $('sidebody'));
   add(A.ProfileBar, { you: me, backend: 'Work' }, $('side'));
   add(A.RoomHeader, { room: 'ops', name: 'Ops', topic: 'Deploys and incidents', onedit: noop }, $('head'));
   var tl = $('tl');

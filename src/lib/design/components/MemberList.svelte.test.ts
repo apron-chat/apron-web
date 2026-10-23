@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
+import { createRawSnippet, flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import AddMemberForm from './AddMemberForm.svelte';
 import MemberList from './MemberList.svelte';
 import type { MemberListSection } from './types';
 
@@ -24,7 +25,7 @@ const sections: MemberListSection[] = [
 
 describe('MemberList', () => {
 	it('says when the count is more than it lists', () => {
-		render({ room: 'General', count: 5, sections });
+		render({ room: 'General', count: 5, sections, countTestid: 'member-count', truncatedTestid: 'member-list-truncated' });
 		expect(document.querySelector('[data-testid="member-count"]')?.textContent).toBe('5');
 		expect(document.querySelector('[data-testid="member-list-truncated"]')?.textContent).toBe('Showing 3 of 5: the most recently active');
 		expect(document.querySelector('ul')?.getAttribute('aria-label')).toBe('Online in General');
@@ -66,14 +67,22 @@ describe('MemberList', () => {
 
 	it('offers the add form only with a listing, and sends what was typed', () => {
 		const onadd = vi.fn();
-		render({ sections, onaddtoggle: () => {}, addOpen: true, adding: 'cy', onadd });
+		/** The add form as MemberList's `addForm`: an AddMemberForm given the id its + controls. */
+		const addForm = (props: Record<string, unknown>) => createRawSnippet((id: () => string) => ({
+			render: () => '<div></div>',
+			setup(el) {
+				const form = mount(AddMemberForm, { target: el, props: { id: id(), ...props } });
+				return () => unmount(form);
+			}
+		}));
+		render({ sections, onaddtoggle: () => {}, addOpen: true, addForm: addForm({ value: 'cy', onadd }) });
 		const toggle = document.querySelector<HTMLButtonElement>('.ap-memberlist-addtoggle')!;
 		const form = document.querySelector<HTMLFormElement>('form.ap-memberlist-add')!;
 		expect(toggle.getAttribute('aria-controls')).toBe(form.id);
 		form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
 		expect(onadd).toHaveBeenCalledWith('cy');
 		unmount(instance!);
-		render({ empty: 'Loading members…', onaddtoggle: () => {}, addOpen: true });
+		render({ empty: 'Loading members…', onaddtoggle: () => {}, addOpen: true, addForm: addForm({}) });
 		expect(document.querySelector('.ap-memberlist-addtoggle')).toBeNull();
 		expect(document.querySelector('form')).toBeNull();
 	});

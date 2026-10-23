@@ -8,6 +8,7 @@
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { loadShutMemberSections, saveShutMemberSections } from '$lib/ui/storage';
 	import { presenceLabel } from '$lib/design/components/util';
+	import AddMemberForm from '$lib/design/components/AddMemberForm.svelte';
 	import MemberList from '$lib/design/components/MemberList.svelte';
 	import type { MemberListPerson, MemberListSection } from '$lib/design/components/types';
 	import { byStatus, ownStatusLabel } from '$lib/ui/user-status';
@@ -63,6 +64,7 @@
 	let busy = $state(false);
 	let note = $state<{ text: string; error: boolean } | undefined>();
 	let list = $state<MemberList | undefined>();
+	let form = $state<AddMemberForm | undefined>();
 	/** Each member as the list shows them, with their status in words: yours as you chose it. */
 	let shown = $derived(sections.map((section): MemberListSection => ({ key: section.key, label: section.label, people: section.people.map(person) })));
 	/** The members by `user_id`, for their role badges. */
@@ -94,7 +96,7 @@
 		if (!addOpen) return;
 		note = undefined;
 		await tick();
-		list?.focusAdd();
+		form?.focus();
 	}
 
 	function closeAdd(): void {
@@ -141,6 +143,9 @@
 
 <MemberList
 	bind:this={list}
+	countTestid="member-count"
+	bodyTestid="room-member-list"
+	truncatedTestid="member-list-truncated"
 	{open}
 	room={room?.title}
 	count={total}
@@ -153,14 +158,13 @@
 	onremove={changing ? remove : undefined}
 	onaddtoggle={changing ? toggleAdd : undefined}
 	{addOpen}
-	bind:adding
-	candidates={candidates.map((user) => ({ user_id: user.user_id, name: directory.name(user) }))}
-	onadd={add}
-	onaddcancel={closeAdd}
 	{busy}
 	{note}
 	remark={session.snapshot.memberChangesUnsupported && canChange ? 'This server doesn’t let members add or remove others.' : undefined}
 >
+	{#snippet addForm(id)}
+		<AddMemberForm bind:this={form} {id} bind:value={adding} candidates={candidates.map((user) => ({ user_id: user.user_id, name: directory.name(user) }))} {busy} onadd={add} ondismiss={closeAdd} />
+	{/snippet}
 	{#snippet avatar(member)}<Avatar name={member.name ?? member.user_id} id={member.user_id} src={member.avatar} size="sm" status={member.status} statusLabel={member.statusLabel} />{/snippet}
 	{#snippet roles(member)}<RoleBadges user={byId.get(member.user_id)} />{/snippet}
 </MemberList>

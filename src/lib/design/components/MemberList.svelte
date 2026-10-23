@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
 	import Plus from '@lucide/svelte/icons/plus';
 	import UserMinus from '@lucide/svelte/icons/user-minus';
 	import Avatar from './Avatar.svelte';
@@ -7,7 +8,8 @@
 	import type { MemberListPerson, MemberListSection } from './types';
 	import { presence, presenceLabel } from './util';
 
-	interface Props {
+	/** Other attributes (`data-testid`, `data-*`) go on its `<aside>`, the caller's winning and its class added. */
+	interface Props extends Omit<HTMLAttributes<HTMLElement>, 'placeholder'> {
 		/** Showing. Shut, it stays in the layout, hidden from everyone, so AppShell can slide it. */
 		open?: boolean;
 		/** The room's or thread's title, which each list's label names. */
@@ -27,17 +29,13 @@
 		onprofile?: (userId: string, anchor: HTMLElement) => void;
 		/** Offer removing members (`room_leave` with `user_id`, §4.2.2): a button on every row but yours, on hover. */
 		onremove?: (userId: string) => void;
-		/** Offer adding a member (`room_join` with `user_id`): a + after the count, which opens a form atop the list. */
+		/** Offer adding a member (`room_join` with `user_id`): a + after the count, which opens `addForm` atop the list. */
 		onaddtoggle?: () => void;
+		/** The add form is open: the + is pressed, and `addForm` shows. */
 		addOpen?: boolean;
-		/** The add form's field. `bind:adding` works. */
-		adding?: string;
-		/** People to suggest in the add form. */
-		candidates?: { user_id: string; name: string }[];
-		onadd?: (value: string) => void;
-		/** Escape in the add form's field. */
-		onaddcancel?: () => void;
-		/** An add or remove is under way: they wait. */
+		/** The add form, an <AddMemberForm> given the `id` the + controls, while `addOpen` (and there is a listing). */
+		addForm?: Snippet<[string]>;
+		/** A remove is under way: the remove buttons wait. */
 		busy?: boolean;
 		/** How the last change went: an error is announced at once. */
 		note?: { text: string; error?: boolean };
@@ -47,41 +45,35 @@
 		avatar?: Snippet<[MemberListPerson]>;
 		/** Replaces each row's RoleBadges. */
 		roles?: Snippet<[MemberListPerson]>;
+		/** `data-testid`s for the count beside the heading, the body, and the line saying the list is a part of the room. */
+		countTestid?: string;
+		bodyTestid?: string;
+		truncatedTestid?: string;
 	}
 	let {
 		open = true, room, count, sections, empty, placeholder = false, shut = [], ontogglesection, onprofile, onremove,
-		onaddtoggle, addOpen = false, adding = $bindable(''), candidates = [], onadd, onaddcancel, busy = false, note, remark, avatar, roles
+		onaddtoggle, addOpen = false, addForm, busy = false, note, remark, avatar, roles, countTestid, bodyTestid, truncatedTestid, class: className, ...rest
 	}: Props = $props();
 
 	const uid = $props.id();
 	const listed = $derived((sections ?? []).reduce((total, section) => total + section.people.length, 0));
 	let addToggle = $state<HTMLButtonElement | undefined>();
-	let addField = $state<HTMLInputElement | undefined>();
 
-	/** Focus the add form's field, once it has opened. */
-	export function focusAdd(): void {
-		addField?.focus();
-	}
-	/** Focus the + that opens the add form, such as once it has shut. */
+	/** Focus the + that opens the add form, such as once it has shut. (The form's field: its <AddMemberForm>'s `focus()`.) */
 	export function focusAddToggle(): void {
 		addToggle?.focus();
 	}
-
-	function submit(event: SubmitEvent): void {
-		event.preventDefault();
-		onadd?.(adding);
-	}
 </script>
 
-<aside class={['ap-memberlist', open && 'ap-memberlist-open']} aria-label="Room member list">
+<aside aria-label="Room member list" {...rest} class={['ap-memberlist', open && 'ap-memberlist-open', className]}>
 	<div class="ap-memberlist-head">
 		<span role="heading" aria-level="2">Members</span>
-		{#if count !== undefined}<span class="ap-memberlist-count" data-testid="member-count">{count}</span>{/if}
+		{#if count !== undefined}<span class="ap-memberlist-count" data-testid={countTestid}>{count}</span>{/if}
 		{#if onaddtoggle && sections}
 			<button bind:this={addToggle} class={['ap-iconbtn', 'ap-memberlist-addtoggle', addOpen && 'ap-iconbtn-on']} type="button" aria-label="Add member" title="Add member" aria-expanded={addOpen} aria-controls={`${uid}-add`} onclick={onaddtoggle}><Plus size={16} aria-hidden="true" /></button>
 		{/if}
 	</div>
-	<div class="ap-memberlist-body" data-testid="room-member-list">
+	<div class="ap-memberlist-body" data-testid={bodyTestid}>
 		{#if placeholder}
 			<div class="ap-memberlist-placeholder" aria-hidden="true"><span class="ap-skel" style:width="62%"></span><span class="ap-skel" style:width="48%"></span></div>
 		{:else if !sections}
@@ -89,30 +81,21 @@
 		{:else}
 			{#if onaddtoggle && addOpen}
 				<!-- Raised, like a popover in place: the members stay in view below it. -->
-				<form class="ap-memberlist-add" id={`${uid}-add`} onsubmit={submit} aria-label="Add a member">
-					<label class="ap-sr" for={`${uid}-user`}>User to add</label>
-					<div class="ap-memberlist-addrow">
-						<input id={`${uid}-user`} bind:this={addField} class="ap-field" list="member-candidates" placeholder="@user_id" bind:value={adding} disabled={busy} autocomplete="off" spellcheck="false" onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); onaddcancel?.(); } }} />
-						<button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" disabled={busy || !adding.trim()}>Add</button>
-					</div>
-					<datalist id="member-candidates">
-						{#each candidates as user (user.user_id)}<option value={user.user_id}>{user.name} (@{user.user_id})</option>{/each}
-					</datalist>
-				</form>
+				{@render addForm?.(`${uid}-add`)}
 			{/if}
 			{#if note}<p class={['ap-memberlist-note', note.error && 'ap-tone-danger']} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}
 			{#if remark}<p class="ap-memberlist-note">{remark}</p>{/if}
 			{#if listed === 0}
 				<p class="ap-memberlist-note">No members listed.</p>
 			{:else}
-				{#if count !== undefined && count > listed}<p class="ap-memberlist-note" data-testid="member-list-truncated">Showing {listed} of {count}: the most recently active</p>{/if}
+				{#if count !== undefined && count > listed}<p class="ap-memberlist-note" data-testid={truncatedTestid}>Showing {listed} of {count}: the most recently active</p>{/if}
 				{#each sections as section (section.key)}
 					{@const sectionOpen = section.key === 'members' || !shut.includes(section.key)}
 					<section class="ap-memberlist-section" data-section={section.key}>
 						<!-- Without presence, one list under the panel's own header and count: a Members heading would repeat them. -->
 						{#if section.key !== 'members'}
 							<h3 class="ap-memberlist-sectionhead">
-								<button class={['ap-sect-toggle', !sectionOpen && 'ap-memberlist-shut']} type="button" aria-expanded={sectionOpen} onclick={() => ontogglesection?.(section.key)}><span class="ap-sect-caret" aria-hidden="true">▾</span>{section.label}<span class="ap-memberlist-sectioncount">· {section.people.length}</span></button>
+								<button class={['ap-sect-toggle', !sectionOpen && 'ap-sect-closed']} type="button" aria-expanded={sectionOpen} onclick={() => ontogglesection?.(section.key)}><span class="ap-sect-caret" aria-hidden="true">▾</span>{section.label}<span class="ap-memberlist-sectioncount">· {section.people.length}</span></button>
 							</h3>
 						{/if}
 						{#if sectionOpen}

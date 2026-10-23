@@ -12,73 +12,60 @@ afterEach(() => {
 });
 
 function render(props: Record<string, unknown>) {
-	instance = mount(RoomItem, { target: document.body, props: { room: 'deploy', name: 'Deploy', ...props } });
+	instance = mount(RoomItem, { target: document.body, props: { room: 'general', name: 'General', ...props } });
 	flushSync();
 	return document.querySelector<HTMLButtonElement>('button.ap-room')!;
 }
 
-const states = (row: HTMLElement) => ['ap-room-unread', 'ap-room-mention', 'ap-room-quiet', 'ap-room-unjoined'].filter((name) => row.classList.contains(name));
-
 describe('RoomItem', () => {
-	it('tints a joined thread with a mention and steps back one with nothing new, never one you haven’t joined', () => {
-		expect(states(render({ nested: true, mentions: 1 }))).toEqual(['ap-room-unread', 'ap-room-mention']);
-		unmount(instance!);
-		expect(states(render({ nested: true }))).toEqual(['ap-room-quiet']);
-		unmount(instance!);
-		// Unjoined with or without Join on it, as where you only read.
-		expect(states(render({ nested: true, unjoined: true }))).toEqual(['ap-room-unjoined']);
-		unmount(instance!);
-		expect(states(render({ nested: true, onjoin: () => {} }))).toEqual(['ap-room-unjoined']);
-	});
-
-	it('wraps every thread in a row that makes room for its action, and names Leave and Join for what they act on', () => {
+	it('names Leave for what it acts on, in a row that makes room for it', () => {
 		const onleave = vi.fn();
-		const row = render({ nested: true, 'data-thread': 'deploy', title: 'Open it', onleave });
-		expect(row.dataset.thread).toBe('deploy');
+		const row = render({ 'data-room': 'general', title: 'Open it', onleave });
+		expect(row.dataset.room).toBe('general');
 		expect(row.title).toBe('Open it');
 		const leave = document.querySelector<HTMLButtonElement>('.ap-roomrow > .ap-room-exit')!;
-		expect([leave.title, leave.getAttribute('aria-label'), leave.dataset.leave]).toEqual(['Leave thread', 'Leave Deploy', 'deploy']);
+		expect([leave.title, leave.getAttribute('aria-label'), leave.dataset.leave]).toEqual(['Leave room', 'Leave General', 'general']);
 		leave.click();
 		expect(onleave).toHaveBeenCalledOnce();
 		unmount(instance!);
-		render({ nested: true, unjoined: true });
-		expect(document.querySelector('.ap-roomrow-nested > .ap-room')).not.toBeNull();
-		expect(document.querySelector('.ap-room-exit, .ap-room-join')).toBeNull();
-		unmount(instance!);
-		render({ room: 'general', name: 'General', onjoin: () => {} });
-		expect(document.querySelector('.ap-room-join')?.getAttribute('title')).toBe('Join room');
+		// A room with no action is the bare row.
+		expect(render({}).parentElement).toBe(document.body);
 	});
 
-	it('ends a row with the count of the one being read, else when it was last active, and a … while history loads', () => {
-		let row = render({ nested: true, unjoined: true, ago: '2h', agoIso: '2026-10-22T10:00:00.000Z', agoTitle: 'Last active today', testid: 'other-thread', count: 3 });
-		expect(row.querySelector('small.ap-room-count')?.getAttribute('aria-label')).toBe('3 messages');
-		expect(row.querySelector('time')).toBeNull();
-		unmount(instance!);
-		row = render({ nested: true, unjoined: true, ago: '2h', agoIso: '2026-10-22T10:00:00.000Z', agoTitle: 'Last active today', testid: 'other-thread' });
-		const time = row.querySelector('time[data-testid="other-thread-ago"]')!;
-		expect([time.textContent, time.getAttribute('datetime'), time.getAttribute('title')]).toEqual(['2h', '2026-10-22T10:00:00.000Z', 'Last active today']);
-		unmount(instance!);
-		row = render({ loading: true, unread: 2, countTestid: 'room-unread' });
+	it('ends a row with its unread bubble, and a … while history loads', () => {
+		const row = render({ loading: true, unread: 2, unreadTestid: 'room-unread' });
+		expect(row.classList.contains('ap-room-unread')).toBe(true);
 		expect(row.querySelector('[data-testid="room-unread"]')?.textContent).toBe('2');
+		expect(row.querySelector('[data-testid="room-unread"]')?.getAttribute('aria-label')).toBe('2 unread messages');
 		expect(row.querySelector('.ap-room-loading')?.getAttribute('aria-label')).toBe('Loading history');
 	});
 
 	it('gives the open room a + for a new thread, beside its row', () => {
 		const onnewthread = vi.fn();
-		render({ room: 'general', name: 'General', active: true, onnewthread });
+		render({ active: true, onnewthread, newThreadTestid: 'create-thread' });
 		const add = document.querySelector<HTMLButtonElement>('.ap-roomstart > [data-testid="create-thread"]')!;
 		expect(add.getAttribute('aria-label')).toBe('New thread in General');
 		add.click();
 		expect(onnewthread).toHaveBeenCalledOnce();
 	});
 
-	it('calls a thread with a blank title Untitled, its room_id on hover, as every place that names one does; a room keeps its room_id', () => {
-		const thread = render({ nested: true, name: '   ' }).querySelector('.ap-room-name');
-		expect(thread?.textContent).toBe('Untitled');
-		expect(thread?.getAttribute('title')).toBe('deploy');
-		unmount(instance!);
-		const room = render({ name: undefined }).querySelector('.ap-room-name');
+	it('names a room with a blank title by its room_id, with no tooltip', () => {
+		const room = render({ room: 'deploy', name: '  ' }).querySelector('.ap-room-name');
 		expect(room?.textContent).toBe('deploy');
 		expect(room?.hasAttribute('title')).toBe(false);
+	});
+
+	it('lets the caller’s attributes win: its class added, its click first, and preventDefault() skipping onselect', () => {
+		const onselect = vi.fn();
+		const order: string[] = [];
+		let row = render({ active: true, class: 'mine', 'aria-current': 'true', onselect: () => order.push('select'), onclick: () => order.push('click') });
+		expect([row.classList.contains('ap-room'), row.classList.contains('ap-room-active'), row.classList.contains('mine')]).toEqual([true, true, true]);
+		expect(row.getAttribute('aria-current')).toBe('true');
+		row.click();
+		expect(order).toEqual(['click', 'select']);
+		unmount(instance!);
+		row = render({ onselect, onclick: (event: MouseEvent) => event.preventDefault() });
+		row.click();
+		expect(onselect).not.toHaveBeenCalled();
 	});
 });

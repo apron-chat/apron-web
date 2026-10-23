@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 
-	/** Other attributes (`data-*`, `aria-*`) go on the shell's grid. */
+	/** Other attributes (`data-*`, `aria-*`) go on the shell's grid, the caller's winning: its class is added, and its style after the shell's own. */
 	interface Props extends HTMLAttributes<HTMLDivElement> {
 		/** The BackendRail, in a column of its own at the left; omit it for one backend. Hidden under 720px. */
 		rail?: Snippet;
@@ -10,7 +10,7 @@
 		side?: Snippet;
 		/** The main pane's contents: a RoomHeader, the `ap-timeline`, a TypingIndicator, the Composer. */
 		main?: Snippet;
-		/** Attributes for the main pane's `<main>`: its `aria-label`, handlers, or an attachment, such as one taking files dropped on it. */
+		/** Attributes for the main pane's `<main>`: its `aria-label`, handlers, or an attachment, such as one taking files dropped on it. Its class is added to the pane's own. */
 		mainAttrs?: HTMLAttributes<HTMLElement>;
 		/** The MemberList: a column of its own with `membersWide`, else over the conversation, sliding in from the right. */
 		members?: Snippet;
@@ -60,33 +60,35 @@
 	let {
 		rail, side, main, mainAttrs, members, sideToggle, sideHandle, membersToggle, membersHandle, nudge, children,
 		sideCollapsed = false, membersOpen = false, membersWide = false, pane, sideWidth, membersWidth, resizing = false, slides = false, viewport = false,
-		class: className, ...rest
+		class: className, style, ...rest
 	}: Props = $props();
 
 	const px = (n: number | undefined) => (n === undefined ? undefined : `${n}px`);
 	/** The member list's column: nothing while it's shut or overlaid, kept at 0 so it can slide. */
 	const membersTrack = $derived(membersWide && membersOpen ? (px(membersWidth) ?? 'var(--member-list-w)') : '0px');
+	/** The shell's own custom properties, then the caller's style, which wins. */
+	const shellStyle = $derived([
+		['--side-col', sideCollapsed ? '0px' : px(sideWidth)], ['--rooms-w', px(sideWidth)], ['--member-list-w', px(membersWidth)], ['--member-list-track', membersTrack]
+	].filter(([, value]) => value !== undefined).map(([name, value]) => `${name}: ${value}`).concat(style ? [style] : []).join('; ') || undefined);
+	const { class: mainClass, ...mainRest } = $derived(mainAttrs ?? {});
 </script>
 
 <div
+	data-pane={pane}
 	{...rest}
 	class={[
 		'ap-shell', !rail && 'ap-shell-norail', viewport && 'ap-shell-viewport', slides && 'ap-shell-slides', sideCollapsed && 'ap-shell-side-shut',
 		resizing && 'ap-shell-resizing', membersOpen && 'ap-shell-members-open', membersWide && 'ap-shell-members-wide',
 		sideToggle && 'ap-shell-side-toggle', membersToggle && 'ap-shell-members-toggle', className
 	]}
-	data-pane={pane}
-	style:--side-col={sideCollapsed ? '0px' : px(sideWidth)}
-	style:--rooms-w={px(sideWidth)}
-	style:--member-list-w={px(membersWidth)}
-	style:--member-list-track={membersTrack}
+	style={shellStyle}
 >
 	{@render rail?.()}
 	{@render sideToggle?.()}
 	{@render side?.()}
 	{@render sideHandle?.()}
 	{#if nudge}<div class="ap-shell-nudge" aria-live="polite">{@render nudge()}</div>{/if}
-	{#if main}<main {...mainAttrs} class="ap-shell-main">{@render main()}</main>{/if}
+	{#if main}<main {...mainRest} class={['ap-shell-main', mainClass]}>{@render main()}</main>{/if}
 	{@render membersToggle?.()}
 	{@render members?.()}
 	{@render membersHandle?.()}

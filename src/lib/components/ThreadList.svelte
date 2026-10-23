@@ -1,5 +1,5 @@
 <script lang="ts">
-	import RoomItem from '$lib/design/components/RoomItem.svelte';
+	import ThreadItem from '$lib/design/components/ThreadItem.svelte';
 	import DesignThreadList from '$lib/design/components/ThreadList.svelte';
 	import type { RoomListing } from '$lib/protocol/client';
 	import { designTitle, threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
@@ -61,16 +61,16 @@
 	let hiddenOthers = $derived(othersOpen ? allOthers.length - shownOthers.length : 0);
 </script>
 
-<!-- The design system's ThreadList holds the rows, each a nested RoomItem; the app says which threads, and what picking one does. -->
+<!-- The design system's ThreadList holds the rows, each a ThreadItem; the app says which threads, and what picking one does. -->
 {#snippet joinedRows()}
 	{#each joined as entry (entry.id)}
 		{@const open = activeThread === entry.id}
 		<!-- Its summary, then its latest message: both when it has both, each marked so either reads alone, as on its card. One bubble for what's new: unread replies in grey, orange with an @ when they include a mention. A thread with nothing new shows none, and steps back. -->
 		<!-- Leaving is the archive: the thread stops alerting and moves down to Other threads, on every device. -->
-		<RoomItem
-			room={entry.id} name={designTitle(entry)} private={entry.private} nested active={open}
+		<ThreadItem
+			thread={entry.id} name={designTitle(entry)} private={entry.private} active={open}
 			unread={open ? 0 : (unread[entry.id] ?? 0)} mentions={open ? 0 : (mentions[entry.id] ?? 0)}
-			summary={threadSummaryText(entry)} latest={threadLatest(entry)} testid="thread-list" countTestid="thread-unread"
+			summary={threadSummaryText(entry)} latest={threadLatest(entry)} linesTestid="thread-list" unreadTestid="thread-unread"
 			data-thread={entry.id} onselect={() => onthread(entry.id)} onleave={canJoin ? () => onleave(entry.id) : undefined}
 		/>
 	{/each}
@@ -80,11 +80,10 @@
 		{@const open = other.id === activeThread}
 		{@const last = other.latestLogId}
 		<!-- The one being read has its history loaded, so its count is known; the others say when they were last active. Joining is a door in, as leaving is a door out. -->
-		<RoomItem
-			room={other.id} name={designTitle(other)} private={other.private} nested unjoined active={open} summary={other.summary} testid="other-thread"
+		<ThreadItem
+			thread={other.id} name={designTitle(other)} private={other.private} unjoined active={open} summary={other.summary} linesTestid="other-thread"
 			count={open ? reading?.count : undefined}
-			ago={last !== undefined ? idAgo(last, minuteNow()) : undefined}
-			agoIso={last !== undefined ? idIso(last) : undefined} agoTitle={last !== undefined ? `Last active ${idDateTime(last)}` : undefined}
+			ago={last !== undefined ? { text: idAgo(last, minuteNow()), datetime: idIso(last), title: `Last active ${idDateTime(last)}` } : undefined} agoTestid="other-thread-ago"
 			data-other-thread={other.id} data-thread={open ? other.id : undefined} title={open ? undefined : `Read ${other.title} without joining`}
 			onselect={() => (open ? onthread(other.id) : onopen(other.id))} onjoin={canJoin ? () => onjoin(other.id) : undefined}
 		/>
@@ -92,6 +91,7 @@
 {/snippet}
 
 <DesignThreadList
+	data-testid="thread-list"
 	room={roomTitle}
 	joined={joined.length > 0 ? joinedRows : undefined}
 	others={allOthers.length}
@@ -100,4 +100,6 @@
 	ontoggleothers={saveOtherThreadsOpen}
 	more={hiddenOthers}
 	onmore={() => (allFor = roomId)}
+	othersToggleTestid="other-threads"
+	moreTestid="more-threads"
 />

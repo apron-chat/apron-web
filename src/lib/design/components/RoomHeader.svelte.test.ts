@@ -30,13 +30,13 @@ describe('RoomHeader', () => {
 		render({ topic: 'Deploys', replies: { count: 1 } });
 		expect(sub()).toEqual(['1 reply']);
 		unmount(instance!);
-		render({ topic: 'Deploys', topicTitle: 'Deploys and incidents' });
+		render({ topic: 'Deploys', topicTitle: 'Deploys and incidents', topicTestid: 'room-description' });
 		expect(document.querySelector('[data-testid="room-description"]')?.getAttribute('title')).toBe('Deploys and incidents');
 	});
 
 	it('puts Edit and Leave in a ⋯ menu named for the room or thread, and Join and the member list beside it', () => {
 		const onjoin = vi.fn();
-		render({ thread: 'deploy', threadName: 'Deploy', onedit: () => {}, onleave: () => {}, onjoin, onmemberlist: () => {}, memberListOpen: true, busy: true });
+		render({ thread: 'deploy', threadName: 'Deploy', onedit: () => {}, onleave: () => {}, canJoin: true, onjoin, onmemberlist: () => {}, memberListOpen: true, busy: true, actionsTestid: 'room-actions', joinTestid: 'join-room' });
 		const menu = document.querySelector<HTMLButtonElement>('[data-testid="room-actions"]')!;
 		expect(menu.getAttribute('aria-label')).toBe('Thread actions');
 		expect(menu.disabled).toBe(true);
@@ -46,8 +46,14 @@ describe('RoomHeader', () => {
 		expect([members.getAttribute('aria-label'), members.classList.contains('ap-iconbtn-on')]).toEqual(['Hide member list', true]);
 		expect(document.querySelector('.ap-roomhead-crumb')?.getAttribute('aria-label')).toBe('Back to room');
 		unmount(instance!);
-		render({});
+		render({ onjoin, actionsTestid: 'room-actions', joinTestid: 'join-room' });
+		// Join shows only where it's offered (`canJoin`), not wherever there's an `onjoin`.
 		expect(document.querySelector('[data-testid="room-actions"], [data-testid="join-room"], .ap-roomhead-members, .ap-roomhead-back')).toBeNull();
+	});
+
+	it('lets the caller’s attributes go on the header, its class added', () => {
+		const header = render({ class: 'mine', private: true, 'data-testid': 'room-header' });
+		expect([header.dataset.testid, header.classList.contains('ap-roomhead'), header.classList.contains('ap-roomhead-private'), header.classList.contains('mine')]).toEqual(['room-header', true, true, true]);
 	});
 
 	it('names a blank-titled room by its room_id and calls a blank-titled thread Untitled, its room_id on hover, and isolates who is typing', () => {

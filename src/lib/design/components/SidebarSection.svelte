@@ -1,8 +1,11 @@
 <script lang="ts">
 	import Plus from '@lucide/svelte/icons/plus';
 	import type { Snippet } from 'svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
 
-	interface Props {
+	/** Other attributes (`data-testid`, `data-*`) go on its `<section>`, the caller's winning and its class added. */
+	interface Props extends Omit<HTMLAttributes<HTMLElement>, 'ontoggle'> {
+		/** Its heading. */
 		title: string;
 		/** Controlled; omit to let the section keep its own state. `bind:open` works too. */
 		open?: boolean;
@@ -16,21 +19,21 @@
 		/** While the list is loading: placeholder lines in place of `children`. */
 		loading?: boolean;
 		/** A `data-testid` for the folding title, and one for the body. */
-		testid?: string;
+		toggleTestid?: string;
 		bodyTestid?: string;
 		children?: Snippet;
 	}
-	let { title, open = $bindable(true), ontoggle, collapsible = true, onadd, addLabel, action, loading, testid, bodyTestid, children }: Props = $props();
+	let { title, open = $bindable(true), ontoggle, collapsible = true, onadd, addLabel, action, loading, toggleTestid, bodyTestid, children, class: className, ...rest }: Props = $props();
 	function toggle() {
 		open = !open;
 		ontoggle?.(open);
 	}
 </script>
 
-<section class={['ap-sect', !open && 'ap-sect-closed']}>
+<section {...rest} class={['ap-sect', !open && 'ap-sect-closed', className]}>
 	<div class="ap-sect-head">
 		{#if collapsible}
-			<button type="button" class="ap-sect-toggle" aria-expanded={open} data-testid={testid} onclick={toggle}><span class="ap-sect-caret" aria-hidden="true">▾</span>{title}</button>
+			<button type="button" class="ap-sect-toggle" aria-expanded={open} data-testid={toggleTestid} onclick={toggle}><span class="ap-sect-caret" aria-hidden="true">▾</span>{title}</button>
 		{:else}
 			<span class="ap-sect-toggle" role="heading" aria-level="2">{title}</span>
 		{/if}

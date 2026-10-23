@@ -1,17 +1,20 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
 	import type { BackendEntry } from './types';
 	import { count99, initials } from './util';
 
-	interface Props {
+	/** Other attributes (`data-testid`, `data-*`) go on its `<nav>`, the caller's winning and its class added. */
+	interface Props extends Omit<HTMLAttributes<HTMLElement>, 'onselect'> {
 		backends: BackendEntry[];
 		active?: string;
+		/** A backend's tile picked, by its `id`. */
 		onselect?: (id: string) => void;
 		onadd?: () => void;
 	}
-	let { backends, active, onselect, onadd }: Props = $props();
+	let { backends, active, onselect, onadd, class: className, ...rest }: Props = $props();
 </script>
 
-<nav class="ap-rail" aria-label="Backends">
+<nav aria-label="Backends" {...rest} class={['ap-rail', className]}>
 	{#each backends as b (b.id)}
 		<button
 			type="button"

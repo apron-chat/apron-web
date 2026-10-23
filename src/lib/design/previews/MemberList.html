@@ -12,7 +12,8 @@
     { key: 'online', label: 'Online', people: [{ user_id: 'alice', name: 'Alice Chen', status: 'online', roles: ['admin'] }, { user_id: 'bob', name: 'Bob', status: 'dnd' }, { user_id: 'sam', name: 'Sam', status: 'idle', you: true }, { user_id: 'sam2', name: 'Sam', status: 'online', handle: true }] },
     { key: 'offline', label: 'Offline', people: [{ user_id: 'dana', name: 'Dana', status: 'offline' }, { user_id: 'deploybot', name: 'Deploy bot', status: 'offline', roles: ['bot'] }] }];
   add(A.MemberList, { room: 'Ops', count: 6, sections: sections, onprofile: noop, onremove: noop, onaddtoggle: noop });
-  add(A.MemberList, { room: 'Ops', count: 6, sections: sections, shut: ['offline'], onaddtoggle: noop, addOpen: true, adding: '@lee', candidates: [{ user_id: 'lee', name: 'Lee' }], note: { text: 'Added Grace.' } });
+  add(A.MemberList, { room: 'Ops', count: 6, sections: sections, shut: ['offline'], onaddtoggle: noop, addOpen: true, note: { text: 'Added Grace.' },
+    addForm: A.partOf(A.AddMemberForm, function (id) { return { id: id, value: '@lee', candidates: [{ user_id: 'lee', name: 'Lee' }], onadd: noop }; }) });
   add(A.MemberList, { placeholder: true });
 </script>
 </body>

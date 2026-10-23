@@ -65,4 +65,14 @@ describe('AppShell', () => {
 		expect(main.getAttribute('aria-label')).toBe('Conversation');
 		expect(main.querySelector('#pane')).not.toBeNull();
 	});
+
+	it('lets the caller’s attributes win: classes added, its style after the shell’s own', () => {
+		const shell = render({
+			pane: 'rooms', sideWidth: 300, class: 'mine', 'data-pane': 'main', style: '--rooms-w: 280px; color: red',
+			main: markup('<div></div>'), mainAttrs: { class: 'pane' }
+		});
+		expect([shell.classList.contains('ap-shell'), shell.classList.contains('mine'), shell.dataset.pane]).toEqual([true, true, 'main']);
+		expect([shell.style.getPropertyValue('--side-col'), shell.style.getPropertyValue('--rooms-w'), shell.style.color]).toEqual(['300px', '280px', 'red']);
+		expect(shell.querySelector('main')?.className).toBe('ap-shell-main pane');
+	});
 });

@@ -72,11 +72,19 @@
 	thread={thread ? pane.id : undefined}
 	threadName={thread && pane.untitled ? undefined : threadTitle}
 	{onroom}
-	onjoin={canJoin ? (onjoin ?? (() => {})) : undefined}
+	{canJoin}
+	{onjoin}
 	onmemberlist={memberListToggle ? onmemberlist : undefined}
 	{memberListOpen}
 	onedit={canEdit ? onedit : undefined}
 	onleave={canLeave ? onleave : undefined}
 	busy={editDisabled}
 	{onsummary}
+	tagTestid="back-unread"
+	topicTestid="room-description"
+	joinTestid="join-room"
+	summaryTestid="show-summary"
+	actionsTestid="room-actions"
+	editTestid="edit-room"
+	leaveTestid="leave-room"
 />

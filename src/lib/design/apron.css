@@ -456,6 +456,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-sect-toggle { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-1); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; cursor: pointer; }
 .ap-sect-toggle:hover { color: var(--ink); }
 .ap-sect-caret { display: inline-block; font-size: var(--text-caps); }
+/* Every heading that folds turns its caret the same way: a SidebarSection, Other threads, a member list's section. */
 .ap-sect-closed .ap-sect-caret { transform: rotate(-90deg); }
 .ap-sect-body { display: flex; flex-direction: column; gap: var(--space-0_5); }
 .ap-sect-head .ap-sect-add { width: var(--control-md); padding: 0; justify-content: center; }
@@ -605,7 +606,6 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-sectionhead { margin: 0; padding: 0 var(--space-1) var(--space-1); font: inherit; }
 .ap-memberlist-sectionhead .ap-sect-toggle { position: relative; padding-left: 0; }
 .ap-memberlist-sectionhead .ap-sect-caret { position: absolute; left: -11px; width: 10px; text-align: center; }
-.ap-memberlist-shut .ap-sect-caret { transform: rotate(-90deg); }
 /* The count after a dot and lighter than the words, as Other threads writes its own. */
 .ap-memberlist-sectioncount { margin-left: 2px; font-weight: 400; }
 .ap-memberlist-people { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }

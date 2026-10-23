@@ -6,10 +6,12 @@
 	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import Users from '@lucide/svelte/icons/users';
 	import type { Snippet } from 'svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
 	import MenuButton from './MenuButton.svelte';
 	import { count99, roomName, roomNameTip } from './util';
 
-	interface Props {
+	/** Other attributes (`data-testid`, `data-*`) go on its `<header>`, the caller's winning and its class added. */
+	interface Props extends HTMLAttributes<HTMLElement> {
 		room: string;
 		/** the room record's `title`, falling back to `room_id` (§3.4) */
 		name?: string;
@@ -37,7 +39,8 @@
 		/** The thread's `title`; without one it's called "Untitled", with its `room_id` on hover. */
 		threadName?: string;
 		onroom?: () => void;
-		/** Cap `rooms`, for a room or thread open without joining it: a Join button (`room_join`, §4.2.2). */
+		/** Cap `rooms`, for a room or thread open without joining it: a Join button, which calls `onjoin` (`room_join`, §4.2.2). */
+		canJoin?: boolean;
 		onjoin?: () => void;
 		/** The member list's toggle, where the list overlays the conversation; pressed while it's open. */
 		onmemberlist?: () => void;
@@ -50,10 +53,19 @@
 		busy?: boolean;
 		/** The room's or thread's pinned <ThreadSummary> was put away with its ×: a Summary button brings it back. */
 		onsummary?: () => void;
+		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Summary, the ⋯ menu and its Edit and Leave. */
+		tagTestid?: string;
+		topicTestid?: string;
+		joinTestid?: string;
+		summaryTestid?: string;
+		actionsTestid?: string;
+		editTestid?: string;
+		leaveTestid?: string;
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0, children,
-		thread, threadName, onroom, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, busy = false, onsummary
+		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, busy = false, onsummary,
+		tagTestid, topicTestid, joinTestid, summaryTestid, actionsTestid, editTestid, leaveTestid, class: className, ...rest
 	}: Props = $props();
 	const noun = $derived(thread ? 'thread' : 'room');
 	/** What's new elsewhere: a mention may be an edit adding you to a read message, so it counts at least once. */
@@ -63,8 +75,8 @@
 		: 'Back to rooms');
 	/** The occasional actions, in the ⋯ menu: Join stays a button, since it's what a pane read without joining is for. */
 	const actions = $derived([
-		...(onedit ? [{ value: 'edit', label: `Edit ${noun}`, testid: 'edit-room' }] : []),
-		...(onleave ? [{ value: 'leave', label: `Leave ${noun}`, testid: 'leave-room' }] : [])
+		...(onedit ? [{ value: 'edit', label: `Edit ${noun}`, testid: editTestid }] : []),
+		...(onleave ? [{ value: 'leave', label: `Leave ${noun}`, testid: leaveTestid }] : [])
 	]);
 	const memberLabel = $derived(memberListOpen ? 'Hide member list' : 'Show member list');
 
@@ -74,10 +86,10 @@
 	}
 </script>
 
-<header class={['ap-roomhead', isPrivate && 'ap-roomhead-private']}>
+<header {...rest} class={['ap-roomhead', isPrivate && 'ap-roomhead-private', className]}>
 	{#if onback}
 		<button type="button" class={['ap-roomhead-back', elsewhere > 0 && 'ap-roomhead-back-tagged']} aria-label={backLabel} onclick={onback}>
-			{#if elsewhere > 0}<span class={['ap-roomhead-tag', mentionsElsewhere ? 'ap-roomhead-tag-at' : 'ap-roomhead-tag-quiet']} data-testid="back-unread" aria-hidden="true">{#if mentionsElsewhere}@&#8239;{/if}{count99(elsewhere)}</span>{:else}‹{/if}
+			{#if elsewhere > 0}<span class={['ap-roomhead-tag', mentionsElsewhere ? 'ap-roomhead-tag-at' : 'ap-roomhead-tag-quiet']} data-testid={tagTestid} aria-hidden="true">{#if mentionsElsewhere}@&#8239;{/if}{count99(elsewhere)}</span>{:else}‹{/if}
 		</button>
 	{/if}
 	<div class="ap-roomhead-text">
@@ -96,12 +108,12 @@
 		{:else if replies}
 			<p class="ap-roomhead-sub">{replies.count}{replies.more ? '+' : ''} {replies.count === 1 && !replies.more ? 'reply' : 'replies'}</p>
 		{:else if topic}
-			<p class="ap-roomhead-sub" data-testid="room-description" title={topicTitle}>{topic}</p>
+			<p class="ap-roomhead-sub" data-testid={topicTestid} title={topicTitle}>{topic}</p>
 		{/if}
 	</div>
 	{#if note}<span class="ap-roomhead-sub" role="status">{note}</span>{/if}
-	{#if onjoin}
-		<button type="button" class="ap-btn ap-btn-sm" data-testid="join-room" aria-label="Join {noun}" title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={busy} onclick={onjoin}>Join</button>
+	{#if canJoin}
+		<button type="button" class="ap-btn ap-btn-sm" data-testid={joinTestid} aria-label="Join {noun}" title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={busy} onclick={onjoin}>Join</button>
 	{/if}
 	{#if onmemberlist}
 		<button type="button" class={['ap-iconbtn', 'ap-roomhead-members', memberListOpen && 'ap-iconbtn-on']} aria-label={memberLabel} aria-expanded={memberListOpen} title={memberLabel} onclick={onmemberlist}>
@@ -109,12 +121,12 @@
 		</button>
 	{/if}
 	{#if onsummary}
-		<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost ap-roomhead-summary" data-testid="show-summary" aria-label="Show the {noun} summary" title="Show the {noun} summary" onclick={onsummary}>
+		<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost ap-roomhead-summary" data-testid={summaryTestid} aria-label="Show the {noun} summary" title="Show the {noun} summary" onclick={onsummary}>
 			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-summary-word">Summary</span>
 		</button>
 	{/if}
 	{#if actions.length > 0}
-		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} buttonTestid="room-actions" choices={actions} disabled={busy} onselect={act}>
+		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} buttonTestid={actionsTestid} choices={actions} disabled={busy} onselect={act}>
 			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
 			{#snippet lead(value)}{#if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
 		</MenuButton>
