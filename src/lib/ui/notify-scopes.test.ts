@@ -83,13 +83,11 @@ describe('what to notify about', () => {
 		expect(inNotifyScopes(message('32', 'general', 'bob'), ['joined'], { me: undefined, mentioned: false, rooms })).toBe(false);
 	});
 
-	it('sends push the checked scopes the server pushes, or no `wake` when it lists none', () => {
+	it('sends push the checked scopes the server pushes, or no `wake` when it lists none, and notes the rest as only while open', () => {
 		expect(pushWake(['mentions', 'private', 'joined'], ['mentions', 'replies', 'private'])).toEqual(['mentions', 'private']);
 		expect(pushWake(['joined'], ['mentions', 'replies'])).toEqual([]);
 		expect(pushWake(['joined'], [])).toBeUndefined();
-	});
-
-	it('notes the checked scopes the server doesn\'t push as only while open, only while push is on', () => {
+		// The rest are noted as only while open, while push is on.
 		const note = 'Only while open';
 		expect(notifyScopeNotes(['mentions', 'private', 'joined'], ['mentions', 'replies', 'private'], true)).toEqual({ joined: note });
 		expect(notifyScopeNotes(['joined'], ['mentions'], false)).toEqual({});

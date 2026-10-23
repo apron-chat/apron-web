@@ -23,13 +23,18 @@ afterAll(() => {
 describe('timestamps', () => {
 	const id = String(Date.UTC(2026, 8, 14, 15, 4));
 
-	it('follow the browser’s locale and time zone, with a compact form that drops AM/PM', () => {
+	it('follow the browser’s locale and time zone, with a compact form that drops AM/PM, and are empty for IDs that carry no time', () => {
 		expect(time.idTime(id)).toBe('11:04 AM');
 		expect(time.idTimeCompact(id)).toBe('11:04');
 		expect(time.idDateTime(id)).toBe('2026-09-14 11:04:00');
 		// Seconds too, and the day before in New York.
 		expect(time.idDateTime(String(Date.UTC(2026, 0, 2, 3, 4, 5)))).toBe('2026-01-01 22:04:05');
 		expect(time.idIso(id)).toBe('2026-09-14T15:04:00.000Z');
+		// IDs that carry no time have none.
+		expect(time.idTime('opaque')).toBe('');
+		expect(time.idTimeCompact('opaque')).toBe('');
+		expect(time.idAgo('opaque')).toBe('');
+		expect(time.idIso('opaque')).toBeUndefined();
 	});
 
 	it('say how long ago compactly: minutes, hours, days, weeks, then years', () => {
@@ -65,12 +70,5 @@ describe('timestamps', () => {
 		expect(since(14 * day)).toBe('Aug 31');
 		expect(since(300 * day)).toBe('Nov 18, 2025');
 		expect(time.idSince('opaque', now)).toBe('');
-	});
-
-	it('are empty for IDs that carry no time', () => {
-		expect(time.idTime('opaque')).toBe('');
-		expect(time.idTimeCompact('opaque')).toBe('');
-		expect(time.idAgo('opaque')).toBe('');
-		expect(time.idIso('opaque')).toBeUndefined();
 	});
 });

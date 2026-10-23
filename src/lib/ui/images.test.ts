@@ -31,15 +31,13 @@ function fakeCodec(width: number, height: number, size: (width: number, height: 
 const file = (content: Uint8Array, name: string, type: string, pad = 0) => new File([content as BlobPart, new Uint8Array(pad)], name, { type });
 
 describe('sniffImage', () => {
-	it('knows the four accepted formats from their bytes', () => {
+	it('knows the four accepted formats from their bytes, and spots animation and location metadata', () => {
 		expect(sniffImage(bytes(JPEG))).toEqual({ type: 'image/jpeg', animated: false, metadata: true });
 		expect(sniffImage(png())).toEqual({ type: 'image/png', animated: false, metadata: false });
 		expect(sniffImage(gif(1))).toEqual({ type: 'image/gif', animated: false, metadata: false });
 		expect(sniffImage(webp())).toEqual({ type: 'image/webp', animated: false, metadata: false });
 		expect(sniffImage(bytes('hello world'))).toBeUndefined();
-	});
-
-	it('spots animation and location metadata', () => {
+		// Animation and location metadata.
 		expect(sniffImage(gif(2))?.animated).toBe(true);
 		expect(sniffImage(png(pngChunk('acTL', [0, 0, 0, 2, 0, 0, 0, 0])))?.animated).toBe(true);
 		expect(sniffImage(png(pngChunk('eXIf', [1, 2])))?.metadata).toBe(true);
@@ -51,13 +49,11 @@ describe('sniffImage', () => {
 });
 
 describe('sizing', () => {
-	it('fits the longest side without scaling up', () => {
+	it('fits the longest side without scaling up, and crops the centered square', () => {
 		expect(fitWithin(4096, 3072, 2048)).toEqual({ width: 2048, height: 1536 });
 		expect(fitWithin(1000, 3000, 2048)).toEqual({ width: 683, height: 2048 });
 		expect(fitWithin(800, 600, 2048)).toEqual({ width: 800, height: 600 });
-	});
-
-	it('crops the centered square', () => {
+		// A square, centered.
 		expect(centerSquare(400, 300)).toEqual({ x: 50, y: 0, width: 300, height: 300 });
 		expect(centerSquare(300, 401)).toEqual({ x: 0, y: 50, width: 300, height: 300 });
 	});
@@ -70,11 +66,15 @@ describe('fileSize', () => {
 });
 
 describe('prepareUpload', () => {
-	it('passes other files through untouched', async () => {
+	it('passes other files, and images the browser cannot decode, through untouched', async () => {
 		const notes = file(bytes('hello'), 'notes.txt', 'text/plain');
 		const { codec, encodes } = fakeCodec(10, 10, () => 1);
 		expect(await prepareUpload(notes, { codec })).toEqual({ file: notes });
 		expect(encodes).toEqual([]);
+		// So is an image the browser cannot decode.
+		const odd = file(bytes(JPEG), 'odd.jpg', 'image/jpeg');
+		const broken: ImageCodec = { decode: () => Promise.reject(new Error('nope')), encode: () => Promise.reject(new Error('unused')) };
+		expect(await prepareUpload(odd, { codec: broken })).toEqual({ file: odd });
 	});
 
 	it('sends a small image without metadata as it is, with its dimensions', async () => {
@@ -125,21 +125,18 @@ describe('prepareUpload', () => {
 		await expect(prepareUpload(large, { codec, maxBytes: 32 })).rejects.toBeInstanceOf(ImageTooLargeError);
 		expect(encodes).toEqual([]);
 	});
-
-	it('passes an image the browser cannot decode through', async () => {
-		const photo = file(bytes(JPEG), 'odd.jpg', 'image/jpeg');
-		const codec: ImageCodec = { decode: () => Promise.reject(new Error('nope')), encode: () => Promise.reject(new Error('unused')) };
-		expect(await prepareUpload(photo, { codec })).toEqual({ file: photo });
-	});
 });
 
 describe('prepareAvatar', () => {
-	it('crops a square and takes 512 when it fits', async () => {
+	it('crops a square and takes 512 when it fits, never scaling a small image up', async () => {
 		const { codec, encodes } = fakeCodec(1000, 800, () => 100_000);
 		const prepared = await prepareAvatar(file(bytes(JPEG), 'me.jpg', 'image/jpeg'), { codec });
 		expect(prepared).toMatchObject({ width: 512, height: 512 });
 		expect(prepared.file.name).toBe('me.webp');
 		expect(encodes[0]).toMatchObject({ crop: { x: 100, y: 0, width: 800, height: 800 }, width: 512, height: 512 });
+		// Never scaling a small image up.
+		const { codec: small } = fakeCodec(120, 200, () => 10);
+		expect(await prepareAvatar(file(png(), 'me.png', 'image/png'), { codec: small })).toMatchObject({ width: 120, height: 120 });
 	});
 
 	it('drops to 256 when 512 is too large, and refuses what never fits', async () => {
@@ -147,10 +144,5 @@ describe('prepareAvatar', () => {
 		expect(await prepareAvatar(file(png(), 'me.png', 'image/png'), { codec })).toMatchObject({ width: 256, height: 256 });
 		const { codec: stubborn } = fakeCodec(1000, 1000, () => 300_000);
 		await expect(prepareAvatar(file(png(), 'me.png', 'image/png'), { codec: stubborn })).rejects.toBeInstanceOf(ImageTooLargeError);
-	});
-
-	it('never scales a small image up', async () => {
-		const { codec } = fakeCodec(120, 200, () => 10);
-		expect(await prepareAvatar(file(png(), 'me.png', 'image/png'), { codec })).toMatchObject({ width: 120, height: 120 });
 	});
 });

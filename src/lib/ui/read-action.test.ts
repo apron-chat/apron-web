@@ -11,24 +11,23 @@ const reading = (fields: Partial<ReadState> = {}): ReadState => ({
 const none = { pushId: undefined, closedThrough: undefined };
 
 describe('reading the latest message', () => {
-	it('marks it read, and closes the room’s notifications on this device up to it', () => {
+	it('marks it read, and closes the room’s notifications on this device up to it, the account’s where it has a push_id', () => {
 		expect(readAction(reading(), none)).toEqual({ room: 'general', message: '120', close: { key: `:${SERVER}:general:120`, target: { tag: `apron:${SERVER}:general` } } });
-	});
-
-	it('closes the account’s notifications of the room where it has a push_id', () => {
+		// The account's, where it has a push_id.
 		expect(readAction(reading(), { pushId: 'a1', closedThrough: undefined })?.close).toEqual({ key: `a1:${SERVER}:general:120`, target: { group: notificationGroup('a1', 'general') } });
 	});
 
-	it.each<[string, Partial<ReadState>]>([
-		['the session isn’t live yet (a view held through a reconnect)', { ready: false }],
-		['the pane isn’t loaded (a view kept on this device, still catching up)', { room: { id: 'general', loaded: false } }],
-		['the pane hasn’t opened at its divider, or its latest isn’t on screen', { readingLatest: false }],
-		['the page isn’t in view', { visible: false }],
-		['the pane has no messages', { last: undefined }],
-		['there is no pane', { room: undefined }],
-		['there is no client', { server: undefined }]
-	])('sends no read cursor while %s', (_, fields) => {
-		expect(readAction(reading(fields), none)).toBeUndefined();
+	it('sends no read cursor unless a live session’s loaded pane is in view at its latest message', () => {
+		const not: Array<[string, Partial<ReadState>]> = [
+			['the session isn’t live yet (a view held through a reconnect)', { ready: false }],
+			['the pane isn’t loaded (a view kept on this device, still catching up)', { room: { id: 'general', loaded: false } }],
+			['the pane hasn’t opened at its divider, or its latest isn’t on screen', { readingLatest: false }],
+			['the page isn’t in view', { visible: false }],
+			['the pane has no messages', { last: undefined }],
+			['there is no pane', { room: undefined }],
+			['there is no client', { server: undefined }]
+		];
+		for (const [why, fields] of not) expect(readAction(reading(fields), none), why).toBeUndefined();
 	});
 
 	it('leaves the notifications while nobody is looking: an unfocused window shows its own', () => {

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadEnabledPushIds } from './push-store';
+import { loadEnabledPushIds, withShown } from './push-store';
+import { isNewerMessage } from './sw-handlers';
 
 /** An IndexedDB whose one store holds `stored`, or whose open fails. */
 function fakeIndexedDb(stored: Record<string, unknown> | 'failing') {
@@ -40,12 +41,9 @@ afterEach(() => {
 });
 
 describe('the enabled push_ids', () => {
-	it('reads the saved list', async () => {
+	it('reads the saved list, and tells a list never saved apart from a read that failed', async () => {
 		vi.stubGlobal('indexedDB', fakeIndexedDb({ enabled: ['a1', 7, 'b2'] }));
 		expect(await loadEnabledPushIds()).toEqual(['a1', 'b2']);
-	});
-
-	it('tells a list never saved apart from a read that failed', async () => {
 		vi.stubGlobal('indexedDB', fakeIndexedDb({}));
 		expect(await loadEnabledPushIds()).toBeUndefined();
 		vi.stubGlobal('indexedDB', fakeIndexedDb('failing'));
@@ -54,5 +52,19 @@ describe('the enabled push_ids', () => {
 		expect(await loadEnabledPushIds()).toBe('unreadable');
 		vi.stubGlobal('indexedDB', fakeIndexedDb({ enabled: 'a1' }));
 		expect(await loadEnabledPushIds()).toBe('unreadable');
+	});
+});
+
+describe('remembering what a room notified about', () => {
+	it('keeps the newest message per group, the most recent groups only', () => {
+		expect(withShown({}, 'g', '5', isNewerMessage)).toEqual({ g: '5' });
+		expect(withShown({ g: '5' }, 'g', '4', isNewerMessage)).toBeUndefined();
+		expect(withShown({ g: '5' }, 'g', '5', isNewerMessage)).toBeUndefined();
+		expect(withShown({ g: '5', h: '1' }, 'g', '10', isNewerMessage)).toEqual({ h: '1', g: '10' });
+		const many = Object.fromEntries(Array.from({ length: 200 }, (_, index) => [`g${index}`, '1']));
+		const next = withShown(many, 'new', '1', isNewerMessage)!;
+		expect(Object.keys(next)).toHaveLength(200);
+		expect(next.g0).toBeUndefined();
+		expect(next.new).toBe('1');
 	});
 });

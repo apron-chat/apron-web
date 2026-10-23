@@ -12,8 +12,9 @@ const ids = (net: { joined: { user_id: string }[]; left: { user_id: string }[] }
 });
 
 describe('netting a run', () => {
-	it('lists joins and leaves in the order each user first appears', () => {
+	it('lists joins and leaves in the order each user first appears, none for no records', () => {
 		expect(ids(netMemberships([record(['ada', true]), record(['carol', false]), record(['bob', true])]))).toEqual({ joined: ['ada', 'bob'], left: ['carol'] });
+		expect(netMemberships([])).toEqual({ joined: [], left: [] });
 	});
 
 	it('drops a user who joins and leaves again, and one who leaves and comes back', () => {
@@ -31,22 +32,16 @@ describe('netting a run', () => {
 		const net = netMemberships([record(['ada', false]), { log_id: String(nextLog++), entries: [{ user: { user_id: 'ada', name: 'Ada' }, joined: true }] }, renamed]);
 		expect(net.left).toEqual([{ user_id: 'ada', name: 'Ada L.' }]);
 	});
-
-	it('is empty for no records', () => {
-		expect(netMemberships([])).toEqual({ joined: [], left: [] });
-	});
 });
 
 describe('baselines', () => {
 	const joins = (count: number, leave = false) => record(...Array.from({ length: count }, (_, index): [string, boolean] => [`user${index}`, !(leave && index === 0)]));
 
-	it('skips a record that joins more than 20 users at once', () => {
+	it('skips a record that joins more than 20 users at once, unless it also removes someone', () => {
 		expect(BASELINE_MIN_MEMBERS).toBe(21);
 		expect(isBaseline(joins(21))).toBe(true);
 		expect(isBaseline(joins(20))).toBe(false);
-	});
-
-	it('keeps a large record that also removes someone: that is a change', () => {
+		// One that also removes someone is a change, kept.
 		expect(isBaseline(joins(30, true))).toBe(false);
 	});
 });
@@ -60,14 +55,12 @@ describe('wording', () => {
 		expect(listNames(['Ada', 'Bob', 'Carol', 'Dan', 'Eve', 'Fay'])).toBe('Ada, Bob, and 4 others');
 	});
 
-	it('says who joined, then who left', () => {
+	it('says who joined, then who left, spelling out every name in the title when the line counts some', () => {
 		expect(membershipSummary(['Ada'], [])).toEqual({ text: 'Ada joined' });
 		expect(membershipSummary([], ['Bob'])).toEqual({ text: 'Bob left' });
 		expect(membershipSummary(['Ada', 'Bob'], ['Carol'])).toEqual({ text: 'Ada and Bob joined · Carol left' });
 		expect(membershipSummary([], []).text).toBe('');
-	});
-
-	it('spells out every name in the title only when the line counts some', () => {
+		// Every name is spelled out in the title, only when the line counts some.
 		expect(membershipSummary(['Ada', 'Bob', 'Carol'], []).title).toBeUndefined();
 		expect(membershipSummary(['Ada', 'Bob', 'Carol', 'Dan', 'Eve', 'Fay'], ['Gus'])).toEqual({
 			text: 'Ada, Bob, and 4 others joined · Gus left',

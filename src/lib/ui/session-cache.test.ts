@@ -51,11 +51,8 @@ describe('keptView', () => {
 describe('usableView', () => {
 	const kept = { v: 1, savedAt: now - HOUR, userId: 'ada', view: { rooms: [] } };
 
-	it('takes a recent view of this version', () => {
+	it('takes a recent view of this version, and drops one that is too old, of another version, or not a view at all', () => {
 		expect(usableView(kept, now)).toBe(kept);
-	});
-
-	it('drops one that is too old, of another version, or not a view at all', () => {
 		expect(usableView({ ...kept, savedAt: now - VIEW_MAX_AGE_MS - 1 }, now)).toBeUndefined();
 		expect(usableView({ ...kept, v: 0 }, now)).toBeUndefined();
 		expect(usableView({ ...kept, view: {} }, now)).toBeUndefined();

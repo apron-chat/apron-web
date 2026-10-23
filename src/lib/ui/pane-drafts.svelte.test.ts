@@ -23,7 +23,7 @@ describe('PaneDrafts', () => {
 		expect(drafts.text).toBe('in thread');
 	});
 
-	it('gives a failed send back only where nothing new was typed', () => {
+	it('gives a failed send back, text and files, only where nothing new was typed or attached', () => {
 		const drafts = new PaneDrafts();
 		drafts.open('lobby');
 		drafts.text = 'first';
@@ -41,9 +41,21 @@ describe('PaneDrafts', () => {
 		expect(drafts.restore('lobby', 'first', undefined)).toBe(false);
 		drafts.open('lobby');
 		expect(drafts.text).toBe('first');
+		// Staged files too, unless something new was attached.
+		drafts.clear('lobby');
+		const files = [staged('a')];
+		drafts.stage(files);
+		drafts.clear('lobby');
+		expect(drafts.files).toEqual([]);
+		expect(drafts.restore('lobby', '', undefined, files)).toBe(true);
+		expect(drafts.files).toEqual(files);
+		drafts.clear('lobby');
+		drafts.stage([staged('b')]);
+		expect(drafts.restore('lobby', 'caption', undefined, files)).toBe(false);
+		expect([drafts.text, drafts.files.map(({ id }) => id)]).toEqual(['', ['b']]);
 	});
 
-	it('keeps each pane its own staged files, removable before sending', () => {
+	it('keeps each pane its own staged files, removable and renamable before sending', () => {
 		const drafts = new PaneDrafts();
 		drafts.open('lobby');
 		drafts.stage([staged('a'), staged('b')]);
@@ -60,34 +72,15 @@ describe('PaneDrafts', () => {
 		drafts.open(undefined);
 		drafts.stage([staged('d')]);
 		expect(drafts.files).toEqual([]);
-	});
-
-	it('renames a staged file on whichever draft holds it', () => {
-		const drafts = new PaneDrafts();
+		// Renamed on whichever draft holds the file.
 		drafts.open('lobby');
-		drafts.stage([staged('a'), staged('b')]);
-		drafts.rename('b', 'sunset.jpg');
+		drafts.stage([staged('e')]);
+		drafts.rename('e', 'sunset.jpg');
 		expect(drafts.files.map(({ title }) => title)).toEqual([undefined, 'sunset.jpg']);
 		drafts.open('thread');
-		drafts.rename('a', 'dawn');
+		drafts.rename('b', 'dawn');
 		drafts.open('lobby');
 		expect(drafts.files.map(({ title }) => title)).toEqual(['dawn', 'sunset.jpg']);
-	});
-
-	it('gives staged files back with a failed send, unless something new was attached', () => {
-		const drafts = new PaneDrafts();
-		drafts.open('lobby');
-		const files = [staged('a')];
-		drafts.stage(files);
-		drafts.clear('lobby');
-		expect(drafts.files).toEqual([]);
-		expect(drafts.restore('lobby', '', undefined, files)).toBe(true);
-		expect(drafts.files).toEqual(files);
-
-		drafts.clear('lobby');
-		drafts.stage([staged('b')]);
-		expect(drafts.restore('lobby', 'caption', undefined, files)).toBe(false);
-		expect([drafts.text, drafts.files.map(({ id }) => id)]).toEqual(['', ['b']]);
 	});
 
 	it('says when reloading would lose a draft: text or files, in the open pane or a kept one', () => {

@@ -71,7 +71,7 @@ describe('directory', () => {
 		rows.stop();
 	});
 
-	it('renders field by field: the kept object, then the recorded one, then the user_id', () => {
+	it('renders and resolves field by field: the kept object, then the recorded one, then the user_id', () => {
 		directory.apply(snapshot([ada, { user_id: 'bo', avatar: 'https://example.com/bo.png' }]), 'https://example.com');
 		// Bo's kept object has no name: the message's from supplies it, the kept one the avatar.
 		expect(directory.name({ user_id: 'bo', name: 'Bo then' })).toBe('Bo then');
@@ -80,6 +80,10 @@ describe('directory', () => {
 		expect(directory.name({ user_id: 'ada', name: 'Ada Lovelace' })).toBe('Ada');
 		// No kept object and no name anywhere: the user_id.
 		expect(directory.name({ user_id: 'guest_7' })).toBe('guest_7');
+		// A mention of someone known only from a record resolves by the recorded name.
+		directory.apply(snapshot([ada], { recordedUsers: { guest_7: { user_id: 'guest_7', name: 'Seven' } } }), undefined);
+		expect(directory.resolve('guest_7')).toEqual({ kind: 'user', id: 'guest_7', name: 'Seven', me: false });
+		expect(directory.resolve('guest_8')).toBeUndefined();
 	});
 
 	it('keeps a cleared field cleared, whatever a stale record says (§3.3)', () => {
@@ -93,13 +97,7 @@ describe('directory', () => {
 		expect(directory.resolve('cy')).toEqual({ kind: 'user', id: 'cy', name: 'cy', me: false });
 	});
 
-	it('resolves a mention of someone known only from a record by the recorded name', () => {
-		directory.apply(snapshot([ada], { recordedUsers: { guest_7: { user_id: 'guest_7', name: 'Seven' } } }), undefined);
-		expect(directory.resolve('guest_7')).toEqual({ kind: 'user', id: 'guest_7', name: 'Seven', me: false });
-		expect(directory.resolve('guest_8')).toBeUndefined();
-	});
-
-	it('tells when another known user shows under the same name', () => {
+	it('tells when another known user shows under the same name, unless the name is the user\'s own user_id', () => {
 		const impostor = { user_id: 'guest_9', name: 'Ada' };
 		directory.apply(snapshot([ada, bo], { recordedUsers: { guest_9: impostor, bo: { user_id: 'bo', name: 'Bo' } } }), undefined);
 		// A kept user and one known only from a message share "Ada": both show their handle.
@@ -117,9 +115,7 @@ describe('directory', () => {
 		expect(directory.name({ user_id: 'guest_2', name: 'Guest' })).toBe('Ada');
 		expect(directory.sharesName({ user_id: 'guest_2', name: 'Guest' })).toBe(false);
 		expect(directory.sharesName(ada)).toBe(false);
-	});
-
-	it('skips the handle for a name that is the user\'s own user_id', () => {
+		// Not for a name that is the user's own user_id; whoever else shows under it still does.
 		const hyfen = { user_id: 'hyfen', name: 'hyfen' };
 		const nameless = { user_id: 'mo' };
 		const impostors = { guest_3: { user_id: 'guest_3', name: 'hyfen' }, guest_4: { user_id: 'guest_4', name: 'mo' } };

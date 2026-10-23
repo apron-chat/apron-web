@@ -11,22 +11,20 @@ const summary = (emoji: string, users: string[], mine = false): ReactionSummary 
 });
 
 describe('reaction chips', () => {
-	it('shows one chip per emoji with its count and whether you reacted', () => {
+	it('shows one chip per emoji with its count and whether you reacted, and none on tombstones or messages nobody reacted to', () => {
 		const chips = reactionChips([summary('👍', ['ada', 'bob', 'you'], true), summary('🎉', ['bob'])], 'you');
 		expect(chips.map(({ emoji, count, mine }) => [emoji, count, mine])).toEqual([['👍', 3, true], ['🎉', 1, false]]);
 		expect(chips[0].title).toBe('You, Ada and Bob reacted with 👍');
 		expect(chips[0].label).toBe('👍 3 reactions, including yours. Remove yours');
 		expect(chips[1].title).toBe('Bob reacted with 🎉');
 		expect(chips[1].label).toBe('🎉 1 reaction. Add yours');
-	});
-
-	it('hides reactions on tombstones and messages nobody reacted to', () => {
+		// None on tombstones, or for messages nobody reacted to.
 		expect(reactionChips([summary('👍', ['ada'])], 'you', true)).toEqual([]);
 		expect(reactionChips(undefined, 'you')).toEqual([]);
 		expect(reactionChips([summary('👍', [])], 'you')).toEqual([]);
 	});
 
-	it('names who reacted, you first, and sums up a long list', () => {
+	it('names who reacted, you first, summing up a long list, and lists them all', () => {
 		expect(whoReacted(summary('👍', ['you'], true), 'you')).toBe('You');
 		expect(whoReacted(summary('👍', ['ada', 'bob']), 'you')).toBe('Ada and Bob');
 		const crowd = summary('👍', ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'you'], true);
@@ -36,9 +34,7 @@ describe('reaction chips', () => {
 		// Callers render reactors through the kept user objects (§3.3).
 		expect(whoReacted(summary('👍', ['ada', 'bob']), 'you', (user) => `${user.user_id}!`)).toBe('ada! and bob!');
 		expect(reactionChips([summary('👍', ['ada'])], 'you', false, () => 'Kept')[0].title).toBe('Kept reacted with 👍');
-	});
-
-	it('lists everyone who reacted, you first', () => {
+		// And lists them all, you first.
 		expect(reactionChips([summary('👍', ['ada', 'bob', 'you'], true)], 'you')[0].reactors.map((user) => user.user_id)).toEqual(['you', 'ada', 'bob']);
 		expect(reactorsOf(summary('👍', ['bob', 'ada']), 'you').map((user) => user.name)).toEqual(['Ada', 'Bob']);
 		// Your own set counts before its echo names you.

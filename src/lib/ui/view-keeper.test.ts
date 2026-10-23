@@ -76,17 +76,13 @@ describe('keeping the view on this device', () => {
 });
 
 describe('showing the kept view', () => {
-	it('shows it only while the session it was kept for is still saved here', async () => {
-		const { keeper: some } = keeper();
+	it('shows it only while the session it was kept for is still saved here, never against the preview server or from an IndexedDB it can’t read', async () => {
+		const { keeper: some, idb } = keeper();
 		await some.keep(client(), view, ada);
 		// Signed out elsewhere (no saved session now): the view isn't shown as a guest's.
 		expect(await restored(some, client([]))).toBeUndefined();
 		expect(await restored(some, client())).toBeDefined();
-	});
-
-	it('shows nothing against the preview server, or when IndexedDB can’t be read', async () => {
-		const { keeper: some, idb } = keeper();
-		await some.keep(client(), view, ada);
+		// Nothing against the preview server, or when IndexedDB can’t be read.
 		expect(await restored(new ViewKeeper({ indexedDB: idb, enabled: false }), client())).toBeUndefined();
 		idb.failing = true;
 		expect(await restored(some, client())).toBeUndefined();

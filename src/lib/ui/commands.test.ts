@@ -4,13 +4,17 @@ import { composerAction, isCommand } from './commands';
 const both = { command: true, rooms: true };
 
 describe('composer commands', () => {
-	it('sends text starting with one slash as a command, and // as a message with one slash stripped', () => {
+	it('sends text starting with one slash as a command where the server takes commands, and // as a message with one slash stripped', () => {
 		expect(isCommand('/help')).toBe(true);
 		expect(isCommand('//etc/hosts')).toBe(false);
 		expect(isCommand(' /help')).toBe(false);
 		expect(composerAction('/kick @guest_2 spamming', both)).toEqual({ kind: 'command', text: '/kick @guest_2 spamming' });
 		expect(composerAction('//etc/hosts is odd', both)).toEqual({ kind: 'message', text: '/etc/hosts is odd' });
 		expect(composerAction('hello', both)).toEqual({ kind: 'message', text: 'hello' });
+		// Without cap command, every text is a message.
+		const none = { command: false, rooms: true };
+		expect(composerAction('/help', none)).toEqual({ kind: 'message', text: '/help' });
+		expect(composerAction('//x', none)).toEqual({ kind: 'message', text: '//x' });
 	});
 
 	it('handles the slash spellings of existing requests itself', () => {
@@ -38,11 +42,5 @@ describe('composer commands', () => {
 		// Email and federated forms are one ID.
 		expect(composerAction('/kick @ada@example.com', both)).toEqual({ kind: 'kick', user: 'ada@example.com' });
 		expect(composerAction('/invite carol:b.example.', both)).toEqual({ kind: 'invite', user: 'carol:b.example' });
-	});
-
-	it('treats every text as a message without cap command', () => {
-		const none = { command: false, rooms: true };
-		expect(composerAction('/help', none)).toEqual({ kind: 'message', text: '/help' });
-		expect(composerAction('//x', none)).toEqual({ kind: 'message', text: '//x' });
 	});
 });

@@ -14,7 +14,7 @@ function typed(text: string, caret = text.length, final = false) {
 }
 
 describe('composer mentions', () => {
-	it('chips a finished @user_id or @name and sends @user_id', () => {
+	it('chips a finished @user_id or @name and sends @user_id, keeping existing chips and moving the caret across new ones', () => {
 		expect(typed('hi @bob ').parts).toEqual(['hi ', { id: 'bob' }, ' ']);
 		expect(typed('hi @Bob, there').parts).toEqual(['hi ', { id: 'bob' }, ', there']);
 		expect(draftText(typed('hi @BOB and').parts)).toBe('hi @bob and');
@@ -22,9 +22,13 @@ describe('composer mentions', () => {
 		const both = typed('ask @ada lovelace now');
 		expect(both.parts).toEqual(['ask ', { id: 'lovelace' }, ' now']);
 		expect(both.caret).toBe('ask @lovelace now'.length);
+		// Existing chips stay, and the caret moves across new ones.
+		const collapsed = collapseMentions([{ id: 'bob' }, ' and @Ada s'], people, { caret: 15 });
+		expect(collapsed.parts).toEqual([{ id: 'bob' }, ' and ', { id: 'ada_1' }, ' s']);
+		expect(collapsed.caret).toBe('@bob and @ada_1 s'.length);
 	});
 
-	it('waits while a mention is still being typed', () => {
+	it('waits while a mention is still being typed, and chips one that ends the draft when sending', () => {
 		expect(typed('hi @bob').changed).toBe(false);
 		// The caret sits inside the mention.
 		expect(typed('hi @bob there', 5).changed).toBe(false);
@@ -33,9 +37,7 @@ describe('composer mentions', () => {
 		expect(typed('hi @Ada ').changed).toBe(false);
 		// Once it can't, the shorter name is the mention.
 		expect(typed('hi @Ada s').parts).toEqual(['hi ', { id: 'ada_1' }, ' s']);
-	});
-
-	it('chips a mention that ends the draft when sending', () => {
+		// Sending ends it.
 		expect(typed('hi @bob', 7, true).parts).toEqual(['hi ', { id: 'bob' }]);
 		expect(typed('hi @Ada', 7, true).parts).toEqual(['hi ', { id: 'ada_1' }]);
 	});
@@ -50,7 +52,7 @@ describe('composer mentions', () => {
 		expect(typed('`x` @bob ').parts).toEqual(['`x` ', { id: 'bob' }, ' ']);
 	});
 
-	it('chips email and federated IDs whole, and no name that what follows would make a longer ID', () => {
+	it('chips email and federated IDs whole, and any the directory knows, and no name that what follows would make a longer ID', () => {
 		const text = 'cc @ada@example.com, @carol:b.example. ';
 		const forms = collapseMentions([text], people, { caret: text.length, isUser: (id) => id === 'ada@example.com' || id === 'carol:b.example' });
 		expect(forms.parts).toEqual(['cc ', { id: 'ada@example.com' }, ', ', { id: 'carol:b.example' }, '. ']);
@@ -58,17 +60,9 @@ describe('composer mentions', () => {
 		expect(typed('hi @Bob.x there').changed).toBe(false);
 		expect(typed('hi @Bob@example.com there').changed).toBe(false);
 		expect(typed('hi @Bob. there').parts).toEqual(['hi ', { id: 'bob' }, '. there']);
-	});
-
-	it('takes IDs the directory knows beyond the room', () => {
+		// Any ID the directory knows, beyond the room.
 		const known = collapseMentions(['cc @carol_9 '], people, { caret: 12, isUser: (id) => id === 'carol_9' });
 		expect(known.parts).toEqual(['cc ', { id: 'carol_9' }, ' ']);
-	});
-
-	it('keeps existing chips and moves the caret across new ones', () => {
-		const collapsed = collapseMentions([{ id: 'bob' }, ' and @Ada s'], people, { caret: 15 });
-		expect(collapsed.parts).toEqual([{ id: 'bob' }, ' and ', { id: 'ada_1' }, ' s']);
-		expect(collapsed.caret).toBe('@bob and @ada_1 s'.length);
 	});
 
 	it('finds the query at the caret and swaps it for a chip', () => {
@@ -96,15 +90,15 @@ describe('draft text', () => {
 		expect(draftText([{ id: 'ada' }, ':-)'])).toBe('@ada:-)');
 	});
 
-	it('separates adjacent chips', () => {
+	it('separates adjacent chips, and a letter or digit from a chip’s prefix, counting caret positions without the added spaces', () => {
 		expect(draftText([{ id: 'ada' }, { id: 'bob' }])).toBe('@ada @bob');
 		expect(draftText([{ id: 'ada' }, { id: 'ops', room: true }])).toBe('@ada #ops');
 		expect(draftText([{ id: 'ops', room: true }, { id: 'ada' }, { id: 'bob' }, '+1'])).toBe('#ops @ada @bob +1');
 		// `_` ends an ID, and a `#` after it is still a room.
 		expect(draftText([{ id: 'ada_' }, { id: 'ops', room: true }])).toBe('@ada_#ops');
-	});
-
-	it('keeps a letter or digit off a chip\'s prefix', () => {
+		// Caret positions count without the added spaces.
+		expect(draftLength(['hi', { id: 'ada' }, { id: 'bob' }, '+1'])).toBe(12);
+		// A letter or digit is kept off a chip's prefix.
 		expect(draftText(['hi', { id: 'ada' }])).toBe('hi @ada');
 		expect(draftText(['v2', { id: 'ops', room: true }])).toBe('v2 #ops');
 		expect(draftText(['(', { id: 'ada' }, ')'])).toBe('(@ada)');
@@ -118,10 +112,6 @@ describe('draft text', () => {
 		expect(draftMentions(read.parts)).toEqual(draftMentions(parts));
 		expect(draftText(read.parts)).toBe(sent);
 	});
-
-	it('counts caret positions without the added spaces', () => {
-		expect(draftLength(['hi', { id: 'ada' }, { id: 'bob' }, '+1'])).toBe(12);
-	});
 });
 
 describe('draft mentions', () => {
@@ -132,11 +122,16 @@ describe('draft mentions', () => {
 });
 
 describe('inserting at the caret', () => {
-	it('puts text at a bare caret and the caret after it', () => {
+	it('puts text at a bare caret, clamped to the draft, and the caret after it, a leading slash left in place', () => {
 		expect(insertText(['hello world'], 5, 5, ' 👋')).toEqual({ parts: ['hello 👋 world'], caret: 8 });
 		expect(insertText(['hi'], 0, 0, '🎉')).toEqual({ parts: ['🎉hi'], caret: 2 });
 		expect(insertText(['hi'], 2, 2, '🎉')).toEqual({ parts: ['hi🎉'], caret: 4 });
 		expect(insertText([], 0, 0, '🎉')).toEqual({ parts: ['🎉'], caret: 2 });
+		// Positions are clamped to the draft.
+		expect(insertText(['hi'], 40, 50, '🎉')).toEqual({ parts: ['hi🎉'], caret: 4 });
+		expect(insertText(['hi'], -3, 1, '🎉')).toEqual({ parts: ['🎉i'], caret: 2 });
+		// A leading slash stays in place, so a command stays a command.
+		expect(draftText(insertText(['/shrug '], 7, 7, '🤷').parts)).toBe('/shrug 🤷');
 	});
 
 	it('replaces a selection, whichever way it was made', () => {
@@ -163,15 +158,6 @@ describe('inserting at the caret', () => {
 		expect(insertText(parts, 5, 9, '👋')).toEqual({ parts: ['hi 👋here'], caret: 5 });
 		expect(insertText(parts, 2, 8, '')).toEqual({ parts: ['hithere'], caret: 2 });
 	});
-
-	it('clamps positions to the draft', () => {
-		expect(insertText(['hi'], 40, 50, '🎉')).toEqual({ parts: ['hi🎉'], caret: 4 });
-		expect(insertText(['hi'], -3, 1, '🎉')).toEqual({ parts: ['🎉i'], caret: 2 });
-	});
-
-	it('leaves a leading slash in place, so a command stays a command', () => {
-		expect(draftText(insertText(['/shrug '], 7, 7, '🤷').parts)).toBe('/shrug 🤷');
-	});
 });
 
 describe('composer room chips', () => {
@@ -186,7 +172,7 @@ describe('composer room chips', () => {
 		expect(draftMentions(['hi ', { id: 'bob' }, ' in ', thread])).toEqual(['bob']);
 	});
 
-	it('chips a finished #room_id naming a known room, like a finished @user_id', () => {
+	it('chips a finished #room_id naming a known room, like a finished @user_id, not one still being typed', () => {
 		expect(typedRoom('see #1790473611343 now').parts).toEqual(['see ', thread, ' now']);
 		expect(typedRoom('see #general.', 13).parts).toEqual(['see ', { id: 'general', room: true }, '.']);
 		// Unknown, mid-word, headings and code stay text.
@@ -197,9 +183,7 @@ describe('composer room chips', () => {
 		// Straight after a chip, `@bob#general` reads as text to everyone else.
 		expect(collapseMentions([{ id: 'bob' }, '#general now'], people, { caret: 16, rooms }).parts).toEqual([{ id: 'bob' }, '#general now']);
 		expect(collapseMentions([{ id: 'bob' }, '@ada_1 now'], people, { caret: 14 }).parts).toEqual([{ id: 'bob' }, '@ada_1 now']);
-	});
-
-	it('waits while the #room_id is still being typed', () => {
+		// Not while it is still being typed.
 		expect(typedRoom('see #general').parts).toEqual(['see #general']);
 		expect(typedRoom('see #ops-').parts).toEqual(['see #ops-']);
 		expect(typedRoom('see #general', 12, true).parts).toEqual(['see ', { id: 'general', room: true }]);
@@ -209,17 +193,14 @@ describe('composer room chips', () => {
 describe('backspace against a chip', () => {
 	const label = (chip: DraftChip) => (chip.room ? '#Deploy checklist' : '@Ada Lovelace');
 
-	it('turns the chip just before the caret back into the text it showed', () => {
+	it('turns the chip just before the caret back into the text it showed, and nothing when no chip ends there', () => {
 		const parts: DraftPart[] = ['hi ', { id: 'lovelace' }, ' and ', { id: '1790473611343', room: true }];
 		// `@lovelace` ends at 12, `#1790473611343` at 31.
 		expect(unchip(parts, 12, label)).toEqual({ parts: ['hi @Ada Lovelace and ', { id: '1790473611343', room: true }], caret: 16 });
 		expect(unchip(parts, 31, label)).toEqual({ parts: ['hi ', { id: 'lovelace' }, ' and #Deploy checklist'], caret: 34 });
-	});
-
-	it('leaves the draft alone when no chip ends at the caret', () => {
-		const parts = ['hi ', { id: 'bob' }, ' there'];
+		// No chip ends at the caret: the draft is left alone.
 		expect(unchip(parts, 3, label)).toBeUndefined();
-		expect(unchip(parts, 8, label)).toBeUndefined();
+		expect(unchip(parts, 14, label)).toBeUndefined();
 		expect(unchip([], 0, label)).toBeUndefined();
 	});
 });

@@ -5,7 +5,7 @@ import { base64url } from '$lib/protocol/webauthn';
 import { accountServer, base64UrlToBytes, canOfferInstall, isStandalone, keepsPushOff, needsHomeScreen, offeredWake, pushHeldBy, sameServerKey, webPushAccount, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
 
 describe('web push', () => {
-	it('decodes base64url keys, padded or not, and encodes them back unpadded', () => {
+	it('decodes base64url keys, padded or not, encodes them back unpadded, and tells whether a subscription was made with the server\'s key', () => {
 		expect([...base64UrlToBytes('-_8')]).toEqual([0xfb, 0xff]);
 		expect([...base64UrlToBytes('-_8=')]).toEqual([0xfb, 0xff]);
 		expect([...base64UrlToBytes('')]).toEqual([]);
@@ -16,13 +16,11 @@ describe('web push', () => {
 		expect(base64url(bytes)).toBe(key);
 		expect(base64url(bytes.buffer)).toBe(key);
 		expect(() => base64UrlToBytes('not+base64/url')).toThrow();
-	});
-
-	it('tells whether a subscription was made with the server\'s key', () => {
-		const key = 'AQIDBA';
-		expect(sameServerKey(new Uint8Array([1, 2, 3, 4]).buffer, key)).toBe(true);
-		expect(sameServerKey(new Uint8Array([1, 2, 3, 5]).buffer, key)).toBe(false);
-		expect(sameServerKey(null, key)).toBe(false);
+		// And tells whether a subscription was made with the server's key.
+		const serverKey = 'AQIDBA';
+		expect(sameServerKey(new Uint8Array([1, 2, 3, 4]).buffer, serverKey)).toBe(true);
+		expect(sameServerKey(new Uint8Array([1, 2, 3, 5]).buffer, serverKey)).toBe(false);
+		expect(sameServerKey(null, serverKey)).toBe(false);
 		expect(sameServerKey(new Uint8Array([1]).buffer, '%%')).toBe(false);
 	});
 
@@ -37,16 +35,14 @@ describe('web push', () => {
 		expect(webPushRegistration({ keys: { p256dh: 'BPk', auth: 'c2Vj' } })).toBeUndefined();
 	});
 
-	it('reads the webpush key from the server frame\'s push kinds', () => {
+	it('reads the webpush key from the server frame\'s push kinds, and the wake scopes it pushes', () => {
 		const server = { apron: 9, auth: ['guest'] };
 		expect(webPushKey({ ...server, push: { relay: {}, webpush: { key: 'BNcR' } } })).toBe('BNcR');
 		expect(webPushKey({ ...server, push: { relay: {} } })).toBeUndefined();
 		expect(webPushKey({ ...server, push: { webpush: { key: '' } } })).toBeUndefined();
 		expect(webPushKey(server)).toBeUndefined();
 		expect(webPushKey(undefined)).toBeUndefined();
-	});
-
-	it('reads the wake scopes the server pushes', () => {
+		// And the wake scopes it pushes.
 		expect(offeredWake({ webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'ext:x', 3] })).toEqual(['mentions', 'replies', 'ext:x']);
 		expect(offeredWake({ webpush: { key: 'BNcR' } })).toEqual([]);
 		expect(offeredWake(undefined)).toEqual([]);

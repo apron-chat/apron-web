@@ -62,14 +62,11 @@ describe('alerts as messages arrive', () => {
 		expect(alerts).toEqual({ audible: 0, notify: [] });
 	});
 
-	it.each([
-		['notifications are off', { active: false }],
-		['someone is looking', { away: false }],
-		['paused or on do not disturb', { silenced: true }]
-	])('chimes but shows no notification while %s', (_, fields) => {
-		const { alerts } = alertsFor([general()], [general([mention(101)])], { settings: fields });
-		expect(alerts.audible).toBe(1);
-		expect(alerts.notify).toEqual([]);
+	it('chimes but shows no notification while notifications are off, someone is looking, or they are paused or on do not disturb', () => {
+		for (const fields of [{ active: false }, { away: false }, { silenced: true }]) {
+			const { alerts } = alertsFor([general()], [general([mention(101)])], { settings: fields });
+			expect(alerts, JSON.stringify(fields)).toMatchObject({ audible: 1, notify: [] });
+		}
 	});
 
 	it('notifies only about the checked scopes', () => {
@@ -80,9 +77,10 @@ describe('alerts as messages arrive', () => {
 		expect(notified(alertsFor(before, after, { settings: { scopes: ['joined'] } }).alerts)).toEqual([['101', false], ['102', false]]);
 	});
 
-	it('notifies once per room, for its newest mention over newer messages', () => {
-		const { alerts } = alertsFor([general()], [general([message(101), mention(102), message(103)])], { settings: { scopes: ['joined', 'mentions'] } });
-		expect(notified(alerts)).toEqual([['102', true]]);
+	it('notifies once per room, for its newest mention over newer messages, else its newest message', () => {
+		const random = (messages: MessageRecord[] = []) => roomSnapshot('random', messages, { latestLogId: '100' });
+		const { alerts } = alertsFor([general(), random()], [general([message(101), mention(102), message(103)]), random([message(104, 'random'), message(105, 'random')])], { settings: { scopes: ['joined', 'mentions'] } });
+		expect(notified(alerts)).toEqual([['102', true], ['105', false]]);
 	});
 
 	it('offers notifications at the first mention you’d hear, naming who and where', () => {

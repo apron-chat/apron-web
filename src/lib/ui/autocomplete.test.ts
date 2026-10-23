@@ -14,23 +14,17 @@ describe('emoji autocomplete', () => {
 		expect(emojiQuery([':'], 1)).toBeUndefined();
 	});
 
-	it('leaves one-letter emoticons alone, so Enter still sends them', () => {
+	it('does not trigger in the middle of words, in email-like text, across mention chips, or on one-letter emoticons, so Enter still sends them', () => {
 		expect(emojiQuery(['lol :D'], 6)).toBeUndefined();
 		expect(emojiQuery(['ok :p'], 5)).toBeUndefined();
 		expect(emojiQuery(['ok :pa'], 6)).toEqual({ query: 'pa', start: 3, end: 6 });
-	});
-
-	it('opens after a mention chip and a space', () => {
-		expect(emojiQuery([{ id: 'ada' }, ' :wav'], 9)).toEqual({ query: 'wav', start: 5, end: 9 });
-	});
-
-	it('does not trigger in the middle of words, in email-like text, or across mention chips', () => {
 		expect(emojiQuery(['hello:smile'], 11)).toBeUndefined();
 		expect(emojiQuery(['mail@example.com'], 12)).toBeUndefined();
 		expect(emojiQuery([{ id: 'ada' }, ':smile'], 10)).toBeUndefined();
 	});
 
-	it('keeps replacement offsets correct after a mention chip', () => {
+	it('opens after a mention chip and a space, keeping replacement offsets correct', () => {
+		expect(emojiQuery([{ id: 'ada' }, ' :wav'], 9)).toEqual({ query: 'wav', start: 5, end: 9 });
 		const parts = [{ id: 'ada' }, ' text :smile after'];
 		const found = emojiQuery(parts, 16);
 

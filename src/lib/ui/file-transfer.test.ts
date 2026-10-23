@@ -18,23 +18,19 @@ function transfer({ files = [], text = '', folders = [] }: { files?: File[]; tex
 
 const image = new File(['x'], 'shot.png', { type: 'image/png' });
 
-describe('carriesFiles', () => {
-	it('is true only for drags with files', () => {
+describe('dropping files', () => {
+	it('is for drags with files, and takes the files, leaving out folders', () => {
 		expect(carriesFiles(transfer({ files: [image] }))).toBe(true);
 		expect(carriesFiles(transfer({ text: 'https://example.com' }))).toBe(false);
 		expect(carriesFiles(null)).toBe(false);
-	});
-});
-
-describe('droppedFiles', () => {
-	it('takes the files and leaves out folders', () => {
 		expect(droppedFiles(transfer({ files: [image], folders: ['photos'] }))).toEqual([image]);
 	});
 });
 
 describe('pastedFiles', () => {
-	it('attaches a pasted image', () => {
+	it('attaches a pasted image, and nothing for plain text', () => {
 		expect(pastedFiles(transfer({ files: [image] }))).toEqual([image]);
+		expect(pastedFiles(transfer({ text: 'hello' }))).toEqual([]);
 	});
 
 	it('pastes the text when there is some beside a picture of it', () => {
@@ -46,9 +42,5 @@ describe('pastedFiles', () => {
 		expect(pastedFiles(transfer({ files: [image], text: 'shot.png' }))).toEqual([image]);
 		expect(pastedFiles(transfer({ files: [image, report], text: 'file:///home/ada/shot.png\nfile:///home/ada/my%20report.pdf' }))).toEqual([image, report]);
 		expect(pastedFiles(transfer({ files: [image], text: 'C:\\Users\\ada\\shot.png' }))).toEqual([image]);
-	});
-
-	it('has nothing to attach in plain text', () => {
-		expect(pastedFiles(transfer({ text: 'hello' }))).toEqual([]);
 	});
 });

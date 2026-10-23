@@ -9,7 +9,7 @@ const me = { user_id: 'guest_me', name: 'sam' };
 const message = (id: number, roomId: string, from = 'ada', fields: Partial<MessageRecord> = {}): MessageRecord => messageRecord(id, roomId, { from: { user_id: from }, ...fields });
 
 describe('unread tracking', () => {
-	it('counts arrivals from others, never history or your own messages', () => {
+	it('counts arrivals from others that still stand, never history or your own messages', () => {
 		const tracker = new UnreadTracker();
 		tracker.observe([room('general', [message(10, 'general')], { latestLogId: '10' }), room('random', [], { latestLogId: '10' })], me, 'general', true);
 		expect(tracker.total).toBe(0);
@@ -19,9 +19,12 @@ describe('unread tracking', () => {
 		], me, 'general', true);
 		expect(tracker.byRoom).toEqual({ random: 2 });
 		expect(tracker.total).toBe(2);
+		// One deleted since drops out.
+		tracker.observe([room('general', [message(10, 'general')]), room('random', [message(20, 'random', 'ada', { deleted: true }), message(21, 'random', me.user_id), message(22, 'random')])], me, 'general', true);
+		expect(tracker.total).toBe(1);
 	});
 
-	it('clears a room once you read its end, or your read cursor passes its arrivals', () => {
+	it('clears a room once you read its end, or your read cursor or your own read position passes its arrivals', () => {
 		const tracker = new UnreadTracker();
 		tracker.observe([room('general', [], { latestLogId: '10' }), room('random', [], { latestLogId: '10' })], me, 'general', true);
 		// Arrivals in the open pane count while you aren't reading its end (scrolled up, or the tab is hidden).
@@ -34,6 +37,9 @@ describe('unread tracking', () => {
 		// Read on another device up to 30: only 31 is left.
 		tracker.observe([general, { ...random, readMessageId: '30' }], me, 'general', true);
 		expect(tracker.total).toBe(1);
+		// Or up to how far you have read here, as given.
+		tracker.observe([general, room('random', [message(30, 'random'), message(31, 'random'), message(32, 'random')])], me, 'general', true, () => '31');
+		expect(tracker.byRoom).toEqual({ random: 1 });
 	});
 
 	it('counts replies in a thread you are not reading, until you open it', () => {
@@ -46,22 +52,6 @@ describe('unread tracking', () => {
 		expect(tracker.byRoom).toEqual({});
 	});
 
-	it('drops arrivals that were deleted', () => {
-		const tracker = new UnreadTracker();
-		tracker.observe([room('general', [], { latestLogId: '10' }), room('random', [], { latestLogId: '10' })], me, 'general', true);
-		tracker.observe([room('general', []), room('random', [message(20, 'random')])], me, 'general', true);
-		expect(tracker.total).toBe(1);
-		tracker.observe([room('general', []), room('random', [message(20, 'random', 'ada', { deleted: true })])], me, 'general', true);
-		expect(tracker.total).toBe(0);
-	});
-
-	it('clears arrivals up to how far you have read, as given', () => {
-		const tracker = new UnreadTracker();
-		tracker.observe([room('general', [], { latestLogId: '10' }), room('random', [], { latestLogId: '10' })], me, 'general', true);
-		const random = room('random', [message(20, 'random'), message(21, 'random'), message(22, 'random')]);
-		tracker.observe([room('general', []), random], me, 'general', true, () => '21');
-		expect(tracker.byRoom).toEqual({ random: 1 });
-	});
 });
 
 describe('countElsewhere', () => {

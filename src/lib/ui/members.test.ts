@@ -2,14 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { memberSections, userIdToAdd } from './members';
 
 describe('adding a member', () => {
-	it('takes exactly the user_id typed, with or without @', () => {
+	it('takes exactly the user_id typed, with or without @, and never a display name, which isn’t unique', () => {
 		expect(userIdToAdd(' @bob ')).toBe('bob');
 		expect(userIdToAdd('guest_1234')).toBe('guest_1234');
 		expect(userIdToAdd('@@bob')).toBe('@bob');
 		expect(userIdToAdd('@ada+chat@example.com')).toBe('ada+chat@example.com');
-	});
-
-	it('never reads a display name, which isn’t unique', () => {
 		expect(userIdToAdd('Bob Smith')).toBeUndefined();
 		expect(userIdToAdd('  ')).toBeUndefined();
 		expect(userIdToAdd('@')).toBeUndefined();
@@ -22,7 +19,7 @@ describe('member sections', () => {
 	type Person = { id: string; status?: string };
 	const sections = (people: Person[], presence = true) => memberSections(people, (person) => person.status, presence).map(({ label, people }) => [label, people.map((person) => person.id)]);
 
-	it('puts offline and invisible members under Offline, everyone else under Online, keeping the order they came in', () => {
+	it('puts offline and invisible members under Offline, everyone else under Online, keeping the order they came in, and leaves out an empty section', () => {
 		expect(sections([
 			{ id: 'a', status: 'offline' },
 			{ id: 'b', status: 'idle' },
@@ -31,9 +28,7 @@ describe('member sections', () => {
 			{ id: 'e', status: 'dnd' },
 			{ id: 'f', status: 'brb' }
 		])).toEqual([['Online', ['b', 'd', 'e', 'f']], ['Offline', ['a', 'c']]]);
-	});
-
-	it('leaves out an empty section', () => {
+		// An empty section is left out.
 		expect(sections([{ id: 'a', status: 'offline' }])).toEqual([['Offline', ['a']]]);
 		expect(sections([{ id: 'a', status: 'online' }])).toEqual([['Online', ['a']]]);
 		expect(sections([])).toEqual([]);

@@ -56,9 +56,14 @@ describe('a sign-in link this browser proposed', () => {
 		expect(host.signedIn).toHaveBeenCalledWith(THERE, true);
 		expect(host.failed).not.toHaveBeenCalled();
 		expect([links.busy, links.failure, said]).toEqual([false, undefined, ['… Signing in…', 'clear']]);
+		// One proposed to the server this page is on switches nothing.
+		links.follow({ token: 'tok2', state: 'sso' });
+		await settled();
+		expect(host.beforeSwitch).toHaveBeenLastCalledWith(false);
+		expect(host.signedIn).toHaveBeenLastCalledWith(HERE, false);
 	});
 
-	it('changes nothing when refused, and opens the connect screen on its server and scheme, saying how to start again', async () => {
+	it('changes nothing when refused, and opens the connect screen on its server and scheme, saying how to start again for that scheme', async () => {
 		const { links, host, answer } = page();
 		links.follow({ token: 'tok', state: 'mail' });
 		answer.signIn.reject(new Error('expired'));
@@ -66,19 +71,15 @@ describe('a sign-in link this browser proposed', () => {
 		const error = 'The sign-in link didn’t work (expired). Send a new code to try again, or pick another server.';
 		expect(host.failed).toHaveBeenCalledWith({ error, server: THERE, scheme: 'email' });
 		expect([host.signedIn.mock.calls, host.beforeSwitch.mock.calls, links.failure, links.busy]).toEqual([[], [], { error }, false]);
-	});
-
-	it('says to sign in again for an external sign-in', async () => {
-		const { links, host, answer } = page();
+		// An external sign-in's says to sign in again.
 		links.follow({ token: 'tok', state: 'sso' });
-		answer.signIn.reject(new Error('used'));
 		await settled();
-		expect(host.failed).toHaveBeenCalledWith(expect.objectContaining({ server: HERE, scheme: 'external', error: expect.stringContaining('Sign in again to try again') }));
+		expect(host.failed).toHaveBeenLastCalledWith(expect.objectContaining({ server: HERE, scheme: 'external', error: expect.stringContaining('Sign in again to try again') }));
 	});
 });
 
 describe('a sign-in link of no proposal here', () => {
-	it('is never used before the viewer confirms it', async () => {
+	it('is never used before the viewer confirms it, and dropped when the server it names isn’t one', async () => {
 		const { links, chat, host } = page();
 		const link = { token: 'tok', server: THERE };
 		links.follow(link);
@@ -88,6 +89,9 @@ describe('a sign-in link of no proposal here', () => {
 		expect(links.asked).toBeUndefined();
 		await settled();
 		expect([chat.signInWithLink.mock.calls, host.beforeSwitch.mock.calls]).toEqual([[], []]);
+		// One naming a server that isn't one is dropped without asking.
+		links.follow({ token: 'tok', server: undefined, badServer: true });
+		expect([links.asked, links.busy, chat.signInWithLink.mock.calls]).toEqual([undefined, false, []]);
 	});
 
 	it('signs in on the server it names once confirmed, with no proposal’s scheme or state', async () => {
@@ -99,12 +103,6 @@ describe('a sign-in link of no proposal here', () => {
 		answer.signIn.reject(new Error('nope'));
 		await settled();
 		expect(host.failed).toHaveBeenCalledWith({ error: askedLinkFailure('nope'), server: THERE });
-	});
-
-	it('is dropped when the server it names isn’t one', () => {
-		const { links, chat } = page();
-		links.follow({ token: 'tok', server: undefined, badServer: true });
-		expect([links.asked, links.busy, chat.signInWithLink.mock.calls]).toEqual([undefined, false, []]);
 	});
 
 	it('adds to this account when the viewer says it was sent for that, saying when it is refused', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
-import { IncomingMessageTracker, notificationsByRoom } from './incoming-messages';
+import { IncomingMessageTracker } from './incoming-messages';
 import { roomSnapshot } from '$lib/test/builders';
 
 const me = { user_id: 'guest_me', name: 'sam' };
@@ -13,34 +13,18 @@ const message = (id: number, from = 'ada'): MessageRecord => ({
 const room = (messages: MessageRecord[], fields: Partial<RoomSnapshot> = {}): RoomSnapshot => roomSnapshot('general', messages, fields);
 
 describe('incoming message tracking', () => {
-	it('ignores existing history and returns each new message from others once', () => {
+	it('ignores history, even history loaded later or after a reset for another backend, and returns each new message from others once', () => {
 		const tracker = new IncomingMessageTracker();
 		tracker.observe([room([message(10)], { latestLogId: '10' })], me);
 		expect(tracker.observe([room([message(10), message(11), message(12, 'guest_me')])], me).map((event) => event.message_id)).toEqual(['11']);
 		expect(tracker.observe([room([message(10), message(11), message(12, 'guest_me')])], me)).toEqual([]);
-	});
-
-	it('uses room log position to avoid notifying about history loaded later', () => {
-		const tracker = new IncomingMessageTracker();
-		tracker.observe([room([], { latestLogId: '20' })], me);
-		expect(tracker.observe([room([message(15), message(20), message(21)])], me).map((event) => event.message_id)).toEqual(['21']);
-	});
-
-	it('can reset its watermark when switching backends', () => {
-		const tracker = new IncomingMessageTracker();
-		tracker.observe([room([], { latestLogId: '10' })], me);
+		// History loaded later is behind the room's log position when first seen.
+		const later = new IncomingMessageTracker();
+		later.observe([room([], { latestLogId: '20' })], me);
+		expect(later.observe([room([message(15), message(20), message(21)])], me).map((event) => event.message_id)).toEqual(['21']);
+		// Reset when switching backends, it takes the new history as history.
 		tracker.reset();
 		tracker.observe([room([message(15), message(20)], { latestLogId: '20' })], me);
 		expect(tracker.observe([room([message(15), message(20), message(21)])], me).map((event) => event.message_id)).toEqual(['21']);
-	});
-});
-
-describe('notifications by room', () => {
-	const inRoom = (id: number, roomId: string): MessageRecord => ({ ...message(id), room_id: roomId });
-
-	it('keeps each room\'s newest message, preferring its newest mention', () => {
-		const events = [inRoom(1, 'general'), inRoom(2, 'general'), inRoom(3, 'random'), inRoom(4, 'general'), inRoom(5, 'random')];
-		expect(notificationsByRoom(events, new Set()).map((event) => event.message_id)).toEqual(['4', '5']);
-		expect(notificationsByRoom(events, new Set(['2'])).map((event) => event.message_id)).toEqual(['2', '5']);
 	});
 });

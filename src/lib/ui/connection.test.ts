@@ -34,14 +34,11 @@ describe('connection state', () => {
 });
 
 describe('sign-in and sign-up schemes (server.signup)', () => {
-	it('lets auth do both without signup', () => {
-		const server = { auth: ['webauthn', 'email'] };
-		expect(schemeUse(server, 'email')).toEqual({ signIn: true, signUp: true });
-		expect(schemeUse(server, 'guest')).toEqual({ signIn: false, signUp: false });
-		expect(offeredSchemes(server)).toEqual(['webauthn', 'email']);
-	});
-
-	it('splits signing in from creating an account with signup', () => {
+	it('lets auth do both without signup, and splits signing in from creating an account with it', () => {
+		const both = { auth: ['webauthn', 'email'] };
+		expect(schemeUse(both, 'email')).toEqual({ signIn: true, signUp: true });
+		expect(schemeUse(both, 'guest')).toEqual({ signIn: false, signUp: false });
+		expect(offeredSchemes(both)).toEqual(['webauthn', 'email']);
 		const server = { auth: ['webauthn'], signup: ['email'] };
 		expect(schemeUse(server, 'webauthn')).toEqual({ signIn: true, signUp: false });
 		expect(schemeUse(server, 'email')).toEqual({ signIn: false, signUp: true });
@@ -51,7 +48,7 @@ describe('sign-in and sign-up schemes (server.signup)', () => {
 });
 
 describe('ways back into an account', () => {
-	it('nudges a token-only account, and one made with a scheme that only signs up', () => {
+	it('nudges a token-only account, and one made with a scheme that only signs up, naming the ways back in words', () => {
 		expect(wayBackNudge({ auth: ['webauthn', 'email', 'token'] }, ['token'])).toEqual(['webauthn', 'email']);
 		expect(wayBackNudge({ auth: ['webauthn'] }, ['email'])).toEqual(['webauthn']);
 		expect(wayBackNudge({ auth: ['webauthn', 'token'] }, ['token', 'webauthn'])).toBeUndefined();
@@ -64,9 +61,7 @@ describe('ways back into an account', () => {
 		// Nothing to suggest, or nothing known.
 		expect(wayBackNudge({ auth: ['token'] }, ['token'])).toBeUndefined();
 		expect(wayBackNudge({ auth: ['webauthn'] }, undefined)).toBeUndefined();
-	});
-
-	it('words the suggestion', () => {
+		// In words.
 		expect(wayBackWords(['webauthn', 'email'])).toBe('a passkey or an email');
 		expect(wayBackWords(['webauthn', 'email', 'external'])).toBe('a passkey, an email or an external sign-in');
 		expect(wayBackWords(['external'])).toBe('an external sign-in');

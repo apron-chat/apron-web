@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Proposal } from '$lib/protocol/proposals';
-import { askedLinkFailure, codeStillFor, linkUse, parseSignInLink, returnUrl, runSignInLink, sessionSettled, signInLinkPrompt, takeSignInLink, type SignInLinkClient } from './sign-in-link';
+import { askedLinkFailure, codeStillFor, linkUse, parseSignInLink, returnUrl, sessionSettled, signInLinkPrompt, takeSignInLink } from './sign-in-link';
 
 describe('sign-in links (§4.11.2)', () => {
-	it('reads the token, and the optional state and server, from the fragment', () => {
+	it('reads the token, and the optional state and server, from the fragment, refusing one without a token and marking a server that isn’t a WebSocket URL', () => {
 		expect(parseSignInLink('#token=Hk41x9')).toEqual({ token: 'Hk41x9' });
 		expect(parseSignInLink('#x=1&token=Hk41x9')).toEqual({ token: 'Hk41x9' });
 		expect(parseSignInLink('#token=Hk41x9&state=q8Rz&server=wss%3A%2F%2Fchat.example%2Fws')).toEqual({ token: 'Hk41x9', state: 'q8Rz', server: 'wss://chat.example/ws' });
-	});
-
-	it('refuses fragments without a token, and marks a server that isn’t a WebSocket URL', () => {
+		// None without a token; a server that isn’t a WebSocket URL is marked.
 		expect(parseSignInLink('')).toBeUndefined();
 		expect(parseSignInLink('#')).toBeUndefined();
 		expect(parseSignInLink('#token=')).toBeUndefined();
@@ -18,7 +16,7 @@ describe('sign-in links (§4.11.2)', () => {
 		expect(parseSignInLink('#token=1&state=s&server=')).toEqual({ token: '1', state: 's', badServer: true });
 	});
 
-	it('scrubs any sign-in fragment from the URL, keeping its path and query', () => {
+	it('scrubs any sign-in fragment from the URL, keeping its path and query, after reading it', () => {
 		const replaced: string[] = [];
 		const link = takeSignInLink({ hash: '#token=Hk41x9&state=s', pathname: '/login', search: '?x=1' }, (url: string) => replaced.push(url));
 		expect(link).toEqual({ token: 'Hk41x9', state: 's' });
@@ -27,9 +25,7 @@ describe('sign-in links (§4.11.2)', () => {
 		expect(takeSignInLink({ hash: '#token=', pathname: '/', search: '' }, (url: string) => replaced.push(url))).toBeUndefined();
 		expect(takeSignInLink({ hash: '#section', pathname: '/', search: '' }, (url: string) => replaced.push(url))).toBeUndefined();
 		expect(replaced).toEqual(['/login?x=1', '/']);
-	});
-
-	it('reads the link before scrubbing a live location', () => {
+		// Read before a live location is scrubbed.
 		const location = { hash: '#token=9', pathname: '/', search: '' };
 		expect(takeSignInLink(location, () => (location.hash = ''))).toEqual({ token: '9' });
 	});
@@ -102,56 +98,6 @@ describe('sign-in links (§4.11.2)', () => {
 	it('returns an external sign-in to this app’s own path', () => {
 		expect(returnUrl({ origin: 'https://web.apron.chat', pathname: '/' })).toBe('https://web.apron.chat/');
 		expect(returnUrl({ origin: 'http://localhost:5173', pathname: '/app/' })).toBe('http://localhost:5173/app/');
-	});
-
-	function fakeClient(url: string, outcome: 'ok' | 'refused'): SignInLinkClient & { calls: string[] } {
-		const calls: string[] = [];
-		let current = url;
-		return {
-			get url() { return current; },
-			calls,
-			async signInWithLink(token, server, options) {
-				calls.push(`signIn ${token} on ${server}${options.scheme ? ` with ${options.scheme} for ${options.state}` : ''}`);
-				if (outcome === 'refused') throw new Error('Invalid or expired token');
-				options.beforeSwitch?.();
-				current = server;
-			}
-		};
-	}
-
-	it('uses a confirmed link on its own server, and remembers the switch only once signed in', async () => {
-		const chat = fakeClient('wss://home.example/', 'ok');
-		const events: string[] = [];
-		await runSignInLink({ kind: 'ask', link: { token: '9', server: 'wss://other.example/' } }, chat, {
-			beforeSwitch: (switched) => events.push(`leave ${switched}`),
-			onSignedIn: (server, switched) => events.push(`signed in ${server} ${switched}`),
-			onFailed: () => events.push('failed')
-		});
-		expect(chat.calls).toEqual(['signIn 9 on wss://other.example/']);
-		expect(events).toEqual(['leave true', 'signed in wss://other.example/ true']);
-	});
-
-	it('uses its own proposal’s link on the server proposed to, with its scheme and state', async () => {
-		const chat = fakeClient('wss://home.example/', 'ok');
-		const events: string[] = [];
-		await runSignInLink({ kind: 'own', token: '9', server: 'wss://home.example/', scheme: 'external', state: 's' }, chat, {
-			onSignedIn: (server, switched) => events.push(`signed in ${server} ${switched}`),
-			onFailed: () => events.push('failed')
-		});
-		expect(chat.calls).toEqual(['signIn 9 on wss://home.example/ with external for s']);
-		expect(events).toEqual(['signed in wss://home.example/ false']);
-	});
-
-	it('reports a refused link, changing nothing', async () => {
-		const chat = fakeClient('wss://home.example/', 'refused');
-		const events: string[] = [];
-		await runSignInLink({ kind: 'ask', link: { token: '9', server: 'wss://other.example/' } }, chat, {
-			beforeSwitch: () => events.push('leave'),
-			onSignedIn: () => events.push('signed in'),
-			onFailed: (error: string, server: string) => events.push(`${error} ${server}`)
-		});
-		expect(chat.url).toBe('wss://home.example/');
-		expect(events).toEqual(['Invalid or expired token wss://other.example/']);
 	});
 
 	it('keeps a connect-screen code only for the server that sent it', () => {

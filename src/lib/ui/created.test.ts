@@ -6,20 +6,15 @@ const open = { id: 'general', title: 'General' };
 const thread = (id: string, isPrivate: boolean) => ({ id, title: id, parentRoomId: 'secret', ...(isPrivate ? { private: true as const } : {}) });
 
 describe('a thread this page created', () => {
-	it('waits until its room_update has listed it', () => {
+	it('waits until its room_update has listed it, then opens a private room’s thread that came back private, and any thread of an ordinary room', () => {
 		expect(createdThread({ room: 'secret', thread: 't1' }, [secret])).toBe('wait');
-	});
-
-	it('opens a private room’s thread that came back private, and any thread of an ordinary room', () => {
 		expect(createdThread({ room: 'secret', thread: 't1', replyTo: '5' }, [secret, thread('t1', true)])).toBe('open');
 		expect(createdThread({ room: 'general', thread: 't2' }, [open, { id: 't2', title: 't2' }])).toBe('open');
 	});
 
-	it('refuses a private room’s thread the server made visible to others, so nothing is posted into it', () => {
+	it('refuses a private room’s thread the server made visible to others, so nothing is posted into it, unless messages were moved into it', () => {
 		expect(createdThread({ room: 'secret', thread: 't1', replyTo: '5' }, [secret, thread('t1', false)])).toEqual({ refuse: PRIVACY_LOST });
-	});
-
-	it('opens one that messages were moved into whatever it shows: the move checked its privacy first', () => {
+		// Unless messages were moved into it: the move checked its privacy first.
 		expect(createdThread({ room: 'secret', thread: 't1', moved: true }, [secret, thread('t1', false)])).toBe('open');
 	});
 });

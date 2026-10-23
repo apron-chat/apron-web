@@ -43,11 +43,6 @@ describe('showing notifications', () => {
 		vi.stubGlobal('isSecureContext', true);
 	}
 
-	it('shows the page\'s own notification without a service worker', async () => {
-		stubPermission('granted', () => undefined);
-		expect(await showNotification('ada · general', { body: 'hi' }, () => undefined)).toBe(true);
-	});
-
 	it('shows through the service worker when there is one, so pushes share its tags, and closes the room\'s older one', async () => {
 		const construct = vi.fn();
 		stubPermission('granted', construct);
@@ -301,7 +296,7 @@ describe('push notifications', () => {
 		expect(pageTarget({ push: true, roomId: 'general' })).toBeUndefined();
 	});
 
-	it('replaces the page\'s older notification of a room with the newer message\'s, without a service worker', async () => {
+	it('shows the page\'s own notification without a service worker, replacing the room\'s older one with the newer message\'s', async () => {
 		type Shown = { tag?: string; data?: unknown; close: () => void; closed: boolean };
 		const shown: Shown[] = [];
 		const Page = vi.fn(function (this: Shown, _title: string, options: NotificationOptions) {
@@ -313,13 +308,13 @@ describe('push notifications', () => {
 		});
 		vi.stubGlobal('Notification', Object.assign(Page, { permission: 'granted' }));
 		vi.stubGlobal('isSecureContext', true);
-		await showNotification('ada · general', messageOptions('1'), () => undefined);
+		expect(await showNotification('ada · general', messageOptions('1'), () => undefined)).toBe(true);
 		await showNotification('ada · general', messageOptions('2'), () => undefined);
 		await showNotification('ada · ops', messageOptions('3', 'ops'), () => undefined);
 		expect(shown.map((entry) => entry.closed)).toEqual([true, false, false]);
 	});
 
-	it('reads a badge push, with no message, as no notification', () => {
+	it('reads a badge push, with no message, or a message without the envelope, as no notification', () => {
 		expect(readPush({ push_id: 'a1', unread: 0 })).toEqual({ pushId: 'a1', unread: 0 });
 		expect(readPush({ push_id: 'a1' })).toEqual({ pushId: 'a1' });
 		expect(readPush({ unread: -1, message: 'nope' })).toEqual({ unreadable: true });
@@ -327,9 +322,7 @@ describe('push notifications', () => {
 		// Anything but an object can't be read.
 		expect(readPush('hello')).toBeUndefined();
 		expect(readPush(undefined)).toBeUndefined();
-	});
-
-	it('reads a message object without the envelope as no notification', () => {
+		// Nor is a message object without the envelope.
 		expect(readPush({ message_id: '7', room_id: 'general', push_id: 'a1', from: { user_id: 'bob' } })).toEqual({ pushId: 'a1' });
 	});
 
@@ -348,13 +341,11 @@ describe('push notifications', () => {
 describe('offersNotifications', () => {
 	const fresh = { chosen: false, active: false, permission: 'default' as const, silenced: false };
 
-	it('offers them at a mention until they are chosen on this device', () => {
+	it('offers them at a mention until they are chosen on this device, and not while on, blocked, unsupported or silenced', () => {
 		expect(offersNotifications(fresh)).toBe(true);
 		expect(offersNotifications({ ...fresh, permission: 'granted' })).toBe(true);
 		expect(offersNotifications({ ...fresh, chosen: true })).toBe(false);
-	});
-
-	it('not while they are on, blocked or unsupported, or paused or on do not disturb', () => {
+		// Not while they are on, blocked or unsupported, or paused or on do not disturb.
 		expect(offersNotifications({ ...fresh, active: true })).toBe(false);
 		expect(offersNotifications({ ...fresh, permission: 'denied' })).toBe(false);
 		expect(offersNotifications({ ...fresh, permission: 'unsupported' })).toBe(false);
@@ -365,13 +356,11 @@ describe('offersNotifications', () => {
 describe('offersAtSignIn', () => {
 	const fresh = { chosen: false, active: false, permission: 'default' as const, silenced: false, installed: true, push: true };
 
-	it('offers them at sign-in in an installed app where push works', () => {
+	it('offers them at sign-in in an installed app where push works, unless chosen, on, blocked or silenced', () => {
 		expect(offersAtSignIn(fresh)).toBe(true);
 		expect(offersAtSignIn({ ...fresh, installed: false })).toBe(false);
 		expect(offersAtSignIn({ ...fresh, push: false })).toBe(false);
-	});
-
-	it('not once chosen, on, blocked, or silenced, as at a mention', () => {
+		// Not once chosen, on, blocked, or silenced, as at a mention.
 		expect(offersAtSignIn({ ...fresh, chosen: true })).toBe(false);
 		expect(offersAtSignIn({ ...fresh, active: true })).toBe(false);
 		expect(offersAtSignIn({ ...fresh, permission: 'denied' })).toBe(false);

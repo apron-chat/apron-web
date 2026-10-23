@@ -48,7 +48,7 @@ describe('MessageSelection.move', () => {
 		expect(moveMessage.mock.calls.map(([id]) => id)).toEqual(['b2', '1', '3', 'b4']);
 	});
 
-	it('moves none when the server refuses someone else\'s message', async () => {
+	it('moves none when the server refuses someone else\'s message, and keeps those it refuses after that probe', async () => {
 		const { client, moveMessage } = fakeClient(['b2']);
 		const selection = picked(['1', 'b2', '3']);
 		const result = await selection.move(client, 'thread', own);
@@ -58,14 +58,11 @@ describe('MessageSelection.move', () => {
 		// The selection stays as it was, ready for Cancel or a change.
 		expect(selection.current).toMatchObject({ ids: ['1', 'b2', '3'], saving: false });
 		expect(selection.current?.denied).toBeUndefined();
-	});
-
-	it('keeps the messages the server refused after the probe picked', async () => {
-		const { client } = fakeClient(['3']);
-		const selection = picked(['b1', '2', '3']);
-		const result = await selection.move(client, 'general', own);
-		expect(result.moved).toBe(false);
-		expect(selection.current).toMatchObject({ ids: ['3'], denied: { failed: 1, total: 3 } });
+		// Refused after the probe passed: the refused ones stay picked.
+		const later = fakeClient(['3']);
+		const rest = picked(['b1', '2', '3']);
+		expect((await rest.move(later.client, 'general', own)).moved).toBe(false);
+		expect(rest.current).toMatchObject({ ids: ['3'], denied: { failed: 1, total: 3 } });
 	});
 });
 
@@ -77,13 +74,10 @@ describe('MessageSelection.move with authors', () => {
 		expect(joinRoom.mock.calls).toEqual([['thread', 'bob'], ['thread', 'bea']]);
 	});
 
-	it('adds no one without authors, as for a move back to the room', async () => {
-		const { client, joinRoom } = fakeClient();
-		await picked(['b1', '2']).move(client, 'general', own);
-		expect(joinRoom).not.toHaveBeenCalled();
-	});
-
-	it('adds only the authors of messages that moved', async () => {
+	it('adds only the authors of messages that moved, and no one without authors, as for a move back to the room', async () => {
+		const back = fakeClient();
+		await picked(['b1', '2']).move(back.client, 'general', own);
+		expect(back.joinRoom).not.toHaveBeenCalled();
 		const { client, joinRoom } = fakeClient(['b2']);
 		await picked(['b2', '1']).move(client, 'thread', own, authors);
 		expect(joinRoom).not.toHaveBeenCalled();
@@ -110,7 +104,7 @@ describe('MessageSelection.moveToNewThread', () => {
 		expect(moveMessage).not.toHaveBeenCalled();
 	});
 
-	it('creates the thread with the title and summary asked for, then moves the messages in, someone else\'s first', async () => {
+	it('creates the thread with the title and summary asked for, then moves the messages in, someone else\'s first, adding their authors', async () => {
 		const { client, moveMessage, createRoom } = fakeClient();
 		const selection = picked(['1', 'b2']);
 		expect(selection.checkMovable(() => true)).toBeUndefined();
@@ -118,11 +112,9 @@ describe('MessageSelection.moveToNewThread', () => {
 			.toEqual({ moved: true, room: 'thread_new' });
 		expect(createRoom).toHaveBeenCalledWith({ parentRoomId: 'general', title: 'T', description: 'About T' });
 		expect(moveMessage.mock.calls).toEqual([['b2', 'thread_new'], ['1', 'thread_new']]);
-	});
-
-	it('adds the moved messages\' authors to the new thread', async () => {
-		const { client, joinRoom } = fakeClient();
-		await picked(['1', 'b2']).moveToNewThread(client, { parentRoomId: 'general', title: 'T', own, movable: () => true, authors });
+		// With authors, they are added to it.
+		const { client: adding, joinRoom } = fakeClient();
+		await picked(['1', 'b2']).moveToNewThread(adding, { parentRoomId: 'general', title: 'T', own, movable: () => true, authors });
 		expect(joinRoom.mock.calls).toEqual([['thread_new', 'bob']]);
 	});
 

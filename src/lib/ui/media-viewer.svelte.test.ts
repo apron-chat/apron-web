@@ -2,7 +2,6 @@
 import { flushSync, tick } from 'svelte';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import MediaViewer from '$lib/design/components/MediaViewer.svelte';
-import { plainClick } from '$lib/design/components/util';
 import EmbedUpload from '$lib/components/embeds/EmbedUpload.svelte';
 import { gallery, mediaItemOf, mediaViewer } from './media-viewer.svelte';
 import { render } from '$lib/test/dom';
@@ -27,15 +26,6 @@ afterEach(() => {
 function link(src: string, title: string, extra = ''): string {
 	return `<a href="https://files.example/${title}" data-viewer-src="${src}" data-viewer-title="${title}" ${extra}>${title}</a>`;
 }
-
-describe('plainClick', () => {
-	it('takes only the main button with no modifier', () => {
-		expect(plainClick(new MouseEvent('click', { button: 0 }))).toBe(true);
-		for (const init of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
-			expect(plainClick(new MouseEvent('click', { button: 0, ...init })), JSON.stringify(init)).toBe(false);
-		}
-	});
-});
 
 describe('gallery', () => {
 	it('pages through the images in the same timeline, in order, from the one clicked', () => {
@@ -103,12 +93,12 @@ describe('MediaViewer', () => {
 describe('an image upload', () => {
 	const embed = { kind: 'upload', url: 'https://files.example/dusk.jpg', title: 'dusk.jpg', og: { image: { url: PIXEL, width: 960, height: 600 } } };
 
-	it('opens in the viewer on a plain click, and stays a link on a Cmd or Ctrl click', () => {
+	it('opens in the viewer on a plain click, and stays a link on a click with a modifier or another button', () => {
 		render(EmbedUpload, { embed, detail: 'Grace Hopper · 4:00 PM' });
 		const anchor = document.querySelector<HTMLAnchorElement>('a.ap-embed-imagelink')!;
 		expect(anchor.target).toBe('_blank');
 
-		for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+		for (const modifier of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
 			const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ...modifier });
 			anchor.dispatchEvent(click);
 			expect(click.defaultPrevented, JSON.stringify(modifier)).toBe(false);
