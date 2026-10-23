@@ -1,19 +1,10 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import AddMemberForm from './AddMemberForm.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(AddMemberForm, { target: document.body, props });
-	flushSync();
+	dom.render(AddMemberForm, props);
 	return document.querySelector<HTMLFormElement>('form')!;
 }
 
@@ -27,17 +18,17 @@ describe('AddMemberForm', () => {
 		expect(form.querySelector('option')?.textContent).toBe('Cy (@cy)');
 		submit(form);
 		expect(onadd).toHaveBeenCalledWith('@cy');
-		unmount(instance!);
+		dom.unmount();
 		const busy = render({ value: '@cy', busy: true });
 		expect([busy.querySelector('input')!.disabled, busy.querySelector<HTMLButtonElement>('button')!.disabled]).toEqual([true, true]);
-		unmount(instance!);
+		dom.unmount();
 		expect(render({ value: '  ' }).querySelector<HTMLButtonElement>('button')!.disabled).toBe(true);
 	});
 
 	it('focuses its field when asked, and asks to be dismissed on Escape', () => {
 		const ondismiss = vi.fn();
 		const form = render({ ondismiss });
-		(instance as unknown as { focus(): void }).focus();
+		dom.exportsOf<{ focus(): void }>().focus();
 		const field = form.querySelector('input')!;
 		expect(document.activeElement).toBe(field);
 		field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

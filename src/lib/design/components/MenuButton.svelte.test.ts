@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createRawSnippet, flushSync, tick } from 'svelte';
+import { describe, expect, it, vi } from 'vitest';
 import MenuButton from './MenuButton.svelte';
+import * as dom from '$lib/test/dom';
 
 const choices = [
 	{ value: '1h', label: 'For 1 hour', hint: 'until 14:30' },
@@ -9,17 +10,8 @@ const choices = [
 	{ value: 'resume', label: 'Until I resume' }
 ];
 
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
-
 function render(onselect = vi.fn()) {
-	instance = mount(MenuButton, { target: document.body, props: { label: 'Pause…', choices, onselect } });
-	flushSync();
+	dom.render(MenuButton, { label: 'Pause…', choices, onselect });
 	return { trigger: document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!, onselect };
 }
 
@@ -67,8 +59,7 @@ describe('MenuButton', () => {
 
 	it('as a picker, checks the selected choice, opens on it, and draws a lead before each label', async () => {
 		const onselect = vi.fn();
-		instance = mount(MenuButton, { target: document.body, props: { label: '8 hours', choices, onselect, selected: '8h', ariaLabel: 'Pause: 8 hours', lead: createRawSnippet((value: () => string) => ({ render: () => `<i class="lead">${value()}</i>` })) } });
-		flushSync();
+		dom.render(MenuButton, { label: '8 hours', choices, onselect, selected: '8h', ariaLabel: 'Pause: 8 hours', lead: createRawSnippet((value: () => string) => ({ render: () => `<i class="lead">${value()}</i>` })) });
 		const trigger = document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
 		expect(trigger.getAttribute('aria-label')).toBe('Pause: 8 hours');
 		trigger.click();
@@ -100,8 +91,7 @@ describe('MenuButton', () => {
 
 	it('while busy, keeps focus and stays closed instead of being disabled', async () => {
 		const props = $state({ label: 'Saving…', choices, onselect: vi.fn(), busy: true });
-		instance = mount(MenuButton, { target: document.body, props });
-		flushSync();
+		dom.render(MenuButton, props);
 		const trigger = document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
 		trigger.focus();
 		expect(trigger.disabled).toBe(false);
@@ -124,8 +114,7 @@ describe('MenuButton', () => {
 	it('draws an icon button named by its label, and marks the items for tests', async () => {
 		const icon = createRawSnippet(() => ({ render: () => '<svg aria-hidden="true"></svg>' }));
 		const actions = [{ value: 'edit', label: 'Edit room', testid: 'edit-room' }, { value: 'leave', label: 'Leave room', testid: 'leave-room' }];
-		instance = mount(MenuButton, { target: document.body, props: { label: 'Room actions', icon, buttonTestid: 'room-actions', choices: actions, onselect: vi.fn() } });
-		flushSync();
+		dom.render(MenuButton, { label: 'Room actions', icon, buttonTestid: 'room-actions', choices: actions, onselect: vi.fn() });
 		const trigger = document.querySelector<HTMLButtonElement>('[data-testid="room-actions"]')!;
 		expect(trigger.classList.contains('ap-iconbtn')).toBe(true);
 		expect(trigger.getAttribute('aria-label')).toBe('Room actions');
@@ -139,8 +128,7 @@ describe('MenuButton', () => {
 
 	it('runs a caller’s onkeydown first, which can keep its own keys from running', async () => {
 		const onkeydown = vi.fn((event: KeyboardEvent) => { if (event.key === 'ArrowDown') event.preventDefault(); });
-		instance = mount(MenuButton, { target: document.body, props: { label: 'Pause…', choices, onselect: vi.fn(), onkeydown, 'data-testid': 'pause' } });
-		flushSync();
+		dom.render(MenuButton, { label: 'Pause…', choices, onselect: vi.fn(), onkeydown, 'data-testid': 'pause' });
 		const trigger = document.querySelector<HTMLButtonElement>('[data-testid="pause"] > button')!;
 		trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 		flushSync();

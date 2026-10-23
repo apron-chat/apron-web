@@ -1,19 +1,11 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'svelte';
+import { describe, expect, it, vi } from 'vitest';
 import SelectionBar from './SelectionBar.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(SelectionBar, { target: document.body, props: { count: 2, ...props } });
-	flushSync();
+	dom.render(SelectionBar, { count: 2, ...props });
 }
 
 const buttons = () => [...document.querySelectorAll('button')].map((button) => button.textContent);
@@ -35,7 +27,7 @@ describe('SelectionBar', () => {
 	it('shows the menu for the room alone, and New thread and Select between only when you can use them', () => {
 		render({ room: 'general' });
 		expect(buttons()).toEqual(['Cancel', 'Move to thread ▾']);
-		unmount(instance!);
+		dom.unmount();
 		render({ onnewthread: vi.fn(), onselectrange: vi.fn(), newThreadTestid: 'new', 'data-testid': 'bar' });
 		expect(buttons()).toEqual(['Select between', 'Cancel', 'New thread']);
 		expect(document.querySelector('[data-testid=bar]')?.getAttribute('role')).toBe('toolbar');

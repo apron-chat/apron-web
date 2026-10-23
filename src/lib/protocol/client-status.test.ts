@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, type ClientSnapshot } from './client';
-import { FakeSocket } from './fake-socket';
+import { FakeSocket, startClient } from '$lib/test/client';
 
 /**
  * Kept statuses across sign-ins (§4.5): dropped at each one, however short
@@ -15,15 +15,10 @@ describe('kept statuses and sign-ins', () => {
 
 	beforeEach(() => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = ChatClient.fromOptions({ serverUrl: 'ws://fake.test/', onChange: (next) => (snapshot = next) });
-		client.start();
-		socket = FakeSocket.latest();
+		({ client, socket } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});
@@ -133,15 +128,10 @@ describe('a guest that signs in to an existing account, as others see it', () =>
 	let socket: FakeSocket;
 
 	beforeEach(() => {
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = ChatClient.fromOptions({ serverUrl: 'ws://fake.test/', onChange: (next) => (snapshot = next) });
-		client.start();
-		socket = FakeSocket.latest();
+		({ client, socket } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 	});
 
@@ -171,14 +161,10 @@ describe('server.status', () => {
 	let snapshot: ClientSnapshot;
 
 	beforeEach(() => {
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = ChatClient.fromOptions({ serverUrl: 'ws://fake.test/', onChange: (next) => (snapshot = next) });
-		client.start();
+		({ client } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 	});
 

@@ -1,22 +1,13 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import SignInForm from './SignInForm.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 /** The test ids the app gives its parts. */
 const TESTIDS = { tokenTestid: 'connect-token-input', emailTestid: 'connect-email-input', codeTestid: 'connect-code-input', nameTestid: 'connect-name-input', passkeyChoiceTestid: 'passkey-choice', pageLinkTestid: 'external-page-link' };
 
 function render(props: Record<string, unknown>) {
-	instance = mount(SignInForm, { target: document.body, props: { schemes: ['guest', 'webauthn', 'email', 'external', 'token'], scheme: 'guest', submit: 'Connect', ...TESTIDS, ...props } });
-	flushSync();
+	dom.render(SignInForm, { schemes: ['guest', 'webauthn', 'email', 'external', 'token'], scheme: 'guest', submit: 'Connect', ...TESTIDS, ...props });
 	return document.querySelector('form')!;
 }
 
@@ -33,14 +24,13 @@ describe('SignInForm', () => {
 	it('shows the fields the scheme takes, and the display name only where asked', () => {
 		render({ scheme: 'token', askName: false });
 		expect(testids()).toEqual(['connect-token-input']);
-		unmount(instance!);
+		dom.unmount();
 		render({ scheme: 'token', askName: true });
 		expect(testids()).toEqual(['connect-token-input', 'connect-name-input']);
-		unmount(instance!);
+		dom.unmount();
 		render({ scheme: 'email' });
 		expect(testids()).toEqual(['connect-email-input', 'connect-name-input']);
-		unmount(instance!);
-		instance = undefined;
+		dom.unmount();
 		render({ scheme: 'webauthn', passkeyChoice: true, askName: false });
 		expect(testids()).toEqual(['passkey-choice', 'passkey-choice-login', 'passkey-choice-register']);
 	});
@@ -53,7 +43,7 @@ describe('SignInForm', () => {
 		expect(document.querySelector('[role="status"]')!.textContent).toContain('If ada@example.com can sign in here');
 		document.querySelector<HTMLButtonElement>('.ap-connect-other')!.click();
 		expect(onrestart).toHaveBeenCalledOnce();
-		unmount(instance!);
+		dom.unmount();
 		render({ scheme: 'external', sent: { scheme: 'external', page: 'https://sso.example/' } });
 		expect(document.querySelector('[data-testid="external-page-link"]')!.getAttribute('href')).toBe('https://sso.example/');
 		expect(document.querySelector<HTMLInputElement>('[data-testid="connect-code-input"]')!.placeholder).toBe('From the sign-in page');

@@ -1,19 +1,10 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import NotifyPrompt from './NotifyPrompt.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Partial<{ whenClosed: boolean; pointer: boolean; onaccept: () => void; ondecline: () => void }> = {}) {
-	instance = mount(NotifyPrompt, { target: document.body, props: { from: 'Ada', room: 'General', whenClosed: true, onaccept: () => {}, ondecline: () => {}, ...props } });
-	flushSync();
+	dom.render(NotifyPrompt, { from: 'Ada', room: 'General', whenClosed: true, onaccept: () => {}, ondecline: () => {}, ...props });
 	return document.querySelector<HTMLElement>('[data-testid="notify-prompt"]')!;
 }
 
@@ -34,16 +25,14 @@ describe('NotifyPrompt', () => {
 		expect(prompt.textContent).toContain('on this device while it’s open.');
 		expect(prompt.classList.contains('ap-nudge-pointer')).toBe(false);
 		expect(prompt.textContent).not.toContain('Preferences');
-		unmount(instance!);
-		instance = undefined;
+		dom.unmount();
 		const pointing = render({ pointer: true });
 		expect(pointing.classList.contains('ap-nudge-pointer')).toBe(true);
 		expect(pointing.textContent).toContain('You can change this any time in Preferences.');
 	});
 
 	it('offered at sign-in, names no mention', () => {
-		instance = mount(NotifyPrompt, { target: document.body, props: { whenClosed: true, onaccept: () => {}, ondecline: () => {} } });
-		flushSync();
+		dom.render(NotifyPrompt, { whenClosed: true, onaccept: () => {}, ondecline: () => {} });
 		const prompt = document.querySelector<HTMLElement>('[data-testid="notify-prompt"]')!;
 		const detail = document.getElementById(prompt.getAttribute('aria-describedby')!);
 		expect(detail?.textContent).toBe('Apron can alert you on this device, even when it’s closed.');

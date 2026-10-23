@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'svelte';
+import { describe, expect, it, vi } from 'vitest';
 import CheckList from './CheckList.svelte';
+import * as dom from '$lib/test/dom';
 
 const options = [
 	{ value: 'mentions', title: 'Mentions', text: 'When someone @-mentions you' },
@@ -9,17 +10,8 @@ const options = [
 	{ value: 'private', title: 'Private rooms', text: 'Every message in private rooms you’re in', disabled: true, note: 'Not offered by this server' }
 ];
 
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
-
 function render(props: Record<string, unknown>) {
-	instance = mount(CheckList, { target: document.body, props: { label: 'Notify me about', options, ...props } as never });
-	flushSync();
+	dom.render(CheckList, { label: 'Notify me about', options, ...props } as never);
 	return [...document.querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
 }
 

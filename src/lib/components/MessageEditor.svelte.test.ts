@@ -1,16 +1,9 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'svelte';
+import { describe, expect, it, vi } from 'vitest';
 import type { Embed } from '$lib/protocol/types';
 import MessageEditor from './MessageEditor.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 const photo: Embed = { kind: 'upload', embed_id: 'e1', title: 'image.png', url: 'https://chat.test/f/1' };
 const notes: Embed = { kind: 'upload', embed_id: 'e2', title: 'notes.txt', url: 'https://chat.test/f/2' };
@@ -18,14 +11,12 @@ const link: Embed = { kind: 'link', url: 'https://github.com/a/b/pull/1', og: { 
 
 function render(props: Record<string, unknown> = {}) {
 	const handlers = { onsave: vi.fn(), oncancel: vi.fn() };
-	instance = mount(MessageEditor, { target: document.body, props: { text: 'see these', embeds: [photo, notes, link], uploads: {}, ...handlers, ...props } });
-	flushSync();
+	dom.render(MessageEditor, { text: 'see these', embeds: [photo, notes, link], uploads: {}, ...handlers, ...props });
 	return handlers;
 }
 
 const button = (name: string) => [...document.querySelectorAll('button')].find((node) => (node.getAttribute('aria-label') ?? node.textContent?.trim()) === name)!;
 const field = () => document.querySelector<HTMLTextAreaElement>('textarea')!;
-const key = (target: Element, key: string) => target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 
 function rename(from: string, to: string, commit = 'Enter') {
 	button(`Rename ${from}`).click();
@@ -33,7 +24,7 @@ function rename(from: string, to: string, commit = 'Enter') {
 	const input = document.querySelector<HTMLInputElement>('input[aria-label="File name"]')!;
 	input.value = to;
 	input.dispatchEvent(new Event('input', { bubbles: true }));
-	key(input, commit);
+	dom.press(input, commit);
 	flushSync();
 }
 
@@ -58,16 +49,16 @@ describe('MessageEditor', () => {
 
 	it('closes without saving when nothing changed, cancels on Escape, and saves text alone without embed edits', () => {
 		let { onsave, oncancel } = render();
-		key(field(), 'Enter');
+		dom.press(field(), 'Enter');
 		expect(onsave).not.toHaveBeenCalled();
 		expect(oncancel).toHaveBeenCalledTimes(1);
-		key(field(), 'Escape');
+		dom.press(field(), 'Escape');
 		expect(oncancel).toHaveBeenCalledTimes(2);
-		unmount(instance!);
+		dom.unmount();
 		({ onsave, oncancel } = render());
 		field().value = 'new words';
 		field().dispatchEvent(new Event('input', { bubbles: true }));
-		key(field(), 'Enter');
+		dom.press(field(), 'Enter');
 		expect(onsave).toHaveBeenCalledWith('new words', undefined);
 	});
 
@@ -77,7 +68,7 @@ describe('MessageEditor', () => {
 		button('Remove image.png').click();
 		flushSync();
 		expect(button('Save changes').disabled).toBe(false);
-		unmount(instance!);
+		dom.unmount();
 		render({ text: '', embeds: [photo] });
 		button('Remove image.png').click();
 		flushSync();

@@ -1,21 +1,13 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount, type Component } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import type { Component } from 'svelte';
+import { describe, expect, it } from 'vitest';
 import Avatar from './Avatar.svelte';
 import StatusDot from './StatusDot.svelte';
 import { presence, presenceLabel } from './util';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render<P extends Record<string, unknown>>(C: Component<P>, props: P): HTMLElement | null {
-	instance = mount(C, { target: document.body, props });
-	flushSync();
+	dom.render(C, props);
 	return document.querySelector<HTMLElement>('.ap-presence');
 }
 
@@ -39,11 +31,11 @@ describe('presence', () => {
 describe('StatusDot', () => {
 	it('draws offline as a hollow ring, your invisible as one too, and an unknown status as a placeholder with its value', () => {
 		expect(render(StatusDot, { status: 'offline' })?.className).toContain('ap-presence-offline');
-		unmount(instance!);
+		dom.unmount();
 		const invisible = render(StatusDot, { status: 'invisible' })!;
 		expect(invisible.className).toContain('ap-presence-invisible');
 		expect(invisible.title).toBe('Invisible');
-		unmount(instance!);
+		dom.unmount();
 		const unknown = render(StatusDot, { status: 'invisible-ish' })!;
 		expect(unknown.className).toContain('ap-presence-unknown');
 		expect(unknown.getAttribute('aria-label')).toBe('Unknown status: invisible-ish');
@@ -78,7 +70,7 @@ describe('Avatar with a status', () => {
 		expect(dot.className).toContain('ap-presence-offline');
 		expect(dot.title).toBe('Offline');
 		expect(dot.getAttribute('aria-hidden')).toBe('true');
-		unmount(instance!);
+		dom.unmount();
 		expect(render(Avatar, { name: 'Alice Chen', status: 'invisible', statusLabel: 'Invisible · others see you as offline' })?.title).toBe('Invisible · others see you as offline');
 	});
 

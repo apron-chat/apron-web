@@ -1,19 +1,10 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import ThreadItem from './ThreadItem.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(ThreadItem, { target: document.body, props: { thread: 'deploy', name: 'Deploy', ...props } });
-	flushSync();
+	dom.render(ThreadItem, { thread: 'deploy', name: 'Deploy', ...props });
 	return document.querySelector<HTMLButtonElement>('button.ap-room')!;
 }
 
@@ -22,12 +13,12 @@ const states = (row: HTMLElement) => ['ap-room-unread', 'ap-room-mention', 'ap-r
 describe('ThreadItem', () => {
 	it('tints a joined thread with a mention and steps back one with nothing new, never one you haven’t joined', () => {
 		expect(states(render({ mentions: 1 }))).toEqual(['ap-room-unread', 'ap-room-mention']);
-		unmount(instance!);
+		dom.unmount();
 		expect(states(render({}))).toEqual(['ap-room-quiet']);
-		unmount(instance!);
+		dom.unmount();
 		// Unjoined with or without Join on it, as where you only read.
 		expect(states(render({ unjoined: true }))).toEqual(['ap-room-unjoined']);
-		unmount(instance!);
+		dom.unmount();
 		expect(states(render({ unjoined: true, onjoin: () => {} }))).toEqual(['ap-room-unjoined']);
 	});
 
@@ -41,11 +32,11 @@ describe('ThreadItem', () => {
 		expect([leave.title, leave.getAttribute('aria-label'), leave.dataset.leave]).toEqual(['Leave thread', 'Leave Deploy', 'deploy']);
 		leave.click();
 		expect(onleave).toHaveBeenCalledOnce();
-		unmount(instance!);
+		dom.unmount();
 		render({ unjoined: true });
 		expect(document.querySelector('.ap-roomrow-nested > .ap-room')).not.toBeNull();
 		expect(document.querySelector('.ap-room-exit, .ap-room-join')).toBeNull();
-		unmount(instance!);
+		dom.unmount();
 		const onjoin = vi.fn();
 		render({ unjoined: true, onjoin });
 		const join = document.querySelector<HTMLButtonElement>('.ap-roomrow > .ap-room-join')!;
@@ -59,11 +50,11 @@ describe('ThreadItem', () => {
 		let row = render({ unjoined: true, ago, agoTestid: 'other-thread-ago', count: 3 });
 		expect(row.querySelector('small.ap-room-count')?.getAttribute('aria-label')).toBe('3 messages');
 		expect(row.querySelector('time')).toBeNull();
-		unmount(instance!);
+		dom.unmount();
 		row = render({ unjoined: true, ago, agoTestid: 'other-thread-ago' });
 		const time = row.querySelector('time[data-testid="other-thread-ago"]')!;
 		expect([time.textContent, time.getAttribute('datetime'), time.getAttribute('title')]).toEqual(['2h', '2026-10-22T10:00:00.000Z', 'Last active today']);
-		unmount(instance!);
+		dom.unmount();
 		row = render({ unread: 2, unreadTestid: 'thread-unread' });
 		expect(row.querySelector('[data-testid="thread-unread"]')?.getAttribute('aria-label')).toBe('2 unread replies');
 	});

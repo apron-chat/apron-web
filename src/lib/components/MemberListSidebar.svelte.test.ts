@@ -1,18 +1,14 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
+import { flushSync } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, RoomSnapshot } from '$lib/protocol/client';
 import type { Identity } from '$lib/protocol/types';
 import { directory } from '$lib/ui/directory.svelte';
 import { blankSnapshot, type SessionView } from '$lib/ui/session.svelte';
 import MemberListSidebar from './MemberListSidebar.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
+import * as dom from '$lib/test/dom';
 
 afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
 	localStorage.clear();
 	directory.forget();
 });
@@ -35,8 +31,7 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChan
 	directory.apply(snapshot, undefined);
 	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })) } as unknown as RoomSnapshot;
 	const session = { snapshot, canManageRooms: true } as unknown as SessionView;
-	instance = mount(MemberListSidebar, { target: document.body, props: { client: canChange ? ({} as never) : undefined, session, room, open: true, canChange } });
-	flushSync();
+	dom.render(MemberListSidebar, { client: canChange ? ({} as never) : undefined, session, room, open: true, canChange });
 	return [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
 }
 
@@ -99,7 +94,7 @@ describe('MemberListSidebar', () => {
 		expect(toggle().textContent).toBe('▾Offline· 2');
 		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', []]]);
 		expect(localStorage.getItem('apron.memberSections')).toBe('["offline"]');
-		unmount(instance!);
+		dom.unmount();
 		render(people);
 		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', []]]);
 		toggle().click();
@@ -135,7 +130,7 @@ describe('MemberListSidebar', () => {
 	it('shows your own status as you chose it: a pause doesn\'t change it, and invisible is a ring that says so', () => {
 		let rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'online' }], { mutedUntil: true });
 		expect(rows.find((row) => row.dataset.user === 'ada')?.dataset.status).toBe('online');
-		unmount(instance!);
+		dom.unmount();
 		const hidden = { ...ada, status: 'invisible' };
 		rows = render([hidden, { user_id: 'bo', name: 'Bo', status: 'online' }], { you: hidden });
 		expect(rows.map((row) => row.dataset.user)).toEqual(['bo', 'ada']);

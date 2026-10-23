@@ -1,18 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { createTimeline } from '$lib/protocol/reducer';
 import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
 import { keptRoom, keptView, MESSAGES_PER_ROOM, MESSAGE_MAX_AGE_MS, usableView, VIEW_MAX_AGE_MS } from './session-cache';
+import { roomSnapshot } from '$lib/test/builders';
 
 const now = Date.UTC(2026, 9, 7, 12, 0, 0);
 const HOUR = 60 * 60 * 1000;
 
 const message = (at: number, text = `at ${at}`): MessageRecord => ({ message_id: String(at), log_id: String(at), room_id: 'general', from: { user_id: 'ada', name: 'Ada' }, body: { text } });
 
-function room(messages: MessageRecord[], fields: Partial<RoomSnapshot> = {}): RoomSnapshot {
-	const timeline = { ...createTimeline('general'), events: Object.fromEntries(messages.map((event) => [event.message_id, event])), order: messages.map((event) => event.message_id) };
-	return { id: 'general', title: 'General', joined: true, timeline, recovering: false, loaded: true, loading: false, notices: [], ...fields };
-}
+const room = (messages: MessageRecord[], fields: Partial<RoomSnapshot> = {}): RoomSnapshot => roomSnapshot('general', messages, { title: 'General', ...fields });
 
 describe('keptRoom', () => {
 	it('keeps the last day of messages, with their reactions and the join lines among them', () => {

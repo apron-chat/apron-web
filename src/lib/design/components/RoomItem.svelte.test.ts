@@ -1,19 +1,11 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import RoomItem from './RoomItem.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(RoomItem, { target: document.body, props: { room: 'general', name: 'General', ...props } });
-	flushSync();
+	// Straight into the body: a test checks that a bare row has no wrapper.
+	dom.render(RoomItem, { room: 'general', name: 'General', ...props }, { target: document.body });
 	return document.querySelector<HTMLButtonElement>('button.ap-room')!;
 }
 
@@ -27,7 +19,7 @@ describe('RoomItem', () => {
 		expect([leave.title, leave.getAttribute('aria-label'), leave.dataset.leave]).toEqual(['Leave room', 'Leave General', 'general']);
 		leave.click();
 		expect(onleave).toHaveBeenCalledOnce();
-		unmount(instance!);
+		dom.unmount();
 		// A room with no action is the bare row.
 		expect(render({}).parentElement).toBe(document.body);
 	});
@@ -63,7 +55,7 @@ describe('RoomItem', () => {
 		expect(row.getAttribute('aria-current')).toBe('true');
 		row.click();
 		expect(order).toEqual(['click', 'select']);
-		unmount(instance!);
+		dom.unmount();
 		row = render({ onselect, onclick: (event: MouseEvent) => event.preventDefault() });
 		row.click();
 		expect(onselect).not.toHaveBeenCalled();

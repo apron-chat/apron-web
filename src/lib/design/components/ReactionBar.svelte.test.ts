@@ -1,24 +1,18 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ReactionBar from './ReactionBar.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
+import * as dom from '$lib/test/dom';
 
 beforeEach(() => vi.useFakeTimers());
 
 afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
 	vi.useRealTimers();
 });
 
 function render(props: Record<string, unknown> = {}) {
 	const ontoggle = vi.fn();
 	const onreactors = vi.fn();
-	instance = mount(ReactionBar, { target: document.body, props: { reactions: [{ emoji: '👍', count: 2, mine: true, who: 'You and Ada' }], ontoggle, onreactors, chipTestid: 'chip', ...props } });
-	flushSync();
+	dom.render(ReactionBar, { reactions: [{ emoji: '👍', count: 2, mine: true, who: 'You and Ada' }], ontoggle, onreactors, chipTestid: 'chip', ...props });
 	return { chip: document.querySelector<HTMLButtonElement>('[data-testid="chip"]')!, ontoggle, onreactors };
 }
 
@@ -32,7 +26,7 @@ describe('ReactionBar', () => {
 	it('labels a chip from who reacted, or from the title and label given', () => {
 		let { chip } = render();
 		expect([chip.title, chip.getAttribute('aria-label'), chip.dataset.emoji]).toEqual(['You and Ada reacted with 👍', '👍 2, including yours. Remove yours', '👍']);
-		unmount(instance!);
+		dom.unmount();
 		({ chip } = render({ reactions: [{ emoji: '🎉', count: 1, title: 'Ada reacted', label: '1 reaction with 🎉' }] }));
 		expect([chip.title, chip.getAttribute('aria-label')]).toEqual(['Ada reacted', '1 reaction with 🎉']);
 	});
@@ -84,7 +78,7 @@ describe('ReactionBar', () => {
 	it('shows the + button unless add is false', () => {
 		render();
 		expect(document.querySelector('.ap-rchip-add')).not.toBeNull();
-		unmount(instance!);
+		dom.unmount();
 		render({ add: false });
 		expect(document.querySelector('.ap-rchip-add')).toBeNull();
 	});

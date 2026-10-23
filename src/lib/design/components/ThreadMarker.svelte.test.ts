@@ -1,19 +1,11 @@
 // @vitest-environment jsdom
-import { createRawSnippet, flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { createRawSnippet } from 'svelte';
+import { describe, expect, it } from 'vitest';
 import ThreadMarker from './ThreadMarker.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(ThreadMarker, { target: document.body, props: { thread: 't1', name: 'Deploy', ...props } });
-	flushSync();
+	dom.render(ThreadMarker, { thread: 't1', name: 'Deploy', ...props });
 }
 
 const one = (selector: string) => document.querySelector(selector);
@@ -46,7 +38,7 @@ describe('ThreadMarker', () => {
 		render({ name: '' });
 		expect(one('.ap-thread-name')?.textContent).toBe('Untitled');
 		expect(one('.ap-thread-name')?.getAttribute('title')).toBe('t1');
-		unmount(instance!);
+		dom.unmount();
 		render({ name: '  ', moved: true });
 		expect(one('.ap-thread-moved button')?.textContent).toBe('Untitled');
 		expect(one('.ap-thread-moved button')?.getAttribute('title')).toBe('t1');

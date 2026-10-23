@@ -1,39 +1,30 @@
 // @vitest-environment jsdom
-import { createRawSnippet, flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createRawSnippet } from 'svelte';
+import { describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
 import ComposerEditable from './ComposerEditable.svelte';
+import * as dom from '$lib/test/dom';
 
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
-
-const html = (markup: string) => createRawSnippet(() => ({ render: () => markup }));
 const testid = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
 
 /** The app's test ids, as it passes them. */
 const testids = { replyTestid: 'reply-draft', attachmentsTestid: 'staged-files', previewsTestid: 'link-previews', fileInputTestid: 'attach-input', commandTestid: 'command-tag', emojiTestid: 'emoji-button', sendTestid: 'send-button' };
 
 function render(props: Record<string, unknown>, component: typeof Composer | typeof ComposerEditable = Composer) {
-	instance = mount(component, { target: document.body, props: component === Composer ? { room: 'Ops', ...testids, ...props } : props });
-	flushSync();
+	dom.render(component, component === Composer ? { room: 'Ops', ...testids, ...props } : props);
 }
 
 describe('Composer', () => {
 	it('disables Send on an empty draft unless told it has something to send, or it has files', () => {
 		render({});
 		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(true);
-		unmount(instance!);
+		dom.unmount();
 		render({ canSend: true });
 		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(false);
-		unmount(instance!);
-		render({ attachments: html('<div class="ap-attachment">tile</div>') });
+		dom.unmount();
+		render({ attachments: dom.html('<div class="ap-attachment">tile</div>') });
 		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(false);
-		unmount(instance!);
+		dom.unmount();
 		render({ value: 'hi', canSend: false });
 		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(true);
 	});
@@ -42,11 +33,11 @@ describe('Composer', () => {
 		render({ value: '/kick ada', canCommand: true });
 		expect(testid('command-tag')).not.toBeNull();
 		expect(testid('send-button')?.getAttribute('aria-label')).toBe('Run command');
-		unmount(instance!);
+		dom.unmount();
 		render({ value: '//kick ada', canCommand: true });
 		expect(testid('command-tag')).toBeNull();
 		expect(testid('send-button')?.textContent).toBe('Send');
-		unmount(instance!);
+		dom.unmount();
 		render({ value: '/kick ada' });
 		expect(testid('command-tag')).toBeNull();
 	});
@@ -103,9 +94,9 @@ describe('Composer', () => {
 		const onremovepreview = vi.fn();
 		render({
 			reply: { name: 'Ada', text: 'raw' },
-			replyText: html('<span class="mine">rendered</span>'),
+			replyText: dom.html('<span class="mine">rendered</span>'),
 			oncancelreply,
-			attachments: html('<div class="ap-attachment">tile</div>'),
+			attachments: dom.html('<div class="ap-attachment">tile</div>'),
 			previews: [{ kind: 'link', url: 'https://a.test/1' }, { kind: 'link', url: 'https://a.test/2' }],
 			preview: createRawSnippet((index: () => number) => ({ render: () => `<div class="ap-embed">preview ${index()}</div>` })),
 			onremovepreview
@@ -137,7 +128,7 @@ describe('Composer', () => {
 		const field = document.querySelector('.ap-composer-field')!;
 		expect(field.getAttribute('dir')).toBe('auto');
 		expect(field.getAttribute('placeholder')).toBe('Reply in Untitled');
-		unmount(instance!);
+		dom.unmount();
 		render({ empty: true }, ComposerEditable);
 		expect(document.querySelector('.ap-composer-editable')?.getAttribute('dir')).toBe('auto');
 	});

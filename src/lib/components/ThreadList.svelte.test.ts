@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
+import { flushSync } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RoomListing } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
 import type { ThreadEntry } from '$lib/ui/timeline';
 import ThreadList from './ThreadList.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
+import * as dom from '$lib/test/dom';
 
 afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
 	localStorage.clear();
 });
 
@@ -20,17 +16,13 @@ const listed = (id: string, title: string): RoomListing => ({ id, title, parentR
 
 function render(props: Record<string, unknown> = {}) {
 	const handlers = { onthread: vi.fn(), onopen: vi.fn(), onjoin: vi.fn(), onleave: vi.fn() };
-	instance = mount(ThreadList, {
-		target: document.body,
-		props: {
-			roomId: 'general', roomTitle: 'General',
-			threads: [joined('deploy', 'Deploy'), joined('cert', 'Expired cert')],
-			others: [listed('offsite', 'Offsite'), listed('logo', 'Logo')],
-			mentions: {}, unread: {}, canJoin: true,
-			...handlers, ...props
-		}
+	dom.render(ThreadList, {
+		roomId: 'general', roomTitle: 'General',
+		threads: [joined('deploy', 'Deploy'), joined('cert', 'Expired cert')],
+		others: [listed('offsite', 'Offsite'), listed('logo', 'Logo')],
+		mentions: {}, unread: {}, canJoin: true,
+		...handlers, ...props
 	});
-	flushSync();
 	return handlers;
 }
 
@@ -143,7 +135,7 @@ describe('ThreadList', () => {
 		flushSync();
 		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
 		expect(one('button[data-other-thread]')).toBeNull();
-		unmount(instance!);
+		dom.unmount();
 		render();
 		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
 		expect(one('button[data-other-thread]')).toBeNull();
@@ -154,7 +146,7 @@ describe('ThreadList', () => {
 		expect(titles('button[data-thread]')).toEqual(['Deploy', 'Expired cert']);
 		expect(one('[data-leave]')).toBeNull();
 		expect(one('[data-testid="other-threads"]')).toBeNull();
-		unmount(instance!);
+		dom.unmount();
 		render({ canJoin: false });
 		expect(titles('button[data-other-thread]')).toEqual(['Offsite', 'Logo']);
 		expect(one('[data-join]')).toBeNull();
@@ -187,7 +179,7 @@ describe('ThreadList', () => {
 		flushSync();
 		expect(titles('button[data-other-thread]')).toEqual(['E']);
 		expect(one('[data-testid="more-threads"]')).toBeNull();
-		unmount(instance!);
+		dom.unmount();
 		localStorage.clear();
 		render({ others: [listed('offsite', 'Offsite')], threads: [{ ...joined('linked', 'Linked'), joined: false }], activeThread: 'linked' });
 		expect(titles('button[data-other-thread]')).toEqual(['Linked', 'Offsite']);

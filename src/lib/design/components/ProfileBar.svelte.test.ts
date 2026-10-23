@@ -1,20 +1,11 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import ProfileBar from './ProfileBar.svelte';
 import ProfileEditor from './ProfileEditor.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(ProfileBar, { target: document.body, props: { backend: 'Work', ...props } });
-	flushSync();
+	dom.render(ProfileBar, { backend: 'Work', ...props });
 	return document.querySelector<HTMLButtonElement>('.ap-profile-me')!;
 }
 
@@ -23,7 +14,7 @@ describe('ProfileBar', () => {
 		const me = render({ you: { user_id: 'alice', name: 'Alice' }, status: 'dnd', note: 'add a sign-in' });
 		expect(me.getAttribute('aria-label')).toBe('Your profile on Work: Alice, do not disturb. Edit');
 		expect(me.querySelector('.ap-profile-sub')?.textContent).toBe('on Work · add a sign-in');
-		unmount(instance!);
+		dom.unmount();
 		const waiting = render({ placeholder: 'Signing in…' });
 		expect(waiting.getAttribute('aria-label')).toBe('Your profile on Work: signing in. Edit');
 		expect(waiting.querySelector('.ap-profile-name')?.textContent).toBe('Signing in…');
@@ -43,11 +34,7 @@ describe('ProfileBar', () => {
 describe('ProfileEditor', () => {
 	it('picks an avatar with its own file input, and says why a handle was declined', () => {
 		const onavatarfile = vi.fn();
-		instance = mount(ProfileEditor, {
-			target: document.body,
-			props: { userId: 'guest_7', name: 'root', canUpload: true, onavatarfile, status: 'declined', declinedNote: 'The server declined this handle (reserved). Sign in and it’s applied.', dialog: false, changeAvatarTestid: 'change-avatar', avatarFileTestid: 'avatar-input' }
-		});
-		flushSync();
+		dom.render(ProfileEditor, { userId: 'guest_7', name: 'root', canUpload: true, onavatarfile, status: 'declined', declinedNote: 'The server declined this handle (reserved). Sign in and it’s applied.', dialog: false, changeAvatarTestid: 'change-avatar', avatarFileTestid: 'avatar-input' });
 		expect(document.querySelector('form')?.getAttribute('role')).toBeNull();
 		const input = document.querySelector<HTMLInputElement>('[data-testid="avatar-input"]')!;
 		const picked = vi.spyOn(input, 'click');

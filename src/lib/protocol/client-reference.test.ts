@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, userIn, type ClientSnapshot } from './client';
 import { embedMedia, parseOrigins, safeAvatar, safeLink, sameOriginMedia, serverOrigin } from './embeds';
-import { FakeSocket } from './fake-socket';
-
-/** Operations whose outcome a test does not await still settle when the client stops. */
-function quiet(value: { promise: Promise<unknown> } | Promise<unknown> | undefined): void {
-	(value && 'promise' in value ? value.promise : value)?.catch(() => undefined);
-}
+import { FakeSocket, quiet, startClient } from '$lib/test/client';
 
 describe('ChatClient reference features', () => {
 	let client: ChatClient;
@@ -15,16 +10,10 @@ describe('ChatClient reference features', () => {
 
 	beforeEach(() => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = new ChatClient('ws://fake.test/ws');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
-		socket = FakeSocket.latest();
+		({ client, socket } = startClient({ url: 'ws://fake.test/ws', onSnapshot: (next) => (snapshot = next) }));
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
+import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot } from '$lib/protocol/client';
 import type { Identity } from '$lib/protocol/types';
@@ -9,30 +9,22 @@ import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 import { reactorsList } from '$lib/ui/reactors.svelte';
 import ReactionBar from './ReactionBar.svelte';
 import ReactorsPopover from './ReactorsPopover.svelte';
+import * as dom from '$lib/test/dom';
 
 const you: Identity = { user_id: 'you', name: 'You' };
 const ada: Identity = { user_id: 'ada', name: 'Ada' };
 const bob: Identity = { user_id: 'bob', name: 'Bob' };
 
-let instances: ReturnType<typeof mount>[] = [];
-
 // jsdom has no ResizeObserver, which `bind:offsetHeight` uses.
 beforeEach(() => {
 	vi.useFakeTimers();
-	vi.stubGlobal('ResizeObserver', class {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
-	});
+	dom.stubResizeObserver();
 	const snapshot: ClientSnapshot = { ...blankSnapshot(), authenticated: true, you, users: { you, ada, bob }, recordedUsers: {}, userAliases: {} };
 	directory.apply(snapshot, undefined);
 });
 
 afterEach(() => {
 	reactorsList.close();
-	for (const instance of instances) unmount(instance);
-	instances = [];
-	document.body.innerHTML = '';
 	directory.forget();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
@@ -45,20 +37,13 @@ function chipsOf(users: Identity[], emoji = '👍'): ReactionChip[] {
 
 function render(chips: ReactionChip[], enabled = true) {
 	const ontoggle = vi.fn();
-	instances.push(mount(ReactorsPopover, { target: document.body }));
-	instances.push(mount(ReactionBar, { target: document.body, props: { chips, enabled, ontoggle } }));
-	flushSync();
+	dom.render(ReactorsPopover);
+	dom.render(ReactionBar, { chips, enabled, ontoggle });
 	const chip = document.querySelector<HTMLButtonElement>('[data-testid="reaction-chip"]')!;
 	return { chip, ontoggle };
 }
 
 const reactors = () => [...document.querySelectorAll('[data-testid="reactor"]')].map((row) => row.getAttribute('data-user-id'));
-
-function touch(type: string, target: Element, x = 0, y = 0): void {
-	const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, detail: 1 });
-	Object.defineProperty(event, 'pointerType', { value: 'touch' });
-	target.dispatchEvent(event);
-}
 
 describe('ReactionBar reactors', () => {
 	it('lists who reacted on a right-click, you first, without toggling', () => {
@@ -74,24 +59,24 @@ describe('ReactionBar reactors', () => {
 
 	it('lists who reacted on a long press, and the click that ends it does not toggle', () => {
 		const { chip, ontoggle } = render(chipsOf([ada]));
-		touch('pointerdown', chip);
+		dom.touch('pointerdown', chip);
 		vi.advanceTimersByTime(500);
 		flushSync();
 		expect(reactors()).toEqual(['ada']);
-		touch('pointerup', chip);
+		dom.touch('pointerup', chip);
 		chip.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
 		expect(ontoggle).not.toHaveBeenCalled();
 		// A tap still toggles.
-		touch('pointerdown', chip);
-		touch('pointerup', chip);
+		dom.touch('pointerdown', chip);
+		dom.touch('pointerup', chip);
 		chip.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
 		expect(ontoggle).toHaveBeenCalledWith('👍');
 	});
 
 	it('treats a touch that moves as a scroll', () => {
 		const { chip } = render(chipsOf([ada]));
-		touch('pointerdown', chip, 0, 0);
-		touch('pointermove', chip, 0, 30);
+		dom.touch('pointerdown', chip, 0, 0);
+		dom.touch('pointermove', chip, 0, 30);
 		vi.advanceTimersByTime(500);
 		flushSync();
 		expect(document.querySelector('[data-testid="reactors"]')).toBeNull();

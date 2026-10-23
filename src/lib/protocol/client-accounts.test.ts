@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, type ClientSnapshot } from './client';
 import { REQUEST_TIMEOUT_MS } from './client-internals';
 import { PROPOSAL_MS } from './signin-connection';
-import { FakeSocket, settle } from './fake-socket';
+import { FakeSocket, settle } from '$lib/test/client';
 import { requestPasskey } from './webauthn';
+import { memoryStorage } from '$lib/test/storage';
 
 vi.mock('./webauthn', () => ({ requestPasskey: vi.fn(), signalPasskeyLabel: vi.fn() }));
 
@@ -75,11 +76,7 @@ describe('accounts and their ways back in', () => {
 		storage.clear();
 		FakeSocket.instances = [];
 		vi.stubGlobal('WebSocket', FakeSocket);
-		vi.stubGlobal('localStorage', {
-			getItem: (key: string) => storage.get(key) ?? null,
-			setItem: (key: string, value: string) => void storage.set(key, value),
-			removeItem: (key: string) => void storage.delete(key)
-		});
+		vi.stubGlobal('localStorage', memoryStorage(storage));
 		vi.mocked(requestPasskey).mockReset();
 	});
 

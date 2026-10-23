@@ -1,16 +1,15 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RoleBadges from './RoleBadges.svelte';
+import * as dom from '$lib/test/dom';
 
-let instance: ReturnType<typeof mount> | undefined;
 /** The width the row of badges is laid out at; jsdom has no layout, so the row reports this and each badge is 10px a letter. */
 let rowWidth = 0;
 /** What else reports a width: an element by its `data-width`. */
 const widthOf = (el: HTMLElement) => (el.classList.contains('ap-roles') ? rowWidth : el.classList.contains('ap-role') ? (el.textContent ?? '').length * 10 : Number(el.dataset.width ?? 0));
 
 beforeEach(() => {
-	vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+	dom.stubResizeObserver();
 	vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
 		return { width: widthOf(this), left: 0, right: 0, top: 0, bottom: 0, height: 0, x: 0, y: 0, toJSON() {} } as DOMRect;
 	});
@@ -20,9 +19,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
 });
@@ -31,8 +27,7 @@ const ROLES = ['moderator', 'admin', 'bot', 'oncall'];
 
 function render(props: { roles: string[]; overflow?: 'drop' | 'stack' }, width = 1000, target: HTMLElement = document.body): HTMLElement[] {
 	rowWidth = width;
-	instance = mount(RoleBadges, { target, props });
-	flushSync();
+	dom.render(RoleBadges, props, { target });
 	return [...document.querySelectorAll<HTMLElement>('.ap-role')];
 }
 
@@ -75,7 +70,7 @@ describe('RoleBadges', () => {
 		// The first badge (90px) and its stack (12px) want 102px; with 90.5 it narrows to 78, the room left beside the stack.
 		const narrow = render({ roles: ROLES, overflow: 'stack' }, 90.5);
 		expect(narrow[0].style.maxWidth).toBe('78px');
-		unmount(instance!);
+		dom.unmount();
 		const none = render({ roles: ROLES, overflow: 'stack' }, 30);
 		expect(none.every((b) => b.classList.contains('ap-role-behind'))).toBe(true);
 		expect(document.querySelector('.ap-roles')!.classList.contains('ap-roles-gone')).toBe(true);
@@ -96,12 +91,12 @@ describe('RoleBadges', () => {
 		const head = row(140);
 		render({ roles: ROLES, overflow: 'stack' }, 60, head);
 		expect(state()).toEqual(['stacked', 'behind', 'behind', 'behind']);
-		unmount(instance!);
+		dom.unmount();
 		document.body.innerHTML = '';
 		// The same room, split the other way (the name already down to its least): the same fit.
 		render({ roles: ROLES, overflow: 'stack' }, 140, row(60));
 		expect(state()).toEqual(['stacked', 'behind', 'behind', 'behind']);
-		unmount(instance!);
+		dom.unmount();
 		document.body.innerHTML = '';
 		// What never gives way (the time) is not room: alone, 80px only narrows the first.
 		const bare = document.createElement('div');

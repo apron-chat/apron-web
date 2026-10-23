@@ -1,19 +1,10 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Mention from './Mention.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(Mention, { target: document.body, props });
-	flushSync();
+	dom.render(Mention, props);
 	return document.querySelector('.ap-mention')!;
 }
 
@@ -38,7 +29,7 @@ describe('Mention', () => {
 		const thread = render({ roomId: 't1', thread: true, hash: true, onopen: vi.fn() });
 		expect(thread.textContent).toBe('#Untitled');
 		expect(thread.getAttribute('title')).toBe('Open Untitled (#t1)');
-		unmount(instance!);
+		dom.unmount();
 		const room = render({ roomId: 'ops', onopen: vi.fn() });
 		expect(room.textContent).toBe('ops');
 		expect(room.getAttribute('title')).toBe('Open ops');

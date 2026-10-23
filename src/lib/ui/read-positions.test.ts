@@ -1,30 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createTimeline } from '$lib/protocol/reducer';
-import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
 import { ReadPositions, newestOwn } from './read-positions';
 import { advanceReadPositions, loadReadPositions, readPositionKey } from './storage';
+import { memoryStorage } from '$lib/test/storage';
+import { messageRecord, roomSnapshot as room } from '$lib/test/builders';
 
 const me = { user_id: 'sam', name: 'Sam' };
 const ada = 'wss://a.example/\nada';
 
-const message = (id: number, roomId: string, from = 'ada'): MessageRecord => ({
-	message_id: String(id), log_id: String(id), room_id: roomId, from: { user_id: from }, body: { text: `hello ${id}` }
-});
-
-function room(id: string, messages: MessageRecord[], fields: Partial<RoomSnapshot> = {}): RoomSnapshot {
-	const timeline = { ...createTimeline(id), events: Object.fromEntries(messages.map((event) => [event.message_id, event])), order: messages.map((event) => event.message_id) };
-	return { id, title: id, joined: true, timeline, recovering: false, loaded: true, loading: false, notices: [], ...fields };
-}
+const message = (id: number, roomId: string, from = 'ada'): MessageRecord => messageRecord(id, roomId, { from: { user_id: from } });
 
 const values = new Map<string, string>();
 
 beforeEach(() => {
-	vi.stubGlobal('localStorage', {
-		getItem: (key: string) => values.get(key) ?? null,
-		setItem: (key: string, value: string) => values.set(key, value),
-		removeItem: (key: string) => values.delete(key)
-	});
+	vi.stubGlobal('localStorage', memoryStorage(values));
 });
 
 afterEach(() => {

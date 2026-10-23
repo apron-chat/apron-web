@@ -1,16 +1,9 @@
 // @vitest-environment jsdom
-import { flushSync, mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { flushSync, tick } from 'svelte';
+import { describe, expect, it } from 'vitest';
 import { pausedUntilLabel, type PausedUntil } from '$lib/ui/pause';
 import PauseNotifications from './PauseNotifications.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import { render } from '$lib/test/dom';
 
 const button = (name: string) => [...document.querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === name);
 
@@ -22,8 +15,7 @@ describe('PauseNotifications', () => {
 			onpause: (until) => { queueMicrotask(() => { props.until = until; }); },
 			onresume: () => { queueMicrotask(() => { props.until = undefined; }); }
 		});
-		instance = mount(PauseNotifications, { target: document.body, props });
-		flushSync();
+		render(PauseNotifications, props);
 		button('Pause…')!.click();
 		flushSync();
 		await tick();
@@ -50,8 +42,7 @@ describe('PauseNotifications', () => {
 			onpause: (until) => { asked.push(until); },
 			onresume: () => undefined
 		});
-		instance = mount(PauseNotifications, { target: document.body, props });
-		flushSync();
+		render(PauseNotifications, props);
 		button('Pause…')!.click();
 		flushSync();
 		await tick();
@@ -77,8 +68,7 @@ describe('PauseNotifications', () => {
 			onpause: () => (refuse ? Promise.reject(new Error('Too Many Requests Try again in 5s.')) : Promise.resolve()),
 			onresume: () => Promise.reject(new Error('Server busy'))
 		});
-		instance = mount(PauseNotifications, { target: document.body, props });
-		flushSync();
+		render(PauseNotifications, props);
 		button('Pause…')!.click();
 		flushSync();
 		await tick();

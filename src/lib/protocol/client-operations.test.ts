@@ -1,13 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, childRooms, findMessage, topLevelRooms, type ClientSnapshot } from './client';
-import { FakeSocket, settle } from './fake-socket';
+import { FakeSocket, quiet, settle, startClient } from '$lib/test/client';
 
 const alice = { user_id: 'alice', name: 'Alice' };
-
-/** Operations whose outcome a test does not await still settle when the client stops. */
-function quiet(handle: { promise: Promise<unknown> } | undefined): void {
-	handle?.promise.catch(() => undefined);
-}
 
 function message(id: string, fields: Record<string, unknown> = {}, log = id): Record<string, unknown> {
 	return { message_id: id, log_id: log, room_id: 'general', from: alice, body: { text: `m${id}` }, ...fields };
@@ -20,16 +15,10 @@ describe('ChatClient operations', () => {
 
 	beforeEach(() => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = new ChatClient('ws://fake.test/');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
-		socket = FakeSocket.latest();
+		({ client, socket } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});
@@ -334,17 +323,11 @@ describe('ChatClient history per room', () => {
 
 	beforeEach(async () => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = new ChatClient('ws://fake.test/');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
-		socket = FakeSocket.latest();
+		({ client, socket } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 		await socket.greet(['history', 'rooms'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10' } });
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});

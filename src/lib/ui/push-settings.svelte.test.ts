@@ -3,15 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PushRegistration } from '$lib/protocol/client';
 import { PushSettings, type PushSettingsClient } from './push-settings.svelte';
 import { WebPushSync, type PushBrowser } from './web-push';
+import { memoryStorage } from '$lib/test/storage';
 
 const values = new Map<string, string>();
 
 beforeEach(() => {
-	vi.stubGlobal('localStorage', {
-		getItem: (key: string) => values.get(key) ?? null,
-		setItem: (key: string, value: string) => values.set(key, value),
-		removeItem: (key: string) => values.delete(key)
-	});
+	vi.stubGlobal('localStorage', memoryStorage(values));
 });
 
 afterEach(() => {

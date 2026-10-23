@@ -1,19 +1,10 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import MentionPicker from './MentionPicker.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(MentionPicker, { target: document.body, props });
-	flushSync();
+	dom.render(MentionPicker, props);
 	return document.querySelector<HTMLElement>('[role="listbox"]')!;
 }
 
@@ -37,7 +28,7 @@ describe('MentionPicker', () => {
 		expect(list.getAttribute('aria-label')).toBe('Room suggestions');
 		expect(rows(list)).toEqual(['Deploy #deploy Tab']);
 		expect(list.querySelector('mark')).toBeNull();
-		unmount(instance!);
+		dom.unmount();
 		list = render({ query: 'smi', emoji: [{ id: 'smile', native: '😄', name: 'Smiling Face' }] });
 		expect(list.getAttribute('aria-label')).toBe('Emoji suggestions');
 		expect(rows(list)).toEqual(['😄 :smile: Smiling Face Tab']);
@@ -45,11 +36,11 @@ describe('MentionPicker', () => {
 
 	it('says what an empty list means for each kind', () => {
 		expect(render({ query: '' }).textContent).toBe('People in this room');
-		unmount(instance!);
+		dom.unmount();
 		expect(render({ query: 'Zed' }).textContent).toBe('No one here matches “Zed”');
-		unmount(instance!);
+		dom.unmount();
 		expect(render({ query: '', rooms: [] }).textContent).toBe('No room matches “”');
-		unmount(instance!);
+		dom.unmount();
 		expect(render({ query: 'zz', emoji: [] }).textContent).toBe('No emoji match “zz”');
 	});
 });

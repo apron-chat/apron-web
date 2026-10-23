@@ -1,19 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createTimeline } from '$lib/protocol/reducer';
-import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
 import { UnreadTracker, countElsewhere } from './unread.svelte';
+import { messageRecord, roomSnapshot as room } from '$lib/test/builders';
 
 const me = { user_id: 'guest_me', name: 'sam' };
 
-const message = (id: number, roomId: string, from = 'ada', fields: Partial<MessageRecord> = {}): MessageRecord => ({
-	message_id: String(id), log_id: String(id), room_id: roomId, from: { user_id: from }, body: { text: `hello ${id}` }, ...fields
-});
-
-function room(id: string, messages: MessageRecord[], fields: Partial<RoomSnapshot> = {}): RoomSnapshot {
-	const timeline = { ...createTimeline(id), events: Object.fromEntries(messages.map((event) => [event.message_id, event])), order: messages.map((event) => event.message_id) };
-	return { id, title: id, joined: true, timeline, recovering: false, loaded: true, loading: false, notices: [], ...fields };
-}
+const message = (id: number, roomId: string, from = 'ada', fields: Partial<MessageRecord> = {}): MessageRecord => messageRecord(id, roomId, { from: { user_id: from }, ...fields });
 
 describe('unread tracking', () => {
 	it('counts arrivals from others, never history or your own messages', () => {

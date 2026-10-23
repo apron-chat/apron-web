@@ -1,15 +1,8 @@
 // @vitest-environment jsdom
-import { flushSync, mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { flushSync, tick } from 'svelte';
+import { describe, expect, it, vi } from 'vitest';
 import StatusPicker from './StatusPicker.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 const trigger = () => document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
 const radios = () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
@@ -50,8 +43,7 @@ function render(initial: string | undefined, answer: (asked: string) => string |
 		onannounce: (text) => props.announced.push(text),
 		announced: []
 	});
-	instance = mount(StatusPicker, { target: document.body, props });
-	flushSync();
+	dom.render(StatusPicker, props);
 	return props;
 }
 
@@ -84,7 +76,7 @@ describe('StatusPicker', () => {
 		await open();
 		expect(labels()).toEqual(['Online', 'Do not disturb', 'None']);
 		document.body.innerHTML = '';
-		if (instance) unmount(instance);
+		dom.unmount();
 		render('online', (asked) => asked, ['invisible', 'busy']);
 		await open();
 		expect(labels()).toEqual(['Online', 'Invisible', 'None']);

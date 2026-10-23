@@ -1,45 +1,20 @@
 // @vitest-environment jsdom
-import { flushSync, mount, tick, unmount } from 'svelte';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { tick } from 'svelte';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import NewThreadDialog from './NewThreadDialog.svelte';
+import * as dom from '$lib/test/dom';
 
-let instance: ReturnType<typeof mount> | undefined;
-
-beforeAll(() => {
-	// jsdom has <dialog> without its modal methods.
-	HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) { this.open = true; };
-	HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) { this.open = false; this.dispatchEvent(new Event('close')); };
-});
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+beforeAll(dom.stubDialog);
 
 function field<T extends HTMLElement>(selector: string): T {
 	return document.querySelector<T>(selector)!;
-}
-
-function type(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
-	element.value = value;
-	element.dispatchEvent(new Event('input'));
-	flushSync();
-}
-
-async function submit(): Promise<void> {
-	document.querySelector('form')!.requestSubmit();
-	await tick();
-	await Promise.resolve();
-	await tick();
 }
 
 describe('NewThreadDialog', () => {
 	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; summary?: string; moving?: number };
 	function render(props: Props = {}, oncreate = vi.fn((_thread: { title: string; description?: string }) => Promise.resolve())) {
 		const onclose = vi.fn();
-		instance = mount(NewThreadDialog, { target: document.body, props: { room: { id: 'ops', title: 'ops' }, enabled: true, oncreate, onclose, ...props } });
-		flushSync();
+		dom.render(NewThreadDialog, { room: { id: 'ops', title: 'ops' }, enabled: true, oncreate, onclose, ...props });
 		return { oncreate, onclose };
 	}
 	const text = () => field('dialog').textContent ?? '';
@@ -57,8 +32,8 @@ describe('NewThreadDialog', () => {
 		const input = field<HTMLInputElement>('input.ap-field');
 		expect(document.activeElement).toBe(input);
 		expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'Deploy failed'.length]);
-		type(input, '  Why the 4pm deploy failed ');
-		await submit();
+		dom.type(input, '  Why the 4pm deploy failed ');
+		await dom.submit();
 		expect(oncreate).toHaveBeenCalledWith({ title: 'Why the 4pm deploy failed', description: '> Deploy failed\n>\n> Runner looked fine.' });
 		expect(onclose).toHaveBeenCalled();
 	});
@@ -67,11 +42,11 @@ describe('NewThreadDialog', () => {
 		const { oncreate } = render();
 		expect(field<HTMLInputElement>('input.ap-field').value).toBe('');
 		expect(field<HTMLInputElement>('input.ap-field').placeholder).toBe('What it’s about');
-		await submit();
+		await dom.submit();
 		expect(oncreate).not.toHaveBeenCalled();
 		expect(document.querySelector('[role="alert"]')?.textContent).toBe('Enter a thread title.');
-		type(field('input.ap-field'), 'Office move');
-		await submit();
+		dom.type(field('input.ap-field'), 'Office move');
+		await dom.submit();
 		// An empty summary sends no description.
 		expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' });
 	});
@@ -86,7 +61,7 @@ describe('NewThreadDialog', () => {
 
 	it('stays open with the reason when creating fails', async () => {
 		const { onclose } = render({ title: 'Deploy' }, vi.fn(() => Promise.reject(new Error('Not allowed'))));
-		await submit();
+		await dom.submit();
 		expect(document.querySelector('[role="alert"]')?.textContent).toBe('Not allowed');
 		expect(field<HTMLDialogElement>('dialog').open).toBe(true);
 		expect(onclose).not.toHaveBeenCalled();

@@ -1,19 +1,10 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import RoomHeader from './RoomHeader.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(RoomHeader, { target: document.body, props: { room: 'ops', name: 'Ops', ...props } });
-	flushSync();
+	dom.render(RoomHeader, { room: 'ops', name: 'Ops', ...props });
 	return document.querySelector('header')!;
 }
 
@@ -23,13 +14,13 @@ describe('RoomHeader', () => {
 	it('says who’s typing, else a thread’s replies, else the topic', () => {
 		render({ topic: 'Deploys', topicTitle: 'Deploys and incidents', typing: ['Alice'], replies: { count: 3 } });
 		expect(sub()).toEqual(['Alice is typing…']);
-		unmount(instance!);
+		dom.unmount();
 		render({ topic: 'Deploys', replies: { count: 12, more: true } });
 		expect(sub()).toEqual(['12+ replies']);
-		unmount(instance!);
+		dom.unmount();
 		render({ topic: 'Deploys', replies: { count: 1 } });
 		expect(sub()).toEqual(['1 reply']);
-		unmount(instance!);
+		dom.unmount();
 		render({ topic: 'Deploys', topicTitle: 'Deploys and incidents', topicTestid: 'room-description' });
 		expect(document.querySelector('[data-testid="room-description"]')?.getAttribute('title')).toBe('Deploys and incidents');
 	});
@@ -45,7 +36,7 @@ describe('RoomHeader', () => {
 		const members = document.querySelector('.ap-roomhead-members')!;
 		expect([members.getAttribute('aria-label'), members.classList.contains('ap-iconbtn-on')]).toEqual(['Hide member list', true]);
 		expect(document.querySelector('.ap-roomhead-crumb')?.getAttribute('aria-label')).toBe('Back to room');
-		unmount(instance!);
+		dom.unmount();
 		render({ onjoin, actionsTestid: 'room-actions', joinTestid: 'join-room' });
 		// Join shows only where it's offered (`canJoin`), not wherever there's an `onjoin`.
 		expect(document.querySelector('[data-testid="room-actions"], [data-testid="join-room"], .ap-roomhead-members, .ap-roomhead-back')).toBeNull();
@@ -61,10 +52,10 @@ describe('RoomHeader', () => {
 		expect(document.querySelector('.ap-roomhead-crumb')?.textContent).toBe('ops');
 		expect(document.querySelector('h1 bdi')?.textContent).toBe('Untitled');
 		expect(document.querySelector('h1 bdi')?.getAttribute('title')).toBe('t1');
-		unmount(instance!);
+		dom.unmount();
 		render({ thread: 't1', threadName: 'Deploy', onroom: vi.fn() });
 		expect(document.querySelector('h1 bdi')?.hasAttribute('title')).toBe(false);
-		unmount(instance!);
+		dom.unmount();
 		render({ typing: ['محمد'] });
 		expect(document.querySelector('.ap-roomhead-typing bdi')?.textContent).toBe('محمد');
 		expect(sub()).toEqual(['محمد is typing…']);

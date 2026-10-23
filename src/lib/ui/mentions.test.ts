@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createTimeline } from '$lib/protocol/reducer';
-import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
 import { MentionTracker } from './mentions.svelte';
+import { roomSnapshot as room } from '$lib/test/builders';
 
 const me = { user_id: 'guest_me', name: 'sam' };
 
@@ -13,11 +12,6 @@ const mention = (id: number, roomId: string, log = id): MessageRecord => ({
 const plain = (id: number, roomId: string, text: string, log = id): MessageRecord => ({
 	message_id: String(id), log_id: String(log), room_id: roomId, from: { user_id: 'ada' }, body: { text }
 });
-
-function room(id: string, messages: MessageRecord[], fields: Partial<RoomSnapshot> = {}): RoomSnapshot {
-	const timeline = { ...createTimeline(id), events: Object.fromEntries(messages.map((event) => [event.message_id, event])), order: messages.map((event) => event.message_id) };
-	return { id, title: id, joined: true, timeline, recovering: false, loaded: true, loading: false, notices: [], ...fields };
-}
 
 describe('mention tracking', () => {
 	it('never pings history, including a thread’s history loaded after it was first seen', () => {

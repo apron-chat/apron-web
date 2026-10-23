@@ -1,21 +1,13 @@
 // @vitest-environment jsdom
-import { createRawSnippet, flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { createRawSnippet } from 'svelte';
+import { describe, expect, it } from 'vitest';
 import AppShell from './AppShell.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 const markup = (html: string) => createRawSnippet(() => ({ render: () => html }));
 
 function render(props: Record<string, unknown>) {
-	instance = mount(AppShell, { target: document.body, props });
-	flushSync();
+	dom.render(AppShell, props);
 	return document.querySelector<HTMLElement>('.ap-shell')!;
 }
 
@@ -24,7 +16,7 @@ describe('AppShell', () => {
 		let shell = render({ sideWidth: 300 });
 		expect(shell.style.getPropertyValue('--side-col')).toBe('300px');
 		expect(shell.style.getPropertyValue('--rooms-w')).toBe('300px');
-		unmount(instance!);
+		dom.unmount();
 		shell = render({ sideWidth: 300, sideCollapsed: true });
 		expect(shell.style.getPropertyValue('--side-col')).toBe('0px');
 		expect(shell.style.getPropertyValue('--rooms-w')).toBe('300px');
@@ -40,9 +32,9 @@ describe('AppShell', () => {
 
 	it('gives the member list a column only while it is wide and open', () => {
 		expect(render({ membersWidth: 240, membersWide: true, membersOpen: true }).style.getPropertyValue('--member-list-track')).toBe('240px');
-		unmount(instance!);
+		dom.unmount();
 		expect(render({ membersWidth: 240, membersWide: true }).style.getPropertyValue('--member-list-track')).toBe('0px');
-		unmount(instance!);
+		dom.unmount();
 		expect(render({ membersWidth: 240, membersOpen: true }).style.getPropertyValue('--member-list-track')).toBe('0px');
 	});
 

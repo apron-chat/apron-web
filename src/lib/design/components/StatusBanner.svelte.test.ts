@@ -1,19 +1,11 @@
 // @vitest-environment jsdom
-import { createRawSnippet, flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { createRawSnippet } from 'svelte';
+import { describe, expect, it } from 'vitest';
 import StatusBanner from './StatusBanner.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(StatusBanner, { target: document.body, props });
-	flushSync();
+	dom.render(StatusBanner, props);
 }
 
 describe('StatusBanner', () => {
@@ -31,7 +23,7 @@ describe('StatusBanner', () => {
 		expect(document.querySelector('.ap-status-dot')?.classList.contains('ap-status-danger')).toBe(true);
 		expect(document.querySelector('.ap-status-text')?.textContent).toBe('Offline · Retrying in 3s');
 		expect(document.querySelector('.ap-status-text')?.hasAttribute('aria-live')).toBe(false);
-		unmount(instance!);
+		dom.unmount();
 		render({ state: 'offline', tone: 'warn' });
 		expect(document.querySelector('.ap-status-dot')?.classList.contains('ap-status-warn')).toBe(true);
 	});

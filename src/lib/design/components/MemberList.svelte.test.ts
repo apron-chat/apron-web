@@ -1,21 +1,13 @@
 // @vitest-environment jsdom
-import { createRawSnippet, flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createRawSnippet, mount, unmount } from 'svelte';
+import { describe, expect, it, vi } from 'vitest';
 import AddMemberForm from './AddMemberForm.svelte';
 import MemberList from './MemberList.svelte';
 import type { MemberListSection } from './types';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(MemberList, { target: document.body, props });
-	flushSync();
+	dom.render(MemberList, props);
 }
 
 const sections: MemberListSection[] = [
@@ -34,7 +26,7 @@ describe('MemberList', () => {
 	it('shows a line in place of a listing, and No members listed for an empty one', () => {
 		render({ empty: 'Loading members…' });
 		expect(document.querySelector('.ap-memberlist-body')?.textContent?.trim()).toBe('Loading members…');
-		unmount(instance!);
+		dom.unmount();
 		render({ count: 0, sections: [] });
 		expect(document.querySelector('.ap-memberlist-body')?.textContent?.trim()).toBe('No members listed.');
 	});
@@ -48,7 +40,7 @@ describe('MemberList', () => {
 		expect(document.querySelector('[data-section="offline"] ul')).toBeNull();
 		offline.click();
 		expect(ontogglesection).toHaveBeenCalledWith('offline');
-		unmount(instance!);
+		dom.unmount();
 		render({ sections: [{ key: 'members', label: 'Members', people: sections[0].people }], shut: ['members'] });
 		expect(document.querySelector('h3')).toBeNull();
 		expect(document.querySelectorAll('li.ap-member')).toHaveLength(2);
@@ -81,7 +73,7 @@ describe('MemberList', () => {
 		expect(toggle.getAttribute('aria-controls')).toBe(form.id);
 		form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
 		expect(onadd).toHaveBeenCalledWith('cy');
-		unmount(instance!);
+		dom.unmount();
 		render({ empty: 'Loading members…', onaddtoggle: () => {}, addOpen: true, addForm: addForm({}) });
 		expect(document.querySelector('.ap-memberlist-addtoggle')).toBeNull();
 		expect(document.querySelector('form')).toBeNull();

@@ -1,15 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pushIdFor, hideSummary, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadHiddenSummaries, showSummary, summaryHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
+import { memoryStorage } from '$lib/test/storage';
 
 const values = new Map<string, string>();
 
 beforeEach(() => {
-	vi.stubGlobal('localStorage', {
-		getItem: (key: string) => values.get(key) ?? null,
-		setItem: (key: string, value: string) => values.set(key, value),
-		removeItem: (key: string) => values.delete(key)
-	});
+	vi.stubGlobal('localStorage', memoryStorage(values));
 });
 
 afterEach(() => {

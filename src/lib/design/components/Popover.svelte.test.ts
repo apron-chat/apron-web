@@ -1,31 +1,22 @@
 // @vitest-environment jsdom
-import { createRawSnippet, flushSync, mount, unmount, type Component } from 'svelte';
+import { createRawSnippet, flushSync, type Component } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Popover from './Popover.svelte';
 import ProfileCard from './ProfileCard.svelte';
 import ReactorsPopover from './ReactorsPopover.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
+import * as dom from '$lib/test/dom';
 
 // jsdom has no ResizeObserver, which `bind:offsetHeight` uses.
 beforeEach(() => {
-	vi.stubGlobal('ResizeObserver', class {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
-	});
+	dom.stubResizeObserver();
 });
 
 afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
 	vi.unstubAllGlobals();
 });
 
 function render<P extends Record<string, unknown>>(C: Component<P>, props: P): HTMLElement {
-	instance = mount(C, { target: document.body, props });
-	flushSync();
+	dom.render(C, props);
 	return document.querySelector<HTMLElement>('.ap-popover')!;
 }
 
@@ -39,7 +30,7 @@ describe('Popover', () => {
 		expect(box.getAttribute('tabindex')).toBe('-1');
 		expect(box.dataset.testid).toBe('pop');
 		expect(box.classList.contains('ap-popover-sheet')).toBe(false);
-		unmount(instance!);
+		dom.unmount();
 		box = render(Popover, { mode: 'sheet' as const, top: 10, left: 20, width: 300, height: 200, children: text });
 		expect([box.style.top, box.style.left, box.style.width, box.style.height]).toEqual(['', '', '', '200px']);
 		expect(box.classList.contains('ap-popover-sheet')).toBe(true);
@@ -52,11 +43,11 @@ describe('ProfileCard', () => {
 	it('says a known status in words, an unknown one as written, and none without one (§4.5)', () => {
 		render(ProfileCard, { userId: 'bo', name: 'Bo', status: 'dnd', statusTestid: 'profile-status' });
 		expect(status()?.textContent).toBe('Do not disturb');
-		unmount(instance!);
+		dom.unmount();
 		render(ProfileCard, { userId: 'eve', status: 'in a meeting', statusTestid: 'profile-status' });
 		expect(status()?.textContent).toBe('Unknown status: in a meeting');
 		expect(status()?.querySelector('code')?.textContent).toBe('in a meeting');
-		unmount(instance!);
+		dom.unmount();
 		render(ProfileCard, { userId: 'cy', statusTestid: 'profile-status' });
 		expect(status()).toBeNull();
 	});
@@ -72,7 +63,7 @@ describe('ProfileCard', () => {
 		const noop = () => undefined;
 		let box = render(ProfileCard, { userId: 'ada', oncopyid: noop });
 		expect([...box.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Copy @user_id']);
-		unmount(instance!);
+		dom.unmount();
 		box = render(ProfileCard, { userId: 'ada', onmention: noop, oncopyid: noop, onaddtoroom: noop, adding: true, note: { text: 'Nope', error: true } });
 		const buttons = [...box.querySelectorAll('button')];
 		expect(buttons.map((b) => b.textContent)).toEqual(['Mention', 'Copy @user_id', 'Adding…']);

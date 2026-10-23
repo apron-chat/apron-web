@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ProtocolStore, applyRecords, createTimeline, decodeHistoryRecords, timelineEvents, type MembershipRecord, type TimelineState } from '$lib/protocol/reducer';
-import type { RoomSnapshot } from '$lib/protocol/client';
+import { ProtocolStore, applyRecords, decodeHistoryRecords, timelineEvents, type MembershipRecord } from '$lib/protocol/reducer';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
 import { escapeMarkdown, quoteMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadSummaryText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
+import { roomSnapshot as room } from '$lib/test/builders';
 
 const DAY = 24 * 60 * 60 * 1000;
 const base = Date.UTC(2026, 8, 14, 12, 0, 0);
@@ -18,15 +18,6 @@ const message = (offset: number, from: string, fields: Partial<MessageRecord> = 
 	body: { text: `${from} says ${offset}` },
 	...fields
 });
-
-function timeline(roomId: string, messages: MessageRecord[]): TimelineState {
-	const state = createTimeline(roomId);
-	return { ...state, events: Object.fromEntries(messages.map((event) => [event.message_id, event])), order: messages.map((event) => event.message_id) };
-}
-
-function room(id: string, messages: MessageRecord[] = [], fields: Partial<RoomSnapshot> = {}): RoomSnapshot {
-	return { id, title: id, joined: true, timeline: timeline(id, messages), recovering: false, loaded: true, loading: false, notices: [], ...fields };
-}
 
 const kinds = (items: TimelineItem[]) => items.map((item) => item.kind);
 

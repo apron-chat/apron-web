@@ -1,13 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, DEFAULT_ROOM_ID, IDLE_RETRY_MS, type ClientSnapshot } from './client';
-import { FakeSocket, settle } from './fake-socket';
+import { FakeSocket, quiet, settle, startClient } from '$lib/test/client';
 import { REQUEST_TIMEOUT_MS, roomTitle, UNTITLED_THREAD, untitledThread } from './client-internals';
 import { UNTITLED } from '$lib/design/components/util';
-
-/** Operations whose outcome a test does not await still settle when the client stops. */
-function quiet(value: { promise: Promise<unknown> } | undefined): void {
-	value?.promise.catch(() => undefined);
-}
 
 describe('rooms by request (cap rooms)', () => {
 	let client: ChatClient;
@@ -16,16 +11,10 @@ describe('rooms by request (cap rooms)', () => {
 
 	beforeEach(() => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = new ChatClient('ws://fake.test/');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
-		socket = FakeSocket.latest();
+		({ client, socket } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});
@@ -960,16 +949,10 @@ describe('the default room (no cap rooms)', () => {
 
 	beforeEach(() => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = new ChatClient('ws://fake.test/');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
-		socket = FakeSocket.latest();
+		({ client, socket } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});
@@ -1035,17 +1018,11 @@ describe('room records and membership', () => {
 
 	beforeEach(async () => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = new ChatClient('ws://fake.test/');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
-		socket = FakeSocket.latest();
+		({ client, socket } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 		await socket.greet(['rooms'], { room: { room_id: 'general', log_id: '10', title: 'General', description: 'Ops *chatter*', members: [{ user_id: 'guest_1' }] } });
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});

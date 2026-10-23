@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createTimeline } from '$lib/protocol/reducer';
 import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
 import { IncomingMessageTracker, notificationsByRoom } from './incoming-messages';
+import { roomSnapshot } from '$lib/test/builders';
 
 const me = { user_id: 'guest_me', name: 'sam' };
 
@@ -10,10 +10,7 @@ const message = (id: number, from = 'ada'): MessageRecord => ({
 	message_id: String(id), log_id: String(id), room_id: 'general', from: { user_id: from }, body: { text: `message ${id}` }
 });
 
-function room(messages: MessageRecord[], fields: Partial<RoomSnapshot> = {}): RoomSnapshot {
-	const timeline = { ...createTimeline('general'), events: Object.fromEntries(messages.map((event) => [event.message_id, event])), order: messages.map((event) => event.message_id) };
-	return { id: 'general', title: 'general', joined: true, timeline, recovering: false, loaded: true, loading: false, notices: [], ...fields };
-}
+const room = (messages: MessageRecord[], fields: Partial<RoomSnapshot> = {}): RoomSnapshot => roomSnapshot('general', messages, fields);
 
 describe('incoming message tracking', () => {
 	it('ignores existing history and returns each new message from others once', () => {

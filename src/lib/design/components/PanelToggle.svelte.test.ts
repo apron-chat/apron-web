@@ -1,19 +1,10 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import PanelToggle from './PanelToggle.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: { side: 'left' | 'right'; panel: string; open: boolean; ontoggle?: () => void }) {
-	instance = mount(PanelToggle, { target: document.body, props: { ontoggle: () => {}, ...props } });
-	flushSync();
+	dom.render(PanelToggle, { ontoggle: () => {}, ...props });
 	return document.querySelector<HTMLButtonElement>('button.ap-shell-toggle')!;
 }
 

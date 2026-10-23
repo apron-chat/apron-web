@@ -1,19 +1,10 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import MessageEditor from './MessageEditor.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
-	instance = mount(MessageEditor, { target: document.body, props: { value: 'hi', ...props } });
-	flushSync();
+	dom.render(MessageEditor, { value: 'hi', ...props });
 	return document.querySelector<HTMLElement>('.ap-msgedit')!;
 }
 
@@ -31,7 +22,7 @@ describe('MessageEditor', () => {
 		expect(onsave).toHaveBeenCalledOnce();
 		expect(key(field, { key: 'Enter', shiftKey: true }).defaultPrevented).toBe(false);
 		expect(onsave).toHaveBeenCalledOnce();
-		unmount(instance!);
+		dom.unmount();
 		const handheld = render({ onsave, handheld: true }).querySelector('textarea')!;
 		expect(key(handheld, { key: 'Enter' }).defaultPrevented).toBe(false);
 		expect(onsave).toHaveBeenCalledOnce();

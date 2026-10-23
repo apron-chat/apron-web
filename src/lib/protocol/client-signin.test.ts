@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, userIn, type ClientSnapshot } from './client';
-import { FakeSocket, settle } from './fake-socket';
+import { FakeSocket, settle, startClient } from '$lib/test/client';
 import { findProposal } from './proposals';
 
 function latest(): FakeSocket {
@@ -10,11 +10,6 @@ function latest(): FakeSocket {
 /** Email and external sign-in (§4.11), token rotation (§3.2.1), `server.welcome`, and roles (§3.3). */
 describe('sign-in', () => {
 	const storage = new Map<string, string>();
-	const fakeLocalStorage = {
-		getItem: (key: string) => storage.get(key) ?? null,
-		setItem: (key: string, value: string) => void storage.set(key, value),
-		removeItem: (key: string) => void storage.delete(key)
-	};
 	const TOKEN_KEY = 'apron.session:ws://fake.test/';
 	let client: ChatClient;
 	let snapshot: ClientSnapshot;
@@ -22,15 +17,11 @@ describe('sign-in', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		storage.clear();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		vi.stubGlobal('localStorage', fakeLocalStorage);
-		client = new ChatClient('ws://fake.test/');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
+		({ client } = startClient({ storage, onSnapshot: (next) => (snapshot = next) }));
 	});
 
 	afterEach(() => {
+		// Some tests start a client of their own in its place.
 		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();

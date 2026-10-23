@@ -1,7 +1,26 @@
+/** What `FakeSocket.greet` tells the client about the server and who it is. */
+export interface GreetOptions {
+	/** `server.auth`: the schemes offered. Default `['guest']`. */
+	auth?: string[];
+	/** A session token in the `auth` result. */
+	token?: string;
+	/** The one joined room the listing answers with. Default `lobby`. */
+	room?: Record<string, unknown>;
+	/** `server.ext`. */
+	ext?: Record<string, unknown>;
+	/** `server.ping`, in seconds. */
+	ping?: number;
+	/** `false` keeps cap `rooms` out of the advertised ones, so no listing is sent. */
+	rooms?: boolean;
+	/** `you` in the `auth` result. Default the guest `guest_1`. */
+	you?: Record<string, unknown>;
+}
+
 /**
  * Test support: a minimal scripted WebSocket for driving `ChatClient` in unit
  * tests. Frames the client sends are parsed into `sent`; tests reply through
- * `receive` and drop the transport with `drop`. Not used by the app.
+ * `receive` and drop the transport with `drop`. `./client.ts` installs it and
+ * starts a client on it.
  */
 export class FakeSocket {
 	static instances: FakeSocket[] = [];
@@ -68,10 +87,7 @@ export class FakeSocket {
 	 * listing right behind `auth` (§3.2), before its result, which is answered
 	 * first, as a server finishes `auth` first.
 	 */
-	async greet(caps: string[] = [], options: {
-		auth?: string[]; token?: string; room?: Record<string, unknown>; ext?: Record<string, unknown>; ping?: number; rooms?: boolean;
-		you?: Record<string, unknown>;
-	} = {}): Promise<void> {
+	async greet(caps: string[] = [], options: GreetOptions = {}): Promise<void> {
 		const advertised = options.rooms === false || caps.includes('rooms') ? caps : [...caps, 'rooms'];
 		this.open();
 		this.receive({
@@ -94,6 +110,7 @@ export class FakeSocket {
 	}
 }
 
+/** Lets a few turns of promise callbacks run, enough for a reply to reach the snapshot. */
 export async function settle(): Promise<void> {
 	for (let turn = 0; turn < 4; turn++) await Promise.resolve();
 }

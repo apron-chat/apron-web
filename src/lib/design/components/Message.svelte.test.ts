@@ -1,22 +1,13 @@
 // @vitest-environment jsdom
-import { createRawSnippet, flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'svelte';
+import { describe, expect, it, vi } from 'vitest';
 import Message from './Message.svelte';
+import * as dom from '$lib/test/dom';
 
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
-
-const html = (markup: string) => createRawSnippet(() => ({ render: () => markup }));
 const sender = { user_id: 'ada', name: 'Ada' };
 
 function render(props: Record<string, unknown>) {
-	instance = mount(Message, { target: document.body, props: { messageId: '1', sender, timestamp: 1710000000000, ...props } });
-	flushSync();
+	dom.render(Message, { messageId: '1', sender, timestamp: 1710000000000, ...props });
 	return document.querySelector('article')!;
 }
 
@@ -25,10 +16,10 @@ describe('Message', () => {
 		const row = render({
 			grouped: true,
 			text: 'unused',
-			avatar: html('<button class="mine-avatar">A</button>'),
-			name: html('<button class="ap-msg-sender">Ada</button>'),
-			reply: html('<div class="ap-reply">Message unavailable</div>'),
-			body: html('<div class="ap-msg-text mine-body">hi</div>')
+			avatar: dom.html('<button class="mine-avatar">A</button>'),
+			name: dom.html('<button class="ap-msg-sender">Ada</button>'),
+			reply: dom.html('<div class="ap-reply">Message unavailable</div>'),
+			body: dom.html('<div class="ap-msg-text mine-body">hi</div>')
 		});
 		// A quote leads into the avatar, so the reply isn't grouped even when asked to be.
 		expect(row.classList.contains('ap-msg-grouped')).toBe(false);
@@ -57,8 +48,7 @@ describe('Message', () => {
 		const onselect = vi.fn();
 		props.onselect = onselect;
 		props.onclick = () => { props.selectMode = true; };
-		instance = mount(Message, { target: document.body, props });
-		flushSync();
+		dom.render(Message, props);
 		document.querySelector('article')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true }));
 		flushSync();
 		expect(props.selectMode).toBe(true);
@@ -76,7 +66,7 @@ describe('Message', () => {
 	});
 
 	it('shows actions on a tombstone when you give them, and the handle when asked even if it matches the name', () => {
-		const row = render({ deleted: true, sender: { user_id: 'ada', name: 'ada' }, handle: true, actions: html('<button>Remove reply</button>') });
+		const row = render({ deleted: true, sender: { user_id: 'ada', name: 'ada' }, handle: true, actions: dom.html('<button>Remove reply</button>') });
 		expect(row.querySelector('.ap-msg-tomb')).not.toBeNull();
 		expect(row.querySelector('.ap-msg-actions')?.textContent).toBe('Remove reply');
 		expect(row.querySelector('.ap-msg-handle')?.textContent).toBe('@ada');
@@ -84,7 +74,7 @@ describe('Message', () => {
 
 	it('shows no handle by default, though it differs from the name: only where it tells people apart', () => {
 		expect(render({ sender: { user_id: 'bart', name: 'Bart' }, text: 'hi' }).querySelector('.ap-msg-handle')).toBeNull();
-		unmount(instance!);
+		dom.unmount();
 		expect(render({ density: 'compact', sender: { user_id: 'bart', name: 'Bart' }, text: 'hi' }).querySelector('.ap-msg-handle')).toBeNull();
 	});
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, type ClientSnapshot } from './client';
-import { FakeSocket, settle } from './fake-socket';
+import { FakeSocket, settle, startClient } from '$lib/test/client';
+import { memoryStorage } from '$lib/test/storage';
 
 function latest(): FakeSocket {
 	return FakeSocket.latest();
@@ -12,11 +13,7 @@ describe('transport reconnects', () => {
 
 	beforeEach(async () => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = new ChatClient('ws://fake.test/');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
+		({ client } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 		await latest().greet();
 		latest().receive({
 			method: 'message',
@@ -27,7 +24,6 @@ describe('transport reconnects', () => {
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});
@@ -183,16 +179,11 @@ describe('connection errors', () => {
 
 	beforeEach(async () => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = new ChatClient('ws://fake.test/');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
+		({ client } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 		await latest().greet();
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});
@@ -247,11 +238,6 @@ describe('connection errors', () => {
 
 describe('persisted session tokens', () => {
 	const storage = new Map<string, string>();
-	const fakeLocalStorage = {
-		getItem: (key: string) => storage.get(key) ?? null,
-		setItem: (key: string, value: string) => void storage.set(key, value),
-		removeItem: (key: string) => void storage.delete(key)
-	};
 	let snapshot: ClientSnapshot;
 
 	beforeEach(() => {
@@ -259,7 +245,7 @@ describe('persisted session tokens', () => {
 		storage.clear();
 		FakeSocket.instances = [];
 		vi.stubGlobal('WebSocket', FakeSocket);
-		vi.stubGlobal('localStorage', fakeLocalStorage);
+		vi.stubGlobal('localStorage', memoryStorage(storage));
 	});
 
 	afterEach(() => {
@@ -512,15 +498,10 @@ describe('reconnect divider', () => {
 
 	beforeEach(() => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = new ChatClient('ws://fake.test/');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
+		({ client } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});

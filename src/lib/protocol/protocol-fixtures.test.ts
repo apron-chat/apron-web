@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import historyFixture from '../../../protocol/tests/fixtures/history.json';
 import webAuthn from '../../../protocol/tests/fixtures/webauthn.json';
 import { ChatClient, type ClientSnapshot } from './client';
-import { FakeSocket, settle } from './fake-socket';
+import { FakeSocket, settle, startClient } from '$lib/test/client';
 import { compareLogIds } from './reducer';
 import { passkeyPublicKeyOptions } from './webauthn';
 import { isLogId } from './types';
@@ -48,15 +48,10 @@ describe('history fixtures through the client', () => {
 
 	beforeEach(() => {
 		vi.useFakeTimers();
-		FakeSocket.instances = [];
-		vi.stubGlobal('WebSocket', FakeSocket);
-		client = new ChatClient('ws://fake.test/');
-		client.subscribe((next) => (snapshot = next));
-		client.start();
+		({ client } = startClient({ onSnapshot: (next) => (snapshot = next) }));
 	});
 
 	afterEach(() => {
-		client.stop();
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});
