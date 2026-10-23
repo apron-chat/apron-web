@@ -3,7 +3,7 @@ import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
 import { messageRecord, roomSnapshot } from '$lib/test/builders';
 import { arrivalAlerts, type AlertSettings, type AlertView } from './alerts';
-import { IncomingMessageTracker } from './incoming-messages';
+import { IncomingMessageTracker, notificationsByRoom } from './incoming-messages';
 import { MentionTracker } from './mentions.svelte';
 
 const me = { user_id: 'sam', name: 'Sam' };
@@ -81,6 +81,8 @@ describe('alerts as messages arrive', () => {
 		const random = (messages: MessageRecord[] = []) => roomSnapshot('random', messages, { latestLogId: '100' });
 		const { alerts } = alertsFor([general(), random()], [general([message(101), mention(102), message(103)]), random([message(104, 'random'), message(105, 'random')])], { settings: { scopes: ['joined', 'mentions'] } });
 		expect(notified(alerts)).toEqual([['102', true], ['105', false]]);
+		// The pick doesn't rest on the mentions coming after the other messages.
+		expect(notificationsByRoom([mention(102), message(103)], new Set(['102'])).map((event) => event.message_id)).toEqual(['102']);
 	});
 
 	it('offers notifications at the first mention you’d hear, naming who and where', () => {
