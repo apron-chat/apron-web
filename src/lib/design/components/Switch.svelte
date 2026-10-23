@@ -1,5 +1,9 @@
 <script lang="ts">
-	interface Props {
+	import type { HTMLButtonAttributes } from 'svelte/elements';
+	import { chain } from './util';
+
+	/** Extra attributes go on the switch's button; an `onclick` runs before its own toggle (`preventDefault()` skips that). */
+	interface Props extends Omit<HTMLButtonAttributes, 'onchange'> {
 		checked: boolean;
 		/** What it turns on, for screen readers: the visible title beside it. */
 		label: string;
@@ -10,7 +14,12 @@
 		/** Called with the value asked for; the owner decides whether `checked` follows. */
 		onchange: (checked: boolean) => void;
 	}
-	let { checked, label, locked = false, describedby, onchange }: Props = $props();
+	let { checked, label, locked = false, describedby, onchange, class: className, onclick, ...rest }: Props = $props();
+
+	function toggle(): void {
+		if (!locked) onchange(!checked);
+	}
 </script>
 
-<button class="ap-switch" type="button" role="switch" aria-checked={checked} aria-label={label} aria-disabled={locked || undefined} aria-describedby={describedby} onclick={() => { if (!locked) onchange(!checked); }}><span></span></button>
+<!-- Its role and state are the switch's own: they follow the extra attributes. -->
+<button type="button" aria-label={label} aria-describedby={describedby} {...rest} class={['ap-switch', className]} role="switch" aria-checked={checked} aria-disabled={locked || undefined} onclick={chain(toggle, onclick)}><span></span></button>

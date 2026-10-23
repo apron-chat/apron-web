@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
+	import ConnectHeader from './ConnectHeader.svelte';
+	import ConnectPage from './ConnectPage.svelte';
 	import SignInForm from './SignInForm.svelte';
-	import { initials } from './util';
 
 	const HINTS: Record<string, string> = {
 		guest: 'No token needed; the server picks a guest identity.',
@@ -10,7 +12,11 @@
 		external: 'Signs in on the server’s own sign-in page (such as single sign-on), which then brings you back here.'
 	};
 
-	interface Props {
+	/**
+	 * A whole connect screen run by its props: a ConnectPage holding a SignInForm, with a ConnectHeader at its top.
+	 * A client with its own sign-in flow renders those three itself. Extra attributes go on the page.
+	 */
+	interface Props extends HTMLAttributes<HTMLDivElement> {
 		status?: 'idle' | 'connecting' | 'authing';
 		/** `bind:url`, `bind:name`, `bind:scheme`, `bind:token` */
 		url?: string;
@@ -51,17 +57,11 @@
 		onpickrecent?: (r: { url: string; label?: string }) => void;
 		/** Fills the viewport, as the app's whole page. */
 		page?: boolean;
-		/**
-		 * Draws the sign-in form in place of the one these props drive, such as a `SignInForm` run by the
-		 * app's own sign-in flow; it is given the header to show at its top (the title, the welcome and the
-		 * Server field).
-		 */
-		form?: Snippet<[Snippet]>;
 	}
 	let {
 		status = 'idle', url = $bindable(''), name = $bindable(''), schemes = ['guest', 'token', 'webauthn'], scheme = $bindable(), token = $bindable(''),
 		welcome, email = $bindable(''), code = $bindable(''), codeSent = false, onrestart, onconnect, passkey = {}, passkeyMode = $bindable('login'), onpasskey, notice, error, oncancel,
-		busy: waiting, recent, onpickrecent, page = false, form
+		busy: waiting, recent, onpickrecent, page = false, ...rest
 	}: Props = $props();
 	const busy = $derived(waiting ?? (status === 'connecting' || status === 'authing'));
 	const current = $derived(scheme || schemes[0]);
@@ -84,39 +84,13 @@
 	}
 </script>
 
-<div class={['ap-connect', page && 'ap-connect-page']}>
-	{#if form}
-		{@render form(header)}
-	{:else}
-		<SignInForm
-			{header} {schemes} scheme={current} onscheme={(k) => (scheme = k)} passkeyChoice={current === 'webauthn' && signIn && signUp} {passkeyMode} onpasskeymode={(k) => (passkeyMode = k)}
-			bind:token bind:email bind:code bind:name {askName} sent={codeSent && current === 'email' ? { scheme: 'email', email } : undefined} {onrestart}
-			{hint} hintStatus={Boolean(notice)} {error} {busy} secondary={oncancel && { label: 'Cancel', onclick: oncancel }} onsubmit={submit}
-			submit={status === 'connecting' ? 'Connecting…' : status === 'authing' ? 'Signing in…' : current === 'email' ? (codeSent ? 'Sign in' : 'Email me a code') : current === 'webauthn' ? (passkeyAction === 'login' ? 'Sign in with passkey' : 'Create account with passkey') : 'Connect'}
-		/>
-	{/if}
-	{#if recent && recent.length > 0}
-		<div class="ap-connect-recent" role="group" aria-label="Recent backends">
-			<span class="ap-fieldlabel">Recent</span>
-			{#each recent as r (r.url)}
-				<button class="ap-connect-recent-item" type="button" disabled={busy} onclick={() => onpickrecent?.(r)}>
-					<span class="ap-rail-tile ap-connect-tile" aria-hidden="true">{initials(r.label || r.url)}</span>
-					<span class="ap-room-text">
-						<span class="ap-room-name">{r.label || r.url}</span>
-						<span class="ap-room-topic">{r.url}</span>
-					</span>
-				</button>
-			{/each}
-		</div>
-	{/if}
-</div>
-
-<!-- The top of the card: the title, the server's welcome and the Server field. -->
-{#snippet header()}
-	<h1 class="ap-connect-title">Apron</h1>
-	<p class="ap-connect-tag">Connect to a backend</p>
-	{#if welcome}<div class="ap-welcome ap-msg-text" data-testid="server-welcome">{@render welcome()}</div>{/if}
-	<label class="ap-fieldlabel">Server
-		<input class="ap-field ap-field-mono" data-testid="server-url-input" type="text" inputmode="url" bind:value={url} placeholder="wss://server.apron.chat/" disabled={busy} autocomplete="url" spellcheck="false" />
-	</label>
-{/snippet}
+<ConnectPage {...rest} {recent} {onpickrecent} {busy} {page}>
+	<SignInForm
+		{schemes} scheme={current} onscheme={(k) => (scheme = k)} passkeyChoice={current === 'webauthn' && signIn && signUp} {passkeyMode} onpasskeymode={(k) => (passkeyMode = k)}
+		bind:token bind:email bind:code bind:name {askName} sent={codeSent && current === 'email' ? { scheme: 'email', email } : undefined} {onrestart}
+		{hint} hintStatus={Boolean(notice)} {error} {busy} secondary={oncancel && { label: 'Cancel', onclick: oncancel }} onsubmit={submit}
+		submit={status === 'connecting' ? 'Connecting…' : status === 'authing' ? 'Signing in…' : current === 'email' ? (codeSent ? 'Sign in' : 'Email me a code') : current === 'webauthn' ? (passkeyAction === 'login' ? 'Sign in with passkey' : 'Create account with passkey') : 'Connect'}
+	>
+		{#snippet header()}<ConnectHeader bind:url {welcome} {busy} />{/snippet}
+	</SignInForm>
+</ConnectPage>

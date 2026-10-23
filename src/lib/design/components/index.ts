@@ -39,6 +39,8 @@ export { default as ReplyPreview } from './ReplyPreview.svelte';
 export { default as ThreadSummary } from './ThreadSummary.svelte';
 export { default as RoomForm } from './RoomForm.svelte';
 export { default as ConnectScreen } from './ConnectScreen.svelte';
+export { default as ConnectPage } from './ConnectPage.svelte';
+export { default as ConnectHeader } from './ConnectHeader.svelte';
 export { default as SelectionBar } from './SelectionBar.svelte';
 export { default as Mention } from './Mention.svelte';
 export { default as MentionPicker } from './MentionPicker.svelte';

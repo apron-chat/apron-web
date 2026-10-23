@@ -1,10 +1,12 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { HTMLFormAttributes } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
 	import Button from './Button.svelte';
-	import TypingDots from './TypingDots.svelte';
+	import { chain } from './util';
 
-	interface Props {
+	/** The profile form. Extra attributes go on the form; an `onsubmit` runs before its own Save (`preventDefault()` skips that). */
+	interface Props extends Omit<HTMLFormAttributes, 'oninput'> {
 		userId: string;
 		/** Display name — sent as `me` `{name}` (§3.3); `you.name` in the result is the answer. `bind:name` in Svelte. */
 		name?: string;
@@ -15,9 +17,8 @@
 		face?: Snippet;
 		/** Caps `command` and `embed:upload`: a `/avatar` command with one `upload` embed (§4.8.6). */
 		canUpload?: boolean;
-		onchangeavatar?: () => void;
-		/** Given, Change avatar opens a file picker for an image, and this gets its input once one is picked. */
-		onavatarfile?: (input: HTMLInputElement) => void;
+		/** Change avatar opens a file picker for an image; this gets the one picked (the picker is cleared for the next). */
+		onavatarfile?: (file: File) => void;
 		/** Sends `me` `{avatar: ""}`. */
 		onremoveavatar?: () => void;
 		/** An avatar on its way: uploading says so on its button; either keeps both avatar buttons disabled. */
@@ -28,50 +29,62 @@
 		avatarError?: string;
 		/** Not connected: the avatar buttons can't be used. */
 		offline?: boolean;
-		/** saving · altered: `you.name` differs from what you asked (`serverName`) · declined */
+		/** saving · altered: `you.name` differs from what you asked (`serverName`) · declined (`declinedNote`) */
 		status?: 'idle' | 'saving' | 'altered' | 'declined';
 		serverName?: string;
-		/** What the server said in declining the handle, in parentheses after the note. */
-		declinedReason?: string;
-		/** The declined note's second sentence, in place of "Your old one is still in use.", such as that signing in applies it. */
-		declinedHint?: string;
+		/**
+		 * The declined note's words, in place of “The server declined this handle. Your old one is still in use.”,
+		 * such as with what the server said, or what happens to the handle next.
+		 */
+		declinedNote?: string;
 		onsave?: () => void;
 		oncancel?: () => void;
-		/** `server.auth` lists `webauthn` and this session isn't one: "Add passkey" runs `auth` action "register" (§4.10). */
-		canPasskey?: boolean;
-		onaddpasskey?: () => void;
-		passkey?: 'idle' | 'waiting' | 'done' | 'declined' | 'cancelled';
-		/** Replaces the Sign-in group's contents under its label, such as with the ways in this server offers. */
+		/**
+		 * A Sign-in group under the handle: how this session signs in, and the ways to add or switch, such as
+		 * buttons for the schemes the server offers with a line saying how it stands.
+		 */
 		signin?: Snippet;
 		/** The form is the dialog (the default); off inside a <ProfileBar>, whose popover is. */
 		dialog?: boolean;
+		/** `data-testid` on the Change avatar button, its Remove, the file picker and the Handle field. */
+		changeAvatarTestid?: string;
+		removeAvatarTestid?: string;
+		avatarFileTestid?: string;
+		nameTestid?: string;
 	}
 	let {
-		userId, name = $bindable(''), oninput, avatar, face, canUpload, onchangeavatar, onavatarfile, onremoveavatar, avatarBusy, avatarKept, avatarError, offline,
-		status = 'idle', serverName, declinedReason, declinedHint, onsave, oncancel, canPasskey, onaddpasskey, passkey, signin, dialog = true
+		userId, name = $bindable(''), oninput, avatar, face, canUpload, onavatarfile, onremoveavatar, avatarBusy, avatarKept, avatarError, offline,
+		status = 'idle', serverName, declinedNote, onsave, oncancel, signin, dialog = true,
+		changeAvatarTestid, removeAvatarTestid, avatarFileTestid, nameTestid, class: className, onsubmit, ...rest
 	}: Props = $props();
 	const saving = $derived(status === 'saving');
 	let fileInput = $state<HTMLInputElement | undefined>();
 
-	function changeAvatar(): void {
-		onchangeavatar?.();
-		fileInput?.click();
+	function save(event: SubmitEvent): void {
+		event.preventDefault();
+		onsave?.();
+	}
+
+	function picked(input: HTMLInputElement): void {
+		const file = input.files?.[0];
+		input.value = '';
+		if (file) onavatarfile?.(file);
 	}
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-<form class="ap-profedit" role={dialog ? 'dialog' : undefined} aria-label={dialog ? 'Edit profile' : undefined} onsubmit={(e) => { e.preventDefault(); onsave?.(); }}>
+<form role={dialog ? 'dialog' : undefined} aria-label={dialog ? 'Edit profile' : undefined} {...rest} class={['ap-profedit', className]} onsubmit={chain(save, onsubmit)}>
 	<div class="ap-profedit-top">
 		{#if face}{@render face()}{:else}<Avatar name={name || userId} src={avatar} size="lg" />{/if}
 		<div class="ap-profedit-av">
 			{#if canUpload}
 				<span class="ap-profedit-avbtns">
-					<Button size="sm" data-testid="change-avatar" disabled={saving || Boolean(avatarBusy) || offline} onclick={changeAvatar} label={avatarBusy === 'uploading' ? 'Uploading…' : avatar ? 'Change avatar' : 'Add avatar'} />
+					<Button size="sm" data-testid={changeAvatarTestid} disabled={saving || Boolean(avatarBusy) || offline} onclick={() => fileInput?.click()} label={avatarBusy === 'uploading' ? 'Uploading…' : avatar ? 'Change avatar' : 'Add avatar'} />
 					{#if avatar && onremoveavatar}
-						<button type="button" class="ap-link ap-profedit-remove" data-testid="remove-avatar" disabled={Boolean(avatarBusy) || offline} onclick={onremoveavatar}>Remove</button>
+						<button type="button" class="ap-link ap-profedit-remove" data-testid={removeAvatarTestid} disabled={Boolean(avatarBusy) || offline} onclick={onremoveavatar}>Remove</button>
 					{/if}
 				</span>
-				{#if onavatarfile}<input class="ap-sr" type="file" accept="image/*" tabindex="-1" aria-hidden="true" data-testid="avatar-input" bind:this={fileInput} onchange={(e) => onavatarfile(e.currentTarget)} />{/if}
+				{#if onavatarfile}<input class="ap-sr" type="file" accept="image/*" tabindex="-1" aria-hidden="true" data-testid={avatarFileTestid} bind:this={fileInput} onchange={(e) => picked(e.currentTarget)} />{/if}
 			{:else if avatar && onremoveavatar}
 				<button type="button" class="ap-link ap-profedit-remove" disabled={Boolean(avatarBusy) || offline} onclick={onremoveavatar}>Remove avatar</button>
 			{:else}
@@ -82,23 +95,15 @@
 		</div>
 	</div>
 	<label class="ap-fieldlabel">Handle
-		<input class="ap-field" data-testid="display-name-input" bind:value={() => name, (v) => { name = v; oninput?.(v); }} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" dir="auto" />
+		<input class="ap-field" data-testid={nameTestid} bind:value={() => name, (v) => { name = v; oninput?.(v); }} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" dir="auto" />
 	</label>
 	<p class="ap-profedit-hint">ID <code>{userId}</code> · set by the server, can’t be changed</p>
 	{#if status === 'altered'}<p class="ap-profedit-note" role="status">The server saved your handle as “{serverName}”.</p>{/if}
-	{#if status === 'declined'}<p class="ap-profedit-note ap-tone-danger" role="alert">The server declined this handle{declinedReason ? ` (${declinedReason})` : ''}. {declinedHint ?? 'Your old one is still in use.'}</p>{/if}
-	{#if canPasskey || signin}
+	{#if status === 'declined'}<p class="ap-profedit-note ap-tone-danger" role="alert">{declinedNote ?? 'The server declined this handle. Your old one is still in use.'}</p>{/if}
+	{#if signin}
 		<div class="ap-profedit-signin" role="group" aria-label="Sign-in">
 			<span class="ap-fieldlabel">Sign-in</span>
-			{#if signin}{@render signin()}
-			{:else if passkey === 'done'}<span class="ap-profedit-hint ap-tone-ok">Passkey saved · this backend will ask your device next time</span>
-			{:else if passkey === 'waiting'}<span class="ap-profedit-hint"><TypingDots />{' Confirm on your device…'}</span>
-			{:else}
-				<span class="ap-profedit-row">
-					<Button size="sm" onclick={onaddpasskey} disabled={saving} label="Add passkey" />
-					<span class={['ap-profedit-hint', passkey === 'declined' && 'ap-tone-danger']}>{passkey === 'declined' ? 'The server didn’t accept it. Your token still works.' : passkey === 'cancelled' ? 'Cancelled. Your token still works.' : 'Signed in with a token'}</span>
-				</span>
-			{/if}
+			{@render signin()}
 		</div>
 	{/if}
 	<div class="ap-profedit-actions">

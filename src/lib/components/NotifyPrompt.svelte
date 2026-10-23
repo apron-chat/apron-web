@@ -30,7 +30,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="notify-prompt" onkeydown={keydown}>
-	<Nudge title="Get notified when you’re mentioned?" {detail} note={pointer ? 'You can change this any time in Preferences.' : undefined} {pointer} testid="notify-prompt">
+	<Nudge title="Get notified when you’re mentioned?" {detail} note={pointer ? 'You can change this any time in Preferences.' : undefined} {pointer} data-testid="notify-prompt">
 		{#snippet icon()}<Bell size={16} strokeWidth={2} />{/snippet}
 		{#snippet actions()}
 			<Button size="sm" variant="ghost" label="Not now" onclick={ondecline} />

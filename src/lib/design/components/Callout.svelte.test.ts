@@ -21,4 +21,12 @@ describe('Callout', () => {
 		expect(document.querySelector('aside')).toBeNull();
 		expect(callout.querySelector('.ap-callout-title')?.textContent).toBe('Install Apron');
 	});
+
+	it('takes the caller’s attributes on its root, merging its class', () => {
+		instance = mount(Callout, { target: document.body, props: { title: 'Install Apron', class: 'extra', 'data-testid': 'install', role: 'alert' } });
+		flushSync();
+		const callout = document.querySelector('[data-testid="install"]')!;
+		expect(callout.className).toBe('ap-callout extra');
+		expect(callout.getAttribute('role')).toBe('alert');
+	});
 });

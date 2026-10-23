@@ -45,9 +45,9 @@ panels' collapse, slide and resize handles (`PanelToggle`, `PanelHandle`,
 driven by `SidebarHandle`); one pane at a time on phones; the overlaid member
 list under 960px) and renders `EmptyState`, `RoomLoading` (in `NoRoom`),
 `FloatingDay` and `DropZone`, with `Toasts` and `ConnectionNotice` beside it.
-The wrappers: `ConnectScreen` and `SignIn` (the design system's
-`ConnectScreen` and the `SignInForm` it shares; `SignIn` keeps the state
-machine in `$lib/ui/sign-in`), `Sidebar` (`SidebarHead`, `SidebarSection` and
+The wrappers: `ConnectScreen` and `SignIn` (the pieces the design system's
+`ConnectScreen` is made of: `ConnectPage`, `ConnectHeader` and `SignInForm`;
+`SignIn` keeps the state machine in `$lib/ui/sign-in`), `Sidebar` (`SidebarHead`, `SidebarSection` and
 `RoomItem`) with `ThreadList` (the design system's `ThreadList`),
 `MemberListSidebar` (`MemberList`), `ProfileBar` (`ProfileBar` with its
 `ProfileEditor`), `RoomHeader` (`RoomHeader`, with its ⋯ `MenuButton`) with

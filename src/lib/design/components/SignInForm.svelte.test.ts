@@ -11,8 +11,11 @@ afterEach(() => {
 	document.body.innerHTML = '';
 });
 
+/** The test ids the app gives its parts. */
+const TESTIDS = { tokenTestid: 'connect-token-input', emailTestid: 'connect-email-input', codeTestid: 'connect-code-input', nameTestid: 'connect-name-input', passkeyChoiceTestid: 'passkey-choice', pageLinkTestid: 'external-page-link' };
+
 function render(props: Record<string, unknown>) {
-	instance = mount(SignInForm, { target: document.body, props: { schemes: ['guest', 'webauthn', 'email', 'external', 'token'], scheme: 'guest', submit: 'Connect', ...props } });
+	instance = mount(SignInForm, { target: document.body, props: { schemes: ['guest', 'webauthn', 'email', 'external', 'token'], scheme: 'guest', submit: 'Connect', ...TESTIDS, ...props } });
 	flushSync();
 	return document.querySelector('form')!;
 }

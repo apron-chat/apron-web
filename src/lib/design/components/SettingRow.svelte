@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
 
-	interface Props {
+	/** Extra attributes go on the row (with `below`, on its box, the row and what's below it). */
+	interface Props extends HTMLAttributes<HTMLDivElement> {
 		/** What it sets, in bold. */
 		title: string;
 		/** The control's id: the title becomes its `<label>`. */
@@ -20,10 +22,8 @@
 		stacked?: boolean;
 		/** Under the whole row, full width, such as what the server answered. */
 		below?: Snippet;
-		/** A modifier, such as `ap-pref-pause`. */
-		class?: string;
 	}
-	let { title, for: forId, badge, hint, hintTestid, children, control, stacked = false, below, class: className }: Props = $props();
+	let { title, for: forId, badge, hint, hintTestid, children, control, stacked = false, below, class: className, ...rest }: Props = $props();
 </script>
 
 <!-- A row of a settings section (SettingsSections): the title and what it does, with its control at the end. -->
@@ -36,10 +36,10 @@
 	{@render control?.()}
 {/snippet}
 {#if below}
-	<div class={['ap-pref-setting-below', className]}>
+	<div {...rest} class={['ap-pref-setting-below', className]}>
 		<div class="ap-pref-setting-row">{@render row()}</div>
 		{@render below()}
 	</div>
 {:else}
-	<div class={['ap-pref-setting', stacked && 'ap-pref-setting-stacked', className]}>{@render row()}</div>
+	<div {...rest} class={['ap-pref-setting', stacked && 'ap-pref-setting-stacked', className]}>{@render row()}</div>
 {/if}

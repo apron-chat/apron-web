@@ -43,15 +43,20 @@ describe('ProfileBar', () => {
 describe('ProfileEditor', () => {
 	it('picks an avatar with its own file input, and says why a handle was declined', () => {
 		const onavatarfile = vi.fn();
-		instance = mount(ProfileEditor, { target: document.body, props: { userId: 'guest_7', name: 'root', canUpload: true, onavatarfile, status: 'declined', declinedReason: 'reserved', declinedHint: 'Sign in and it’s applied.', dialog: false } });
+		instance = mount(ProfileEditor, {
+			target: document.body,
+			props: { userId: 'guest_7', name: 'root', canUpload: true, onavatarfile, status: 'declined', declinedNote: 'The server declined this handle (reserved). Sign in and it’s applied.', dialog: false, changeAvatarTestid: 'change-avatar', avatarFileTestid: 'avatar-input' }
+		});
 		flushSync();
 		expect(document.querySelector('form')?.getAttribute('role')).toBeNull();
 		const input = document.querySelector<HTMLInputElement>('[data-testid="avatar-input"]')!;
 		const picked = vi.spyOn(input, 'click');
 		document.querySelector<HTMLButtonElement>('[data-testid="change-avatar"]')!.click();
 		expect(picked).toHaveBeenCalledOnce();
+		const file = new File(['png'], 'face.png', { type: 'image/png' });
+		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
 		input.dispatchEvent(new Event('change', { bubbles: true }));
-		expect(onavatarfile).toHaveBeenCalledWith(input);
+		expect(onavatarfile).toHaveBeenCalledExactlyOnceWith(file);
 		expect(document.querySelector('.ap-tone-danger')?.textContent).toBe('The server declined this handle (reserved). Sign in and it’s applied.');
 	});
 });

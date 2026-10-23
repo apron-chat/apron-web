@@ -32,7 +32,7 @@
 	adding first, since an addition approves only for the account that proposed it (§4.11.3).
 -->
 <!-- Escape and the close button cancel, as Cancel does. -->
-<Dialog open title={prompt.title} closeLabel="Cancel" testid="sign-in-link-dialog" onclose={oncancel} onsubmit={(event) => { event.preventDefault(); if (prompt.adds) onadd(); else onconfirm(); }}>
+<Dialog open title={prompt.title} closeLabel="Cancel" data-testid="sign-in-link-dialog" onclose={oncancel} onsubmit={(event) => { event.preventDefault(); if (prompt.adds) onadd(); else onconfirm(); }}>
 	{#each prompt.lines as line (line)}<p>{line}</p>{/each}
 	{#snippet footer()}
 		<Button size="sm" variant="ghost" label="Cancel" onclick={oncancel} />

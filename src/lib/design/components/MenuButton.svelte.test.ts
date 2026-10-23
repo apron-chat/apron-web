@@ -124,7 +124,7 @@ describe('MenuButton', () => {
 	it('draws an icon button named by its label, and marks the items for tests', async () => {
 		const icon = createRawSnippet(() => ({ render: () => '<svg aria-hidden="true"></svg>' }));
 		const actions = [{ value: 'edit', label: 'Edit room', testid: 'edit-room' }, { value: 'leave', label: 'Leave room', testid: 'leave-room' }];
-		instance = mount(MenuButton, { target: document.body, props: { label: 'Room actions', icon, testid: 'room-actions', choices: actions, onselect: vi.fn() } });
+		instance = mount(MenuButton, { target: document.body, props: { label: 'Room actions', icon, buttonTestid: 'room-actions', choices: actions, onselect: vi.fn() } });
 		flushSync();
 		const trigger = document.querySelector<HTMLButtonElement>('[data-testid="room-actions"]')!;
 		expect(trigger.classList.contains('ap-iconbtn')).toBe(true);
@@ -135,5 +135,21 @@ describe('MenuButton', () => {
 		await tick();
 		expect(trigger.classList.contains('ap-iconbtn-on')).toBe(true);
 		expect(document.querySelector('[data-testid="leave-room"]')?.textContent).toBe('Leave room');
+	});
+
+	it('runs a caller’s onkeydown first, which can keep its own keys from running', async () => {
+		const onkeydown = vi.fn((event: KeyboardEvent) => { if (event.key === 'ArrowDown') event.preventDefault(); });
+		instance = mount(MenuButton, { target: document.body, props: { label: 'Pause…', choices, onselect: vi.fn(), onkeydown, 'data-testid': 'pause' } });
+		flushSync();
+		const trigger = document.querySelector<HTMLButtonElement>('[data-testid="pause"] > button')!;
+		trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+		flushSync();
+		await tick();
+		expect(onkeydown).toHaveBeenCalledOnce();
+		expect(items()).toHaveLength(0);
+		key(trigger, 'ArrowUp');
+		flushSync();
+		await tick();
+		expect(items()).toHaveLength(3);
 	});
 });

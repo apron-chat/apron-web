@@ -1,7 +1,13 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { HTMLDialogAttributes } from 'svelte/elements';
+	import { chain } from './util';
 
-	interface Props {
+	/**
+	 * Extra attributes go on the `<dialog>`. Its `oncancel`, `onpointerdown` and `onclick` run before its own
+	 * (`preventDefault()` skips that); `onsubmit` and `onclose` are its own props, below.
+	 */
+	interface Props extends Omit<HTMLDialogAttributes, 'onsubmit' | 'onclose'> {
 		/** Shown as a modal while true; bindable, and set false however it closes (Escape, the close button, the backdrop). */
 		open?: boolean;
 		title: string;
@@ -25,9 +31,11 @@
 		footer?: Snippet;
 		/** The body without padding, for content that lays itself out (a section nav beside a pane). */
 		flush?: boolean;
-		testid?: string;
 	}
-	let { open = $bindable(false), title, subtitle, size = 'sm', closeLabel = 'Close', locked = false, backdropCloses = false, onsubmit, onclose, children, footer, flush = false, testid }: Props = $props();
+	let {
+		open = $bindable(false), title, subtitle, size = 'sm', closeLabel = 'Close', locked = false, backdropCloses = false, onsubmit, onclose, children, footer, flush = false,
+		class: className, oncancel, onpointerdown, onclick, ...rest
+	}: Props = $props();
 
 	let dialog = $state<HTMLDialogElement | undefined>();
 	const uid = $props.id();
@@ -52,13 +60,18 @@
 	let pressedBackdrop = false;
 
 	/** The panel's content fills the dialog, so only the backdrop targets the dialog itself. */
+	function pointerdown(event: PointerEvent): void {
+		pressedBackdrop = event.target === dialog;
+	}
+
 	function click(event: MouseEvent): void {
 		if (backdropCloses && !locked && event.target === dialog && pressedBackdrop) dialog?.close();
 		pressedBackdrop = false;
 	}
 </script>
 
-<dialog bind:this={dialog} class={['ap-dialog', 'ap-dialog-' + size]} aria-labelledby={titleId} data-testid={testid} oncancel={cancel} onclose={closed} onpointerdown={(event) => (pressedBackdrop = event.target === dialog)} onclick={click}>
+<!-- Named by its title: that wiring is the dialog's own, so it follows the extra attributes. -->
+<dialog bind:this={dialog} {...rest} class={['ap-dialog', 'ap-dialog-' + size, className]} aria-labelledby={titleId} oncancel={chain(cancel, oncancel)} onclose={closed} onpointerdown={chain(pointerdown, onpointerdown)} onclick={chain(click, onclick)}>
 	<svelte:element this={onsubmit ? 'form' : 'div'} class="ap-dialog-frame" role={onsubmit ? undefined : 'presentation'} {onsubmit}>
 		<header class="ap-dialog-head">
 			<div class="ap-dialog-heading">

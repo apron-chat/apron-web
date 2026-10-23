@@ -11,7 +11,7 @@ const out = [
 	' * Generated from src/lib/design/components by scripts/design-dts.js; it documents their props.',
 	" * In Svelte, import them from '$lib/design/components'; in any page, components/bundle.js sets window.Apron (bottom of this file). */",
 	"import type { Component, Snippet } from 'svelte';",
-	"import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements';",
+	'ELEMENTS',
 	'',
 	sender,
 	'',
@@ -44,4 +44,7 @@ ${names.map((n) => `  ${n}: typeof ${n};\n`).join('')}  /** Mount a component; c
 `);
 const OUT = 'dist-design/project/components';
 mkdirSync(OUT, { recursive: true });
+// The element attribute types the Props extend, from svelte/elements.
+const elements = [...new Set(out.join('\n').match(/\bHTML\w*Attributes\b/g))].sort();
+out[out.indexOf('ELEMENTS')] = `import type { ${elements.join(', ')} } from 'svelte/elements';`;
 writeFileSync(`${OUT}/index.d.ts`, out.join('\n').replaceAll('\n\t\t', '\n  ').replaceAll('\n\t', '\n  '));

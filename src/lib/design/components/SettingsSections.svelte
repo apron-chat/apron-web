@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
 
-	interface Props {
+	/** Extra attributes go on the body (the nav and the open section's box). */
+	interface Props extends HTMLAttributes<HTMLDivElement> {
 		/** Names the nav (its `aria-label`). */
 		label?: string;
 		/** Each section: its nav label, which also heads it, the line under the heading, and the heading's id. */
@@ -11,11 +13,11 @@
 		/** The open section's settings, such as SettingRows, under its heading. */
 		children?: Snippet;
 	}
-	let { label = 'Preference sections', sections, current = $bindable(), children }: Props = $props();
+	let { label = 'Preference sections', sections, current = $bindable(), children, class: className, ...rest }: Props = $props();
 </script>
 
 <!-- A settings dialog's body (Dialog's `flush`): a nav of sections beside the open one, which scrolls on its own. -->
-<div class="ap-preferences-body">
+<div {...rest} class={['ap-preferences-body', className]}>
 	<nav class="ap-preferences-nav" aria-label={label}>
 		{#each sections as section (section.value)}
 			<button type="button" aria-current={current === section.value ? 'page' : undefined} onclick={() => (current = section.value)}>{section.label}</button>

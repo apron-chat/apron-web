@@ -114,7 +114,7 @@
 		</button>
 	{/if}
 	{#if actions.length > 0}
-		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} testid="room-actions" choices={actions} disabled={busy} onselect={act}>
+		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} buttonTestid="room-actions" choices={actions} disabled={busy} onselect={act}>
 			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
 			{#snippet lead(value)}{#if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
 		</MenuButton>

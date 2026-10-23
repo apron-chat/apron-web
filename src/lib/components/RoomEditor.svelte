@@ -58,4 +58,4 @@
 	}
 </script>
 
-<RoomForm bind:open kind={thread ? 'thread' : 'room'} mode="edit" bind:name={title} bind:summary={description} status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={save} {onclose} />
+<RoomForm data-testid="room-form" bind:open kind={thread ? 'thread' : 'room'} mode="edit" bind:name={title} bind:summary={description} status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={save} {onclose} />

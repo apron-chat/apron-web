@@ -96,6 +96,8 @@
 	let canUseEmail = $derived(!!session.server?.auth.includes('email'));
 	/** External sign-in on the server's page (§4.11.5), where the server offers it. */
 	let canUseExternal = $derived(!!session.server?.auth.includes('external'));
+	/** Why the server declined the handle, and what happens to it now: a guest who can sign in gets it applied once signed in. */
+	let declinedNote = $derived(`The server declined this handle${declinedReason ? ` (${declinedReason})` : ''}. ${(canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession ? 'Sign in and it’s applied once you’re signed in.' : 'Your old one is still in use.'}`);
 	/**
 	 * No way back into the account that the server signs in with, as far as
 	 * this browser knows: only a kept token (pasted, or an invite, §3.2), or an
@@ -129,10 +131,7 @@
 	}
 
 	/** The server sets `avatar` and sends `user` once the image is written; `you` then carries it. */
-	async function uploadAvatar(input: HTMLInputElement): Promise<void> {
-		const file = input.files?.[0];
-		input.value = '';
-		if (!file) return;
+	async function uploadAvatar(file: File): Promise<void> {
 		avatarStatus = 'uploading';
 		avatarError = '';
 		try {
@@ -400,11 +399,11 @@
 		offline={!connected}
 		{status}
 		{serverName}
-		{declinedReason}
-		declinedHint={(canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession ? 'Sign in and it’s applied once you’re signed in.' : undefined}
+		{declinedNote}
 		onsave={save}
 		oncancel={close}
 		signin={canUsePasskey || canUseEmail || canUseExternal ? signin : undefined}
+		changeAvatarTestid="change-avatar" removeAvatarTestid="remove-avatar" avatarFileTestid="avatar-input" nameTestid="display-name-input"
 	/>
 {/snippet}
 

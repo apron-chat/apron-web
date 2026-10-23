@@ -24,7 +24,7 @@
 </script>
 
 {#if (updated.current || chunkMissing) && !dismissed}
-	<ActionBanner float title="Apron has been updated" detail={unsent ? 'Reloading clears your unsent message.' : undefined} testid="update-notice">
+	<ActionBanner float title="Apron has been updated" detail={unsent ? 'Reloading clears your unsent message.' : undefined} data-testid="update-notice">
 		{#snippet icon()}<RefreshCw size={16} aria-hidden="true" />{/snippet}
 		{#snippet action()}
 			<Button size="sm" variant="ghost" onclick={() => (dismissed = true)} label="Later" />

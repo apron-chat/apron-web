@@ -6,7 +6,8 @@
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import type { Scheme, SignOutHandler } from '$lib/ui/sign-in';
 	import type { RecentServer } from '$lib/ui/storage';
-	import DesignConnectScreen from '$lib/design/components/ConnectScreen.svelte';
+	import ConnectHeader from '$lib/design/components/ConnectHeader.svelte';
+	import ConnectPage from '$lib/design/components/ConnectPage.svelte';
 	import SignIn from './SignIn.svelte';
 
 	interface Props {
@@ -52,13 +53,14 @@
 	});
 </script>
 
-<!-- The design system's ConnectScreen draws the page; the app's SignIn runs the form under its header. -->
+<!-- The design system's ConnectPage draws the page; the app's SignIn runs the form, with a ConnectHeader at its top. -->
 {#snippet welcomeHtml()}{@html welcome}{/snippet}
-<DesignConnectScreen page bind:url={serverInput} {busy} welcome={welcome ? welcomeHtml : undefined} recent={recentServers} onpickrecent={(recent) => (serverInput = recent.url)}>
-	{#snippet form(header)}
-		<SignIn
-			{client} {session} bind:serverInput bind:displayName bind:busy {passkeyUnavailable} {canCancel}
-			{initialScheme} {initialEmail} {initialError} {header} {onconnect} {onconnected} {oncancel} {onsignout}
-		/>
-	{/snippet}
-</DesignConnectScreen>
+{#snippet header()}
+	<ConnectHeader bind:url={serverInput} {busy} welcome={welcome ? welcomeHtml : undefined} welcomeTestid="server-welcome" urlTestid="server-url-input" />
+{/snippet}
+<ConnectPage page {busy} recent={recentServers} onpickrecent={(recent) => (serverInput = recent.url)}>
+	<SignIn
+		{client} {session} bind:serverInput bind:displayName bind:busy {passkeyUnavailable} {canCancel}
+		{initialScheme} {initialEmail} {initialError} {header} {onconnect} {onconnected} {oncancel} {onsignout}
+	/>
+</ConnectPage>
