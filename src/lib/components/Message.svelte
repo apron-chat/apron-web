@@ -1,11 +1,5 @@
-<script module lang="ts">
-	import { Lazy } from '$lib/ui/lazy.svelte';
-
-	/** The editor's code, which loads apart from the page's: until it has, an edited message shows as it is. */
-	const messageEditor = new Lazy(() => import('./MessageEditor.svelte'));
-</script>
-
 <script lang="ts">
+	import { messageEditor } from './lazy';
 	import type { EmbedEdits, UploadState } from '$lib/protocol/client';
 	import { renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 	import type { Embed as EmbedData, MessageRecord } from '$lib/protocol/types';

@@ -8,9 +8,10 @@
 export class Lazy<T> {
 	#component = $state<T>();
 	#loading?: Promise<T>;
-	#load: () => Promise<{ default: T }>;
+	#load: () => Promise<T>;
 
-	constructor(load: () => Promise<{ default: T }>) {
+	/** `load` imports the code, once asked: `() => import('./on-demand').then((m) => m.Dialog)`. */
+	constructor(load: () => Promise<T>) {
 		this.#load = load;
 		registered.push(this);
 	}
@@ -22,7 +23,7 @@ export class Lazy<T> {
 
 	load(): Promise<T> {
 		this.#loading ??= this.#load().then(
-			(module) => (this.#component = module.default),
+			(component) => (this.#component = component),
 			(error) => {
 				this.#loading = undefined;
 				throw error;

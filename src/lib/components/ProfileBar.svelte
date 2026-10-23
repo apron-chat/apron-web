@@ -1,11 +1,5 @@
-<script module lang="ts">
-	import { Lazy } from '$lib/ui/lazy.svelte';
-
-	/** Preferences' code, which loads apart from the page's. */
-	const preferences = new Lazy(() => import('./PreferencesDialog.svelte'));
-</script>
-
 <script lang="ts">
+	import { preferencesDialog } from './lazy';
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
 	import type { ChatClient, OperationHandle } from '$lib/protocol/client';
@@ -431,8 +425,8 @@
 	{paused}
 	bind:preferencesButton={preferencesTrigger}
 >
-	{#if preferencesMounted && preferences.component}
-		{@const PreferencesDialog = preferences.component}
+	{#if preferencesMounted && preferencesDialog.component}
+		{@const PreferencesDialog = preferencesDialog.component}
 		<PreferencesDialog
 			bind:open={preferencesOpen}
 			{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}

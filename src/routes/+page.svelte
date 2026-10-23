@@ -1,13 +1,5 @@
-<script module lang="ts">
-	import { Lazy } from '$lib/ui/lazy.svelte';
-
-	// Dialogs the page opens only on demand: their code loads apart from the page's.
-	const roomEditor = new Lazy(() => import('$lib/components/RoomEditor.svelte'));
-	const newThreadDialog = new Lazy(() => import('$lib/components/NewThreadDialog.svelte'));
-	const signInLinkDialog = new Lazy(() => import('$lib/components/SignInLinkDialog.svelte'));
-</script>
-
 <script lang="ts">
+	import { newThreadDialog, roomEditor, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { createAttachmentKey, fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';

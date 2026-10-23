@@ -1,11 +1,5 @@
-<script module lang="ts">
-	import { Lazy } from '$lib/ui/lazy.svelte';
-
-	/** The new-room dialog's code, which loads apart from the page's. */
-	const newRoomDialog = new Lazy(() => import('./NewRoomDialog.svelte'));
-</script>
-
 <script lang="ts">
+	import { newRoomDialog } from './lazy';
 	import { untrack } from 'svelte';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { SessionView } from '$lib/ui/session.svelte';
