@@ -93,7 +93,7 @@ describe('StatusPicker', () => {
 		expect(document.querySelector('.ap-status-pick-dot .ap-presence')).toBeNull();
 	});
 
-	it('shows what the server answered for a listed optional status it substituted, and stops offering it', async () => {
+	it('shows what the server answered for a listed optional status it substituted, through the dialog’s live region, and stops offering it', async () => {
 		const props = render('online', (asked) => (asked === 'invisible' ? '' : asked));
 		await pick('Invisible');
 		expect(props.onchoose).toHaveBeenCalledWith('invisible');
@@ -101,8 +101,17 @@ describe('StatusPicker', () => {
 		expect(note()?.textContent).toContain('This server doesn’t offer Invisible');
 		expect(note()?.textContent).toContain('Your status is None.');
 		expect(props.unsupported).toEqual(['invisible']);
+		// Said through the dialog's live region, not one of its own.
+		expect(props.announced.at(-1)).toBe('This server doesn’t offer Invisible. Your status is None.');
+		expect(document.querySelector('[role="status"], [aria-live]')).toBeNull();
 		await open();
 		expect(offered()).toEqual(['Online', 'Do not disturb', 'None']);
+		// A choice that works clears it.
+		choice('Online')!.click();
+		flushSync();
+		await tick();
+		await tick();
+		expect(props.announced.at(-1)).toBeUndefined();
 	});
 
 	it('says when the server declined', async () => {
@@ -112,13 +121,4 @@ describe('StatusPicker', () => {
 		expect(trigger().textContent).toBe('Online');
 	});
 
-	it('says the server\'s answer through the dialog\'s live region, not one of its own', async () => {
-		const props = render('online', (asked) => (asked === 'invisible' ? '' : asked));
-		await pick('Invisible');
-		expect(props.announced.at(-1)).toBe('This server doesn’t offer Invisible. Your status is None.');
-		expect(document.querySelector('[role="status"], [aria-live]')).toBeNull();
-		// A choice that works clears it.
-		await pick('Online');
-		expect(props.announced.at(-1)).toBeUndefined();
-	});
 });

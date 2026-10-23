@@ -11,13 +11,18 @@ function render(props: Partial<{ whenClosed: boolean; pointer: boolean; onaccept
 const button = (name: string) => [...document.querySelectorAll('button')].find((candidate) => candidate.textContent === name)!;
 
 describe('NotifyPrompt', () => {
-	it('says who mentioned you, where, and how far notifications reach, as a labelled dialog', () => {
+	it('says who mentioned you, where, and how far notifications reach, as a labelled dialog, naming no mention at sign-in', () => {
 		const prompt = render();
 		expect(prompt.getAttribute('role')).toBe('dialog');
 		const title = document.getElementById(prompt.getAttribute('aria-labelledby')!);
 		expect(title?.textContent).toBe('Get notified when you’re mentioned?');
 		const detail = document.getElementById(prompt.getAttribute('aria-describedby')!);
 		expect(detail?.textContent).toBe('Ada mentioned you in General. Apron can alert you on this device, even when it’s closed.');
+		dom.unmount();
+		// Offered at sign-in, it names no mention.
+		dom.render(NotifyPrompt, { whenClosed: true, onaccept: () => {}, ondecline: () => {} });
+		const atSignIn = document.querySelector<HTMLElement>('[data-testid="notify-prompt"]')!;
+		expect(document.getElementById(atSignIn.getAttribute('aria-describedby')!)?.textContent).toBe('Apron can alert you on this device, even when it’s closed.');
 	});
 
 	it('says while it’s open where push doesn’t work, and points at Preferences only when asked', () => {
@@ -29,13 +34,6 @@ describe('NotifyPrompt', () => {
 		const pointing = render({ pointer: true });
 		expect(pointing.classList.contains('ap-nudge-pointer')).toBe(true);
 		expect(pointing.textContent).toContain('You can change this any time in Preferences.');
-	});
-
-	it('offered at sign-in, names no mention', () => {
-		dom.render(NotifyPrompt, { whenClosed: true, onaccept: () => {}, ondecline: () => {} });
-		const prompt = document.querySelector<HTMLElement>('[data-testid="notify-prompt"]')!;
-		const detail = document.getElementById(prompt.getAttribute('aria-describedby')!);
-		expect(detail?.textContent).toBe('Apron can alert you on this device, even when it’s closed.');
 	});
 
 	it('turns them on, or declines with Not now or Escape', () => {

@@ -20,7 +20,7 @@ describe('NewRoomDialog', () => {
 	}
 	const checkbox = () => field<HTMLInputElement>('input[type="checkbox"]');
 
-	it('creates a room in the same centered form as threads: a title, a description, and Private to choose', async () => {
+	it('creates a room in the same centered form as threads: a title, a description, and Private to choose, sending none it wasn’t given', async () => {
 		const { createRoom, oncreated, onclose } = render();
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.classList.contains('ap-dialog-md')).toBe(true);
@@ -38,14 +38,13 @@ describe('NewRoomDialog', () => {
 		// Its record must come back private before it's used (§4.2.4).
 		expect(oncreated).toHaveBeenCalledWith('new', { private: true });
 		expect(onclose).toHaveBeenCalled();
-	});
-
-	it('sends no description or private it wasn’t given', async () => {
-		const { createRoom, oncreated } = render();
+		dom.unmount();
+		// No description or private it wasn't given.
+		const bare = render();
 		dom.type(field('input.ap-field'), 'Ops');
 		await dom.submit();
-		expect(createRoom).toHaveBeenCalledWith({ title: 'Ops' });
-		expect(oncreated).toHaveBeenCalledWith('new', { private: false });
+		expect(bare.createRoom).toHaveBeenCalledWith({ title: 'Ops' });
+		expect(bare.oncreated).toHaveBeenCalledWith('new', { private: false });
 	});
 
 	it('says in words that a server keeps no private rooms, and stays open', async () => {

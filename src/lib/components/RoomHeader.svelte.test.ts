@@ -19,23 +19,20 @@ function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: numbe
 }
 
 describe('RoomHeader', () => {
-	it('offers the member list’s toggle where the list overlays the conversation', () => {
+	it('offers the member list’s toggle where the list overlays the conversation, and leaves it to the corner where the list has a column of its own', () => {
 		expect(render()?.getAttribute('aria-label')).toBe('Show member list');
-	});
-
-	it('leaves it to the corner where the list has a column of its own', () => {
+		dom.unmount();
 		expect(render(false)).toBeNull();
 	});
 
-	it('shows the room’s description under its title, unless it’s pinned as a summary', () => {
+	it('shows the room’s description under its title, unless it’s pinned as a summary, and offers Summary once that is put away', () => {
 		render();
 		expect(document.querySelector('[data-testid="room-description"]')?.textContent).toBe('Say hello.');
 		dom.unmount();
 		render(undefined, { showTopic: false });
 		expect(document.querySelector('[data-testid="room-description"]')).toBeNull();
-	});
-
-	it('offers Summary once the summary is put away', () => {
+		dom.unmount();
+		// Summary is offered once the summary is put away.
 		render();
 		expect(document.querySelector('[data-testid="show-summary"]')).toBeNull();
 		dom.unmount();

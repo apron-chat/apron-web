@@ -38,7 +38,7 @@ describe('NewThreadDialog', () => {
 		expect(onclose).toHaveBeenCalled();
 	});
 
-	it('starts from a room with nothing filled in, and needs a title', async () => {
+	it('starts from a room with nothing filled in, needs a title, and stays open with the reason when creating fails', async () => {
 		const { oncreate } = render();
 		expect(field<HTMLInputElement>('input.ap-field').value).toBe('');
 		expect(field<HTMLInputElement>('input.ap-field').placeholder).toBe('What it’s about');
@@ -49,6 +49,13 @@ describe('NewThreadDialog', () => {
 		await dom.submit();
 		// An empty summary sends no description.
 		expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' });
+		dom.unmount();
+		// Creating fails: it stays open with the reason.
+		const { onclose } = render({ title: 'Deploy' }, vi.fn(() => Promise.reject(new Error('Not allowed'))));
+		await dom.submit();
+		expect(document.querySelector('[role="alert"]')?.textContent).toBe('Not allowed');
+		expect(field<HTMLDialogElement>('dialog').open).toBe(true);
+		expect(onclose).not.toHaveBeenCalled();
 	});
 
 	it('says what starting from a selection moves, and that a private room’s thread is private', () => {
@@ -57,13 +64,5 @@ describe('NewThreadDialog', () => {
 		expect(text()).toContain('The 3 selected messages move into the new thread.');
 		expect(text()).toContain('Private, like its room');
 		expect(submitLabel()).toBe('Move 3 messages');
-	});
-
-	it('stays open with the reason when creating fails', async () => {
-		const { onclose } = render({ title: 'Deploy' }, vi.fn(() => Promise.reject(new Error('Not allowed'))));
-		await dom.submit();
-		expect(document.querySelector('[role="alert"]')?.textContent).toBe('Not allowed');
-		expect(field<HTMLDialogElement>('dialog').open).toBe(true);
-		expect(onclose).not.toHaveBeenCalled();
 	});
 });

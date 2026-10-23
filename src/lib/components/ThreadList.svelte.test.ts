@@ -45,7 +45,7 @@ describe('ThreadList', () => {
 		expect(one('button[data-thread="cert"] .ap-tline-sender')?.textContent).toBe('Grace');
 	});
 
-	it('lists joined threads, each with Leave, then the others under a heading that folds, each with Join', () => {
+	it('lists joined threads, each with Leave, then the others under a heading that folds and stays folded, each with Join', () => {
 		const { onthread, onleave, onopen, onjoin } = render();
 		expect(titles('button[data-thread]')).toEqual(['Deploy', 'Expired cert']);
 		expect(titles('button[data-other-thread]')).toEqual(['Offsite', 'Logo']);
@@ -64,6 +64,15 @@ describe('ThreadList', () => {
 		expect(onjoin).not.toHaveBeenCalled();
 		one('button[data-join="logo"]')!.click();
 		expect(onjoin).toHaveBeenCalledWith('logo');
+		// Folded, it stays folded, also the next time.
+		one('[data-testid="other-threads"]')!.click();
+		flushSync();
+		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
+		expect(one('button[data-other-thread]')).toBeNull();
+		dom.unmount();
+		render();
+		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
+		expect(one('button[data-other-thread]')).toBeNull();
 	});
 
 	it('sets apart what’s new: unread replies counted, unread mentions tinted, the open thread marked, the rest stepping back', () => {
@@ -123,18 +132,6 @@ describe('ThreadList', () => {
 		flushSync();
 		expect(titles('button[data-other-thread]')).toEqual(['A', 'B', 'C', 'D', 'E']);
 		expect(one('[data-testid="more-threads"]')).toBeNull();
-	});
-
-	it('stays folded once folded, also the next time', () => {
-		render();
-		one('[data-testid="other-threads"]')!.click();
-		flushSync();
-		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
-		expect(one('button[data-other-thread]')).toBeNull();
-		dom.unmount();
-		render();
-		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
-		expect(one('button[data-other-thread]')).toBeNull();
 	});
 
 	it('offers no Join or Leave where you only read, and no heading with nothing else to list', () => {
