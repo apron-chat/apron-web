@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { credentialSource } from './passkey-diagnostics';
-import { base64url, credentialJSON, labelledCreationOptions, requestPasskey, signalPasskeyLabel } from './webauthn';
+import webAuthn from '../../../protocol/tests/fixtures/webauthn.json';
+import { base64url, credentialJSON, labelledCreationOptions, passkeyPublicKeyOptions, requestPasskey, signalPasskeyLabel } from './webauthn';
 
 const bytes = (...values: number[]) => new Uint8Array(values).buffer;
 
@@ -171,5 +172,19 @@ describe('passkey labels', () => {
 	it('does nothing without the Signal API', () => {
 		vi.stubGlobal('PublicKeyCredential', {});
 		expect(() => signalPasskeyLabel('demo.example', 'dXNlci0x', 'Ada')).not.toThrow();
+	});
+});
+
+describe('the shared WebAuthn fixture', () => {
+	it('uses canonical public_key options and two-step actions', () => {
+		expect(webAuthn.format).toBe(1);
+		expect(webAuthn.kind).toBe('webauthn');
+		const registration = webAuthn.cases[0];
+		const options = passkeyPublicKeyOptions(registration.begin_result);
+		expect(options).toEqual(registration.begin_result.public_key);
+		expect(options?.authenticatorSelection).toEqual({ residentKey: 'required', userVerification: 'required' });
+		expect(registration.finish?.params.credential.id).toBe(registration.finish?.params.credential.rawId);
+		expect(registration.begin.params).toMatchObject({ scheme: 'webauthn', action: 'register', step: 'begin' });
+		expect(registration.finish?.params).toMatchObject({ scheme: 'webauthn', action: 'register', step: 'finish', challenge_id: registration.begin_result.challenge_id });
 	});
 });

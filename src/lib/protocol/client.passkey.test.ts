@@ -1,21 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatClient } from './client';
-import { FakeSocket, settle } from '$lib/test/client';
+import type { ChatClient } from './client';
+import { PASSKEY_IDLE_POLL_MS } from './client-internals';
+import { connect, FakeSocket, settle, startClient } from '$lib/test/client';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
-import { memoryStorage } from '$lib/test/storage';
 
 vi.mock('./webauthn', () => ({
 	requestPasskey: vi.fn(),
 	signalPasskeyLabel: vi.fn()
 }));
 
+/**
+ * Passkeys (§4.10): one explicit ceremony per tap, which waits for requests
+ * sent as the old identity, carries a chosen handle, relabels the saved
+ * passkey, and never starts on its own after a failed resume.
+ */
 const storage = new Map<string, string>();
 
 beforeEach(() => {
-	FakeSocket.instances = [];
+	vi.useFakeTimers();
 	storage.clear();
-	vi.stubGlobal('WebSocket', FakeSocket);
-	vi.stubGlobal('localStorage', memoryStorage(storage));
 	vi.mocked(requestPasskey).mockReset();
 	vi.mocked(signalPasskeyLabel).mockReset();
 });
@@ -25,12 +28,9 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+/** A guest on a server that offers passkeys. */
 async function connected(): Promise<{ client: ChatClient; socket: FakeSocket }> {
-	const client = new ChatClient('ws://fake.test/');
-	client.start();
-	const socket = FakeSocket.latest();
-	await socket.greet([], { auth: ['webauthn', 'guest'] });
-	return { client, socket };
+	return connect([], { auth: ['webauthn', 'guest'], storage });
 }
 
 function authRequests(socket: FakeSocket): Array<Record<string, unknown>> {
@@ -60,7 +60,6 @@ describe('passkey ceremonies carry a chosen handle', () => {
 		expect(socket.request('me').params).toEqual({ name: 'shazow' });
 		await socket.reply('me', { you: { user_id: 'u_1', name: 'shazow' } });
 		await expect(named!.promise).resolves.toEqual({ you: { user_id: 'u_1', name: 'shazow' } });
-		client.stop();
 	});
 
 	it('keeps the old handle when the ceremony is cancelled', async () => {
@@ -78,13 +77,10 @@ describe('passkey ceremonies carry a chosen handle', () => {
 		await ceremony(socket, { user_id: 'u_2', name: 'Existing' });
 		await expect(login).resolves.toBeUndefined();
 		expect(socket.sent.some((frame) => frame.method === 'me')).toBe(false);
-		client.stop();
 	});
 });
 
 describe('passkey ceremonies and requests in flight', () => {
-	const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 	it('names only a new account at begin, not a sign-in', async () => {
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
 		const { client, socket } = await connected();
@@ -94,7 +90,6 @@ describe('passkey ceremonies and requests in flight', () => {
 		expect(socket.request('auth').params).not.toHaveProperty('name');
 		await ceremony(socket, { user_id: 'u_1', name: 'Existing' });
 		await pending;
-		client.stop();
 	});
 
 	it('waits for requests sent as the old identity before starting', async () => {
@@ -102,14 +97,14 @@ describe('passkey ceremonies and requests in flight', () => {
 		const { client, socket } = await connected();
 		client.setDisplayName('Renamed');
 		const pending = client.usePasskey('login');
-		await pause(120);
+		// It looks again every PASSKEY_IDLE_POLL_MS while the rename is unanswered.
+		await vi.advanceTimersByTimeAsync(PASSKEY_IDLE_POLL_MS * 3);
 		expect(authRequests(socket).some((params) => params.scheme === 'webauthn')).toBe(false);
 		await socket.reply('me', { you: { user_id: 'guest_1', name: 'Renamed' } });
-		await pause(120);
+		await vi.advanceTimersByTimeAsync(PASSKEY_IDLE_POLL_MS);
 		expect(socket.request('auth').params).toEqual(expect.objectContaining({ action: 'login', step: 'begin' }));
 		await ceremony(socket, { user_id: 'u_1', name: 'Existing' });
 		await expect(pending).resolves.toBeDefined();
-		client.stop();
 	});
 });
 
@@ -124,7 +119,6 @@ describe('one explicit ceremony per tap', () => {
 		await pending;
 		// The browser labels the passkey with it too, whatever the server put in the options.
 		expect(vi.mocked(requestPasskey).mock.calls[0]?.[3]).toBe('shazow');
-		client.stop();
 	});
 
 	it('sends no name with a login, which signs in to an account that has one', async () => {
@@ -135,7 +129,6 @@ describe('one explicit ceremony per tap', () => {
 		expect(socket.request('auth').params).toEqual({ scheme: 'webauthn', action: 'login', step: 'begin' });
 		await ceremony(socket, { user_id: 'u_1', name: 'Existing' });
 		await pending;
-		client.stop();
 	});
 
 	it('is busy from the tap on, before the server is asked for a challenge', async () => {
@@ -148,12 +141,11 @@ describe('one explicit ceremony per tap', () => {
 		expect(client.snapshot().passkeyBusy).toBeUndefined();
 		await expect(client.usePasskey('register')).rejects.toThrow('Already signing in');
 		await socket.reply('me', { you: { user_id: 'guest_1', name: 'Renamed' } });
-		await new Promise((resolve) => setTimeout(resolve, 120));
+		await vi.advanceTimersByTimeAsync(PASSKEY_IDLE_POLL_MS);
 		await ceremony(socket, { user_id: 'u_1', name: 'Existing' });
 		await pending;
 		expect(client.snapshot().authBusy).toBe(false);
 		expect(authRequests(socket).filter((params) => params.step === 'begin')).toHaveLength(1);
-		client.stop();
 	});
 
 	it('stops at once when cancelled while it waits for its turn', async () => {
@@ -161,12 +153,14 @@ describe('one explicit ceremony per tap', () => {
 		client.setDisplayName('Renamed');
 		const pending = client.usePasskey('login');
 		client.cancelPasskeyPrompt();
-		await expect(pending).rejects.toThrow('Cancelled');
+		const cancelled = expect(pending).rejects.toThrow('Cancelled');
+		// At its next look, with the rename still unanswered.
+		await vi.advanceTimersByTimeAsync(PASSKEY_IDLE_POLL_MS);
+		await cancelled;
 		expect(client.snapshot().authBusy).toBe(false);
 		await socket.reply('me', { you: { user_id: 'guest_1', name: 'Renamed' } });
 		expect(authRequests(socket).some((params) => params.scheme === 'webauthn')).toBe(false);
 		expect(requestPasskey).not.toHaveBeenCalled();
-		client.stop();
 	});
 
 	it('relabels a saved passkey with the account’s name after a login', async () => {
@@ -178,7 +172,6 @@ describe('one explicit ceremony per tap', () => {
 		await socket.reply('auth', { you: { user_id: 'u_1', name: 'Ada' } });
 		await pending;
 		expect(signalPasskeyLabel).toHaveBeenCalledWith('demo.example', 'dXNlci0x', 'Ada');
-		client.stop();
 	});
 
 	it('relabels with the display name chosen for the login once the server has it', async () => {
@@ -194,7 +187,6 @@ describe('one explicit ceremony per tap', () => {
 		await named!.promise;
 		await settle();
 		expect(signalPasskeyLabel).toHaveBeenCalledWith('demo.example', 'dXNlci0x', 'Ada Lovelace');
-		client.stop();
 	});
 });
 
@@ -221,7 +213,6 @@ describe('console diagnostics', () => {
 			credential: { rawIdMatchesId: true, type: 'public-key' }
 		});
 		warn.mockRestore();
-		client.stop();
 	});
 
 	it('only notes a dismissed sheet', async () => {
@@ -237,7 +228,6 @@ describe('console diagnostics', () => {
 		expect(warn).not.toHaveBeenCalled();
 		warn.mockRestore();
 		info.mockRestore();
-		client.stop();
 	});
 });
 
@@ -246,11 +236,8 @@ describe('a failed session resume never prompts on its own', () => {
 	const server = { method: 'server', params: { apron: 9, auth: ['webauthn', 'token', 'guest'], capabilities: [] } };
 
 	async function resuming(): Promise<{ client: ChatClient; socket: FakeSocket; auth: { id: string } }> {
-		vi.useFakeTimers();
 		storage.set(key, 'session-1');
-		const client = new ChatClient('ws://fake.test/');
-		client.start();
-		const socket = FakeSocket.latest();
+		const { client, socket } = startClient({ storage });
 		socket.open();
 		socket.receive(server);
 		const auth = socket.request('auth');
@@ -274,7 +261,6 @@ describe('a failed session resume never prompts on its own', () => {
 		next.receive(server);
 		expect(next.request('auth').params).toEqual(expect.objectContaining({ scheme: 'token', token: 'session-1' }));
 		expect(requestPasskey).not.toHaveBeenCalled();
-		client.stop();
 	});
 
 	it('waits for Sign in after the server denies the token', async () => {
@@ -314,7 +300,6 @@ describe('a failed session resume never prompts on its own', () => {
 		expect(snapshot.held).toBeUndefined();
 		expect(snapshot.signInNeeded).toBeUndefined();
 		expect(snapshot.authenticated).toBe(true);
-		client.stop();
 	});
 
 	it('keeps the refused connection open, so one tap signs in again on it', async () => {
@@ -338,7 +323,6 @@ describe('a failed session resume never prompts on its own', () => {
 		expect(client.snapshot().authenticated).toBe(true);
 		expect(client.snapshot().held).toBeUndefined();
 		expect(storage.get(key)).toBe('session-2');
-		client.stop();
 	});
 
 	it('stays held, without prompting again, when that sign-in is dismissed', async () => {
@@ -362,6 +346,5 @@ describe('a failed session resume never prompts on its own', () => {
 		await vi.advanceTimersByTimeAsync(10 * 60_000);
 		expect(FakeSocket.instances).toHaveLength(2);
 		expect(requestPasskey).toHaveBeenCalledTimes(1);
-		client.stop();
 	});
 });
