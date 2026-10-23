@@ -100,7 +100,7 @@ describe('history per room', () => {
 		expect(room('20').olderAvailable).toBeUndefined();
 	});
 
-	it('has nothing older once retention passes the oldest loaded page', async () => {
+	it('has nothing older once retention passes the oldest loaded page, or when the newest page reaches the start', async () => {
 		await socket.reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '40', history_log_id: '20' }] } });
 		const loaded = client.loadRoom('20');
@@ -109,17 +109,14 @@ describe('history per room', () => {
 		expect(room('20').olderAvailable).toBe(true);
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '40', history_log_id: '39' }] } });
 		expect(room('20').olderAvailable).toBeUndefined();
-	});
-
-	it('offers nothing older when the newest page reaches the start', async () => {
-		await socket.reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
-		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '22', history_log_id: '20' }] } });
-		const loaded = client.loadRoom('20');
-		await socket.reply('history', { messages: [message('21', { room_id: '20' })], first_log_id: '20', last_log_id: '22', more: false, latest_log_id: '22', history_log_id: '20' });
-		await loaded;
-		expect(room('20').olderAvailable).toBeUndefined();
-		await client.loadOlder('20');
-		expect(socket.sent.filter((frame) => frame.method === 'history' && (frame.params as { room_id: string }).room_id === '20')).toHaveLength(1);
+		// Nor where the newest page reaches the start.
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '50', log_id: '50', parent_room_id: 'general', title: 'Short', latest_log_id: '52', history_log_id: '50' }] } });
+		const short = client.loadRoom('50');
+		await socket.reply('history', { messages: [message('51', { room_id: '50' })], first_log_id: '50', last_log_id: '52', more: false, latest_log_id: '52', history_log_id: '50' });
+		await short;
+		expect(room('50').olderAvailable).toBeUndefined();
+		await client.loadOlder('50');
+		expect(socket.sent.filter((frame) => frame.method === 'history' && (frame.params as { room_id: string }).room_id === '50')).toHaveLength(1);
 	});
 
 	it('installs an embedded reply_to snapshot below its room bound', async () => {

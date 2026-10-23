@@ -34,7 +34,7 @@ describe('persisted session tokens', () => {
 		return auth.params as Record<string, unknown>;
 	}
 
-	it('stores a token the server can resume with, keyed by server URL, and presents it on the next start', async () => {
+	it('stores a token the server can resume with, and only such a token, keyed by server URL, and presents it on the next start', async () => {
 		const { client: first } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
 		await latest().greet([], { auth: ['webauthn', 'token', 'guest'], token: 'session-1' });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'guest' }));
@@ -53,6 +53,12 @@ describe('persisted session tokens', () => {
 		latest().receive({ method: 'server', params: { apron: 9, auth: ['webauthn', 'token', 'guest'], capabilities: [] } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'guest' }));
 		elsewhere.stop();
+
+		// A token the server can't resume with (no `token` in `auth`) isn't kept.
+		storage.clear();
+		startClient({ storage });
+		await latest().greet([], { auth: ['webauthn', 'guest'], token: 'session-2' });
+		expect(storage.has('apron.session:ws://fake.test/')).toBe(false);
 	});
 
 	it('names the account a sign-up invite creates, with that token only', async () => {
@@ -140,12 +146,6 @@ describe('persisted session tokens', () => {
 		expect(snapshot.rooms.find((room) => room.id === 'general')?.notices).toEqual([]);
 	});
 
-	it('does not persist a token when the server cannot resume with it', async () => {
-		startClient({ storage });
-		await latest().greet([], { auth: ['webauthn', 'guest'], token: 'session-2' });
-		expect(storage.has('apron.session:ws://fake.test/')).toBe(false);
-	});
-
 	it('forgets a stored token the server rejects and on sign-out', async () => {
 		storage.set('apron.session:ws://fake.test/', 'stale');
 		const { client } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
@@ -196,13 +196,6 @@ describe('display name on connect', () => {
 
 	const renames = (socket: FakeSocket) => socket.sent.filter((frame) => frame.method === 'me').length;
 
-	it('skips a name the server already has', async () => {
-		const client = startNamed('Guest');
-		// greet() authenticates as { user_id: 'guest_1', name: 'Guest' }.
-		await latest().greet();
-		expect(renames(latest())).toBe(0);
-	});
-
 	it('does not resend a name the server denied after a reconnect', async () => {
 		const client = startNamed('Dana');
 		await latest().greet();
@@ -228,7 +221,11 @@ describe('display name on connect', () => {
 		expect(renames(latest())).toBe(0);
 	});
 
-	it('asks for the name the server kept, so a normalized one is not sent again at each reconnect', async () => {
+	it('skips a name the server already has, and asks for the one it kept, so a normalized one is not sent again at each reconnect', async () => {
+		startNamed('Guest');
+		// greet() authenticates as { user_id: 'guest_1', name: 'Guest' }.
+		await latest().greet();
+		expect(renames(latest())).toBe(0);
 		const client = startNamed('Dana ');
 		await latest().greet();
 		const first = latest();

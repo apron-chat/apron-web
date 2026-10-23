@@ -64,7 +64,7 @@ describe('idle reports', () => {
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'status']);
 	});
 
-	it('sends nothing for a connection that starts attended', async () => {
+	it('reports idle and attended as the page says, at once, and only changes: nothing for a connection that starts attended', async () => {
 		await greet();
 		client.setIdle(false);
 		vi.advanceTimersByTime(60_000);
@@ -72,10 +72,6 @@ describe('idle reports', () => {
 		// A replacing server frame says nothing either.
 		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 		expect(statuses()).toEqual([]);
-	});
-
-	it('reports idle and attended as the page says, at once, and only changes', async () => {
-		await greet();
 		client.setIdle(true);
 		expect(statuses()).toEqual([{ idle: 0 }]);
 		await answer();
@@ -424,7 +420,7 @@ describe('your own status', () => {
 
 /** `server.status` (§3.1, §4.5): the optional statuses the server accepts. */
 describe('server.status', () => {
-	it('takes the server as it is: status, its sign-ins and member changes all apply', async () => {
+	it('takes the server as it is: status, its sign-ins and member changes all apply, and the strings server.status lists', async () => {
 		socket.open();
 		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'], status: ['dnd'] } });
 		expect(snapshot.server?.apron).toBe(9);
@@ -434,10 +430,7 @@ describe('server.status', () => {
 		expect(snapshot.memberChangesUnsupported).toBeUndefined();
 		client.setStatus('dnd').catch(() => undefined);
 		expect(socket.request('me').params).toEqual({ status: 'dnd' });
-	});
-
-	it('takes the strings listed, and a replacing frame without it leaves none', () => {
-		socket.open();
+		// It takes the strings listed, and a replacing frame without it leaves none.
 		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'], status: ['dnd', 'invisible', 7] } });
 		expect(snapshot.server?.status).toEqual(['dnd', 'invisible']);
 		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'] } });
@@ -468,15 +461,10 @@ describe('kept statuses and sign-ins', () => {
 	const statusOf = (userId: string) => snapshot.users[userId]?.status;
 	const seen = [{ user_id: 'ada', status: 'online' }, { user_id: 'bo', status: 'idle' }, { user_id: 'cy', status: 'dnd' }];
 
-	it('keeps other users\' statuses through a lost connection, until the next sign-in', async () => {
-		await listed({ user_id: 'ada', status: 'online' }, seen);
-		socket.drop();
-		expect([statusOf('ada'), statusOf('bo'), statusOf('cy')]).toEqual(['online', 'idle', 'dnd']);
-	});
-
-	it('drops them at each sign-in; resuming, they still show until the joined listing, then those not sent again have no status', async () => {
+	it('keeps them through a lost connection, and drops them at the next sign-in; resuming, they still show until the joined listing, then those not sent again have no status', async () => {
 		await listed({ user_id: 'ada', status: 'online' }, seen);
 		reconnect();
+		expect([statusOf('ada'), statusOf('bo'), statusOf('cy')]).toEqual(['online', 'idle', 'dnd']);
 		hello();
 		await socket.reply('auth', { you: { user_id: 'ada', status: 'dnd' } });
 		// Your own comes from the auth's `you`; the others' from before still show, said to be only held.

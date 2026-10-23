@@ -100,7 +100,7 @@ describe('kept and recorded users', () => {
 });
 
 describe('your own user', () => {
-	it('merges a you into this connection\'s identity, takes your status only from you, and a me result whole', async () => {
+	it('merges a you into this connection\'s identity, takes your status only from you, and adopts a me result whole', async () => {
 		await connect();
 		// `you` merges into this connection's identity.
 		socket.receive({ method: 'user', params: { you: { user_id: 'guest_1', avatar: 'https://example.com/me.png' } } });
@@ -114,18 +114,17 @@ describe('your own user', () => {
 		expect(snapshot.you).toEqual({ user_id: 'guest_1', name: 'Guest', status: 'dnd' });
 		// The `you` of a `me` result is complete: it replaces the kept object.
 		const profile = client.updateProfile({ avatar: 'https://example.com/me2.png' });
+		expect(socket.request('me').params).toEqual({ avatar: 'https://example.com/me2.png' });
 		await socket.reply('me', { you: { user_id: 'guest_1', name: 'Guest', avatar: 'https://example.com/me2.png' } });
-		await profile;
+		await expect(profile).resolves.toEqual({ user_id: 'guest_1', name: 'Guest', avatar: 'https://example.com/me2.png' });
 		expect(snapshot.you).toEqual({ user_id: 'guest_1', name: 'Guest', avatar: 'https://example.com/me2.png' });
 		expect(snapshot.users.guest_1).toBe(snapshot.you);
-	});
-
-	it('updates the profile with me and adopts what the server kept', async () => {
-		await connect();
-		const saved = client.updateProfile({ avatar: '' });
+		// Clearing a field sends it empty, and what the server kept is adopted.
+		const cleared = client.updateProfile({ avatar: '' });
 		expect(socket.request('me').params).toEqual({ avatar: '' });
 		await socket.reply('me', { you: { user_id: 'guest_1', name: 'Guest' } });
-		await expect(saved).resolves.toEqual({ user_id: 'guest_1', name: 'Guest' });
+		await expect(cleared).resolves.toEqual({ user_id: 'guest_1', name: 'Guest' });
+		expect(snapshot.you).toEqual({ user_id: 'guest_1', name: 'Guest' });
 	});
 
 	it('merges roles like any profile field, and an empty list clears them', async () => {

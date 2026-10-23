@@ -460,7 +460,7 @@ describe('room records and membership', () => {
 		expect(room('s3')?.private).toBe(true);
 	});
 
-	it('keeps member_count for a truncated member list until a complete one replaces it', async () => {
+	it('keeps member_count for a truncated member list until a complete one replaces it, and through an update without members', async () => {
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'big', log_id: '30', title: 'Big', latest_log_id: '30', members: [{ user_id: 'guest_1' }, { user_id: 'bob' }], member_count: 5000 }] } });
 		expect(room('big')?.memberCount).toBe(5000);
 		expect(room('big')?.members?.map((member) => member.user_id)).toEqual(['guest_1', 'bob']);
@@ -470,6 +470,10 @@ describe('room records and membership', () => {
 		expect((await listed)[0].memberCount).toBe(90);
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'big', log_id: '30', title: 'Big', latest_log_id: '31', members: [{ user_id: 'guest_1' }] }] } });
 		expect(room('big')?.memberCount).toBeUndefined();
+		// An update to a listed room's record that carries no members leaves its count and members.
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'huge', log_id: '61', title: 'Huge', description: 'Everyone' }] } });
+		expect(snapshot.directory?.find((listing) => listing.id === 'huge')).toMatchObject({ memberCount: 90, members: [{ user_id: 'carol' }] });
+		expect(snapshot.directory?.find((listing) => listing.id === 'huge')?.record.description).toBe('Everyone');
 	});
 
 	it('adds and removes other members with user_id, and stops offering it once unsupported', async () => {
@@ -490,13 +494,11 @@ describe('room records and membership', () => {
 		expect(snapshot.memberChangesUnsupported).toBeUndefined();
 	});
 
-	it('never installs a ~private message, even one carrying a message_id', async () => {
+	it('never installs a ~private message, even one carrying a message_id or in a history page', async () => {
 		socket.receive({ method: 'message', params: { message_id: '50', log_id: '50', room_id: 'general', from: { user_id: '~private' }, body: { text: 'Just you' } } });
 		expect(client.message('50')).toBeUndefined();
 		expect(room('general')?.notices.map((notice) => notice.body?.text)).toEqual(['Just you']);
-	});
-
-	it('never installs a ~private message from a history page', async () => {
+		// Nor one in a history page.
 		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'history'] } });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '80', title: 'Ops', latest_log_id: '82', history_log_id: '80' }] } });
 		const request = socket.request('history');
@@ -507,15 +509,6 @@ describe('room records and membership', () => {
 		await settle();
 		expect(client.message('81')).toBeUndefined();
 		expect(client.message('82')?.body).toEqual({ text: 'hi' });
-	});
-
-	it('keeps a listed room’s member_count when an update to its record carries no members', async () => {
-		const listed = client.listRooms();
-		await socket.reply('room_list', { not_joined: [{ room_id: 'huge', log_id: '60', title: 'Huge', members: [{ user_id: 'carol' }], member_count: 90 }] });
-		await listed;
-		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'huge', log_id: '61', title: 'Huge', description: 'Everyone' }] } });
-		expect(snapshot.directory?.find((listing) => listing.id === 'huge')).toMatchObject({ memberCount: 90, members: [{ user_id: 'carol' }] });
-		expect(snapshot.directory?.find((listing) => listing.id === 'huge')?.record.description).toBe('Everyone');
 	});
 
 	it('keeps where a thread was created as its record changes', async () => {

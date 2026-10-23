@@ -74,9 +74,19 @@ afterEach(() => {
 for (const [file, fixture] of fixtures) {
 	describe(`${file}: ${fixture.name}`, () => {
 		for (const variant of fixture.variants) {
-			for (const envelope of ['minimal', 'jsonrpc'] as const) {
-				it(`${variant.name} (${envelope})`, () => runVariant(fixture, variant, envelope));
-			}
+			// Each envelope from a fresh client: the bare frames, then the same with `jsonrpc: "2.0"`, which the client tolerates.
+			it(`${variant.name}, in both envelopes`, async () => {
+				for (const envelope of ['minimal', 'jsonrpc'] as const) {
+					try {
+						await runVariant(fixture, variant, envelope);
+					} catch (error) {
+						if (error instanceof Error) error.message = `${envelope}: ${error.message}`;
+						throw error;
+					}
+					vi.clearAllTimers();
+					vi.unstubAllGlobals();
+				}
+			});
 		}
 	});
 }
@@ -215,6 +225,7 @@ async function runVariant(fixture: Fixture, variant: Variant, envelope: 'minimal
 		}
 	}
 	await expectState(client, operations, fixture.expected);
+	client.stop();
 }
 
 /**

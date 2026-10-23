@@ -255,17 +255,10 @@ describe('saves', () => {
 		quiet(client.editMessage('100', 'again'));
 		expect(socket.request('message').params).toEqual({ message_id: '100', room_id: 'general', body: { text: 'again' } });
 	});
-
-	it('keeps a tombstone deleted when it is moved or its reply changes', async () => {
-		await connect();
-		socket.receive({ method: 'message', params: { message_id: '100', log_id: '105', room_id: 'general', from: alice, deleted: true } });
-		quiet(client.moveMessage('100', 'thread'));
-		expect(socket.request('message').params).toEqual({ message_id: '100', room_id: 'thread', deleted: true });
-	});
 });
 
 describe('moves and reactions', () => {
-	it('re-homes a moved message and its reactions into the destination room', async () => {
+	it('re-homes a moved message and its reactions into the destination room, a moved tombstone still deleted', async () => {
 		await connect();
 		socket.receive({ method: 'message', params: message('100') });
 		socket.receive({ method: 'reactions', params: { log_id: '101', message_id: '100', room_id: 'general', reactions: [{ from: { user_id: 'bob' }, emojis: ['👍'] }] } });
@@ -277,6 +270,10 @@ describe('moves and reactions', () => {
 		expect(room('thread').timeline.order).toEqual(['100']);
 		expect(room('thread').timeline.reactions['100']?.[0].user_ids).toEqual(['bob']);
 		expect(findMessage(snapshot.rooms, '100')?.room_id).toBe('thread');
+		// A tombstone stays deleted when it is moved.
+		socket.receive({ method: 'message', params: { message_id: '200', log_id: '205', room_id: 'general', from: alice, deleted: true } });
+		quiet(client.moveMessage('200', 'thread'));
+		expect(socket.request('message').params).toEqual({ message_id: '200', room_id: 'thread', deleted: true });
 	});
 
 	it('sets, toggles, and clears your own reactions and hides them on tombstones', async () => {
@@ -298,7 +295,7 @@ describe('moves and reactions', () => {
 		expect(client.reactions('100')).toBeUndefined();
 	});
 
-	it('keeps a later pending reaction intent when an earlier own set is broadcast', async () => {
+	it('keeps a pending reaction intent through the broadcast of an earlier set, or a result before its broadcast', async () => {
 		await connect();
 		socket.receive({ method: 'message', params: message('100') });
 		quiet(client.toggleReaction('100', 'A'));
@@ -309,23 +306,20 @@ describe('moves and reactions', () => {
 		expect(socket.request('reactions').params).toEqual({ message_id: '100', emojis: ['A', 'B', 'C'] });
 		socket.receive({ method: 'reactions', params: { log_id: '102', message_id: '100', room_id: 'general', reactions: [{ from: { user_id: 'guest_1' }, emojis: ['C', 'B', 'A'] }] } });
 		expect(client.ownReactions('100')).toEqual(['C', 'B', 'A']);
-	});
-
-	it('keeps a reaction intent when the result arrives before the broadcast', async () => {
-		await connect();
-		socket.receive({ method: 'message', params: message('100') });
-		quiet(client.toggleReaction('100', 'A'));
+		// Its result before the broadcast keeps it too.
+		socket.receive({ method: 'message', params: message('110') });
+		quiet(client.toggleReaction('110', 'A'));
 		await socket.reply('reactions', {});
-		expect(client.ownReactions('100')).toEqual(['A']);
+		expect(client.ownReactions('110')).toEqual(['A']);
 		// A no-op request (the store already matches) settles on its result.
-		quiet(client.react('100', []));
+		quiet(client.react('110', []));
 		await socket.reply('reactions', {});
-		expect(client.ownReactions('100')).toEqual([]);
+		expect(client.ownReactions('110')).toEqual([]);
 		// An error drops the intent.
-		quiet(client.toggleReaction('100', 'B'));
+		quiet(client.toggleReaction('110', 'B'));
 		socket.receive({ id: socket.request('reactions').id, error: { code: -32602, message: 'bad' } });
 		await settle();
-		expect(client.ownReactions('100')).toEqual([]);
+		expect(client.ownReactions('110')).toEqual([]);
 	});
 });
 

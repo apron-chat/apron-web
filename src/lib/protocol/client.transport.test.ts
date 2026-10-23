@@ -307,7 +307,7 @@ describe('liveness pings', () => {
 		expect(pings(latest())).toBe(2);
 	});
 
-	it('follows a replacing server frame to its new interval', async () => {
+	it('follows a replacing server frame to its new interval, or to none where it does not ask', async () => {
 		const { client } = startClient();
 		await latest().greet([], { ping: 30 });
 		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'], ping: 10 } });
@@ -316,13 +316,6 @@ describe('liveness pings', () => {
 		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
 		vi.advanceTimersByTime(300_000);
 		expect(pings(latest())).toBe(1);
-	});
-
-	it('sends nothing to a server that does not ask', async () => {
-		const { client } = startClient();
-		await latest().greet();
-		vi.advanceTimersByTime(300_000);
-		expect(pings(latest())).toBe(0);
 	});
 });
 
@@ -391,14 +384,12 @@ describe('default server URL', () => {
 	afterEach(() => vi.unstubAllEnvs());
 	const location = new URL('https://web.apron.chat/') as unknown as Location;
 
-	it('uses the configured backend while preserving an explicit server choice', () => {
+	it('uses the configured backend while preserving an explicit server choice, else same-origin and local defaults', () => {
 		vi.stubEnv('VITE_DEFAULT_SERVER_URL', 'wss://server.apron.chat/');
 		expect(defaultWebSocketUrl(location)).toBe('wss://server.apron.chat/');
 		expect(normalizeWebSocketUrl('', location)).toBe('wss://server.apron.chat/');
 		expect(normalizeWebSocketUrl('https://other.example', location)).toBe('wss://other.example/');
-	});
-
-	it('keeps same-origin and local defaults without deployment configuration', () => {
+		// Without deployment configuration.
 		vi.stubEnv('VITE_DEFAULT_SERVER_URL', '');
 		expect(defaultWebSocketUrl(location)).toBe('wss://web.apron.chat/ws');
 		expect(defaultWebSocketUrl(new URL('http://localhost:5173') as unknown as Location)).toBe('ws://localhost:5173/ws');
@@ -426,13 +417,11 @@ describe('recovery and reconnect policies', () => {
 		expect(recoveryBufferFits(0, 999, transition, 1000, 1000)).toBe(false);
 	});
 
-	it('adds jitter while honoring a server retry delay', () => {
+	it('adds jitter while honoring a server retry delay, and backs off prolonged failures to roughly one attempt per minute', () => {
 		expect(reconnectDelay(1, 0, 700)).toBe(700);
 		expect(reconnectDelay(2, 0, 0)).toBe(800);
 		expect(reconnectDelay(2, 1, 0)).toBe(1200);
-	});
-
-	it('backs off prolonged failures to roughly one attempt per minute', () => {
+		// Prolonged failures back off to roughly one attempt per minute.
 		expect(reconnectDelay(1)).toBe(500);
 		expect(reconnectDelay(6)).toBe(16000);
 		expect(reconnectDelay(8)).toBe(60000);

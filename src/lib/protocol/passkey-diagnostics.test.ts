@@ -67,7 +67,7 @@ describe('describing a credential', () => {
 		expect(described.authenticatorData).toMatchObject({ flags: { userPresent: true, userVerified: false }, rpIdHashMatches: false });
 	});
 
-	it('says which field it couldn’t read rather than failing', async () => {
+	it('says which field it couldn’t read rather than failing, reading only base64url', async () => {
 		const described = await describeCredential({ id: 'x', rawId: 'y', type: 'public-key', response: { clientDataJSON: 'eyJub3Q', attestationObject: 'AAAA', signature: 'not base64!' } });
 		expect(described).toMatchObject({
 			rawIdMatchesId: false,
@@ -75,9 +75,7 @@ describe('describing a credential', () => {
 			attestationObject: { error: 'attestationObject is not a CBOR map' },
 			response: { signature: 'not base64url bytes' }
 		});
-	});
-
-	it('decodes base64url, and refuses anything else', () => {
+		// Only base64url is read as such.
 		expect(fromBase64Url('-_8')).toEqual(Uint8Array.of(251, 255));
 		expect(fromBase64Url('+/8=')).toBeUndefined();
 	});

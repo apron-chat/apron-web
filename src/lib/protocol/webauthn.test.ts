@@ -68,7 +68,7 @@ describe('credential JSON', () => {
 		});
 	});
 
-	it('reads the fields itself when toJSON is missing, reaching hidden ones through getters', () => {
+	it('reads the fields itself when toJSON is missing or throws, reaching hidden ones through getters', () => {
 		const sent = credentialJSON(proxiedAssertion());
 		expect(credentialSource(sent)).toEqual({ source: 'fields', note: 'the credential has no toJSON' });
 		expect(sent).toEqual({
@@ -79,9 +79,7 @@ describe('credential JSON', () => {
 			response: { clientDataJSON: 'Aw', authenticatorData: 'BAU', signature: 'Bg', userHandle: 'Bw' },
 			clientExtensionResults: { credProps: { rk: true } }
 		});
-	});
-
-	it('reads the fields itself when toJSON throws', () => {
+		// So it does when toJSON throws.
 		const json = credentialJSON(proxiedAssertion(() => {
 			throw new Error('Permission denied to access object');
 		}));
@@ -136,20 +134,14 @@ describe('credential JSON', () => {
 		});
 		expect(base64url(foreign(251, 255))).toBe('-_8');
 	});
-
-	it('encodes base64url without padding', () => {
-		expect(base64url(new Uint8Array([251, 255]))).toBe('-_8');
-	});
 });
 
 describe('passkey labels', () => {
 	const options = { challenge: 'x', user: { id: 'dXNlci0x', name: 'guest_7', displayName: 'Guest' } };
 
-	it('labels a new passkey with the requested name, keeping the account handle', () => {
+	it('labels a new passkey with the requested name, keeping the account handle, else the server’s label', () => {
 		expect(labelledCreationOptions(options, ' Ada ')).toEqual({ challenge: 'x', user: { id: 'dXNlci0x', name: 'Ada', displayName: 'Ada' } });
-	});
-
-	it('leaves the server’s label without a name', () => {
+		// Without a name, the server's label stands.
 		expect(labelledCreationOptions(options, ' ')).toBe(options);
 	});
 
@@ -162,14 +154,12 @@ describe('passkey labels', () => {
 		expect(parse).toHaveBeenCalledWith(expect.objectContaining({ user: { id: 'dXNlci0x', name: 'Ada', displayName: 'Ada' } }));
 	});
 
-	it('signals the account’s label where the browser can, without waiting on it', () => {
+	it('signals the account’s label where the browser can, without waiting on it, and does nothing where it can’t', () => {
 		const signalCurrentUserDetails = vi.fn(() => new Promise<void>(() => undefined));
 		vi.stubGlobal('PublicKeyCredential', { signalCurrentUserDetails });
 		signalPasskeyLabel('demo.example', 'dXNlci0x', 'Ada');
 		expect(signalCurrentUserDetails).toHaveBeenCalledWith({ rpId: 'demo.example', userId: 'dXNlci0x', name: 'Ada', displayName: 'Ada' });
-	});
-
-	it('does nothing without the Signal API', () => {
+		// Without the Signal API, nothing.
 		vi.stubGlobal('PublicKeyCredential', {});
 		expect(() => signalPasskeyLabel('demo.example', 'dXNlci0x', 'Ada')).not.toThrow();
 	});

@@ -38,7 +38,7 @@ describe('typing', () => {
 		socket.receive({ method: 'server', params: { apron: 9, agent: 'fake', auth: ['guest'], capabilities: ['activity'] } });
 	}
 
-	it('bounds typing traffic while refreshing it before expiry', () => {
+	it('bounds typing traffic while refreshing it before expiry, and lets a sent message end it without another frame', () => {
 		const socket = latest();
 		advertiseActivity();
 		const typing = () => socket.sent.filter(frame => frame.method === 'activity');
@@ -55,16 +55,10 @@ describe('typing', () => {
 		expect(typing().at(-1)?.params).toEqual({ room_id: 'lobby', typing: 0 });
 		client.sendTyping('lobby', true);
 		expect(typing()).toHaveLength(4);
-	});
-
-	it('lets a sent message end typing without another activity frame', () => {
-		const socket = latest();
-		advertiseActivity();
-		client.sendTyping('lobby', true);
+		// A sent message ends it without another activity frame.
 		client.send('lobby', 'hello').promise.catch(() => undefined);
 		client.sendTyping('lobby', false);
-		const typing = socket.sent.filter(frame => frame.method === 'activity');
-		expect(typing).toEqual([{ method: 'activity', params: { room_id: 'lobby', typing: 15 } }]);
+		expect(typing()).toHaveLength(4);
 	});
 
 	it('sends no typing to a server without cap activity', () => {
@@ -85,7 +79,7 @@ describe('typing', () => {
 		expect(latest().sent.filter(frame => frame.method === 'activity')).toHaveLength(1);
 	});
 
-	it('shows typing from activity broadcasts for the given seconds', () => {
+	it('shows typing from activity broadcasts for the given seconds, until that user’s next message', () => {
 		const bob = { user_id: 'bob', name: 'Bob' };
 		const activity = (params: Record<string, unknown>) => latest().receive({ method: 'activity', params: { room_id: 'lobby', from: bob, ...params } });
 		activity({ typing: 8 });
@@ -107,10 +101,7 @@ describe('typing', () => {
 		// An unknown `typing` notification is ignored (§1).
 		latest().receive({ method: 'typing', params: { room_id: 'lobby', from: bob, active: true } });
 		expect(snapshot.typing).toEqual([]);
-	});
-
-	it('ends a typing indicator when a new message from that user arrives in the room', () => {
-		const bob = { user_id: 'bob', name: 'Bob' };
+		// A new message from that user in the room ends it too.
 		latest().receive({ method: 'activity', params: { room_id: 'lobby', from: bob, typing: 15 } });
 		latest().receive({ method: 'activity', params: { room_id: 'lobby', from: { user_id: 'carol' }, typing: 15 } });
 		// An edit is not a new message.

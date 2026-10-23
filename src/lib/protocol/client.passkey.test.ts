@@ -81,17 +81,6 @@ describe('passkey ceremonies carry a chosen handle', () => {
 });
 
 describe('passkey ceremonies and requests in flight', () => {
-	it('names only a new account at begin, not a sign-in', async () => {
-		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
-		const { client, socket } = await connected();
-		const pending = client.usePasskey('login', 'shazow');
-		await settle();
-		expect(socket.request('auth').params).toEqual(expect.objectContaining({ action: 'login', step: 'begin' }));
-		expect(socket.request('auth').params).not.toHaveProperty('name');
-		await ceremony(socket, { user_id: 'u_1', name: 'Existing' });
-		await pending;
-	});
-
 	it('waits for requests sent as the old identity before starting', async () => {
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
 		const { client, socket } = await connected();

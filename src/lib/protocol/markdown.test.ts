@@ -10,11 +10,9 @@ const resolve: MentionResolver = (id) => {
 };
 
 describe('mentions (Appendix A.3)', () => {
-	it('renders a known user_id with the latest name', () => {
+	it('renders a known user_id with the latest name, marking the viewer’s own chip', () => {
 		expect(renderMarkdown('Handing this to @alice.', resolve)).toBe('<p>Handing this to <button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>.</p>\n');
-	});
-
-	it('marks the viewer’s own chip', () => {
+		// The viewer's own chip is marked.
 		expect(renderMarkdown('@guest_1 can you look?', resolve)).toContain('class="ap-mention ap-mention-me" data-user-id="guest_1"');
 	});
 
@@ -27,16 +25,14 @@ describe('mentions (Appendix A.3)', () => {
 		expect(renderPlain('#nobody tag#ops', resolve)).toBe('#nobody tag#ops');
 		expect(renderMarkdown('`#ops`', resolve)).toBe('<p><code>#ops</code></p>\n');	});
 
-	it('links a thread by its all-digit ID, leaving numbers that name no room as text', () => {
+	it('links a thread by its all-digit ID, naming an untitled one’s ID on hover, and leaves numbers that name no room as text', () => {
 		const threads = (id: string) => (id === '1790473611343' ? { kind: 'room' as const, id, title: 'Deploy checklist' } : undefined);
 		expect(renderPlain('see #1790473611343, not #1.', undefined, threads)).toBe(
 			'see <button type="button" class="ap-mention ap-mention-room ap-mention-hash-room" data-room-id="1790473611343" title="Open Deploy checklist">#Deploy checklist</button>, not #1.'
 		);
-	});
-
-	it('names an untitled thread’s ID on its chip’s hover', () => {
-		const threads = (id: string) => (id === '1790473611343' ? { kind: 'room' as const, id, title: 'Untitled', untitled: true as const } : undefined);
-		expect(renderPlain('see #1790473611343', undefined, threads)).toBe(
+		// An untitled thread's ID is named on its chip's hover.
+		const untitled = (id: string) => (id === '1790473611343' ? { kind: 'room' as const, id, title: 'Untitled', untitled: true as const } : undefined);
+		expect(renderPlain('see #1790473611343', undefined, untitled)).toBe(
 			'see <button type="button" class="ap-mention ap-mention-room ap-mention-hash-room" data-room-id="1790473611343" title="Open Untitled (#1790473611343)">#Untitled</button>'
 		);
 	});
@@ -80,16 +76,14 @@ describe('mentions (Appendix A.3)', () => {
 		]);
 	});
 
-	it('leaves unknown IDs, emails, and mentions inside code or links as written', () => {
+	it('leaves unknown IDs, emails, mentions inside code or links, and every mention without a resolver, as written', () => {
 		expect(renderMarkdown('@nobody and mail@alice.com', resolve)).not.toContain('ap-mention');
 		expect(renderMarkdown('`@alice` stays', resolve)).not.toContain('ap-mention');
 		expect(renderMarkdown('```\n@alice\n```', resolve)).not.toContain('ap-mention');
 		const html = renderMarkdown('[@alice](https://example.com/@alice)', resolve);
 		expect(html).toContain('<a href="https://example.com/@alice" rel="noreferrer noopener" target="_blank">');
 		expect(html).not.toContain('ap-mention');
-	});
-
-	it('escapes plain bodies and renders without a resolver as before', () => {
+		// A plain body is escaped around its mentions, and without a resolver there are none.
 		expect(renderPlain('<b>@alice</b>', resolve)).toBe('&lt;b&gt;<button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>&lt;/b&gt;');
 		expect(renderMarkdown('@alice is here')).toBe('<p>@alice is here</p>\n');
 	});
@@ -151,35 +145,31 @@ describe('bare links', () => {
 });
 
 describe('tables', () => {
-	it('renders a GFM table with alignment, inline markdown, and short rows padded', () => {
+	it('renders a GFM table with alignment, inline markdown, short rows padded and extra cells dropped', () => {
 		expect(renderMarkdown('| Name | Count |\n| :-- | --: |\n| **a** | 1 |\n| b |')).toBe(
 			'<div class="ap-table"><table>\n<thead>\n<tr>\n<th class="ap-align-left">Name</th>\n<th class="ap-align-right">Count</th>\n</tr>\n</thead>\n' +
 				'<tbody>\n<tr>\n<td class="ap-align-left"><strong>a</strong></td>\n<td class="ap-align-right">1</td>\n</tr>\n' +
 				'<tr>\n<td class="ap-align-left">b</td>\n<td class="ap-align-right"></td>\n</tr>\n</tbody>\n</table></div>\n'
 		);
+		// Extra cells are dropped, and a header-only table has no body.
+		expect(renderMarkdown('| a |\n| - |')).not.toContain('<tbody>');
+		expect(renderMarkdown('| a |\n| - |\n| 1 | 2 |')).toContain('<td>1</td>\n</tr>');
 	});
 
-	it('keeps the lines before the header as a paragraph and needs no outer pipes', () => {
+	it('keeps the lines before the header as a paragraph, needs no outer pipes, and finds tables inside quotes and list items', () => {
 		const html = renderMarkdown('Results\na | b\n--|--\n1 | 2');
 		expect(html).toMatch(/^<p>Results<\/p>\n<div class="ap-table"><table>/);
 		expect(html).toContain('<th>a</th>\n<th>b</th>');
 		expect(html).toContain('<td>1</td>\n<td>2</td>');
-	});
-
-	it('omits the body of a header-only table and drops extra cells', () => {
-		expect(renderMarkdown('| a |\n| - |')).not.toContain('<tbody>');
-		expect(renderMarkdown('| a |\n| - |\n| 1 | 2 |')).toContain('<td>1</td>\n</tr>');
+		// Inside quotes and list items too.
+		expect(renderMarkdown('> | a |\n> |---|')).toMatch(/^<blockquote>\n<div class="ap-table"><table>/);
+		expect(renderMarkdown('- item\n\n  | a |\n  |---|')).toContain('<li>\n<p>item</p>\n<div class="ap-table">');
 	});
 
 	it('takes an escaped pipe as a literal, in code too, and links mentions in cells', () => {
 		const html = renderMarkdown('| cmd | who |\n|---|---|\n| `a \\| b` | @alice |', resolve);
 		expect(html).toContain('<td><code>a | b</code></td>');
 		expect(html).toContain('data-user-id="alice"');
-	});
-
-	it('renders tables inside quotes and list items', () => {
-		expect(renderMarkdown('> | a |\n> |---|')).toMatch(/^<blockquote>\n<div class="ap-table"><table>/);
-		expect(renderMarkdown('- item\n\n  | a |\n  |---|')).toContain('<li>\n<p>item</p>\n<div class="ap-table">');
 	});
 
 	it('stays safe inside cells', () => {
@@ -226,12 +216,14 @@ describe('arbitrary HTML', () => {
 		'**<u>x</u>**'
 	];
 
-	it.each(vectors)('shows %s as text', (source) => {
-		const html = renderMarkdown(source);
-		expect(html).toContain('&lt;');
-		const tags = [...elements(html)].map((element) => element.tagName.toLowerCase());
-		expect(tags.every((tag) => ['p', 'br', 'strong', 'blockquote', 'ul', 'li', 'h1', 'a'].includes(tag))).toBe(true);
-		expect(unsafe(html)).toEqual([]);
+	it('shows raw HTML as text, in a paragraph, a quote, a list, a heading or bold', () => {
+		for (const source of vectors) {
+			const html = renderMarkdown(source);
+			expect(html, source).toContain('&lt;');
+			const tags = [...elements(html)].map((element) => element.tagName.toLowerCase());
+			expect(tags.filter((tag) => !['p', 'br', 'strong', 'blockquote', 'ul', 'li', 'h1', 'a'].includes(tag)), source).toEqual([]);
+			expect(unsafe(html), source).toEqual([]);
+		}
 	});
 
 	it('does not link unsafe schemes', () => {
