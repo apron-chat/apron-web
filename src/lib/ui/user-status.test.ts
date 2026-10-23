@@ -1,9 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { byStatus, chosenStatusLabel, ownStatusLabel, pageSilenced, STATUS_CHOICES } from './user-status';
+import { byStatus, chosenStatusLabel, ownStatusLabel, pageSilenced, STATUS_CHOICES, statusChoices } from './user-status';
 
 describe('STATUS_CHOICES', () => {
 	it('offers online, dnd, invisible and none (§4.5), with no durations', () => {
 		expect(STATUS_CHOICES.map((choice) => choice.value)).toEqual(['online', 'dnd', 'invisible', '']);
+	});
+});
+
+describe('statusChoices', () => {
+	const offered = (accepted: string[], unsupported: string[], current: string | undefined) => statusChoices(accepted, unsupported, current).map((choice) => choice.value);
+
+	it.each<[string, string[], string[], string | undefined, string[]]>([
+		['every choice where server.status lists both optional ones', ['dnd', 'invisible'], [], 'online', ['online', 'dnd', 'invisible', '']],
+		['only Online and None without server.status (or an empty one)', [], [], 'online', ['online', '']],
+		['just the optional ones server.status lists, ignoring unknown ones', ['invisible', 'busy'], [], 'online', ['online', 'invisible', '']],
+		['not one the server answered something else for', ['dnd', 'invisible'], ['invisible'], '', ['online', 'dnd', '']],
+		['the current status, listed or not, so it shows as checked', [], [], 'dnd', ['online', 'dnd', '']],
+		['the default, online, for an absent status', ['dnd'], [], undefined, ['online', 'dnd', '']],
+		['nothing extra for an unknown current status', [], [], 'busy-coding', ['online', '']]
+	])('offers %s', (_, accepted, unsupported, current, expected) => {
+		expect(offered(accepted, unsupported, current)).toEqual(expected);
+	});
+
+	it('names and explains each choice', () => {
+		expect(statusChoices(['dnd'], [], 'online').map((choice) => [choice.label, choice.hint])).toEqual([
+			['Online', 'Automatic'], ['Do not disturb', 'Mutes notifications'], ['None', 'Show no status']
+		]);
 	});
 });
 

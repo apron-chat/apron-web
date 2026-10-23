@@ -37,12 +37,12 @@
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import { composerAction } from '$lib/ui/commands';
-	import { addError, backendHost, statusLabel } from '$lib/ui/connection';
+	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState } from '$lib/ui/feedback.svelte';
 	import { prepareUpload } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
-	import { IncomingMessageTracker, notificationsByRoom } from '$lib/ui/incoming-messages';
+	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
 	import { ReadPositions } from '$lib/ui/read-positions';
 	import { isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
@@ -59,9 +59,10 @@
 	import EmptyState from '$lib/design/components/EmptyState.svelte';
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
-	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
-	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadLostPrivacy, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
-	import { askedLinkFailure, linkUse, runSignInLink, sessionSettled, takeSignInLink, type LinkUse, type SignInLink } from '$lib/ui/sign-in-link';
+	import { ViewKeeper } from '$lib/ui/view-keeper';
+	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
+	import { takeSignInLink } from '$lib/ui/sign-in-link';
+	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
 	import SignInLinkDialog from '$lib/components/SignInLinkDialog.svelte';
 	import { idMillis } from '$lib/ui/time';
@@ -78,21 +79,11 @@
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
 	import { PushSettings } from '$lib/ui/push-settings.svelte';
-	import { inMutedRoom, inNotifyScopes, notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
+	import { notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
+	import { arrivalAlerts } from '$lib/ui/alerts';
+	import { readAction } from '$lib/ui/read-action';
+	import { createdRoom, createdThread, moveCheck, type PendingThread } from '$lib/ui/created';
 	import { accountServer, canOfferInstall, isStandalone, keepsPushOff, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
-
-	/**
-	 * A thread this viewer created, opened once its `room_update` has arrived;
-	 * `replyTo`, the message it was started from, which its composer then
-	 * replies to (the thread-from-message convention: see `startThread`).
-	 */
-	type PendingOpen = {
-		room: string;
-		thread: string;
-		replyTo?: string;
-		/** Messages were moved into it already: it opens whatever privacy its record shows, as that was checked before they moved. */
-		moved?: true;
-	};
 
 	/**
 	 * A thread being started, named in the NewThreadDialog: under `room`, with
@@ -128,12 +119,8 @@
 	const MEMBERS_FRESH_MS = 15_000;
 	/** How long the open room's messages wait for its thread listing, so the cards arrive with them. */
 	const THREADS_WAIT_MS = 3000;
-	/** The shortest gap between keeping the view on this device; leaving the page keeps it at once. */
-	const VIEW_SAVE_MS = 2000;
 	/** The shortest gap between listings made because the pane has no members. */
 	const MEMBERS_RETRY_MS = 10_000;
-	/** A new thread of a private room that the server made visible to others (§4.2.4). */
-	const PRIVACY_LOST = 'The server made the new thread visible to people outside this private room, so nothing was posted or moved into it. Leave it, or use it knowing that.';
 
 	const session = new SessionView();
 	const feedback = new FeedbackState();
@@ -262,18 +249,37 @@
 	let editingId = $state<string | undefined>();
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
-	/** A sign-in link of no proposal this browser made (§4.11.2), until the viewer answers whether to use it. */
-	let askedLink = $state<SignInLink | undefined>();
-	/** A link is being used: its token goes out as a fresh connection's first `auth`, or adds to this account. */
-	let linkBusy = $state(false);
-	/** A link for an addition this browser proposed (§4.11.3), waiting for the session of the account that proposed it. */
-	let linkAddition = $state<Extract<LinkUse, { kind: 'addition' }> | undefined>();
-	/** Why a sign-in link didn't sign in, for the connect screen. */
-	let linkFailure = $state<{ error: string } | undefined>();
+	/**
+	 * Sign-in links (§4.11.2): one of no proposal this browser made waits for the viewer's answer (`asked`), one
+	 * for an addition proposed here for its account's session (`addition`), and why one didn't sign in (`failure`).
+	 */
+	const links = new SignInLinks({
+		client: () => client,
+		feedback,
+		findProposal: (state) => findProposal(state),
+		// Another account from here on: the view held for the current one goes, and on this
+		// server it is signed out of, push going off for it as a sign-out does.
+		beforeSwitch: (switched) => (switched ? leaveBackend() : signedOut()()),
+		signedIn: (server, switched) => {
+			// Only now is a switch to the link's server remembered, and the server listed as recent.
+			if (switched) {
+				serverInput = server;
+				saveServerUrl(server);
+			}
+			connected();
+		},
+		failed: ({ server, scheme }) => {
+			// The connect screen can start again, on the link's server, which is not remembered unless that works.
+			serverInput = server;
+			connectScheme = scheme;
+			connectOpen = true;
+		}
+	});
 	/** The open thread's `room_id`; undefined in the room view. */
 	let activeThread = $state<string | undefined>();
 	let selectedRoomId = $state<string | undefined>();
-	let pendingOpen = $state<PendingOpen | undefined>();
+	/** A thread this viewer created (`startThread`, `createThread`), opened once its `room_update` has arrived. */
+	let pendingOpen = $state<PendingThread | undefined>();
 	/** A room or thread joined from the directory or just created, opened once its `room_update` has arrived. */
 	let pendingJoin = $state<string | undefined>();
 	/** `pendingJoin` was created as a private room: its record must say `private: true` before it is used (§4.2.4). */
@@ -364,19 +370,14 @@
 	});
 	$effect(() => session.awaitThreads(awaitingThreads ? session.activeRoomId : undefined));
 
-	/** When the view was last kept on this device: a busy room saves at most once per `VIEW_SAVE_MS`. */
-	let viewSavedAt = 0;
+	/** The view kept on this device for the next visit: only for a session saved here (a passkey or email account). */
+	const viewKeeper = new ViewKeeper({ enabled: !previewMode });
 	function keepView(): void {
-		const view = untrack(() => session.keepable);
-		const you = untrack(() => session.snapshot.you);
-		// Only for a session saved here (a passkey or email account): a guest's next visit is someone new.
-		if (previewMode || !client || !view || !you || !client.keptSessionFor(client.url)) return;
-		viewSavedAt = Date.now();
-		void saveView(client.url, you.user_id, view);
+		void viewKeeper.keep(client, untrack(() => session.keepable), untrack(() => session.snapshot.you));
 	}
 	$effect(() => {
 		if (!session.keepable) return;
-		const timer = setTimeout(keepView, Math.max(0, viewSavedAt + VIEW_SAVE_MS - Date.now()));
+		const timer = setTimeout(keepView, viewKeeper.wait());
 		return () => clearTimeout(timer);
 	});
 	/** The open thread as the pane shows it: its copy held from before (a reload) while the live one loads, as the room's. */
@@ -487,28 +488,22 @@
 		});
 	});
 
+	// What arrives alerts: mentions you'd hear chime and flash the tab, the first offers notifications (until
+	// they're chosen on this device), and while you're away they notify. Never from a held view (`arrivalAlerts`).
 	$effect(() => {
-		// A held view (a reconnect, or one kept on this device) is from before: nothing in it has just arrived.
-		if (session.showingHeld) return;
-		const arrivedMentions = mentions.observe(session.rooms, session.you, paneRoom?.id, latestVisible);
-		const arrivedMessages = incomingMessages.observe(session.rooms, session.you);
-		// A mention in a room you muted (§4.5) doesn't alert the tab either.
-		const audible = arrivedMentions.filter((event) => !inMutedRoom(event, session.rooms)).length;
-		if (audible) untrack(() => (audibleMentions += audible));
-		// The first mention you'd hear offers notifications, until they're chosen on this device.
-		const offered = audible > 0 && untrack(() => !notifyOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced }));
-		if (offered) {
-			const first = arrivedMentions.find((event) => !inMutedRoom(event, session.rooms));
-			const room = first && session.rooms.find((candidate) => candidate.id === first.room_id);
-			if (first) untrack(() => (notifyOffer = { from: senderName(first), room: room?.title ?? first.room_id }));
-		}
-		if (!notificationsActive || !presence.away || silenced) return;
-		const mentioned = new Set(arrivedMentions.map((event) => event.message_id));
-		// The checked scopes, judged here; an edit that adds you counts as a mention.
-		const context = { me: session.you, rooms: session.rooms };
-		const selected = [...arrivedMessages, ...arrivedMentions]
-			.filter((event) => inNotifyScopes(event, notifyScopes, { ...context, mentioned: mentioned.has(event.message_id) }));
-		for (const event of notificationsByRoom(selected, mentioned)) untrack(() => void notifyMessage(event, mentioned.has(event.message_id)));
+		const alerts = arrivalAlerts(
+			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible },
+			{ mentions, messages: incomingMessages },
+			{
+				offerable: untrack(() => !notifyOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
+				active: notificationsActive, away: presence.away, silenced, scopes: notifyScopes
+			}
+		);
+		untrack(() => {
+			if (alerts.audible) audibleMentions += alerts.audible;
+			if (alerts.offer) notifyOffer = alerts.offer;
+			for (const { event, mention } of alerts.notify) void notifyMessage(event, mention);
+		});
 	});
 
 	// Your read cursors as the server reports them, and your own newest messages, move your read positions.
@@ -652,23 +647,20 @@
 
 	// Reading the latest message advances your read position, and your read cursor (capability `activity`),
 	// which the server syncs to your other devices.
+	// Only from a live, visible, loaded pane at its latest message, once it has opened at its divider (`readAction`).
 	$effect(() => {
-		const room = paneRoom;
-		const last = messages[messages.length - 1];
-		// Only once this pane has opened at its divider: advancing first would hide what was new.
-		if (!client || !room || !last || !readingLatest || !presence.visible || !room.loaded || !session.ready) return;
-		const looking = !presence.away;
+		const action = readAction(
+			{ server: client?.url, room: paneRoom, last: messages[messages.length - 1]?.message_id, ready: session.ready, readingLatest, visible: presence.visible, away: presence.away },
+			untrack(() => ({ pushId: accountPushId, closedThrough }))
+		);
+		if (!action) return;
 		untrack(() => {
-			readPositions.read(room.id, last.message_id);
-			client?.markRead(room.id, last.message_id);
-			// What you just read here no longer needs its notifications on this device. Only once
-			// you're looking (focused too): an unfocused window shows its own desktop notification
-			// of what arrives, which must stay until you come back.
-			if (!looking) return;
-			const read = `${accountPushId ?? ''}:${client?.url}:${room.id}:${last.message_id}`;
-			if (read === closedThrough || !client) return;
-			closedThrough = read;
-			void closeReadNotifications(accountPushId ? { group: notificationGroup(accountPushId, room.id) } : { tag: `apron:${client.url}:${room.id}` }, last.message_id);
+			readPositions.read(action.room, action.message);
+			client?.markRead(action.room, action.message);
+			// What you just read here no longer needs its notifications on this device.
+			if (!action.close) return;
+			closedThrough = action.close.key;
+			void closeReadNotifications(action.close.target, action.message);
 		});
 	});
 
@@ -688,12 +680,12 @@
 		if (!room) return;
 		pendingJoin = undefined;
 		// A server that doesn't keep private rooms may create an ordinary one anyway: say so, and don't open it to post in.
-		if (untrack(() => pendingPrivate) && !room.private) {
-			pendingPrivate = false;
-			untrack(() => feedback.error(`The server made “${room.title}” an ordinary room that others can see and join, not a private one. Leave it, or use it knowing that.`));
+		const step = createdRoom(room, untrack(() => pendingPrivate));
+		pendingPrivate = false;
+		if ('refuse' in step) {
+			untrack(() => feedback.error(step.refuse));
 			return;
 		}
-		pendingPrivate = false;
 		untrack(() => {
 			if (room.parentRoomId !== undefined && session.rooms.some((candidate) => candidate.id === room.parentRoomId)) openDestination(room.parentRoomId, room.id);
 			else chooseRoom(room);
@@ -707,7 +699,7 @@
 	let promptedSignIn = false;
 	$effect(() => {
 		const server = snapshot.server;
-		if (previewMode || promptedSignIn || connectOpen || askedLink || linkBusy || linkAddition || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
+		if (previewMode || promptedSignIn || connectOpen || links.asked || links.busy || links.addition || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
 		const needed = snapshot.signInNeeded && session.rooms.length === 0 ? snapshot.signInNeeded : undefined;
 		if (!needed && (server.auth.includes('guest') || server.signup?.includes('guest') || !snapshot.error)) return;
 		promptedSignIn = true;
@@ -729,11 +721,13 @@
 	// A thread this viewer just created opens once its `room_update` has arrived.
 	$effect(() => {
 		const pending = pendingOpen;
-		if (!pending || !session.rooms.some((room) => room.id === pending.thread)) return;
+		if (!pending) return;
+		const step = createdThread(pending, session.rooms);
+		if (step === 'wait') return;
 		pendingOpen = undefined;
 		// A thread of a private room is private too (§4.2.4); one the server made visible isn't opened to reply in.
-		if (!pending.moved && threadLostPrivacy(session.rooms, pending.room, pending.thread)) {
-			untrack(() => feedback.error(PRIVACY_LOST));
+		if (step !== 'open') {
+			untrack(() => feedback.error(step.refuse));
 			return;
 		}
 		untrack(() => {
@@ -883,7 +877,7 @@
 		const hashChanged = () => {
 			const link = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 			if (link) {
-				followLink(link);
+				links.follow(link);
 				return;
 			}
 			// A message link differing only in its fragment doesn't reload the page: go to it here.
@@ -954,11 +948,9 @@
 		);
 		// The view from this device's last visit, while this one signs in and catches up: only for the session
 		// saved here, which is the account it was kept for (a sign-in as anyone else drops it).
-		if (!previewMode && chat.keptSessionFor(chat.url)) {
-			void loadView(chat.url).then((kept) => {
-				if (kept && client === chat) session.prime(kept.view);
-			});
-		}
+		void viewKeeper.restore(chat, (view) => {
+			if (client === chat) session.prime(view);
+		});
 		const unsubscribe = chat.subscribe((next) => {
 			serverUrl = chat.url;
 			session.apply(next, chat);
@@ -966,7 +958,7 @@
 		});
 		chat.start();
 		client = chat;
-		if (signInLink) followLink(signInLink);
+		if (signInLink) links.follow(signInLink);
 		if (pushed) void followPush(chat, pushed);
 		if (link.room) linked = { ...link, server: offeredServer ?? chat.url, room: link.room };
 		if (offeredServer) {
@@ -999,108 +991,9 @@
 
 	// --- Connecting ---
 
-	/**
-	 * A sign-in link (§4.11.2), emailed or the return from an external
-	 * sign-in page. One with the `state` of a sign-in this browser proposed
-	 * is used at once, on the server it was proposed to; one for an addition
-	 * waits for the session of the account that proposed it; any other is a
-	 * credential someone else may have crafted or forwarded, and the viewer
-	 * is asked first.
-	 */
-	function followLink(link: SignInLink): void {
-		const use = linkUse(link, (state) => findProposal(state));
-		if (!use) return;
-		if (use.kind === 'addition') linkAddition = use;
-		else if (use.kind === 'own') useLink(use);
-		else askedLink = use.link;
-	}
-
-	/**
-	 * Signs in with a link of this browser's own proposal, or one the viewer
-	 * confirmed having been shown its server: the client presents its token
-	 * on a fresh connection that is not signed in (§4.11.3), and carries on
-	 * with that connection once it has worked, when the page lets go of the
-	 * view it held. A link adds to an account only with the `state` of an
-	 * addition proposed here (`linkAddition`), or once the viewer says a
-	 * link of no proposal here is one (`addAskedLink`). A failure changes
-	 * nothing and opens the connect screen on the link's scheme and server,
-	 * with the reason.
-	 */
-	function useLink(use: Exclude<LinkUse, { kind: 'addition' }>): void {
-		const chat = client;
-		askedLink = undefined;
-		if (!chat) return;
-		linkBusy = true;
-		feedback.pending('Signing in…');
-		void runSignInLink(use, chat, {
-			// Another account from here on: the view held for the current one goes, and on this
-			// server it is signed out of, push going off for it as a sign-out does.
-			beforeSwitch: (switched) => (switched ? leaveBackend() : signedOut()()),
-			onSignedIn: (server, switched) => {
-				feedback.clear();
-				linkFailure = undefined;
-				// Only now is a switch to the link's server remembered, and the server listed as recent.
-				if (switched) {
-					serverInput = server;
-					saveServerUrl(server);
-				}
-				connected();
-			},
-			onFailed: (error, server) => {
-				feedback.clear();
-				// The link may have expired or been used: the connect screen can start again, on the
-				// link's server, which is not remembered unless that works. One of no proposal here
-				// may have been for an addition instead, which a new sign-in code wouldn't help with.
-				serverInput = server;
-				linkFailure = {
-					error: use.kind === 'own'
-						? `The sign-in link didn’t work (${error}). ${use.scheme === 'email' ? 'Send a new code' : 'Sign in again'} to try again, or pick another server.`
-						: askedLinkFailure(error)
-				};
-				connectScheme = use.kind === 'own' ? use.scheme : undefined;
-				connectOpen = true;
-			}
-		}).finally(() => (linkBusy = false));
-	}
-
-	/**
-	 * Adds a link of no proposal here to the account this page is signed in
-	 * to, once the viewer said it was sent for that (§4.11.3): the server
-	 * approves it only if that account proposed it, so any other link is
-	 * refused, and changes nothing.
-	 */
-	function addAskedLink(link: SignInLink): void {
-		const chat = client;
-		askedLink = undefined;
-		if (!chat) return;
-		linkBusy = true;
-		feedback.pending('Adding the sign-in…');
-		chat.addWithConfirmedLink(link.token)
-			.then(() => feedback.clear(), (cause: unknown) => feedback.error(addError(cause, 'link')))
-			.finally(() => (linkBusy = false));
-	}
-
 	// A link for an addition this browser proposed (§4.11.3) approves only on a connection signed in to the
-	// account that proposed it: once this page's session has settled (a kept one resumed, or past resuming), it
-	// adds there, or says it can't.
-	$effect(() => {
-		const addition = linkAddition;
-		const chat = client;
-		if (!addition || !chat || !sessionSettled(snapshot)) return;
-		const signedInAs = snapshot.authenticated ? snapshot.you?.user_id : undefined;
-		untrack(() => {
-			linkAddition = undefined;
-			if (chat.url !== addition.server || signedInAs !== addition.account) {
-				feedback.error(`The link adds a sign-in to @${addition.account} on ${backendHost(addition.server) || addition.server}, which this page isn’t signed in as now. Sign in as @${addition.account} there, and add it again.`);
-				return;
-			}
-			linkBusy = true;
-			feedback.pending('Adding the sign-in…');
-			chat.addWithLink(addition.token, addition.state)
-				.then(() => feedback.clear(), (cause: unknown) => feedback.error(addError(cause, findProposal(addition.state)?.scheme)))
-				.finally(() => (linkBusy = false));
-		});
-	});
+	// account that proposed it: once this page's session has settled, it adds there, or says it can't.
+	$effect(() => links.settle(snapshot));
 
 	/** Replaces the page's URL without adding a history entry: through the router once it runs, else the browser. */
 	function scrubUrl(url: string): void {
@@ -1124,7 +1017,7 @@
 		const any = [...offered, ...(session.server?.signup ?? [])];
 		const passkeyFirst = offered.includes('webauthn') ? offered.includes('guest') || !offered.includes('email') : !any.includes('email');
 		connectScheme = options.scheme ?? (options.signIn ? (passkeyFirst ? 'webauthn' : 'email') : undefined);
-		linkFailure = undefined;
+		links.failure = undefined;
 		if (options.name) displayName = options.name;
 		connectOpen = true;
 	}
@@ -1347,7 +1240,7 @@
 		const chat = client;
 		return () => {
 			if (chat && account) void pushSettings.signedOut(chat, account);
-			if (chat) void clearView(chat.url);
+			if (chat) void viewKeeper.forget(chat.url);
 			session.forget();
 		};
 	}
@@ -2280,7 +2173,7 @@
 				parentRoomId: roomId,
 				...thread,
 				// Nothing moves out of a private room into a thread others can see.
-				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined,
+				check: moveCheck(() => session.rooms, roomId),
 				own: ownMessage,
 				movable,
 				authors: moveAuthors()
@@ -2386,17 +2279,17 @@
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
 </svelte:head>
 
-{#if client && askedLink}
+{#if client && links.asked}
 	<!-- Signed in here, guests too, where a link can add a way in (`addAs`): the link may have been sent for that. -->
 	<SignInLinkDialog
-		link={askedLink}
+		link={links.asked}
 		current={{
 			url: client.url, keptSession: Boolean(snapshot.keptSession),
-			...(askedLink.server && askedLink.server !== client.url ? { targetKeptSession: client.keptSessionFor(askedLink.server) } : {}),
+			...(links.asked.server && links.asked.server !== client.url ? { targetKeptSession: client.keptSessionFor(links.asked.server) } : {}),
 			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}),
 			...(snapshot.authenticated && snapshot.you && snapshot.server?.auth.some((scheme) => scheme === 'email' || scheme === 'external') ? { addAs: snapshot.you.name ? `${snapshot.you.name} (@${snapshot.you.user_id})` : `@${snapshot.you.user_id}` } : {})
 		}}
-		onconfirm={() => askedLink && useLink({ kind: 'ask', link: askedLink })} onadd={() => askedLink && addAskedLink(askedLink)} oncancel={() => (askedLink = undefined)}
+		onconfirm={() => links.confirm()} onadd={() => links.addAsked()} oncancel={() => links.cancel()}
 	/>
 {/if}
 {#if !client}
@@ -2405,7 +2298,7 @@
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
 		canCancel={session.rooms.length > 0 || session.ready || offeringLink} initialScheme={connectScheme}
-		initialError={linkFailure?.error}
+		initialError={links.failure?.error}
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
 	/>
 {:else}

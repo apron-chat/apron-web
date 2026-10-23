@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '$lib/protocol/types';
 import { UnreadTracker, countElsewhere } from './unread.svelte';
+import { tabTitle } from './attention';
 import { messageRecord, roomSnapshot as room } from '$lib/test/builders';
 
 const me = { user_id: 'guest_me', name: 'sam' };
@@ -68,5 +69,14 @@ describe('countElsewhere', () => {
 		expect(countElsewhere({ general: 3, random: 2, thread_1: 4 }, 'random')).toBe(7);
 		expect(countElsewhere({ general: 3 }, 'general')).toBe(0);
 		expect(countElsewhere({ general: 3, random: 2 }, undefined)).toBe(5);
+	});
+});
+
+describe('tab title', () => {
+	it('leads with the unread count and flashes for a mention', () => {
+		expect(tabTitle(0, false)).toBe('Apron');
+		expect(tabTitle(3, false)).toBe('(3) Apron');
+		expect(tabTitle(1200, false)).toBe('(999+) Apron');
+		expect(tabTitle(3, true)).toBe('@ You were mentioned');
 	});
 });

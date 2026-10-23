@@ -4,7 +4,7 @@
 	import MenuButton from '$lib/design/components/MenuButton.svelte';
 	import SettingRow from '$lib/design/components/SettingRow.svelte';
 	import StatusDot from '$lib/design/components/StatusDot.svelte';
-	import { OPTIONAL_STATUSES, STATUS_CHOICES, chosenStatusLabel, ownStatusLabel } from '$lib/ui/user-status';
+	import { OPTIONAL_STATUSES, STATUS_CHOICES, chosenStatusLabel, ownStatusLabel, statusChoices } from '$lib/ui/user-status';
 
 	interface Props {
 		/**
@@ -40,13 +40,8 @@
 
 	let current = $derived(status ?? 'online');
 	let known = $derived(STATUS_CHOICES.some((choice) => choice.value === current));
-	/**
-	 * Online and None always; Do not disturb and Invisible where `server.status`
-	 * lists them, until this server answers something else for one. The current
-	 * status stays listed, so it shows as checked.
-	 */
-	let offered = (value: string) => !OPTIONAL_STATUSES.includes(value) || (accepted.includes(value) && !unsupported.includes(value));
-	let choices = $derived(STATUS_CHOICES.filter((choice) => offered(choice.value) || choice.value === current).map((choice) => ({ value: key(choice.value), label: choice.label, hint: choice.hint })));
+	/** What `statusChoices` offers, the current status among them. */
+	let choices = $derived(statusChoices(accepted, unsupported, current).map((choice) => ({ value: key(choice.value), label: choice.label, hint: choice.hint })));
 	let busy = $state(false);
 	/** What the server answered for the last choice, when it isn't what was asked. */
 	let answer = $state<{ asked: string; kept: string | undefined } | { asked: string; error: string } | undefined>();

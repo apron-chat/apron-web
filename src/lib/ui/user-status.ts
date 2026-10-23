@@ -19,6 +19,19 @@ export const STATUS_CHOICES = [
 /** The optional ones (§4.5): a server accepts those `server.status` lists. */
 export const OPTIONAL_STATUSES: readonly string[] = ['dnd', 'invisible'];
 
+/**
+ * The statuses the picker offers, in `STATUS_CHOICES` order: Online and None
+ * always; Do not disturb and Invisible where `server.status` (`accepted`)
+ * lists them, until this server answers something else for one
+ * (`unsupported`). The `current` status (absent: the default, `online`) stays
+ * listed, so it shows as checked.
+ */
+export function statusChoices(accepted: readonly string[], unsupported: readonly string[], current: string | undefined): Array<(typeof STATUS_CHOICES)[number]> {
+	const shown = current ?? 'online';
+	const offered = (value: string) => !OPTIONAL_STATUSES.includes(value) || (accepted.includes(value) && !unsupported.includes(value));
+	return STATUS_CHOICES.filter((choice) => offered(choice.value) || choice.value === shown);
+}
+
 /** A chosen status in words, as the picker names it: "Online", "None", or an unknown value as itself. */
 export function chosenStatusLabel(status: string | undefined): string {
 	const choice = STATUS_CHOICES.find((entry) => entry.value === (status ?? ''));

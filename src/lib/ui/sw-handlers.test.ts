@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { messageNotificationTag, notificationGroup, PUSH_CLICK, NOTIFICATION_CLICK, QUIET_PUSH, type ShowNotificationOptions } from './notifications';
+import { PUSH_CLICK, NOTIFICATION_CLICK, type ShowNotificationOptions } from './notifications';
 import { withShown } from './push-store';
 import { anyWindowVisible, appWindows, handleClick, handlePush, isNewerMessage, type PushContext, type Tab } from './sw-handlers';
 
@@ -37,6 +37,8 @@ function context(overrides: Partial<PushContext> = {}) {
 
 const payload = (id: string, extra: Record<string, unknown> = {}) => () => ({ push_id: 'a1', message: { message_id: id, room_id: 'general', from: { user_id: 'bob', name: 'Bob' }, body: { text: `message ${id}` } }, ...extra });
 
+// What to show for a push is `planPush`'s decision, tested in `notifications.test.ts` › planning a push. Here:
+// what the handler does with it that the plan can't see.
 describe('the push handler', () => {
 	it('shows new messages, closing the room\'s older ones, and remembers the newest', async () => {
 		const { value, registration, setBadge, marks } = context();
@@ -46,55 +48,6 @@ describe('the push handler', () => {
 		expect(registration.list[0].options).toMatchObject({ icon: '/icon-192.png', renotify: false });
 		expect(marks()).toEqual({ 'a1:general': '11' });
 		expect(setBadge).toHaveBeenLastCalledWith(2);
-	});
-
-	it('doesn\'t notify again for a late push of a message the page already showed', async () => {
-		const { value, registration } = context();
-		// The page showed m1 and m2 (through the registration), and remembered m2.
-		await registration.showNotification('Bob · General', { tag: messageNotificationTag('a1', '2'), body: 'message 2', renotify: false, data: { pushId: 'a1', messageId: '2', group: notificationGroup('a1', 'general') } });
-		await value.markShown('a1:general', '2');
-		await handlePush(payload('1'), value);
-		expect(registration.list.map((entry) => [entry.tag, entry.title])).toEqual([['apron:a1:2', 'Bob · General']]);
-		// It was still shown again, quietly, as browsers require.
-		expect(registration.showNotification).toHaveBeenLastCalledWith('Bob · General', expect.objectContaining({ tag: 'apron:a1:2', silent: true, renotify: false }));
-	});
-
-	it('replaces the page\'s notification of the same message quietly, keeping its title', async () => {
-		const { value, registration } = context();
-		await registration.showNotification('Bob · General', { tag: messageNotificationTag('a1', '3'), body: 'old text', data: { pushId: 'a1', messageId: '3', group: 'a1:general' } });
-		await value.markShown('a1:general', '3');
-		await handlePush(payload('3'), value);
-		expect(registration.list.map((entry) => [entry.title, entry.body, entry.options.silent])).toEqual([['Bob · General', 'message 3', true]]);
-	});
-
-	it('shows a dismissed message again only quietly', async () => {
-		const { value, registration } = context();
-		await value.markShown('a1:general', '4');
-		await handlePush(payload('4'), value);
-		expect(registration.list.map((entry) => [entry.tag, entry.options.silent])).toEqual([['apron:a1:4', true]]);
-	});
-
-	it('drops a push for another account and leaves the badge, showing the quiet stand-in', async () => {
-		const { value, registration, setBadge } = context({ loadEnabled: async () => ['b2'] });
-		await handlePush(payload('5', { unread: 7 }), value);
-		expect(setBadge).not.toHaveBeenCalled();
-		expect(registration.list.map((entry) => entry.tag)).toEqual([QUIET_PUSH.options.tag]);
-	});
-
-	it('shows only the quiet stand-in, without the badge, when the enabled accounts can\'t be read', async () => {
-		const { value, registration, setBadge } = context({ loadEnabled: async () => 'unreadable' });
-		await registration.showNotification('Bob · General', { tag: messageNotificationTag('a1', '2'), body: 'message 2', data: { pushId: 'a1', messageId: '2', group: 'a1:general' } });
-		await handlePush(payload('5', { unread: 7 }), value);
-		expect(setBadge).not.toHaveBeenCalled();
-		expect(registration.showNotification).toHaveBeenLastCalledWith(QUIET_PUSH.title, expect.objectContaining(QUIET_PUSH.options));
-		expect(registration.list.some((entry) => entry.body === 'message 5')).toBe(false);
-	});
-
-	it('shows the quiet stand-in, not an older message, when the room\'s newest was dismissed', async () => {
-		const { value, registration } = context();
-		await value.markShown('a1:general', '9');
-		await handlePush(payload('8'), value);
-		expect(registration.list.map((entry) => entry.tag)).toEqual([QUIET_PUSH.options.tag]);
 	});
 
 	it('leaves the badge to a page in view', async () => {

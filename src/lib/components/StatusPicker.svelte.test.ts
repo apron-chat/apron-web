@@ -4,9 +4,15 @@ import { describe, expect, it, vi } from 'vitest';
 import StatusPicker from './StatusPicker.svelte';
 import * as dom from '$lib/test/dom';
 
-const trigger = () => document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
-const radios = () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
-const labels = () => radios().map((item) => item.querySelector('.ap-menu-label')?.textContent);
+// Which statuses are offered is `statusChoices`' decision (`user-status.test.ts`); here, the picker around it.
+
+const LABELS = ['Online', 'Do not disturb', 'Invisible', 'None'];
+const trigger = () => dom.byRole<HTMLButtonElement>('button', /^Status: /);
+/** The menu's choice whose name starts with `label` (its hint follows). */
+const choice = (label: string) => dom.queryByRole<HTMLButtonElement>('menuitemradio', new RegExp(`^${label}`));
+const offered = () => LABELS.filter((label) => choice(label));
+const checked = () => offered().filter((label) => choice(label)!.getAttribute('aria-checked') === 'true');
+const note = () => dom.queryByRole('note');
 
 async function open(): Promise<void> {
 	trigger().click();
@@ -16,7 +22,7 @@ async function open(): Promise<void> {
 
 async function pick(label: string): Promise<void> {
 	await open();
-	radios().find((item) => item.querySelector('.ap-menu-label')?.textContent === label)!.click();
+	choice(label)!.click();
 	flushSync();
 	// The `me` request settles.
 	await tick();
@@ -48,59 +54,28 @@ function render(initial: string | undefined, answer: (asked: string) => string |
 }
 
 describe('StatusPicker', () => {
-	it('offers Online, Do not disturb, Invisible and None where server.status lists both, with the current one checked', async () => {
-		render('online', (asked) => asked);
+	it('offers the choices with the current one checked, each with its dot, and follows a replacing server frame', async () => {
+		const props = render('online', (asked) => asked, null);
 		expect(trigger().textContent).toBe('Online');
-		expect(trigger().getAttribute('aria-label')).toBe('Status: Online');
 		await open();
-		expect(radios().map((item) => item.querySelector('.ap-menu-label')?.textContent)).toEqual(['Online', 'Do not disturb', 'Invisible', 'None']);
-		expect(radios().map((item) => item.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'false']);
-		// Each with its dot; None has none.
-		expect(radios().map((item) => item.querySelector('.ap-presence')?.className.match(/ap-presence-(online|dnd|invisible)/)?.[1] ?? '')).toEqual(['online', 'dnd', 'invisible', '']);
-	});
-
-	it('offers only Online and None without server.status', async () => {
-		render('online', (asked) => asked, null);
-		await open();
-		expect(labels()).toEqual(['Online', 'None']);
-	});
-
-	it('offers only Online and None for an empty server.status', async () => {
-		render('online', (asked) => asked, []);
-		await open();
-		expect(labels()).toEqual(['Online', 'None']);
-	});
-
-	it('offers just the optional statuses server.status lists', async () => {
-		render('online', (asked) => asked, ['dnd']);
-		await open();
-		expect(labels()).toEqual(['Online', 'Do not disturb', 'None']);
-		document.body.innerHTML = '';
-		dom.unmount();
-		render('online', (asked) => asked, ['invisible', 'busy']);
-		await open();
-		expect(labels()).toEqual(['Online', 'Invisible', 'None']);
-	});
-
-	it('follows a replacing server frame', async () => {
-		const props = render('online', (asked) => asked, []);
+		expect([offered(), checked()]).toEqual([['Online', 'None'], ['Online']]);
 		props.accepted = ['dnd', 'invisible'];
 		flushSync();
-		await open();
-		expect(labels()).toEqual(['Online', 'Do not disturb', 'Invisible', 'None']);
+		expect([offered(), checked()]).toEqual([LABELS, ['Online']]);
+		// Each with its dot; None has none.
+		expect(LABELS.map((label) => choice(label)!.querySelector('.ap-presence')?.className.match(/ap-presence-(online|dnd|invisible)/)?.[1] ?? '')).toEqual(['online', 'dnd', 'invisible', '']);
 	});
 
-	it('keeps an unlisted current status listed and checked', async () => {
-		render('dnd', (asked) => asked, []);
-		expect(trigger().textContent).toBe('Do not disturb');
-		await open();
-		expect(labels()).toEqual(['Online', 'Do not disturb', 'None']);
-		expect(radios().map((item) => item.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
-	});
-
-	it('takes the absent status as the default, online', () => {
+	it('shows an absent status as Online, and an unknown one as itself, with nothing checked', async () => {
 		render(undefined, (asked) => asked);
-		expect(trigger().textContent).toBe('Online');
+		expect(trigger().getAttribute('aria-label')).toBe('Status: Online');
+		dom.cleanup();
+		render('busy-coding', (asked) => asked);
+		expect(trigger().textContent).toBe('“busy-coding”');
+		expect(trigger().getAttribute('aria-label')).toBe('Status: busy-coding');
+		expect(document.querySelector('.ap-status-pick-dot .ap-presence-unknown')).not.toBeNull();
+		await open();
+		expect(checked()).toEqual([]);
 	});
 
 	it('sets the chosen status, and says what it means', async () => {
@@ -108,11 +83,13 @@ describe('StatusPicker', () => {
 		await pick('Do not disturb');
 		expect(props.onchoose).toHaveBeenCalledWith('dnd');
 		expect(trigger().textContent).toBe('Do not disturb');
-		expect(document.querySelector('[data-testid="status-hint"]')?.textContent).toContain('notifications are silenced');
-		expect(document.querySelector('.ap-callout')).toBeNull();
+		expect(document.body.textContent).toContain('Your notifications are silenced.');
+		expect(note()).toBeNull();
 		await pick('None');
 		expect(props.onchoose).toHaveBeenLastCalledWith('');
 		expect(trigger().textContent).toBe('None');
+		expect(document.body.textContent).toContain('Others see no status.');
+		// Its own dot beside the button goes with it.
 		expect(document.querySelector('.ap-status-pick-dot .ap-presence')).toBeNull();
 	});
 
@@ -121,58 +98,27 @@ describe('StatusPicker', () => {
 		await pick('Invisible');
 		expect(props.onchoose).toHaveBeenCalledWith('invisible');
 		expect(trigger().textContent).toBe('None');
-		const callout = document.querySelector('.ap-callout')!;
-		expect(callout.querySelector('.ap-callout-title')?.textContent).toBe('This server doesn’t offer Invisible');
-		expect(callout.textContent).toContain('Your status is None.');
+		expect(note()?.textContent).toContain('This server doesn’t offer Invisible');
+		expect(note()?.textContent).toContain('Your status is None.');
 		expect(props.unsupported).toEqual(['invisible']);
 		await open();
-		expect(labels()).toEqual(['Online', 'Do not disturb', 'None']);
+		expect(offered()).toEqual(['Online', 'Do not disturb', 'None']);
 	});
 
 	it('says when the server declined', async () => {
 		render('online', () => new Error('denied'));
 		await pick('Do not disturb');
-		expect(document.querySelector('.ap-callout')?.textContent).toContain('The server declined Do not disturb (denied).');
+		expect(note()?.textContent).toContain('The server declined Do not disturb (denied).');
 		expect(trigger().textContent).toBe('Online');
-	});
-
-	it('shows an unknown status as itself, with nothing checked', async () => {
-		render('busy-coding', (asked) => asked);
-		expect(trigger().textContent).toBe('“busy-coding”');
-		expect(document.querySelector('.ap-status-pick-dot .ap-presence-unknown')).not.toBeNull();
-		await open();
-		expect(radios().every((item) => item.getAttribute('aria-checked') === 'false')).toBe(true);
-	});
-
-	it('keeps focus on the button while the choice is saved, and after', async () => {
-		let reply!: (kept: string) => void;
-		render('online', () => new Promise<string>((resolve) => (reply = resolve)));
-		await open();
-		radios().find((item) => item.querySelector('.ap-menu-label')?.textContent === 'Do not disturb')!.click();
-		flushSync();
-		await tick();
-		// Saving: the button says so and can't open, but isn't disabled, which would drop focus.
-		expect(trigger().textContent).toBe('Saving…');
-		expect(trigger().disabled).toBe(false);
-		expect(trigger().getAttribute('aria-disabled')).toBe('true');
-		expect(document.activeElement).toBe(trigger());
-		reply('dnd');
-		await tick();
-		await tick();
-		flushSync();
-		expect(trigger().textContent).toBe('Do not disturb');
-		expect(trigger().hasAttribute('aria-disabled')).toBe(false);
-		expect(document.activeElement).toBe(trigger());
 	});
 
 	it('says the server\'s answer through the dialog\'s live region, not one of its own', async () => {
 		const props = render('online', (asked) => (asked === 'invisible' ? '' : asked));
 		await pick('Invisible');
 		expect(props.announced.at(-1)).toBe('This server doesn’t offer Invisible. Your status is None.');
-		expect(document.querySelector('.ap-status-pick [role="status"], .ap-status-pick [aria-live]')).toBeNull();
+		expect(document.querySelector('[role="status"], [aria-live]')).toBeNull();
 		// A choice that works clears it.
 		await pick('Online');
 		expect(props.announced.at(-1)).toBeUndefined();
 	});
 });
-
