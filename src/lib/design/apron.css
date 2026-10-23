@@ -105,18 +105,12 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-timeline:has(.ap-msg-actions [aria-expanded='true']) .ap-msg:not(:has(.ap-msg-actions [aria-expanded='true'])):is(:hover, :focus-within) :is(.ap-msg-actions, .ap-msg-hovertime, .ap-rchip-add) { visibility: hidden; }
 /* select mode: a check column on the left; the whole row toggles */
 .ap-msg-selectable { grid-template-columns: 24px var(--avatar-md) minmax(0, 1fr); cursor: pointer; user-select: none; }
-.ap-msg-selectable.ap-msg-compact { grid-template-columns: 24px 40px minmax(0, 1fr); }
 .ap-msg-selectable:hover { background: var(--hover-soft); }
 .ap-msg-selected, .ap-msg-selected:hover { background: var(--denim-soft); }
 .ap-msg-check { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-top: 3px; box-sizing: border-box; border: 2px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg-100); color: var(--on-accent); font-size: var(--text-sm); line-height: 1; font-weight: 600; }
 .ap-msg-selected .ap-msg-check { border-color: var(--accent); background: var(--accent); }
 .ap-msg-selectable .ap-msg-hovertime { visibility: visible; }
 /* compact density: time | sender + text on one line */
-.ap-msg-compact { grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--space-2); margin-top: 0; padding-top: 1px; padding-bottom: 1px; }
-.ap-msg-compact .ap-msg-ctime { font-size: var(--text-xs); line-height: var(--leading-body); color: var(--ink-muted); text-align: right; font-variant-numeric: tabular-nums; }
-.ap-msg-compact .ap-msg-sender { margin-right: var(--space-2); }
-.ap-msg-compact .ap-msg-text p { display: inline; }
-.ap-msg-compact .ap-msg-meta { margin-left: var(--space-2); }
 .ap-msg-gutter { padding-top: 2px; }
 .ap-msg-hovertime { display: block; font-size: var(--text-xs); line-height: var(--leading-body); color: var(--ink-muted); text-align: right; visibility: hidden; font-variant-numeric: tabular-nums; }
 .ap-msg:hover .ap-msg-hovertime { visibility: visible; }
@@ -168,7 +162,6 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 }
 .ap-role-admin { border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); }
 .ap-role-bot { border-color: color-mix(in srgb, var(--denim) 55%, transparent); color: var(--denim); }
-.ap-msg-compact .ap-roles { margin-right: var(--space-2); }
 /*
  * Stacked roles (--ap-role-overflow: stack, or RoleBadges' overflow prop): instead of dropping, the badges that don't fit
  * sit as layers behind the last one that does, each the badge's own size and a step further out, in its own role's
@@ -188,7 +181,6 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* None fit: the row takes no room, lead included, and gives it back to the name. */
 .ap-roles-stack.ap-roles-gone { width: 0; }
 .ap-roles-stack.ap-roles-gone::before { width: 0; }
-.ap-msg-compact .ap-msg-handle { margin-right: var(--space-2); }
 .ap-msg-meta { display: inline-flex; gap: var(--space-2); white-space: nowrap; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-msg-text { overflow-wrap: anywhere; font-family: var(--font-chat); }
 .ap-msg-text p { margin: 0; }
@@ -217,10 +209,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-text th { font-weight: 600; background: var(--bg-200); }
 .ap-msg-text .ap-align-center { text-align: center; }
 .ap-msg-text .ap-align-right { text-align: right; }
-.ap-msg-pending .ap-msg-text { color: var(--ink-muted); }
 .ap-msg-tomb { font-style: italic; color: var(--ink-muted); }
-.ap-msg-failed { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--danger); margin-top: 2px; }
-.ap-msg-failed .ap-link { color: var(--danger); }
 .ap-msg-embeds { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-2); }
 /* An absent format is plain (§3.5): its line breaks kept. A Markdown body's quotes set apart on a muted ground. */
 .ap-msg-plain { white-space: pre-wrap; }
@@ -846,7 +835,6 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-msg-reply { --reply-indent: calc(var(--avatar-md) + var(--space-3)); --spine-x: calc(var(--avatar-md) / 2); --spine-drop: 2px; /* past the row: its 4px gap and the gutter's 2px, less 4px */
 	grid-column: 1 / -1; display: flex; min-width: 0; margin-bottom: var(--space-1); padding-left: var(--reply-indent); }
 .ap-msg-selectable .ap-msg-reply { grid-column: 2 / -1; }
-.ap-msg-compact .ap-msg-reply { --reply-indent: calc(40px + var(--space-2)); --spine-x: 20px; --spine-drop: var(--space-1); /* to the time's line; its text starts 4px lower */ }
 .ap-reply { font: inherit; position: relative; display: flex; align-items: center; gap: var(--space-1); min-width: 0; max-width: min(100%, 520px); margin-left: calc(-1 * var(--space-1)); padding: 1px var(--space-1); border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-ui); text-align: left; cursor: pointer; }
 .ap-msg-reply .ap-reply::before { content: ''; position: absolute; right: 100%; top: calc(50% - 1px); bottom: calc(-1 * var(--spine-drop)); box-sizing: border-box; width: calc(var(--reply-indent) - var(--space-1) - var(--spine-x) + 1px); border: 2px solid color-mix(in srgb, var(--line-strong) 60%, transparent); border-right: 0; border-bottom: 0; border-top-left-radius: var(--radius-sm); pointer-events: none; }
 .ap-reply:hover { background: var(--hover); color: var(--ink); }
