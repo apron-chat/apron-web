@@ -10,7 +10,6 @@ import { DEVICES, expect, test, type Preview } from './fixtures';
 test.use({ knobs: { seed: 'rich' } });
 
 const VIEWPORTS = ['desktop', 'tablet', 'phone', 'phone360', 'phone320'] as const;
-const THEMES = ['light', 'dark'] as const;
 
 /** Every broken rule in the open timeline and member list, as readable lines (none: `[]`). Runs in the page. */
 function layoutViolations(): string[] {
@@ -101,29 +100,25 @@ async function showMembers(preview: Preview): Promise<void> {
 	await expect(list.locator('li').first()).toBeVisible();
 }
 
+// One theme: the light theme overrides only colors (tokens.css), and apron.css has no theme-specific rules, so
+// the geometry is the same in both.
 for (const viewport of VIEWPORTS) {
-	for (const theme of THEMES) {
-		test.describe(`${viewport}, ${theme}`, () => {
-			test.use({ ...DEVICES[viewport], colorScheme: theme });
+	test.describe(viewport, () => {
+		test.use(DEVICES[viewport]);
 
-			test('long names and four roles keep every message header whole', async ({ preview }) => {
-				await preview.open();
-				await expect(preview.message('Long names and four roles')).toBeVisible();
-				// Scrolled to each long-named message in turn, so each one is laid out on screen.
-				for (const text of ['Long names and four roles', 'with an even longer name', 'no spaces to break at', 'the handle tells us apart']) {
-					await preview.message(text).scrollIntoViewIfNeeded();
-					await expectNoViolations(preview, `at ${text}`);
-				}
-			});
-
-			test('the member list fits, with the same names and roles', async ({ preview }) => {
-				await preview.open();
-				await showMembers(preview);
-				await expect(preview.page.getByTestId('room-member-list').getByText('Wilhelmina Featherstonehaugh-Cholmondeley')).toBeVisible();
-				await expectNoViolations(preview, 'with the member list open');
-			});
+		test('long names and four roles keep every message header whole, and the member list fits them', async ({ preview }) => {
+			await preview.open();
+			await expect(preview.message('Long names and four roles')).toBeVisible();
+			// Scrolled to each long-named message in turn, so each one is laid out on screen.
+			for (const text of ['Long names and four roles', 'with an even longer name', 'no spaces to break at', 'the handle tells us apart']) {
+				await preview.message(text).scrollIntoViewIfNeeded();
+				await expectNoViolations(preview, `at ${text}`);
+			}
+			await showMembers(preview);
+			await expect(preview.page.getByTestId('room-member-list').getByText('Wilhelmina Featherstonehaugh-Cholmondeley')).toBeVisible();
+			await expectNoViolations(preview, 'with the member list open');
 		});
-	}
+	});
 }
 
 test.describe('the member list under 960px', () => {

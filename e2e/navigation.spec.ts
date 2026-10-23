@@ -10,13 +10,10 @@ async function at(preview: Preview, heading: string, url: RegExp): Promise<void>
 test.describe('deep links', () => {
 	test.use(DEVICES.desktop);
 
-	test('a room link opens that room', async ({ preview }) => {
+	test('a room link opens that room, and a thread link the thread under its room', async ({ preview }) => {
 		await preview.open('?room=engineering');
 		await at(preview, 'engineering', /\?room=engineering$/);
 		await expect(preview.message('Engineering room preview')).toBeVisible();
-	});
-
-	test('a thread link opens the thread under its room', async ({ preview }) => {
 		await preview.open('?room=general&thread=thread_deploy');
 		await at(preview, 'general › Deploy checklist', /\?room=general&thread=thread_deploy$/);
 		await expect(preview.message('Thread replies are ordinary messages')).toBeVisible();
