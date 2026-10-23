@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cssPx, fitRoles, rolePeek, roomName, roomNameTip, UNTITLED } from './util';
+import { chain, cssPx, fitRoles, rolePeek, roomName, roomNameTip, UNTITLED } from './util';
 
 describe('roomName', () => {
 	it('names a room or thread by its title, else its room_id (§3.4)', () => {
@@ -95,5 +95,26 @@ describe('fitRoles', () => {
 		expect(fitRoles([60], 45, 4, 30)).toEqual({ shown: 1, room: 45 });
 		expect(fitRoles([60], 29, 4, 30)).toEqual({ shown: 0 });
 		expect(fitRoles([], 100, 4, 30)).toEqual({ shown: 0 });
+	});
+});
+
+describe('chain', () => {
+	it('runs the caller\'s handler, then the component\'s own', () => {
+		const calls: string[] = [];
+		chain(() => calls.push('own'), () => calls.push('caller'))!(new Event('click', { cancelable: true }));
+		expect(calls).toEqual(['caller', 'own']);
+	});
+
+	it('skips the component\'s own where the caller prevents the default', () => {
+		const calls: string[] = [];
+		chain(() => calls.push('own'), (event: Event) => { calls.push('caller'); event.preventDefault(); })!(new Event('click', { cancelable: true }));
+		expect(calls).toEqual(['caller']);
+	});
+
+	it('passes either one through alone, and nothing for neither', () => {
+		const own = () => {};
+		expect(chain(own, undefined)).toBe(own);
+		expect(chain(undefined, own)).toBe(own);
+		expect(chain(undefined, null)).toBeUndefined();
 	});
 });

@@ -133,6 +133,20 @@ export function cssPx(value: string, context: { size?: number; percent?: number;
 	}
 }
 
+/**
+ * One handler from a component's own and a caller's, for an event both listen to (the caller's extra attributes win,
+ * so handlers chain rather than replace). The caller's runs first; if it calls `preventDefault()`, the component's own
+ * is skipped, which is how a caller replaces a built-in behavior. Either may be absent.
+ */
+export function chain<E extends Event>(own: ((event: E) => void) | null | undefined, caller: ((event: E) => void) | null | undefined): ((event: E) => void) | undefined {
+	if (!own) return caller ?? undefined;
+	if (!caller) return own;
+	return (event: E) => {
+		caller(event);
+		if (!event.defaultPrevented) own(event);
+	};
+}
+
 export function initials(name: string | undefined): string {
 	const p = String(name || '?').trim().split(/\s+/);
 	return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
