@@ -38,16 +38,21 @@ the app doesn't import it and none of it ships with the app), `index.d.ts`
 `tokens.css` is the tokens' source of truth: change a token there, and it
 reaches the design system with the next bundle.
 
-Every design component follows two conventions. Extra attributes go on its
-root element and the caller's win: the component's own attributes come
-before the spread, `class` merges with its own, and an event handler both
-set is chained with `chain()` from `util.ts` (the caller's runs first, and
-its `preventDefault()` skips the component's own); only attributes that
-carry the component's accessibility contract come after the spread, with a
-comment. Test ids follow the same rule: the root takes `data-testid` like
-any attribute, and an inner part something queries gets a named prop
-(`chipTestid`, `sendTestid`), so no design component hard-codes one. Role
-badges beside a name stack when they don't fit (`--ap-role-overflow:
+Every design component follows two conventions. It declares the props it
+takes and spreads nothing onto its markup: a `class`, added to its own; a
+`testid` for its root where something queries it, and a named prop for an
+inner part's (`chipTestid`, `sendTestid`), so no design component
+hard-codes one; an `id` or a label where it fits; the handlers its callers
+use; and an attribute other code reads, such as `data-room` on a room's row
+or `data-timeline-item` on a timeline row, from a prop of its own. A
+spread stays only where a component stands in for one element any of whose
+attributes is the caller's by design, such as `Button`'s `<button>` or
+`ComposerEditable`'s field (or `Embed` handing an embed's fields on to its
+renderer), and then with a `<!-- spread: why -->` comment right before it:
+`conventions.test.ts` fails on any spread without one. Where a caller's
+handler and the component's own share an event, `chain()` from `util.ts`
+runs the caller's first, and its `preventDefault()` skips the component's
+own. Role badges beside a name stack when they don't fit (`--ap-role-overflow:
 stack`): after an unneeded handle, the name gives way first, down to
 `--ap-name-min`, then the badges stack behind the last that fits; a handle
 shows only where two people share a name, and gives way last. An untitled

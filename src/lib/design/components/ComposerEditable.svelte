@@ -18,6 +18,7 @@
 	let { placeholder, empty, disabled, element = $bindable(), class: className, ...rest }: Props = $props();
 </script>
 
+<!-- spread: a generic text field, which the caller fills, reads and wires itself; any attribute of it is the caller's -->
 <!-- `role` after the spread: a contenteditable is announced as a text box only with it. -->
 <div
 	aria-label="Message"
