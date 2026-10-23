@@ -150,3 +150,56 @@ describe('in-memory preview protocol', () => {
 		expect(afterReaction.rooms.find((room) => room.id === 'general')?.timeline.reactions[seededId]).toBeUndefined();
 	});
 });
+
+describe('knobs for the browser suite', () => {
+	async function connect(server: MemoryProtocolServer): Promise<ChatClient> {
+		const client = new ChatClient('ws://apron-preview.invalid', 'Preview User', server.factory);
+		clients.push(client);
+		client.start();
+		await waitFor(() => client.snapshot().authenticated && client.snapshot().rooms.some((room) => room.id === 'general' && room.loaded));
+		return client;
+	}
+	const room = (client: ChatClient, id: string) => client.snapshot().rooms.find((candidate) => candidate.id === id);
+
+	it('records every frame the client sends, in order', async () => {
+		const server = new MemoryProtocolServer({});
+		const client = await connect(server);
+		await client.send('general', 'Recorded').promise;
+		expect(server.frames.map((frame) => frame.method).slice(0, 2)).toEqual(['auth', 'room_list']);
+		expect(server.frames.at(-1)).toMatchObject({ method: 'message', params: { room_id: 'general', body: { text: 'Recorded' } } });
+	});
+
+	it('drops private from new rooms or new threads, as asked, like a server without private rooms', async () => {
+		const threads = await connect(new MemoryProtocolServer({ dropPrivate: 'threads' }));
+		const secret = await threads.createRoom({ title: 'Secret', private: true }).promise;
+		await waitFor(() => Boolean(room(threads, secret.room_id)));
+		expect(room(threads, secret.room_id)?.private).toBe(true);
+		const thread = await threads.createRoom({ parentRoomId: secret.room_id, title: 'Leaky' }).promise;
+		await waitFor(() => Boolean(room(threads, thread.room_id)));
+		expect(room(threads, thread.room_id)?.private).toBeFalsy();
+
+		const rooms = await connect(new MemoryProtocolServer({ dropPrivate: 'rooms' }));
+		const open = await rooms.createRoom({ title: 'Secret', private: true }).promise;
+		await waitFor(() => Boolean(room(rooms, open.room_id)));
+		expect(room(rooms, open.room_id)?.private).toBeFalsy();
+	});
+
+	it('seeds long names with four roles, and posts as someone else, live', async () => {
+		const server = new MemoryProtocolServer({ seed: 'rich', capabilities: ['status'] });
+		const client = await connect(server);
+		expect(client.snapshot().server?.capabilities).toContain('status');
+		expect(client.snapshot().users.wilhelmina.roles).toHaveLength(4);
+		expect(timelineMessages(room(client, 'general')!).some((message) => message.from.user_id === 'bartholomew' && message.reply_to?.message_id === '1710000000001')).toBe(true);
+
+		const id = server.post('general', 'ada', 'Live from Ada');
+		await waitFor(() => Boolean(client.message(id)));
+		expect(client.message(id)).toMatchObject({ from: { user_id: 'ada' }, body: { text: 'Live from Ada' } });
+	});
+
+	it('leaves the demo as it is without knobs', async () => {
+		const client = await connect(new MemoryProtocolServer());
+		expect(client.snapshot().server?.capabilities).not.toContain('status');
+		expect(client.snapshot().users.wilhelmina).toBeUndefined();
+		expect(timelineMessages(room(client, 'general')!)).toHaveLength(10);
+	});
+});
