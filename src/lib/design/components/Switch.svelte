@@ -1,9 +1,7 @@
 <script lang="ts">
-	import type { HTMLButtonAttributes } from 'svelte/elements';
-	import { chain } from './util';
+	import type { ClassValue } from 'svelte/elements';
 
-	/** Extra attributes go on the switch's button; an `onclick` runs before its own toggle (`preventDefault()` skips that). */
-	interface Props extends Omit<HTMLButtonAttributes, 'onchange'> {
+	interface Props {
 		checked: boolean;
 		/** What it turns on, for screen readers: the visible title beside it. */
 		label: string;
@@ -13,13 +11,14 @@
 		describedby?: string;
 		/** Called with the value asked for; the owner decides whether `checked` follows. */
 		onchange: (checked: boolean) => void;
+		/** Classes for the switch's button, added to its own. */
+		class?: ClassValue;
 	}
-	let { checked, label, locked = false, describedby, onchange, class: className, onclick, ...rest }: Props = $props();
+	let { checked, label, locked = false, describedby, onchange, class: className }: Props = $props();
 
 	function toggle(): void {
 		if (!locked) onchange(!checked);
 	}
 </script>
 
-<!-- Its role and state are the switch's own: they follow the extra attributes. -->
-<button type="button" aria-label={label} aria-describedby={describedby} {...rest} class={['ap-switch', className]} role="switch" aria-checked={checked} aria-disabled={locked || undefined} onclick={chain(toggle, onclick)}><span></span></button>
+<button type="button" aria-label={label} aria-describedby={describedby} class={['ap-switch', className]} role="switch" aria-checked={checked} aria-disabled={locked || undefined} onclick={toggle}><span></span></button>

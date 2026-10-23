@@ -1,12 +1,8 @@
 <script lang="ts">
-	import type { HTMLInputAttributes } from 'svelte/elements';
-	import { chain } from './util';
+	import type { ClassValue } from 'svelte/elements';
 
-	/**
-	 * A label, the field and its hint, with no root of their own: extra attributes go on the field (the input). Its
-	 * `onfocus`, `oninput` and `onkeydown` run before its own (`preventDefault()` skips that).
-	 */
-	interface Props extends HTMLInputAttributes {
+	/** A label, the field and its hint, with no root of their own. */
+	interface Props {
 		id: string;
 		label: string;
 		/** Under the field: what the font applies to. */
@@ -25,9 +21,11 @@
 		font?: string;
 		/** Load installed fonts (or Try again): from the tap, so the browser sees the user asked. */
 		onloadfonts: () => void;
+		/** Classes for the field (the input), added to its own. */
+		class?: ClassValue;
 	}
 
-	let { id, label, hint, placeholder, value = $bindable(), fonts, fontState, font, onloadfonts, class: className, onfocus, oninput, onkeydown, ...rest }: Props = $props();
+	let { id, label, hint, placeholder, value = $bindable(), fonts, fontState, font, onloadfonts, class: className }: Props = $props();
 	let open = $state(false);
 	let activeIndex = $state(-1);
 	let input = $state<HTMLInputElement | undefined>();
@@ -78,11 +76,9 @@
 <!-- A font family field: type a name, or pick from the installed fonts it suggests as you type. -->
 <label class="ap-font-label" for={id}>{label}</label>
 <div class="ap-font-combobox" bind:this={container} onfocusout={focusout}>
-	<!-- The combobox wiring is the field's own: it follows the extra attributes. -->
 	<input
 		maxlength="64"
 		autocomplete="off"
-		{...rest}
 		{id}
 		class={['ap-field', className]}
 		bind:this={input}
@@ -95,9 +91,9 @@
 		aria-controls={open ? `${id}-options` : undefined}
 		aria-activedescendant={open && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
 		aria-describedby="{id}-hint"
-		onfocus={chain(focus, onfocus)}
-		oninput={chain(() => (activeIndex = -1), oninput)}
-		onkeydown={chain(keydown, onkeydown)}
+		onfocus={focus}
+		oninput={() => (activeIndex = -1)}
+		onkeydown={keydown}
 	/>
 	{#if open}
 		<div class="ap-font-options" id="{id}-options" role={fontState === 'ready' && matches.length > 0 ? 'listbox' : 'status'} aria-label={`${label} suggestions`} aria-live={fontState === 'ready' && matches.length > 0 ? undefined : 'polite'}>

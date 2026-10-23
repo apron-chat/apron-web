@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import Button from './Button.svelte';
 	import TypingDots from './TypingDots.svelte';
 
@@ -11,8 +11,14 @@
 		['register', 'Create account', 'I’m new here']
 	] as const;
 
-	/** The sign-in card, a form: its submit is the caller's `onsubmit`. Extra attributes go on the form. */
-	interface Props extends HTMLAttributes<HTMLFormElement> {
+	/** The sign-in card, a form: its submit is the caller's `onsubmit`. */
+	interface Props {
+		/** The form's submit: connect, or sign in with the scheme shown. */
+		onsubmit?: (event: SubmitEvent) => void;
+		/** Names the form (its `aria-label`), such as "Sign in". */
+		label?: string;
+		/** Where the sign-in stands, as `data-phase` on the form, for tests and styles to read. */
+		phase?: string;
 		/** Shown at the top of the card, such as a ConnectHeader (the title, the welcome and the Server field). */
 		header?: Snippet;
 		/** The sign-in schemes to offer (§3.1 `auth`, then the rest of `signup`), in order; an unknown one shows by its name. */
@@ -61,15 +67,17 @@
 		passkeyChoiceTestid?: string;
 		/** `data-testid` on the link to the external sign-in page. */
 		pageLinkTestid?: string;
+		/** Classes for the form, added to its own. */
+		class?: ClassValue;
 	}
 	let {
 		header, schemes, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
 		askName = true, sent, onrestart, hint, hintStatus = false, error, busy = false, submit, secondary,
-		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, pageLinkTestid, class: className, ...rest
+		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, pageLinkTestid, onsubmit, label, phase, class: className
 	}: Props = $props();
 </script>
 
-<form {...rest} class={['ap-connect-card', className]}>
+<form aria-label={label} data-phase={phase} class={['ap-connect-card', className]} {onsubmit}>
 	{@render header?.()}
 	<div class="ap-fieldlabel">Sign in with
 		<div class="ap-seg" role="radiogroup" aria-label="Sign in with">

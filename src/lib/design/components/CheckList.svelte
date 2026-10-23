@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { HTMLFieldsetAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 
 	/** One option of a CheckList: its value, a title, and optionally a line saying what it does (without one, the row is a single line). */
 	interface CheckOption {
@@ -12,8 +12,7 @@
 		note?: string;
 	}
 
-	/** Extra attributes go on the fieldset. */
-	interface Props extends Omit<HTMLFieldsetAttributes, 'onchange'> {
+	interface Props {
 		/** Names the group (its legend). */
 		label: string;
 		options: CheckOption[];
@@ -23,8 +22,10 @@
 		min?: number;
 		/** Called with the new checked values, in the options' order. */
 		onchange?: (value: string[]) => void;
+		/** Classes for the fieldset, added to its own. */
+		class?: ClassValue;
 	}
-	let { label, options, value = $bindable([]), min = 0, onchange, class: className, ...rest }: Props = $props();
+	let { label, options, value = $bindable([]), min = 0, onchange, class: className }: Props = $props();
 	const uid = $props.id();
 
 	function toggle(option: string, checked: boolean): void {
@@ -34,7 +35,7 @@
 	}
 </script>
 
-<fieldset {...rest} class={['ap-checklist', className]}>
+<fieldset class={['ap-checklist', className]}>
 	<legend class="ap-checklist-legend">{label}</legend>
 	{#each options as option (option.value)}
 		{@const checked = value.includes(option.value)}

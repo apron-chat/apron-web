@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import type { ConnectionState } from './types';
 
 	type Tone = 'ok' | 'warn' | 'danger';
@@ -14,8 +14,7 @@
 		error: ['danger', 'Something went wrong']
 	};
 
-	/** Other attributes (`data-*`, `class`, …) go on the banner. */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		/** The connection's state: the dot's tone and, without `children`, the words. Leave out for any other status, with `tone` and `children`. */
 		state?: ConnectionState;
 		children?: Snippet;
@@ -30,13 +29,15 @@
 		live?: boolean;
 		/** A `data-testid` for the words. */
 		textTestid?: string;
+		/** Classes for the banner, added to its own. */
+		class?: ClassValue;
 	}
-	let { state, children, retryIn, action, tone: toneProp, role = 'status', live, textTestid, class: className, ...rest }: Props = $props();
+	let { state, children, retryIn, action, tone: toneProp, role = 'status', live, textTestid, class: className }: Props = $props();
 	const s = $derived(state ? (STATUS[state] ?? STATUS.connecting) : undefined);
 	const tone = $derived(toneProp ?? s?.[0] ?? 'none');
 </script>
 
-<div {role} {...rest} class={['ap-status', action && 'ap-status-action', className]}>
+<div {role} class={['ap-status', action && 'ap-status-action', className]}>
 	<span class={['ap-status-dot', tone !== 'none' && `ap-status-${tone}`]} aria-hidden="true"></span>
 	<span class="ap-status-text" data-testid={textTestid} aria-live={live ? 'polite' : undefined}>{#if children}{@render children()}{:else}{s?.[1]}{/if}{#if retryIn != null}<span class="ap-status-retry">{` · Retrying in ${retryIn}s`}</span>{/if}</span>
 	{@render action?.()}

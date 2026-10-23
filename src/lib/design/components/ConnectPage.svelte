@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import { initials } from './util';
 
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		/** The card: a SignInForm, with a ConnectHeader as its `header`. */
 		children?: Snippet;
 		/** Backends signed in to before, offered under the card. */
@@ -13,12 +13,14 @@
 		busy?: boolean;
 		/** Fills the viewport, as the app's whole page. */
 		page?: boolean;
+		/** Classes for the page, added to its own. */
+		class?: ClassValue;
 	}
-	let { children, recent, onpickrecent, busy = false, page = false, class: className, ...rest }: Props = $props();
+	let { children, recent, onpickrecent, busy = false, page = false, class: className }: Props = $props();
 </script>
 
 <!-- The connect screen's page: the card centered, and the recent backends under it. ConnectScreen is one, run by its props. -->
-<div {...rest} class={['ap-connect', page && 'ap-connect-page', className]}>
+<div class={['ap-connect', page && 'ap-connect-page', className]}>
 	{@render children?.()}
 	{#if recent && recent.length > 0}
 		<div class="ap-connect-recent" role="group" aria-label="Recent backends">

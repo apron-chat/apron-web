@@ -75,11 +75,9 @@ describe('Dialog', () => {
 		expect(state.onclose).toHaveBeenCalledOnce();
 	});
 
-	it('runs the caller’s cancel and click first, which can keep it open with preventDefault()', () => {
-		const { dialog, state } = render({ backdropCloses: true, oncancel: (event: Event) => event.preventDefault(), onclick: (event: MouseEvent) => event.preventDefault() });
-		expect(escape(dialog)).toBe(false);
-		press(dialog);
-		expect([dialog.open, state.open]).toEqual([true, true]);
+	it('takes a class beside its own and its size', () => {
+		const { dialog } = render({ size: 'md', class: 'mine' });
+		expect([...dialog.classList]).toEqual(['ap-dialog', 'ap-dialog-md', 'mine']);
 	});
 
 	it('makes its body a form when it handles a submit', () => {

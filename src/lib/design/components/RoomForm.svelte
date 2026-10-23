@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { HTMLDialogAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import Button from './Button.svelte';
 	import Dialog from './Dialog.svelte';
 
-	/** Extra attributes go on its Dialog's `<dialog>`. */
-	interface Props extends Omit<HTMLDialogAttributes, 'onsubmit' | 'onclose' | 'title'> {
+	interface Props {
 		/** Shown as a centered modal while true; bindable, and set false however it closes. */
 		open?: boolean;
 		/** A room (title and description), or a thread (title and summary): a room with a `parent_room_id` (§3.4). */
@@ -36,8 +35,10 @@
 		onsubmit?: () => void;
 		/** It closed, whichever way: Cancel, Escape, the close button. */
 		onclose?: () => void;
+		/** Classes for its Dialog's `<dialog>`, added to its own. */
+		class?: ClassValue;
 	}
-	let { open = $bindable(false), kind = 'thread', mode = 'edit', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), summary = $bindable(''), status = 'idle', error, disabled = false, onsubmit, onclose, ...rest }: Props = $props();
+	let { open = $bindable(false), kind = 'thread', mode = 'edit', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), summary = $bindable(''), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
 	const uid = $props.id();
 	const saving = $derived(status === 'saving');
 	const creating = $derived(mode === 'create');
@@ -65,7 +66,7 @@
 </script>
 
 <!-- Escape, the close button and Cancel do nothing while it saves. -->
-<Dialog {...rest} bind:open size="md" title={heading} {subtitle} locked={saving} {onclose}
+<Dialog class={className} bind:open size="md" title={heading} {subtitle} locked={saving} {onclose}
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled) onsubmit?.(); }}>
 	<label class="ap-fieldlabel" for="{uid}-name">Title
 		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"

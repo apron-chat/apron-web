@@ -3,10 +3,18 @@ import { flushSync, tick, type Component } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AttachmentTile from './AttachmentTile.svelte';
 import Composer from './Composer.svelte';
+import Attachments from './Attachments.svelte';
 import ConnectHeader from './ConnectHeader.svelte';
+import EmbedStream from './EmbedStream.svelte';
+import EmojiPopover from './EmojiPopover.svelte';
+import FloatingDay from './FloatingDay.svelte';
 import JumpBar from './JumpBar.svelte';
 import MemberList from './MemberList.svelte';
+import MentionPicker from './MentionPicker.svelte';
 import MenuButton from './MenuButton.svelte';
+import MessageEditor from './MessageEditor.svelte';
+import Nudge from './Nudge.svelte';
+import Popover from './Popover.svelte';
 import ProfileCard from './ProfileCard.svelte';
 import ProfileEditor from './ProfileEditor.svelte';
 import ReactionBar from './ReactionBar.svelte';
@@ -18,9 +26,12 @@ import SettingRow from './SettingRow.svelte';
 import SidebarSection from './SidebarSection.svelte';
 import SignInForm from './SignInForm.svelte';
 import StatusBanner from './StatusBanner.svelte';
+import SystemLine from './SystemLine.svelte';
 import ThreadItem from './ThreadItem.svelte';
 import ThreadList from './ThreadList.svelte';
 import ThreadMarker from './ThreadMarker.svelte';
+import TimelineDivider from './TimelineDivider.svelte';
+import UnreadCount from './UnreadCount.svelte';
 import * as dom from '$lib/test/dom';
 import { byLabel, byText } from '$lib/test/queries';
 
@@ -90,22 +101,24 @@ const rows: Row[] = [
 	}],
 	['ThreadMarker', ThreadMarker, {
 		thread: 't1', name: 'Deploy', unread: 2, lastReply: '9h', lastReplyAt: Date.UTC(2026, 8, 14, 9, 30), summary: 'Lock held', latest: { sender: 'Ada', text: 'done' },
-		unreadTestid: 'unread', lastReplyTestid: 'last-reply', summaryTestid: 'summary', latestTestid: 'latest'
+		unreadTestid: 'unread', lastReplyTestid: 'last-reply', summaryTestid: 'summary', latestTestid: 'latest', testid: 'card'
 	}, {
-		unread: () => labelled('2 unread replies'), 'last-reply': () => byText('9h'), summary: () => around('Lock held'), latest: () => around('Ada done')
+		card: () => dom.button(/^Deploy/), unread: () => labelled('2 unread replies'), 'last-reply': () => byText('9h'), summary: () => around('Lock held'), latest: () => around('Ada done')
 	}],
-	['ThreadList', ThreadList, { room: 'General', others: 4, otherRows: dom.html('<div>Offsite</div>'), more: 3, onmore: vi.fn(), othersToggleTestid: 'others', moreTestid: 'more' }, {
-		others: () => dom.button(/Other threads/), more: () => dom.button('3 more…')
+	['ThreadList', ThreadList, { room: 'General', others: 4, otherRows: dom.html('<div>Offsite</div>'), more: 3, onmore: vi.fn(), othersToggleTestid: 'others', moreTestid: 'more', testid: 'list' }, {
+		list: () => dom.byRole('group', 'Threads in General'), others: () => dom.button(/Other threads/), more: () => dom.button('3 more…')
 	}],
-	['SelectionBar', SelectionBar, { count: 2, onnewthread: vi.fn(), newThreadTestid: 'new-thread' }, { 'new-thread': () => dom.button('New thread') }],
+	['SelectionBar', SelectionBar, { count: 2, onnewthread: vi.fn(), newThreadTestid: 'new-thread', testid: 'bar' }, {
+		bar: () => dom.byRole('toolbar', 'Selected messages'), 'new-thread': () => dom.button('New thread')
+	}],
 	['ReactionBar', ReactionBar, { reactions: [{ emoji: '👍', count: 2, mine: true }, { emoji: '🎉', count: 1 }], ontoggle: vi.fn(), chipTestid: 'chip' }, {
 		chip: () => [dom.button('👍 2, including yours. Remove yours'), dom.button('🎉 1. Add yours')]
 	}],
-	['ReactorsPopover', ReactorsPopover, { emoji: '👍', reactors: [{ user_id: 'ada' }, { user_id: 'bo' }], rowTestid: 'reactor' }, {
-		reactor: () => [...dom.byRole('dialog', '2 reactions with 👍').querySelectorAll('li')]
+	['ReactorsPopover', ReactorsPopover, { emoji: '👍', reactors: [{ user_id: 'ada' }, { user_id: 'bo' }], rowTestid: 'reactor', testid: 'reactors' }, {
+		reactors: () => dom.byRole('dialog', '2 reactions with 👍'), reactor: () => [...dom.byRole('dialog', '2 reactions with 👍').querySelectorAll('li')]
 	}],
-	['ProfileCard', ProfileCard, { userId: 'ada', status: 'dnd', roles: ['admin'], statusTestid: 'status', rolesTestid: 'roles' }, {
-		status: () => byText('Do not disturb'), roles: () => around('admin')
+	['ProfileCard', ProfileCard, { userId: 'ada', status: 'dnd', roles: ['admin'], statusTestid: 'status', rolesTestid: 'roles', testid: 'card' }, {
+		card: () => dom.byRole('dialog', 'Profile of ada'), status: () => byText('Do not disturb'), roles: () => around('admin')
 	}],
 	['ProfileEditor', ProfileEditor, {
 		userId: 'ada', name: 'Ada', avatar: 'data:image/png;base64,iVBORw0KGgo=', canUpload: true, onavatarfile: vi.fn(), onremoveavatar: vi.fn(), dialog: false,
@@ -134,11 +147,23 @@ const rows: Row[] = [
 	['StatusBanner', StatusBanner, { state: 'offline', textTestid: 'text' }, { text: () => byText('Offline') }],
 	['JumpBar', JumpBar, { count: 3, onjump: vi.fn(), buttonTestid: 'jump' }, { jump: () => dom.button('3 new messages, jump to latest') }],
 	['AttachmentTile, renamable', AttachmentTile, { name: 'a.png', onrename: vi.fn(), labelTestid: 'label' }, { label: () => dom.button('Rename a.png') }],
-	['AttachmentTile', AttachmentTile, { name: 'a.png', labelTestid: 'label' }, { label: () => around('a.png') }]
+	['AttachmentTile', AttachmentTile, { name: 'a.png', labelTestid: 'label' }, { label: () => around('a.png') }],
+	// A root's own test id, where the app gives one.
+	['Popover', Popover, { label: 'Hello', children: dom.html('<p>Hello</p>'), testid: 'pop' }, { pop: () => dom.byRole('dialog', 'Hello') }],
+	['EmojiPopover', EmojiPopover, { testid: 'picker' }, { picker: () => dom.byRole('dialog', 'Emoji picker') }],
+	['EmbedStream', EmbedStream, { kind: 'stream', text: 'ok', testid: 'stream' }, { stream: () => document.querySelector('.ap-embed-stream')! }],
+	['SystemLine', SystemLine, { text: 'Ada joined', testid: 'line' }, { line: () => around('Ada joined') }],
+	['TimelineDivider', TimelineDivider, { kind: 'new', testid: 'divider' }, { divider: () => dom.byRole('separator', 'New') }],
+	['FloatingDay', FloatingDay, { label: 'Today', testid: 'day' }, { day: () => around('Today') }],
+	['UnreadCount', UnreadCount, { unread: 2, mentions: 0, testid: 'count' }, { count: () => labelled('2 unread messages') }],
+	['Attachments', Attachments, { files: [{ name: 'a.png' }], testid: 'files' }, { files: () => labelled('Files to send') }],
+	['MentionPicker', MentionPicker, { people: [{ user_id: 'ada' }], testid: 'picker' }, { picker: () => dom.byRole('listbox', 'Mention someone') }],
+	['MessageEditor', MessageEditor, { value: 'hi', testid: 'editor' }, { editor: () => byLabel('Edit message').parentElement! }],
+	['Nudge', Nudge, { title: 'Get notified?', testid: 'nudge' }, { nudge: () => dom.byRole('dialog', 'Get notified?') }]
 ];
 
-describe('named test-id props', () => {
-	it('put each id on the part it names, and nowhere else, in every component that takes them', async () => {
+describe('test-id props', () => {
+	it('put each id on the part it names (`testid` on the root), and nowhere else, in every component that takes them', async () => {
 		for (const [name, component, props, parts, act] of rows) {
 			dom.render(component, props);
 			await act?.();
@@ -148,6 +173,6 @@ describe('named test-id props', () => {
 			dom.unmount();
 			document.body.innerHTML = '';
 		}
-		// It renders 22 components in turn: give a loaded machine room past the 5 s default.
+		// It renders 35 rows in turn: give a loaded machine room past the 5 s default.
 	}, 30_000);
 });

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import ConnectHeader from './ConnectHeader.svelte';
 	import ConnectPage from './ConnectPage.svelte';
 	import SignInForm from './SignInForm.svelte';
@@ -14,9 +14,9 @@
 
 	/**
 	 * A whole connect screen run by its props: a ConnectPage holding a SignInForm, with a ConnectHeader at its top.
-	 * A client with its own sign-in flow renders those three itself. Extra attributes go on the page.
+	 * A client with its own sign-in flow renders those three itself.
 	 */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		status?: 'idle' | 'connecting' | 'authing';
 		/** `bind:url`, `bind:name`, `bind:scheme`, `bind:token` */
 		url?: string;
@@ -57,11 +57,13 @@
 		onpickrecent?: (r: { url: string; label?: string }) => void;
 		/** Fills the viewport, as the app's whole page. */
 		page?: boolean;
+		/** Classes for the page, added to its own. */
+		class?: ClassValue;
 	}
 	let {
 		status = 'idle', url = $bindable(''), name = $bindable(''), schemes = ['guest', 'token', 'webauthn'], scheme = $bindable(), token = $bindable(''),
 		welcome, email = $bindable(''), code = $bindable(''), codeSent = false, onrestart, onconnect, passkey = {}, passkeyMode = $bindable('login'), onpasskey, notice, error, oncancel,
-		busy: waiting, recent, onpickrecent, page = false, ...rest
+		busy: waiting, recent, onpickrecent, page = false, class: className
 	}: Props = $props();
 	const busy = $derived(waiting ?? (status === 'connecting' || status === 'authing'));
 	const current = $derived(scheme || schemes[0]);
@@ -84,7 +86,7 @@
 	}
 </script>
 
-<ConnectPage {...rest} {recent} {onpickrecent} {busy} {page}>
+<ConnectPage class={className} {recent} {onpickrecent} {busy} {page}>
 	<SignInForm
 		{schemes} scheme={current} onscheme={(k) => (scheme = k)} passkeyChoice={current === 'webauthn' && signIn && signUp} {passkeyMode} onpasskeymode={(k) => (passkeyMode = k)}
 		bind:token bind:email bind:code bind:name {askName} sent={codeSent && current === 'email' ? { scheme: 'email', email } : undefined} {onrestart}
