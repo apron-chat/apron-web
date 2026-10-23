@@ -38,6 +38,19 @@ describe('credential JSON', () => {
 		expect(credentialSource(json)).toEqual({ source: 'toJSON' });
 	});
 
+	it('fills in the extension results an extension’s toJSON leaves out', () => {
+		for (const clientExtensionResults of [undefined, null]) {
+			const json = {
+				id: 'AQI', rawId: 'AQI', type: 'public-key',
+				response: { clientDataJSON: 'Aw', authenticatorData: 'BAU', signature: 'Bg', userHandle: 'Bw' },
+				...(clientExtensionResults === undefined ? {} : { clientExtensionResults })
+			};
+			const sent = credentialJSON(proxiedAssertion(() => json));
+			expect(sent).toEqual({ ...json, clientExtensionResults: { credProps: { rk: true } } });
+			expect(credentialSource(sent)).toEqual({ source: 'toJSON', note: 'toJSON gave no clientExtensionResults; the credential\'s own are sent' });
+		}
+	});
+
 	it('sends the credential’s own fields where an extension’s toJSON encodes them otherwise', () => {
 		// Padded, plain base64 for the signature, and another credential's client data.
 		const json = {
