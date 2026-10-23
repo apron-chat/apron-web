@@ -148,5 +148,6 @@ describe('named test-id props', () => {
 			dom.unmount();
 			document.body.innerHTML = '';
 		}
-	});
+		// It renders 22 components in turn: give a loaded machine room past the 5 s default.
+	}, 30_000);
 });
