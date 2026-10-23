@@ -22,11 +22,12 @@ describe('EmbedUpload', () => {
 		expect(document.querySelector('.ap-embed-progress')).toBeNull();
 	});
 
-	it('puts the link attributes on the picture, and a plain click views it', () => {
+	it('puts what a viewer shows on the picture\'s link, and a plain click views it', () => {
 		const onview = vi.fn();
-		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.png', title: 'a.png', og: { image: { url: PIXEL } }, onview, link: { 'data-viewer-src': PIXEL } });
+		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.png', title: 'a.png', og: { image: { url: PIXEL } }, onview, viewer: { src: PIXEL, title: 'a.png', detail: 'Ada · 4:00 PM', width: 960, height: 600 } });
 		const link = document.querySelector<HTMLAnchorElement>('a.ap-embed-imagelink')!;
-		expect([link.dataset.viewerSrc, link.title, link.getAttribute('aria-haspopup')]).toEqual([PIXEL, 'View a.png', 'dialog']);
+		expect([link.dataset.viewerSrc, link.dataset.viewerTitle, link.dataset.viewerDetail, link.dataset.viewerWidth, link.dataset.viewerHeight, link.hasAttribute('data-viewer-alt')]).toEqual([PIXEL, 'a.png', 'Ada · 4:00 PM', '960', '600', false]);
+		expect([link.title, link.getAttribute('aria-haspopup')]).toEqual(['View a.png', 'dialog']);
 		const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
 		link.dispatchEvent(click);
 		expect(click.defaultPrevented).toBe(true);
@@ -35,13 +36,14 @@ describe('EmbedUpload', () => {
 });
 
 describe('EmbedFrame', () => {
-	it('keeps its own sandbox, referrer policy and permissions over any the caller passes', () => {
-		render(EmbedFrame, { kind: 'iframe', url: 'https://view.example/live', live: true, sandbox: 'allow-scripts allow-same-origin allow-top-navigation', referrerpolicy: 'unsafe-url', allow: 'camera; microphone', class: 'mine' } as never);
+	it('is sandboxed with scripts only, no referrer and no permissions, and takes a class and test id', () => {
+		render(EmbedFrame, { kind: 'iframe', url: 'https://view.example/live', live: true, class: 'mine', testid: 'frame' });
 		const frame = document.querySelector('iframe')!;
 		expect(frame.getAttribute('sandbox')).toBe('allow-scripts');
 		expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer');
 		expect(frame.getAttribute('allow')).toBe('');
 		expect(frame.classList.contains('mine')).toBe(true);
+		expect(frame.dataset.testid).toBe('frame');
 	});
 
 	it('is a fallback card without a usable address', () => {

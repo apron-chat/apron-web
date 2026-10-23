@@ -1,6 +1,6 @@
 <script lang="ts">
 	/* Renders one entry of body.embeds by picking the renderer for its kind (§4.8). An unknown kind is never an error.
-	   Other attributes (`data-testid`, `class`, …) go on the renderer's root. */
+	   Its `class` and `testid` go on the renderer's root. */
 	import EmbedCard from './EmbedCard.svelte';
 	import EmbedFallback from './EmbedFallback.svelte';
 	import EmbedFrame from './EmbedFrame.svelte';
@@ -10,11 +10,15 @@
 	import type { EmbedComponentProps } from './types';
 
 	let props: EmbedComponentProps = $props();
+	const Renderer = $derived(
+		props.kind === 'upload' ? EmbedUpload
+		: props.kind === 'stream' ? EmbedStream
+		: props.kind === 'iframe' ? EmbedFrame
+		: props.kind === 'html' ? EmbedHtml
+		: props.og ? EmbedCard
+		: EmbedFallback
+	);
 </script>
 
-{#if props.kind === 'upload'}<EmbedUpload {...props} />
-{:else if props.kind === 'stream'}<EmbedStream {...props} />
-{:else if props.kind === 'iframe'}<EmbedFrame {...props} />
-{:else if props.kind === 'html'}<EmbedHtml {...props} />
-{:else if props.og}<EmbedCard {...props} />
-{:else}<EmbedFallback {...props} />{/if}
+<!-- spread: a dispatcher; every renderer takes the same props, the embed's fields, so it hands them all on -->
+<Renderer {...props} />

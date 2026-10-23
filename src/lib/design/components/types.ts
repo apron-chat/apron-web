@@ -1,5 +1,5 @@
 import type { Snippet } from 'svelte';
-import type { HTMLAttributes } from 'svelte/elements';
+import type { ClassValue, HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements';
 import type { Sender } from './util';
 export type { Sender };
 
@@ -30,8 +30,11 @@ export interface EmbedProps {
 	 * to show it full screen in a MediaViewer. Other clicks still open the link in a new tab or window.
 	 */
 	onview?: (event: MouseEvent) => void;
-	/** upload with og.image: more attributes for the link around the picture, such as the `data-*` a viewer pages through. */
-	link?: HTMLAttributes<HTMLAnchorElement>;
+	/**
+	 * upload with og.image: what a MediaViewer shows of the picture, on the link around it as `data-viewer-src`,
+	 * `-title`, `-alt`, `-detail`, `-width` and `-height`, which a viewer reads to page through a timeline's images.
+	 */
+	viewer?: Partial<Omit<MediaItem, 'href'>>;
 	/** stream (§4.8.5): `format` plain | markdown | terminal. Live while `url` is set and not `done`. */
 	format?: string;
 	text?: string;
@@ -51,10 +54,15 @@ export interface EmbedProps {
 	html?: string;
 }
 
-/** Attributes for an Embed component's root (`data-testid`, `class`, …), beside the embed's own fields. */
-export type EmbedAttributes = Omit<HTMLAttributes<HTMLElement>, keyof EmbedProps>;
+/** What an Embed component takes for its root, beside the embed's own fields. */
+export interface EmbedAttributes {
+	/** Classes for its root, added to its own. */
+	class?: ClassValue;
+	/** A `data-testid` for its root. */
+	testid?: string;
+}
 
-/** An Embed component's props: the embed's fields, and attributes for its root. */
+/** An Embed component's props: the embed's fields, and its root's class and test id. */
 export type EmbedComponentProps = EmbedProps & EmbedAttributes;
 
 /** One chip per emoji, aggregated by you from the reaction sets (§4.7). */

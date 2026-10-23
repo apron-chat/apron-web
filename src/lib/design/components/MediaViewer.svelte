@@ -1,10 +1,8 @@
 <script lang="ts">
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 	import type { MediaItem } from './types';
-	import { chain } from './util';
 
-	/** Other attributes (`data-*`, `class`, …) go on its `<dialog>`; handlers of yours for the events it uses run before its own. */
-	interface Props extends Omit<HTMLAttributes<HTMLDialogElement>, 'onclose'> {
+	interface Props {
 		/** Shown full screen while true; bindable, and set false however it closes (Escape, Close, a click beside the image). */
 		open?: boolean;
 		/** The images to page through, such as every image in the open room, oldest first. */
@@ -13,8 +11,10 @@
 		index?: number;
 		/** It closed, whichever way: put focus back on what opened it. */
 		onclose?: () => void;
+		/** Classes for its `<dialog>`, added to its own. */
+		class?: ClassValue;
 	}
-	let { open = $bindable(false), items, index = $bindable(0), onclose, class: className, ...rest }: Props = $props();
+	let { open = $bindable(false), items, index = $bindable(0), onclose, class: className }: Props = $props();
 
 	let dialog = $state<HTMLDialogElement | undefined>();
 	let closeButton = $state<HTMLButtonElement | undefined>();
@@ -58,16 +58,15 @@
 	}
 </script>
 
-<!-- Its title names it, whatever else you give it. -->
+<!-- Its title names it. -->
 <dialog
 	bind:this={dialog}
-	{...rest}
 	class={['ap-viewer', className]}
 	aria-labelledby={`${uid}-title`}
 	onclose={closed}
-	onkeydown={chain(keydown, rest.onkeydown)}
-	onpointerdown={chain((event) => (pressedGround = ground(event.target)), rest.onpointerdown)}
-	onclick={chain(click, rest.onclick)}
+	onkeydown={keydown}
+	onpointerdown={(event) => (pressedGround = ground(event.target))}
+	onclick={click}
 >
 	{#if item}
 		<header class="ap-viewer-bar">

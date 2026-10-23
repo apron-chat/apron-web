@@ -1,12 +1,13 @@
 <script lang="ts">
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 
-	/** "Drop files to attach". Other attributes (`data-testid`, `data-*`) go on the zone, the caller's winning and its class added. */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
-		// No props of its own.
+	/** "Drop files to attach". */
+	interface Props {
+		/** Classes for the zone, added to its own. */
+		class?: ClassValue;
 	}
-	let { class: className, ...rest }: Props = $props();
+	let { class: className }: Props = $props();
 </script>
 
 <!-- Over the pane it's placed in (position: relative) while files are dragged onto it; drag events pass through to the pane. -->
-<div aria-hidden="true" {...rest} class={['ap-dropzone', className]}><span>Drop files to attach</span></div>
+<div aria-hidden="true" class={['ap-dropzone', className]}><span>Drop files to attach</span></div>

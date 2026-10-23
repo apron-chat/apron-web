@@ -21,4 +21,4 @@
 	let summary = $derived(membershipSummary(joined.map(label), left.map(label)));
 </script>
 
-<SystemLine quiet text={summary.text} timestamp={idMillis(logId)} data-timeline-item="" data-testid="membership-line" data-log-id={logId} title={summary.title} />
+<SystemLine quiet text={summary.text} timestamp={idMillis(logId)} timelineItem testid="membership-line" {logId} title={summary.title} />

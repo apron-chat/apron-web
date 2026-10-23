@@ -44,7 +44,11 @@ ${names.map((n) => `  ${n}: typeof ${n};\n`).join('')}  /** Mount a component; c
 `);
 const OUT = 'dist-design/project/components';
 mkdirSync(OUT, { recursive: true });
-// The element attribute types the Props extend, from svelte/elements.
-const elements = [...new Set(out.join('\n').match(/\bHTML\w*Attributes\b/g))].sort();
-out[out.indexOf('ELEMENTS')] = `import type { ${elements.join(', ')} } from 'svelte/elements';`;
+// The element types the Props use, from svelte/elements (a class, the attributes of a generic element), and an attachment's.
+const text = out.join('\n');
+const elements = [...new Set(text.match(/\b(HTML\w*Attributes|ClassValue)\b/g))].sort();
+out[out.indexOf('ELEMENTS')] = [
+	`import type { ${elements.join(', ')} } from 'svelte/elements';`,
+	...(/\bAttachment</.test(text) ? ["import type { Attachment } from 'svelte/attachments';"] : [])
+].join('\n');
 writeFileSync(`${OUT}/index.d.ts`, out.join('\n').replaceAll('\n\t\t', '\n  ').replaceAll('\n\t', '\n  '));

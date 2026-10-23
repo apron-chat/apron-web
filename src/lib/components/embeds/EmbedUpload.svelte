@@ -22,15 +22,8 @@
 	/** An image's size as sent, until the server's `og` arrives with the finished upload. */
 	let size = $derived(upload?.width && upload.height ? `${upload.width} × ${upload.height}` : undefined);
 	/** What the viewer reads from the image's link (`mediaItemOf`). */
-	let viewer = $derived({
-		'data-viewer-src': og.image?.url || undefined,
-		'data-viewer-title': title,
-		'data-viewer-alt': og.image?.alt || undefined,
-		'data-viewer-detail': detail,
-		'data-viewer-width': og.image?.width,
-		'data-viewer-height': og.image?.height
-	});
+	let viewer = $derived({ src: og.image?.url || undefined, title, alt: og.image?.alt || undefined, detail, width: og.image?.width, height: og.image?.height });
 </script>
 
 <DesignEmbedUpload kind="upload" {url} title={embed.title} {og} progress={upload?.progress} failed={upload?.failed} detail={url ? undefined : size}
-	link={viewer} onview={(event) => mediaViewer.show(event.currentTarget as HTMLElement)} />
+	{viewer} onview={(event) => mediaViewer.show(event.currentTarget as HTMLElement)} />

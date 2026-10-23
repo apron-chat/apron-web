@@ -1,8 +1,7 @@
 <script lang="ts">
-	import type { HTMLAttributes } from 'svelte/elements';
+	import type { ClassValue } from 'svelte/elements';
 
-	/** Other attributes (`data-*`, `class`, …) go on its outermost element. */
-	interface Props extends HTMLAttributes<HTMLDivElement> {
+	interface Props {
 		/** What is happening, such as "Checking for new messages…" or "Loading messages…". */
 		label: string;
 		/** Placeholder message rows above it, while the timeline has nothing to show yet. */
@@ -12,21 +11,23 @@
 		 * above the composer's row, it floats a small gap above the composer and moves nothing as it comes and goes.
 		 */
 		float?: boolean;
+		/** Classes for its outermost element, added to its own. */
+		class?: ClassValue;
 	}
-	let { label, rows = 0, float = false, class: className, ...rest }: Props = $props();
+	let { label, rows = 0, float = false, class: className }: Props = $props();
 
 	/** Widths that vary like real messages, the same on every render so nothing shimmers into a new shape. */
 	const WIDTHS = [['30%', '78%'], ['22%', '64%'], ['26%', '88%'], ['18%', '52%'], ['28%', '70%'], ['24%', '60%']];
 </script>
 
-{#snippet pill(attributes: HTMLAttributes<HTMLDivElement>)}
+{#snippet pill(pillClass?: ClassValue)}
 	<!-- At the foot of the timeline, where new messages will appear; sticky, so it stays in view while reading back. -->
-	<div role="status" {...attributes} class={['ap-tlstatus', attributes.class]}><span class="ap-tlstatus-pill"><span class="ap-tlstatus-spin" aria-hidden="true"></span>{label}</span></div>
+	<div role="status" class={['ap-tlstatus', pillClass]}><span class="ap-tlstatus-pill"><span class="ap-tlstatus-spin" aria-hidden="true"></span>{label}</span></div>
 {/snippet}
 
 {#if rows > 0}
 	<!-- Nothing shown yet: placeholder rows stand at the bottom, where the newest messages will. -->
-	<div {...rest} class={['ap-tlload', className]}>
+	<div class={['ap-tlload', className]}>
 		<div class="ap-skel-rows" aria-hidden="true">
 			{#each { length: rows } as _, index (index)}
 				{@const [name, text] = WIDTHS[index % WIDTHS.length]}
@@ -36,11 +37,11 @@
 				</div>
 			{/each}
 		</div>
-		{@render pill({})}
+		{@render pill()}
 	</div>
 {:else if float}
 	<!-- Zero-height anchor: the pill floats on it, in the gap above the composer, and takes no space. -->
-	<div role="status" {...rest} class={['ap-tlstatus-float', className]}><span class="ap-tlstatus-pill"><span class="ap-tlstatus-spin" aria-hidden="true"></span>{label}</span></div>
+	<div role="status" class={['ap-tlstatus-float', className]}><span class="ap-tlstatus-pill"><span class="ap-tlstatus-spin" aria-hidden="true"></span>{label}</span></div>
 {:else}
-	{@render pill({ ...rest, class: className })}
+	{@render pill(className)}
 {/if}

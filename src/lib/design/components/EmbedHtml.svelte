@@ -1,9 +1,7 @@
 <script lang="ts">
-	/* html: the markup must ALREADY be sanitized (DOMPurify or equivalent). Other attributes go on its box. */
+	/* html: the markup must ALREADY be sanitized (DOMPurify or equivalent). Its `class` and `testid` go on its box. */
 	import type { EmbedComponentProps } from './types';
-	import { embedAttributes } from './util';
 	let props: EmbedComponentProps = $props();
-	const attributes = $derived(embedAttributes(props));
 </script>
 
-<div {...attributes} class={['ap-embed', 'ap-embed-html', attributes.class]}>{@html props.html || ''}</div>
+<div data-testid={props.testid} class={['ap-embed', 'ap-embed-html', props.class]}>{@html props.html || ''}</div>
