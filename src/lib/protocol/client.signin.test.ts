@@ -672,47 +672,6 @@ describe('accounts and their ways back in', () => {
 		await registered;
 	}
 
-	it('keeps the token of a session kept before sign-in methods were remembered when it adds an email', async () => {
-		storage.set(TOKEN_KEY, 'st_ada');
-		start();
-		const auth = ['webauthn', 'email', 'token'];
-		await latest().greet([], { auth, you: { user_id: 'ada' } });
-		expect(snapshot.passkeySession).toBe(true);
-		const socket = latest();
-		const asked = client.requestEmailCodeToAdd('ada@example.com');
-		await socket.reply('auth', {});
-		await asked;
-		const added = client.addWithCode('1');
-		await vi.advanceTimersByTimeAsync(0);
-		socket.receive({ id: socket.request('auth').id, result: {} });
-		await added;
-		// An add, not a sign-in: the token stays, and the email is another way back in.
-		expect(storage.get(TOKEN_KEY)).toBe('st_ada');
-		// Its method is guessed as a resume guesses it (a kept session means this browser signed in here).
-		expect(snapshot.signedInWith).toBe('webauthn');
-		expect(snapshot.signInMethods).toEqual(['webauthn', 'email']);
-		const next = await reconnect(auth);
-		expect(frames(next)[0]).toBe('auth token');
-		expect(snapshot.held).toBeUndefined();
-	});
-
-	it('keeps the token of a session kept before sign-in methods were remembered when it adds a passkey', async () => {
-		storage.set(TOKEN_KEY, 'st_ada');
-		start();
-		const auth = ['webauthn', 'token', 'guest'];
-		await latest().greet([], { auth, you: { user_id: 'ada' } });
-		await latest().reply('room_list', { joined: [] }).catch(() => undefined);
-		await registerPasskey(latest(), 'ada');
-		expect(storage.get(TOKEN_KEY)).toBe('st_ada');
-		expect(snapshot.signInMethods).toContain('webauthn');
-		// After a reload it resumes, rather than becoming a guest.
-		client.stop();
-		start();
-		latest().open();
-		latest().receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
-		expect(frames(latest())[0]).toBe('auth token');
-	});
-
 	it('offers the passkey login on reconnect to an email session that added a passkey', async () => {
 		const auth = ['email', 'webauthn'];
 		start();

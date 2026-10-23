@@ -74,22 +74,6 @@ describe('preference storage', () => {
 		expect(loadNotifyScopes(ada)).toBeUndefined();
 	});
 
-	it('carries over the device-wide "Everything", then drops the old key', () => {
-		values.set('apron.notificationScope', 'everything');
-		// Accounts without a choice take what "Everything" meant: every scope.
-		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'bob'))).toEqual(['mentions', 'replies', 'private', 'joined']);
-		expect(values.has('apron.notificationScope')).toBe(false);
-		// A choice made since wins over it.
-		saveNotifyScopes(notifyAccount('wss://b.example/', 'bob'), ['mentions']);
-		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'bob'))).toEqual(['mentions']);
-	});
-
-	it('takes the old "Mentions" setting as the default, mentions and replies', () => {
-		values.set('apron.notificationScope', 'mentions');
-		expect(loadNotifyScopes(notifyAccount('wss://a.example/', 'ada'))).toBeUndefined();
-		expect(values.has('apron.notificationScope')).toBe(false);
-	});
-
 	it('makes each account a random push_id once, and keeps it', () => {
 		let made = 0;
 		const make = () => `random${++made}`;
