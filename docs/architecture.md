@@ -36,6 +36,21 @@ then `apron.css`, so it needs nothing else), `index.d.ts`
 `tokens.css` is the tokens' source of truth: change a token there, and it
 reaches the design system with the next bundle.
 
+Every design component follows two conventions. Extra attributes go on its
+root element and the caller's win: the component's own attributes come
+before the spread, `class` merges with its own, and an event handler both
+set is chained with `chain()` from `util.ts` (the caller's runs first, and
+its `preventDefault()` skips the component's own); only attributes that
+carry the component's accessibility contract come after the spread, with a
+comment. Test ids follow the same rule: the root takes `data-testid` like
+any attribute, and an inner part something queries gets a named prop
+(`chipTestid`, `sendTestid`), so no design component hard-codes one. Role
+badges beside a name stack when they don't fit (`--ap-role-overflow:
+stack`): after an unneeded handle, the name gives way first, down to
+`--ap-name-min`, then the badges stack behind the last that fits; a handle
+shows only where two people share a name, and gives way last. An untitled
+thread is called "Untitled", its room_id in the tooltip.
+
 The Svelte components under `src/lib/components` are the app's side of the
 design system: each renders a design component and adds the app's state and
 behavior (the client, `directory` lookups, stores, requests), and none has
