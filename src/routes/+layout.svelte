@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { appearanceSettings } from '$lib/ui/appearance.svelte';
+	import { prefetchLazy } from '$lib/ui/lazy.svelte';
 	import '$lib/design/tokens.css';
 	import '$lib/design/apron.css';
 	import '../app.css';
@@ -11,7 +12,11 @@
 
 	let { children } = $props();
 
-	onMount(() => appearanceSettings.load());
+	onMount(() => {
+		appearanceSettings.load();
+		// What the page renders only on demand (dialogs, editors) loads apart from it, in the background once it settles.
+		prefetchLazy();
+	});
 </script>
 
 <svelte:head>

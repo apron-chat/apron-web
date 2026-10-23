@@ -1,0 +1,43 @@
+/**
+ * Code the page renders only on demand (a dialog, an editor), loaded apart from the page's own: `component` is
+ * undefined until `load()` has fetched it, and then stays, so later opens render at once. Each one is also fetched
+ * shortly after the page settles (`prefetchLazy`), so the first open rarely waits on the network, and a tab that was
+ * opened before a deploy already holds it. A failed load is forgotten, so the next `load()` tries again.
+ */
+export class Lazy<T> {
+	component = $state<T>();
+	#loading?: Promise<T>;
+	#load: () => Promise<{ default: T }>;
+
+	constructor(load: () => Promise<{ default: T }>) {
+		this.#load = load;
+		registered.push(this);
+	}
+
+	load(): Promise<T> {
+		this.#loading ??= this.#load().then(
+			(module) => (this.component = module.default),
+			(error) => {
+				this.#loading = undefined;
+				throw error;
+			}
+		);
+		return this.#loading;
+	}
+}
+
+const registered: Lazy<unknown>[] = [];
+let prefetching = false;
+
+/** How long after the page asks to prefetch it waits, so the fetches stay clear of its start. */
+const PREFETCH_AFTER_MS = 2000;
+
+/** Fetches every lazy component in the background once the page is idle; once per page. */
+export function prefetchLazy(): void {
+	if (prefetching || typeof window === 'undefined') return;
+	prefetching = true;
+	const idle = (run: () => void) => (typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback(run, { timeout: 5000 }) : setTimeout(run, 0));
+	setTimeout(() => idle(() => {
+		for (const lazy of registered) lazy.load().catch(() => undefined);
+	}), PREFETCH_AFTER_MS);
+}

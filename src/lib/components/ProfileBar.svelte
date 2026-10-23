@@ -1,3 +1,10 @@
+<script module lang="ts">
+	import { Lazy } from '$lib/ui/lazy.svelte';
+
+	/** Preferences' code, which loads apart from the page's. */
+	const preferences = new Lazy(() => import('./PreferencesDialog.svelte'));
+</script>
+
 <script lang="ts">
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
@@ -16,7 +23,6 @@
 	import { ownStatusLabel } from '$lib/ui/user-status';
 	import { signOutThen, type SignOutHandler } from '$lib/ui/sign-in';
 	import Avatar from './Avatar.svelte';
-	import PreferencesDialog from './PreferencesDialog.svelte';
 	import TypingDots from '$lib/design/components/TypingDots.svelte';
 
 	type Status = 'idle' | 'saving' | 'altered' | 'declined';
@@ -169,6 +175,7 @@
 		open = false;
 		preferencesMounted = true;
 		preferencesOpen = true;
+		preferences.load().catch(() => undefined);
 	}
 
 	/** A handle the user typed in the editor, as opposed to the one it opened with. */
@@ -425,7 +432,8 @@
 	{paused}
 	bind:preferencesButton={preferencesTrigger}
 >
-	{#if preferencesMounted}
+	{#if preferencesMounted && preferences.component}
+		{@const PreferencesDialog = preferences.component}
 		<PreferencesDialog
 			bind:open={preferencesOpen}
 			{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
