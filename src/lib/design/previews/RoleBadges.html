@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=120 subtitle="Server-assigned roles beside a name" -->
+<!-- @dsCard group="Timeline" height=260 subtitle="Server-assigned roles beside a name; past the room they have, dropped whole, or stacked behind the last that fits" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>RoleBadges</title></head>
@@ -10,6 +10,12 @@
   add(A.RoleBadges, { roles: ['admin'] });
   add(A.RoleBadges, { roles: ['bot'] });
   add(A.RoleBadges, { roles: ['moderator', 'trusted'] });
+  // Too many for the room: dropped (the default, --ap-role-overflow: drop), then stacked.
+  var roles = ['moderator', 'admin', 'bot', 'oncall'];
+  [['drop', 150], ['stack', 150], ['stack', 120], ['stack', 70]].forEach(function (c) {
+    var box = document.createElement('div'); box.style.cssText = 'display: flex; width: ' + c[1] + 'px; outline: 1px dashed var(--line); font-size: 12px; gap: 8px; align-items: center';
+    root.appendChild(box); add(A.RoleBadges, { roles: roles, overflow: c[0] }, box);
+  });
 </script>
 </body>
 </html>

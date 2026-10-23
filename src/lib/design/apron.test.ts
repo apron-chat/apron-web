@@ -36,9 +36,19 @@ describe('apron.css: role badges', () => {
 		expect(row.get('flex-wrap')).toBe('wrap');
 		expect(row.get('overflow')).toBe('hidden');
 		expect(row.get('height')).toBe('var(--ap-role-h)');
-		expect(style('.ap-roles::before').get('width')).toBe('0');
+		// No lead before the first badge unless the row asks for one (a message header's gap after the name).
+		expect(style('.ap-roles::before').get('width')).toBe('var(--ap-role-lead, 0px)');
 		// No row of badges anywhere goes back to one unbroken line, which its edge would slice.
 		for (const rule of rules) if (rule.selectors.some((selector) => /\.ap-roles$/.test(selector))) expect(rule.declarations.get('flex-wrap') ?? 'wrap').toBe('wrap');
+	});
+
+	it('stacked, keep one line, with those behind out of the flow but still in the DOM', () => {
+		expect(style('.ap-roles-stack').get('flex-wrap')).toBe('nowrap');
+		const behind = style('.ap-roles-stack > .ap-role-behind');
+		expect(behind.get('position')).toBe('absolute');
+		expect(behind.get('opacity')).toBe('0');
+		expect(behind.get('display')).toBeUndefined();
+		for (const kind of ['admin', 'bot', 'other']) for (const part of ['fill', 'line']) expect(style('.ap-roles').get(`--ap-role-${kind}-${part}`)).toBeTruthy();
 	});
 
 	it('give way before the name beside them', () => {

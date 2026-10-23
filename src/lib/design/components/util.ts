@@ -24,6 +24,35 @@ export function roomName(title: string | undefined | null, roomId: string | unde
 	return typeof title === 'string' && title.trim() ? title : (roomId ?? '');
 }
 
+/** How far each role stacked behind a badge peeks out past the one in front of it, in px, its 1px edge included (`.ap-role-stacked`). */
+export const ROLE_PEEK = 4;
+/** Stacked roles drawn behind a badge: past this many, the stack shows no deeper. */
+export const ROLE_STACK_MAX = 3;
+
+/** The width the stack behind a badge adds, for `hidden` roles behind it: each layer, the badge's own size, peeks out by ROLE_PEEK. */
+export function rolePeek(hidden: number): number {
+	const layers = Math.min(Math.max(hidden, 0), ROLE_STACK_MAX);
+	return layers * ROLE_PEEK;
+}
+
+/**
+ * How many of a row of role badges show, when they are stacked rather than dropped: as many whole badges as fit, the
+ * last of them carrying the rest as a stack behind it (`rolePeek`). Where not even the first whole badge and its stack
+ * fit, the first narrows to `room` (ellipsized), but never under `min`; below that none show. `widths` are the badges'
+ * own widths in order, `gap` the space between them, `available` the row's.
+ */
+export function fitRoles(widths: number[], available: number, gap: number, min: number): { shown: number; room?: number } {
+	const n = widths.length;
+	if (!n) return { shown: 0 };
+	let used = 0;
+	const ends: number[] = [];
+	for (const w of widths) ends.push((used += (ends.length ? gap : 0) + w));
+	if (ends[n - 1] <= available) return { shown: n };
+	for (let k = n - 1; k >= 1; k--) if (ends[k - 1] + rolePeek(n - k) <= available) return { shown: k };
+	const room = Math.floor(available - rolePeek(n - 1));
+	return room >= min ? { shown: 1, room } : { shown: 0 };
+}
+
 export function initials(name: string | undefined): string {
 	const p = String(name || '?').trim().split(/\s+/);
 	return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();

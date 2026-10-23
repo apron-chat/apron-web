@@ -127,7 +127,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-head > * + * { margin-left: var(--space-2); }
 .ap-msg-head > :is(.ap-msg-handle, .ap-roles) { margin-left: 0; }
 .ap-msg-head > .ap-msg-handle::before { content: ''; display: inline-block; width: var(--space-2); }
-.ap-msg-head > .ap-roles::before { width: var(--space-2); }
+.ap-msg-head > .ap-roles { --ap-role-lead: var(--space-2); }
 .ap-msg-sender { font-weight: 600; }
 .ap-msg-handle { font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 400; color: var(--ink-muted); overflow-wrap: anywhere; }
 .ap-msg-head > :is(.ap-msg-sender, .ap-msg-handle) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -145,7 +145,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
  */
 .ap-roles { --ap-role-h: 16px; --ap-role-gap: 4px; --ap-role-min: 4em; display: inline-flex; flex-wrap: wrap; gap: var(--ap-role-gap); align-self: center; min-width: 0; max-width: 100%; height: var(--ap-role-h); overflow: hidden; vertical-align: middle; }
 /* The first item: as tall as a badge, so a row whose only badge dropped still fills the first line and the badge stays out of view. */
-.ap-roles::before { content: ''; width: 0; height: var(--ap-role-h); margin-right: calc(-1 * var(--ap-role-gap)); }
+.ap-roles::before { content: ''; flex: none; width: var(--ap-role-lead, 0px); height: var(--ap-role-h); margin-right: calc(-1 * var(--ap-role-gap)); }
 /* Its width: as written, up to 12em; past the row's width, the row's width (ellipsized); but never under --ap-role-min,
    so a badge with less room than that doesn't fit its row and drops. */
 .ap-role { display: inline-block; flex: none; max-width: min(12em, max(var(--ap-role-min), 100%)); height: var(--ap-role-h); padding: 0 5px; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-caps); line-height: var(--leading-sm); font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
@@ -158,6 +158,24 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-role-admin { border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); }
 .ap-role-bot { border-color: color-mix(in srgb, var(--denim) 55%, transparent); color: var(--denim); }
 .ap-msg-compact .ap-roles { margin-right: var(--space-2); }
+/*
+ * Stacked roles (--ap-role-overflow: stack, or RoleBadges' overflow prop): instead of dropping, the badges that don't fit
+ * sit as layers behind the last one that does, each the badge's own size and a step further out, in its own role's
+ * colors, up to three deep; its title names every role. The row stays one line and keeps every badge in the DOM (the
+ * hidden ones out of the flow and invisible, still read by screen readers). RoleBadges measures the room it has as its
+ * own width plus the free space in the flex rows around it, so a name it shares a row with keeps its priority. The
+ * layers are box-shadows: drawn only outside a badge's border, they never show through its transparent inside, whatever
+ * the ground. Where not even one badge and its stack fit, the first narrows (ellipsized) to --ap-role-min, and below
+ * that none show.
+ */
+.ap-roles { --ap-role-admin-fill: var(--accent-soft); --ap-role-admin-line: color-mix(in srgb, var(--accent) 55%, transparent); --ap-role-bot-fill: var(--denim-soft); --ap-role-bot-line: color-mix(in srgb, var(--denim) 55%, transparent); --ap-role-other-fill: var(--bg-300); --ap-role-other-line: var(--line-strong); }
+.ap-roles-stack { position: relative; flex-wrap: nowrap; }
+.ap-roles-stack > .ap-role { max-width: 12em; }
+/* Out of the flow, so the row is only as wide as what shows and what follows it (the time) stays beside it. */
+.ap-roles-stack > .ap-role-behind { position: absolute; top: 0; left: 0; opacity: 0; pointer-events: none; }
+/* None fit: the row takes no room, lead included, and gives it back to the name. */
+.ap-roles-stack.ap-roles-gone { width: 0; }
+.ap-roles-stack.ap-roles-gone::before { width: 0; }
 .ap-msg-compact .ap-msg-handle { margin-right: var(--space-2); }
 .ap-msg-meta { display: inline-flex; gap: var(--space-2); white-space: nowrap; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-msg-text { overflow-wrap: anywhere; font-family: var(--font-chat); }

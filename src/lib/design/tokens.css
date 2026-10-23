@@ -170,6 +170,9 @@
 	--duration-slide: 240ms;   /* the side panels opening and shutting (the page's SLIDE_MS) */
 	--ease-slide: cubic-bezier(0.2, 0, 0, 1);
 
+	/* Role badges that don't fit beside a name: `drop` them whole, or `stack` them as layers behind the last that fits (RoleBadges). */
+	--ap-role-overflow: drop;
+
 	/* Breakpoints. Media queries can't read custom properties, so these are written out where used
 	   (and in src/lib/ui/breakpoints.ts for scripts); these are the only ones:
 	   560px  (max-width: 560px)  dialogs and the media viewer go edge to edge; Preferences narrows its nav.
