@@ -140,7 +140,7 @@ export interface PopoverPlacement {
 export interface Reactor extends Sender {
 	/** The viewer: "(you)" follows the name. */
 	you?: boolean;
-	/** Show `@user_id` under the name. Defaults to where it differs from the name; `true` shows it even then, such as when two users share the name. */
+	/** Show `@user_id` under the name, where it tells people apart: another user listed or shown has the same name. Off by default. */
 	handle?: boolean;
 }
 

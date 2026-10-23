@@ -93,11 +93,12 @@
 
 	let name = $derived(senderName(event));
 	/**
-	 * Name (@user_id) (§3.3): the handle shows beside a display name that
-	 * differs from it, and always when another user shows under the same name.
+	 * Name (@user_id) (§3.3): the handle shows only where it tells people
+	 * apart, when another user shows under the same name; a handle that merely
+	 * differs from the name adds nothing.
 	 */
 	let handle = $derived(directory.person(event.from)?.user_id ?? event.from.user_id);
-	let showHandle = $derived(Boolean(handle) && (handle !== name || directory.sharesName(event.from)));
+	let showHandle = $derived(Boolean(handle) && directory.sharesName(event.from));
 	/** Who else got a system message (Appendix A.1): everyone on the server, the room, or only you. */
 	let scope = $derived(systemScope(event.from.user_id));
 	let time = $derived(eventTime(event));

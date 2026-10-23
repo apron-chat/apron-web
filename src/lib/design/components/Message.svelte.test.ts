@@ -56,8 +56,14 @@ describe('Message', () => {
 		expect(row.querySelector('.ap-msg-handle')?.textContent).toBe('@ada');
 	});
 
+	it('shows no handle by default, though it differs from the name: only where it tells people apart', () => {
+		expect(render({ sender: { user_id: 'bart', name: 'Bart' }, text: 'hi' }).querySelector('.ap-msg-handle')).toBeNull();
+		unmount(instance!);
+		expect(render({ density: 'compact', sender: { user_id: 'bart', name: 'Bart' }, text: 'hi' }).querySelector('.ap-msg-handle')).toBeNull();
+	});
+
 	it('keeps its header to the name, handle, badges and time in that order, the full name on the name for when it is cut short', () => {
-		const row = render({ sender: { user_id: 'bart', name: 'Bartholomew Maximilian Featherstonehaugh-Cholmondeley', roles: ['admin', 'bot'] } });
+		const row = render({ sender: { user_id: 'bart', name: 'Bartholomew Maximilian Featherstonehaugh-Cholmondeley', roles: ['admin', 'bot'] }, handle: true });
 		const head = row.querySelector('.ap-msg-head')!;
 		expect([...head.children].map((part) => part.className)).toEqual(['ap-msg-sender', 'ap-msg-handle', 'ap-roles', 'ap-msg-meta']);
 		expect(head.querySelector('.ap-msg-sender')?.getAttribute('title')).toBe('Bartholomew Maximilian Featherstonehaugh-Cholmondeley');

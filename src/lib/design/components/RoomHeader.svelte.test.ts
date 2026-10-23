@@ -50,10 +50,14 @@ describe('RoomHeader', () => {
 		expect(document.querySelector('[data-testid="room-actions"], [data-testid="join-room"], .ap-roomhead-members, .ap-roomhead-back')).toBeNull();
 	});
 
-	it('names a blank-titled room and thread by their room_id in the breadcrumb, and isolates who is typing', () => {
+	it('names a blank-titled room by its room_id and calls a blank-titled thread Untitled, its room_id on hover, and isolates who is typing', () => {
 		render({ name: ' ', thread: 't1', threadName: '', onroom: vi.fn() });
 		expect(document.querySelector('.ap-roomhead-crumb')?.textContent).toBe('ops');
-		expect(document.querySelector('h1 bdi')?.textContent).toBe('t1');
+		expect(document.querySelector('h1 bdi')?.textContent).toBe('Untitled');
+		expect(document.querySelector('h1 bdi')?.getAttribute('title')).toBe('t1');
+		unmount(instance!);
+		render({ thread: 't1', threadName: 'Deploy', onroom: vi.fn() });
+		expect(document.querySelector('h1 bdi')?.hasAttribute('title')).toBe(false);
 		unmount(instance!);
 		render({ typing: ['محمد'] });
 		expect(document.querySelector('.ap-roomhead-typing bdi')?.textContent).toBe('محمد');

@@ -72,9 +72,13 @@ describe('RoomItem', () => {
 		expect(onnewthread).toHaveBeenCalledOnce();
 	});
 
-	it('names a thread with a blank title by its room_id, as every place that names one does', () => {
-		expect(render({ nested: true, name: '   ' }).querySelector('.ap-room-name')?.textContent).toBe('deploy');
+	it('calls a thread with a blank title Untitled, its room_id on hover, as every place that names one does; a room keeps its room_id', () => {
+		const thread = render({ nested: true, name: '   ' }).querySelector('.ap-room-name');
+		expect(thread?.textContent).toBe('Untitled');
+		expect(thread?.getAttribute('title')).toBe('deploy');
 		unmount(instance!);
-		expect(render({ name: undefined }).querySelector('.ap-room-name')?.textContent).toBe('deploy');
+		const room = render({ name: undefined }).querySelector('.ap-room-name');
+		expect(room?.textContent).toBe('deploy');
+		expect(room?.hasAttribute('title')).toBe(false);
 	});
 });

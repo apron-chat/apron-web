@@ -171,7 +171,9 @@
 	--ease-slide: cubic-bezier(0.2, 0, 0, 1);
 
 	/* Role badges that don't fit beside a name: `drop` them whole, or `stack` them as layers behind the last that fits (RoleBadges). */
-	--ap-role-overflow: drop;
+	--ap-role-overflow: stack;
+	/* The least a name beside role badges truncates to before they give way (a message's header, member rows). */
+	--ap-name-min: 6em;
 
 	/* Breakpoints. Media queries can't read custom properties, so these are written out where used
 	   (and in src/lib/ui/breakpoints.ts for scripts); these are the only ones:

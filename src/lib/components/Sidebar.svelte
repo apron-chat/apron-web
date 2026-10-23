@@ -115,7 +115,7 @@
 					{@const current = active && !activeThread}
 					<!-- What's new in the room itself (its threads show their own): none while you're reading it. -->
 					<RoomItem
-						room={room.id} name={room.title} private={room.private} active={current}
+						room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={room.private} active={current}
 						unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} countTestid="room-unread" loading={room.recovering}
 						data-room={room.id} onselect={() => onroom(room)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined}
 					/>

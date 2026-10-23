@@ -44,7 +44,8 @@ function sanitize(html: string): string {
  * showing its title. Unknown IDs render as written. System identities (`~`)
  * appear only as senders, never in text.
  */
-export type RoomMentionTarget = { kind: 'room'; id: string; title: string };
+/** `untitled`: a thread without a title, whose `title` is "Untitled"; its chip names its `room_id` on hover. */
+export type RoomMentionTarget = { kind: 'room'; id: string; title: string; untitled?: true };
 /** `shared` marks a user whose display name another known user also shows under, so their ID shows beside it. */
 export type MentionTarget = { kind: 'user'; id: string; name: string; me?: boolean; shared?: boolean } | RoomMentionTarget;
 
@@ -182,7 +183,7 @@ function mentionChip(mention: Mention): string {
 	const label = escapeHtml(mentionLabel(mention));
 	const className = mentionClass(mention);
 	if (target.kind === 'room') {
-		return `<button type="button" class="${className}" data-room-id="${escapeHtml(target.id)}" title="Open ${escapeHtml(target.title)}">${label}</button>`;
+		return `<button type="button" class="${className}" data-room-id="${escapeHtml(target.id)}" title="Open ${escapeHtml(target.title)}${target.untitled ? ` (#${escapeHtml(target.id)})` : ''}">${label}</button>`;
 	}
 	const title = target.name !== target.id ? ` title="@${escapeHtml(target.id)}"` : '';
 	return `<button type="button" class="${className}" data-user-id="${escapeHtml(target.id)}"${title}>${label}</button>`;

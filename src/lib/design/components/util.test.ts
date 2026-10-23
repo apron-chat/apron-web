@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitRoles, rolePeek, roomName } from './util';
+import { cssPx, fitRoles, rolePeek, roomName, roomNameTip, UNTITLED } from './util';
 
 describe('roomName', () => {
 	it('names a room or thread by its title, else its room_id (§3.4)', () => {
@@ -16,6 +16,46 @@ describe('roomName', () => {
 
 	it('keeps a title as written, spaces and all', () => {
 		expect(roomName('  Ops  ', 't1')).toBe('  Ops  ');
+	});
+
+	it('calls a thread without a title Untitled, its room_id for a tooltip; a titled one, or a room, gets none', () => {
+		expect(UNTITLED).toBe('Untitled');
+		for (const title of [undefined, null, '', '  ']) {
+			expect(roomName(title, 't1', { thread: true })).toBe('Untitled');
+			expect(roomNameTip(title, 't1', { thread: true })).toBe('t1');
+			expect(roomNameTip(title, 't1')).toBeUndefined();
+		}
+		expect(roomName('Deploy', 't1', { thread: true })).toBe('Deploy');
+		expect(roomNameTip('Deploy', 't1', { thread: true })).toBeUndefined();
+	});
+});
+
+describe('cssPx', () => {
+	it('reads a plain length, and the math a computed min-width leaves unresolved', () => {
+		expect(cssPx('0px', {})).toBe(0);
+		expect(cssPx('12.5px', {})).toBe(12.5);
+		expect(cssPx('min(96px, 100%)', { percent: 80 })).toBe(80);
+		expect(cssPx('calc(100% - 8px)', { percent: 80 })).toBe(72);
+		expect(cssPx('max(4em, 10px)', { em: 10 })).toBe(40);
+		expect(cssPx('clamp(10px, 50%, 30px)', { percent: 100 })).toBe(30);
+		expect(cssPx('calc(2 * 4px + 1px)', {})).toBe(9);
+	});
+
+	it('resolves calc-size() against the box’s natural size', () => {
+		// As Chrome reports a name's least: all of a short name, --ap-name-min (6em) of a long one, the row where narrower.
+		const least = 'calc-size(max-content, min(size, 96px, 100%))';
+		expect(cssPx(least, { size: 40, percent: 300 })).toBe(40);
+		expect(cssPx(least, { size: 200, percent: 300 })).toBe(96);
+		expect(cssPx(least, { size: 200, percent: 60 })).toBe(60);
+		expect(cssPx('calc-size(max-content, min(size, calc(20px + 8px + 96px), 100%))', { size: 300, percent: 400 })).toBe(124);
+	});
+
+	it('leaves what it can’t resolve to the caller', () => {
+		expect(cssPx('auto', {})).toBeUndefined();
+		expect(cssPx('min-content', {})).toBeUndefined();
+		expect(cssPx('min(6em, 100%)', { percent: 50 })).toBeUndefined();
+		expect(cssPx('calc-size(max-content, size)', {})).toBeUndefined();
+		expect(cssPx('min(1px', {})).toBeUndefined();
 	});
 });
 

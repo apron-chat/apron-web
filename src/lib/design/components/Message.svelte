@@ -14,7 +14,12 @@
 		/** Omit only for a system line about the room itself (room records carry no sender). A `~private` notice has no `messageId`: render it, never store it (§3.5). */
 		messageId?: string;
 		sender?: Sender;
-		/** Show `@user_id` beside the name, the protocol's `Name (@user_id)` (§3.3). Defaults to on in cozy and off in compact, and only where it differs from the name; `true` shows it even then, such as when two users share the name. */
+		/**
+		 * Show `@user_id` beside the name, the protocol's `Name (@user_id)` (§3.3), where it tells people apart: pass
+		 * `true` when another user shown has the same display name. Off by default, in both densities: a handle that
+		 * merely differs from the name says nothing the name doesn't. Shown, it's needed, so it stays whole: the name and
+		 * the badges give way before it.
+		 */
 		handle?: boolean;
 		/** Plain text body. For Markdown, render + sanitize yourself and pass `children`. */
 		text?: string;
@@ -82,7 +87,7 @@
 	const name = $derived(s.name || sid);
 	const system = $derived(systemProp ?? String(sid || '').startsWith('~'));
 	const scope = $derived(scopeProp || (sid === '~server' ? 'server' : sid === '~room' ? 'room' : sid === '~private' ? 'private' : undefined));
-	const showHandle = $derived(!!sid && (handle ?? (sid !== name && density !== 'compact')));
+	const showHandle = $derived(!!sid && handle === true);
 	const quoted = $derived((!!replyTo || !!reply) && !deleted);
 	const grouped = $derived(groupedProp && !quoted);
 	const t = $derived(times(timestamp, time));

@@ -15,4 +15,4 @@
 	// A user's chip reads `@name`, with their ID beside it when someone else shares the name (mentionLabel).
 </script>
 
-{#each segments as segment, index (index)}{#if typeof segment === 'string'}{segment}{:else if segment.target.kind === 'room'}<Mention roomId={segment.target.id} name={segment.target.title} hash={segment.hash} />{:else}<Mention user_id={segment.target.id} name={mentionLabel(segment).slice(1)} me={segment.target.me} />{/if}{/each}
+{#each segments as segment, index (index)}{#if typeof segment === 'string'}{segment}{:else if segment.target.kind === 'room'}<Mention roomId={segment.target.id} name={segment.target.untitled ? undefined : segment.target.title} thread={segment.target.untitled} hash={segment.hash} />{:else}<Mention user_id={segment.target.id} name={mentionLabel(segment).slice(1)} me={segment.target.me} />{/if}{/each}

@@ -2,7 +2,7 @@
 	import ThreadMarker from '$lib/design/components/ThreadMarker.svelte';
 	import { minuteNow } from '$lib/ui/clock.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
+	import { designTitle, threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
 	import { idMillis, idSince } from '$lib/ui/time';
 	import Avatar from './Avatar.svelte';
 
@@ -27,6 +27,6 @@
 {/snippet}
 
 <ThreadMarker
-	row data-timeline-item="" testid="thread" thread={entry.id} name={entry.title} private={entry.private} {unread} {mentions}
+	row data-timeline-item="" testid="thread" thread={entry.id} name={designTitle(entry)} private={entry.private} {unread} {mentions}
 	faces={entry.participants.length > 0 ? faces : undefined} {summary} {latest} lastReply={since || undefined} lastReplyAt={idMillis(entry.lastReplyId ?? '')} {onopen}
 />

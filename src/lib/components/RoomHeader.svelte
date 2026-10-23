@@ -70,7 +70,7 @@
 	{unreadElsewhere}
 	{mentionsElsewhere}
 	thread={thread ? pane.id : undefined}
-	threadName={threadTitle}
+	threadName={thread && pane.untitled ? undefined : threadTitle}
 	{onroom}
 	onjoin={canJoin ? (onjoin ?? (() => {})) : undefined}
 	onmemberlist={memberListToggle ? onmemberlist : undefined}

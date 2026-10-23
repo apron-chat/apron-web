@@ -8,8 +8,8 @@
 	/**
 	 * Who reacted with an emoji (§4.7), in a Popover, for a reaction chip
 	 * long-pressed or right-clicked: the emoji and how many, then each
-	 * person's avatar, name and `@user_id`, in the order given (you first,
-	 * usually). The list scrolls past a few rows. Other attributes (`data-*`,
+	 * person's avatar and name, with their `@user_id` where it tells them
+	 * apart (`handle`), in the order given (you first, usually). The list scrolls past a few rows. Other attributes (`data-*`,
 	 * event handlers) go on the Popover.
 	 */
 	interface Props extends HTMLAttributes<HTMLDivElement>, PopoverPlacement {
@@ -35,7 +35,7 @@
 				{#if avatar}{@render avatar(reactor)}{:else}<Avatar {name} user_id={reactor.user_id} src={reactor.avatar} />{/if}
 				<div class="ap-reactors-names">
 					<div class="ap-reactors-nameline"><span class="ap-reactors-name">{name}</span>{#if reactor.you}<span class="ap-reactors-muted">(you)</span>{/if}</div>
-					{#if reactor.handle ?? reactor.user_id !== name}<div class="ap-reactors-muted ap-reactors-handle">@{reactor.user_id}</div>{/if}
+					{#if reactor.handle}<div class="ap-reactors-muted ap-reactors-handle">@{reactor.user_id}</div>{/if}
 				</div>
 			</li>
 		{/each}

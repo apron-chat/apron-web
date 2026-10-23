@@ -15,13 +15,30 @@ export function uid(u: { user_id?: string } | undefined | null): string | undefi
 	return u?.user_id || undefined;
 }
 
+/** What a thread without a title is called (`roomName` with `thread`). */
+export const UNTITLED = 'Untitled';
+
+/** Whether a room's or thread's `title` names it: an empty or all-space one counts as none, so nothing is ever named by a blank. */
+export function titled(title: string | undefined | null): title is string {
+	return typeof title === 'string' && Boolean(title.trim());
+}
+
 /**
  * What a room or thread is called wherever it is named (rows, cards, headers, breadcrumbs, menus, placeholders): its
- * `title`, else its `room_id` (§3.4: "absent: shown as room_id"). A title that is empty or only spaces counts as
- * absent, so nothing is ever named by a blank. The client's own titles follow the same rule (`roomTitle`).
+ * `title`, else its `room_id` (§3.4: "absent: shown as room_id"). A thread (a room with a `parent_room_id`), named
+ * with `thread`, falls back to "Untitled" instead: its `room_id` says nothing to people, and it's always seen under
+ * its parent; `roomNameTip` gives the `room_id` for a tooltip wherever that shows. A top-level room keeps its
+ * `room_id`, since several untitled rooms side by side would be indistinguishable. The client's own titles follow the
+ * same rule (`roomTitle`).
  */
-export function roomName(title: string | undefined | null, roomId: string | undefined): string {
-	return typeof title === 'string' && title.trim() ? title : (roomId ?? '');
+export function roomName(title: string | undefined | null, roomId: string | undefined, options: { thread?: boolean } = {}): string {
+	if (titled(title)) return title;
+	return options.thread ? UNTITLED : (roomId ?? '');
+}
+
+/** The tooltip for a name `roomName` fell back on for a thread ("Untitled"): its `room_id`, so it can still be told apart. Otherwise none. */
+export function roomNameTip(title: string | undefined | null, roomId: string | undefined, options: { thread?: boolean } = {}): string | undefined {
+	return options.thread && !titled(title) && roomId ? roomId : undefined;
 }
 
 /** How far each role stacked behind a badge peeks out past the one in front of it, in px, its 1px edge included (`.ap-role-stacked`). */
@@ -51,6 +68,69 @@ export function fitRoles(widths: number[], available: number, gap: number, min: 
 	for (let k = n - 1; k >= 1; k--) if (ends[k - 1] + rolePeek(n - k) <= available) return { shown: k };
 	const room = Math.floor(available - rolePeek(n - 1));
 	return room >= min ? { shown: 1, room } : { shown: 0 };
+}
+
+/**
+ * A computed CSS length in px, as `getComputedStyle` reports a min-width: a plain length (`96px`), or the math a
+ * browser leaves unresolved there, `calc()`, `min()`, `max()`, `clamp()` and `calc-size(<basis>, …)`, over px, em,
+ * percentages and calc-size's `size`. `size` is the box's natural width (its basis), `percent` what 100% is, `em` its
+ * font size. Anything else (`auto`, an intrinsic keyword outside calc-size) is undefined: the caller decides.
+ */
+export function cssPx(value: string, context: { size?: number; percent?: number; em?: number }): number | undefined {
+	const tokens = value.trim().match(/-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?(?:px|em|%)?|[a-z-]+\(|[a-z-]+|[(),+*/-]/gi);
+	if (!tokens || tokens.join('').replace(/\s/g, '') !== value.replace(/\s/g, '')) return undefined;
+	let at = 0;
+	const fail = (): never => { throw new Error('unresolved'); };
+	const peek = () => tokens[at];
+	const take = (expected?: string) => (expected === undefined || tokens[at] === expected ? tokens[at++] : fail());
+	function args(): number[] {
+		const list = [sum()];
+		while (peek() === ',') { take(); list.push(sum()); }
+		take(')');
+		return list;
+	}
+	function atom(): number {
+		const token = take() ?? fail();
+		if (token === '(') { const inner = sum(); take(')'); return inner; }
+		if (token === '-') return -atom();
+		if (token === 'size') return context.size ?? fail();
+		const fn = token.toLowerCase();
+		if (fn === 'calc(') { const inner = sum(); take(')'); return inner; }
+		if (fn === 'min(') return Math.min(...args());
+		if (fn === 'max(') return Math.max(...args());
+		if (fn === 'clamp(') { const [lo, mid, hi] = args(); return Math.max(lo, Math.min(mid, hi)); }
+		if (fn === 'calc-size(') {
+			const basis = take();
+			if (!/^(max-content|min-content|fit-content|auto|any)$/.test(basis)) fail();
+			take(',');
+			const inner = sum();
+			take(')');
+			return inner;
+		}
+		const number = token.match(/^(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|em|%)?$/i) ?? fail();
+		const n = parseFloat(number[1]);
+		const unit = (number[2] ?? '').toLowerCase();
+		if (unit === 'em') return n * (context.em ?? fail());
+		if (unit === '%') return (n / 100) * (context.percent ?? fail());
+		// px, or a plain number (a factor, or 0).
+		return n;
+	}
+	function product(): number {
+		let left = atom();
+		while (peek() === '*' || peek() === '/') left = take() === '*' ? left * atom() : left / atom();
+		return left;
+	}
+	function sum(): number {
+		let left = product();
+		while (peek() === '+' || peek() === '-') left = take() === '+' ? left + product() : left - product();
+		return left;
+	}
+	try {
+		const result = sum();
+		return at === tokens.length && Number.isFinite(result) ? result : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 export function initials(name: string | undefined): string {

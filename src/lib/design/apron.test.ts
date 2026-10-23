@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 const fsModule = 'node:fs';
 const { readFileSync } = await import(/* @vite-ignore */ fsModule) as { readFileSync: (path: URL, encoding: 'utf8') => string };
 const css = readFileSync(new URL('./apron.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const tokens = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
 /** Every top-level rule as its selector list and declarations (at-rule blocks' inner rules included). */
 const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
@@ -51,23 +52,34 @@ describe('apron.css: role badges', () => {
 		for (const kind of ['admin', 'bot', 'other']) for (const part of ['fill', 'line']) expect(style('.ap-roles').get(`--ap-role-${kind}-${part}`)).toBeTruthy();
 	});
 
-	it('give way before the name beside them', () => {
-		expect(shrink(style('.ap-member .ap-roles').get('flex'))).toBeGreaterThan(1000 * shrink(style('.ap-member-who').get('flex')));
+	it('stack by default, everywhere but the profile card, which has the room to show them all', () => {
+		expect(tokens).toMatch(/--ap-role-overflow:\s*stack;/);
+	});
+
+	it('come first in a member row: the name gives way before them, down to its least; a handle after them', () => {
+		const roles = shrink(style('.ap-member .ap-roles').get('flex'));
+		for (const part of ['.ap-member-who', '.ap-member-name', '.ap-member-text']) expect(shrink(style(part).get('flex'))).toBeGreaterThanOrEqual(1e6 * roles);
+		expect(roles).toBeGreaterThanOrEqual(1e6 * shrink(style('.ap-member-name .ap-member-handle').get('flex')));
+		expect(style('.ap-member-text').get('min-width')).toBe('calc-size(max-content, min(size, var(--ap-name-min), 100%))');
+		expect(style('.ap-member-who').get('min-width')).toContain('var(--ap-name-min)');
 	});
 });
 
 describe('apron.css: a message header is one line', () => {
-	it('never wraps; the handle gives way first, then the badges, then the name, and the time never', () => {
+	it('never wraps; the name gives way first, down to its least, then the badges, then a handle, and the time never', () => {
 		expect(style('.ap-msg-head').get('flex-wrap')).toBe('nowrap');
 		const sender = shrink(style('.ap-msg-head > .ap-msg-sender').get('flex'));
 		const roles = shrink(style('.ap-msg-head > .ap-roles').get('flex'));
 		const handle = shrink(style('.ap-msg-head > .ap-msg-handle').get('flex'));
-		expect(roles).toBeGreaterThanOrEqual(1e6 * sender);
-		expect(handle).toBeGreaterThanOrEqual(1e6 * roles);
+		expect(sender).toBeGreaterThanOrEqual(1e6 * roles);
+		expect(roles).toBeGreaterThanOrEqual(1e6 * handle);
 		expect(style('.ap-msg-head > .ap-msg-meta').get('flex')).toBe('none');
 		const truncates = style('.ap-msg-head > :is(.ap-msg-sender, .ap-msg-handle)');
 		expect(truncates.get('text-overflow')).toBe('ellipsis');
 		expect(truncates.get('min-width')).toBe('0');
+		// The name's least: --ap-name-min, all of a shorter name, or the row; where calc-size() is supported.
+		expect(style('.ap-msg-head > .ap-msg-sender').get('min-width')).toBe('calc-size(max-content, min(size, var(--ap-name-min), 100%))');
+		expect(tokens).toMatch(/--ap-name-min:\s*6em;/);
 	});
 });
 

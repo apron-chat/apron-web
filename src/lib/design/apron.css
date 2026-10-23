@@ -115,13 +115,16 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg:hover .ap-msg-hovertime { visibility: visible; }
 .ap-msg-main { min-width: 0; }
 /*
- * Name rows: a name with its meta on one line (a message's header; member rows, the profile bar, thread cards and the
- * profile card do the same with their own parts). The line never wraps. Short of room, the @handle gives way first
- * (ellipsized), then the role badges (dropped whole, see Roles), then the name (ellipsized: its full text stays its
- * button's accessible name, and the profile card's); the time and its meta never wrap or shrink. The shrink factors are
- * a million apart, so each part has given up all it can before the next gives up a fraction of a pixel (a badge row
- * shrunk by any amount drops a badge). The space before the handle and the badges is inside them, so one that has given
- * up all its room leaves no double gap.
+ * Name rows: a name with its meta on one line (a message's header and member rows, roles first; the profile bar, thread
+ * cards and the profile card do the same with their own parts). The line never wraps. Short of room, the name gives way
+ * first (ellipsized: its full text stays its button's accessible name, and the profile card's), but only down to
+ * --ap-name-min (or all of it, where it's shorter, or the row is narrower); then the role badges compact (stacked behind
+ * the last that fits, see Roles), the first narrows, and they go; and only then an @handle, which shows only where it's
+ * needed to tell two people apart, so it stays whole until there's no other room to take. The time and its meta never
+ * wrap or shrink. The shrink factors are a million apart, so each part has given up all it can before the next gives up
+ * a fraction of a pixel, and RoleBadges reads them the same way: room a part with a higher factor can still give up is
+ * room the badges may take. The space before the handle and the badges is inside them, so one that has given up all its
+ * room leaves no double gap.
  */
 .ap-msg-head { display: flex; flex-wrap: nowrap; align-items: baseline; min-width: 0; }
 .ap-msg-head > * + * { margin-left: var(--space-2); }
@@ -131,17 +134,18 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-sender { font-weight: 600; }
 .ap-msg-handle { font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 400; color: var(--ink-muted); overflow-wrap: anywhere; }
 .ap-msg-head > :is(.ap-msg-sender, .ap-msg-handle) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ap-msg-head > .ap-msg-sender { flex: 0 1 auto; }
-.ap-msg-head > .ap-msg-handle { flex: 0 1e12 auto; }
+.ap-msg-head > .ap-msg-sender { flex: 0 1e12 auto; }
 .ap-msg-head > .ap-roles { flex: 0 1e6 auto; }
+.ap-msg-head > .ap-msg-handle { flex: 0 1 auto; }
 .ap-msg-head > .ap-msg-meta { flex: none; }
 /*
  * Roles (§3.3): server-assigned labels as small outlined badges in the UI face, set apart from the name so no name can
  * pass as one. "admin" takes the accent, "bot" the denim; other roles show as written, muted.
  * A badge is never sliced: it shows whole, or ellipsized inside its own border (down to --ap-role-min), and where not
- * even that fits, whole badges drop off the end. The row is one badge high and wraps, so a badge that doesn't fit goes
- * to a second row, clipped away (screen readers still read it); the zero-width first item lets the first badge drop
- * too. Beside a name, the name keeps priority: its row gives the badges only the room the name doesn't need.
+ * even that fits, whole badges drop off the end (or stack, see Stacked roles, the default). The row is one badge high
+ * and wraps, so a badge that doesn't fit goes to a second row, clipped away (screen readers still read it); the
+ * zero-width first item lets the first badge drop too. Beside a name, the badges come first: the name truncates to
+ * --ap-name-min before they give up any room (see Name rows).
  */
 .ap-roles { --ap-role-h: 16px; --ap-role-gap: 4px; --ap-role-min: 4em; display: inline-flex; flex-wrap: wrap; gap: var(--ap-role-gap); align-self: center; min-width: 0; max-width: 100%; height: var(--ap-role-h); overflow: hidden; vertical-align: middle; }
 /* The first item: as tall as a badge, so a row whose only badge dropped still fills the first line and the badge stays out of view. */
@@ -163,8 +167,9 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
  * sit as layers behind the last one that does, each the badge's own size and a step further out, in its own role's
  * colors, up to three deep; its title names every role. The row stays one line and keeps every badge in the DOM (the
  * hidden ones out of the flow and invisible, still read by screen readers). RoleBadges measures the room it has as its
- * own width plus the free space in the flex rows around it, so a name it shares a row with keeps its priority. The
- * layers are box-shadows: drawn only outside a badge's border, they never show through its transparent inside, whatever
+ * own width, plus the free space in the flex rows around it, plus what the parts of its row that give way before it (a
+ * higher flex-shrink: the name) can still give up, down to their min-width; so the result depends only on the row's
+ * width, never on how it got there. The layers are box-shadows: drawn only outside a badge's border, they never show through its transparent inside, whatever
  * the ground. Where not even one badge and its stack fit, the first narrows (ellipsized) to --ap-role-min, and below
  * that none show.
  */
@@ -606,15 +611,25 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-people { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .ap-member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 /* Role badges follow the name, as beside a message's sender; the remove button floats over the far right. */
-.ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1e12 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .ap-member-who:hover .ap-member-name { text-decoration: underline; }
 /* Offline members (§4.5) recede, badges and all; their ring and name still read. */
 .ap-member-offline .ap-member-who { color: var(--ink-muted); }
 .ap-member-offline .ap-avatar, .ap-member-offline .ap-roles { opacity: var(--opacity-dim); }
-.ap-member-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The name comes first: the badges give up their room before it does, dropping whole (see Roles). */
+/* As in a message's header, roles first: the name truncates to --ap-name-min before the badges compact (see Name rows);
+   a handle, there to tell two people apart, gives way last. */
+.ap-member-name { display: flex; align-items: baseline; flex: 0 1e12 auto; min-width: 0; }
+.ap-member-text { flex: 0 1e12 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-member .ap-roles { flex: 0 1e6 auto; }
-.ap-member-name small { margin-left: 4px; color: var(--ink-muted); font-size: var(--text-xs); }
+.ap-member-name small { flex: none; margin-left: 4px; color: var(--ink-muted); font-size: var(--text-xs); white-space: nowrap; }
+.ap-member-name .ap-member-handle { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The least a name truncates to: --ap-name-min, all of a shorter one, or the whole row where that's narrower. Without
+   calc-size() the name can truncate further, after the badges have gone (RoleBadges still holds it at --ap-name-min). */
+@supports (min-width: calc-size(max-content, size)) {
+	.ap-msg-head > .ap-msg-sender, .ap-member-text { min-width: calc-size(max-content, min(size, var(--ap-name-min), 100%)); }
+	/* A member's button: its avatar and the name's least. */
+	.ap-member-who { min-width: calc-size(max-content, min(size, calc(var(--avatar-sm) + var(--space-2) + var(--ap-name-min)), 100%)); }
+}
 /* Remove shows on hover or focus, over the end of the row rather than holding a gap there, so names and badges keep the width. */
 .ap-member .ap-member-remove { position: absolute; top: 50%; right: var(--space-1); width: var(--control-sm); height: var(--control-sm); transform: translateY(-50%); background: var(--bg-000); box-shadow: -8px 0 6px var(--bg-000); opacity: 0; pointer-events: none; }
 .ap-member:hover .ap-member-remove, .ap-member:focus-within .ap-member-remove { opacity: 1; pointer-events: auto; }

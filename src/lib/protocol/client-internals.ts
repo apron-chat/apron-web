@@ -256,12 +256,22 @@ export function canonicalJson(value: JsonValue): string {
 /** Shared by rooms without notices, so their snapshots compare equal. */
 export const NO_NOTICES: readonly Notice[] = Object.freeze([]);
 
+/** What a thread without a title is called: the design system's `UNTITLED`. */
+export const UNTITLED_THREAD = 'Untitled';
+
+/** A thread (a room with a `parent_room_id`, §3.4) whose record has no title: `roomTitle` calls it "Untitled". */
+export function untitledThread(record: RoomRecord | undefined): boolean {
+	return typeof record?.parent_room_id === 'string' && !(typeof record.title === 'string' && record.title.trim());
+}
+
 /**
- * A room's or thread's display title: its record's `title`, else its `room_id` (§3.4). A title of only spaces counts
- * as none, so nothing is named by a blank; the design system's `roomName` applies the same rule to names it is given.
+ * A room's or thread's display title: its record's `title`, else its `room_id` (§3.4), or for a thread "Untitled",
+ * whose `room_id` the design system shows on hover (`untitled` on the snapshot says so). A title of only spaces counts
+ * as none, so nothing is named by a blank; the design system's `roomName` applies the same rules to names it is given.
  */
 export function roomTitle(roomId: string, record: RoomRecord | undefined): string {
 	if (typeof record?.title === 'string' && record.title.trim()) return record.title;
+	if (untitledThread(record)) return UNTITLED_THREAD;
 	if (roomId === DEFAULT_ROOM_ID) return 'Default room';
 	return roomId;
 }

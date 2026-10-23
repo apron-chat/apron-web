@@ -29,12 +29,12 @@
 		if (!request) return undefined;
 		return placePicker(request.anchor.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, { width: WIDTH, height: measured || 120 });
 	});
-	/** Each by the name they show as, with `@user_id` under it where that differs, or another user shares the name. */
+	/** Each by the name they show as, with `@user_id` under it only where another user shares the name. */
 	let rows = $derived(
 		reactors.map((user): Reactor => {
 			const id = directory.person(user)?.user_id ?? user.user_id;
 			const name = directory.name(user);
-			return { user_id: id, name, avatar: directory.avatar(user), you: directory.isMe(id), handle: id !== name || directory.sharesName(user) };
+			return { user_id: id, name, avatar: directory.avatar(user), you: directory.isMe(id), handle: directory.sharesName(user) };
 		})
 	);
 

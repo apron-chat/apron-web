@@ -6,12 +6,13 @@
 	import ThreadLines from './ThreadLines.svelte';
 	import UnreadCount from './UnreadCount.svelte';
 	import type { Sender } from './types';
-	import { roomName, times, uid } from './util';
+	import { roomName, roomNameTip, times, uid } from './util';
 
 	/** Other attributes (`data-*`) go on the card. */
 	interface Props extends HTMLAttributes<HTMLElement> {
 		/** The thread's `room_id` (a room with `parent_room_id`, §3.4). */
 		thread: string;
+		/** Its `title`; without one it's called "Untitled", with its `room_id` on hover. */
 		name?: string;
 		/** Unread replies from others, and how many mention you: a bubble beside the time, as on its sidebar row. Leave out when unknown. */
 		unread?: number;
@@ -39,7 +40,8 @@
 		onopen?: () => void;
 	}
 	let { thread, name, unread = 0, mentions = 0, private: isPrivate, summary, participants, faces: facesSnippet, lastReply, lastReplyAt, latest, moved, row, testid, onopen, ...rest }: Props = $props();
-	const shown = $derived(roomName(name, thread));
+	const shown = $derived(roomName(name, thread, { thread: true }));
+	const tip = $derived(roomNameTip(name, thread, { thread: true }));
 	const faces = $derived((participants || []).slice(0, 4));
 	const last = $derived(latest ? { sender: typeof latest.sender === 'string' ? latest.sender : latest.sender?.name || uid(latest.sender) || '', text: latest.text } : undefined);
 	const at = $derived(times(lastReplyAt));
@@ -48,13 +50,13 @@
 
 {#snippet marker()}
 	{#if moved}
-		<div {...rest} class="ap-thread ap-thread-moved" data-testid={id('card')}><span>{'Moved to '}</span><button type="button" class="ap-link" onclick={onopen}>{shown}</button></div>
+		<div {...rest} class="ap-thread ap-thread-moved" data-testid={id('card')}><span>{'Moved to '}</span><button type="button" class="ap-link" title={tip} onclick={onopen}>{shown}</button></div>
 	{:else}
 		<button {...rest} type="button" class={['ap-thread', (summary || last) && 'ap-thread-2', isPrivate && 'ap-thread-private']} data-testid={id('card')} data-thread={thread} onclick={onopen}>
 			<span class="ap-thread-head">
 				{#if facesSnippet || faces.length}<span class="ap-thread-faces" aria-hidden="true">{#if facesSnippet}{@render facesSnippet()}{:else}{#each faces as f, i (uid(f) || i)}<Avatar name={f.name || uid(f)} src={f.avatar} size="sm" />{/each}{/if}</span>{/if}
 				<!-- The lock leads the title, so its ellipsis never cuts it off. -->
-				<span class="ap-thread-name">{#if isPrivate}<Lock class="ap-lock" aria-label="Private" role="img" />{/if}{shown}</span>
+				<span class="ap-thread-name" title={tip}>{#if isPrivate}<Lock class="ap-lock" aria-label="Private" role="img" />{/if}{shown}</span>
 				<UnreadCount {unread} {mentions} noun="reply" testid={id('unread')} />
 				{#if lastReply && at.iso}<time class="ap-thread-last" data-testid={id('last-reply')} datetime={at.iso} title={`Last reply ${at.exact}`}>{lastReply}</time>
 				{:else if lastReply}<span class="ap-thread-last" data-testid={id('last-reply')} title="Last reply">{lastReply}</span>{/if}

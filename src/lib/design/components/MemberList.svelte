@@ -125,7 +125,7 @@
 										<button class="ap-member-who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => onprofile?.(person.user_id, event.currentTarget)}>
 											{#if avatar}{@render avatar(person)}{:else}<Avatar {name} user_id={person.user_id} src={person.avatar} size="sm" status={person.status} statusLabel={words} />{/if}
 											<span class="ap-member-name">
-												<bdi>{name}</bdi>{#if person.handle}<small>@{person.user_id}</small>{/if}{#if person.you}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.toLowerCase()}</span>{/if}
+												<bdi class="ap-member-text">{name}</bdi>{#if person.handle}<small class="ap-member-handle">@{person.user_id}</small>{/if}{#if person.you}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.toLowerCase()}</span>{/if}
 											</span>
 										</button>
 										{#if roles}{@render roles(person)}{:else}<RoleBadges roles={person.roles} />{/if}

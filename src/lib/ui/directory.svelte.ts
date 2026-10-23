@@ -19,6 +19,8 @@ class Directory {
 	you = $state.raw<Identity | undefined>();
 	private users = $state.raw<Users>({ users: {}, recordedUsers: {}, userAliases: {} });
 	private rooms = $state.raw<Record<string, string>>({});
+	/** The rooms among them that are threads without a title, which `rooms` calls "Untitled". */
+	private untitled = $state.raw<Record<string, true>>({});
 	/**
 	 * Every known `user_id` by the display name it shows under: its kept name,
 	 * else (only when nothing is kept for it, not when it was cleared) the name
@@ -54,15 +56,21 @@ class Directory {
 			this.users = { users: snapshot.users, recordedUsers: snapshot.recordedUsers, userAliases: snapshot.userAliases };
 		}
 		const rooms: Record<string, string> = {};
-		for (const listing of [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat()]) rooms[listing.id] = listing.title;
-		for (const room of snapshot.rooms) rooms[room.id] = room.title;
+		const untitled: Record<string, true> = {};
+		for (const room of [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat(), ...snapshot.rooms]) {
+			rooms[room.id] = room.title;
+			if (room.untitled) untitled[room.id] = true;
+			else delete untitled[room.id];
+		}
 		if (!sameEntries(this.rooms, rooms)) this.rooms = rooms;
+		if (!sameEntries(this.untitled, untitled)) this.untitled = untitled;
 	}
 
 	forget(): void {
 		this.you = undefined;
 		this.users = { users: {}, recordedUsers: {}, userAliases: {} };
 		this.rooms = {};
+		this.untitled = {};
 	}
 
 	/** How to show a user a frame names (a `from`, a member): the kept fields, else the recorded ones. */
@@ -116,7 +124,8 @@ class Directory {
 	/** Resolves `#room_id` (Appendix A.3), whatever users share the ID. */
 	readonly resolveRoom: RoomMentionResolver = (id) => {
 		const title = this.rooms[id];
-		return title === undefined ? undefined : { kind: 'room', id, title };
+		if (title === undefined) return undefined;
+		return { kind: 'room', id, title, ...(this.untitled[id] ? { untitled: true as const } : {}) };
 	};
 
 	/** Resolves `@user_id` (Appendix A.3): a known user, marked `shared` when another shows under their name; unknown IDs stay text. */

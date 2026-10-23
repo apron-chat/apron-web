@@ -82,7 +82,7 @@ describe('ProfileCard', () => {
 });
 
 describe('ReactorsPopover', () => {
-	it('counts the reactions, and shows @user_id where it differs from the name or is asked for', () => {
+	it('counts the reactions, and shows @user_id only where it is asked for, to tell people apart', () => {
 		const box = render(ReactorsPopover, {
 			emoji: '👍',
 			reactors: [{ user_id: 'you', name: 'You', you: true }, { user_id: 'linus' }, { user_id: 'grace', name: 'grace', handle: true }]
@@ -90,7 +90,7 @@ describe('ReactorsPopover', () => {
 		expect(box.getAttribute('aria-label')).toBe('3 reactions with 👍');
 		const rows = [...box.querySelectorAll<HTMLElement>('[data-testid="reactor"]')];
 		expect(rows.map((row) => row.dataset.userId)).toEqual(['you', 'linus', 'grace']);
-		expect(rows.map((row) => row.querySelector('.ap-reactors-handle')?.textContent ?? '')).toEqual(['@you', '', '@grace']);
+		expect(rows.map((row) => row.querySelector('.ap-reactors-handle')?.textContent ?? '')).toEqual(['', '', '@grace']);
 		expect(rows[0].querySelector('.ap-reactors-nameline')?.textContent).toBe('You(you)');
 	});
 });

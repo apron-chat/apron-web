@@ -39,11 +39,13 @@ describe('ThreadMarker', () => {
 		expect(one('span.ap-thread-last')?.getAttribute('title')).toBe('Last reply');
 	});
 
-	it('names a thread with a blank title by its room_id, on its card and its Moved to line', () => {
+	it('calls a thread with a blank title Untitled, its room_id on hover, on its card and its Moved to line', () => {
 		render({ name: '' });
-		expect(one('.ap-thread-name')?.textContent).toBe('t1');
+		expect(one('.ap-thread-name')?.textContent).toBe('Untitled');
+		expect(one('.ap-thread-name')?.getAttribute('title')).toBe('t1');
 		unmount(instance!);
 		render({ name: '  ', moved: true });
-		expect(one('.ap-thread-moved button')?.textContent).toBe('t1');
+		expect(one('.ap-thread-moved button')?.textContent).toBe('Untitled');
+		expect(one('.ap-thread-moved button')?.getAttribute('title')).toBe('t1');
 	});
 });

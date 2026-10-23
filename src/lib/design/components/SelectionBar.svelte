@@ -1,10 +1,11 @@
 <script lang="ts">
 	import Button from './Button.svelte';
 	import TypingDots from './TypingDots.svelte';
-	import { roomName } from './util';
+	import { roomName, roomNameTip } from './util';
 
 	interface Props {
 		count: number;
+		/** Threads to move to, each by `room_id` and `title` ("Untitled" without one, with its `room_id` on hover). */
 		threads?: Array<{ thread: string; name?: string }>;
 		/** In a thread: its parent room's ID, offered first in the menu as Move to room. */
 		room?: string;
@@ -55,7 +56,7 @@
 								<li><button type="button" class="ap-menu-item" role="option" aria-selected="false" onclick={() => move(room)}>Move to room</button></li>
 							{/if}
 							{#each threads as t (t.thread)}
-								<li><button type="button" class="ap-menu-item" role="option" aria-selected="false" data-thread={t.thread} onclick={() => move(t.thread)}><bdi>{roomName(t.name, t.thread)}</bdi></button></li>
+								<li><button type="button" class="ap-menu-item" role="option" aria-selected="false" data-thread={t.thread} onclick={() => move(t.thread)}><bdi title={roomNameTip(t.name, t.thread, { thread: true })}>{roomName(t.name, t.thread, { thread: true })}</bdi></button></li>
 							{/each}
 						</ul>
 					{/if}

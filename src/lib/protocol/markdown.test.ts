@@ -34,6 +34,13 @@ describe('mentions (Appendix A.3)', () => {
 		);
 	});
 
+	it('names an untitled thread’s ID on its chip’s hover', () => {
+		const threads = (id: string) => (id === '1790473611343' ? { kind: 'room' as const, id, title: 'Untitled', untitled: true as const } : undefined);
+		expect(renderPlain('see #1790473611343', undefined, threads)).toBe(
+			'see <button type="button" class="ap-mention ap-mention-room ap-mention-hash-room" data-room-id="1790473611343" title="Open Untitled (#1790473611343)">#Untitled</button>'
+		);
+	});
+
 	it('resolves #room_id as a room even when @id resolves to a user', () => {
 		const userResolver: MentionResolver = (id) => id === 'ops' ? { kind: 'user', id, name: 'Ops User' } : undefined;
 		const roomResolver = (id: string) => id === 'ops' ? { kind: 'room' as const, id, title: 'Ops Room' } : undefined;

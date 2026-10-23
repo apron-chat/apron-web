@@ -33,4 +33,14 @@ describe('Mention', () => {
 		expect(chip.getAttribute('data-room-id')).toBe('ops');
 		expect(chip.textContent).toBe('Ops');
 	});
+
+	it('calls an untitled thread Untitled, with its room_id in the tooltip; an untitled room keeps its room_id', () => {
+		const thread = render({ roomId: 't1', thread: true, hash: true, onopen: vi.fn() });
+		expect(thread.textContent).toBe('#Untitled');
+		expect(thread.getAttribute('title')).toBe('Open Untitled (#t1)');
+		unmount(instance!);
+		const room = render({ roomId: 'ops', onopen: vi.fn() });
+		expect(room.textContent).toBe('ops');
+		expect(room.getAttribute('title')).toBe('Open ops');
+	});
 });

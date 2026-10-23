@@ -72,7 +72,7 @@
 			{:else if shown}
 				<div class="ap-profcard-status" data-testid="profile-status">{statusLabel ?? presenceLabel(status)}</div>
 			{/if}
-			<RoleBadges {roles} testid="roles" />
+			<RoleBadges {roles} testid="roles" overflow="drop" />
 		</div>
 	</div>
 	{#if sharesName}

@@ -47,9 +47,10 @@ describe('SelectionBar', () => {
 		expect(document.querySelector('[role=alert]')?.textContent).toBe('1 of 3 couldn’t be moved');
 	});
 
-	it('names a destination thread with a blank title by its room_id, isolated from the menu’s direction', () => {
+	it('calls a destination thread with a blank title Untitled, its room_id on hover, isolated from the menu’s direction', () => {
 		render({ threads: [{ thread: 't1', name: ' ' }, { thread: 't2', name: 'מסירה' }], open: true });
 		const items = [...document.querySelectorAll('[role=option] bdi')];
-		expect(items.map((item) => item.textContent)).toEqual(['t1', 'מסירה']);
+		expect(items.map((item) => item.textContent)).toEqual(['Untitled', 'מסירה']);
+		expect(items.map((item) => item.getAttribute('title'))).toEqual(['t1', null]);
 	});
 });

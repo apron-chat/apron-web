@@ -26,6 +26,15 @@ function render(entry: Partial<ThreadEntry>, news: { unread?: number; mentions?:
 const one = (selector: string) => document.querySelector(selector);
 
 describe('ThreadCard', () => {
+	it('calls an untitled thread Untitled, its room_id on hover', () => {
+		render({ title: 'Untitled', untitled: true });
+		expect(one('.ap-thread-name')?.textContent).toBe('Untitled');
+		expect(one('.ap-thread-name')?.getAttribute('title')).toBe('t1');
+		unmount(instance!);
+		render({});
+		expect(one('.ap-thread-name')?.hasAttribute('title')).toBe(false);
+	});
+
 	it('shows its summary and its latest reply, each marked by an icon, as the sidebar does', () => {
 		const id = String(Date.now() - 9 * hour);
 		const latest = { message_id: id, room_id: 't1', from: { user_id: 'shazow', name: 'shazow' }, body: { text: 'test\ntest' } } as unknown as MessageRecord;

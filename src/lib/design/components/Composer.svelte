@@ -40,7 +40,7 @@
 		/** While true the field is replaced by a "Recording m:ss" line, the mic becomes Stop, and Attach, the emoji button and Send wait. */
 		recording?: boolean;
 		recordingTime?: string;
-		/** Set when the main pane shows a thread: posts go to its `room_id` and the placeholder reads "Reply in …". */
+		/** Set when the main pane shows a thread: posts go to its `room_id` and the placeholder reads "Reply in …" (its `name`, or "Untitled"). */
 		thread?: { thread: string; name?: string } | null;
 		/** Cap `command` (§4.1): while `value` starts with one "/", a Command tag shows, the field turns monospace and Send reads Run. */
 		canCommand?: boolean;
@@ -89,7 +89,7 @@
 		files, onremovefile, onrenamefile, attachments, previews, preview, onremovepreview, picker
 	}: Props = $props();
 
-	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread)}` : `Message ${room || ''}`));
+	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
 	/* "//" posts a message starting with "/" */
 	const cmd = $derived(command ?? (!!canCommand && value.startsWith('/') && !value.startsWith('//')));
 	const sendable = $derived(canSend ?? !!value.trim());

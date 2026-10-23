@@ -102,6 +102,7 @@ import {
 	roomTitle,
 	sameEmojiSet,
 	typingKey,
+	untitledThread,
 	userFacingRpcError,
 	validHistoryMetadata,
 	type LiveRecord,
@@ -606,6 +607,7 @@ export class ChatClient {
 				return {
 					id: room.id,
 					title: roomTitle(room.id, record),
+					...(untitledThread(record) ? { untitled: true as const } : {}),
 					joined: room.kind === 'joined',
 					...(record ? { record } : {}),
 					...(thread ? { parentRoomId: record!.parent_room_id } : {}),
@@ -2060,6 +2062,7 @@ export class ChatClient {
 				listed[key].push({
 					id: record.room_id,
 					title: roomTitle(record.room_id, record),
+					...(untitledThread(record) ? { untitled: true as const } : {}),
 					record,
 					...(first !== undefined ? { firstRecordLogId: first } : {}),
 					...(record.parent_room_id !== undefined ? { parentRoomId: record.parent_room_id } : {}),
@@ -3181,6 +3184,7 @@ export class ChatClient {
 		const listing = (members: Identity[]): RoomListing => ({
 			id: record.room_id,
 			title: roomTitle(record.room_id, record),
+			...(untitledThread(record) ? { untitled: true as const } : {}),
 			record,
 			...(first !== undefined ? { firstRecordLogId: first } : {}),
 			...(record.parent_room_id !== undefined ? { parentRoomId: record.parent_room_id } : {}),

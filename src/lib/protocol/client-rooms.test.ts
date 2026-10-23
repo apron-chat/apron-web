@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, DEFAULT_ROOM_ID, IDLE_RETRY_MS, type ClientSnapshot } from './client';
 import { FakeSocket, settle } from './fake-socket';
-import { REQUEST_TIMEOUT_MS, roomTitle } from './client-internals';
+import { REQUEST_TIMEOUT_MS, roomTitle, UNTITLED_THREAD, untitledThread } from './client-internals';
+import { UNTITLED } from '$lib/design/components/util';
 
 /** Operations whose outcome a test does not await still settle when the client stops. */
 function quiet(value: { promise: Promise<unknown> } | undefined): void {
@@ -1153,5 +1154,18 @@ describe('roomTitle', () => {
 		expect(roomTitle('t1', { room_id: 't1', title: '' })).toBe('t1');
 		expect(roomTitle('t1', { room_id: 't1', title: '   ' })).toBe('t1');
 		expect(roomTitle(DEFAULT_ROOM_ID, undefined)).toBe('Default room');
+	});
+
+	it('calls a thread without a title Untitled, as the design system does, and says it is one', () => {
+		expect(UNTITLED_THREAD).toBe(UNTITLED);
+		for (const title of [undefined, '', '  ']) {
+			const record = { room_id: 't1', parent_room_id: 'general', ...(title !== undefined ? { title } : {}) };
+			expect(roomTitle('t1', record)).toBe('Untitled');
+			expect(untitledThread(record)).toBe(true);
+		}
+		expect(roomTitle('t1', { room_id: 't1', parent_room_id: 'general', title: 'Deploy' })).toBe('Deploy');
+		expect(untitledThread({ room_id: 't1', parent_room_id: 'general', title: 'Deploy' })).toBe(false);
+		// A top-level room keeps its room_id: several untitled rooms side by side would be indistinguishable.
+		expect(untitledThread({ room_id: 'r1' })).toBe(false);
 	});
 });

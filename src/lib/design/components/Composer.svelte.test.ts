@@ -96,11 +96,11 @@ describe('Composer', () => {
 		expect((testid('send-button') as HTMLButtonElement).disabled).toBe(true);
 	});
 
-	it('takes the direction of what is typed, in either field, and names a blank-titled thread by its room_id', () => {
+	it('takes the direction of what is typed, in either field, and calls a blank-titled thread Untitled', () => {
 		render({ thread: { thread: 't1', name: '' } });
 		const field = document.querySelector('.ap-composer-field')!;
 		expect(field.getAttribute('dir')).toBe('auto');
-		expect(field.getAttribute('placeholder')).toBe('Reply in t1');
+		expect(field.getAttribute('placeholder')).toBe('Reply in Untitled');
 		unmount(instance!);
 		render({ editable: true, empty: true });
 		expect(document.querySelector('.ap-composer-editable')?.getAttribute('dir')).toBe('auto');

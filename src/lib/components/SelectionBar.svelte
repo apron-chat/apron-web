@@ -1,7 +1,7 @@
 <script lang="ts">
 	import DesignSelectionBar from '$lib/design/components/SelectionBar.svelte';
 	import type { MessageSelection } from '$lib/ui/selection.svelte';
-	import type { ThreadEntry } from '$lib/ui/timeline';
+	import { designTitle, type ThreadEntry } from '$lib/ui/timeline';
 
 	interface Props {
 		selection: MessageSelection;
@@ -19,7 +19,7 @@
 	let { selection, threads, parentRoom, canCreateThread, onmove, onnewthread, onfill, oncancel }: Props = $props();
 	let current = $derived(selection.current);
 	let count = $derived(current?.ids.length ?? 0);
-	let destinations = $derived(threads.map((thread) => ({ thread: thread.id, name: thread.title })));
+	let destinations = $derived(threads.map((thread) => ({ thread: thread.id, name: designTitle(thread) })));
 </script>
 
 {#if current}

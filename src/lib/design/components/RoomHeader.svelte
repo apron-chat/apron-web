@@ -7,7 +7,7 @@
 	import Users from '@lucide/svelte/icons/users';
 	import type { Snippet } from 'svelte';
 	import MenuButton from './MenuButton.svelte';
-	import { count99, roomName } from './util';
+	import { count99, roomName, roomNameTip } from './util';
 
 	interface Props {
 		room: string;
@@ -34,6 +34,7 @@
 		children?: Snippet;
 		/** A thread is open in the main pane: shows `Parent › Thread`; the parent's title goes back via onroom. */
 		thread?: string;
+		/** The thread's `title`; without one it's called "Untitled", with its `room_id` on hover. */
 		threadName?: string;
 		onroom?: () => void;
 		/** Cap `rooms`, for a room or thread open without joining it: a Join button (`room_join`, §4.2.2). */
@@ -85,7 +86,7 @@
 			<h1 class="ap-roomhead-name">
 				<button type="button" class="ap-roomhead-crumb" aria-label="Back to room" onclick={onroom}>{roomName(name, room)}</button>
 				<span class="ap-roomhead-sep" aria-hidden="true"> › </span>
-				<bdi>{roomName(threadName, thread)}</bdi>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}
+				<bdi title={roomNameTip(threadName, thread, { thread: true })}>{roomName(threadName, thread, { thread: true })}</bdi>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}
 			</h1>
 		{:else}
 			<h1 class="ap-roomhead-name">{roomName(name, room)}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</h1>

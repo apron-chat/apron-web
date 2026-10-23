@@ -6,12 +6,12 @@
 	import type { HTMLButtonAttributes } from 'svelte/elements';
 	import ThreadLines from './ThreadLines.svelte';
 	import UnreadCount from './UnreadCount.svelte';
-	import { roomName } from './util';
+	import { roomName, roomNameTip } from './util';
 
 	/** Other attributes (`data-*`, `title`) go on the row's button. */
 	interface Props extends HTMLButtonAttributes {
 		room: string;
-		/** `title`, falling back to `room_id` */
+		/** `title`, falling back to `room_id`, or for a thread (`nested`) to "Untitled" with its `room_id` on hover */
 		name?: string;
 		/** the room's `description` (§3.4) as one line of text */
 		topic?: string;
@@ -59,7 +59,8 @@
 		onnewthread?: () => void;
 	}
 	let { room, name, topic, private: isPrivate, unread, mentions, active, nested, unjoined, summary, latest, ago, agoIso, agoTitle, count, loading, testid, countTestid, onselect, onleave, onjoin, onnewthread, ...rest }: Props = $props();
-	const shown = $derived(roomName(name, room));
+	const shown = $derived(roomName(name, room, { thread: nested }));
+	const tip = $derived(roomNameTip(name, room, { thread: nested }));
 	const outside = $derived(unjoined ?? Boolean(onjoin));
 	/** A joined thread: tinted with an unread mention, stepped back with nothing new. */
 	const mention = $derived(nested && !active && !outside && Boolean(mentions));
@@ -69,7 +70,7 @@
 
 {#snippet row()}
 	<button type="button" {...rest} class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', (unread || mentions) && 'ap-room-unread', outside && 'ap-room-unjoined', mention && 'ap-room-mention', quiet && 'ap-room-quiet']} aria-current={active ? 'page' : undefined} onclick={onselect}>
-		<span class="ap-room-text"><span class="ap-room-name">{shown}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>{#if topic}<span class="ap-room-topic">{topic}</span>{/if}<ThreadLines {summary} {latest} {testid} /></span>
+		<span class="ap-room-text"><span class="ap-room-name" title={tip}>{shown}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>{#if topic}<span class="ap-room-topic">{topic}</span>{/if}<ThreadLines {summary} {latest} {testid} /></span>
 		<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun={nested ? 'reply' : 'message'} testid={countTestid} />
 		{#if count !== undefined}<small class="ap-room-count" aria-label={`${count} ${count === 1 ? 'message' : 'messages'}`}>{count}</small>
 		{:else if ago}<time class="ap-room-ago" data-testid={testid && `${testid}-ago`} datetime={agoIso} title={agoTitle}>{ago}</time>{/if}
