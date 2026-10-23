@@ -83,9 +83,9 @@ describe('presence colors', () => {
 	});
 });
 
-// apron.css against the scales: a value a redesign retunes in tokens.css, never one written out in a rule.
+// apron.css (and rail.css, the design bundle's rail) against the scales: a value a redesign retunes in tokens.css, never one written out in a rule.
 describe('apron.css', () => {
-	const stylesheet = readFileSync(new URL('./apron.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+	const stylesheet = ['./apron.css', './rail.css'].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
 	/** Every declaration, with the selector of the innermost rule holding it (a keyframe's step, inside @keyframes). */
 	const declarations = [...stylesheet.matchAll(/([^{}]*)\{([^{}]*)\}/g)].flatMap(([, selector, body]) =>
 		body.split(';').filter((text) => text.includes(':')).map((text) => {

@@ -7,7 +7,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-rail-item, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-rchip, .ap-rpick, .ap-switch, .ap-summary-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-rchip, .ap-rpick, .ap-switch, .ap-summary-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* Disabled — one fade, whatever the control. */
 :is(.ap-btn, .ap-iconbtn, .ap-link, .ap-rpick, .ap-seg-item, .ap-choice-item, .ap-field, .ap-viewer-btn):disabled, .ap-switch[aria-disabled='true'] { cursor: default; opacity: var(--opacity-disabled); }
@@ -466,25 +466,12 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* A line of text among the rows: a caption, an empty list, an error. */
 .ap-sect-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
 
-/* BackendRail — one tile per connected backend */
-.ap-rail { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: var(--rail-w); padding: var(--space-3) 0; box-sizing: border-box; background: var(--bg-rail); }
-.ap-rail-item { position: relative; display: grid; place-items: center; width: 100%; height: var(--rail-tile); padding: 0; border: 0; background: none; cursor: pointer; }
+/* A backend's tile: BackendRail's (rail.css, the design bundle's alone), and ConnectPage's recent backends'. */
 .ap-rail-tile { display: grid; place-items: center; width: var(--rail-tile); height: var(--rail-tile); border-radius: var(--radius-lg); background: var(--bg-200); color: var(--ink); font-size: var(--text-field); font-weight: 600; object-fit: cover; }
-.ap-rail-item:hover .ap-rail-tile { background: var(--accent-soft); color: var(--accent); border-radius: var(--radius-full); }
-.ap-rail-active .ap-rail-tile, .ap-rail-active:hover .ap-rail-tile { background: var(--accent); color: var(--on-accent); border-radius: var(--radius-full); }
-.ap-rail-offline .ap-rail-tile { opacity: var(--opacity-dim); }
-.ap-rail-pip { position: absolute; left: 0; top: 50%; width: 4px; height: 0; transform: translateY(-50%); border-radius: 0 var(--radius-full) var(--radius-full) 0; background: var(--ink); }
-.ap-rail-unread .ap-rail-pip { height: 8px; }
-.ap-rail-item:hover .ap-rail-pip { height: 20px; }
-.ap-rail-active .ap-rail-pip, .ap-rail-active:hover .ap-rail-pip { height: var(--rail-tile); }
-.ap-rail-count { position: absolute; right: 8px; bottom: -4px; box-shadow: 0 0 0 3px var(--bg-rail); }
-.ap-rail-add .ap-rail-tile { background: transparent; border: 1px dashed var(--line-strong); color: var(--ink-muted); font-size: 18px; font-weight: 400; box-sizing: border-box; }
-.ap-rail-add:hover .ap-rail-tile { border-style: solid; }
 
-/* AppShell — rail | rooms | main pane | member list. A thread opens in the main pane; there is no thread pane.
+/* AppShell — rooms | main pane | member list, with a rail before them in rail.css. A thread opens in the main pane; there is no thread pane.
    --corner: how far a header's content keeps clear of a PanelToggle in the window's corner. */
-.ap-shell { --corner: calc(var(--space-3) + var(--control-md) + var(--space-2)); position: relative; display: grid; grid-template-columns: var(--rail-w) var(--side-col, var(--sidebar-w)) minmax(0, 1fr); height: 100%; min-height: 0; overflow: clip; background: var(--bg-100); }
-.ap-shell-norail { grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr); }
+.ap-shell { --corner: calc(var(--space-3) + var(--control-md) + var(--space-2)); position: relative; display: grid; grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr); height: 100%; min-height: 0; overflow: clip; background: var(--bg-100); }
 .ap-shell-side { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--bg-000); border-right: 1px solid var(--line); }
 .ap-shell-sidehead { display: flex; align-items: center; height: var(--header-h); padding: 0 var(--space-4); border-bottom: 1px solid var(--line); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; box-sizing: border-box; }
 .ap-shell-sidebody { flex: 1; overflow: auto; padding: var(--space-3) var(--space-2); }
@@ -554,15 +541,12 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 	.ap-shell:not(.ap-shell-side-shut) .ap-shell-nudge { display: block; }
 	.ap-shell:not(.ap-shell-side-shut) .ap-shell-nudge-inline { display: none; }
 }
-/* Beside a rail, what is placed against the rooms list's left edge moves over by it. */
-.ap-shell:not(.ap-shell-norail) :is(.ap-shell-toggle-left, .ap-shell-nudge), .ap-shell:not(.ap-shell-norail) .ap-shell-handle:not(.ap-shell-handle-right) { margin-left: var(--rail-w); }
 /* In the main pane: a StatusBanner under the header, and who is typing, in a row kept while nobody is so nothing moves. */
 .ap-shell-banner { padding: var(--space-2) var(--space-4) 0; }
 .ap-typing.ap-shell-typing { min-height: 20px; padding-top: var(--space-1); }
 /* Wide screens give the member list a column of its own, there while it's shut too, at 0, so it can slide. */
 @media (min-width: 960px) {
-	.ap-shell-members-wide { grid-template-columns: var(--rail-w) var(--side-col, var(--sidebar-w)) minmax(0, 1fr) var(--member-list-track); }
-	.ap-shell-norail.ap-shell-members-wide { grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr) var(--member-list-track); }
+	.ap-shell-members-wide { grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr) var(--member-list-track); }
 }
 /* Narrower, it overlays the conversation, sliding in from the right edge as the column does on wide screens. */
 @media (max-width: 959px) {
@@ -572,7 +556,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* Under 720px it's one pane at a time (data-pane): rooms, then the room or thread, pushed like pages. Phones go back to the rooms list rather than shut it. */
 @media (max-width: 719px) {
 	.ap-shell { grid-template-columns: minmax(0, 1fr); }
-	.ap-shell .ap-rail, .ap-shell .ap-shell-toggle-left, .ap-shell-handle, .ap-typing.ap-shell-typing { display: none; }
+	.ap-shell .ap-shell-toggle-left, .ap-shell-handle, .ap-typing.ap-shell-typing { display: none; }
 	.ap-shell-side-toggle .ap-shell-sidehead, .ap-shell.ap-shell-side-toggle .ap-roomhead { padding-left: var(--space-4); }
 	.ap-shell .ap-shell-side { align-items: stretch; }
 	.ap-shell .ap-shell-side > * { width: auto; }

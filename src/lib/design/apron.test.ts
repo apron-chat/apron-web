@@ -154,3 +154,19 @@ describe('apron.css: inline chips', () => {
 		expect(chips.selectors.some((selector) => selector.includes('.ap-msg-text') && selector.endsWith('code'))).toBe(true);
 	});
 });
+
+describe('apron.css: only what the app renders', () => {
+	it('leaves BackendRail and AppShell\'s rail column, which the app never renders, to rail.css: in the design bundle, not the app', () => {
+		// No rail rule but the tile ConnectPage shares, and no rail width.
+		expect(rules.flatMap((rule) => rule.selectors).filter((selector) => /\.ap-rail(?!-tile\b)/.test(selector))).toEqual([]);
+		expect(`${css}${tokens}`).not.toMatch(/--rail-w\b/);
+		const rail = readFileSync(new URL('./rail.css', import.meta.url), 'utf8');
+		expect(rail).toMatch(/--rail-w:/);
+		expect(rail).toMatch(/\.ap-rail \{/);
+		// The app's stylesheets are the layout's imports; the design bundle adds rail.css after apron.css.
+		const layout = readFileSync(new URL('../../routes/+layout.svelte', import.meta.url), 'utf8');
+		expect(layout).toContain("import '$lib/design/apron.css';");
+		expect(layout).not.toContain('rail.css');
+		expect(readFileSync(new URL('../../../scripts/design-bundle.js', import.meta.url), 'utf8')).toMatch(/\['apron\.css', 'rail\.css'\]/);
+	});
+});

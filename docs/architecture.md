@@ -30,7 +30,9 @@ preview page for each. `npm run design:bundle` builds them into
 `dist-design/project/components/`: `bundle.js` (one classic script, with the
 Svelte runtime inside, that sets `window.Apron` with `render`, `html`, `part`
 and `parts` for plain pages), `bundle.css` (all of `tokens.css`, both themes,
-then `apron.css`, so it needs nothing else), `index.d.ts`
+then `apron.css`, then `rail.css`, so it needs nothing else; `rail.css` styles
+`BackendRail` and `AppShell`'s column for it, which the app never renders, so
+the app doesn't import it and none of it ships with the app), `index.d.ts`
 (generated from each component's `interface Props`) and each
 `<Name>/preview.html`. Publish those files to the design system artifact.
 `tokens.css` is the tokens' source of truth: change a token there, and it

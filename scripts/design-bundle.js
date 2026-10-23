@@ -1,5 +1,6 @@
 // Builds the Apron design system's bundle from src/lib/design: components/bundle.js (one classic script that sets
-// window.Apron) and components/bundle.css (every token from tokens.css, both themes, then apron.css's component styles),
+// window.Apron) and components/bundle.css (every token from tokens.css, both themes, then apron.css's component styles, then
+// rail.css's BackendRail and AppShell's rail column, which the app never renders and so doesn't import),
 // under dist-design/project/. Also index.d.ts and each components/<Name>/preview.html. Publish those files to the design system artifact.
 import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import { build } from 'vite';
@@ -22,7 +23,7 @@ const tokens = readFileSync('src/lib/design/tokens.css', 'utf8');
 for (const block of [':root {', '@media (prefers-color-scheme: light) {', ":root:not([data-theme='dark']) {", ":root[data-theme='dark'] {", ":root[data-theme='light'] {"]) {
 	if (!tokens.includes(block)) throw new Error(`tokens.css has no ${block} block`);
 }
-const css = `${tokens}\n${readFileSync('src/lib/design/apron.css', 'utf8')}`;
+const css = [tokens, ...['apron.css', 'rail.css'].map((f) => readFileSync(`src/lib/design/${f}`, 'utf8'))].join('\n');
 if (/<\/style/i.test(css)) throw new Error('bundle.css must not contain </style');
 
 mkdirSync(OUT, { recursive: true });

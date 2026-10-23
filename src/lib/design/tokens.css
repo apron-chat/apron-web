@@ -128,8 +128,7 @@
 	--embed-max-w: 480px;
 	--embed-max-h: 360px;
 	--iframe-max-h: 480px;
-	--rail-w: 64px;
-	--rail-tile: 40px;
+	--rail-tile: 40px;  /* a backend's tile; the rail's own width, --rail-w, is in rail.css, the design bundle's alone */
 	--header-h: 48px;
 	/* The member list's width until the page sets the one you dragged it to (the page's own default is the same: +page.svelte). */
 	--member-list-w: 240px;
