@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { HTMLAttributes } from 'svelte/elements';
 	import type { ReactionChip } from './types';
 
 	const PALETTE = ['👍', '❤️', '😂', '🎉', '😮', '😢', '👀', '✅'];
@@ -7,8 +6,7 @@
 	/** A touch that drifts further than this is a scroll, not a long press. */
 	const SLOP_PX = 10;
 
-	/** Other attributes (`data-testid`, `class`, …) go on the group of chips. */
-	interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'ontoggle'> {
+	interface Props {
 		reactions: ReactionChip[];
 		/** The palette is open under the message. */
 		open?: boolean;
@@ -27,8 +25,10 @@
 		onreactors?: (emoji: string, chip: HTMLElement) => void;
 		/** A `data-testid` for each chip, which also carries its emoji as `data-emoji`. */
 		chipTestid?: string;
+		/** On the group of chips. */
+		'data-testid'?: string;
 	}
-	let { reactions, open, disabled, ontoggle, add = true, onopen, onclose, onreactors, chipTestid, class: className, ...rest }: Props = $props();
+	let { reactions, open, disabled, ontoggle, add = true, onopen, onclose, onreactors, chipTestid, 'data-testid': testid }: Props = $props();
 	const chips = $derived((reactions || []).filter((r) => r.count > 0));
 	const mine = $derived(new Set(chips.filter((c) => c.mine).map((c) => c.emoji)));
 
@@ -86,7 +86,7 @@
 </script>
 
 {#if chips.length > 0}
-	<div role="group" aria-label="Reactions" {...rest} class={['ap-reactions', className]}>
+	<div class="ap-reactions" role="group" aria-label="Reactions" data-testid={testid}>
 		{#each chips as c (c.emoji)}
 			<button
 				type="button"
