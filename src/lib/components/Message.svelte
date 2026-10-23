@@ -282,7 +282,6 @@
 			<button
 				class="ap-actions-btn"
 				type="button"
-				data-testid="react"
 				aria-label="React"
 				title="React"
 				aria-haspopup="dialog"
@@ -293,7 +292,7 @@
 			>React</button>
 		{/if}
 		{#if caps.startThread}
-			<button class="ap-actions-btn" type="button" data-testid="start-thread" aria-label="Start thread" title="Start thread" onclick={() => act(onstartthread)}>Start thread</button>
+			<button class="ap-actions-btn" type="button" aria-label="Start thread" title="Start thread" onclick={() => act(onstartthread)}>Start thread</button>
 		{/if}
 		{#if caps.edit}
 			<button class="ap-actions-btn" type="button" aria-label="Edit message" title="Edit" onclick={() => act(onedit)}>Edit</button>
@@ -308,7 +307,7 @@
 					<button class="ap-actions-btn" type="button" data-testid="select-message" aria-label="Select message" title="Select" onclick={() => act(onbeginselect)}>Select</button>
 				{/if}
 				{#if caps.link}
-					<button class="ap-actions-btn" type="button" data-testid="copy-link" aria-label={copied ? 'Link copied' : 'Copy link to message'} title="Copy link" onclick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button>
+					<button class="ap-actions-btn" type="button" aria-label={copied ? 'Link copied' : 'Copy link to message'} title="Copy link" onclick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button>
 				{/if}
 				{#if caps.edit}
 					<button class="ap-actions-btn ap-actions-danger" type="button" aria-label="Delete message" title="Delete" onclick={() => act(ondelete)}>Delete</button>

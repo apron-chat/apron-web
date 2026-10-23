@@ -42,4 +42,4 @@
 	});
 </script>
 
-<AttachmentTile {name} {detail} {kind} {src} {onrename} {onremove} removeLabel={`Remove ${name}`} labelTestid="staged-label" />
+<AttachmentTile {name} {detail} {kind} {src} {onrename} {onremove} removeLabel={`Remove ${name}`} />

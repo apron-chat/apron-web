@@ -324,31 +324,31 @@
 				{#if snapshot.passkeySession}
 					<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
 					{#if canUsePasskey && you}
-						<button class="ap-btn ap-btn-sm" type="button" data-testid="add-passkey" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
+						<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
 					{/if}
 					{#if canUseEmail && you && !addEmail}
-						<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+						<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
 					{/if}
 					{#if canUseExternal && you && !addEmail}
-						<button class="ap-btn ap-btn-sm" type="button" data-testid="add-external" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
+						<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
 					{/if}
 					<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
 				{:else}
 					{#if canUsePasskey}
-						<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin" disabled={!!passkeyUnavailable || status === 'saving'} onclick={() => signIn('webauthn')}>Sign in with a passkey</button>
+						<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || status === 'saving'} onclick={() => signIn('webauthn')}>Sign in with a passkey</button>
 					{/if}
 					{#if canUseEmail}
-						<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-email" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
+						<button class="ap-btn ap-btn-sm" type="button" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
 						<!-- Adding an address to a guest asks and answers on this connection; whether that keeps the
 						     guest identity as an account is the server's call (§4.11). -->
 						{#if you && !addEmail}
-							<button class="ap-btn ap-btn-sm" type="button" data-testid="add-email" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+							<button class="ap-btn ap-btn-sm" type="button" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
 						{/if}
 					{/if}
 					{#if canUseExternal}
-						<button class="ap-btn ap-btn-sm" type="button" data-testid="profile-signin-external" disabled={status === 'saving'} onclick={() => signIn('external')}>Sign in externally</button>
+						<button class="ap-btn ap-btn-sm" type="button" disabled={status === 'saving'} onclick={() => signIn('external')}>Sign in externally</button>
 						{#if you && !addEmail}
-							<button class="ap-btn ap-btn-sm" type="button" data-testid="add-external" title="Keep this identity: add an external sign-in to it, if the server allows" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
+							<button class="ap-btn ap-btn-sm" type="button" title="Keep this identity: add an external sign-in to it, if the server allows" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
 						{/if}
 					{/if}
 				{/if}
@@ -360,7 +360,7 @@
 			{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
 				<span class="ap-profedit-hint">{passkeyUnavailable}</span>
 			{:else if wayBack}
-				<span class="ap-profedit-hint" data-testid="way-back-nudge">{snapshot.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
+				<span class="ap-profedit-hint">{snapshot.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
 			{:else}
 				<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
 			{/if}

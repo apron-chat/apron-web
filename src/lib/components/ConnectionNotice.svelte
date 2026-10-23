@@ -29,7 +29,7 @@
 			{statusLabel(snapshot, session.stalled)}
 			{#snippet action()}
 				{#if session.reconnectNeedsAttention}
-					<button class="ap-btn ap-btn-sm" type="button" data-testid="reconnect-retry" disabled={Boolean(snapshot.retryAfterMs)} onclick={onretry}>{snapshot.held ? 'Sign in' : 'Try Again'}</button>
+					<button class="ap-btn ap-btn-sm" type="button" disabled={Boolean(snapshot.retryAfterMs)} onclick={onretry}>{snapshot.held ? 'Sign in' : 'Try Again'}</button>
 				{/if}
 			{/snippet}
 		</StatusBanner>

@@ -5,7 +5,6 @@
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import Users from '@lucide/svelte/icons/users';
-	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import MenuButton from './MenuButton.svelte';
 	import { count99, roomName, roomNameTip } from './util';
@@ -32,8 +31,6 @@
 		/** Unread messages in the other rooms and threads, and how many mention you: the ‹ becomes the point of a tag holding the count, grey, or orange with an @ for a mention, as in the rooms list. */
 		unreadElsewhere?: number;
 		mentionsElsewhere?: number;
-		/** After the header's own buttons. */
-		children?: Snippet;
 		/** A thread is open in the main pane: shows `Parent › Thread`; the parent's title goes back via onroom. */
 		thread?: string;
 		/** The thread's `title`; without one it's called "Untitled", with its `room_id` on hover. */
@@ -63,7 +60,7 @@
 		leaveTestid?: string;
 	}
 	let {
-		room, name, topic, topicTitle, private: isPrivate, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0, children,
+		room, name, topic, topicTitle, private: isPrivate, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
 		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, busy = false, onsummary,
 		tagTestid, topicTestid, joinTestid, summaryTestid, actionsTestid, editTestid, leaveTestid, class: className, ...rest
 	}: Props = $props();
@@ -131,5 +128,4 @@
 			{#snippet lead(value)}{#if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
 		</MenuButton>
 	{/if}
-	{@render children?.()}
 </header>

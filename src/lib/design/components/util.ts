@@ -186,7 +186,7 @@ export function safeHttp(u: unknown): string | undefined {
 
 /** Every field of EmbedProps, so an Embed component can tell the embed's own from the attributes for its root. */
 const EMBED_FIELDS: Record<keyof EmbedProps, true> = {
-	embed_id: true, kind: true, url: true, title: true, og: true, progress: true, failed: true, detail: true, caption: true, onview: true, link: true,
+	embed_id: true, kind: true, url: true, title: true, og: true, progress: true, failed: true, detail: true, onview: true, link: true,
 	format: true, text: true, done: true, truncated: true, status: true, children: true, attach: true, height: true, live: true, onactivate: true, html: true
 };
 

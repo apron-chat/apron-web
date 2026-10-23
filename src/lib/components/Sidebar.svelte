@@ -104,7 +104,7 @@
 </script>
 
 <aside class="ap-shell-side" aria-label="Rooms">
-	<SidebarHead name={backendLabel} {onconnect} {returnTo} {onreturn} returnTestid="rooms-return" />
+	<SidebarHead name={backendLabel} {onconnect} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
 		<SidebarSection title="Rooms" collapsible={false} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && session.starting} bodyTestid="room-list">
 			{#if rooms.length === 0}

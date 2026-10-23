@@ -64,7 +64,6 @@
 		onjumpto?: () => void;
 		reactions?: ReactionChip[];
 		reacting?: boolean;
-		palette?: string[];
 		canReact?: boolean;
 		onreact?: (emoji: string) => void;
 		onopenreact?: () => void;
@@ -79,7 +78,7 @@
 	let {
 		messageId, sender, handle, text, children, embeds, body, avatar, name: nameSnippet, timestamp, time, grouped: groupedProp, status = 'sent', onretry, edited, deleted,
 		system: systemProp, scope: scopeProp, mention, pinged, highlighted, density = 'cozy', actions, footer, replyTo, reply, onjumpto,
-		reactions, reacting, palette, canReact, onreact, onopenreact, onclosereact, selectMode, selected, onselect, onclick, class: className, ...rest
+		reactions, reacting, canReact, onreact, onopenreact, onclosereact, selectMode, selected, onselect, onclick, class: className, ...rest
 	}: Props = $props();
 
 	const s = $derived(sender || ({} as Partial<Sender>));
@@ -207,7 +206,7 @@
 				{/if}
 				{@render failed()}
 				{#if (reactions && reactions.length) || reacting}
-					<ReactionBar reactions={reactions || []} open={reacting} palette={palette} disabled={canReact === false} ontoggle={onreact} onopen={onopenreact} onclose={onclosereact} />
+					<ReactionBar reactions={reactions || []} open={reacting} disabled={canReact === false} ontoggle={onreact} onopen={onopenreact} onclose={onclosereact} />
 				{/if}
 			{/if}
 			{@render footer?.()}

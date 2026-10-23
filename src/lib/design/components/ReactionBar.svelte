@@ -12,7 +12,6 @@
 		reactions: ReactionChip[];
 		/** The palette is open under the message. */
 		open?: boolean;
-		palette?: string[];
 		/** No capability `reactions`, or the session can't send now: chips render but don't toggle, and stay focusable so `onreactors` still works. */
 		disabled?: boolean;
 		/** Toggle your own emoji; send your complete set with `reactions`. */
@@ -29,9 +28,8 @@
 		/** A `data-testid` for each chip, which also carries its emoji as `data-emoji`. */
 		chipTestid?: string;
 	}
-	let { reactions, open, palette = PALETTE, disabled, ontoggle, add = true, onopen, onclose, onreactors, chipTestid, class: className, ...rest }: Props = $props();
+	let { reactions, open, disabled, ontoggle, add = true, onopen, onclose, onreactors, chipTestid, class: className, ...rest }: Props = $props();
 	const chips = $derived((reactions || []).filter((r) => r.count > 0));
-	const picks = $derived([...new Set(palette)]);
 	const mine = $derived(new Set(chips.filter((c) => c.mine).map((c) => c.emoji)));
 
 	let press: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | undefined;
@@ -113,7 +111,7 @@
 {/if}
 {#if open}
 	<div class="ap-rpalette" role="toolbar" tabindex="-1" aria-label="Pick a reaction" onkeydown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onclose?.(); } }}>
-		{#each picks as e (e)}
+		{#each PALETTE as e (e)}
 			<button type="button" class={['ap-rpick', mine.has(e) && 'ap-rpick-mine']} aria-pressed={mine.has(e)} aria-label="React with {e}" title={e} {disabled} onclick={() => { onclose?.(); ontoggle?.(e); }}>{e}</button>
 		{/each}
 		<button type="button" class="ap-rpick ap-rpick-close" aria-label="Close reactions" title="Close" onclick={onclose}>×</button>

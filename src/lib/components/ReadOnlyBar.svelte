@@ -14,11 +14,11 @@
 	let { passkeyUnavailable, onsignin }: Props = $props();
 </script>
 
-<div class="ap-composer ap-composer-readonly" role="note" data-testid="read-only-bar">
+<div class="ap-composer ap-composer-readonly" role="note">
 	<p class="ap-composer-readonly-text">
 		You’re reading as a guest. {passkeyUnavailable ? `Posting needs a passkey sign-in. ${passkeyUnavailable}` : 'Sign in to post, react, join rooms, and start threads.'}
 	</p>
 	{#if !passkeyUnavailable}
-		<Button variant="primary" size="sm" data-testid="read-only-signin" onclick={onsignin} label="Sign in" />
+		<Button variant="primary" size="sm" onclick={onsignin} label="Sign in" />
 	{/if}
 </div>

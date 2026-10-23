@@ -23,8 +23,6 @@
 		onremoveavatar?: () => void;
 		/** An avatar on its way: uploading says so on its button; either keeps both avatar buttons disabled. */
 		avatarBusy?: 'uploading' | 'removing';
-		/** The request went out but `you.avatar` didn't change. */
-		avatarKept?: boolean;
 		/** Why the avatar couldn't be uploaded or removed. */
 		avatarError?: string;
 		/** Not connected: the avatar buttons can't be used. */
@@ -53,7 +51,7 @@
 		nameTestid?: string;
 	}
 	let {
-		userId, name = $bindable(''), oninput, avatar, face, canUpload, onavatarfile, onremoveavatar, avatarBusy, avatarKept, avatarError, offline,
+		userId, name = $bindable(''), oninput, avatar, face, canUpload, onavatarfile, onremoveavatar, avatarBusy, avatarError, offline,
 		status = 'idle', serverName, declinedNote, onsave, oncancel, signin, dialog = true,
 		changeAvatarTestid, removeAvatarTestid, avatarFileTestid, nameTestid, class: className, onsubmit, ...rest
 	}: Props = $props();
@@ -90,7 +88,6 @@
 			{:else}
 				<span class="ap-profedit-hint">This backend doesn’t take uploads, so your avatar can’t be set here.</span>
 			{/if}
-			{#if avatarKept}<span class="ap-profedit-hint">The server kept your previous avatar.</span>{/if}
 			{#if avatarError}<span class="ap-profedit-hint ap-tone-danger" role="alert">{avatarError}</span>{/if}
 		</div>
 	</div>

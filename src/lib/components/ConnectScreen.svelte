@@ -56,7 +56,7 @@
 <!-- The design system's ConnectPage draws the page; the app's SignIn runs the form, with a ConnectHeader at its top. -->
 {#snippet welcomeHtml()}{@html welcome}{/snippet}
 {#snippet header()}
-	<ConnectHeader bind:url={serverInput} {busy} welcome={welcome ? welcomeHtml : undefined} welcomeTestid="server-welcome" urlTestid="server-url-input" />
+	<ConnectHeader bind:url={serverInput} {busy} welcome={welcome ? welcomeHtml : undefined} urlTestid="server-url-input" />
 {/snippet}
 <ConnectPage page {busy} recent={recentServers} onpickrecent={(recent) => (serverInput = recent.url)}>
 	<SignIn

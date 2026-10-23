@@ -50,4 +50,4 @@
 	}
 </script>
 
-<RoomForm data-testid="room-form" bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} bind:summary status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={start} {onclose} />
+<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} bind:summary status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={start} {onclose} />

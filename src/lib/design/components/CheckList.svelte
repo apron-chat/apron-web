@@ -21,14 +21,10 @@
 		value?: string[];
 		/** Keeps at least this many checked: the last ones can't be unchecked. */
 		min?: number;
-		/** Disables every option. */
-		disabled?: boolean;
 		/** Called with the new checked values, in the options' order. */
 		onchange?: (value: string[]) => void;
-		/** Says why the last checked ones can't be unchecked (read to screen readers). */
-		minNote?: string;
 	}
-	let { label, options, value = $bindable([]), min = 0, disabled = false, onchange, minNote = 'At least one stays checked.', class: className, ...rest }: Props = $props();
+	let { label, options, value = $bindable([]), min = 0, onchange, class: className, ...rest }: Props = $props();
 	const uid = $props.id();
 
 	function toggle(option: string, checked: boolean): void {
@@ -38,7 +34,7 @@
 	}
 </script>
 
-<fieldset {...rest} class={['ap-checklist', className]} {disabled}>
+<fieldset {...rest} class={['ap-checklist', className]}>
 	<legend class="ap-checklist-legend">{label}</legend>
 	{#each options as option (option.value)}
 		{@const checked = value.includes(option.value)}
@@ -60,5 +56,5 @@
 			</span>
 		</label>
 	{/each}
-	{#if min > 0}<span class="ap-sr" id={`${uid}-min`}>{minNote}</span>{/if}
+	{#if min > 0}<span class="ap-sr" id={`${uid}-min`}>At least one stays checked.</span>{/if}
 </fieldset>

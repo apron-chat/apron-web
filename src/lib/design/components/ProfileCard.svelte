@@ -19,8 +19,6 @@
 		userId: string;
 		/** Display name; falls back to `userId`. */
 		name?: string;
-		/** Avatar image URL. */
-		src?: string;
 		/** Replaces the avatar, such as with your own that tints initials by `user_id`. */
 		avatar?: Snippet;
 		/** The viewer's own card: "(you)" follows the name. */
@@ -49,18 +47,14 @@
 		element?: HTMLDivElement;
 		/** The Popover's rendered height in px, bindable. */
 		offsetHeight?: number;
-		/** A `data-testid` for the `@user_id`. */
-		handleTestid?: string;
 		/** A `data-testid` for the status in words. */
 		statusTestid?: string;
 		/** A `data-testid` for the row of roles. */
 		rolesTestid?: string;
-		/** A `data-testid` for the membership note. */
-		membershipTestid?: string;
 	}
 	let {
-		userId, name, src, avatar, you = false, status, statusLabel, roles, sharesName = false, membership, onmention, oncopyid, onaddtoroom, adding = false, note,
-		element = $bindable(), offsetHeight = $bindable(0), handleTestid, statusTestid, rolesTestid, membershipTestid, class: className, ...rest
+		userId, name, avatar, you = false, status, statusLabel, roles, sharesName = false, membership, onmention, oncopyid, onaddtoroom, adding = false, note,
+		element = $bindable(), offsetHeight = $bindable(0), statusTestid, rolesTestid, class: className, ...rest
 	}: Props = $props();
 	const shownName = $derived(name || userId);
 	const shown = $derived(presence(status));
@@ -68,13 +62,13 @@
 
 <Popover aria-label={`Profile of ${shownName}`} {...rest} class={['ap-profcard', className]} bind:element bind:offsetHeight>
 	<div class="ap-profcard-who">
-		{#if avatar}{@render avatar()}{:else}<Avatar name={shownName} user_id={userId} {src} size="lg" {status} {statusLabel} />{/if}
+		{#if avatar}{@render avatar()}{:else}<Avatar name={shownName} user_id={userId} size="lg" {status} {statusLabel} />{/if}
 		<div class="ap-profcard-names">
 			<div class="ap-profcard-nameline">
 				<span class="ap-profcard-name">{shownName}</span>
 				{#if you}<span class="ap-profcard-you">(you)</span>{/if}
 			</div>
-			<div class="ap-profcard-handle" data-testid={handleTestid}>@{userId}</div>
+			<div class="ap-profcard-handle">@{userId}</div>
 			{#if shown === 'unknown'}
 				<div class="ap-profcard-status" data-testid={statusTestid}>Unknown status: <code class="ap-profcard-literal">{status}</code></div>
 			{:else if shown}
@@ -86,7 +80,7 @@
 	{#if sharesName}
 		<p class="ap-profcard-warn" role="note">Another user also shows as <strong>{shownName}</strong>. Check the @user_id.</p>
 	{/if}
-	{#if membership}<p class="ap-profcard-note" data-testid={membershipTestid}>{membership}</p>{/if}
+	{#if membership}<p class="ap-profcard-note">{membership}</p>{/if}
 	<div class="ap-profcard-actions">
 		{#if onmention}<Button size="sm" onclick={onmention}>Mention</Button>{/if}
 		{#if oncopyid}<Button variant="ghost" size="sm" onclick={oncopyid}>Copy @user_id</Button>{/if}

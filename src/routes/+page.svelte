@@ -2446,7 +2446,7 @@
 	{/snippet}
 
 	{#snippet main()}
-		{#if dropping}<DropZone data-testid="drop-zone" />{/if}
+		{#if dropping}<DropZone />{/if}
 		{#if activeRoom}
 			<RoomHeader
 				room={activeRoom}

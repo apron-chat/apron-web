@@ -454,7 +454,7 @@
 
 <!-- The design system's SignInForm draws the panel; this runs it. -->
 <SignInForm
-	aria-label="Sign in" data-testid="sign-in" data-phase={view.phase} onsubmit={submit}
+	aria-label="Sign in" data-phase={view.phase} onsubmit={submit}
 	{header} {schemes} scheme={chosen} onscheme={(candidate) => (scheme = candidate as Scheme)}
 	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }}
 	bind:token bind:email bind:code bind:name={displayName} askName={chosen === 'token' ? inviteToken : !passkeyLogin}

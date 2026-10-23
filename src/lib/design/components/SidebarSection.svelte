@@ -15,7 +15,6 @@
 		/** A + at the end of the heading, such as Create room; `addLabel` is its name and tooltip. */
 		onadd?: () => void;
 		addLabel?: string;
-		action?: Snippet;
 		/** While the list is loading: placeholder lines in place of `children`. */
 		loading?: boolean;
 		/** A `data-testid` for the folding title, and one for the body. */
@@ -23,7 +22,7 @@
 		bodyTestid?: string;
 		children?: Snippet;
 	}
-	let { title, open = $bindable(true), ontoggle, collapsible = true, onadd, addLabel, action, loading, toggleTestid, bodyTestid, children, class: className, ...rest }: Props = $props();
+	let { title, open = $bindable(true), ontoggle, collapsible = true, onadd, addLabel, loading, toggleTestid, bodyTestid, children, class: className, ...rest }: Props = $props();
 	function toggle() {
 		open = !open;
 		ontoggle?.(open);
@@ -40,7 +39,6 @@
 		{#if onadd}
 			<button type="button" class="ap-btn ap-btn-ghost ap-btn-sm ap-sect-add" aria-label={addLabel} title={addLabel} onclick={onadd}><Plus size={18} aria-hidden="true" /></button>
 		{/if}
-		{@render action?.()}
 	</div>
 	{#if open || !collapsible}
 		<div class="ap-sect-body" data-testid={bodyTestid}>

@@ -681,8 +681,8 @@
 	{#if pickerOpen}
 		<AutocompletePicker id={pickerId} query={query ?? ''} people={matches} active={activeIndex} data-testid="mention-picker" onpick={(index) => pick(matches[index])} onhover={(index) => (active = index)} />
 	{:else if roomPickerOpen}
-		<AutocompletePicker id={pickerId} query={roomFound?.query ?? ''} rooms={roomMatches} active={activeIndex} data-testid="room-autocomplete" onpick={(index) => pickRoom(roomMatches[index])} onhover={(index) => (active = index)} />
+		<AutocompletePicker id={pickerId} query={roomFound?.query ?? ''} rooms={roomMatches} active={activeIndex} onpick={(index) => pickRoom(roomMatches[index])} onhover={(index) => (active = index)} />
 	{:else if emojiPickerOpen}
-		<AutocompletePicker id={pickerId} query={emojiFound?.query ?? ''} emoji={emojiMatches} active={activeIndex} data-testid="emoji-autocomplete" onpick={(index) => pickEmoji(emojiMatches[index])} onhover={(index) => (active = index)} />
+		<AutocompletePicker id={pickerId} query={emojiFound?.query ?? ''} emoji={emojiMatches} active={activeIndex} onpick={(index) => pickEmoji(emojiMatches[index])} onhover={(index) => (active = index)} />
 	{/if}
 {/snippet}

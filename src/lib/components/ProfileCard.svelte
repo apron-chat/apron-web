@@ -173,10 +173,8 @@
 		adding={busy}
 		{note}
 		data-testid="profile-card"
-		handleTestid="profile-handle"
 		statusTestid="profile-status"
 		rolesTestid="roles"
-		membershipTestid="profile-membership"
 		bind:element={box}
 		bind:offsetHeight={measured}
 		onkeydown={keydown}

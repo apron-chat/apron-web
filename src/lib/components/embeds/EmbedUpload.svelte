@@ -33,4 +33,4 @@
 </script>
 
 <DesignEmbedUpload kind="upload" {url} title={embed.title} {og} progress={upload?.progress} failed={upload?.failed} detail={url ? undefined : size}
-	link={viewer} onview={(event) => mediaViewer.show(event.currentTarget as HTMLElement)} data-testid={url ? undefined : 'upload-pending'} />
+	link={viewer} onview={(event) => mediaViewer.show(event.currentTarget as HTMLElement)} />

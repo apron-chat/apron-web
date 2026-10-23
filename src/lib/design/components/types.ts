@@ -25,8 +25,6 @@ export interface EmbedProps {
 	failed?: boolean | string;
 	/** upload: a detail line under the file name: what it is (size, type) on a file card without og media, or ahead of Uploading… while pending. */
 	detail?: string;
-	/** upload with og.image: false hides the caption under the picture. */
-	caption?: boolean;
 	/**
 	 * upload with og.image: a plain click (`plainClick`) on the picture calls this instead of following the link,
 	 * to show it full screen in a MediaViewer. Other clicks still open the link in a new tab or window.

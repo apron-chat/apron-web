@@ -5,7 +5,7 @@
 	import type { EmbedComponentProps } from './types';
 	import { embedAttributes, ogRatio, plainClick, safeHttp } from './util';
 
-	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, caption, onview, link, ...rest }: EmbedComponentProps = $props();
+	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, onview, link, ...rest }: EmbedComponentProps = $props();
 	const attributes = $derived(embedAttributes(rest));
 	const url = $derived(safeHttp(rawUrl));
 	const title = $derived(rawTitle || og.title || 'File');
@@ -42,7 +42,7 @@
 	<figure {...attributes} class={['ap-embed', 'ap-embed-figure', attributes.class]}>
 		<a {...link} href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener" aria-haspopup={onview ? 'dialog' : undefined} title={onview ? `View ${title}` : undefined}
 			onclick={(event) => { if (onview && plainClick(event)) { event.preventDefault(); onview(event); } }}><img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} /></a>
-		{#if caption !== false}<figcaption class="ap-embed-caption">{title}</figcaption>{/if}
+		<figcaption class="ap-embed-caption">{title}</figcaption>
 	</figure>
 {:else}
 	<a href={url} download={title} target="_blank" rel="noreferrer noopener" {...attributes} class={['ap-embed', 'ap-embed-card', 'ap-embed-file', attributes.class]}>

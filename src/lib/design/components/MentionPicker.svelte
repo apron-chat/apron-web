@@ -23,19 +23,15 @@
 		onhover?: (index: number) => void;
 		/** The list's ID, which the field names in `aria-controls`; option `i` is `${id}-${i}`, its `aria-activedescendant`. */
 		id?: string;
-		/** The list's label; by default "Mention someone", "Room suggestions" or "Emoji suggestions". */
-		label?: string;
-		/** What an empty list says; by default that nothing matches the query (with no query, "People in this room"). */
-		empty?: string;
 		/** Replaces a person's avatar, such as with one tinted by their ID. */
 		avatar?: Snippet<[Sender]>;
 	}
-	let { query = '', people = [], rooms, emoji, active = 0, onpick, onhover, id, label, empty, avatar, class: className, ...rest }: Props = $props();
+	let { query = '', people = [], rooms, emoji, active = 0, onpick, onhover, id, avatar, class: className, ...rest }: Props = $props();
 
 	const kind = $derived(rooms ? 'rooms' : emoji ? 'emoji' : 'people');
 	const items: (Sender | PickerRoom | PickerEmoji)[] = $derived(rooms ?? emoji ?? people);
-	const listLabel = $derived(label ?? (kind === 'rooms' ? 'Room suggestions' : kind === 'emoji' ? 'Emoji suggestions' : 'Mention someone'));
-	const emptyText = $derived(empty ?? (kind === 'rooms' ? `No room matches “${query}”` : kind === 'emoji' ? `No emoji match “${query}”` : query ? `No one here matches “${query}”` : 'People in this room'));
+	const listLabel = $derived(kind === 'rooms' ? 'Room suggestions' : kind === 'emoji' ? 'Emoji suggestions' : 'Mention someone');
+	const emptyText = $derived(kind === 'rooms' ? `No room matches “${query}”` : kind === 'emoji' ? `No emoji match “${query}”` : query ? `No one here matches “${query}”` : 'People in this room');
 	const q = $derived(query.toLowerCase());
 	const key = (item: Sender | PickerRoom | PickerEmoji, index: number): string => ('user_id' in item ? uid(item) : item.id) ?? String(index);
 	let list = $state<HTMLUListElement>();

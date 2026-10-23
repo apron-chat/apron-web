@@ -21,15 +21,13 @@
 		children?: Snippet;
 		/** The Popover's `<div>`, bindable. */
 		element?: HTMLDivElement;
-		/** A `data-testid` for the caption. */
-		captionTestid?: string;
 	}
-	let { caption, status = 'ready', mount = $bindable(), children, element = $bindable(), captionTestid, class: className, ...rest }: Props = $props();
+	let { caption, status = 'ready', mount = $bindable(), children, element = $bindable(), class: className, ...rest }: Props = $props();
 </script>
 
 <Popover aria-label="Emoji picker" {...rest} class={['ap-emojipop', className]} bind:element>
 	{#if caption}
-		<p class="ap-emojipop-caption" data-testid={captionTestid}><span class="ap-emojipop-lead">{caption.lead}</span> <span class="ap-emojipop-text">“{caption.text}”</span></p>
+		<p class="ap-emojipop-caption"><span class="ap-emojipop-lead">{caption.lead}</span> <span class="ap-emojipop-text">“{caption.text}”</span></p>
 	{/if}
 	{#if status !== 'ready'}
 		<p class="ap-emojipop-status" role="status">{status === 'failed' ? 'Emoji couldn’t load. Close and try again.' : 'Loading emoji…'}</p>

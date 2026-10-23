@@ -16,10 +16,8 @@
 
 	/** Other attributes (`data-*`, `class`, …) go on the banner. */
 	interface Props extends HTMLAttributes<HTMLDivElement> {
-		/** The connection's state: the dot's tone and, without `message` or `children`, the words. Leave out for any other status, with `tone` and `children`. */
+		/** The connection's state: the dot's tone and, without `children`, the words. Leave out for any other status, with `tone` and `children`. */
 		state?: ConnectionState;
-		/** The server's error `message`, shown as is (§1.1). */
-		message?: string;
 		children?: Snippet;
 		/** Seconds left from `data.retry_after`. */
 		retryIn?: number;
@@ -33,13 +31,13 @@
 		/** A `data-testid` for the words. */
 		textTestid?: string;
 	}
-	let { state, message, children, retryIn, action, tone: toneProp, role = 'status', live, textTestid, class: className, ...rest }: Props = $props();
+	let { state, children, retryIn, action, tone: toneProp, role = 'status', live, textTestid, class: className, ...rest }: Props = $props();
 	const s = $derived(state ? (STATUS[state] ?? STATUS.connecting) : undefined);
 	const tone = $derived(toneProp ?? s?.[0] ?? 'none');
 </script>
 
 <div {role} {...rest} class={['ap-status', action && 'ap-status-action', className]}>
 	<span class={['ap-status-dot', tone !== 'none' && `ap-status-${tone}`]} aria-hidden="true"></span>
-	<span class="ap-status-text" data-testid={textTestid} aria-live={live ? 'polite' : undefined}>{#if children}{@render children()}{:else}{message || s?.[1]}{/if}{#if retryIn != null}<span class="ap-status-retry">{` · Retrying in ${retryIn}s`}</span>{/if}</span>
+	<span class="ap-status-text" data-testid={textTestid} aria-live={live ? 'polite' : undefined}>{#if children}{@render children()}{:else}{s?.[1]}{/if}{#if retryIn != null}<span class="ap-status-retry">{` · Retrying in ${retryIn}s`}</span>{/if}</span>
 	{@render action?.()}
 </div>

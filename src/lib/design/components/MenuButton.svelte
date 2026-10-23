@@ -26,10 +26,6 @@
 		choices: MenuChoice[];
 		/** Called with the chosen value; the menu closes. */
 		onselect: (value: string) => void;
-		variant?: 'quiet' | 'primary' | 'ghost';
-		size?: 'md' | 'sm';
-		/** Where the menu opens: under the button (the default) or above it. */
-		placement?: 'below' | 'above';
 		disabled?: boolean;
 		/**
 		 * Working on the last choice, such as a request in flight: the button
@@ -47,7 +43,7 @@
 		ariaLabel?: string;
 	}
 	let {
-		label, icon, buttonTestid, choices, onselect, variant = 'quiet', size = 'sm', placement = 'below', disabled = false, busy = false, open = $bindable(false), selected, lead, ariaLabel,
+		label, icon, buttonTestid, choices, onselect, disabled = false, busy = false, open = $bindable(false), selected, lead, ariaLabel,
 		class: className, onkeydown, ...rest
 	}: Props = $props();
 
@@ -120,10 +116,10 @@
 	{#if icon}
 		<button bind:this={trigger} type="button" class={['ap-iconbtn', open && 'ap-iconbtn-on']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel ?? label} title={label} data-testid={buttonTestid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{@render icon()}</button>
 	{:else}
-		<button bind:this={trigger} type="button" class={['ap-btn', 'ap-btn-' + variant, size === 'sm' && 'ap-btn-sm']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel} data-testid={buttonTestid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{label}</button>
+		<button bind:this={trigger} type="button" class="ap-btn ap-btn-quiet ap-btn-sm" aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel} data-testid={buttonTestid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{label}</button>
 	{/if}
 	{#if open}
-		<ul class={['ap-menu', placement === 'below' && 'ap-menu-below', selected !== undefined && 'ap-menu-pick']} role="menu" aria-label={ariaLabel ?? label}>
+		<ul class={['ap-menu', 'ap-menu-below', selected !== undefined && 'ap-menu-pick']} role="menu" aria-label={ariaLabel ?? label}>
 			{#each choices as choice (choice.value)}
 				{@const on = selected !== undefined && choice.value === selected}
 				<li role="none">
