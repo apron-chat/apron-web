@@ -70,13 +70,6 @@ Some features have no capability:
   back requests of that method until the delay ends. It holds back no other
   method, unless `ext:limits` gives a category ([§4](#4-extlimits)).
 
-### 2.1 Known departures
-
-These predate this document. Each one is to move behind an extension, or go:
-
-- apron-web asks for a display name with a pasted token only when the token
-  starts with `apron_join_`.
-
 ---
 
 ## 3. `ext:settings`

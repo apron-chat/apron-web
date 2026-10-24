@@ -27,7 +27,7 @@ describe('SignInForm', () => {
 		expect(fields()).toEqual(['Token']);
 		dom.unmount();
 		render({ scheme: 'token', askName: true });
-		expect(fields()).toEqual(['Token', 'Display name']);
+		expect(fields()).toEqual(['Token', 'Your name, if this is an invite']);
 		dom.unmount();
 		render({ scheme: 'email' });
 		expect(fields()).toEqual(['Email', 'Display name']);

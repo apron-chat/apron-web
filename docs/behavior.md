@@ -1150,6 +1150,13 @@ the account, which then signs it back in (with a tap, as below); where the
 scheme only signs up, the message points to another way in rather than to it. The link dialog also
 warns when the server a link switches to has a saved session here.
 
+**Token** signs in with a token the server gave you, pasted into the form
+(`scheme: "token"`), and keeps it like a session token (below). Its optional
+name field, "Your name, if this is an invite", goes with the token as `name`
+only when filled, for an invite that creates an account
+([PROTOCOL.md Appendix B.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#b3-an-invite-token-signs-up-several-people));
+left empty, no name is sent, and the account keeps the one the server gives it.
+
 When the server advertises token authentication, the session token it returns
 (after a passkey or email sign-in, or a replacement in reply to a token resume)
 is kept in `localStorage`, keyed by server URL, the latest replacing any earlier, and automatically resumes the

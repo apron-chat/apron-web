@@ -153,7 +153,7 @@ function primaryAction(input: SignInInput): SignInAction {
 }
 
 /** What the panel says about the chosen scheme. */
-export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered' | 'passkey'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean; invite?: boolean }): string {
+export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered' | 'passkey'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean }): string {
 	if (input.scheme === 'webauthn') {
 		if (input.here && input.registered) return 'Signed in. Choose Guest to sign out.';
 		const asGuest = input.phase === 'ready' && input.guest;
@@ -174,8 +174,7 @@ export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'register
 		const does = input.use.signIn && !input.use.signUp ? 'Signs in to an account you have' : input.use.signUp && !input.use.signIn ? 'Creates an account' : 'Signs in';
 		return `${does} on the server’s own sign-in page (such as single sign-on), which then brings you back here.`;
 	}
-	if (input.scheme === 'token' && input.invite) return 'Creates an account with this sign-up invite. Your user ID is picked from your display name.';
-	if (input.scheme === 'token') return 'Signs in with a token the server gave you, such as a bot token from /invite-bot.';
+	if (input.scheme === 'token') return 'Signs in with a token the server gave you. If it’s an invite, add your name for the account it creates.';
 	return input.guestReadOnly ? 'No token needed, but guests only read here: sign in with a passkey to post.' : 'No token needed; the server picks a guest identity.';
 }
 
