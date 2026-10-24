@@ -7,7 +7,8 @@ import { FakeSocket, quiet, settle, startClient } from '$lib/test/client';
 /**
  * Waits the server asks for (`retry_after`, §1.1): a refusal is a
  * `RateLimitError`; one of `history` or `message` holds back further requests
- * of its method, and the snapshot's `limits` show each wait until it is over. History in client.recovery.test.ts.
+ * of its method, or with `ext:limits` what its category covers, and the
+ * snapshot's `limits` show each wait until it is over. History in client.recovery.test.ts.
  */
 let client: ChatClient;
 let socket: FakeSocket;
@@ -142,13 +143,134 @@ describe('a refusal with retry_after', () => {
 	});
 });
 
+describe('a refusal with a category of limit (ext:limits)', () => {
+	const ROOM = { room_id: 'general', title: 'General', latest_log_id: '12', history_log_id: '10' };
+	/** A refusal that gives its category in `data.ext.limits`. */
+	const refuseAs = (id: string, retryAfter: number, category: unknown, message = 'Too Many Requests') => refuse(id, retryAfter, message, { ext: { limits: category } });
+	const files = () => [new File(['x'], 'x.txt')];
+	/** Tries each request a `write` wait covers but `message`; resolves with how many of each method went out. */
+	const writes = async () => {
+		const tried = [
+			client.react('1', ['👍']).promise, client.command('general', '/help').promise, client.joinRoom('ops').promise,
+			client.leaveRoom('general').promise, client.updateRoom('general', { title: 'Main' }).promise, client.updateProfile({ name: 'Ada' })
+		];
+		for (const attempt of tried) attempt.catch(() => undefined);
+		await settle();
+		return ['reactions', 'command', 'room_join', 'room_leave', 'room_set', 'me'].map(sentOf);
+	};
+
+	it('of write holds back every request that changes shared state, in the server\'s words, and nothing else', async () => {
+		await socket.greet(['rooms', 'history', 'reactions', 'command', 'ext:limits'], { room: ROOM });
+		await socket.reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
+		const sent = client.send('general', 'one');
+		refuseAs(socket.request('message').id, 40, 'write', 'Posting limit reached');
+		await expect(sent.promise).rejects.toMatchObject({ scope: 'write', method: 'message', message: 'Posting limit reached. Try again in 40s.' });
+		expect(snapshot.limits).toEqual({ write: { since: Date.now(), until: Date.now() + 40_000 } });
+		await expect(client.react('1', ['👍']).promise).rejects.toMatchObject({ scope: 'write', method: 'reactions', retryAt: Date.now() + 40_000, message: 'Posting limit reached. Try again in 40s.' });
+		await expect(client.joinRoom('ops').promise).rejects.toMatchObject({ scope: 'write', method: 'room_join' });
+		expect(await writes()).toEqual([0, 0, 0, 0, 0, 0]);
+		quiet(client.send('general', 'two'));
+		expect(sentOf('message')).toBe(1);
+		// Reading goes on.
+		quiet(client.listRooms());
+		quiet(client.loadRoom('general'));
+		await settle();
+		expect(sentOf('room_list')).toBe(2);
+		await vi.advanceTimersByTimeAsync(40_000);
+		expect(snapshot.limits).toBeUndefined();
+		expect(await writes()).toEqual([1, 1, 1, 1, 1, 1]);
+	});
+
+	it('of write on any request it covers holds back messages too', async () => {
+		await socket.greet(['rooms', 'reactions', 'ext:limits'], { room: ROOM });
+		const reacted = client.react('1', ['👍']);
+		refuseAs(socket.request('reactions').id, 30, 'write');
+		await expect(reacted.promise).rejects.toMatchObject({ scope: 'write' });
+		await expect(client.send('general', 'hi').promise).rejects.toMatchObject({ scope: 'write', method: 'message' });
+		expect(sentOf('message')).toBe(0);
+	});
+
+	it('of upload holds back only messages and commands with files: text still sends', async () => {
+		await socket.greet(['rooms', 'command', 'embed:upload', 'ext:limits'], { room: ROOM });
+		const { sent, uploaded } = client.sendFiles('general', 'see attached', files());
+		quiet(uploaded);
+		refuseAs(socket.request('message').id, 5 * 3600, 'upload', 'Daily upload limit reached');
+		await expect(sent).rejects.toMatchObject({ scope: 'upload', method: 'message' });
+		expect(Object.keys(snapshot.limits ?? {})).toEqual(['upload']);
+		const again = client.sendFiles('general', '', files());
+		quiet(again.uploaded);
+		await expect(again.sent).rejects.toMatchObject({ scope: 'upload', message: 'Daily upload limit reached. Try again in 5h.' });
+		await expect(client.uploadAvatar(new File(['x'], 'me.png', { type: 'image/png' }))).rejects.toMatchObject({ scope: 'upload', method: 'command' });
+		expect([sentOf('message'), sentOf('command')]).toEqual([1, 0]);
+		quiet(client.send('general', 'words only'));
+		quiet(client.command('general', '/help'));
+		expect([sentOf('message'), sentOf('command')]).toEqual([2, 1]);
+	});
+
+	it('of read holds back only the refused method: history, not room_list', async () => {
+		await socket.greet(['rooms', 'history', 'ext:limits'], { room: ROOM });
+		refuseAs(socket.request('history').id, 20, 'read', 'History request limit reached');
+		await settle();
+		expect(Object.keys(snapshot.limits ?? {})).toEqual(['history']);
+		const listed = client.listRooms();
+		expect(sentOf('room_list')).toBe(2);
+		refuseAs(socket.request('room_list').id, 20, 'read');
+		await expect(listed).rejects.toMatchObject({ scope: undefined, method: 'room_list' });
+		expect(Object.keys(snapshot.limits ?? {})).toEqual(['history']);
+		quiet(client.send('general', 'hi'));
+		expect(sentOf('message')).toBe(1);
+	});
+
+	it('of a category the request isn\'t in holds back by method', async () => {
+		await socket.greet(['rooms', 'history', 'ext:limits'], { room: ROOM });
+		refuseAs(socket.request('history').id, 20, 'write');
+		await settle();
+		const sent = client.send('general', 'text only');
+		refuseAs(socket.request('message').id, 20, 'upload');
+		await expect(sent.promise).rejects.toMatchObject({ scope: 'message' });
+		expect(Object.keys(snapshot.limits ?? {}).sort()).toEqual(['history', 'message']);
+	});
+
+	/** Each holds back by method, as without the extension. */
+	const byMethod: Array<[string, string[], unknown]> = [
+		['a category from a server that doesn\'t advertise ext:limits', ['rooms', 'reactions', 'command'], 'write'],
+		['a category the client doesn\'t know', ['rooms', 'reactions', 'command', 'ext:limits'], 'post'],
+		['a category that isn\'t a string', ['rooms', 'reactions', 'command', 'ext:limits'], { name: 'write' }],
+		['no category', ['rooms', 'reactions', 'command', 'ext:limits'], undefined]
+	];
+	for (const [name, caps, category] of byMethod) {
+		it(`with ${name} holds back by method`, async () => {
+			await socket.greet(caps, { room: ROOM });
+			const sent = client.send('general', 'one');
+			refuse(socket.request('message').id, 20, 'Too Many Requests', category === undefined ? {} : { ext: { limits: category } });
+			await expect(sent.promise).rejects.toMatchObject({ scope: 'message' });
+			expect(Object.keys(snapshot.limits ?? {})).toEqual(['message']);
+			await expect(client.send('general', 'two').promise).rejects.toMatchObject({ message: 'Sending is paused. Try again in 20s.' });
+			expect(await writes()).toEqual([1, 1, 1, 1, 1, 1]);
+		});
+	}
+});
+
 describe('limitScope', () => {
-	it('is the refused request\'s method, for history and message only', () => {
-		expect(limitScope('history')).toBe('history');
-		expect(limitScope('message')).toBe('message');
+	const text = { room_id: 'general', body: { text: 'hi' } };
+	const upload = { room_id: 'general', body: { text: 'hi', embeds: [{ kind: 'upload' }] } };
+	it('is the refused request\'s method, for history and message only, without a category it can use', () => {
+		expect(limitScope('history', {})).toBe('history');
+		expect(limitScope('message', text)).toBe('message');
 		for (const method of ['command', 'reactions', 'room_join', 'room_leave', 'room_set', 'room_list', 'status', 'me', 'auth', 'constructor']) {
-			expect(limitScope(method)).toBeUndefined();
+			expect(limitScope(method, {})).toBeUndefined();
+			expect(limitScope(method, {}, 'read')).toBeUndefined();
 		}
+		expect(limitScope('history', {}, 'read')).toBe('history');
+		expect(limitScope('history', {}, 'write')).toBe('history');
+		expect(limitScope('message', text, 'upload')).toBe('message');
+		expect(limitScope('status', {}, 'write')).toBeUndefined();
+	});
+
+	it('is the category for a request it covers', () => {
+		for (const method of ['message', 'command', 'reactions', 'room_join', 'room_leave', 'room_set', 'me']) expect(limitScope(method, {}, 'write')).toBe('write');
+		expect(limitScope('message', upload, 'upload')).toBe('upload');
+		expect(limitScope('command', upload, 'upload')).toBe('upload');
 	});
 });
 

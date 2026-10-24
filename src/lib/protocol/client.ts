@@ -92,6 +92,8 @@ import {
 	historyParams,
 	increment,
 	isEmbedded,
+	limitCategory,
+	limitHolds,
 	limitScope,
 	makeRequestId,
 	maxDefined,
@@ -354,8 +356,8 @@ export class ChatClient {
 	 * users rename, or a value it rejects): not resent on reconnect.
 	 */
 	private declinedName?: string;
-	/** The waits the server asked for (`retry_after`, §1.1) that are still on, by scope, each with the timer that ends it. */
-	private readonly limits = new Map<LimitScope, LimitWait & { timer: ReturnType<typeof setTimeout> }>();
+	/** The waits the server asked for (`retry_after`, §1.1) that are still on, by scope, each with the server's words and the timer that ends it. */
+	private readonly limits = new Map<LimitScope, LimitWait & { message: string; timer: ReturnType<typeof setTimeout> }>();
 	/** Whose the waits in `limits` are: another identity's sign-in starts without them. */
 	private limitsUserId?: string;
 	/** Every `history` request not yet answered: the connection's one queue of them. */
@@ -3856,8 +3858,9 @@ export class ChatClient {
 	/**
 	 * The error a refused `request` rejects with. `retry_after` makes it a
 	 * `RateLimitError`: on `auth` it holds back reconnecting; on any other
-	 * request it is that request's wait, and on `history` or `message` it holds
-	 * back further requests of that method until the wait is over (`limits`).
+	 * request it is that request's wait, and it holds back what `limitScope`
+	 * says until the wait is over (`limits`): the category in `data.ext.limits`
+	 * counts only while the server advertises `ext:limits`.
 	 */
 	private errorFromRpc(rpcError: RpcError, request: PendingRequest): Error {
 		const retryAfter = retryAfterMilliseconds(rpcError);
@@ -3871,17 +3874,17 @@ export class ChatClient {
 			this.retryAfterUntil = Math.max(this.retryAfterUntil, since + retryAfter);
 			return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', since, since + retryAfter);
 		}
-		const scope = limitScope(request.method);
-		if (scope) this.noteLimit(scope, since, since + retryAfter, this.you?.user_id ?? this.resumingUserId);
-		return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', since, since + retryAfter, scope);
+		const scope = limitScope(request.method, request.params, this.hasCap('ext:limits') ? limitCategory(rpcError) : undefined);
+		if (scope) this.noteLimit(scope, since, since + retryAfter, rpcError.message ?? '', this.you?.user_id ?? this.resumingUserId);
+		return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', since, since + retryAfter, scope, request.method);
 	}
 
 	/**
 	 * A wait for `scope` until `until` (at most RETRY_AFTER_MAX_MS away), asked
-	 * of `userId`: it holds what it covers back until then, unless one already
-	 * runs longer.
+	 * of `userId` in the server's words `message`: it holds what it covers back
+	 * until then, unless one already runs longer.
 	 */
-	private noteLimit(scope: LimitScope, since: number, until: number, userId: string | undefined): void {
+	private noteLimit(scope: LimitScope, since: number, until: number, message: string, userId: string | undefined): void {
 		if (userId !== this.limitsUserId) {
 			for (const { timer } of this.limits.values()) clearTimeout(timer);
 			this.limits.clear();
@@ -3891,7 +3894,7 @@ export class ChatClient {
 		if (current && current.until >= until) return;
 		if (current) clearTimeout(current.timer);
 		const timer = setTimeout(() => this.endLimit(scope), Math.max(0, until - Date.now()));
-		this.limits.set(scope, { since, until, timer });
+		this.limits.set(scope, { since, until, message, timer });
 	}
 
 	/**
@@ -3911,22 +3914,27 @@ export class ChatClient {
 	}
 
 	/** The wait on `scope`, while it is on. */
-	private limited(scope: LimitScope): LimitWait | undefined {
+	private limited(scope: LimitScope): (LimitWait & { message: string }) | undefined {
 		const limit = this.limits.get(scope);
 		return limit && limit.until > Date.now() ? limit : undefined;
 	}
 
 	/**
-	 * A `message` sent while a `message` was refused for a while: refused here
-	 * rather than sent, until the wait is over (§1.1).
+	 * A request that a wait holds back (`limitHolds`): refused here rather than
+	 * sent, until the longest such wait is over (§1.1). An `ext:limits` wait
+	 * keeps the server's words, which say what limit it is.
 	 */
-	private heldBack(method: string): RateLimitError | undefined {
-		if (method !== 'message') return undefined;
-		const wait = this.limited('message');
-		if (!wait) return undefined;
-		const words = 'Sending is paused';
+	private heldBack(method: string, params: JsonObject): RateLimitError | undefined {
+		let held: { scope: LimitScope; wait: LimitWait & { message: string } } | undefined;
+		for (const scope of this.limits.keys()) {
+			const wait = this.limited(scope);
+			if (wait && limitHolds(scope, method, params) && (!held || wait.until > held.wait.until)) held = { scope, wait };
+		}
+		if (!held) return undefined;
+		const { scope, wait } = held;
+		const words = scope === 'message' ? 'Sending is paused' : wait.message;
 		const seconds = Math.max(1, Math.ceil((wait.until - Date.now()) / 1000));
-		return new RateLimitError(userFacingRpcError({ code: -32002, message: words, data: { retry_after: seconds } }), words, wait.since, wait.until, 'message');
+		return new RateLimitError(userFacingRpcError({ code: -32002, message: words, data: { retry_after: seconds } }), words, wait.since, wait.until, scope, method);
 	}
 
 	/** A room's history waits out a `history` wait: its recovery was refused for it, or a page of it is held. */
@@ -3952,7 +3960,7 @@ export class ChatClient {
 		if (this.passkeyAbort && method !== 'auth') {
 			return rejectedHandle<T>(method, new Error('Finish signing in before sending requests'), id);
 		}
-		const held = this.heldBack(method);
+		const held = this.heldBack(method, params);
 		if (held) return rejectedHandle<T>(method, held, id);
 		let resolvePromise!: (result: T) => void;
 		let rejectPromise!: (error: Error) => void;

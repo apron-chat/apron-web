@@ -161,10 +161,11 @@ export interface RoomListing {
 /**
  * What a wait the server asked for (`retry_after`, §1.1) holds back: further
  * requests of the refused request's method, `history` pages or `message`
- * sends (with files or without). A client choice: the protocol doesn't say
- * what a limit covers.
+ * sends (with files or without); or, with extension `ext:limits`, the
+ * category the server gave: every request that changes shared state
+ * (`write`), or only those that carry `upload` embeds (`upload`).
  */
-export type LimitScope = 'history' | 'message';
+export type LimitScope = 'history' | 'message' | 'write' | 'upload';
 
 /** A wait the server asked for: from when it was asked (`since`) until requests of its scope go again, in epoch milliseconds. */
 export interface LimitWait {
@@ -174,9 +175,9 @@ export interface LimitWait {
 
 /**
  * A request refused with `retry_after` (§1.1): what it holds back (`scope`,
- * undefined for a limit the client doesn't know), when that may go again
- * (`retryAt`, epoch milliseconds), and the server's own words. `message` is
- * the same as one line, for callers that show only text.
+ * undefined when that is only itself), when that may go again (`retryAt`,
+ * epoch milliseconds), the server's own words, and the refused request's
+ * `method`. `message` is the same as one line, for callers that show only text.
  */
 export class RateLimitError extends Error {
 	readonly code = -32002;
@@ -185,7 +186,8 @@ export class RateLimitError extends Error {
 		readonly serverMessage: string,
 		readonly since: number,
 		readonly retryAt: number,
-		readonly scope?: LimitScope
+		readonly scope?: LimitScope,
+		readonly method?: string
 	) {
 		super(message);
 		this.name = 'RateLimitError';
@@ -348,9 +350,9 @@ export interface ClientSnapshot {
 	retryAfterMs?: number;
 	/**
 	 * The waits the server asked for (`retry_after`, §1.1) that are still on,
-	 * by the method they hold back. Meanwhile history requests wait to be
-	 * sent, and a `message` is refused here without being sent.
-	 * Absent when none is.
+	 * by what they hold back (`LimitScope`). Meanwhile history requests wait
+	 * to be sent, and the other requests a wait holds back are refused here
+	 * without being sent. Absent when none is.
 	 */
 	limits?: Partial<Record<LimitScope, LimitWait>>;
 	/** The server denied the connection (§1.1): no reconnect until the user acts (`retryNow`). */

@@ -393,5 +393,5 @@ export interface MenuChoice {
 	testid?: string;
 }
 
-/** What a wait the server asked for (`retry_after`, §1.1) holds back: pages of history (`history`), or sending (`message`). */
-export type LimitScope = 'history' | 'message';
+/** What a wait the server asked for (`retry_after`, §1.1) holds back: pages of history (`history`), sending (`message`), or files (`upload`). */
+export type LimitScope = 'history' | 'message' | 'upload';

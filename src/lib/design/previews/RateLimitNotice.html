@@ -1,4 +1,4 @@
-<!-- @dsCard group="Feedback" height=380 subtitle="A request the server refused for a while: history, sending, a wait of hours, and a wait on anything else, each counting down" -->
+<!-- @dsCard group="Feedback" height=430 subtitle="A request the server refused for a while: history, sending, a wait of hours, uploads, and a wait on anything else, each counting down" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>RateLimitNotice</title></head>
@@ -14,6 +14,8 @@
   add(A.Composer, { room: 'General', value: 'Sounds good, shipping it', waitUntil: now + 28000 });
   // An hour or more: a clock, in minutes, put away with its ×.
   add(A.RateLimitNotice, { scope: 'message', since: now - 60000, until: now + (3 * 60 + 12) * 60000, ondismiss: function () {} });
+  // Uploads only (ext:limits): text still sends, and Send counts down only while files are attached.
+  add(A.RateLimitNotice, { scope: 'upload', since: now - 60000, until: now + (5 * 60 + 40) * 60000, ondismiss: function () {} });
   // A wait on anything else: the server's words, made a sentence.
   add(A.RateLimitNotice, { message: 'Too Many Requests', since: now, until: now + 20000 });
   add(A.RoomHeader, { room: 'general', name: 'General', thread: 't1', threadName: 'Launch checklist', wait: now + 18000 });

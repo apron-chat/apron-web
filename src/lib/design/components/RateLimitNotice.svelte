@@ -8,7 +8,8 @@
 
 	interface Props {
 		/**
-		 * What the wait holds back, which picks the words: `history` (pages of a room's history) or `message` (sending).
+		 * What the wait holds back, which picks the words: `history` (pages of a room's history), `message` (sending), or
+		 * `upload` (sending files).
 		 * Leave it out for a wait on anything else, with the server's `message`. The words say what waits, never why:
 		 * the server asked for the wait (`retry_after`), and says no more.
 		 */
@@ -39,6 +40,7 @@
 	const words = $derived.by((): [string, string, string] => {
 		if (scope === 'history') return ['Loading history is paused.', 'Loading again in', ''];
 		if (scope === 'message') return ['Sending is paused.', 'You can send again in', '.'];
+		if (scope === 'upload') return ['Uploads are paused.', 'Uploads resume in', '.'];
 		return [punctuated(message || 'Too many requests'), 'Try again in', ''];
 	});
 	/** Said once for each wait, not at every tick: the time a screen reader hears is the wait as it began. */

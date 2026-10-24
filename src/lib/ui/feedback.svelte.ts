@@ -17,12 +17,13 @@ export class FeedbackState {
 	}
 
 	/**
-	 * Shows an error, returned for `dismiss`. A wait on `history` or `message` (`RateLimitError.scope`) isn't one: the
-	 * page shows those where they apply, counting down, and nothing is toasted.
+	 * Shows an error, returned for `dismiss`. A wait (`RateLimitError.scope`) on a `history` or `message` request isn't
+	 * one: the page shows those where they apply, counting down, and nothing is toasted. Another request a wait holds
+	 * back, such as a reaction during a `write` wait, is toasted with its wait.
 	 */
 	error(cause: unknown, fallback = 'Something went wrong'): Feedback | undefined {
 		this.stopTimer();
-		if (cause instanceof RateLimitError && cause.scope) {
+		if (cause instanceof RateLimitError && cause.scope && (cause.method === 'history' || cause.method === 'message')) {
 			if (this.current?.kind === 'pending') this.current = undefined;
 			return undefined;
 		}

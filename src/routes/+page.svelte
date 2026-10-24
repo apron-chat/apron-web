@@ -296,6 +296,8 @@
 	let threadError: Feedback | undefined;
 	/** The end of a wait on sending whose notice was put away (a wait of hours can outlast the visit). */
 	let dismissedSendWait = $state<number | undefined>();
+	/** The same for a wait on uploads. */
+	let dismissedUploadWait = $state<number | undefined>();
 	let selectedRoomId = $state<string | undefined>();
 	/** A thread this viewer created (`startThread`, `createThread`), opened once its `room_update` has arrived. */
 	let pendingOpen = $state<PendingThread | undefined>();
@@ -411,10 +413,19 @@
 	let limits = $derived(snapshot.limits ?? {});
 	/** The pane's history waits out a refused `history`, which every room's history shares: it waits, then loads by itself. */
 	let historyWait = $derived(paneRoom?.limited ? limits.history : undefined);
-	/** Sending waits out a refused `message`, with files or without: Send counts down, and the draft stays. */
-	let sendWait = $derived(limits.message);
+	/**
+	 * Sending waits out a refused `message`, with files or without, or a `write` wait (`ext:limits`), the longer if both
+	 * are on: Send counts down, and the draft stays. A reaction, join or the like that a `write` wait holds back is toasted.
+	 */
+	let sendWait = $derived(limits.write && limits.write.until >= (limits.message?.until ?? 0) ? limits.write : limits.message);
 	/** `sendWait`'s notice, unless it was put away. */
 	let sendNotice = $derived(sendWait && sendWait.until !== dismissedSendWait ? sendWait : undefined);
+	/** An `upload` wait (`ext:limits`) holds back only messages with files: Send counts down while files are attached, and text goes. */
+	let uploadWait = $derived(limits.upload);
+	/** `uploadWait`'s notice, unless it was put away. */
+	let uploadNotice = $derived(uploadWait && uploadWait.until !== dismissedUploadWait ? uploadWait : undefined);
+	/** Where Send counts down to: the wait that holds back this draft, the longer one if both do. */
+	let composerWait = $derived(Math.max(sendWait?.until ?? 0, drafts.files.length ? (uploadWait?.until ?? 0) : 0) || undefined);
 	/**
 	 * The open pane is catching up: its history is recovering or loading, or it shows a copy held from before
 	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
@@ -1574,6 +1585,10 @@
 			dismissedSendWait = undefined;
 			return;
 		}
+		if (drafts.files.length && uploadWait && uploadWait.until > Date.now()) {
+			dismissedUploadWait = undefined;
+			return;
+		}
 		if (drafts.files.length) {
 			void sendFiles();
 			return;
@@ -2556,11 +2571,17 @@
 			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
 			{#if (checkingShown || historyWait) && timeline.length > 0}<TimelineLoading float label={quietReconnect ? statusLabel(snapshot, session.stalled) : activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} notice={historyWait ? historyNotice : undefined} />{/if}
-			<!-- A wait the server asked for on sending, above the composer it holds back. -->
-			{#if sendNotice && !selection.active && !session.readOnly}
-				{@const wait = sendNotice}
+			<!-- A wait the server asked for on sending or uploads, above the composer it holds back. -->
+			{#if (sendNotice || uploadNotice) && !selection.active && !session.readOnly}
 				<div class="ap-shell-waits">
-					<RateLimitNotice scope="message" since={wait.since} until={wait.until} ondismiss={() => (dismissedSendWait = wait.until)} />
+					{#if sendNotice}
+						{@const wait = sendNotice}
+						<RateLimitNotice scope="message" since={wait.since} until={wait.until} ondismiss={() => (dismissedSendWait = wait.until)} />
+					{/if}
+					{#if uploadNotice}
+						{@const wait = uploadNotice}
+						<RateLimitNotice scope="upload" since={wait.since} until={wait.until} ondismiss={() => (dismissedUploadWait = wait.until)} />
+					{/if}
 				</div>
 			{/if}
 
@@ -2588,7 +2609,7 @@
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
 					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply}
 					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
-					waitUntil={sendWait?.until}
+					waitUntil={composerWait}
 				/>
 			{/if}
 		{:else}

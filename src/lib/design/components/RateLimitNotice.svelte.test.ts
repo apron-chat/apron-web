@@ -69,6 +69,12 @@ describe('RateLimitNotice', () => {
 		expect(dom.queryByRole('button', 'Dismiss')).toBeNull();
 	});
 
+	it('says when uploads are paused, and when they resume', () => {
+		const now = Date.now();
+		dom.render(RateLimitNotice, { scope: 'upload', since: now, until: now + 45_000 });
+		expect(read()).toEqual({ shown: 'Uploads are paused. Uploads resume in 45s.', heard: 'Uploads are paused. Uploads resume in 45 seconds.' });
+	});
+
 	it('gives a wait on anything else in the server’s words, made a sentence, and says when it’s done', () => {
 		const ondone = vi.fn();
 		dom.render(RateLimitNotice, { message: 'Too Many Requests', until: Date.now() + 20_000, ondone });
