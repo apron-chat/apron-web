@@ -457,9 +457,12 @@ export function carriesUploads(params: JsonObject): boolean {
 
 /**
  * What a request refused with `retry_after` was held back by: the limit the
- * server names in `data.limit`, if it is one the client knows, else the
- * request's kind. A post with files that waits a day (or says it's the
- * uploads) hit the upload limit; any other post, the posting limit.
+ * server names in `data.limit` (`history`, `post`, `upload`) whenever it is
+ * one the client knows, whatever the request, its wait or its words. A name
+ * it doesn't know is no name. Only then, for servers that name none, is it
+ * guessed from the request's kind: a post with files that waits an hour or
+ * more (or says it's the uploads) hit the upload limit; any other post, the
+ * posting limit.
  */
 export function limitScope(method: string, params: JsonObject, error: RpcError, wait: number): LimitScope | undefined {
 	const named = isJsonObject(error.data) && typeof error.data.limit === 'string' ? LIMIT_NAMES.get(error.data.limit.toLowerCase()) : undefined;

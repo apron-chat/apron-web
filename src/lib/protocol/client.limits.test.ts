@@ -112,6 +112,22 @@ describe('limitScope', () => {
 		expect(limitScope('message', files, error('Posting limit reached'), 28_000)).toBe('post');
 		expect(limitScope('message', {}, error('Daily posting limit reached'), 3_600_000)).toBe('post');
 	});
+
+	it('takes the name the server gives over any guess', () => {
+		// Uploads, though nothing about the post looks like one: no files, a short wait, no word of it.
+		expect(limitScope('message', {}, error('Slow down', { limit: 'upload' }), 5_000)).toBe('upload');
+		// Posting, though the post carries files, waits a day, and speaks of uploads.
+		expect(limitScope('message', files, error('Daily upload limit reached', { limit: 'post' }), 24 * 3_600_000)).toBe('post');
+		expect(limitScope('command', files, error('Upload storage is full', { limit: 'post' }), 60_000)).toBe('post');
+	});
+
+	it('guesses as without a name when the name is one it doesn\'t know', () => {
+		expect(limitScope('message', files, error('Daily upload limit reached', { limit: 'storage' }), 3_600_000)).toBe('upload');
+		expect(limitScope('message', files, error('Posting limit reached', { limit: 'burst' }), 28_000)).toBe('post');
+		expect(limitScope('history', {}, error('Slow down', { limit: 'requests' }), 1_000)).toBe('history');
+		expect(limitScope('room_list', {}, error('Slow down', { limit: 'room_list' }), 1_000)).toBeUndefined();
+		expect(limitScope('message', files, error('Upload limit reached', { limit: 7 }), 1_000)).toBe('upload');
+	});
 });
 
 describe('the words of a refused request', () => {
