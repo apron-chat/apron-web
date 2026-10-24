@@ -7,6 +7,7 @@
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
 	import { sidebarRooms, threadsWithNews, type ThreadEntry } from '$lib/ui/timeline';
+	import { listInBackground } from '$lib/ui/background-listing';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
@@ -92,17 +93,17 @@
 	// Browse rooms and Other threads show only when there is something to join, so list both in the background:
 	// the rooms whenever the rooms you've joined change, and the active room's threads whenever it or what you've
 	// joined changes. Threads you haven't joined deliver nothing live (§3.4): this listing is also what brings their
-	// cards up to date.
+	// cards up to date. One refused for a while lists again once the wait is over.
 	$effect(() => {
 		void roomsKey;
 		if (!canBrowse) return;
-		untrack(() => client.listRooms(undefined, BACKGROUND_LISTING_MS).catch(() => {}));
+		return untrack(() => listInBackground(() => client.listRooms(undefined, BACKGROUND_LISTING_MS)));
 	});
 	$effect(() => {
 		const roomId = session.activeRoomId;
 		void joinedKey;
 		if (!canBrowse || !roomId) return;
-		untrack(() => client.listRooms(roomId, BACKGROUND_LISTING_MS).catch(() => {}));
+		return untrack(() => listInBackground(() => client.listRooms(roomId, BACKGROUND_LISTING_MS)));
 	});
 
 	function list(parentRoomId?: string): void {
