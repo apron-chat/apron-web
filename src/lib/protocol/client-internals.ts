@@ -104,6 +104,8 @@ interface RecoveryState {
 	 * loading on demand (§4.3.5 step 3), instead of paging forward.
 	 */
 	newest?: boolean;
+	/** A rebuild whose first page isn't in yet: the room still has what it is to replace (`clearForRebuild`). */
+	rebuild?: boolean;
 	/**
 	 * Live records for the room received during the recovery. They are applied
 	 * to the store on arrival; the buffer bounds memory and lets a rebuild

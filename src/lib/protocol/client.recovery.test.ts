@@ -282,6 +282,40 @@ describe('history per room', () => {
 		expect(room('20')).toMatchObject({ loading: false, loaded: true });
 	});
 
+	it('goes on from where a recovery refused for the history wait stopped, keeping what it had, once the wait is over', async () => {
+		await socket.reply('history', { messages: [message('11'), message('12')], first_log_id: '11', last_log_id: '12', more: true, latest_log_id: '12', history_log_id: '10' });
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '20', history_log_id: '10' }] } });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '13', before: '20' });
+		await socket.reply('history', { messages: [message('13'), message('15')], first_log_id: '13', last_log_id: '15', more: true, latest_log_id: '20', history_log_id: '10' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '16', before: '20' });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 20 } } });
+		await settle();
+		// Live meanwhile: what arrives while the rest waits stays.
+		socket.receive({ method: 'message', params: message('21') });
+		await vi.advanceTimersByTimeAsync(20_000);
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '16', before: '21' });
+		await socket.reply('history', { messages: [message('18')], first_log_id: '16', last_log_id: '21', more: false, latest_log_id: '21', history_log_id: '10' });
+		expect(room('general')).toMatchObject({ recovering: false, loaded: true, olderAvailable: true });
+		expect(room('general').timeline.order).toEqual(['11', '12', '13', '15', '18', '21']);
+	});
+
+	it('keeps showing what a room had while its rebuild waits out a history wait', async () => {
+		await socket.reply('history', { messages: [message('11'), message('12')], more: false, latest_log_id: '12', history_log_id: '10' });
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '14', history_log_id: '10' }] } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Daily history limit reached', data: { retry_after: 3_600 } } });
+		await settle();
+		// The next room frame rebuilds the room (history-recovery-failure.json), but its page waits for hours.
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '15', history_log_id: '10' }] } });
+		socket.receive({ method: 'message', params: message('16') });
+		expect(room('general')).toMatchObject({ recovering: true, limited: true });
+		expect(room('general').timeline.order).toEqual(['11', '12']);
+		await vi.advanceTimersByTimeAsync(3_600_000);
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', before: '15' });
+		await socket.reply('history', { messages: [message('14'), message('15')], first_log_id: '14', last_log_id: '15', more: true, latest_log_id: '16', history_log_id: '10' });
+		// Then replaced by what the rebuild found, with what arrived live meanwhile.
+		expect(room('general').timeline.order).toEqual(['14', '15', '16']);
+	});
+
 	it('leaves a recovery that failed for another reason to loadRoom', async () => {
 		socket.receive({ id: socket.request('history').id, error: { code: -32603, message: 'Internal error' } });
 		await settle();

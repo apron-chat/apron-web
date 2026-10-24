@@ -2273,7 +2273,7 @@ export class ChatClient {
 			if (!needed) return Promise.resolve();
 			const settled = new Promise<void>((resolve, reject) => room.waiters.push({ resolve, reject }));
 			if (!room.recovery && head) {
-				this.startRecovery(room, head, Boolean(room.recoveryError) || room.checkpoint === undefined);
+				this.startRecovery(room, head, this.rebuilds(room));
 				this.emit();
 			}
 			return settled;
@@ -3460,10 +3460,7 @@ export class ChatClient {
 		this.retireRecoveryRequest(room);
 		const generation = ++room.recoveryGeneration;
 		if (rebuild) {
-			this.store.clearRoom(room.id);
-			for (const live of retained) this.applyLive(live);
-			room.timeline = createTimeline(room.id);
-			// Older pages loaded before are gone with the rest: a load of one still to go is for nothing.
+			// Older pages loaded before go with the rest: a load of one still to go is for nothing.
 			this.historyQueue.dropRoom(room.id, 'History recovery superseded');
 			room.olderBefore = undefined;
 			room.hasOlder = false;
@@ -3478,16 +3475,44 @@ export class ChatClient {
 			...(head !== undefined ? { head } : {}),
 			nextAfter,
 			...(rebuild && this.historyStart === 'newest' ? { newest: true } : {}),
+			...(rebuild ? { rebuild: true } : {}),
 			buffer: retained,
 			bufferBytes: retained.reduce((bytes, live) => bytes + recordBytes(live.record), 0),
 			generation
 		};
 		room.recoveryError = undefined;
 		if (head !== undefined && compareLogIds(nextAfter, head) > 0) {
+			this.clearForRebuild(room);
 			this.finishRecovery(room);
 			return;
 		}
 		this.requestHistoryPage(room, generation);
+	}
+
+	/**
+	 * A rebuild replaces what the room had once its first page is in, not when
+	 * it starts: until then (hours, when a history wait holds the page) the
+	 * room shows what it had. Live records since then come back with the page.
+	 */
+	private clearForRebuild(room: RoomState): void {
+		const recovery = room.recovery;
+		if (!recovery?.rebuild) return;
+		recovery.rebuild = false;
+		this.store.clearRoom(room.id);
+		for (const live of recovery.buffer) this.applyLive(live);
+		room.timeline = createTimeline(room.id);
+	}
+
+	/**
+	 * Whether a room's next recovery rebuilds it rather than going on from its
+	 * checkpoint: it has none, its last recovery failed, or the floor has
+	 * passed it. A recovery refused for the history wait failed only for now:
+	 * it left the checkpoint where it stopped (`abortRecovery`).
+	 */
+	private rebuilds(room: RoomState): boolean {
+		if (room.checkpoint === undefined) return true;
+		if (!room.limited) return Boolean(room.recoveryError);
+		return room.floor !== undefined && compareLogIds(increment(room.checkpoint), room.floor) < 0;
 	}
 
 	private requestHistoryPage(room: RoomState, generation: number): void {
@@ -3525,6 +3550,7 @@ export class ChatClient {
 		recovery.head ??= result.latest_log_id;
 		this.observeHistoryResponse(room, result);
 		if (room.recovery !== recovery || recovery.generation !== generation) return;
+		this.clearForRebuild(room);
 		this.applyPage(room, result);
 		if (recovery.newest) {
 			// Everything up to H is covered for live delivery; what is older loads as the reader scrolls back.
@@ -3647,7 +3673,14 @@ export class ChatClient {
 	}
 
 	private abortRecovery(room: RoomState, message: string): void {
-		if (!room.recovery) return;
+		const recovery = room.recovery;
+		if (!recovery) return;
+		if (room.limited) {
+			// Only a wait: once it is over the room goes on from what this recovered, or a rebuild that
+			// hadn't replaced what the room had yet starts again.
+			if (recovery.rebuild) room.checkpoint = undefined;
+			else if (recovery.nextAfter !== undefined && compareLogIds(recovery.nextAfter, FIRST_LOG_ID) > 0) room.checkpoint = decrement(recovery.nextAfter);
+		}
 		this.retireRecoveryRequest(room);
 		room.recoveryError = message;
 		// Live delivery remains authoritative even when history is incomplete:
@@ -3853,7 +3886,7 @@ export class ChatClient {
 
 	/**
 	 * A wait is over: held history goes now, and rooms whose recovery was
-	 * refused for it recover again, as `loadRoom` would.
+	 * refused for it go on from where it stopped (`rebuilds`).
 	 */
 	private endLimit(scope: LimitScope): void {
 		const limit = this.limits.get(scope);
@@ -3867,7 +3900,7 @@ export class ChatClient {
 		if (scope === 'history') {
 			this.historyQueue.pump();
 			for (const room of [...this.rooms.values()]) {
-				if (room.limited && !room.recovery && this.authenticated && this.recoversAutomatically(room)) this.startRecovery(room, room.latestLogId, true);
+				if (room.limited && !room.recovery && this.authenticated && this.recoversAutomatically(room)) this.startRecovery(room, room.latestLogId, this.rebuilds(room));
 			}
 		}
 		this.emit();
