@@ -126,3 +126,34 @@ describe('the words of a refused request', () => {
 		expect(userFacingRpcError({ code: -32603, message: 'Internal error' })).toBe('Internal error');
 	});
 });
+
+describe('a listing refused with retry_after', () => {
+	it('is refused again without asking until the wait is over', async () => {
+		await socket.greet(['rooms'], { room: { room_id: 'general', title: 'General' } });
+		const count = () => socket.sent.filter((frame) => frame.method === 'room_list').length;
+		const first = client.listRooms('general');
+		refuse(socket.request('room_list').id, 20, 'Room listing limited');
+		await expect(first).rejects.toBeInstanceOf(RateLimitError);
+		const sent = count();
+		await expect(client.listRooms('general', 0)).rejects.toMatchObject({ message: 'Room listing limited. Try again in 20s.' });
+		expect(count()).toBe(sent);
+		await vi.advanceTimersByTimeAsync(20_000);
+		quiet(client.listRooms('general'));
+		expect(count()).toBe(sent + 1);
+	});
+
+	it('of the joined rooms goes again once the wait is over, rather than leaving the connection with none', async () => {
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
+		refuse(socket.request('room_list').id, 6, 'Room listing limited');
+		await settle();
+		expect(snapshot.error).toBeUndefined();
+		expect(socket.sent.filter((frame) => frame.method === 'room_list')).toHaveLength(1);
+		await vi.advanceTimersByTimeAsync(6_000);
+		const again = socket.request('room_list');
+		expect(again.params).toEqual({ filter: 'joined', members: true });
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
+		expect(snapshot.rooms.map((room) => room.id)).toEqual(['general']);
+	});
+});

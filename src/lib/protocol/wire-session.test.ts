@@ -97,7 +97,9 @@ async function runVariant(fixture: Fixture, variant: Variant, envelope: 'minimal
 	expect(fixture.kind).toBe('session');
 	// The fixtures page a room with no checkpoint forward from its lower bound, one way §4.3.5 allows; the
 	// client's default, its newest page with older ones on demand, is the other (client.recovery.test.ts).
-	const { client } = startClient({ storage: new Map(), historyStart: 'forward' });
+	// And they interleave history requests, several out at once, which the protocol allows; the client sends
+	// one at a time by default, as some servers take no more (client.recovery.test.ts).
+	const { client } = startClient({ storage: new Map(), historyStart: 'forward', historyConcurrency: Infinity });
 	const requests = new Map<string, ObjectValue>();
 	const unmatched: ObjectValue[] = [];
 	const operations: Record<string, string> = {};

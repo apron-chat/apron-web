@@ -152,6 +152,7 @@ describe('history per room', () => {
 	});
 
 	it('opens a room with no lower bound known on its newest page too, and skips one whose history is all gone', async () => {
+		await socket.reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'nobound', log_id: '30', latest_log_id: '40' }] } });
 		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'nobound', before: '40' });
 		const sent = socket.sent.length;
@@ -196,16 +197,14 @@ describe('history per room', () => {
 		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(1);
 		expect(room('general')).toMatchObject({ recovering: true, limited: true });
 		await vi.advanceTimersByTimeAsync(1_000);
-		const sent = socket.sent.filter((frame) => frame.method === 'history');
-		expect(sent.map((frame) => bounds(frame.params))).toEqual([
-			{ room_id: 'general', before: '12' },
-			{ room_id: 'general', before: '12' },
-			{ room_id: 'ops', before: '31' }
-		]);
+		// Then they go one at a time, the open room's first.
+		const sent = () => socket.sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params));
+		expect(sent()).toEqual([{ room_id: 'general', before: '12' }, { room_id: 'general', before: '12' }]);
 		expect(snapshot.limits).toBeUndefined();
 		expect(room('general').limited).toBeUndefined();
-		socket.receive({ id: sent[1].id as string, result: { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' } });
+		await socket.reply('history', { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' });
 		await retried;
+		expect(sent().at(-1)).toEqual({ room_id: 'ops', before: '31' });
 		expect(room('general')).toMatchObject({ recovering: false, loaded: true });
 		expect(room('general').recoveryError).toBeUndefined();
 		expect(room('general').timeline.order).toEqual(['11']);
@@ -294,6 +293,33 @@ describe('after a reconnect', () => {
 		expect(snapshot.showReconnectDivider).toBe(false);
 	});
 
+	it('sends history one request at a time, and none for a kept room the listing shows has nothing new', async () => {
+		await latest().greet(['history', 'rooms'], { room: general });
+		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
+		const ops = { room_id: 'ops', log_id: '20', title: 'Ops', latest_log_id: '21', history_log_id: '20' };
+		const quiet = { room_id: 'quiet', log_id: '30', title: 'Quiet', latest_log_id: '31', history_log_id: '30' };
+		latest().receive({ method: 'room_update', params: { joined: [ops, quiet] } });
+		const history = () => latest().sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params));
+		// Each recovers in turn: the next goes once the last is answered.
+		expect(history().slice(1)).toEqual([{ room_id: 'ops', before: '21' }]);
+		await latest().reply('history', { more: false, latest_log_id: '21', history_log_id: '20' });
+		expect(history().slice(1)).toEqual([{ room_id: 'ops', before: '21' }, { room_id: 'quiet', before: '31' }]);
+		await latest().reply('history', { more: false, latest_log_id: '31', history_log_id: '30' });
+		latest().drop();
+		vi.advanceTimersByTime(5_000);
+		const again = latest();
+		again.open();
+		again.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		// The first kept room resumes right behind auth; the others wait their turn.
+		expect(history()).toEqual([{ room_id: 'general', after: '13' }]);
+		await again.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
+		// The listing says ops has nothing new and quiet has: ops's resume never goes, quiet's pages only to its head.
+		await again.reply('room_list', { joined: [general, ops, { ...quiet, latest_log_id: '35' }] });
+		expect(snapshot.rooms.find((candidate) => candidate.id === 'ops')).toMatchObject({ recovering: false, loaded: true });
+		await again.reply('history', { more: false, latest_log_id: '12', history_log_id: '10' });
+		expect(history()).toEqual([{ room_id: 'general', after: '13' }, { room_id: 'quiet', after: '32', before: '35' }]);
+	});
+
 	it('rebuilds a kept room when retention has passed its checkpoint', async () => {
 		await latest().greet(['history', 'rooms'], { room: general });
 		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
@@ -321,6 +347,9 @@ describe('after a reconnect', () => {
 		// Kept, but the gap since its checkpoint is not loaded yet.
 		expect(snapshot.rooms.find((candidate) => candidate.id === '20')?.loaded).toBe(false);
 		const again = client.loadRoom('20');
+		// One at a time: after the room's resume, which went right behind auth.
+		expect(bounds(latest().request('history').params)).toEqual({ room_id: 'general', after: '13' });
+		await latest().reply('history', { more: false, latest_log_id: '12', history_log_id: '10' });
 		expect(latest().request('history').params).toMatchObject({ room_id: '20', after: '22', before: '23' });
 		await latest().reply('history', { messages: [{ ...entry('23'), room_id: '20' }], more: false, latest_log_id: '23', history_log_id: '20' });
 		await again;

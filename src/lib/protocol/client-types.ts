@@ -470,6 +470,8 @@ export interface ChatClientOptions {
 	now?: () => number;
 	/** How a top-level room without a checkpoint recovers (`HistoryStart`); `newest` by default. */
 	historyStart?: HistoryStart;
+	/** How many `history` requests may be out at a time on a connection; one by default, as some servers allow no more. */
+	historyConcurrency?: number;
 }
 
 /**

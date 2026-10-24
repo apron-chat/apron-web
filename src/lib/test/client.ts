@@ -28,6 +28,8 @@ export interface ClientOptions {
 	onSnapshot?: (snapshot: ClientSnapshot) => void;
 	/** How a room with no checkpoint recovers. Default the client's, `newest`. */
 	historyStart?: HistoryStart;
+	/** How many history requests may be out at once. Default the client's, one. */
+	historyConcurrency?: number;
 }
 
 export interface ClientHarness {
@@ -56,7 +58,7 @@ export function startClient(options: ClientOptions = {}): ClientHarness {
 	FakeSocket.instances = [];
 	vi.stubGlobal('WebSocket', FakeSocket);
 	if (options.storage) vi.stubGlobal('localStorage', memoryStorage(options.storage));
-	const client = new ChatClient(options.url ?? SERVER_URL, undefined, undefined, undefined, options.historyStart);
+	const client = new ChatClient(options.url ?? SERVER_URL, undefined, undefined, undefined, options);
 	let latest: ClientSnapshot | undefined;
 	client.subscribe((next) => {
 		latest = next;

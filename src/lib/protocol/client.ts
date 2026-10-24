@@ -81,6 +81,7 @@ import {
 	ROOM_LIST_REUSE_MS,
 	STABLE_CONNECTION_MS,
 	THREAD_PAGE_SIZE,
+	HISTORY_CONCURRENCY,
 	TYPING_REFRESH_MS,
 	TYPING_TIMEOUT_S,
 	AGENT,
@@ -275,7 +276,7 @@ export class ChatClient {
 	 * `room_id` for its threads, `#` and a `room_id` for its members), shared
 	 * while in flight and reused while recent.
 	 */
-	private readonly listings = new Map<string, { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string> }>();
+	private readonly listings = new Map<string, { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number }>();
 	/**
 	 * The `room_list` of joined rooms on this connection (capability `rooms`), until
 	 * its result arrives; `since` and `userId` when it lists only changes since
@@ -356,8 +357,14 @@ export class ChatClient {
 	private declinedName?: string;
 	/** The waits the server asked for (`retry_after`, §1.1) that are still on, by scope, each with the timer that ends it. */
 	private readonly limits = new Map<LimitScope, LimitWait & { timer: ReturnType<typeof setTimeout> }>();
-	/** Every `history` request not yet answered, sent or held for a wait, by its handle's id. */
+	/**
+	 * Every `history` request not yet answered, by its handle's id, in the
+	 * order asked: the connection's one queue of them. `historyConcurrency`
+	 * are out at a time, those the reader is waiting for first.
+	 */
 	private readonly historyJobs = new Map<string, HistoryJob>();
+	private readonly historyStart: HistoryStart;
+	private readonly historyConcurrency: number;
 	private status: ConnectionStatus = 'idle';
 	private error?: string;
 	private showReconnectDivider = false;
@@ -380,15 +387,17 @@ export class ChatClient {
 		displayName = '',
 		webSocketFactory: WebSocketFactory = (url) => new WebSocket(url),
 		private readonly now: () => number = () => Date.now(),
-		private readonly historyStart: HistoryStart = 'newest'
+		{ historyStart = 'newest', historyConcurrency = HISTORY_CONCURRENCY }: Pick<ChatClientOptions, 'historyStart' | 'historyConcurrency'> = {}
 	) {
+		this.historyStart = historyStart;
+		this.historyConcurrency = Math.max(1, historyConcurrency);
 		this.webSocketFactory = webSocketFactory;
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
 	}
 
 	static fromOptions(options: ChatClientOptions): ChatClient {
-		const client = new ChatClient(options.serverUrl, options.displayName, options.webSocketFactory, options.now, options.historyStart);
+		const client = new ChatClient(options.serverUrl, options.displayName, options.webSocketFactory, options.now, options);
 		if (options.onChange) client.subscribe(options.onChange);
 		return client;
 	}
@@ -1981,24 +1990,29 @@ export class ChatClient {
 	/**
 	 * Listing is costly on some servers and rate limited on most, and several
 	 * parts of the UI want it at once: a request in flight, or one answered
-	 * within `maxAgeMs`, serves them all.
+	 * within `maxAgeMs`, serves them all. One refused for a while
+	 * (`retry_after`) is refused again, without asking, until the wait is over.
 	 */
 	private cachedListing(
 		key: string, params: JsonObject, maxAgeMs: number, pick: (listed: { joined: RoomListing[]; not_joined: RoomListing[] }) => RoomListing[]
 	): Promise<RoomListing[]> {
 		const recent = this.listings.get(key);
-		if (recent && Date.now() - recent.at < maxAgeMs) return recent.promise.then((listings) => listings.map((listing) => this.withJoined(listing)));
+		if (recent && (recent.until !== undefined ? Date.now() < recent.until : Date.now() - recent.at < maxAgeMs)) {
+			return recent.promise.then((listings) => listings.map((listing) => this.withJoined(listing)));
+		}
 		const promise = this.enqueueRequest('room_list', params, { visible: false, allowBeforeAuth: false }).promise.then((result) => {
 			const listings = pick(this.applyRoomList(result, false));
 			this.emit();
 			return listings;
 		});
-		const entry: { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string> } = { at: Date.now(), promise };
+		const entry: { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number } = { at: Date.now(), promise };
 		this.listings.set(key, entry);
 		promise.then((listings) => {
 			entry.rooms = new Set(listings.map((listing) => listing.id));
-		}, () => {
-			if (this.listings.get(key) === entry) this.listings.delete(key);
+		}, (cause: unknown) => {
+			if (this.listings.get(key) !== entry) return;
+			if (cause instanceof RateLimitError) entry.until = cause.retryAt;
+			else this.listings.delete(key);
 		});
 		return promise.then((listings) => listings.map((listing) => this.withJoined(listing)));
 	}
@@ -2041,6 +2055,18 @@ export class ChatClient {
 		}, (cause: Error) => {
 			if (socket !== this.socket || this.joinedListing !== listing) return;
 			this.joinedListing = undefined;
+			if (cause instanceof RateLimitError && this.authenticated) {
+				// The server's listing limit: rather than leave the connection with no rooms, list them again
+				// once the wait is over, as long as it lasts. Meanwhile this stands as the listing under way.
+				this.joinedListing = listing;
+				setTimeout(() => {
+					if (socket !== this.socket || this.joinedListing !== listing) return;
+					this.listJoinedRooms(since);
+					this.emit();
+				}, Math.min(MAX_TIMER_MS, Math.max(0, cause.retryAt - Date.now())));
+				this.emit();
+				return;
+			}
 			this.settleHeldStatuses();
 			// Behind a failed `auth` the listing likely failed too; that failure speaks for itself.
 			if (this.authenticated) this.error = `Unable to list your rooms: ${cause.message}`;
@@ -2098,7 +2124,12 @@ export class ChatClient {
 				for (const value of result.left) {
 					if (isJsonObject(value) && typeof value.room_id === 'string') this.hideRoom(value.room_id);
 				}
-				for (const room of this.rooms.values()) if (room.kind === 'pending') this.markJoined(room);
+				for (const room of this.rooms.values()) {
+					if (room.kind !== 'pending') continue;
+					this.markJoined(room);
+					// Left out: nothing in it moved past its checkpoint, so its resume, if still queued, needn't go.
+					this.settleQueuedResume(room, room.checkpoint);
+				}
 			} else {
 				// A full listing: `joined` is the whole set; anything else joined was left meanwhile.
 				for (const room of [...this.rooms.values()]) {
@@ -3148,6 +3179,28 @@ export class ChatClient {
 			this.observeBoundary(room, decoded.delivery.history_log_id, listedHead ?? room.latestLogId);
 		}
 		this.recoverIfBehind(room, !existing);
+		if (listedHead !== undefined) this.settleQueuedResume(room, room.latestLogId);
+	}
+
+	/**
+	 * A kept room's resume, sent right behind `auth` before any head was known
+	 * (`requestRooms`), that is still waiting its turn in the history queue,
+	 * now that a frame says the room's head: at the checkpoint it needs no
+	 * request at all; past it, it pages forward to that head (§4.3.5).
+	 */
+	private settleQueuedResume(room: RoomState, head: string | undefined): void {
+		const recovery = room.recovery;
+		if (!recovery || recovery.head !== undefined || recovery.newest || head === undefined || recovery.requestId === undefined) return;
+		const job = this.historyJobs.get(recovery.requestId);
+		if (!job || job.requestId !== undefined) return;
+		if (room.checkpoint !== undefined && compareLogIds(head, room.checkpoint) <= 0) {
+			recovery.requestId = undefined;
+			this.cancelHistory(job.id, 'Nothing to recover');
+			this.finishRecovery(room);
+			return;
+		}
+		recovery.head = head;
+		job.params = historyParams(room.id, recovery.nextAfter, head);
 	}
 
 	/**
@@ -3805,7 +3858,7 @@ export class ChatClient {
 		}
 		this.limits.delete(scope);
 		if (scope === 'history') {
-			for (const job of [...this.historyJobs.values()]) if (job.requestId === undefined) this.runHistory(job);
+			this.pumpHistory();
 			for (const room of [...this.rooms.values()]) {
 				if (room.limited && !room.recovery && this.authenticated && this.recoversAutomatically(room)) this.startRecovery(room, room.latestLogId, true);
 			}
@@ -3844,10 +3897,15 @@ export class ChatClient {
 	}
 
 	/**
-	 * Sends a `history` request for a room (§4.3), or holds it while a history
-	 * wait is on, sending it once that is over: the server would only refuse
-	 * it, and each refusal still costs it a frame. With `retry`, one refused
-	 * for a wait waits it out and goes again rather than failing.
+	 * Queues a `history` request for a room (§4.3). The queue sends one at a
+	 * time (`historyConcurrency`), what the reader is waiting for first: a
+	 * load asked for (`retry`: a thread opened, older pages scrolled back to)
+	 * or the open room's recovery, then the other rooms', in the order asked.
+	 * A server may take only one at a time from a connection, and refuse the
+	 * rest. While a history wait is on, nothing goes until it is over: the
+	 * server would only refuse it, and each refusal still costs it a frame.
+	 * With `retry`, one refused for a wait waits it out and goes again rather
+	 * than failing.
 	 */
 	private requestHistory(roomId: string, params: JsonObject, options: { allowBeforeAuth?: boolean; retry?: boolean } = {}): OperationHandle {
 		const id = makeRequestId('history');
@@ -3859,28 +3917,51 @@ export class ChatClient {
 		});
 		const job: HistoryJob = { id, roomId, params, allowBeforeAuth: options.allowBeforeAuth ?? false, retry: options.retry ?? false, resolve, reject };
 		this.historyJobs.set(id, job);
-		this.runHistory(job);
+		this.pumpHistory();
 		return { id, promise };
 	}
 
-	private runHistory(job: HistoryJob): void {
-		if (this.historyJobs.get(job.id) !== job || this.limited('history')) return;
+	/** Sends the next queued `history` requests while there is room for them and no history wait is on. */
+	private pumpHistory(): void {
+		if (this.limited('history')) return;
+		const urgent = (job: HistoryJob) => job.retry || job.roomId === this.activeRoomId;
+		let out = 0;
+		for (const job of this.historyJobs.values()) if (job.requestId !== undefined) out += 1;
+		while (out < this.historyConcurrency) {
+			let next: HistoryJob | undefined;
+			for (const job of this.historyJobs.values()) {
+				if (job.requestId !== undefined) continue;
+				if (urgent(job)) {
+					next = job;
+					break;
+				}
+				next ??= job;
+			}
+			if (!next) return;
+			this.sendHistory(next);
+			out += 1;
+		}
+	}
+
+	private sendHistory(job: HistoryJob): void {
 		const request = this.enqueueRequest('history', job.params, { visible: false, allowBeforeAuth: job.allowBeforeAuth });
 		job.requestId = request.id;
 		request.promise.then((result) => {
 			if (this.historyJobs.get(job.id) !== job) return;
 			this.historyJobs.delete(job.id);
 			job.resolve(result);
+			this.pumpHistory();
 		}, (cause: Error) => {
 			if (this.historyJobs.get(job.id) !== job) return;
 			job.requestId = undefined;
 			if (job.retry && cause instanceof RateLimitError && this.limited('history')) {
-				// Held until the wait is over (`endLimit`), then sent again.
+				// Held, in its place in the queue, until the wait is over (`endLimit`), then sent again.
 				this.emit();
 				return;
 			}
 			this.historyJobs.delete(job.id);
 			job.reject(cause);
+			this.pumpHistory();
 		});
 	}
 
@@ -3896,6 +3977,7 @@ export class ChatClient {
 			request.reject(new Error(reason));
 		}
 		job.reject(new Error(reason));
+		if (job.requestId !== undefined) this.pumpHistory();
 	}
 
 	/** Every held `history` request fails with `reason`: the connection it was for is gone. Sent ones fail with their requests. */
