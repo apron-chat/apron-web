@@ -3,6 +3,7 @@
 	 * The message field and what sits above it until the message is sent: the message being replied to, the draft's files
 	 * and its links' previews, and an autocomplete picker. The field is a textarea, or your own (`field`).
 	 */
+	import Hourglass from '@lucide/svelte/icons/hourglass';
 	import Mic from '@lucide/svelte/icons/mic';
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import Smile from '@lucide/svelte/icons/smile';
@@ -29,8 +30,8 @@
 		/** Whether Send is enabled, when you decide it. By default, while the draft has text (`value`) or files (`attachments`). */
 		canSend?: boolean;
 		/**
-		 * Sending waits until then, as the server asked (`retry_after`), in epoch milliseconds: Send is off and counts down
-		 * in place of its label, and comes back at zero. The draft stays; nothing is sent by itself.
+		 * Sending waits until then, as the server asked (`retry_after`), in epoch milliseconds: Send is off and shows an
+		 * hourglass and the time left in place of its label, and comes back at zero. The draft stays; nothing is sent by itself.
 		 */
 		waitUntil?: number;
 		/** Cap `embed:upload`: the attach and microphone buttons. Attachments go out as `upload` embeds (§4.8.3). */
@@ -164,6 +165,8 @@
 			</span>
 		{/if}
 		<!-- Pressing Send leaves the focus in the field, so a phone's keyboard stays up between messages rather than dropping and coming back. -->
-		<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : cmd ? 'Run command' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0} label={waitLeft > 0 ? waitLabel(waitLeft, waitLeft >= LONG_WAIT_MS) : cmd ? 'Run' : 'Send'} />
+		<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : cmd ? 'Run command' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0}>
+			{#snippet children()}{#if waitLeft > 0}<Hourglass size={14} aria-hidden="true" />{waitLabel(waitLeft, waitLeft >= LONG_WAIT_MS)}{:else}{cmd ? 'Run' : 'Send'}{/if}{/snippet}
+		</Button>
 	</form>
 </div>

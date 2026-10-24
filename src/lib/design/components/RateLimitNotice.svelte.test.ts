@@ -81,10 +81,12 @@ describe('waiting elsewhere', () => {
 		dom.render(Composer, { room: 'General', value: 'Sounds good, shipping it', onsend, waitUntil: Date.now() + 28_000 });
 		const send = document.querySelector<HTMLButtonElement>('button[type="submit"]')!;
 		expect([send.textContent, send.disabled, send.getAttribute('aria-label')]).toEqual(['28s', true, 'Send again in 28 seconds']);
+		// An hourglass says the number is a wait.
+		expect(send.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
 		document.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
 		expect(onsend).not.toHaveBeenCalled();
 		wait(28_000);
-		expect([send.textContent, send.disabled]).toEqual(['Send', false]);
+		expect([send.textContent, send.disabled, send.querySelector('svg')]).toEqual(['Send', false, null]);
 		document.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
 		expect(onsend).toHaveBeenCalledOnce();
 	});

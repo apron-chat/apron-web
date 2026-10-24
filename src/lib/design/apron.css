@@ -327,7 +327,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-editable .ap-mention { white-space: nowrap; cursor: default; user-select: all; }
 /* The autocomplete picker anchors to the composer's row and grows upward. */
 .ap-composer-wrap { position: relative; }
-/* Send counting down a wait on sending (`waitUntil`): figures that don't shift as they count. */
+/* Send counting down a wait on sending (`waitUntil`), after an hourglass: figures that don't shift as they count. */
 .ap-btn.ap-composer-wait { font-variant-numeric: tabular-nums; }
 /* Above the field: the message being replied to, with Cancel reply */
 .ap-composer-reply { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-4); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
