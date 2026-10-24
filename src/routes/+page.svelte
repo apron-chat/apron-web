@@ -5,7 +5,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, serverSettings, timelineMessages, webPushKey, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, serverMedia, serverSettings, timelineMessages, webPushKey, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
@@ -1679,12 +1679,14 @@
 	/**
 	 * Attaches picked, pasted or recorded files to the open pane's draft
 	 * (capability `embed:upload`), to go out when it is sent. Images start
-	 * shrinking and losing their metadata right away; one that can't be
-	 * readied is taken back off with the reason.
+	 * shrinking and losing their metadata right away, to the server's limits
+	 * where it states them (`ext:media`); one that can't be readied, or that
+	 * the server said it doesn't take, is taken back off with the reason.
 	 */
 	function stageFiles(picked: File[]): void {
 		if (!canCompose || !session.snapshot.capabilities['embed:upload']) return;
-		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: prepareUpload(file) }));
+		const limits = serverMedia(session.server).upload;
+		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: prepareUpload(file, { limits }) }));
 		for (const { id, prepared } of staged) {
 			prepared.catch((cause: unknown) => {
 				drafts.unstage(id);
@@ -2604,6 +2606,7 @@
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!canCompose}
 					canUpload={snapshot.capabilities['embed:upload']}
+					uploadLimits={serverMedia(session.server).upload}
 					canCommand={snapshot.capabilities.command}
 					{people}
 					rooms={roomSuggestions}

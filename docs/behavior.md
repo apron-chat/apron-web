@@ -10,8 +10,8 @@ The default connection is `VITE_DEFAULT_SERVER_URL` from the build, which
 `VITE_DEFAULT_SERVER_URL=` (empty), use same-origin `/ws` instead.
 
 Embed media (`og` images, video and audio) loads from the chat server's origin
-and from the origins in `VITE_TRUSTED_MEDIA_ORIGINS`, which `.env.production`
-sets to `https://media.apron.chat`, the Cloudflare demo server's upload bucket.
+and from the origins that server names for its media, such as its upload bucket
+(`ext.media.origins`, [EXT.md §6](../EXT.md#6-extmedia)).
 Streams load from the chat server's origin only. Every link in chat, from
 message text, link cards, uploads and HTML embeds, opens in a new tab.
 
@@ -817,7 +817,13 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   keeps the new name, Escape the old one, and an empty name changes nothing.
   The file is sent under that name, as the embed's `title`. A long name
   loses its middle rather than its end, so its extension stays in view. Images start shrinking as soon as they are attached; one that
-  can't be made small enough comes off again with the reason. Send (with or
+  can't be made small enough comes off again with the reason. Where the server
+  states the types it takes and their limits
+  ([EXT.md §6](../EXT.md#6-extmedia)), images shrink to those limits, the
+  file picker offers only those types, the microphone shows only when one of
+  them is an audio type the browser records, and a file of another type, or
+  one over its type's limit that can't be shrunk (audio, video, an animated
+  image), comes off again with the limit. Send (with or
   without text) posts the message with one `upload` embed per attached file,
   then writes each file to the `write_url` in the result. A failed send gives
   the draft back with its files. The message shows a pending
@@ -877,8 +883,9 @@ first, since the server deletes its content. A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
-Media in `og` and stream URLs load only from the chat server's own origin;
-links may point anywhere `http(s)`.
+Media in `og` loads only from the chat server's own origin and the origins it
+names with `ext:media`, and stream URLs only from its own origin; links may
+point anywhere `http(s)`.
 
 **Connect** in the
 sidebar header opens the connect screen: a WebSocket URL or an HTTP(S) server

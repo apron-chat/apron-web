@@ -16,9 +16,10 @@ describe('embed URL policy', () => {
 		expect(safeAvatar('http://elsewhere.example/a.png', origin)).toBeUndefined();
 	});
 
-	it('loads embed media from trusted origins as well as the chat server', () => {
-		const trusted = parseOrigins('https://media.apron.chat, http://localhost:9000 http://media.example https://cdn.example/path nonsense');
-		expect(trusted).toEqual(['https://media.apron.chat', 'http://localhost:9000']);
+	it('loads embed media from the origins the server names as well as from the server', () => {
+		const trusted = parseOrigins(['https://media.apron.chat', 'http://localhost:9000', 'http://[::1]:9000', 'http://media.example', 'https://cdn.example/path', 'https://cdn.example/', 'https://CDN.example', 7, 'nonsense']);
+		expect(trusted).toEqual(['https://media.apron.chat', 'http://localhost:9000', 'http://[::1]:9000']);
+		expect(parseOrigins('https://media.apron.chat')).toEqual([]);
 		expect(embedMedia('https://media.apron.chat/f/abc', 'https://server.apron.chat', trusted)).toBe('https://media.apron.chat/f/abc');
 		expect(embedMedia('https://server.apron.chat/files/x', 'https://server.apron.chat', trusted)).toBe('https://server.apron.chat/files/x');
 		expect(embedMedia('https://tracker.example/pixel.gif', 'https://server.apron.chat', trusted)).toBeUndefined();

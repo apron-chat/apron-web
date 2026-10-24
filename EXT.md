@@ -32,6 +32,7 @@ the fallback of that capability:
 | `embed:upload` | attaches files, and sets an avatar with `/avatar` when `command` is also advertised             | no attachments                     |
 | `ext:settings` | follows the server's settings ([§3](#3-extsettings))                                            | every setting is `true`            |
 | `ext:limits`   | holds back the requests that a refused request's category of limit covers ([§4](#4-extlimits)) | holds back by method ([§2](#2-the-boundary)) |
+| `ext:media`    | loads embed media from the server's media origins, and fits files to its limits ([§6](#6-extmedia)) | loads embed media from the server's origin; refuses no file |
 
 Some features have no capability:
 
@@ -77,8 +78,6 @@ These predate this document. Each one is to move behind an extension, or go:
 - apron-web offers to move the messages of other users only to users with role
   `admin` or `mod`. For role `admin`, it adds the authors of moved messages
   also while `add_members` is `false`.
-- apron-web shrinks images to fit 5 MB, and avatars to fit 256 KB, before it
-  uploads them. It refuses an animated image over 5 MB.
 
 ---
 
@@ -327,3 +326,113 @@ Access-Control-Expose-Headers: Apron-Connection-Status, Retry-After
 - It shows `error`, cut to 300 characters, as the connection error.
 - Until `Retry-After` passes, up to a day, it holds back reconnects, manual
   retries included.
+
+---
+
+## 6. `ext:media`
+
+A server can serve its files from another origin, such as a storage bucket,
+and take only some types and sizes of file. A client that knows can load those
+files, and fit a file to the server, or refuse it, before it uploads the file.
+
+Adds media to the `server` frame
+([§3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame)):
+
+```ts
+class Server {
+  // "ext:media" capability
+  ext?: {
+    media?: {
+      origins?: string[];
+      upload?: {[pattern: string]: Limits};
+      avatar?: {[pattern: string]: Limits};
+    };
+  };
+}
+
+class Limits {
+  max_bytes?: number;
+  max_side?: number;
+}
+```
+
+| field       | meaning                                                                                   |
+|-------------|-------------------------------------------------------------------------------------------|
+| `origins`   | origins besides the server's own that serve its media                                     |
+| `upload`    | the types of file that the server takes as attachments ([§4.8.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#484-embedupload)), with their limits |
+| `avatar`    | the types of image that the server takes with `/avatar` ([§4.8.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#486-avatars)), with their limits |
+| `max_bytes` | the largest file, in bytes                                                                |
+| `max_side`  | the longest side, in pixels, of an image as the server keeps it; clients need not send larger |
+
+```json
+{
+  "method": "server", "params": {
+    "apron": 9, "capabilities": ["command", "embed:upload", "ext:media"], "auth": ["guest", "webauthn"],
+    "ext": {"media": {
+      "origins": ["https://media.chat.example"],
+      "upload": {
+        "image/*": {"max_bytes": 5242880, "max_side": 2048},
+        "image/gif": {"max_bytes": 5242880},
+        "audio/*": {"max_bytes": 10485760}
+      },
+      "avatar": {"image/*": {"max_bytes": 262144, "max_side": 512}}
+    }}
+  }
+}
+```
+
+- The server lists `ext:media` in `capabilities`.
+- Every field is optional. Clients ignore unknown keys, and each field of the
+  wrong type or range on its own, such as a limit that is not a positive
+  integer, or a category or limits that are not an object.
+- Each `server` frame replaces the media.
+- `origins` lists exact origins, `scheme://host[:port]` without a path or a
+  query. Each is `https:`, or `http:` on `localhost`, `127.0.0.1`, or `[::1]`.
+  Clients ignore other entries.
+- Clients MAY load `og` media
+  ([§4.8.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#481-opengraph-metadata-og))
+  from `origins` as well as from the server's own origin, only for content
+  from a connection to that server.
+- `upload` and `avatar` are categories. Each maps MIME patterns to limits. A
+  pattern is an exact `type/subtype`, a group `type/*`, or `*/*`, in any
+  case.
+- A file takes the limits of its most specific pattern: its exact type, then
+  its group, then `*/*`. The order of keys does not matter.
+- The server does not take a file whose type matches no pattern of the
+  category. `{}` takes the type without a stated limit. Clients ignore unknown
+  limits.
+- Without a category, nothing is known about it. Clients then behave as
+  without `ext:media`.
+- A file's type is the type that the client declares for it: the
+  `Content-Type` of its write
+  ([§4.8.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#483-writes)),
+  or `application/octet-stream` without one. A client that re-encodes a file
+  declares the new type.
+- The media describe server policy. The server still decides by content, and
+  MAY refuse a write with 413 or 415.
+
+### 6.1 apron-web
+
+- apron-web loads `og` media from `origins`, besides the server's own origin.
+  Streams load from the server's own origin only
+  ([§4.8.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#485-embedstream)).
+- apron-web re-encodes every photo, which drops its metadata, as WebP, or as
+  JPEG where the browser cannot encode WebP. It scales an image to the smaller
+  of 2048 pixels and `max_side`, and steps the quality down to fit
+  `max_bytes`. It crops an avatar to a square of 512 pixels, or 256 when 512
+  does not fit, no larger than `max_side`.
+- Without a category, or for a type without `max_bytes`, apron-web aims for
+  its own preference: 5 MB for attachments, and 256 KB for avatars.
+- Without a category, apron-web refuses no file for its type or size. The
+  server's 413 or 415 decides.
+- With a category, apron-web re-encodes only as a type that the category
+  takes, within the limits of that type. A file that it does not re-encode
+  (an animated image, audio, video, or another file) it refuses before the
+  upload when its type matches no pattern, or when the file is over its
+  `max_bytes`. The error names the limit, such as "this server takes audio up
+  to 10 MB".
+- With `upload`, the file picker offers the patterns of `upload`, unless one
+  of them is `*/*`.
+- With `upload`, apron-web offers voice clips only when it takes `audio/webm`,
+  `audio/ogg`, or `audio/mp4`, in that order, and the browser records that
+  type. It records the clip as that type, and stops it at 95% of `max_bytes`.

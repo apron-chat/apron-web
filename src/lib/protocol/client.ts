@@ -127,6 +127,7 @@ import { HistoryQueue } from './history-queue';
 export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
 export { IDLE_RETRY_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
+export type { MediaLimit, MediaTypes, ServerMedia } from './client-views';
 export {
 	canEdit,
 	canManageRooms,
@@ -136,7 +137,9 @@ export {
 	defaultWebSocketUrl,
 	findMessage,
 	hasHistory,
+	mediaLimit,
 	normalizeWebSocketUrl,
+	serverMedia,
 	serverSettings,
 	timelineMessages,
 	topLevelRooms,

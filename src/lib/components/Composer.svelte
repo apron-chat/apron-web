@@ -8,6 +8,7 @@
 	import type { EmojiMartData } from '@emoji-mart/data';
 	import { emojiAnchor, emojiPicker, loadEmojiData } from '$lib/ui/emoji-picker.svelte';
 	import { isCommand } from '$lib/ui/commands';
+	import { mediaLimit, type MediaTypes } from '$lib/protocol/client';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { findGitHubLinks, linkPreviews } from '$lib/ui/link-previews';
 	import { pastedFiles } from '$lib/ui/file-transfer';
@@ -27,6 +28,10 @@
 	const PREVIEW_TYPING_PAUSE_MS = 800;
 	/** Plenty for speech, in Opus or AAC: about 240 KB a minute, so a 5 MB upload holds 20 minutes. */
 	const VOICE_BITS_PER_SECOND = 32_000;
+	/** What a clip may be recorded as where the server states the types it takes, by preference. */
+	const VOICE_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp4'];
+	/** A clip stops by itself at this share of the server's `max_bytes` for its type, the rest left for its last second. */
+	const VOICE_LIMIT_SHARE = 0.95;
 
 	/** The file extension for a recorded clip's type: Safari records MP4, Firefox Ogg, Chrome WebM. */
 	function voiceExtension(type: string): string {
@@ -53,6 +58,12 @@
 		disabled: boolean;
 		/** Attachments and voice clips (capability `embed:upload`, §4.8.4): each file goes out as an `upload` embed. */
 		canUpload: boolean;
+		/**
+		 * The types of attachment the server takes and their limits, where it
+		 * states them (`ext.media.upload`, EXT.md §6): the file picker offers
+		 * those, and a voice clip is recorded as one of them, or not offered.
+		 */
+		uploadLimits?: MediaTypes;
 		/** Files attached to the draft, shown above the field until it is sent; each can be removed first. */
 		files?: Staged[];
 		/**
@@ -80,7 +91,7 @@
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], uploadLimits, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
 
 	/** Unique per composer, for the open picker's ID. */
 	const uid = $props.id();
@@ -106,8 +117,24 @@
 	let recordTimer: ReturnType<typeof setInterval> | undefined;
 
 	let recording = $derived(recordSeconds !== undefined);
-	/** Voice messages need both uploads and a browser that can record. */
-	let canRecord = $derived(canUpload && typeof MediaRecorder !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia));
+	/** The file picker's `accept`: the patterns the server takes, unless one is any type. */
+	let accept = $derived(uploadLimits && !Object.hasOwn(uploadLimits, '*/*') ? Object.keys(uploadLimits).join(',') : undefined);
+	/**
+	 * What a voice clip is recorded as, and its `max_bytes`: the browser's own
+	 * type without stated limits, else the first of `VOICE_TYPES` that the
+	 * browser records and the server takes. Undefined: no voice clips.
+	 */
+	let voice = $derived.by((): { type?: string; maxBytes?: number } | undefined => {
+		if (typeof MediaRecorder === 'undefined') return undefined;
+		if (!uploadLimits) return {};
+		for (const type of VOICE_TYPES) {
+			const limit = mediaLimit(uploadLimits, type);
+			if (limit && MediaRecorder.isTypeSupported(type)) return { type, maxBytes: limit.max_bytes };
+		}
+		return undefined;
+	});
+	/** Voice messages need uploads, a type the server takes, and a browser that can record. */
+	let canRecord = $derived(canUpload && voice !== undefined && Boolean(navigator.mediaDevices?.getUserMedia));
 	let matches = $derived(query === undefined ? [] : matching(query));
 	let emojiMatches = $derived(emojiFound && emojiData ? searchEmoji(emojiData, emojiFound.query) : []);
 	/** The IDs a typed `#room_id` collapses into a chip for. */
@@ -584,11 +611,18 @@
 			return;
 		}
 		const chunks: Blob[] = [];
-		const current = new MediaRecorder(stream, { audioBitsPerSecond: VOICE_BITS_PER_SECOND });
+		const { type: mimeType, maxBytes } = voice ?? {};
+		const current = new MediaRecorder(stream, { audioBitsPerSecond: VOICE_BITS_PER_SECOND, ...(mimeType ? { mimeType } : {}) });
 		recorder = current;
 		recordSeconds = 0;
 		recordTimer = setInterval(() => (recordSeconds = (recordSeconds ?? 0) + 1), 1000);
-		current.ondataavailable = (event) => { if (event.data.size > 0) chunks.push(event.data); };
+		let recorded = 0;
+		current.ondataavailable = (event) => {
+			if (event.data.size > 0) chunks.push(event.data);
+			recorded += event.data.size;
+			// Under a stated limit, the clip comes in a slice a second, and stops itself short of the limit.
+			if (maxBytes !== undefined && recorded >= maxBytes * VOICE_LIMIT_SHARE && current.state === 'recording') current.stop();
+		};
 		current.onstop = () => {
 			for (const track of stream.getTracks()) track.stop();
 			if (recorder !== current) return;
@@ -598,7 +632,7 @@
 			const type = current.mimeType || chunks[0].type || 'audio/webm';
 			onfiles([new File(chunks, `voice-message.${voiceExtension(type)}`, { type })]);
 		};
-		current.start();
+		current.start(maxBytes === undefined ? undefined : 1000);
 	}
 
 	function stopRecording(send = true): void {
@@ -625,6 +659,7 @@
 	{canUpload}
 	{canRecord}
 	{onfiles}
+	{accept}
 	onrecord={startRecording}
 	onstoprecording={() => stopRecording()}
 	{recording}
