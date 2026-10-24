@@ -1,6 +1,6 @@
 /** `ChatClient` internals: per-room state, tuning constants, and pure helpers. */
 import { roomName, titled, UNTITLED } from '../naming';
-import { punctuated } from '../words';
+import { punctuated, retryAfterLabel } from '../words';
 import { compareLogIds, createTimeline, type TimelineState } from './reducer';
 import {
 	isJsonObject,
@@ -441,11 +441,7 @@ export function retryAfterMilliseconds(error: RpcError): number | undefined {
 export function userFacingRpcError(error: RpcError): string {
 	const retryAfter = retryAfterMilliseconds(error);
 	if (retryAfter !== undefined) {
-		// A wait can be hours long.
-		const seconds = Math.max(1, Math.ceil(retryAfter / 1000));
-		const minutes = Math.ceil(seconds / 60);
-		const wait = seconds < 60 ? `${seconds}s` : minutes < 60 ? `${minutes}m` : `${Math.ceil(minutes / 60)}h`;
-		return `${punctuated(error.message || 'Temporarily limited')} Try again in ${wait}.`;
+		return `${punctuated(error.message || 'Temporarily limited')} Try again in ${retryAfterLabel(retryAfter)}.`;
 	}
 	return error.message || `Request failed (${error.code})`;
 }

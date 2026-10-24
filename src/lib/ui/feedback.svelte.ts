@@ -1,7 +1,6 @@
 import { RateLimitError, type OperationHandle } from '$lib/protocol/client';
 
-/** A toast; an error the server refused for a while (`retry_after`) also has its wait, which the toast counts down. */
-export type Feedback = { kind: 'pending' | 'error'; text: string; wait?: { message: string; since: number; until: number } };
+export type Feedback = { kind: 'pending' | 'error'; text: string };
 
 /** How long a request may take before the toast admits it is still pending. */
 const QUIET_MS = 600;
@@ -19,7 +18,7 @@ export class FeedbackState {
 	/**
 	 * Shows an error, returned for `dismiss`. A wait (`RateLimitError.scope`) on a `history` or `message` request isn't
 	 * one: the page shows those where they apply, counting down, and nothing is toasted. Another request a wait holds
-	 * back, such as a reaction during a `write` wait, is toasted with its wait.
+	 * back, such as a reaction during a `write` wait, is toasted as any error, with how long the wait is.
 	 */
 	error(cause: unknown, fallback = 'Something went wrong'): Feedback | undefined {
 		this.stopTimer();
@@ -27,11 +26,7 @@ export class FeedbackState {
 			if (this.current?.kind === 'pending') this.current = undefined;
 			return undefined;
 		}
-		this.current = {
-			kind: 'error',
-			text: cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : fallback,
-			...(cause instanceof RateLimitError ? { wait: { message: cause.serverMessage, since: cause.since, until: cause.retryAt } } : {})
-		};
+		this.current = { kind: 'error', text: cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : fallback };
 		return this.current;
 	}
 

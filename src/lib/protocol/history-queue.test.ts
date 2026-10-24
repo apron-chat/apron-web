@@ -39,7 +39,7 @@ function connection(concurrency?: number) {
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-const refused = () => new RateLimitError('Too Many Requests. Try again in 5s.', 'Too Many Requests', 0, 5_000, 'history');
+const refused = () => new RateLimitError('Too Many Requests. Try again in 5s.', 'Too Many Requests', 5_000, 'history');
 
 afterEach(() => {
 	vi.useRealTimers();
@@ -127,10 +127,10 @@ describe('the history queue', () => {
 		const { queue, sent, rooms } = connection();
 		const handle = queue.request('thread', { room_id: 'thread' }, { retry: true });
 		// retry_after 0: the connection has no wait on by the time the refusal is handled.
-		sent[0].reject(new RateLimitError('Too Many Requests. Try again in 1s.', 'Too Many Requests', Date.now(), Date.now(), 'history'));
+		sent[0].reject(new RateLimitError('Too Many Requests. Try again in 1s.', 'Too Many Requests', Date.now(), 'history'));
 		await vi.advanceTimersByTimeAsync(0);
 		expect(rooms()).toEqual(['thread', 'thread']);
-		sent[1].reject(new RateLimitError('Too Many Requests. Try again in 2s.', 'Too Many Requests', Date.now(), Date.now() + 2_000, 'history'));
+		sent[1].reject(new RateLimitError('Too Many Requests. Try again in 2s.', 'Too Many Requests', Date.now() + 2_000, 'history'));
 		await vi.advanceTimersByTimeAsync(1_999);
 		expect(queue.holds('thread')).toBe(true);
 		await vi.advanceTimersByTimeAsync(1);

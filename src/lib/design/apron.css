@@ -374,16 +374,14 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-status-warn { background: var(--warn); }
 .ap-status-danger { background: var(--danger); }
 
-/* RateLimitNotice — a request the server refused for a while (`retry_after`): a ring that empties as the wait runs out
-   (a clock for a wait of an hour or more), what it holds back, and the time left, which doesn't shift as it counts. */
-.ap-wait { display: inline-flex; align-items: center; gap: var(--space-2); max-width: 100%; box-sizing: border-box; padding: var(--space-1) var(--space-4) var(--space-1) var(--space-2); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink); }
-.ap-wait-long { padding-right: var(--space-1); }
+/* RateLimitNotice — a StatusBanner for a request the server refused for a while (`retry_after`): a ring in place of the dot
+   that empties as the wait runs out (a clock for a wait of an hour or more), and the time left, which doesn't shift as it counts. */
 .ap-wait-ring { flex: none; width: 20px; height: 20px; fill: none; stroke-width: 3; }
 .ap-wait-track { stroke: var(--line); }
 .ap-wait-fill { stroke: var(--warn); stroke-linecap: round; transition: stroke-dashoffset var(--duration-tick) linear; }
 .ap-wait-clock { flex: none; color: var(--warn); }
 .ap-wait-time { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-.ap-wait .ap-wait-close { width: var(--control-xs); height: var(--control-xs); flex: none; }
+.ap-wait-close { width: var(--control-xs); height: var(--control-xs); margin: -2px 0; flex: none; }
 @media (prefers-reduced-motion: reduce) { .ap-wait-fill { transition: none; } }
 /* ActionBanner — a floating notice that offers one thing to do (a new version: Reload), on the accent */
 .ap-banner { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
@@ -438,9 +436,6 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-roomhead-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-3); }
 .ap-roomhead-name { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; white-space: nowrap; }
 .ap-roomhead-sub { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Waiting out a wait the server asked for on history (RoomHeader `wait`): a pill with a warn dot, the time left counting down. */
-.ap-roomhead-wait { flex: none; display: inline-flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); }
-.ap-roomhead-waitdot { width: 6px; height: 6px; border-radius: var(--radius-full); background: var(--warn); }
 .ap-roomhead-typing { color: var(--denim); }
 .ap-roomhead-back { font: inherit; font-size: 22px; width: var(--control-lg); height: var(--control-lg); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--denim); cursor: pointer; }
 @container (max-width: 560px) { .ap-roomhead-text { flex-direction: column; align-items: stretch; gap: 0; } }
@@ -656,7 +651,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 
 /* Toast — a StatusBanner floating over the page's foot, above the composer: a change under way, or an error until it's closed (ap-toast-close) */
 .ap-toast { position: fixed; z-index: var(--z-toast); left: 50%; bottom: calc(var(--space-4) + 64px); transform: translateX(-50%); max-width: min(var(--toast-max-w), calc(100% - var(--space-8))); }
-.ap-toast :is(.ap-status, .ap-wait) { box-shadow: var(--shadow-float); }
+.ap-toast .ap-status { box-shadow: var(--shadow-float); }
 /* At the right, apart from one in the middle: the connection's error. Across the foot on a phone. */
 .ap-toast-end { left: auto; right: var(--space-4); transform: none; }
 @media (max-width: 719px) { .ap-toast-end { right: var(--space-4); left: var(--space-4); max-width: none; } }

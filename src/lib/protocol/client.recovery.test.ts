@@ -186,7 +186,7 @@ describe('history per room', () => {
 		await settle();
 		const now = Date.now();
 		expect(room('general')).toMatchObject({ recovering: false, limited: true, recoveryError: 'Too Many Requests. Try again in 20s.' });
-		expect(snapshot.limits).toEqual({ history: { since: now, until: now + 20_000 } });
+		expect(snapshot.limits).toEqual({ history: { until: now + 20_000 } });
 		// A request's limit is not the connection's: reconnecting is not held back.
 		expect(snapshot.retryAfterMs).toBeUndefined();
 		// Nor is it any other method's: sending goes.

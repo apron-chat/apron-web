@@ -1,4 +1,4 @@
-<!-- @dsCard group="Feedback" height=430 subtitle="A request the server refused for a while: history, sending, a wait of hours, uploads, and a wait on anything else, each counting down" -->
+<!-- @dsCard group="Feedback" height=430 subtitle="A request the server refused for a while: history, sending, a wait of hours and uploads, each counting down" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>RateLimitNotice</title></head>
@@ -8,17 +8,16 @@
   var A = window.Apron, root = document.getElementById('root'), now = Date.now();
   function add(C, props) { var box = document.createElement('div'); root.appendChild(box); return A.render(C, box, props || {}); }
   // Shown in the timeline, where the messages will appear; it loads again by itself at zero.
-  add(A.RateLimitNotice, { scope: 'history', since: now - 3000, until: now + 17000 });
+  add(A.RateLimitNotice, { scope: 'history', until: now + 17000 });
   // Above the composer, whose Send counts down with it; the draft stays.
-  add(A.RateLimitNotice, { scope: 'message', since: now - 2000, until: now + 28000 });
+  add(A.RateLimitNotice, { scope: 'message', until: now + 28000 });
   add(A.Composer, { room: 'General', value: 'Sounds good, shipping it', waitUntil: now + 28000 });
   // An hour or more: a clock, in minutes, put away with its ×.
-  add(A.RateLimitNotice, { scope: 'message', since: now - 60000, until: now + (3 * 60 + 12) * 60000, ondismiss: function () {} });
+  add(A.RateLimitNotice, { scope: 'message', until: now + (3 * 60 + 12) * 60000, ondismiss: function () {} });
   // Uploads only (ext:limits): text still sends, and Send counts down only while files are attached.
-  add(A.RateLimitNotice, { scope: 'upload', since: now - 60000, until: now + (5 * 60 + 40) * 60000, ondismiss: function () {} });
-  // A wait on anything else: the server's words, made a sentence.
-  add(A.RateLimitNotice, { message: 'Too Many Requests', since: now, until: now + 20000 });
-  add(A.RoomHeader, { room: 'general', name: 'General', thread: 't1', threadName: 'Launch checklist', wait: now + 18000 });
+  add(A.RateLimitNotice, { scope: 'upload', until: now + (5 * 60 + 40) * 60000, ondismiss: function () {} });
+  // Its room's header says only that it waits: the notice counts down.
+  add(A.RoomHeader, { room: 'general', name: 'General', thread: 't1', threadName: 'Launch checklist', note: 'Waiting' });
 </script>
 </body>
 </html>

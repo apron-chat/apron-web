@@ -167,9 +167,8 @@ export interface RoomListing {
  */
 export type LimitScope = 'history' | 'message' | 'write' | 'upload';
 
-/** A wait the server asked for: from when it was asked (`since`) until requests of its scope go again, in epoch milliseconds. */
+/** A wait the server asked for: until requests of its scope go again, in epoch milliseconds. */
 export interface LimitWait {
-	since: number;
 	until: number;
 }
 
@@ -184,18 +183,12 @@ export class RateLimitError extends Error {
 	constructor(
 		message: string,
 		readonly serverMessage: string,
-		readonly since: number,
 		readonly retryAt: number,
 		readonly scope?: LimitScope,
 		readonly method?: string
 	) {
 		super(message);
 		this.name = 'RateLimitError';
-	}
-
-	/** The wait as the server gave it, in milliseconds. */
-	get retryAfterMs(): number {
-		return this.retryAt - this.since;
 	}
 }
 

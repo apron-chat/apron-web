@@ -7,8 +7,7 @@
 	import Users from '@lucide/svelte/icons/users';
 	import type { ClassValue } from 'svelte/elements';
 	import MenuButton from './MenuButton.svelte';
-	import { secondNow } from './clock.svelte';
-	import { count99, LONG_WAIT_MS, roomName, roomNameTip, waitLabel } from './util';
+	import { count99, roomName, roomNameTip } from './util';
 
 	interface Props {
 		room: string;
@@ -26,11 +25,6 @@
 		replies?: { count: number; more?: boolean };
 		/** A short status after the title, such as "History unavailable". */
 		note?: string;
-		/**
-		 * Its history waits until then, as the server asked (`retry_after`), in epoch milliseconds: "Waiting · 17s" after the title, counting
-		 * down, in place of `note`. A <RateLimitNotice> in the timeline says why, and is what a screen reader hears.
-		 */
-		wait?: number;
 		/** Phones: a ‹ back to the rooms list. */
 		onback?: () => void;
 		/** Unread messages in the other rooms and threads, and how many mention you: the ‹ becomes the point of a tag holding the count, grey, or orange with an @ for a mention, as in the rooms list. */
@@ -67,7 +61,7 @@
 		class?: ClassValue;
 	}
 	let {
-		room, name, topic, topicTitle, private: isPrivate, typing = [], replies, note, wait, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
+		room, name, topic, topicTitle, private: isPrivate, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
 		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, busy = false, onsummary,
 		tagTestid, topicTestid, joinTestid, summaryTestid, actionsTestid, editTestid, leaveTestid, class: className
 	}: Props = $props();
@@ -115,10 +109,7 @@
 			<p class="ap-roomhead-sub" data-testid={topicTestid} title={topicTitle}>{topic}</p>
 		{/if}
 	</div>
-	{#if wait !== undefined}
-		{@const left = Math.max(0, wait - secondNow())}
-		<span class="ap-roomhead-sub ap-roomhead-wait"><span class="ap-roomhead-waitdot" aria-hidden="true"></span>Waiting<span aria-hidden="true">{' · '}<span class="ap-wait-time">{waitLabel(left, left >= LONG_WAIT_MS)}</span></span></span>
-	{:else if note}<span class="ap-roomhead-sub" role="status">{note}</span>{/if}
+	{#if note}<span class="ap-roomhead-sub" role="status">{note}</span>{/if}
 	{#if canJoin}
 		<button type="button" class="ap-btn ap-btn-sm" data-testid={joinTestid} aria-label="Join {noun}" title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={busy} onclick={onjoin}>Join</button>
 	{/if}

@@ -6,7 +6,7 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
-const limited = (seconds: number) => new RateLimitError(`Too Many Requests. Try again in ${seconds}s.`, 'Too Many Requests', Date.now(), Date.now() + seconds * 1000);
+const limited = (seconds: number) => new RateLimitError(`Too Many Requests. Try again in ${seconds}s.`, 'Too Many Requests', Date.now() + seconds * 1000);
 
 describe('a background listing', () => {
 	it('lists again once the wait it was refused for is over, and not for any other failure', async () => {

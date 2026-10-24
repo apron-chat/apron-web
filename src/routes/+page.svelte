@@ -2432,7 +2432,7 @@
 	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} onsave={(text, edits) => saveEdit(event, text, edits)} oncancel={() => (editingId = undefined)} />{/if}
 {/snippet}
 <!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
-{#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" since={historyWait.since} until={historyWait.until} />{/if}{/snippet}
+{#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}
 {#snippet membersToggle()}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/snippet}
 <!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
 <!-- Kept while shut (hidden), so its border slides with the list's. -->
@@ -2482,7 +2482,7 @@
 				typing={typingNames}
 				replyCount={activeThread ? threadReplyCount : undefined}
 				moreReplies={Boolean(activeThread && threadRoom?.olderAvailable)}
-				wait={historyWait?.until}
+				waiting={Boolean(historyWait)}
 				canEdit={canEditPane}
 				editDisabled={!paneReady}
 				canLeave={session.canManageRooms && !session.readOnly && Boolean(paneRoom?.joined)}
@@ -2576,11 +2576,11 @@
 				<div class="ap-shell-waits">
 					{#if sendNotice}
 						{@const wait = sendNotice}
-						<RateLimitNotice scope="message" since={wait.since} until={wait.until} ondismiss={() => (dismissedSendWait = wait.until)} />
+						<RateLimitNotice scope="message" until={wait.until} ondismiss={() => (dismissedSendWait = wait.until)} />
 					{/if}
 					{#if uploadNotice}
 						{@const wait = uploadNotice}
-						<RateLimitNotice scope="upload" since={wait.since} until={wait.until} ondismiss={() => (dismissedUploadWait = wait.until)} />
+						<RateLimitNotice scope="upload" until={wait.until} ondismiss={() => (dismissedUploadWait = wait.until)} />
 					{/if}
 				</div>
 			{/if}

@@ -683,7 +683,7 @@ export class ChatClient {
 			threadDirectory: Object.fromEntries([...this.threadDirectory].map(([parent, listings]) => [parent, listings.map((listing) => this.withJoined(listing))])),
 			showReconnectDivider: this.showReconnectDivider,
 			retryAfterMs: this.retryAfterRemaining(),
-			...(this.limits.size ? { limits: Object.fromEntries([...this.limits].map(([scope, { since, until }]) => [scope, { since, until }])) } : {}),
+			...(this.limits.size ? { limits: Object.fromEntries([...this.limits].map(([scope, { until }]) => [scope, { until }])) } : {}),
 			...(this.reconnectHeld ? { held: true } : {}),
 			...(this.reconnectHeld && this.signInNeeded ? { signInNeeded: this.signInNeeded } : {}),
 			...(this.disconnectedAt !== undefined ? { disconnectedAt: this.disconnectedAt } : {})
@@ -1686,9 +1686,9 @@ export class ChatClient {
 		}, (cause: unknown) => {
 			if (this.idleReport !== report) return;
 			report.sending = false;
-			const { code, retryAfterMs } = cause as Error & { code?: number; retryAfterMs?: number };
+			const { code } = cause as Error & { code?: number };
 			if (code === undefined) report.applied = undefined;
-			let wait = retryAfterMs;
+			let wait = cause instanceof RateLimitError ? Math.max(0, cause.retryAt - Date.now()) : undefined;
 			if (wait === undefined) {
 				const failures = report.failures = (report.failures ?? 0) + 1;
 				wait = Math.min(IDLE_RETRY_MS * 2 ** (failures - 1), IDLE_RETRY_MAX_MS);
@@ -3869,14 +3869,14 @@ export class ChatClient {
 			(error as Error & { code?: number }).code = rpcError.code;
 			return error;
 		}
-		const since = Date.now();
+		const until = Date.now() + retryAfter;
 		if (request.method === 'auth') {
-			this.retryAfterUntil = Math.max(this.retryAfterUntil, since + retryAfter);
-			return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', since, since + retryAfter);
+			this.retryAfterUntil = Math.max(this.retryAfterUntil, until);
+			return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', until);
 		}
 		const scope = limitScope(request.method, request.params, this.hasCap('ext:limits') ? limitCategory(rpcError) : undefined);
-		if (scope) this.noteLimit(scope, since, since + retryAfter, rpcError.message ?? '', this.you?.user_id ?? this.resumingUserId);
-		return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', since, since + retryAfter, scope, request.method);
+		if (scope) this.noteLimit(scope, until, rpcError.message ?? '', this.you?.user_id ?? this.resumingUserId);
+		return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', until, scope, request.method);
 	}
 
 	/**
@@ -3884,7 +3884,7 @@ export class ChatClient {
 	 * of `userId` in the server's words `message`: it holds what it covers back
 	 * until then, unless one already runs longer.
 	 */
-	private noteLimit(scope: LimitScope, since: number, until: number, message: string, userId: string | undefined): void {
+	private noteLimit(scope: LimitScope, until: number, message: string, userId: string | undefined): void {
 		if (userId !== this.limitsUserId) {
 			for (const { timer } of this.limits.values()) clearTimeout(timer);
 			this.limits.clear();
@@ -3894,7 +3894,7 @@ export class ChatClient {
 		if (current && current.until >= until) return;
 		if (current) clearTimeout(current.timer);
 		const timer = setTimeout(() => this.endLimit(scope), Math.max(0, until - Date.now()));
-		this.limits.set(scope, { since, until, message, timer });
+		this.limits.set(scope, { until, message, timer });
 	}
 
 	/**
@@ -3934,7 +3934,7 @@ export class ChatClient {
 		const { scope, wait } = held;
 		const words = scope === 'message' ? 'Sending is paused' : wait.message;
 		const seconds = Math.max(1, Math.ceil((wait.until - Date.now()) / 1000));
-		return new RateLimitError(userFacingRpcError({ code: -32002, message: words, data: { retry_after: seconds } }), words, wait.since, wait.until, scope, method);
+		return new RateLimitError(userFacingRpcError({ code: -32002, message: words, data: { retry_after: seconds } }), words, wait.until, scope, method);
 	}
 
 	/** A room's history waits out a `history` wait: its recovery was refused for it, or a page of it is held. */

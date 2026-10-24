@@ -36,9 +36,9 @@ describe('a refusal with retry_after', () => {
 		refuse(socket.request('message').id, 28);
 		const error = await sent.promise.catch((cause: unknown) => cause);
 		expect(error).toBeInstanceOf(RateLimitError);
-		expect(error).toMatchObject({ code: -32002, scope: 'message', serverMessage: 'Too Many Requests', retryAt: Date.now() + 28_000, retryAfterMs: 28_000 });
+		expect(error).toMatchObject({ code: -32002, scope: 'message', serverMessage: 'Too Many Requests', retryAt: Date.now() + 28_000 });
 		expect((error as Error).message).toBe('Too Many Requests. Try again in 28s.');
-		expect(snapshot.limits).toEqual({ message: { since: Date.now(), until: Date.now() + 28_000 } });
+		expect(snapshot.limits).toEqual({ message: { until: Date.now() + 28_000 } });
 		// A listing holds back no other method: the caller shows it, and nothing else waits.
 		const listed = client.listRooms();
 		refuse(socket.request('room_list').id, 20);
@@ -168,7 +168,7 @@ describe('a refusal with a category of limit (ext:limits)', () => {
 		const sent = client.send('general', 'one');
 		refuseAs(socket.request('message').id, 40, 'write', 'Posting limit reached');
 		await expect(sent.promise).rejects.toMatchObject({ scope: 'write', method: 'message', message: 'Posting limit reached. Try again in 40s.' });
-		expect(snapshot.limits).toEqual({ write: { since: Date.now(), until: Date.now() + 40_000 } });
+		expect(snapshot.limits).toEqual({ write: { until: Date.now() + 40_000 } });
 		await expect(client.react('1', ['👍']).promise).rejects.toMatchObject({ scope: 'write', method: 'reactions', retryAt: Date.now() + 40_000, message: 'Posting limit reached. Try again in 40s.' });
 		await expect(client.joinRoom('ops').promise).rejects.toMatchObject({ scope: 'write', method: 'room_join' });
 		// Commands may do anything, and `me` isn't posting: they go.

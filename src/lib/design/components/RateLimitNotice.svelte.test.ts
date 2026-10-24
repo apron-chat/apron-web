@@ -3,7 +3,6 @@ import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
 import RateLimitNotice from './RateLimitNotice.svelte';
-import RoomHeader from './RoomHeader.svelte';
 import * as dom from '$lib/test/dom';
 
 beforeEach(() => {
@@ -17,7 +16,7 @@ afterEach(() => {
 
 /** What the notice shows (its countdown included), and what a screen reader hears of it. */
 function read(): { shown: string; heard: string } {
-	const text = dom.byRole('status').querySelector('.ap-wait-text')!;
+	const text = dom.byRole('status').querySelector('.ap-status-text')!;
 	const without = (selector: string) => [...text.childNodes].filter((node) => !(node instanceof Element && node.matches(selector))).map((node) => node.textContent).join('');
 	return { shown: without('.ap-sr'), heard: without('.ap-wait-time') };
 }
@@ -31,7 +30,7 @@ function wait(ms: number): void {
 describe('RateLimitNotice', () => {
 	it('says what the wait holds back and counts down to its end, the time a screen reader hears said once', () => {
 		const now = Date.now();
-		dom.render(RateLimitNotice, { scope: 'history', since: now, until: now + 17_000 });
+		dom.render(RateLimitNotice, { scope: 'history', until: now + 17_000 });
 		expect(read()).toEqual({ shown: 'Loading history is paused. Loading again in 17s', heard: 'Loading history is paused. Loading again in 17 seconds' });
 		expect(dom.byRole('status').querySelector('.ap-wait-time')?.getAttribute('aria-hidden')).toBe('true');
 		const ring = document.querySelector<SVGCircleElement>('.ap-wait-fill')!;
@@ -43,17 +42,17 @@ describe('RateLimitNotice', () => {
 		expect(Number(ring.getAttribute('stroke-dashoffset'))).toBeCloseTo(full * 5 / 17);
 	});
 
-	it('counts from the wait’s end, not from when it rendered, so showing it again doesn’t start it over', () => {
+	it('counts down to the wait’s end, whenever it is shown, its ring full from then', () => {
 		const now = Date.now();
-		dom.render(RateLimitNotice, { scope: 'message', since: now - 30_000, until: now + 90_000 });
+		dom.render(RateLimitNotice, { scope: 'message', until: now + 90_000 });
 		expect(read().shown).toBe('Sending is paused. You can send again in 1:30.');
-		expect(Number(document.querySelector('.ap-wait-fill')!.getAttribute('stroke-dashoffset'))).toBeCloseTo(2 * Math.PI * 7 / 4);
+		expect(Number(document.querySelector('.ap-wait-fill')!.getAttribute('stroke-dashoffset'))).toBe(0);
 	});
 
 	it('shows a wait of an hour or more with a clock, in minutes, put away with its ×', () => {
 		const now = Date.now();
 		const ondismiss = vi.fn();
-		dom.render(RateLimitNotice, { scope: 'message', since: now, until: now + (3 * 60 + 12) * 60_000, ondismiss });
+		dom.render(RateLimitNotice, { scope: 'message', until: now + (3 * 60 + 12) * 60_000, ondismiss });
 		// The same words as a short wait: how long it is says nothing of why.
 		expect(read()).toEqual({ shown: 'Sending is paused. You can send again in 3h 12m.', heard: 'Sending is paused. You can send again in 3 hours 12 minutes.' });
 		expect(document.querySelector('.ap-wait-ring')).toBeNull();
@@ -62,7 +61,7 @@ describe('RateLimitNotice', () => {
 		expect(ondismiss).toHaveBeenCalledOnce();
 		dom.unmount();
 		// History waits as long say so the same way; a short wait has no ×.
-		dom.render(RateLimitNotice, { scope: 'history', since: now, until: now + 2 * 3_600_000, ondismiss });
+		dom.render(RateLimitNotice, { scope: 'history', until: now + 2 * 3_600_000, ondismiss });
 		expect(read().shown).toBe('Loading history is paused. Loading again in 2h 0m');
 		dom.unmount();
 		dom.render(RateLimitNotice, { scope: 'message', until: now + 28_000, ondismiss });
@@ -71,18 +70,8 @@ describe('RateLimitNotice', () => {
 
 	it('says when uploads are paused, and when they resume', () => {
 		const now = Date.now();
-		dom.render(RateLimitNotice, { scope: 'upload', since: now, until: now + 45_000 });
+		dom.render(RateLimitNotice, { scope: 'upload', until: now + 45_000 });
 		expect(read()).toEqual({ shown: 'Uploads are paused. Uploads resume in 45s.', heard: 'Uploads are paused. Uploads resume in 45 seconds.' });
-	});
-
-	it('gives a wait on anything else in the server’s words, made a sentence, and says when it’s done', () => {
-		const ondone = vi.fn();
-		dom.render(RateLimitNotice, { message: 'Too Many Requests', until: Date.now() + 20_000, ondone });
-		expect(read().shown).toBe('Too Many Requests. Try again in 20s');
-		wait(19_999);
-		expect(ondone).not.toHaveBeenCalled();
-		wait(1);
-		expect(ondone).toHaveBeenCalledOnce();
 	});
 });
 
@@ -109,14 +98,5 @@ describe('waiting elsewhere', () => {
 		expect(onsend).not.toHaveBeenCalled();
 		wait(28_000);
 		expect([send.textContent, send.disabled]).toEqual(['Send', false]);
-	});
-
-	it('says the room is waiting in its header, counting down, in place of its note', () => {
-		dom.render(RoomHeader, { room: 'general', name: 'General', note: 'History unavailable', wait: Date.now() + 18_000 });
-		const note = document.querySelector('.ap-roomhead-wait')!;
-		expect(note.textContent).toBe('Waiting · 18s');
-		expect(document.querySelector('[role="status"]')).toBeNull();
-		wait(1_000);
-		expect(note.textContent).toBe('Waiting · 17s');
 	});
 });
