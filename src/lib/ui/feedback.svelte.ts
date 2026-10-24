@@ -15,14 +15,21 @@ export class FeedbackState {
 		this.current = { kind: 'pending', text };
 	}
 
-	error(cause: unknown, fallback = 'Something went wrong'): void {
+	/** Shows an error, returned for `dismiss`. */
+	error(cause: unknown, fallback = 'Something went wrong'): Feedback {
 		this.stopTimer();
 		this.current = { kind: 'error', text: cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : fallback };
+		return this.current;
 	}
 
 	clear(): void {
 		this.stopTimer();
 		this.current = undefined;
+	}
+
+	/** Clears `shown` if it is still the toast: one that no longer applies, not whatever replaced it. */
+	dismiss(shown: Feedback | undefined): void {
+		if (shown && this.current === shown) this.clear();
 	}
 
 	/** Shows the pending copy only when a request takes noticeably long, and its error until the next request. */

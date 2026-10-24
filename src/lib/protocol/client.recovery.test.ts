@@ -145,6 +145,29 @@ describe('history per room', () => {
 		expect(room('general').recoveryError).toBeUndefined();
 		expect(room('general').timeline.order).toEqual(['11']);
 	});
+
+	it('recovers again on its own once a refused page\'s retry_after is over', async () => {
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 20 } } });
+		await settle();
+		expect(room('general').recoveryError).toBe('History request limit reached Try again in 20s.');
+		await vi.advanceTimersByTimeAsync(19_000);
+		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(1);
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(2);
+		expect(room('general')).toMatchObject({ recovering: true });
+		expect(room('general').recoveryError).toBeUndefined();
+		await socket.reply('history', { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' });
+		expect(room('general')).toMatchObject({ recovering: false, loaded: true });
+		expect(room('general').timeline.order).toEqual(['11']);
+	});
+
+	it('leaves a recovery that failed for another reason to loadRoom', async () => {
+		socket.receive({ id: socket.request('history').id, error: { code: -32603, message: 'Internal error' } });
+		await settle();
+		expect(room('general').recoveryError).toBe('Internal error');
+		await vi.advanceTimersByTimeAsync(120_000);
+		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(1);
+	});
 });
 
 describe('a room shown for its messages (no cap rooms)', () => {

@@ -46,7 +46,7 @@
 	import { composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { FeedbackState } from '$lib/ui/feedback.svelte';
+	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
 	import { prepareUpload } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
@@ -283,6 +283,10 @@
 	});
 	/** The open thread's `room_id`; undefined in the room view. */
 	let activeThread = $state<string | undefined>();
+	/** The toast for the last thread that failed to load, cleared once it no longer applies. */
+	let threadError: Feedback | undefined;
+	/** A thread whose load was refused with `retry_after`, and when to try it again. */
+	let threadRetry = $state<{ id: string; at: number } | undefined>();
 	let selectedRoomId = $state<string | undefined>();
 	/** A thread this viewer created (`startThread`, `createThread`), opened once its `room_update` has arrived. */
 	let pendingOpen = $state<PendingThread | undefined>();
@@ -753,6 +757,14 @@
 				if (messageScroll && messageScroll.scrollHeight <= messageScroll.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
 			});
 		});
+	});
+
+	// A thread refused for a while (the history quota's `retry_after`) loads again once the wait is over, while it is open.
+	$effect(() => {
+		const retry = threadRetry;
+		if (!retry || activeThread !== retry.id) return;
+		const timer = setTimeout(() => loadThread(retry.id), Math.max(0, retry.at - Date.now()));
+		return () => clearTimeout(timer);
 	});
 
 	// Threads don't recover with their parent: the open one loads its own history,
@@ -1425,6 +1437,8 @@
 		if (thread) mentions.clearRoom(thread);
 		stickToBottom = true;
 		reveal.from(timeline.length - FIRST_PAINT_ITEMS);
+		// A thread's failed load is about that thread: leaving it takes the toast too.
+		feedback.dismiss(threadError);
 	}
 
 	/** Writes the destination into the page's history entry, unless it is already there. */
@@ -1466,7 +1480,8 @@
 	function openDestination(roomId: string, thread: string | undefined): void {
 		if (!client) return;
 		if (activeRoom?.id !== roomId) session.chooseRoom(client, roomId);
-		setDestination(roomId, thread);
+		if (thread) showThread(roomId, thread);
+		else setDestination(roomId, undefined);
 		closeRooms();
 	}
 
@@ -1505,10 +1520,17 @@
 		chooseThread(thread);
 	}
 
-	/** Loads a thread's history (§4.3); a failure the client recorded is reported once. */
+	/**
+	 * Loads a thread's history (§4.3); a failure the client recorded is reported once, and one refused with
+	 * `retry_after` is tried again after the wait. A load that succeeds takes the last failure's toast away.
+	 */
 	function loadThread(roomId: string): void {
-		client?.loadRoom(roomId).catch((cause: unknown) => {
-			if (session.rooms.find((room) => room.id === roomId)?.recoveryError) feedback.error(cause, 'Unable to load thread');
+		if (threadRetry?.id === roomId) threadRetry = undefined;
+		client?.loadRoom(roomId).then(() => feedback.dismiss(threadError), (cause: unknown) => {
+			if (!session.rooms.find((room) => room.id === roomId)?.recoveryError) return;
+			threadError = feedback.error(cause, 'Unable to load thread');
+			const wait = (cause as { retryAfterMs?: number }).retryAfterMs;
+			if (wait !== undefined) threadRetry = { id: roomId, at: Date.now() + wait };
 		});
 	}
 

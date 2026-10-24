@@ -3384,6 +3384,8 @@ export class ChatClient {
 	}
 
 	private startRecovery(room: RoomState, head: string | undefined, rebuild: boolean, preserveBuffer = false): void {
+		clearTimeout(room.recoveryRetry);
+		room.recoveryRetry = undefined;
 		const retained = preserveBuffer
 			? (room.recovery?.buffer ?? []).filter((live) => isEmbedded(live) || room.floor === undefined || compareLogIds(live.record.log_id, room.floor) >= 0)
 			: [];
@@ -3426,10 +3428,26 @@ export class ChatClient {
 		request.promise.then((result) => {
 			if (room.recovery?.requestId !== request.id || room.recovery.generation !== generation) return;
 			this.applyHistoryPage(room, result, generation);
-		}).catch((cause: Error) => {
+		}).catch((cause: Error & { retryAfterMs?: number }) => {
 			if (!room.recovery || room.recovery.requestId !== request.id || room.recovery.generation !== generation) return;
 			this.abortRecovery(room, cause.message);
+			if (cause.retryAfterMs !== undefined) this.retryRecoveryAfter(room, cause.retryAfterMs);
 		});
+	}
+
+	/**
+	 * A history page refused with `retry_after` (the history quota, §4.3) is
+	 * only a wait: the room recovers again on its own once it is over, as
+	 * `loadRoom` would, instead of staying unavailable until a reconnect.
+	 */
+	private retryRecoveryAfter(room: RoomState, wait: number): void {
+		clearTimeout(room.recoveryRetry);
+		room.recoveryRetry = setTimeout(() => {
+			room.recoveryRetry = undefined;
+			if (this.rooms.get(room.id) !== room || !room.recoveryError || room.recovery || !this.authenticated) return;
+			this.startRecovery(room, room.latestLogId, true);
+			this.emit();
+		}, wait);
 	}
 
 	private applyHistoryPage(room: RoomState, result: JsonObject, generation: number): void {
@@ -3579,6 +3597,8 @@ export class ChatClient {
 
 	private discardRoom(room: RoomState, reason: string): void {
 		this.retireRecoveryRequest(room);
+		clearTimeout(room.recoveryRetry);
+		room.recoveryRetry = undefined;
 		room.recovery = undefined;
 		room.loadGeneration += 1;
 		for (const waiter of room.waiters.splice(0)) waiter.reject(new Error(reason));

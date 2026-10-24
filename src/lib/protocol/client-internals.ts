@@ -37,6 +37,8 @@ export interface RoomState {
 	recovery?: RecoveryState;
 	recoveryGeneration: number;
 	recoveryError?: string;
+	/** Restarts a recovery refused with `retry_after` once the wait is over. */
+	recoveryRetry?: ReturnType<typeof setTimeout>;
 	/** Settled when the running (or next) automatic recovery completes or fails. */
 	waiters: Array<{ resolve: () => void; reject: (error: Error) => void }>;
 	/** Thread checkpoint T of `loadRoom`. */
