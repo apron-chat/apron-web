@@ -11,6 +11,10 @@ import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
  *
  *     #token=Hk41x9…&state=q8Rz…&server=wss%3A%2F%2Fchat.example%2F
  *
+ * A link passed on by link.apron.chat names the server in the query
+ * instead, as every link to a place here does (`?server=…#token=…`): the
+ * fragment's `server` comes first, then the query's.
+ *
  * With the `state` of a proposal this browser made, the link is that
  * proposal's, for the server it went to, and `server` is ignored. Any other
  * link is a credential someone else may have crafted or forwarded (login
@@ -38,20 +42,26 @@ export function takeSignInLink(location: Pick<Location, 'hash' | 'pathname' | 's
 	const params = fragmentParams(hash);
 	if (!params?.has('token')) return undefined;
 	// Read before scrubbing: a real `Location` changes under us.
-	const link = parseSignInLink(hash);
+	const link = parseSignInLink(hash, location.search);
 	replace(`${location.pathname}${location.search}`);
 	return link;
 }
 
-/** `#token=…[&state=…][&server=…]` as its parts. `token` is required; other keys are ignored. */
-export function parseSignInLink(hash: string): SignInLink | undefined {
+/**
+ * `#token=…[&state=…][&server=…]` as its parts, with the `server` of
+ * `search` when the fragment has none. `token` is required; other keys are
+ * ignored.
+ */
+export function parseSignInLink(hash: string, search = ''): SignInLink | undefined {
 	const params = fragmentParams(hash);
 	const token = params?.get('token')?.trim();
 	if (!params || !token) return undefined;
 	const state = params.get('state') || undefined;
 	const link: SignInLink = { token, ...(state ? { state } : {}) };
-	if (!params.has('server')) return link;
-	const server = webSocketUrl(params.get('server') ?? '');
+	const query = new URLSearchParams(search);
+	const named = params.has('server') ? params.get('server') : query.get('server');
+	if (named === null) return link;
+	const server = webSocketUrl(named);
 	return server ? { ...link, server } : { ...link, badServer: true };
 }
 

@@ -1082,6 +1082,9 @@ code field has gone. The link, from the email or the page's return, is
 `#token=…&state=…`, with `&server=` naming the server's `ws:`/`wss:` URL
 when it opens a client that isn't tied to one, all
 `application/x-www-form-urlencoded` in the URL fragment; it carries no address.
+A sign-in link that link.apron.chat passes on names the server in the query
+instead, as its links to a place do (`?server=…#token=…&state=…`): a `server`
+in the fragment comes first, then the query's.
 The fragment is read and scrubbed from the address bar before anything else,
 and a link pasted into an open tab is taken the same way. A link with the
 `state` of a sign-in this browser proposed (in this tab or another) is used at

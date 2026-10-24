@@ -14,6 +14,11 @@ describe('sign-in links (§4.11.2)', () => {
 		expect(parseSignInLink('#room')).toBeUndefined();
 		expect(parseSignInLink('#token=1&server=https%3A%2F%2Fevil.example')).toEqual({ token: '1', badServer: true });
 		expect(parseSignInLink('#token=1&state=s&server=')).toEqual({ token: '1', state: 's', badServer: true });
+		// As link.apron.chat passes one on: the server in the query, as for any link to a place.
+		expect(parseSignInLink('#token=Hk41x9&state=q8Rz', '?server=wss%3A%2F%2Fchat.example%2Fws')).toEqual({ token: 'Hk41x9', state: 'q8Rz', server: 'wss://chat.example/ws' });
+		expect(parseSignInLink('#token=1&server=wss%3A%2F%2Fa.example%2F', '?server=wss%3A%2F%2Fb.example%2F')).toEqual({ token: '1', server: 'wss://a.example/' });
+		expect(parseSignInLink('#token=1', '?server=https%3A%2F%2Fevil.example')).toEqual({ token: '1', badServer: true });
+		expect(parseSignInLink('#token=1', '?room=general')).toEqual({ token: '1' });
 	});
 
 	it('scrubs any sign-in fragment from the URL, keeping its path and query, after reading it', () => {
@@ -25,6 +30,10 @@ describe('sign-in links (§4.11.2)', () => {
 		expect(takeSignInLink({ hash: '#token=', pathname: '/', search: '' }, (url: string) => replaced.push(url))).toBeUndefined();
 		expect(takeSignInLink({ hash: '#section', pathname: '/', search: '' }, (url: string) => replaced.push(url))).toBeUndefined();
 		expect(replaced).toEqual(['/login?x=1', '/']);
+		// One passed on by link.apron.chat keeps its query: the server it names is the one the page switches to.
+		const passed = takeSignInLink({ hash: '#token=t&state=s', pathname: '/', search: '?server=wss%3A%2F%2Fchat.example%2Fws' }, (url: string) => replaced.push(url));
+		expect(passed).toEqual({ token: 't', state: 's', server: 'wss://chat.example/ws' });
+		expect(replaced.at(-1)).toBe('/?server=wss%3A%2F%2Fchat.example%2Fws');
 		// Read before a live location is scrubbed.
 		const location = { hash: '#token=9', pathname: '/', search: '' };
 		expect(takeSignInLink(location, () => (location.hash = ''))).toEqual({ token: '9' });
