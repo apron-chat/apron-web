@@ -80,20 +80,29 @@
 	// From the same source as the room's thread cards: a held view's listing while it shows, so they change over together.
 	let otherThreads = $derived(canBrowse ? (session.threadSource(session.activeRoomId).directory ?? []).filter((listing) => !listing.joined) : []);
 
-	/** Changes whenever a room or thread is joined or left. */
+	/** Changes whenever a room or thread is joined or left; `roomsKey` only for a top-level room. */
 	let joinedKey = $derived(session.rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));
+	let roomsKey = $derived(rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));
+	/**
+	 * How long a listing made in the background is reused: `room_list` is rate limited, and switching between rooms
+	 * shouldn't spend it. Joining or leaving lists afresh (the client drops what it changed), and so does opening Browse.
+	 */
+	const BACKGROUND_LISTING_MS = 60_000;
 
-	// Browse rooms and Other threads show only when there is something to join, so list both in the background
-	// (the rooms, and the active room's threads) whenever the active room or what you've joined changes. Threads
-	// you haven't joined deliver nothing live (§3.4): this listing is also what brings their cards up to date.
+	// Browse rooms and Other threads show only when there is something to join, so list both in the background:
+	// the rooms whenever the rooms you've joined change, and the active room's threads whenever it or what you've
+	// joined changes. Threads you haven't joined deliver nothing live (§3.4): this listing is also what brings their
+	// cards up to date.
+	$effect(() => {
+		void roomsKey;
+		if (!canBrowse) return;
+		untrack(() => client.listRooms(undefined, BACKGROUND_LISTING_MS).catch(() => {}));
+	});
 	$effect(() => {
 		const roomId = session.activeRoomId;
 		void joinedKey;
-		if (!canBrowse) return;
-		untrack(() => {
-			client.listRooms().catch(() => {});
-			if (roomId) client.listRooms(roomId).catch(() => {});
-		});
+		if (!canBrowse || !roomId) return;
+		untrack(() => client.listRooms(roomId, BACKGROUND_LISTING_MS).catch(() => {}));
 	});
 
 	function list(parentRoomId?: string): void {

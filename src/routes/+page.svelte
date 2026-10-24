@@ -122,7 +122,10 @@
 	 */
 	const FIRST_PAINT_ITEMS = 40;
 	const REVEAL_CHUNK_ITEMS = 60;
-	/** How long a members listing stays current when the mention picker opens. */
+	/**
+	 * How long a members listing stays current when the mention picker opens, in a pane read without joining it: a
+	 * joined room's members came with its listing and stay current by memberships (§4.2.2), so it lists nothing.
+	 */
 	const MEMBERS_FRESH_MS = 15_000;
 	/** How long the open room's messages wait for its thread listing, so the cards arrive with them. */
 	const THREADS_WAIT_MS = 3000;
@@ -225,6 +228,11 @@
 	let offeringLink = $state(false);
 	/** How far back a linked message is looked for, in pages of history. */
 	const LINKED_MESSAGE_PAGES = 20;
+	/**
+	 * How far back a pane opening at its New divider loads to reach it, in pages of history: opening a room read long
+	 * ago shouldn't spend the server's history allowance. Further back, it opens at the latest.
+	 */
+	const DIVIDER_PAGES = 3;
 	/** How long a pushed room waits for its account and rooms before it is dropped. */
 	const PUSH_ROOM_WAIT_MS = 30_000;
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
@@ -765,7 +773,8 @@
 		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !messageScroll) return;
 		untrack(() => {
 			tick().then(() => {
-				if (messageScroll && messageScroll.scrollHeight <= messageScroll.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
+				// Not while the pane isn't laid out (a phone showing the rooms list): it would never fill, and load every page.
+				if (messageScroll && messageScroll.clientHeight > 0 && messageScroll.scrollHeight <= messageScroll.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
 			});
 		});
 	});
@@ -2027,9 +2036,10 @@
 	/**
 	 * Opens the pane at its New divider, near the top with what is new below
 	 * it, as long as it still shows the latest: a jump, the reader, or sending
-	 * may have moved it first. A thread first loads its older replies back to
-	 * the divider (as a linked message's do), so the divider doesn't move up
-	 * out of view as they load. Either way the pane has landed after.
+	 * may have moved it first. A pane opened on its newest page first loads its
+	 * older messages back to the divider (as a linked message's do, but only
+	 * DIVIDER_PAGES of them), so the divider doesn't move up out of view as they
+	 * load. Either way the pane has landed after.
 	 */
 	async function landAtDivider(roomId: string): Promise<void> {
 		const visit = newDivider;
@@ -2039,7 +2049,7 @@
 		const still = () => newDivider === visit && paneRoom?.id === roomId && stickToBottom && pins === pinned;
 		try {
 			const after = visit.after;
-			for (let page = 0; page < LINKED_MESSAGE_PAGES && client && after !== undefined && still(); page++) {
+			for (let page = 0; page < DIVIDER_PAGES && client && after !== undefined && still(); page++) {
 				const oldest = paneRoom?.timeline.order[0];
 				if (!paneRoom?.olderAvailable || oldest === undefined || compareLogIds(oldest, after) <= 0) break;
 				try {
@@ -2584,7 +2594,7 @@
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
 					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply}
-					onmention={() => listMembers(MEMBERS_FRESH_MS)}
+					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
 					waitUntil={postWait?.until}
 				/>
 			{/if}
