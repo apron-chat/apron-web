@@ -2604,7 +2604,6 @@
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!canCompose}
 					canUpload={snapshot.capabilities['embed:upload']}
-					canUploadAudio={!snapshot.imageOnlyUploads}
 					canCommand={snapshot.capabilities.command}
 					{people}
 					rooms={roomSuggestions}

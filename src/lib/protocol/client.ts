@@ -1,6 +1,6 @@
 import { describeError, logPasskeyFailure, type PasskeyStage } from './passkey-diagnostics';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
-import { WriteError, writeEmbed } from './embeds';
+import { writeEmbed } from './embeds';
 import { SignInConnection, type RpcFailure } from './signin-connection';
 import { PROPOSAL_KEPT_MS, findProposal, forgetProposal, newProposalState, rememberProposal, signInPageUrl, type ProposalScheme } from './proposals';
 import {
@@ -182,8 +182,6 @@ export class ChatClient {
 	/** Read cursors per room, per user (§4.6). */
 	private readonly reads = new Map<string, Map<string, string>>();
 	private readonly uploads = new Map<string, UploadState>();
-	/** A 415 on a file that isn't an image: this server takes images only. */
-	private imageOnlyUploads = false;
 	/** Rooms whose `members` the server truncated (§4.2.1): the total it gave with them. */
 	private readonly memberCounts = new Map<string, number>();
 	/** This server answered adding or removing another user `unsupported` (§4.2.2). */
@@ -677,7 +675,6 @@ export class ChatClient {
 			recordedUsers: Object.fromEntries([...this.recordedUsers].map(([id, entry]) => [id, entry.identity])),
 			userAliases: Object.fromEntries(this.userAliases),
 			uploads: Object.fromEntries(this.uploads),
-			...(this.imageOnlyUploads ? { imageOnlyUploads: true } : {}),
 			...(this.memberChangesUnsupported ? { memberChangesUnsupported: true } : {}),
 			...(this.directory ? { directory: this.directory.map((listing) => this.withJoined(listing)) } : {}),
 			threadDirectory: Object.fromEntries([...this.threadDirectory].map(([parent, listings]) => [parent, listings.map((listing) => this.withJoined(listing))])),
@@ -2243,7 +2240,6 @@ export class ChatClient {
 				this.uploads.delete(embedId);
 			} catch (cause) {
 				state.failed = cause instanceof Error ? cause.message : 'Upload failed';
-				if (cause instanceof WriteError && cause.status === 415 && !file.type.startsWith('image/')) this.imageOnlyUploads = true;
 				failures.push(state.failed);
 			}
 			this.emit();
@@ -2504,6 +2500,13 @@ export class ChatClient {
 		};
 	}
 
+	/**
+	 * After a handshake that failed, asks the server why (EXT.md §7): `GET`
+	 * its URL over HTTP with `?apron_connection_status=1`. A reply marked
+	 * `Apron-Connection-Status: 1`, with status 403, 429 or 503 and a JSON
+	 * `{error}`, shows as the error and holds reconnects for its
+	 * `Retry-After`. Any other reply is ignored.
+	 */
 	private async diagnoseConnection(id: number): Promise<void> {
 		const controller = new AbortController();
 		this.connectionProbe = controller;
@@ -2515,6 +2518,8 @@ export class ChatClient {
 			const response = await fetch(url, {
 				credentials: 'omit', cache: 'no-store', redirect: 'error', signal: controller.signal
 			});
+			// Any server answers the GET; only the marker says the reply is a connection status.
+			if (response.headers.get('Apron-Connection-Status') !== '1') return;
 			if (![403, 429, 503].includes(response.status) || !response.headers.get('content-type')?.includes('application/json')) return;
 			const body: unknown = await response.json();
 			if (!this.running || id !== this.connectionId || controller.signal.aborted) return;

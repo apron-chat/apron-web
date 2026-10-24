@@ -29,9 +29,11 @@ route, never with the app itself.
 Local development and builds with an empty `VITE_DEFAULT_SERVER_URL` retain the
 same-origin default.
 After a failed WebSocket handshake, the client makes a bounded HTTP diagnostic
-request to the same URL with `?apron_connection_status=1`. Supporting servers
-can expose a capacity error and `Retry-After` through CORS; the client displays
-the reason and waits before retrying, including manual retries. Servers without
+request to the same URL with `?apron_connection_status=1`
+([EXT.md §5](../EXT.md#5-connection-status)). A reply marked
+`Apron-Connection-Status: 1` can carry a capacity error and `Retry-After`,
+exposed through CORS; the client displays the reason and waits before retrying,
+including manual retries. Any other reply is ignored, and servers without
 this optional endpoint retain ordinary reconnect behavior.
 Repeated connection failures back off from 500 ms to about one attempt per minute
 with jitter. An explicit server retry window takes precedence, including a

@@ -55,8 +55,6 @@
 		canUpload: boolean;
 		/** Files attached to the draft, shown above the field until it is sent; each can be removed first. */
 		files?: Staged[];
-		/** False once the server showed it takes images only: voice clips are hidden. */
-		canUploadAudio?: boolean;
 		/**
 		 * Cap `command` (§4.1): text starting with one `/` is a command, shown
 		 * with a Command tag in monospace and sent with Run.
@@ -82,7 +80,7 @@
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
 
 	/** Unique per composer, for the open picker's ID. */
 	const uid = $props.id();
@@ -109,7 +107,7 @@
 
 	let recording = $derived(recordSeconds !== undefined);
 	/** Voice messages need both uploads and a browser that can record. */
-	let canRecord = $derived(canUpload && canUploadAudio && typeof MediaRecorder !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia));
+	let canRecord = $derived(canUpload && typeof MediaRecorder !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia));
 	let matches = $derived(query === undefined ? [] : matching(query));
 	let emojiMatches = $derived(emojiFound && emojiData ? searchEmoji(emojiData, emojiFound.query) : []);
 	/** The IDs a typed `#room_id` collapses into a chip for. */

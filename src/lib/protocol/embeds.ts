@@ -134,12 +134,10 @@ export class WriteError extends Error {
 	}
 }
 
+/** Only the standard meanings of a status (RFC 9110): what else a server means by one is its own. */
 function writeError(status: number): string {
 	if (status === 413) return 'The file is larger than this server accepts';
 	if (status === 415) return 'The server does not accept this type of file';
-	if (status === 409) return 'This upload link was already used';
-	if (status === 410) return 'The message was removed before the upload finished';
-	if (status === 404) return 'The upload expired; attach the file again';
 	return `The server refused the upload (${status})`;
 }
 

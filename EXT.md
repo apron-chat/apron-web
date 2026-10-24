@@ -38,6 +38,8 @@ Some features have no capability:
 - apron-web renders `stream` embeds that it receives. It never creates them.
 - `server.push` enables Web Push, for accounts that are not guests.
 - `server.auth` enables passkeys, and email and external sign-in.
+- After a failed WebSocket handshake, apron-web asks the server why over HTTP
+  ([§5](#5-connection-status)).
 - apron-web writes no `ext` of its own.
 
 ## 2. The boundary
@@ -54,6 +56,10 @@ Some features have no capability:
 - apron-web identifies errors by `code` only. It shows `message` as text, and
   never parses it
   ([§1.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#11-envelope-and-replies)).
+- apron-web reads the HTTP status of a refused upload write
+  ([§4.8.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#483-writes))
+  by its standard meaning only: 413 as a file too large, and 415 as a type that
+  the server does not take. Any other status is a refusal.
 - apron-web ignores unknown keys
   ([§1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#1-transport--framing)),
   such as keys of an error's `data` other than `retry_after` and, with
@@ -66,9 +72,6 @@ Some features have no capability:
 
 These predate this document. Each one is to move behind an extension, or go:
 
-- After a failed WebSocket handshake, apron-web sends an HTTP `GET` to the
-  server URL with `?apron_connection_status=1`. It shows the `error` of a JSON
-  reply with status 403, 429, or 503, and waits for its `Retry-After`.
 - apron-web asks for a display name with a pasted token only when the token
   starts with `apron_join_`.
 - apron-web offers to move the messages of other users only to users with role
@@ -76,8 +79,6 @@ These predate this document. Each one is to move behind an extension, or go:
   also while `add_members` is `false`.
 - apron-web shrinks images to fit 5 MB, and avatars to fit 256 KB, before it
   uploads them. It refuses an animated image over 5 MB.
-- apron-web reads the HTTP status of a failed upload write as a cause, such as
-  404 for an expired upload.
 
 ---
 
@@ -273,3 +274,56 @@ A refusal from a limit that fits no category:
 - After `read`, without a category, or with a category that apron-web does not
   use for the request, apron-web holds back by method
   ([§2](#2-the-boundary)).
+
+---
+
+## 5. Connection status
+
+A browser hides why a WebSocket handshake failed. A server that refuses
+connections, such as one at capacity, can say why over plain HTTP, and when to
+try again.
+
+This happens before any `server` frame, so no capability gates it. After a
+handshake that fails, the client asks:
+
+```http
+GET /ws?apron_connection_status=1 HTTP/1.1
+Host: chat.example
+Origin: https://web.example
+```
+
+A server that refuses connections answers:
+
+```http
+HTTP/1.1 503 Service Unavailable
+Apron-Connection-Status: 1
+Content-Type: application/json
+Retry-After: 3600
+Access-Control-Allow-Origin: *
+Access-Control-Expose-Headers: Apron-Connection-Status, Retry-After
+
+{"error": "Daily capacity reached"}
+```
+
+- The request is a `GET` of the WebSocket URL over HTTP (`https:` for `wss:`,
+  `http:` for `ws:`), with the query parameter `apron_connection_status=1` and
+  no credentials.
+- The reply has status 403, 429, or 503, the header
+  `Apron-Connection-Status: 1`, and a JSON body `{"error": string}`. `error`
+  says why, for people.
+- The reply MAY carry `Retry-After`, in seconds or as an HTTP date.
+- The server MUST allow the client's origin, and list
+  `Apron-Connection-Status` and `Retry-After` in
+  `Access-Control-Expose-Headers`, so that a browser lets the client read them.
+- Clients MUST ignore a reply without `Apron-Connection-Status: 1`, such as a
+  page from a host or a proxy in front of the server.
+- A server that accepts connections, or that does not implement this, answers
+  the request as any other. Clients then reconnect as before.
+
+### 5.1 apron-web
+
+- apron-web asks after each handshake that fails, and waits at most 4 seconds
+  for the reply before it reconnects.
+- It shows `error`, cut to 300 characters, as the connection error.
+- Until `Retry-After` passes, up to a day, it holds back reconnects, manual
+  retries included.
