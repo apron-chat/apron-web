@@ -1028,12 +1028,13 @@ A refusal with `retry_after` holds back further requests of its method when
 that is `history` or `message`, and fails only itself otherwise. A server that
 advertises `ext:limits` ([EXT.md §4](../EXT.md#4-extlimits)) may say more in
 the refusal's `data.ext.limits`. After `write`, Send counts down under
-"Sending is paused", and reactions, joins, leaves, room edits and profile
-changes are refused without being sent; a reaction, join or leave says so in
-a toast, with the server's words and the wait. After `upload`, a notice above the composer says "Uploads are
-paused", and Send counts down only while files are attached; text still
-sends. `read`, a category the client doesn't know, or none holds back by
-method, as without the extension.
+"Sending is paused", and reactions, joins, leaves and room edits are refused
+without being sent; a reaction, join or leave says so in a toast, with the
+server's words and the wait. After `upload`, a notice above the composer says
+"Uploads are paused", Send counts down only while files are attached, and a
+message or command that adds a file is refused without being sent; text, and
+an edit that keeps its files, still go. `read`, a category the client doesn't
+know, or none holds back by method, as without the extension.
 
 Passkeys use the browser's native WebAuthn JSON APIs, with no frontend dependency.
 An up-to-date browser is required; unsupported browsers can still chat as guests.

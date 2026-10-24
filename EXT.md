@@ -173,11 +173,15 @@ class RetryAfterError {  // code -32002
 Each category covers a set of requests. Until the delay ends, clients hold
 back these requests:
 
-| category | requests it covers                                                                    | what clients hold back                          |
-|----------|---------------------------------------------------------------------------------------|-------------------------------------------------|
-| `read`   | `history`, `room_list`                                                                | requests of the refused method                  |
-| `write`  | `message`, `command`, `reactions`, `room_join`, `room_leave`, `room_set`, `me`        | every request that `write` covers               |
-| `upload` | `message` and `command` requests that carry `upload` embeds ([§4.8.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#484-embedupload)) | every request that `upload` covers |
+| category | requests it covers                                                     | what clients hold back             |
+|----------|------------------------------------------------------------------------|------------------------------------|
+| `read`   | `history`, `room_list`                                                 | requests of the refused method     |
+| `write`  | `message`, `reactions`, `room_join`, `room_leave`, `room_set`          | every request that `write` covers  |
+| `upload` | `message` and `command` requests that add an upload: an `upload` embed without an `embed_id` ([§4.8.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#482-embed-identity)) | every request that `upload` covers |
+
+A command can do anything, so `write` does not cover `command`. A save that
+keeps an upload sends it back with its `embed_id`, so `upload` does not cover
+the save.
 
 The server advertises the extension:
 
@@ -234,9 +238,13 @@ A refusal from a limit that fits no category:
 - A `retry_after` error that replies to a request MAY carry `data.ext.limits`.
 - The server MUST send a category only on a request that the category covers.
 - The server MUST send `write` only for a limit that counts every request that
-  `write` covers.
+  `write` covers and that changes something.
 - The server MUST send `upload` only for a limit that counts every request
-  that `upload` covers.
+  that adds an upload.
+- A limit MAY leave out a request that changes nothing, such as a
+  deduplicated retry
+  ([§1.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#12-retries-and-deduplication))
+  or a `room_join` of a room that the user has already joined.
 - The server SHOULD send no category for a limit that fits none, or when it is
   not sure that a limit fits one.
 - The category describes server policy. The server still refuses each request
@@ -257,10 +265,11 @@ A refusal from a limit that fits no category:
   wait holds back without sending it. The error carries the server's `message`
   and the time left.
 - After `write`, a notice above the composer says that sending is paused, and
-  Send counts down. A held reaction, join, or leave shows the server's
-  `message` and the time left.
+  Send counts down. Meanwhile the composer sends no commands either. A held
+  reaction, join, or leave shows the server's `message` and the time left.
 - After `upload`, a notice above the composer says that uploads are paused.
-  Send counts down only while files are attached, and text still sends.
+  Send counts down only while files are attached. Text, and edits that keep
+  their files, still go.
 - After `read`, without a category, or with a category that apron-web does not
   use for the request, apron-web holds back by method
   ([§2](#2-the-boundary)).

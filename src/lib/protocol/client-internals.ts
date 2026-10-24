@@ -450,13 +450,22 @@ export function userFacingRpcError(error: RpcError): string {
 	return error.message || `Request failed (${error.code})`;
 }
 
-/** The requests that change shared state: an `ext:limits` `write` wait holds back every one of them. */
-const WRITES = new Set(['message', 'command', 'reactions', 'room_join', 'room_leave', 'room_set', 'me']);
+/**
+ * The requests an `ext:limits` `write` wait holds back: posting, reacting,
+ * joining, leaving, and room changes. Not `command`, which may do anything,
+ * nor `me`.
+ */
+const WRITES = new Set(['message', 'reactions', 'room_join', 'room_leave', 'room_set']);
 
-/** A `message` or `command` that carries `upload` embeds (§4.8.3): files to write once it is accepted. */
-function carriesUploads(method: string, params: JsonObject): boolean {
+/**
+ * A `message` or `command` that adds an upload: an `upload` embed without an
+ * `embed_id` is new (§4.8.2), a file to write once it is accepted (§4.8.3).
+ * A save that keeps an upload sends it back with its `embed_id`.
+ */
+function addsUpload(method: string, params: JsonObject): boolean {
 	const body = params.body;
-	return (method === 'message' || method === 'command') && isJsonObject(body) && Array.isArray(body.embeds) && body.embeds.some((embed) => isJsonObject(embed) && embed.kind === 'upload');
+	return (method === 'message' || method === 'command') && isJsonObject(body) && Array.isArray(body.embeds)
+		&& body.embeds.some((embed) => isJsonObject(embed) && embed.kind === 'upload' && embed.embed_id === undefined);
 }
 
 /**
@@ -470,22 +479,22 @@ export function limitCategory(error: RpcError): unknown {
 
 /**
  * What a request refused with `retry_after` (§1.1) holds back. With
- * `ext:limits`, a `write` category on a request that changes shared state
- * holds back all of those, and an `upload` category on one that carries
- * uploads holds back those that do. Otherwise, as the protocol says only that
+ * `ext:limits`, a `write` category on a request it covers (`WRITES`) holds
+ * back all of those, and an `upload` category on one that adds an upload
+ * holds back those that do. Otherwise, as the protocol says only that
  * this request should wait: further requests of its method, when that is
  * `history` or `message`; any other method's refusal only fails its request.
  */
 export function limitScope(method: string, params: JsonObject, category?: unknown): LimitScope | undefined {
 	if (category === 'write' && WRITES.has(method)) return 'write';
-	if (category === 'upload' && carriesUploads(method, params)) return 'upload';
+	if (category === 'upload' && addsUpload(method, params)) return 'upload';
 	return method === 'history' || method === 'message' ? method : undefined;
 }
 
 /** Whether a wait on `scope` refuses a request before it is sent. History is queued instead. */
 export function limitHolds(scope: LimitScope, method: string, params: JsonObject): boolean {
 	if (scope === 'write') return WRITES.has(method);
-	if (scope === 'upload') return carriesUploads(method, params);
+	if (scope === 'upload') return addsUpload(method, params);
 	return scope === 'message' && method === 'message';
 }
 

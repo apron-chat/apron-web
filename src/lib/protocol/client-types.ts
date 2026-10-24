@@ -162,8 +162,8 @@ export interface RoomListing {
  * What a wait the server asked for (`retry_after`, §1.1) holds back: further
  * requests of the refused request's method, `history` pages or `message`
  * sends (with files or without); or, with extension `ext:limits`, the
- * category the server gave: every request that changes shared state
- * (`write`), or only those that carry `upload` embeds (`upload`).
+ * category the server gave: posts, reactions, joins, leaves and room changes
+ * (`write`), or only requests that add an upload (`upload`).
  */
 export type LimitScope = 'history' | 'message' | 'write' | 'upload';
 
