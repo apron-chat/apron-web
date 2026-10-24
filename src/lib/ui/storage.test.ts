@@ -111,4 +111,17 @@ describe('preference storage', () => {
 		values.set('apron.hiddenSummaries', '{broken');
 		expect(loadHiddenSummaries()).toEqual({});
 	});
+
+	it('keeps the summaries another tab put away, or brought back, since this one loaded them', () => {
+		const here = loadHiddenSummaries();
+		hideSummary(loadHiddenSummaries(), 'general', 'Say hello.');
+		hideSummary(loadHiddenSummaries(), 'design', 'Critiques.');
+		const hidden = hideSummary(here, 'random', 'Anything goes.');
+		expect(summaryHidden(hidden, 'general', 'Say hello.')).toBe(true);
+		expect(summaryHidden(loadHiddenSummaries(), 'general', 'Say hello.')).toBe(true);
+		expect(summaryHidden(loadHiddenSummaries(), 'random', 'Anything goes.')).toBe(true);
+		showSummary(loadHiddenSummaries(), 'design');
+		expect(summaryHidden(showSummary(hidden, 'random'), 'design', 'Critiques.')).toBe(false);
+		expect(Object.keys(loadHiddenSummaries())).toEqual(['general']);
+	});
 });

@@ -155,6 +155,9 @@ export function saveOtherThreadsOpen(open: boolean): void {
 	write(KEY.otherThreads, open ? 'open' : 'shut');
 }
 
+/** The storage key of the summaries put away: other tabs follow its `storage` events. */
+export const HIDDEN_SUMMARIES_KEY = KEY.hiddenSummaries;
+
 /** The summaries put away, by the page's key for each room or thread: the fingerprint of the text that was put away. */
 export function loadHiddenSummaries(): Record<string, string> {
 	try {
@@ -166,9 +169,17 @@ export function loadHiddenSummaries(): Record<string, string> {
 	}
 }
 
+/**
+ * The summaries to change: as saved, which another tab may have changed since this one loaded them (its
+ * `hidden` would put back what that tab saved), unless nothing is saved for the next visit.
+ */
+function savedSummaries(hidden: Record<string, string>): Record<string, string> {
+	return persisting ? loadHiddenSummaries() : hidden;
+}
+
 /** Puts a room's or thread's summary away, until it's edited: returns the summaries put away, this one newest. */
 export function hideSummary(hidden: Record<string, string>, key: string, description: string): Record<string, string> {
-	const others = Object.entries(hidden).filter(([entry]) => entry !== key);
+	const others = Object.entries(savedSummaries(hidden)).filter(([entry]) => entry !== key);
 	const next = Object.fromEntries([...others, [key, summaryFingerprint(description)]].slice(-HIDDEN_SUMMARIES_MAX));
 	write(KEY.hiddenSummaries, JSON.stringify(next));
 	return next;
@@ -176,7 +187,7 @@ export function hideSummary(hidden: Record<string, string>, key: string, descrip
 
 /** Brings a room's or thread's summary back: returns the summaries still put away. */
 export function showSummary(hidden: Record<string, string>, key: string): Record<string, string> {
-	const next = Object.fromEntries(Object.entries(hidden).filter(([entry]) => entry !== key));
+	const next = Object.fromEntries(Object.entries(savedSummaries(hidden)).filter(([entry]) => entry !== key));
 	write(KEY.hiddenSummaries, JSON.stringify(next));
 	return next;
 }
