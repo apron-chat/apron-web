@@ -22,7 +22,7 @@
 	<button class="ap-iconbtn ap-toast-close" type="button" aria-label={label} title="Dismiss" onclick={onclose}><X size={14} aria-hidden="true" /></button>
 {/snippet}
 {#if feedback.current?.wait}
-	<!-- Refused for a while by a limit the page has no place for: the server's words, counting down, gone when the wait is. -->
+	<!-- Refused for a while, on something the page has no place for: the server's words, counting down, gone when the wait is. -->
 	{@const shown = feedback.current}
 	{@const wait = shown.wait!}
 	<div class="ap-toast">

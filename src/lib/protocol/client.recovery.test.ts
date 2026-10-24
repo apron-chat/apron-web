@@ -182,13 +182,16 @@ describe('history per room', () => {
 	});
 
 	it('waits out a refused page\'s retry_after, sending no history meanwhile, then recovers on its own', async () => {
-		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 20 } } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 20 } } });
 		await settle();
 		const now = Date.now();
-		expect(room('general')).toMatchObject({ recovering: false, limited: true, recoveryError: 'History request limit reached. Try again in 20s.' });
+		expect(room('general')).toMatchObject({ recovering: false, limited: true, recoveryError: 'Too Many Requests. Try again in 20s.' });
 		expect(snapshot.limits).toEqual({ history: { since: now, until: now + 20_000 } });
 		// A request's limit is not the connection's: reconnecting is not held back.
 		expect(snapshot.retryAfterMs).toBeUndefined();
+		// Nor is it any other method's: sending goes.
+		client.send('general', 'hi').promise.catch(() => undefined);
+		expect(socket.sent.filter((frame) => frame.method === 'message')).toHaveLength(1);
 		// The wait is shared: loading again, or another room's recovery, sends nothing until it is over.
 		const retried = client.loadRoom('general');
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
@@ -215,7 +218,7 @@ describe('history per room', () => {
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '22', history_log_id: '20' }] } });
 		let settled = false;
 		const loaded = client.loadRoom('20').then(() => (settled = true));
-		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 5 } } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 5 } } });
 		await settle();
 		expect(room('20')).toMatchObject({ loading: true, limited: true, loaded: false });
 		expect(room('20').recoveryError).toBeUndefined();
@@ -258,7 +261,7 @@ describe('history per room', () => {
 		await socket.reply('history', { messages: [message('11'), message('12')], first_log_id: '11', last_log_id: '12', more: true, latest_log_id: '12', history_log_id: '10' });
 		expect(room('general').olderAvailable).toBe(true);
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
-		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 20 } } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 20 } } });
 		await settle();
 		const older = client.loadOlder('general').catch((cause: Error) => cause.message);
 		// Retention passes the checkpoint: rebuilt, so the page before what it had is for nothing.
@@ -273,7 +276,7 @@ describe('history per room', () => {
 		await socket.reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '22', history_log_id: '20' }] } });
 		const loaded = client.loadRoom('20');
-		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 0 } } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 0 } } });
 		await vi.advanceTimersByTimeAsync(0);
 		expect(room('20').recoveryError).toBeUndefined();
 		expect(socket.sent.filter((frame) => frame.method === 'history' && (frame.params as { room_id: string }).room_id === '20')).toHaveLength(2);
@@ -288,7 +291,7 @@ describe('history per room', () => {
 		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '13', before: '20' });
 		await socket.reply('history', { messages: [message('13'), message('15')], first_log_id: '13', last_log_id: '15', more: true, latest_log_id: '20', history_log_id: '10' });
 		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '16', before: '20' });
-		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 20 } } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 20 } } });
 		await settle();
 		// Live meanwhile: what arrives while the rest waits stays.
 		socket.receive({ method: 'message', params: message('21') });
@@ -302,7 +305,7 @@ describe('history per room', () => {
 	it('keeps showing what a room had while its rebuild waits out a history wait', async () => {
 		await socket.reply('history', { messages: [message('11'), message('12')], more: false, latest_log_id: '12', history_log_id: '10' });
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '14', history_log_id: '10' }] } });
-		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Daily history limit reached', data: { retry_after: 3_600 } } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 3_600 } } });
 		await settle();
 		// The next room frame rebuilds the room (history-recovery-failure.json), but its page waits for hours.
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '15', history_log_id: '10' }] } });

@@ -17,8 +17,8 @@ export class FeedbackState {
 	}
 
 	/**
-	 * Shows an error, returned for `dismiss`. A wait on history, posting or uploads isn't one: the page shows those where
-	 * they apply, counting down, and nothing is toasted.
+	 * Shows an error, returned for `dismiss`. A wait on `history` or `message` (`RateLimitError.scope`) isn't one: the
+	 * page shows those where they apply, counting down, and nothing is toasted.
 	 */
 	error(cause: unknown, fallback = 'Something went wrong'): Feedback | undefined {
 		this.stopTimer();

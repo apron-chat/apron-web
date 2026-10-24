@@ -7,12 +7,17 @@ import { makeRequestId, RequestTimeout } from './client-internals';
 import { RateLimitError, type OperationHandle } from './client-types';
 import type { JsonObject } from './types';
 
-/** How many `history` requests a connection has out at a time: servers may take only one, refusing the rest for a moment. */
+/**
+ * How many `history` requests a connection has out at a time: one, a client
+ * choice. Servers may answer in any order (§1) and may rate-limit any request
+ * (§1.1), so paging one at a time keeps a recovery's requests few and in
+ * order, what the reader waits for first.
+ */
 export const HISTORY_CONCURRENCY = 1;
 /**
  * How long a `history` request that timed out still counts as out, unless
- * its answer comes first: the server may be working on it yet, and would
- * refuse the next meanwhile. After that its answer is presumed lost.
+ * its answer comes first: the server may be working on it yet, and the next
+ * would only pile on. After that its answer is presumed lost.
  */
 export const LATE_ANSWER_MS = 10_000;
 
@@ -52,12 +57,11 @@ export interface HistoryQueueHooks {
  * Every `history` request not yet answered, by its handle's id, in the order
  * asked. `concurrency` are out at a time, what the reader is waiting for
  * first: a load asked for (`retry`: a thread opened, older pages scrolled
- * back to) or the open room's, then the other rooms', in the order asked. A
- * server may take only one at a time from a connection, and refuse the rest:
- * one sent stays out until the server answers it, even once taken back or
- * timed out (for a while). While a history wait is on, nothing goes until it
- * is over (`pump` again): the server would only refuse it, and each refusal
- * still costs it a frame.
+ * back to) or the open room's, then the other rooms', in the order asked.
+ * One sent stays out until the server answers it, even once taken back or
+ * timed out (for a while), so the pace holds. While a history wait is on
+ * (a `history` refused with `retry_after`, §1.1), nothing goes until it is
+ * over (`pump` again): the server asked for the wait.
  */
 export class HistoryQueue {
 	private readonly jobs = new Map<string, HistoryJob>();

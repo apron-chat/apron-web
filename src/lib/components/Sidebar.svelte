@@ -85,8 +85,8 @@
 	let joinedKey = $derived(session.rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));
 	let roomsKey = $derived(rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));
 	/**
-	 * How long a listing made in the background is reused: `room_list` is rate limited, and switching between rooms
-	 * shouldn't spend it. Joining or leaving lists afresh (the client drops what it changed), and so does opening Browse.
+	 * How long a listing made in the background is reused, a client choice: switching between rooms shouldn't list
+	 * again each time, and any server may rate-limit `room_list`. Joining or leaving lists afresh (the client drops what it changed), and so does opening Browse.
 	 */
 	const BACKGROUND_LISTING_MS = 60_000;
 

@@ -79,7 +79,7 @@
 		oncancelreply: () => void;
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
-		/** Sending waits for the server's posting limit until then (epoch milliseconds): Send counts down, and the draft stays. */
+		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
 	}
 	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();

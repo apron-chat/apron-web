@@ -96,9 +96,9 @@ export interface RoomSnapshot {
 	/** The last recovery or `loadRoom` failed; `loadRoom` retries. */
 	recoveryError?: string;
 	/**
-	 * Its history waits for the history limit (`limits.history`): a page was
-	 * refused for it, or is held until the wait is over. It loads again by
-	 * itself then.
+	 * Its history waits out a refused `history` request's `retry_after`
+	 * (`limits.history`): a page was refused, or is held until the wait is
+	 * over. It loads again by itself then.
 	 */
 	limited?: true;
 	/**
@@ -159,11 +159,12 @@ export interface RoomListing {
 }
 
 /**
- * What a wait the server asked for (`retry_after`, §1.1) holds back: history
- * pages, posting (messages and the other mutations, which share its limit),
- * or uploads.
+ * What a wait the server asked for (`retry_after`, §1.1) holds back: further
+ * requests of the refused request's method, `history` pages or `message`
+ * sends (with files or without). A client choice: the protocol doesn't say
+ * what a limit covers.
  */
-export type LimitScope = 'history' | 'post' | 'upload';
+export type LimitScope = 'history' | 'message';
 
 /** A wait the server asked for: from when it was asked (`since`) until requests of its scope go again, in epoch milliseconds. */
 export interface LimitWait {
@@ -347,8 +348,8 @@ export interface ClientSnapshot {
 	retryAfterMs?: number;
 	/**
 	 * The waits the server asked for (`retry_after`, §1.1) that are still on,
-	 * by what they hold back. Meanwhile history requests wait to be sent, and
-	 * a post or an upload the wait covers is refused here without being sent.
+	 * by the method they hold back. Meanwhile history requests wait to be
+	 * sent, and a `message` is refused here without being sent.
 	 * Absent when none is.
 	 */
 	limits?: Partial<Record<LimitScope, LimitWait>>;
@@ -476,7 +477,7 @@ export interface ChatClientOptions {
 	historyStart?: HistoryStart;
 	/**
 	 * How many `history` requests may be out at a time on a connection; one by
-	 * default, as some servers allow no more. For the shared session fixtures,
+	 * default, to pace them (`HISTORY_CONCURRENCY`). For the shared session fixtures,
 	 * which interleave them: production code leaves it.
 	 */
 	historyConcurrency?: number;

@@ -27,7 +27,7 @@
 		/** A short status after the title, such as "History unavailable". */
 		note?: string;
 		/**
-		 * Its history waits for the server's limit until then, in epoch milliseconds: "Waiting · 17s" after the title, counting
+		 * Its history waits until then, as the server asked (`retry_after`), in epoch milliseconds: "Waiting · 17s" after the title, counting
 		 * down, in place of `note`. A <RateLimitNotice> in the timeline says why, and is what a screen reader hears.
 		 */
 		wait?: number;

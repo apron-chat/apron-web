@@ -18,7 +18,7 @@
 		replyCount?: number;
 		/** Older replies are not loaded yet, so `replyCount` is a lower bound. */
 		moreReplies?: boolean;
-		/** The pane's history waits for the server's limit until then (epoch milliseconds): "Waiting · 17s" in place of a failure. */
+		/** The pane's history waits until then, as the server asked (`retry_after`, epoch milliseconds): "Waiting · 17s" in place of a failure. */
 		wait?: number;
 		/** Offer Edit for the room, or the open thread (capability `rooms`): its title and description. */
 		canEdit: boolean;

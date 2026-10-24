@@ -438,7 +438,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-roomhead-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-3); }
 .ap-roomhead-name { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; white-space: nowrap; }
 .ap-roomhead-sub { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Waiting on the server's history limit (RoomHeader `wait`): a pill with a warn dot, the time left counting down. */
+/* Waiting out a wait the server asked for on history (RoomHeader `wait`): a pill with a warn dot, the time left counting down. */
 .ap-roomhead-wait { flex: none; display: inline-flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); }
 .ap-roomhead-waitdot { width: 6px; height: 6px; border-radius: var(--radius-full); background: var(--warn); }
 .ap-roomhead-typing { color: var(--denim); }
@@ -555,7 +555,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 }
 /* In the main pane: a StatusBanner under the header, and who is typing, in a row kept while nobody is so nothing moves. */
 .ap-shell-banner { padding: var(--space-2) var(--space-4) 0; }
-/* Waits on the server's limits (RateLimitNotice) for what the composer sends, just above it. */
+/* Waits the server asked for (RateLimitNotice) on what the composer sends, just above it. */
 .ap-shell-waits { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-4) 0; }
 .ap-typing.ap-shell-typing { min-height: 20px; padding-top: var(--space-1); }
 /* Wide screens give the member list a column of its own, there while it's shut too, at 0, so it can slide. */
@@ -1032,7 +1032,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-tlstatus-float { position: relative; height: 0; z-index: var(--z-float); pointer-events: none; }
 /* Placed right above the composer's row, whose top margin is --space-2: the pill's foot sits on that margin's top, clear of the composer by the same gap, in the space under the last message. */
 .ap-tlstatus-float :is(.ap-tlstatus-pill, .ap-wait) { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); white-space: nowrap; animation: ap-tlstatus-in var(--duration-medium) ease-out; }
-/* A notice in the pill's place (a wait on the server's limit) floats the same way, its × still pressable. */
+/* A notice in the pill's place (a wait the server asked for) floats the same way, its × still pressable. */
 :is(.ap-tlstatus, .ap-tlstatus-float) .ap-wait { box-shadow: var(--shadow-float); pointer-events: auto; }
 @keyframes ap-tlstatus-in { from { opacity: 0; transform: translate(-50%, 4px); } }
 .ap-tlload { display: flex; flex-direction: column; justify-content: flex-end; min-height: 100%; box-sizing: border-box; }

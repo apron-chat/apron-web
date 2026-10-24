@@ -229,8 +229,8 @@
 	/** How far back a linked message is looked for, in pages of history. */
 	const LINKED_MESSAGE_PAGES = 20;
 	/**
-	 * How far back a pane opening at its New divider loads to reach it, in pages of history: opening a room read long
-	 * ago shouldn't spend the server's history allowance. Further back, it opens at the latest.
+	 * How far back a pane opening at its New divider loads to reach it, in pages of history: a client choice, so that
+	 * opening a room read long ago asks for a few pages, not its whole backlog. Further back, it opens at the latest.
 	 */
 	const DIVIDER_PAGES = 3;
 	/** How long a pushed room waits for its account and rooms before it is dropped. */
@@ -294,8 +294,8 @@
 	let activeThread = $state<string | undefined>();
 	/** The toast for the last thread that failed to load, cleared once it no longer applies. */
 	let threadError: Feedback | undefined;
-	/** The end of an upload wait whose notice was put away (a day's limit outlasts the visit). */
-	let dismissedUploadWait = $state<number | undefined>();
+	/** The end of a wait on sending whose notice was put away (a wait of hours can outlast the visit). */
+	let dismissedSendWait = $state<number | undefined>();
 	let selectedRoomId = $state<string | undefined>();
 	/** A thread this viewer created (`startThread`, `createThread`), opened once its `room_update` has arrived. */
 	let pendingOpen = $state<PendingThread | undefined>();
@@ -409,12 +409,12 @@
 	let mentionsElsewhere = $derived(countElsewhere(mentions.byRoom, paneRoom?.id));
 	/** The waits the server asked for (`retry_after`) that are on, as the client holds them. */
 	let limits = $derived(snapshot.limits ?? {});
-	/** The pane's history waits for the history limit, which is shared: every room's history waits it out, then loads by itself. */
+	/** The pane's history waits out a refused `history`, which every room's history shares: it waits, then loads by itself. */
 	let historyWait = $derived(paneRoom?.limited ? limits.history : undefined);
-	/** Sending waits, with files or without: Send counts down, and the draft stays. */
-	let postWait = $derived(limits.post);
-	/** Uploads wait, unless that notice was put away. */
-	let uploadWait = $derived(limits.upload && limits.upload.until !== dismissedUploadWait ? limits.upload : undefined);
+	/** Sending waits out a refused `message`, with files or without: Send counts down, and the draft stays. */
+	let sendWait = $derived(limits.message);
+	/** `sendWait`'s notice, unless it was put away. */
+	let sendNotice = $derived(sendWait && sendWait.until !== dismissedSendWait ? sendWait : undefined);
 	/**
 	 * The open pane is catching up: its history is recovering or loading, or it shows a copy held from before
 	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
@@ -1568,9 +1568,12 @@
 	 */
 	function sendMessage(): void {
 		if (!client || !paneRoom || !canCompose) return;
-		// Sending waits for the server's limit, files or not (the client holds back any message meanwhile): Send
-		// counts down, the draft and its files stay, and nothing goes by itself.
-		if (postWait && postWait.until > Date.now()) return;
+		// Sending waits as the server asked, files or not (the client holds back any message meanwhile): Send
+		// counts down, the draft and its files stay, and nothing goes by itself. A notice put away shows again.
+		if (sendWait && sendWait.until > Date.now()) {
+			dismissedSendWait = undefined;
+			return;
+		}
 		if (drafts.files.length) {
 			void sendFiles();
 			return;
@@ -1684,12 +1687,6 @@
 	 */
 	async function sendFiles(): Promise<void> {
 		if (!client || !paneRoom || !canCompose || !session.snapshot.capabilities['embed:upload']) return;
-		const uploads = limits.upload;
-		if (uploads && uploads.until > Date.now()) {
-			// Uploads wait for the server's daily limit: the draft stays, and the notice says until when.
-			dismissedUploadWait = undefined;
-			return;
-		}
 		const chat = client;
 		const room = paneRoom;
 		const roomId = room.id;
@@ -2419,7 +2416,7 @@
 	{@const event = rowEvent(view)}
 	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} onsave={(text, edits) => saveEdit(event, text, edits)} oncancel={() => (editingId = undefined)} />{/if}
 {/snippet}
-<!-- The pane's history waiting for the server's limit, where its messages will appear: it loads by itself at zero. -->
+<!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
 {#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" since={historyWait.since} until={historyWait.until} />{/if}{/snippet}
 {#snippet membersToggle()}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/snippet}
 <!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
@@ -2559,11 +2556,11 @@
 			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
 			{#if (checkingShown || historyWait) && timeline.length > 0}<TimelineLoading float label={quietReconnect ? statusLabel(snapshot, session.stalled) : activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} notice={historyWait ? historyNotice : undefined} />{/if}
-			<!-- What waits for the server's limits, above the composer it holds back: sending, and uploads. -->
-			{#if (postWait || uploadWait) && !selection.active && !session.readOnly}
+			<!-- A wait the server asked for on sending, above the composer it holds back. -->
+			{#if sendNotice && !selection.active && !session.readOnly}
+				{@const wait = sendNotice}
 				<div class="ap-shell-waits">
-					{#if postWait}<RateLimitNotice scope="post" since={postWait.since} until={postWait.until} />{/if}
-					{#if uploadWait}{@const upload = uploadWait}<RateLimitNotice scope="upload" since={upload.since} until={upload.until} ondismiss={() => (dismissedUploadWait = upload.until)} />{/if}
+					<RateLimitNotice scope="message" since={wait.since} until={wait.until} ondismiss={() => (dismissedSendWait = wait.until)} />
 				</div>
 			{/if}
 
@@ -2591,7 +2588,7 @@
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
 					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply}
 					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
-					waitUntil={postWait?.until}
+					waitUntil={sendWait?.until}
 				/>
 			{/if}
 		{:else}

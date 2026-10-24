@@ -8,11 +8,12 @@
 
 	interface Props {
 		/**
-		 * What the wait holds back, which picks the words: `history` (pages of a room's history), `post` (sending), or
-		 * `upload`. Leave it out for a limit of any other kind, with the server's `message`.
+		 * What the wait holds back, which picks the words: `history` (pages of a room's history) or `message` (sending).
+		 * Leave it out for a wait on anything else, with the server's `message`. The words say what waits, never why:
+		 * the server asked for the wait (`retry_after`), and says no more.
 		 */
 		scope?: LimitScope;
-		/** The server's message, for a limit of no known scope: shown as a sentence, then "Try again in …". */
+		/** The server's message, for a wait of no `scope`: shown as a sentence, then "Try again in …". */
 		message?: string;
 		/** When the wait is over, in epoch milliseconds (`retry_after` from when it was asked): it counts down to that, so re-rendering never drifts. */
 		until: number;
@@ -36,9 +37,8 @@
 	const left = $derived(Math.max(0, until - secondNow()));
 	/** What the wait holds back, then what happens when it's over: the time left goes after the second. */
 	const words = $derived.by((): [string, string, string] => {
-		if (scope === 'history') return ['Too many history requests just now.', 'Loading again in', ''];
-		if (scope === 'post') return [long ? 'Daily posting limit reached.' : 'You’re sending messages quickly.', 'You can send again in', '.'];
-		if (scope === 'upload') return [long ? 'Daily upload limit reached.' : 'Too many uploads just now.', 'Uploads resume in', '.'];
+		if (scope === 'history') return ['Loading history is paused.', 'Loading again in', ''];
+		if (scope === 'message') return ['Sending is paused.', 'You can send again in', '.'];
 		return [punctuated(message || 'Too many requests'), 'Try again in', ''];
 	});
 	/** Said once for each wait, not at every tick: the time a screen reader hears is the wait as it began. */

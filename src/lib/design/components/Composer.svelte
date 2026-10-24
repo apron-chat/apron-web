@@ -29,8 +29,8 @@
 		/** Whether Send is enabled, when you decide it. By default, while the draft has text (`value`) or files (`attachments`). */
 		canSend?: boolean;
 		/**
-		 * Sending waits for the server's limit until then, in epoch milliseconds: Send is off and counts down in place of
-		 * its label, and comes back at zero. The draft stays; nothing is sent by itself.
+		 * Sending waits until then, as the server asked (`retry_after`), in epoch milliseconds: Send is off and counts down
+		 * in place of its label, and comes back at zero. The draft stays; nothing is sent by itself.
 		 */
 		waitUntil?: number;
 		/** Cap `embed:upload`: the attach and microphone buttons. Attachments go out as `upload` embeds (§4.8.3). */

@@ -111,7 +111,6 @@ import {
 	untitledThread,
 	userFacingRpcError,
 	validHistoryMetadata,
-	carriesUploads,
 	type LiveRecord,
 	type PendingRequest,
 	type SignInMethod,
@@ -1989,7 +1988,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * Listing is costly on some servers and rate limited on most, and several
+	 * Listing can be costly, any server may rate-limit it, and several
 	 * parts of the UI want it at once: a request in flight, or one answered
 	 * within `maxAgeMs`, serves them all. One refused for a while
 	 * (`retry_after`) is refused again, without asking, until the wait is over.
@@ -2057,7 +2056,7 @@ export class ChatClient {
 			if (socket !== this.socket || this.joinedListing !== listing) return;
 			this.joinedListing = undefined;
 			if (cause instanceof RateLimitError && this.authenticated) {
-				// The server's listing limit: rather than leave the connection with no rooms, list them again
+				// Refused for a while (§1.1): rather than leave the connection with no rooms, list them again
 				// once the wait is over, as long as it lasts. Meanwhile this stands as the listing under way.
 				this.joinedListing = listing;
 				setTimeout(() => {
@@ -3535,8 +3534,8 @@ export class ChatClient {
 			this.applyHistoryPage(room, result, generation);
 		}).catch((cause: Error) => {
 			if (!room.recovery || room.recovery.requestId !== request.id || room.recovery.generation !== generation) return;
-			// A page refused for the history wait (the server's quota, §4.3) is only a wait: what was
-			// recovered shows meanwhile, and the room recovers again by itself once it is over (`endLimit`).
+			// A page refused with `retry_after` (§1.1) is only a wait: what was recovered shows
+			// meanwhile, and the room recovers again by itself once it is over (`endLimit`).
 			room.limited = cause instanceof RateLimitError && cause.scope === 'history';
 			this.abortRecovery(room, cause.message);
 		});
@@ -3857,9 +3856,8 @@ export class ChatClient {
 	/**
 	 * The error a refused `request` rejects with. `retry_after` makes it a
 	 * `RateLimitError`: on `auth` it holds back reconnecting; on any other
-	 * request it is that request's limit, and one of a scope the client knows
-	 * (history, posting, uploads) holds back what it covers until the wait is
-	 * over (`limits`).
+	 * request it is that request's wait, and on `history` or `message` it holds
+	 * back further requests of that method until the wait is over (`limits`).
 	 */
 	private errorFromRpc(rpcError: RpcError, request: PendingRequest): Error {
 		const retryAfter = retryAfterMilliseconds(rpcError);
@@ -3873,7 +3871,7 @@ export class ChatClient {
 			this.retryAfterUntil = Math.max(this.retryAfterUntil, since + retryAfter);
 			return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', since, since + retryAfter);
 		}
-		const scope = limitScope(request.method, request.params, rpcError, retryAfter);
+		const scope = limitScope(request.method);
 		if (scope) this.noteLimit(scope, since, since + retryAfter, this.you?.user_id ?? this.resumingUserId);
 		return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', since, since + retryAfter, scope);
 	}
@@ -3919,22 +3917,19 @@ export class ChatClient {
 	}
 
 	/**
-	 * A message, or files to upload, that a wait covers, which the server
-	 * would refuse: refused here rather than sent (§1.1).
+	 * A `message` sent while a `message` was refused for a while: refused here
+	 * rather than sent, until the wait is over (§1.1).
 	 */
-	private heldBack(method: string, params: JsonObject): RateLimitError | undefined {
-		if (method !== 'message' && method !== 'command') return undefined;
-		const upload = carriesUploads(params) ? this.limited('upload') : undefined;
-		const post = method === 'message' ? this.limited('post') : undefined;
-		const wait = upload ?? post;
+	private heldBack(method: string): RateLimitError | undefined {
+		if (method !== 'message') return undefined;
+		const wait = this.limited('message');
 		if (!wait) return undefined;
-		const scope: LimitScope = upload ? 'upload' : 'post';
-		const words = scope === 'upload' ? 'Uploads are limited for now' : 'Posting is limited for now';
+		const words = 'Sending is paused';
 		const seconds = Math.max(1, Math.ceil((wait.until - Date.now()) / 1000));
-		return new RateLimitError(userFacingRpcError({ code: -32002, message: words, data: { retry_after: seconds } }), words, wait.since, wait.until, scope);
+		return new RateLimitError(userFacingRpcError({ code: -32002, message: words, data: { retry_after: seconds } }), words, wait.since, wait.until, 'message');
 	}
 
-	/** A room's history waits for the history limit: its recovery was refused for it, or a page of it is held. */
+	/** A room's history waits out a `history` wait: its recovery was refused for it, or a page of it is held. */
 	private historyLimited(room: RoomState): boolean {
 		if (!this.limited('history')) return false;
 		return room.limited || this.historyQueue.holds(room.id);
@@ -3957,7 +3952,7 @@ export class ChatClient {
 		if (this.passkeyAbort && method !== 'auth') {
 			return rejectedHandle<T>(method, new Error('Finish signing in before sending requests'), id);
 		}
-		const held = this.heldBack(method, params);
+		const held = this.heldBack(method);
 		if (held) return rejectedHandle<T>(method, held, id);
 		let resolvePromise!: (result: T) => void;
 		let rejectPromise!: (error: Error) => void;

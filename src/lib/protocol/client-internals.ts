@@ -441,7 +441,7 @@ export function retryAfterMilliseconds(error: RpcError): number | undefined {
 export function userFacingRpcError(error: RpcError): string {
 	const retryAfter = retryAfterMilliseconds(error);
 	if (retryAfter !== undefined) {
-		// A daily limit (such as uploads) can be hours away.
+		// A wait can be hours long.
 		const seconds = Math.max(1, Math.ceil(retryAfter / 1000));
 		const minutes = Math.ceil(seconds / 60);
 		const wait = seconds < 60 ? `${seconds}s` : minutes < 60 ? `${minutes}m` : `${Math.ceil(minutes / 60)}h`;
@@ -450,35 +450,15 @@ export function userFacingRpcError(error: RpcError): string {
 	return error.message || `Request failed (${error.code})`;
 }
 
-/** A wait this long or longer on posting is the daily limit, not a burst. */
-export const DAILY_WAIT_MS = 60 * 60 * 1000;
-/** The requests that post: each counts against the server's posting limit, whichever it is. */
-const POSTS = new Set(['message', 'command', 'reactions', 'room_set', 'room_join', 'room_leave']);
-/** `data.limit` names a server gives its limits by. */
-const LIMIT_NAMES = new Map<string, LimitScope>([['history', 'history'], ['post', 'post'], ['upload', 'upload']]);
-
-/** A message's or command's params carry `upload` embeds (§4.8.3): files to write once it is accepted. */
-export function carriesUploads(params: JsonObject): boolean {
-	const body = params.body;
-	return isJsonObject(body) && Array.isArray(body.embeds) && body.embeds.some((embed) => isJsonObject(embed) && embed.kind === 'upload');
-}
-
 /**
- * What a request refused with `retry_after` was held back by: the limit the
- * server names in `data.limit` (`history`, `post`, `upload`) whenever it is
- * one the client knows, whatever the request, its wait or its words. A name
- * it doesn't know is no name. Only then, for servers that name none, is it
- * guessed from the request's kind: a post with files that waits an hour or
- * more (or says it's the uploads) hit the upload limit; any other post, the
- * posting limit.
+ * What a request refused with `retry_after` (§1.1) holds back: further
+ * requests of its method, when that is `history` or `message`. The protocol
+ * says only that this request should wait, not what else a limit covers, so
+ * the client holds back no other method; any other method's refusal only
+ * fails its request.
  */
-export function limitScope(method: string, params: JsonObject, error: RpcError, wait: number): LimitScope | undefined {
-	const named = isJsonObject(error.data) && typeof error.data.limit === 'string' ? LIMIT_NAMES.get(error.data.limit.toLowerCase()) : undefined;
-	if (named) return named;
-	if (method === 'history') return 'history';
-	if (!POSTS.has(method)) return undefined;
-	if ((method === 'message' || method === 'command') && carriesUploads(params) && (wait >= DAILY_WAIT_MS || /upload/i.test(error.message ?? ''))) return 'upload';
-	return 'post';
+export function limitScope(method: string): LimitScope | undefined {
+	return method === 'history' || method === 'message' ? method : undefined;
 }
 
 /** Whether the page is hidden or the browser reports no network; false outside a browser. */
