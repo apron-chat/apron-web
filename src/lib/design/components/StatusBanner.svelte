@@ -1,9 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
-	import type { ConnectionState } from './types';
+	import type { ConnectionState, Tone } from './types';
 
-	type Tone = 'ok' | 'warn' | 'danger';
 	const STATUS: Record<ConnectionState, [tone: Tone, label: string]> = {
 		connected: ['ok', 'Connected'],
 		connecting: ['warn', 'Connecting…'],

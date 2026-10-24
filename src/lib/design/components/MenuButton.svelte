@@ -1,15 +1,7 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
-
-	/** One choice of a MenuButton: its value, a label, and an optional muted hint after it. */
-	interface MenuChoice {
-		value: string;
-		label: string;
-		hint?: string;
-		/** A `data-testid` for its item. */
-		testid?: string;
-	}
+	import type { MenuChoice } from './types';
 
 	/** A button that opens a menu of choices. Its `onselect` is the choice's, not the DOM event. */
 	interface Props {

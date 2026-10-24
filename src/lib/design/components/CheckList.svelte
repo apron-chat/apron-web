@@ -1,16 +1,6 @@
 <script lang="ts">
 	import type { ClassValue } from 'svelte/elements';
-
-	/** One option of a CheckList: its value, a title, and optionally a line saying what it does (without one, the row is a single line). */
-	interface CheckOption {
-		value: string;
-		title: string;
-		text?: string;
-		/** Can't be changed here; `note` can say why. */
-		disabled?: boolean;
-		/** A short muted note beside the title, such as why it is disabled, or "Desktop only". */
-		note?: string;
-	}
+	import type { CheckOption } from './types';
 
 	interface Props {
 		/** Names the group (its legend). */

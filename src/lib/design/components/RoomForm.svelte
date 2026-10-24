@@ -10,7 +10,7 @@
 		/** A room (title and description), or a thread (title and summary): a room with a `parent_room_id` (§3.4). */
 		kind?: 'room' | 'thread';
 		/**
-		 * `create` a room or start a thread (`room_create`, §4.2.4), or `edit` an existing one (`room_set`). A thread
+		 * `create` a room or start a thread (`room_set` without a `room_id`, §4.2.4), or `edit` an existing one (`room_set` with it). A thread
 		 * starts from its room, from a message (its text quoted as the summary), or from selected messages.
 		 */
 		mode?: 'create' | 'edit';

@@ -26,7 +26,7 @@
 	let saving = $state(false);
 	let error = $state<string | undefined>();
 
-	/** Creates the room with `room_create` (§4.2.4), its description and `private` only when given. */
+	/** Creates the room with `room_set` and no `room_id` (§4.2.4), its description and `private` only when given. */
 	async function create(): Promise<void> {
 		if (saving || !enabled) return;
 		const name = title.trim();

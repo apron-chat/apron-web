@@ -110,7 +110,6 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-check { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-top: 3px; box-sizing: border-box; border: 2px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg-100); color: var(--on-accent); font-size: var(--text-sm); line-height: 1; font-weight: 600; }
 .ap-msg-selected .ap-msg-check { border-color: var(--accent); background: var(--accent); }
 .ap-msg-selectable .ap-msg-hovertime { visibility: visible; }
-/* compact density: time | sender + text on one line */
 .ap-msg-gutter { padding-top: 2px; }
 .ap-msg-hovertime { display: block; font-size: var(--text-xs); line-height: var(--leading-body); color: var(--ink-muted); text-align: right; visibility: hidden; font-variant-numeric: tabular-nums; }
 .ap-msg:hover .ap-msg-hovertime { visibility: visible; }

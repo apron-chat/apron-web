@@ -369,3 +369,26 @@ export interface MessageTestids {
 	chip?: string;
 	select?: string;
 }
+
+/** A status line's tone: StatusBanner colors its line with it. */
+export type Tone = 'ok' | 'warn' | 'danger';
+
+/** One option of a CheckList: its value, a title, and optionally a line saying what it does (without one, the row is a single line). */
+export interface CheckOption {
+	value: string;
+	title: string;
+	text?: string;
+	/** Can't be changed here; `note` can say why. */
+	disabled?: boolean;
+	/** A short muted note beside the title, such as why it is disabled, or "Desktop only". */
+	note?: string;
+}
+
+/** One choice of a MenuButton: its value, a label, and an optional muted hint after it. */
+export interface MenuChoice {
+	value: string;
+	label: string;
+	hint?: string;
+	/** A `data-testid` for its item. */
+	testid?: string;
+}
