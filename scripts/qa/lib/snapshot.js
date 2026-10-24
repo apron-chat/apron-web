@@ -132,7 +132,7 @@ const readMaybe = (f) => (existsSync(f) ? readFileSync(f, 'utf8') : null);
 function run(cmd, args, cwd, logFile) {
 	return new Promise((ok, fail) => {
 		const chunks = [];
-		const child = spawn(cmd, args, { cwd, env: { ...process.env, FORCE_COLOR: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
+		const child = spawn(cmd, args, { cwd, env: { ...process.env, FORCE_COLOR: '0', APRON_PREVIEW: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
 		child.stdout.on('data', (d) => chunks.push(d));
 		child.stderr.on('data', (d) => chunks.push(d));
 		child.on('error', fail);

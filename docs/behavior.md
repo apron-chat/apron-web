@@ -14,7 +14,8 @@ sets to `https://media.apron.chat`, the Cloudflare demo server's upload bucket.
 Streams load from the chat server's origin only. Every link in chat, from
 message text, link cards, uploads and HTML embeds, opens in a new tab.
 
-`/__preview` mounts this same app against a page-local in-memory WebSocket
+`/__preview` (in development builds only: `vite dev`, or `APRON_PREVIEW=1 vite build`, which the QA tools and
+`npm run e2e` use; production builds leave it out) mounts this same app against a page-local in-memory WebSocket
 server, not the saved, configured, or same-origin backend. It seeds a guest,
 rooms, a thread, people, CommonMark examples, and a message moved into the thread,
 and implements the app's protocol

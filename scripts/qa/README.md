@@ -3,7 +3,9 @@
 Screenshots, pixel diffs and perf comparisons of the app on `/__preview`, which runs the full client
 against the in-memory server (`src/lib/preview/memory-server.ts`), so nothing needs a backend; and the
 browser tests in `e2e/` (`npm run e2e`, [below](#npm-run-e2e-the-browser-tests)). They run locally, not in
-CI. Everything they write goes under `.qa/` (gitignored).
+CI. Everything they write goes under `.qa/` (gitignored). `/__preview` exists only in builds made with
+`APRON_PREVIEW=1` (and under `vite dev`): the QA snapshots and `npm run e2e` set it, and a production `npm run build`
+leaves the page and its code out. To serve a build of your own here, make it with `APRON_PREVIEW=1 npm run build`.
 
 ```sh
 npm run qa -- ab --base main                        # the redesign workflow (below)
