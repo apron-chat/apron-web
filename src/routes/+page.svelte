@@ -58,7 +58,7 @@
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { WIDE_MIN } from '$lib/ui/breakpoints';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_SUMMARIES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
 	import AppShell from '$lib/design/components/AppShell.svelte';
@@ -902,11 +902,13 @@
 		if (!previewMode) pushSettings.load();
 		webPushAvailable = webPushSupported();
 		runsInstalled = isStandalone();
-		// Push turned on or off in another tab applies here too.
+		// Push turned on or off, and summaries put away, in another tab apply here too.
 		const storageChanged = (event: StorageEvent) => {
 			if (previewMode) return;
 			pushSettings.storageChanged(event.key);
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
+			// A summary put away or brought back in another tab is here too.
+			if (event.key === HIDDEN_SUMMARIES_KEY) hiddenSummaries = loadHiddenSummaries();
 		};
 		window.addEventListener('storage', storageChanged);
 		// Any input on the page means someone is attending it (§4.5 `idle`). Captured, so a
