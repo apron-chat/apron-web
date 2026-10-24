@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { RequestTimeout } from './client-internals';
 import { RateLimitError } from './client-types';
-import { HistoryQueue } from './history-queue';
+import { HistoryQueue, LATE_ANSWER_MS } from './history-queue';
 import type { JsonObject } from './types';
 
 /**
@@ -17,7 +18,6 @@ interface Sent {
 
 function connection(concurrency?: number) {
 	const sent: Sent[] = [];
-	const aborted: Array<{ id: string; reason: string }> = [];
 	const state = { limited: false, active: undefined as string | undefined, emits: 0 };
 	let next = 0;
 	const queue = new HistoryQueue({
@@ -28,11 +28,6 @@ function connection(concurrency?: number) {
 			});
 			return { id, promise };
 		},
-		abort: (id, reason) => {
-			aborted.push({ id, reason });
-			const request = sent.find((entry) => entry.id === id);
-			request?.reject(new Error(reason));
-		},
 		limited: () => state.limited,
 		activeRoomId: () => state.active,
 		emit: () => {
@@ -40,11 +35,15 @@ function connection(concurrency?: number) {
 		}
 	}, concurrency);
 	const rooms = () => sent.map((entry) => entry.params.room_id);
-	return { queue, sent, aborted, state, rooms };
+	return { queue, sent, state, rooms };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const refused = () => new RateLimitError('History limited. Try again in 5s.', 'History limited', 0, 5_000, 'history');
+
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 describe('the history queue', () => {
 	it('sends one at a time by default, what the reader waits for first, then the rest in the order asked', async () => {
@@ -123,42 +122,115 @@ describe('the history queue', () => {
 		expect(queue.holds('b')).toBe(false);
 	});
 
+	it('holds one with retry refused for a wait that is already over, or none, and sends it again at its end', async () => {
+		vi.useFakeTimers();
+		const { queue, sent, rooms } = connection();
+		const handle = queue.request('thread', { room_id: 'thread' }, { retry: true });
+		// retry_after 0: the connection has no wait on by the time the refusal is handled.
+		sent[0].reject(new RateLimitError('History limited. Try again in 1s.', 'History limited', Date.now(), Date.now(), 'history'));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(rooms()).toEqual(['thread', 'thread']);
+		sent[1].reject(new RateLimitError('History limited. Try again in 2s.', 'History limited', Date.now(), Date.now() + 2_000, 'history'));
+		await vi.advanceTimersByTimeAsync(1_999);
+		expect(queue.holds('thread')).toBe(true);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(rooms()).toEqual(['thread', 'thread', 'thread']);
+		sent[2].resolve({ more: false });
+		await expect(handle.promise).resolves.toEqual({ more: false });
+	});
+
 	it('takes back a held request without sending it', async () => {
-		const { queue, aborted, state, rooms } = connection();
+		const { queue, state, rooms } = connection();
 		state.limited = true;
 		const handle = queue.request('a', { room_id: 'a' });
 		queue.cancel(handle.id, 'Nothing to recover');
 		await expect(handle.promise).rejects.toThrow('Nothing to recover');
-		expect(aborted).toEqual([]);
 		state.limited = false;
 		queue.pump();
 		expect(rooms()).toEqual([]);
 		expect(queue.queued(handle.id)).toBeUndefined();
 	});
 
-	it('takes back a sent request, ignores its answer, and sends the next', async () => {
-		const { queue, sent, aborted, rooms } = connection();
+	it('takes back a sent request at once, but sends the next only once the server answers it, and ignores the answer', async () => {
+		const { queue, sent, rooms } = connection();
 		const handle = queue.request('a', { room_id: 'a' });
-		queue.request('b', { room_id: 'b' });
+		const next = queue.request('b', { room_id: 'b' });
 		queue.cancel(handle.id, 'History recovery superseded');
-		expect(aborted).toEqual([{ id: sent[0].id, reason: 'History recovery superseded' }]);
 		await expect(handle.promise).rejects.toThrow('History recovery superseded');
-		expect(rooms()).toEqual(['a', 'b']);
-		// A late answer to the taken-back request changes nothing.
-		sent[0].resolve({});
+		// The server is still working on it, and would refuse another meanwhile.
 		await settle();
+		expect(rooms()).toEqual(['a']);
+		sent[0].resolve({ more: false });
+		await settle();
+		expect(rooms()).toEqual(['a', 'b']);
+		// A refusal of the taken-back request frees its place too, without holding it for a wait.
+		queue.cancel(next.id, 'Room left');
+		quietly(next.promise);
+		queue.request('c', { room_id: 'c' }, { retry: true });
+		sent[1].reject(refused());
+		await settle();
+		expect(rooms()).toEqual(['a', 'b', 'c']);
+	});
+
+	it('fails one that timed out at once, and keeps its place until its late answer or LATE_ANSWER_MS', async () => {
+		vi.useFakeTimers();
+		const { queue, sent, rooms } = connection();
+		const first = queue.request('a', { room_id: 'a' });
+		quietly(queue.request('b', { room_id: 'b' }).promise);
+		sent[0].reject(new RequestTimeout('history'));
+		await expect(first.promise).rejects.toBeInstanceOf(RequestTimeout);
+		await vi.advanceTimersByTimeAsync(LATE_ANSWER_MS - 1);
+		expect(rooms()).toEqual(['a']);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(rooms()).toEqual(['a', 'b']);
+		// One whose late answer comes sooner frees its place then.
+		queue.request('c', { room_id: 'c' });
+		sent[1].reject(new RequestTimeout('history'));
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(rooms()).toEqual(['a', 'b']);
+		queue.answered(sent[1].id);
+		expect(rooms()).toEqual(['a', 'b', 'c']);
+	});
+
+	it('drops the requests held for a room, and only those', async () => {
+		const { queue, sent, state, rooms } = connection();
+		const out = queue.request('a', { room_id: 'a' });
+		state.limited = true;
+		const older = queue.request('a', { room_id: 'a', before: '9' }, { retry: true });
+		queue.request('b', { room_id: 'b' });
+		queue.dropRoom('a', 'Room left');
+		await expect(older.promise).rejects.toThrow('Room left');
+		expect(queue.holds('a')).toBe(false);
+		expect(queue.holds('b')).toBe(true);
+		state.limited = false;
+		sent[0].resolve({});
+		await expect(out.promise).resolves.toEqual({});
 		expect(rooms()).toEqual(['a', 'b']);
 	});
 
 	it('drops held requests, leaving sent ones to fail with their requests', async () => {
-		const { queue, sent, aborted } = connection();
+		const { queue, sent } = connection();
 		const out = queue.request('a', { room_id: 'a' });
 		const held = queue.request('b', { room_id: 'b' });
 		queue.dropHeld('Connection closed');
 		await expect(held.promise).rejects.toThrow('Connection closed');
-		expect(aborted).toEqual([]);
 		sent[0].reject(new Error('Connection closed; delivery is uncertain. Please retry'));
 		await expect(out.promise).rejects.toThrow('delivery is uncertain');
 		expect(sent).toHaveLength(1);
 	});
+
+	it('forgets one that timed out when the connection goes', async () => {
+		vi.useFakeTimers();
+		const { queue, sent, rooms } = connection();
+		quietly(queue.request('a', { room_id: 'a' }).promise);
+		sent[0].reject(new RequestTimeout('history'));
+		await vi.advanceTimersByTimeAsync(0);
+		queue.dropHeld('Connection closed');
+		queue.request('b', { room_id: 'b' });
+		expect(rooms()).toEqual(['a', 'b']);
+	});
 });
+
+function quietly(promise: Promise<unknown>): void {
+	promise.catch(() => undefined);
+}

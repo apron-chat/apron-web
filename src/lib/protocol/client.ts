@@ -77,6 +77,7 @@ import {
 	PASSKEY_IDLE_WAIT_MS,
 	PING_FRAME,
 	REQUEST_TIMEOUT_MS,
+	RequestTimeout,
 	RETRY_AFTER_MAX_MS,
 	ROOM_LIST_REUSE_MS,
 	STABLE_CONNECTION_MS,
@@ -386,7 +387,6 @@ export class ChatClient {
 		this.historyStart = historyStart;
 		this.historyQueue = new HistoryQueue({
 			send: (params, allowBeforeAuth) => this.enqueueRequest('history', params, { visible: false, allowBeforeAuth }),
-			abort: (requestId, reason) => this.abortRequest(requestId, reason),
 			limited: () => Boolean(this.limited('history')),
 			activeRoomId: () => this.activeRoomId,
 			emit: () => this.emit()
@@ -3463,7 +3463,8 @@ export class ChatClient {
 			this.store.clearRoom(room.id);
 			for (const live of retained) this.applyLive(live);
 			room.timeline = createTimeline(room.id);
-			// Older pages loaded before are gone with the rest: a load of one still out is for nothing.
+			// Older pages loaded before are gone with the rest: a load of one still to go is for nothing.
+			this.historyQueue.dropRoom(room.id, 'History recovery superseded');
 			room.olderBefore = undefined;
 			room.hasOlder = false;
 			room.loadingOlder = false;
@@ -3666,6 +3667,8 @@ export class ChatClient {
 
 	private discardRoom(room: RoomState, reason: string): void {
 		this.retireRecoveryRequest(room);
+		// A thread's load, an older page: for nothing now, they would only go ahead of what is wanted.
+		this.historyQueue.dropRoom(room.id, reason);
 		room.limited = false;
 		room.recovery = undefined;
 		room.loadGeneration += 1;
@@ -3803,7 +3806,11 @@ export class ChatClient {
 
 	private handleResponse(id: string, result: JsonObject, rpcError?: RpcError): void {
 		const request = this.requests.get(id);
-		if (!request) return;
+		if (!request) {
+			// A history request's answer after it timed out frees its place in the queue.
+			this.historyQueue.answered(id);
+			return;
+		}
 		this.requests.delete(id);
 		clearTimeout(request.timer);
 		if (rpcError) request.reject(this.errorFromRpc(isJsonObject(rpcError) ? rpcError : { code: -32603, message: 'Invalid error' }, request));
@@ -3894,15 +3901,6 @@ export class ChatClient {
 		return room.limited || this.historyQueue.holds(room.id);
 	}
 
-	/** Takes back a sent request: it rejects with `reason`, and an answer to it is ignored. */
-	private abortRequest(id: string, reason: string): void {
-		const request = this.requests.get(id);
-		if (!request) return;
-		clearTimeout(request.timer);
-		this.requests.delete(id);
-		request.reject(new Error(reason));
-	}
-
 	/** Ends every wait: a new server, or a stopped client, learns its limits afresh. */
 	private clearLimits(): void {
 		for (const { timer } of this.limits.values()) clearTimeout(timer);
@@ -3930,7 +3928,7 @@ export class ChatClient {
 			const request = this.requests.get(id);
 			if (!request) return;
 			this.requests.delete(id);
-			request.reject(new Error(`${method} request timed out`));
+			request.reject(new RequestTimeout(method));
 			this.emit();
 		}, REQUEST_TIMEOUT_MS);
 		const request: PendingRequest = {

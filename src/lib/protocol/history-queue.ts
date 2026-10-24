@@ -3,12 +3,18 @@
  * the reader is waiting for goes first, a few at a time, and nothing while a
  * history wait (`retry_after`, §1.1) is on.
  */
-import { makeRequestId } from './client-internals';
+import { makeRequestId, RequestTimeout } from './client-internals';
 import { RateLimitError, type OperationHandle } from './client-types';
 import type { JsonObject } from './types';
 
 /** How many `history` requests a connection has out at a time: servers may take only one, refusing the rest for a moment. */
 export const HISTORY_CONCURRENCY = 1;
+/**
+ * How long a `history` request that timed out still counts as out, unless
+ * its answer comes first: the server may be working on it yet, and would
+ * refuse the next meanwhile. After that its answer is presumed lost.
+ */
+export const LATE_ANSWER_MS = 10_000;
 
 /**
  * A `history` request (§4.3): sent when its turn comes and no history wait
@@ -22,6 +28,10 @@ export interface HistoryJob {
 	allowBeforeAuth: boolean;
 	retry: boolean;
 	requestId?: string;
+	/** Its caller has its answer already (taken back, or timed out): sent, it still counts as out until the server answers. */
+	settled?: boolean;
+	/** Timed out: out until its late answer (`answered`) or LATE_ANSWER_MS. */
+	late?: ReturnType<typeof setTimeout>;
 	resolve: (result: JsonObject) => void;
 	reject: (error: Error) => void;
 }
@@ -30,8 +40,6 @@ export interface HistoryJob {
 export interface HistoryQueueHooks {
 	/** Sends a `history` request now. */
 	send: (params: JsonObject, allowBeforeAuth: boolean) => OperationHandle;
-	/** Takes back a sent request: it rejects with `reason`, and an answer to it is ignored. */
-	abort: (requestId: string, reason: string) => void;
 	/** Whether a history wait is on. */
 	limited: () => boolean;
 	/** The room the reader has open, whose history goes first. */
@@ -45,13 +53,17 @@ export interface HistoryQueueHooks {
  * asked. `concurrency` are out at a time, what the reader is waiting for
  * first: a load asked for (`retry`: a thread opened, older pages scrolled
  * back to) or the open room's, then the other rooms', in the order asked. A
- * server may take only one at a time from a connection, and refuse the rest.
- * While a history wait is on, nothing goes until it is over (`pump` again):
- * the server would only refuse it, and each refusal still costs it a frame.
+ * server may take only one at a time from a connection, and refuse the rest:
+ * one sent stays out until the server answers it, even once taken back or
+ * timed out (for a while). While a history wait is on, nothing goes until it
+ * is over (`pump` again): the server would only refuse it, and each refusal
+ * still costs it a frame.
  */
 export class HistoryQueue {
 	private readonly jobs = new Map<string, HistoryJob>();
 	private readonly concurrency: number;
+	/** Pumps again when a wait that held a job back is over but no longer the connection's (`limited`). */
+	private wake?: ReturnType<typeof setTimeout>;
 
 	constructor(private readonly hooks: HistoryQueueHooks, concurrency = HISTORY_CONCURRENCY) {
 		this.concurrency = Math.max(1, concurrency);
@@ -107,19 +119,49 @@ export class HistoryQueue {
 		}
 	}
 
-	/** Takes back a request, sent or held: it rejects with `reason`, and an answer to it is ignored. */
+	/**
+	 * Takes back a request: it rejects with `reason` now. One held never goes;
+	 * one sent is out until the server answers it, and the answer is ignored.
+	 */
 	cancel(id: string, reason: string): void {
 		const job = this.jobs.get(id);
-		if (!job) return;
-		this.jobs.delete(id);
-		if (job.requestId !== undefined) this.hooks.abort(job.requestId, reason);
+		if (!job || job.settled) return;
+		if (job.requestId === undefined) this.jobs.delete(id);
+		else job.settled = true;
 		job.reject(new Error(reason));
-		if (job.requestId !== undefined) this.pump();
 	}
 
-	/** Every held request fails with `reason`: the connection it was for is gone. Sent ones fail with their requests. */
+	/** Takes back every request held for `roomId`: what they were for is gone (the room left, or rebuilt). */
+	dropRoom(roomId: string, reason: string): void {
+		for (const job of [...this.jobs.values()]) if (job.roomId === roomId && job.requestId === undefined) this.cancel(job.id, reason);
+	}
+
+	/**
+	 * The connection is gone: every held request fails with `reason`, and one
+	 * that timed out is out no longer. Sent ones fail with their requests.
+	 */
 	dropHeld(reason: string): void {
-		for (const job of [...this.jobs.values()]) if (job.requestId === undefined) this.cancel(job.id, reason);
+		clearTimeout(this.wake);
+		this.wake = undefined;
+		for (const job of [...this.jobs.values()]) {
+			if (job.requestId === undefined) this.cancel(job.id, reason);
+			else if (job.late !== undefined) {
+				clearTimeout(job.late);
+				this.jobs.delete(job.id);
+			}
+		}
+	}
+
+	/** The server answered a request after it timed out: its place is free. */
+	answered(requestId: string): void {
+		for (const job of this.jobs.values()) if (job.requestId === requestId && job.late !== undefined) return this.free(job);
+	}
+
+	private free(job: HistoryJob): void {
+		clearTimeout(job.late);
+		if (this.jobs.get(job.id) !== job) return;
+		this.jobs.delete(job.id);
+		this.pump();
 	}
 
 	private send(job: HistoryJob): void {
@@ -128,18 +170,33 @@ export class HistoryQueue {
 		request.promise.then((result) => {
 			if (this.jobs.get(job.id) !== job) return;
 			this.jobs.delete(job.id);
-			job.resolve(result);
+			if (!job.settled) job.resolve(result);
 			this.pump();
 		}, (cause: Error) => {
 			if (this.jobs.get(job.id) !== job) return;
-			job.requestId = undefined;
-			if (job.retry && cause instanceof RateLimitError && this.hooks.limited()) {
-				// Held, in its place in the queue, until the wait is over, then sent again.
+			if (cause instanceof RequestTimeout) {
+				// The server may be working on it still: out until it answers, or for a while.
+				if (!job.settled) job.reject(cause);
+				job.settled = true;
+				job.late = setTimeout(() => this.free(job), LATE_ANSWER_MS);
+				return;
+			}
+			if (!job.settled && job.retry && cause instanceof RateLimitError && cause.scope === 'history') {
+				// Held, in its place in the queue, until the wait is over, then sent again: by the wait's
+				// end (`pump`), or here when the refusal's wait isn't the connection's (none, or over already).
+				job.requestId = undefined;
+				if (!this.hooks.limited()) {
+					clearTimeout(this.wake);
+					this.wake = setTimeout(() => {
+						this.wake = undefined;
+						this.pump();
+					}, Math.max(0, cause.retryAt - Date.now()));
+				}
 				this.hooks.emit();
 				return;
 			}
 			this.jobs.delete(job.id);
-			job.reject(cause);
+			if (!job.settled) job.reject(cause);
 			this.pump();
 		});
 	}

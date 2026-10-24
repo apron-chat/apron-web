@@ -162,6 +162,14 @@ export const IDLE_RETRY_MAX_MS = 5 * 60_000;
 /** The longest `setTimeout` delay browsers keep. */
 export const MAX_TIMER_MS = 2 ** 31 - 1;
 export const REQUEST_TIMEOUT_MS = 20_000;
+
+/** A request with no answer after REQUEST_TIMEOUT_MS: the server may yet answer it, or be working on it still. */
+export class RequestTimeout extends Error {
+	constructor(method: string) {
+		super(`${method} request timed out`);
+		this.name = 'RequestTimeout';
+	}
+}
 /** This implementation and its version, sent as `agent` with `auth` (§3.2), for the server's debugging. */
 export const AGENT = 'apron-web/0.4';
 /** The `unsupported` error code (§1.1): a method or an optional parameter the server does not implement. */

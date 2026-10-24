@@ -228,6 +228,60 @@ describe('history per room', () => {
 		expect(room('20').limited).toBeUndefined();
 	});
 
+	it('sends the next history request only once the server answers one taken back', async () => {
+		const general = socket.request('history');
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
+		// Left while its page is out: the page is for nothing, but the server is still working on it.
+		socket.receive({ method: 'room_update', params: { left: [{ room_id: 'general' }] } });
+		await settle();
+		const history = () => socket.sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params));
+		expect(history()).toEqual([{ room_id: 'general', before: '12' }]);
+		socket.receive({ id: general.id, result: { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' } });
+		await settle();
+		expect(history()).toEqual([{ room_id: 'general', before: '12' }, { room_id: 'ops', before: '31' }]);
+		expect(snapshot.limits).toBeUndefined();
+	});
+
+	it('sends the next history request after one that timed out once its late answer comes', async () => {
+		const general = socket.request('history');
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
+		await vi.advanceTimersByTimeAsync(20_000);
+		expect(room('general').recoveryError).toBe('history request timed out');
+		const history = () => socket.sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params));
+		expect(history()).toEqual([{ room_id: 'general', before: '12' }]);
+		socket.receive({ id: general.id, result: { more: false, latest_log_id: '12', history_log_id: '10' } });
+		await settle();
+		expect(history()).toEqual([{ room_id: 'general', before: '12' }, { room_id: 'ops', before: '31' }]);
+	});
+
+	it('drops an older page held for a wait when its room is rebuilt, so it goes first once the wait is over', async () => {
+		await socket.reply('history', { messages: [message('11'), message('12')], first_log_id: '11', last_log_id: '12', more: true, latest_log_id: '12', history_log_id: '10' });
+		expect(room('general').olderAvailable).toBe(true);
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 20 } } });
+		await settle();
+		const older = client.loadOlder('general').catch((cause: Error) => cause.message);
+		// Retention passes the checkpoint: rebuilt, so the page before what it had is for nothing.
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '20', history_log_id: '15' }] } });
+		expect(await older).toBe('History recovery superseded');
+		await vi.advanceTimersByTimeAsync(20_000);
+		const history = () => socket.sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params));
+		expect(history().slice(2)).toEqual([{ room_id: 'general', before: '20' }]);
+	});
+
+	it('sends a thread\'s page again after a refusal whose wait is already over', async () => {
+		await socket.reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '22', history_log_id: '20' }] } });
+		const loaded = client.loadRoom('20');
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 0 } } });
+		await vi.advanceTimersByTimeAsync(0);
+		expect(room('20').recoveryError).toBeUndefined();
+		expect(socket.sent.filter((frame) => frame.method === 'history' && (frame.params as { room_id: string }).room_id === '20')).toHaveLength(2);
+		await socket.reply('history', { messages: [message('21', { room_id: '20' })], more: false, latest_log_id: '22', history_log_id: '20' });
+		await loaded;
+		expect(room('20')).toMatchObject({ loading: false, loaded: true });
+	});
+
 	it('leaves a recovery that failed for another reason to loadRoom', async () => {
 		socket.receive({ id: socket.request('history').id, error: { code: -32603, message: 'Internal error' } });
 		await settle();
@@ -326,6 +380,9 @@ describe('after a reconnect', () => {
 		latest().drop();
 		vi.advanceTimersByTime(5_000);
 		await latest().greet(['history', 'rooms'], { room: { ...general, latest_log_id: '30', history_log_id: '20' } });
+		// The resume sent behind auth is for nothing now, but out: the rebuild goes once it is answered.
+		expect(bounds(latest().request('history').params)).toEqual({ room_id: 'general', after: '13' });
+		await latest().reply('history', { more: false, latest_log_id: '30', history_log_id: '20' });
 		// Rebuilt as a first visit is: the newest page.
 		expect(bounds(latest().request('history').params)).toEqual({ room_id: 'general', before: '30' });
 		await latest().reply('history', { messages: [entry('25')], more: false, latest_log_id: '30', history_log_id: '20' });
