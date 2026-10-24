@@ -1,6 +1,7 @@
-import type { OperationHandle } from '$lib/protocol/client';
+import { RateLimitError, type OperationHandle } from '$lib/protocol/client';
 
-export type Feedback = { kind: 'pending' | 'error'; text: string };
+/** A toast; an error the server refused for a while (`retry_after`) also has its wait, which the toast counts down. */
+export type Feedback = { kind: 'pending' | 'error'; text: string; wait?: { message: string; since: number; until: number } };
 
 /** How long a request may take before the toast admits it is still pending. */
 const QUIET_MS = 600;
@@ -15,10 +16,21 @@ export class FeedbackState {
 		this.current = { kind: 'pending', text };
 	}
 
-	/** Shows an error, returned for `dismiss`. */
-	error(cause: unknown, fallback = 'Something went wrong'): Feedback {
+	/**
+	 * Shows an error, returned for `dismiss`. A wait on history, posting or uploads isn't one: the page shows those where
+	 * they apply, counting down, and nothing is toasted.
+	 */
+	error(cause: unknown, fallback = 'Something went wrong'): Feedback | undefined {
 		this.stopTimer();
-		this.current = { kind: 'error', text: cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : fallback };
+		if (cause instanceof RateLimitError && cause.scope) {
+			if (this.current?.kind === 'pending') this.current = undefined;
+			return undefined;
+		}
+		this.current = {
+			kind: 'error',
+			text: cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : fallback,
+			...(cause instanceof RateLimitError ? { wait: { message: cause.serverMessage, since: cause.since, until: cause.retryAt } } : {})
+		};
 		return this.current;
 	}
 

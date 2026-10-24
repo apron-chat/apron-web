@@ -1,5 +1,6 @@
 /** `ChatClient` internals: per-room state, tuning constants, and pure helpers. */
 import { roomName, titled, UNTITLED } from '../naming';
+import { punctuated } from '../words';
 import { compareLogIds, createTimeline, type TimelineState } from './reducer';
 import {
 	isJsonObject,
@@ -13,7 +14,7 @@ import {
 	type ReactionSet,
 	type RpcError
 } from './types';
-import { DEFAULT_ROOM_ID, type Notice, type OperationHandle } from './client-types';
+import { DEFAULT_ROOM_ID, type LimitScope, type Notice, type OperationHandle } from './client-types';
 
 /**
  * How a room is in the client's rooms: `joined` (visible and live; without capability
@@ -37,8 +38,8 @@ export interface RoomState {
 	recovery?: RecoveryState;
 	recoveryGeneration: number;
 	recoveryError?: string;
-	/** Restarts a recovery refused with `retry_after` once the wait is over. */
-	recoveryRetry?: ReturnType<typeof setTimeout>;
+	/** The recovery was refused for the history wait (`retry_after`): it starts again once that is over. */
+	limited?: boolean;
 	/** Settled when the running (or next) automatic recovery completes or fails. */
 	waiters: Array<{ resolve: () => void; reject: (error: Error) => void }>;
 	/** Thread checkpoint T of `loadRoom`. */
@@ -119,6 +120,22 @@ export interface PendingRequest<T extends JsonObject = JsonObject> {
 	sentConnection?: number;
 	timer: ReturnType<typeof setTimeout>;
 	resolve: (result: T) => void;
+	reject: (error: Error) => void;
+}
+
+/**
+ * A `history` request (§4.3): sent when no history wait is on (`requestId`
+ * while in flight), held while one is. One with `retry` refused for a wait
+ * waits it out and goes again instead of failing.
+ */
+export interface HistoryJob {
+	id: string;
+	roomId: string;
+	params: JsonObject;
+	allowBeforeAuth: boolean;
+	retry: boolean;
+	requestId?: string;
+	resolve: (result: JsonObject) => void;
 	reject: (error: Error) => void;
 }
 
@@ -429,10 +446,39 @@ export function userFacingRpcError(error: RpcError): string {
 		const seconds = Math.max(1, Math.ceil(retryAfter / 1000));
 		const minutes = Math.ceil(seconds / 60);
 		const wait = seconds < 60 ? `${seconds}s` : minutes < 60 ? `${minutes}m` : `${Math.ceil(minutes / 60)}h`;
-		if (error.message) return `${error.message} Try again in ${wait}.`;
-		return `Temporarily limited. Try again in ${wait}.`;
+		return `${punctuated(error.message || 'Temporarily limited')} Try again in ${wait}.`;
 	}
 	return error.message || `Request failed (${error.code})`;
+}
+
+/** A wait this long or longer on posting is the daily limit, not a burst. */
+export const DAILY_WAIT_MS = 60 * 60 * 1000;
+/** The requests that post: each counts against the server's posting limit, whichever it is. */
+const POSTS = new Set(['message', 'command', 'reactions', 'room_set', 'room_join', 'room_leave']);
+/** `data.limit` names a server may give its limits by. */
+const LIMIT_NAMES = new Map<string, LimitScope>([
+	['history', 'history'], ['post', 'post'], ['posts', 'post'], ['posting', 'post'], ['message', 'post'], ['messages', 'post'], ['upload', 'upload'], ['uploads', 'upload']
+]);
+
+/** A message's or command's params carry `upload` embeds (§4.8.3): files to write once it is accepted. */
+export function carriesUploads(params: JsonObject): boolean {
+	const body = params.body;
+	return isJsonObject(body) && Array.isArray(body.embeds) && body.embeds.some((embed) => isJsonObject(embed) && embed.kind === 'upload');
+}
+
+/**
+ * What a request refused with `retry_after` was held back by: the limit the
+ * server names in `data.limit`, if it is one the client knows, else the
+ * request's kind. A post with files that waits a day (or says it's the
+ * uploads) hit the upload limit; any other post, the posting limit.
+ */
+export function limitScope(method: string, params: JsonObject, error: RpcError, wait: number): LimitScope | undefined {
+	const named = isJsonObject(error.data) && typeof error.data.limit === 'string' ? LIMIT_NAMES.get(error.data.limit.toLowerCase()) : undefined;
+	if (named) return named;
+	if (method === 'history') return 'history';
+	if (!POSTS.has(method)) return undefined;
+	if ((method === 'message' || method === 'command') && carriesUploads(params) && (wait >= DAILY_WAIT_MS || /upload/i.test(error.message ?? ''))) return 'upload';
+	return 'post';
 }
 
 /** Whether the page is hidden or the browser reports no network; false outside a browser. */

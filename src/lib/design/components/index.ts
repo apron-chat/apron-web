@@ -25,6 +25,7 @@ export { default as AttachmentTile } from './AttachmentTile.svelte';
 export { default as RoomItem } from './RoomItem.svelte';
 export { default as ThreadItem } from './ThreadItem.svelte';
 export { default as StatusBanner } from './StatusBanner.svelte';
+export { default as RateLimitNotice } from './RateLimitNotice.svelte';
 export { default as ActionBanner } from './ActionBanner.svelte';
 export { default as Nudge } from './Nudge.svelte';
 export { default as MessageActions } from './MessageActions.svelte';

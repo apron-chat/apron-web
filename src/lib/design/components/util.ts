@@ -17,6 +17,7 @@ export function uid(u: { user_id?: string } | undefined | null): string | undefi
 
 // What rooms and threads are called: one rule with the client's titles, kept outside the design system.
 export { roomName, roomNameTip, titled, UNTITLED } from '../../naming';
+export { punctuated } from '../../words';
 
 /** How far each role stacked behind a badge peeks out past the one in front of it, in px, its 1px edge included (`.ap-role-stacked`). */
 export const ROLE_PEEK = 4;
@@ -196,4 +197,30 @@ export const PRESENCE_LABELS: Record<Presence, string> = { online: 'Online', idl
  */
 export function plainClick(event: MouseEvent): boolean {
 	return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.defaultPrevented;
+}
+
+/** A wait this long or longer in all counts down in minutes, with a clock rather than a ring, and can be put away. */
+export const LONG_WAIT_MS = 60 * 60 * 1000;
+
+/**
+ * A wait's time left as a countdown shows it: `17s` under a minute, then `m:ss`; a `long` wait (LONG_WAIT_MS or
+ * more in all) in whole minutes, `3h 12m`, rounded up so it never reads 0 before it is over.
+ */
+export function waitLabel(ms: number, long = false): string {
+	if (long) {
+		const minutes = Math.max(1, Math.ceil(ms / 60_000));
+		const hours = Math.floor(minutes / 60);
+		return hours ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+	}
+	const seconds = Math.max(0, Math.ceil(ms / 1000));
+	return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/** `waitLabel` in words, for a screen reader: `17 seconds`, `3 hours 12 minutes`. */
+export function waitWords(ms: number, long = false): string {
+	const unit = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+	if (!long && ms < 60_000) return unit(Math.max(1, Math.ceil(ms / 1000)), 'second');
+	const minutes = Math.max(1, Math.ceil(ms / 60_000));
+	const hours = Math.floor(minutes / 60);
+	return hours ? [unit(hours, 'hour'), ...(minutes % 60 ? [unit(minutes % 60, 'minute')] : [])].join(' ') : unit(minutes, 'minute');
 }

@@ -96,6 +96,12 @@ export interface RoomSnapshot {
 	/** The last recovery or `loadRoom` failed; `loadRoom` retries. */
 	recoveryError?: string;
 	/**
+	 * Its history waits for the history limit (`limits.history`): a page was
+	 * refused for it, or is held until the wait is over. It loads again by
+	 * itself then.
+	 */
+	limited?: true;
+	/**
 	 * History for this room has been loaded on this connection: always true
 	 * without capability `history`; for top-level rooms after the first recovery; for
 	 * threads after `loadRoom` completed.
@@ -150,6 +156,44 @@ export interface RoomListing {
 	memberCount?: number;
 	/** The user has joined it: it is in the joined set on this connection. */
 	joined: boolean;
+}
+
+/**
+ * What a wait the server asked for (`retry_after`, §1.1) holds back: history
+ * pages, posting (messages and the other mutations, which share its limit),
+ * or uploads.
+ */
+export type LimitScope = 'history' | 'post' | 'upload';
+
+/** A wait the server asked for: from when it was asked (`since`) until requests of its scope go again, in epoch milliseconds. */
+export interface LimitWait {
+	since: number;
+	until: number;
+}
+
+/**
+ * A request refused with `retry_after` (§1.1): what it holds back (`scope`,
+ * undefined for a limit the client doesn't know), when that may go again
+ * (`retryAt`, epoch milliseconds), and the server's own words. `message` is
+ * the same as one line, for callers that show only text.
+ */
+export class RateLimitError extends Error {
+	readonly code = -32002;
+	constructor(
+		message: string,
+		readonly serverMessage: string,
+		readonly since: number,
+		readonly retryAt: number,
+		readonly scope?: LimitScope
+	) {
+		super(message);
+		this.name = 'RateLimitError';
+	}
+
+	/** The wait as the server gave it, in milliseconds. */
+	get retryAfterMs(): number {
+		return this.retryAt - this.since;
+	}
 }
 
 /** The room a client posts to without naming one: the server's default room (§3.5), before its `room_id` is known. */
@@ -301,6 +345,13 @@ export interface ClientSnapshot {
 	showReconnectDivider: boolean;
 	/** Server supplied retry delay for the most recent temporary limit. */
 	retryAfterMs?: number;
+	/**
+	 * The waits the server asked for (`retry_after`, §1.1) that are still on,
+	 * by what they hold back. Meanwhile history requests wait to be sent, and
+	 * a post or an upload the wait covers is refused here without being sent.
+	 * Absent when none is.
+	 */
+	limits?: Partial<Record<LimitScope, LimitWait>>;
 	/** The server denied the connection (§1.1): no reconnect until the user acts (`retryNow`). */
 	held?: boolean;
 	/**

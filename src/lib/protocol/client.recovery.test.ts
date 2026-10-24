@@ -133,11 +133,9 @@ describe('history per room', () => {
 	});
 
 	it('retries a failed top-level recovery through loadRoom', async () => {
-		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Busy', data: { retry_after: 2 } } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32603, message: 'Busy' } });
 		await settle();
-		expect(room('general').recoveryError).toBe('Busy Try again in 2s.');
-		// A request's limit is not the connection's: reconnecting is not held back.
-		expect(snapshot.retryAfterMs).toBeUndefined();
+		expect(room('general').recoveryError).toBe('Busy');
 		const retried = client.loadRoom('general');
 		expect(socket.request('history').params).toMatchObject({ after: '10', before: '12' });
 		await socket.reply('history', { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' });
@@ -146,19 +144,53 @@ describe('history per room', () => {
 		expect(room('general').timeline.order).toEqual(['11']);
 	});
 
-	it('recovers again on its own once a refused page\'s retry_after is over', async () => {
+	it('waits out a refused page\'s retry_after, sending no history meanwhile, then recovers on its own', async () => {
 		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 20 } } });
 		await settle();
-		expect(room('general').recoveryError).toBe('History request limit reached Try again in 20s.');
+		const now = Date.now();
+		expect(room('general')).toMatchObject({ recovering: false, limited: true, recoveryError: 'History request limit reached. Try again in 20s.' });
+		expect(snapshot.limits).toEqual({ history: { since: now, until: now + 20_000 } });
+		// A request's limit is not the connection's: reconnecting is not held back.
+		expect(snapshot.retryAfterMs).toBeUndefined();
+		// The wait is shared: loading again, or another room's recovery, sends nothing until it is over.
+		const retried = client.loadRoom('general');
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
+		expect(room('ops')).toMatchObject({ recovering: true, limited: true });
 		await vi.advanceTimersByTimeAsync(19_000);
 		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(1);
+		expect(room('general')).toMatchObject({ recovering: true, limited: true });
 		await vi.advanceTimersByTimeAsync(1_000);
-		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(2);
-		expect(room('general')).toMatchObject({ recovering: true });
-		expect(room('general').recoveryError).toBeUndefined();
-		await socket.reply('history', { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' });
+		const sent = socket.sent.filter((frame) => frame.method === 'history');
+		expect(sent.map((frame) => bounds(frame.params))).toEqual([
+			{ room_id: 'general', after: '10', before: '12' },
+			{ room_id: 'general', after: '10', before: '12' },
+			{ room_id: 'ops', after: '30', before: '31' }
+		]);
+		expect(snapshot.limits).toBeUndefined();
+		expect(room('general').limited).toBeUndefined();
+		socket.receive({ id: sent[1].id as string, result: { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' } });
+		await retried;
 		expect(room('general')).toMatchObject({ recovering: false, loaded: true });
+		expect(room('general').recoveryError).toBeUndefined();
 		expect(room('general').timeline.order).toEqual(['11']);
+	});
+
+	it('loads a thread refused for the history wait once the wait is over, without failing', async () => {
+		await socket.reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '22', history_log_id: '20' }] } });
+		let settled = false;
+		const loaded = client.loadRoom('20').then(() => (settled = true));
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'History request limit reached', data: { retry_after: 5 } } });
+		await settle();
+		expect(room('20')).toMatchObject({ loading: true, limited: true, loaded: false });
+		expect(room('20').recoveryError).toBeUndefined();
+		await vi.advanceTimersByTimeAsync(5_000);
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: '20', before: '22' });
+		expect(settled).toBe(false);
+		await socket.reply('history', { messages: [message('21', { room_id: '20' })], more: false, latest_log_id: '22', history_log_id: '20' });
+		await loaded;
+		expect(room('20')).toMatchObject({ loading: false, loaded: true });
+		expect(room('20').limited).toBeUndefined();
 	});
 
 	it('leaves a recovery that failed for another reason to loadRoom', async () => {

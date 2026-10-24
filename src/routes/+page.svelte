@@ -60,6 +60,7 @@
 	import { WIDE_MIN } from '$lib/ui/breakpoints';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
+	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
 	import AppShell from '$lib/design/components/AppShell.svelte';
 	import DropZone from '$lib/design/components/DropZone.svelte';
@@ -285,8 +286,8 @@
 	let activeThread = $state<string | undefined>();
 	/** The toast for the last thread that failed to load, cleared once it no longer applies. */
 	let threadError: Feedback | undefined;
-	/** A thread whose load was refused with `retry_after`, and when to try it again. */
-	let threadRetry = $state<{ id: string; at: number } | undefined>();
+	/** The end of an upload wait whose notice was put away (a day's limit outlasts the visit). */
+	let dismissedUploadWait = $state<number | undefined>();
 	let selectedRoomId = $state<string | undefined>();
 	/** A thread this viewer created (`startThread`, `createThread`), opened once its `room_update` has arrived. */
 	let pendingOpen = $state<PendingThread | undefined>();
@@ -396,11 +397,19 @@
 	/** What's new in the rooms and threads other than the one being read, as the rooms list counts it: the phone header's back button shows it. */
 	let unreadElsewhere = $derived(countElsewhere(unread.byRoom, paneRoom?.id));
 	let mentionsElsewhere = $derived(countElsewhere(mentions.byRoom, paneRoom?.id));
+	/** The waits the server asked for (`retry_after`) that are on, as the client holds them. */
+	let limits = $derived(snapshot.limits ?? {});
+	/** The pane's history waits for the history limit, which is shared: every room's history waits it out, then loads by itself. */
+	let historyWait = $derived(paneRoom?.limited ? limits.history : undefined);
+	/** Sending waits: Send counts down, and the draft stays. */
+	let postWait = $derived(limits.post);
+	/** Uploads wait, unless that notice was put away. */
+	let uploadWait = $derived(limits.upload && limits.upload.until !== dismissedUploadWait ? limits.upload : undefined);
 	/**
 	 * The open pane is catching up: its history is recovering or loading, or it shows a copy held from before
 	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
 	 */
-	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || session.showingHeld || (activeThread ? shownThreadRoom !== threadRoom : session.activeRoomHeld || awaitingThreads))));
+	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || historyWait || session.showingHeld || (activeThread ? shownThreadRoom !== threadRoom : session.activeRoomHeld || awaitingThreads))));
 	/** `paneCatchingUp` or a quiet reconnect, as the floating pill shows it: only once it outlasts a moment, then for a moment at least. */
 	let checkingShown = $state(false);
 	const checking = new SettleFlag((on) => (checkingShown = on));
@@ -757,14 +766,6 @@
 				if (messageScroll && messageScroll.scrollHeight <= messageScroll.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
 			});
 		});
-	});
-
-	// A thread refused for a while (the history quota's `retry_after`) loads again once the wait is over, while it is open.
-	$effect(() => {
-		const retry = threadRetry;
-		if (!retry || activeThread !== retry.id) return;
-		const timer = setTimeout(() => loadThread(retry.id), Math.max(0, retry.at - Date.now()));
-		return () => clearTimeout(timer);
 	});
 
 	// Threads don't recover with their parent: the open one loads its own history,
@@ -1521,16 +1522,14 @@
 	}
 
 	/**
-	 * Loads a thread's history (§4.3); a failure the client recorded is reported once, and one refused with
-	 * `retry_after` is tried again after the wait. A load that succeeds takes the last failure's toast away.
+	 * Loads a thread's history (§4.3); a failure the client recorded is reported once. One the server refuses for a
+	 * while (`retry_after`) isn't a failure: the client waits it out and loads again, the timeline counting down
+	 * meanwhile. A load that succeeds takes the last failure's toast away.
 	 */
 	function loadThread(roomId: string): void {
-		if (threadRetry?.id === roomId) threadRetry = undefined;
 		client?.loadRoom(roomId).then(() => feedback.dismiss(threadError), (cause: unknown) => {
 			if (!session.rooms.find((room) => room.id === roomId)?.recoveryError) return;
 			threadError = feedback.error(cause, 'Unable to load thread');
-			const wait = (cause as { retryAfterMs?: number }).retryAfterMs;
-			if (wait !== undefined) threadRetry = { id: roomId, at: Date.now() + wait };
 		});
 	}
 
@@ -1565,6 +1564,8 @@
 	 */
 	function sendMessage(): void {
 		if (!client || !paneRoom || !canCompose) return;
+		// Sending waits for the server's limit: Send counts down, the draft stays, and nothing goes by itself.
+		if (!drafts.files.length && postWait && postWait.until > Date.now()) return;
 		if (drafts.files.length) {
 			void sendFiles();
 			return;
@@ -1678,6 +1679,12 @@
 	 */
 	async function sendFiles(): Promise<void> {
 		if (!client || !paneRoom || !canCompose || !session.snapshot.capabilities['embed:upload']) return;
+		const uploads = limits.upload;
+		if (uploads && uploads.until > Date.now()) {
+			// Uploads wait for the server's daily limit: the draft stays, and the notice says until when.
+			dismissedUploadWait = undefined;
+			return;
+		}
 		const chat = client;
 		const room = paneRoom;
 		const roomId = room.id;
@@ -2404,6 +2411,8 @@
 	{@const event = rowEvent(view)}
 	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} onsave={(text, edits) => saveEdit(event, text, edits)} oncancel={() => (editingId = undefined)} />{/if}
 {/snippet}
+<!-- The pane's history waiting for the server's limit, where its messages will appear: it loads by itself at zero. -->
+{#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" since={historyWait.since} until={historyWait.until} />{/if}{/snippet}
 {#snippet membersToggle()}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/snippet}
 <!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
 <!-- Kept while shut (hidden), so its border slides with the list's. -->
@@ -2453,6 +2462,7 @@
 				typing={typingNames}
 				replyCount={activeThread ? threadReplyCount : undefined}
 				moreReplies={Boolean(activeThread && threadRoom?.olderAvailable)}
+				wait={historyWait?.until}
 				canEdit={canEditPane}
 				editDisabled={!paneReady}
 				canLeave={session.canManageRooms && !session.readOnly && Boolean(paneRoom?.joined)}
@@ -2494,7 +2504,7 @@
 				{/if}
 				<!-- No messages yet: placeholders, not thread cards on their own. -->
 				{#if (messages.length === 0 || paneHeldBack) && paneCatchingUp}
-					<TimelineLoading label={activeThread ? 'Loading replies…' : 'Loading messages…'} rows={activeThread ? 3 : 6} />
+					<TimelineLoading label={activeThread ? 'Loading replies…' : 'Loading messages…'} rows={activeThread ? 3 : 6} notice={historyWait ? historyNotice : undefined} />
 				{:else if timeline.length === 0}
 					<EmptyState title={activeThread ? 'No replies yet' : 'Nothing here yet'} detail={activeThread ? 'Reply below to continue the thread.' : `Start the conversation in ${activeRoom.title}.`} />
 				{:else}
@@ -2540,7 +2550,14 @@
 			</div>
 			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
-			{#if checkingShown && timeline.length > 0}<TimelineLoading float label={quietReconnect ? statusLabel(snapshot, session.stalled) : activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} />{/if}
+			{#if (checkingShown || historyWait) && timeline.length > 0}<TimelineLoading float label={quietReconnect ? statusLabel(snapshot, session.stalled) : activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} notice={historyWait ? historyNotice : undefined} />{/if}
+			<!-- What waits for the server's limits, above the composer it holds back: sending, and uploads. -->
+			{#if (postWait || uploadWait) && !selection.active && !session.readOnly}
+				<div class="ap-shell-waits">
+					{#if postWait}<RateLimitNotice scope="post" since={postWait.since} until={postWait.until} />{/if}
+					{#if uploadWait}{@const upload = uploadWait}<RateLimitNotice scope="upload" since={upload.since} until={upload.until} ondismiss={() => (dismissedUploadWait = upload.until)} />{/if}
+				</div>
+			{/if}
 
 			{#if selection.active}
 				<SelectionBar
@@ -2566,6 +2583,7 @@
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
 					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply}
 					onmention={() => listMembers(MEMBERS_FRESH_MS)}
+					waitUntil={postWait?.until}
 				/>
 			{/if}
 		{:else}

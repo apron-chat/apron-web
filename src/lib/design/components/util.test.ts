@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chain, cssPx, fitRoles, rolePeek } from './util';
+import { chain, cssPx, fitRoles, rolePeek, waitLabel, waitWords } from './util';
 
 describe('cssPx', () => {
 	it('reads a plain length, and the math a computed min-width leaves unresolved, leaving what it can’t resolve to the caller', () => {
@@ -81,5 +81,15 @@ describe('chain', () => {
 		const calls: string[] = [];
 		chain(() => calls.push('own'), (event: Event) => { calls.push('caller'); event.preventDefault(); })!(new Event('click', { cancelable: true }));
 		expect(calls).toEqual(['caller']);
+	});
+});
+
+describe('waitLabel', () => {
+	it('counts seconds under a minute, then m:ss; a long wait in minutes, rounded up', () => {
+		expect([waitLabel(17_000), waitLabel(16_001), waitLabel(0), waitLabel(-5)]).toEqual(['17s', '17s', '0s', '0s']);
+		expect([waitLabel(60_000), waitLabel(90_000), waitLabel(605_000)]).toEqual(['1:00', '1:30', '10:05']);
+		expect([waitLabel((3 * 60 + 12) * 60_000, true), waitLabel(3_600_000, true), waitLabel(30_001, true)]).toEqual(['3h 12m', '1h 0m', '1m']);
+		expect([waitWords(17_000), waitWords(1_000), waitWords(90_000), waitWords((3 * 60 + 12) * 60_000, true), waitWords(7_200_000, true)])
+			.toEqual(['17 seconds', '1 second', '2 minutes', '3 hours 12 minutes', '2 hours']);
 	});
 });

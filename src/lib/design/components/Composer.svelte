@@ -13,9 +13,10 @@
 	import Button from './Button.svelte';
 	import Embed from './Embed.svelte';
 	import EmbedRemove from './EmbedRemove.svelte';
+	import { secondNow } from './clock.svelte';
 	import { isCommand } from './compose';
 	import type { ComposerField, EmbedProps } from './types';
-	import { roomName } from './util';
+	import { LONG_WAIT_MS, roomName, waitLabel, waitWords } from './util';
 
 	interface Props {
 		room?: string;
@@ -27,6 +28,11 @@
 		onsend?: () => void;
 		/** Whether Send is enabled, when you decide it. By default, while the draft has text (`value`) or files (`attachments`). */
 		canSend?: boolean;
+		/**
+		 * Sending waits for the server's limit until then, in epoch milliseconds: Send is off and counts down in place of
+		 * its label, and comes back at zero. The draft stays; nothing is sent by itself.
+		 */
+		waitUntil?: number;
 		/** Cap `embed:upload`: the attach and microphone buttons. Attachments go out as `upload` embeds (§4.8.3). */
 		canUpload?: boolean;
 		/** Picked files: Attach opens the browser's file picker (a hidden file input) and hands them over. */
@@ -87,7 +93,7 @@
 		class?: ClassValue;
 	}
 	let {
-		room, placeholder, value = $bindable(''), oninput, onsend, canSend, canUpload, onfiles, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand,
+		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
 		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, emojiTestid, sendTestid, class: className
 	}: Props = $props();
@@ -95,6 +101,8 @@
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
 	const cmd = $derived(!!canCommand && isCommand(value));
 	const sendable = $derived(canSend ?? (!!value.trim() || !!attachments));
+	/** What's left of a wait on sending, while there is one. */
+	const waitLeft = $derived(waitUntil === undefined ? 0 : Math.max(0, waitUntil - secondNow()));
 	let fileInput = $state<HTMLInputElement>();
 
 	function picked(input: HTMLInputElement): void {
@@ -124,7 +132,7 @@
 <!-- The picker anchors to the field's row and grows upward. -->
 <div class="ap-composer-wrap">
 	{@render picker?.()}
-	<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd']} aria-label="Send a message" onsubmit={(e) => { e.preventDefault(); onsend?.(); }}>
+	<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd']} aria-label="Send a message" onsubmit={(e) => { e.preventDefault(); if (waitLeft <= 0) onsend?.(); }}>
 		{#if canUpload}
 			<span class="ap-composer-tools">
 				<button type="button" class="ap-iconbtn" onclick={() => fileInput?.click()} disabled={disabled || recording} aria-label="Attach a file" title="Attach a file">
@@ -156,6 +164,6 @@
 			</span>
 		{/if}
 		<!-- Pressing Send leaves the focus in the field, so a phone's keyboard stays up between messages rather than dropping and coming back. -->
-		<Button type="submit" size="sm" variant="primary" data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={cmd ? 'Run command' : 'Send message'} disabled={disabled || recording || !sendable} label={cmd ? 'Run' : 'Send'} />
+		<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : cmd ? 'Run command' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0} label={waitLeft > 0 ? waitLabel(waitLeft, waitLeft >= LONG_WAIT_MS) : cmd ? 'Run' : 'Send'} />
 	</form>
 </div>

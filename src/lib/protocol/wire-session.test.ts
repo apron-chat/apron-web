@@ -133,6 +133,12 @@ async function runVariant(fixture: Fixture, variant: Variant, envelope: 'minimal
 					if (turn) await flush();
 					while (taken < socket.sent.length) unmatched.push(socket.sent[taken++]);
 					position = unmatched.findIndex(selects);
+					// The fixtures carry no sleeps, but a request the client holds for a server's `retry_after`
+					// (history while a history wait is on) goes only once the wait is over: let that time pass.
+					if (position < 0 && turn === SETTLE_TURNS) position = await waitOutLimits(client, () => {
+						while (taken < socket.sent.length) unmatched.push(socket.sent[taken++]);
+						return unmatched.findIndex(selects);
+					});
 				}
 				if (position < 0) throw new Error(`the client sent no ${JSON.stringify(match)}; unmatched: ${JSON.stringify(unmatched)}`);
 				const [frame] = unmatched.splice(position, 1);
@@ -239,6 +245,19 @@ function connection(previous?: FakeSocket): FakeSocket {
 	if (socket === previous) throw new Error('the client did not reconnect');
 	socket.open();
 	return socket;
+}
+
+/** Lets the waits the client holds requests for run out, one by one, until `find` finds the request; -1 if it never does. */
+async function waitOutLimits(client: ChatClient, find: () => number): Promise<number> {
+	for (let wait = 0; wait < 8; wait++) {
+		const limits = Object.values(client.snapshot().limits ?? {});
+		if (!limits.length) return -1;
+		await vi.advanceTimersByTimeAsync(Math.max(0, Math.min(...limits.map((limit) => limit.until)) - Date.now()));
+		for (let turn = 0; turn < SETTLE_TURNS; turn++) await flush();
+		const position = find();
+		if (position >= 0) return position;
+	}
+	return -1;
 }
 
 /** Lets promise callbacks and zero-delay timers run: no time passes. */
