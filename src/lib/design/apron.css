@@ -327,6 +327,8 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-editable .ap-mention { white-space: nowrap; cursor: default; user-select: all; }
 /* The autocomplete picker anchors to the composer's row and grows upward. */
 .ap-composer-wrap { position: relative; }
+/* Send counting down a wait on sending (`waitUntil`), after an hourglass: figures that don't shift as they count. */
+.ap-btn.ap-composer-wait { font-variant-numeric: tabular-nums; }
 /* Above the field: the message being replied to, with Cancel reply */
 .ap-composer-reply { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-4); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-composer-reply-text { min-width: 0; overflow-wrap: anywhere; }
@@ -371,6 +373,16 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-status-ok { background: var(--ok); }
 .ap-status-warn { background: var(--warn); }
 .ap-status-danger { background: var(--danger); }
+
+/* RateLimitNotice — a StatusBanner for a request the server refused for a while (`retry_after`): a ring in place of the dot
+   that empties as the wait runs out (a clock for a wait of an hour or more), and the time left, which doesn't shift as it counts. */
+.ap-wait-ring { flex: none; width: 20px; height: 20px; fill: none; stroke-width: 3; }
+.ap-wait-track { stroke: var(--line); }
+.ap-wait-fill { stroke: var(--warn); stroke-linecap: round; transition: stroke-dashoffset var(--duration-tick) linear; }
+.ap-wait-clock { flex: none; color: var(--warn); }
+.ap-wait-time { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.ap-wait-close { width: var(--control-xs); height: var(--control-xs); margin: -2px 0; flex: none; }
+@media (prefers-reduced-motion: reduce) { .ap-wait-fill { transition: none; } }
 /* ActionBanner — a floating notice that offers one thing to do (a new version: Reload), on the accent */
 .ap-banner { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-banner-icon { flex: none; display: grid; place-items: center; width: var(--control-md); height: var(--control-md); border-radius: var(--radius-full); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
@@ -538,6 +550,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 }
 /* In the main pane: a StatusBanner under the header, and who is typing, in a row kept while nobody is so nothing moves. */
 .ap-shell-banner { padding: var(--space-2) var(--space-4) 0; }
+/* Waits the server asked for (RateLimitNotice) on what the composer sends, just above it. */
+.ap-shell-waits { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-4) 0; }
 .ap-typing.ap-shell-typing { min-height: 20px; padding-top: var(--space-1); }
 /* Wide screens give the member list a column of its own, there while it's shut too, at 0, so it can slide. */
 @media (min-width: 960px) {
@@ -1012,7 +1026,9 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 @keyframes ap-spin { to { transform: rotate(360deg); } }
 .ap-tlstatus-float { position: relative; height: 0; z-index: var(--z-float); pointer-events: none; }
 /* Placed right above the composer's row, whose top margin is --space-2: the pill's foot sits on that margin's top, clear of the composer by the same gap, in the space under the last message. */
-.ap-tlstatus-float .ap-tlstatus-pill { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); white-space: nowrap; animation: ap-tlstatus-in var(--duration-medium) ease-out; }
+.ap-tlstatus-float :is(.ap-tlstatus-pill, .ap-wait) { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); white-space: nowrap; animation: ap-tlstatus-in var(--duration-medium) ease-out; }
+/* A notice in the pill's place (a wait the server asked for) floats the same way, its × still pressable. */
+:is(.ap-tlstatus, .ap-tlstatus-float) .ap-wait { box-shadow: var(--shadow-float); pointer-events: auto; }
 @keyframes ap-tlstatus-in { from { opacity: 0; transform: translate(-50%, 4px); } }
 .ap-tlload { display: flex; flex-direction: column; justify-content: flex-end; min-height: 100%; box-sizing: border-box; }
 .ap-skel-rows { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -1023,7 +1039,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-skel-name { height: 11px; }
 .ap-skel-text { height: 10px; }
 @keyframes ap-skel-pulse { 50% { opacity: .55; } }
-@media (prefers-reduced-motion: reduce) { .ap-tlstatus-spin { animation-duration: 2.4s; } .ap-tlstatus-float .ap-tlstatus-pill, .ap-skel { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ap-tlstatus-spin { animation-duration: 2.4s; } .ap-tlstatus-float :is(.ap-tlstatus-pill, .ap-wait), .ap-skel { animation: none; } }
 
 /* SelectionBar — replaces the composer while messages are being picked */
 .ap-selbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) var(--space-4); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); background: var(--bg-200); border: 1px solid var(--accent); border-radius: var(--radius-lg); font-size: var(--text-ui); line-height: var(--leading-ui); }

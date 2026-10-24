@@ -18,6 +18,8 @@
 		replyCount?: number;
 		/** Older replies are not loaded yet, so `replyCount` is a lower bound. */
 		moreReplies?: boolean;
+		/** The pane's history waits, as the server asked (`retry_after`): "Waiting" in place of a failure. The timeline's notice counts it down. */
+		waiting?: boolean;
 		/** Offer Edit for the room, or the open thread (capability `rooms`): its title and description. */
 		canEdit: boolean;
 		/** Join and the actions menu can't be used now, such as while a request is in flight. */
@@ -47,7 +49,7 @@
 		onsummary?: () => void;
 	}
 	let {
-		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, canEdit, editDisabled, canLeave, canJoin = false,
+		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, canEdit, editDisabled, canLeave, canJoin = false,
 		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, onjoin, onmemberlist, onsummary
 	}: Props = $props();
 
@@ -65,7 +67,7 @@
 	private={pane.private}
 	{typing}
 	replies={replyCount !== undefined ? { count: replyCount, more: moreReplies } : undefined}
-	note={pane.recoveryError ? 'History unavailable' : undefined}
+	note={waiting ? 'Waiting' : pane.recoveryError ? 'History unavailable' : undefined}
 	{onback}
 	{unreadElsewhere}
 	{mentionsElsewhere}

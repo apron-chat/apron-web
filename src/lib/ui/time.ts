@@ -137,14 +137,6 @@ export function isGrouped(previous: MessageRecord | undefined, event: MessageRec
 	return before !== undefined && after !== undefined && after - before < GROUP_WINDOW_MS;
 }
 
-/** `45s`, `3m`, `2h`: how long until a limited connection may retry. */
-export function retryAfterLabel(milliseconds: number): string {
-	const seconds = Math.max(1, Math.ceil(milliseconds / 1000));
-	if (seconds < 60) return `${seconds}s`;
-	const minutes = Math.ceil(seconds / 60);
-	if (minutes < 60) return `${minutes}m`;
-	return `${Math.ceil(minutes / 60)}h`;
-}
 
 /** `0:12`: the running time of a voice recording. */
 export function clockLabel(seconds: number): string {

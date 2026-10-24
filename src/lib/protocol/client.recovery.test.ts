@@ -44,7 +44,8 @@ describe('history per room', () => {
 	});
 
 	it('holds the published timeline until the recovery completes', async () => {
-		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '10', before: '12' });
+		// No checkpoint yet: only the newest page, up to the head (§4.3.5).
+		expect(socket.request('history').params).toEqual({ room_id: 'general', before: '12', limit: 50 });
 		socket.receive({ method: 'message', params: message('13') });
 		expect(room('general')).toMatchObject({ recovering: true, loaded: false });
 		expect(room('general').timeline.order).toEqual([]);
@@ -127,23 +128,203 @@ describe('history per room', () => {
 		expect(client.message('6')?.body).toEqual({ text: 'older' });
 	});
 
-	it('starts at the lowest log_id when no bound is known', async () => {
+	it('opens a room on its newest page, loads older pages backward on demand, and resumes forward from there', async () => {
+		await socket.reply('history', { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '90', history_log_id: '30' }] } });
+		const ops = (id: string) => message(id, { room_id: 'ops' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'ops', before: '90' });
+		// Live records meanwhile are kept, as in any recovery.
+		socket.receive({ method: 'message', params: ops('91') });
+		await socket.reply('history', { messages: [ops('80'), ops('90')], first_log_id: '80', last_log_id: '90', more: true, latest_log_id: '91', history_log_id: '30' });
+		expect(room('ops')).toMatchObject({ recovering: false, loaded: true, olderAvailable: true });
+		expect(room('ops').timeline.order).toEqual(['80', '90', '91']);
+		// One request opened it, however long its log.
+		expect(socket.sent.filter((frame) => frame.method === 'history' && (frame.params as { room_id: string }).room_id === 'ops')).toHaveLength(1);
+		const older = client.loadOlder('ops');
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'ops', before: '79' });
+		await socket.reply('history', { rooms: [{ room_id: 'ops', log_id: '30', title: 'Ops' }], messages: [ops('40')], first_log_id: '30', last_log_id: '40', more: false, latest_log_id: '91', history_log_id: '30' });
+		await older;
+		expect(room('ops').timeline.order).toEqual(['40', '80', '90', '91']);
+		expect(room('ops').olderAvailable).toBeUndefined();
+		// Its checkpoint is the head it opened at: a newer head resumes forward from there.
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '93', history_log_id: '30' }] } });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'ops', after: '91', before: '93' });
+	});
+
+	it('opens a room with no lower bound known on its newest page too, and skips one whose history is all gone', async () => {
+		await socket.reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'nobound', log_id: '30', latest_log_id: '40' }] } });
-		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'nobound', after: '1', before: '40' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'nobound', before: '40' });
+		const sent = socket.sent.length;
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'gone', log_id: '30', latest_log_id: '40', history_log_id: null }] } });
+		expect(room('gone')).toMatchObject({ recovering: false, loaded: true });
+		expect(socket.sent.slice(sent).filter((frame) => frame.method === 'history')).toEqual([]);
+	});
+
+	it('keeps the newest page it asked for when retention moves meanwhile, without what fell below the bound', async () => {
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '11' }] } });
+		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(1);
+		await socket.reply('history', { messages: [message('10'), message('11'), message('12')], first_log_id: '10', last_log_id: '12', more: false, latest_log_id: '12', history_log_id: '11' });
+		expect(room('general')).toMatchObject({ recovering: false, loaded: true });
+		expect(room('general').timeline.order).toEqual(['11', '12']);
 	});
 
 	it('retries a failed top-level recovery through loadRoom', async () => {
-		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Busy', data: { retry_after: 2 } } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32603, message: 'Busy' } });
 		await settle();
-		expect(room('general').recoveryError).toBe('Busy Try again in 2s.');
-		// A request's limit is not the connection's: reconnecting is not held back.
-		expect(snapshot.retryAfterMs).toBeUndefined();
+		expect(room('general').recoveryError).toBe('Busy');
 		const retried = client.loadRoom('general');
-		expect(socket.request('history').params).toMatchObject({ after: '10', before: '12' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', before: '12' });
 		await socket.reply('history', { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' });
 		await retried;
 		expect(room('general').recoveryError).toBeUndefined();
 		expect(room('general').timeline.order).toEqual(['11']);
+	});
+
+	it('waits out a refused page\'s retry_after, sending no history meanwhile, then recovers on its own', async () => {
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 20 } } });
+		await settle();
+		const now = Date.now();
+		expect(room('general')).toMatchObject({ recovering: false, limited: true, recoveryError: 'Too Many Requests. Try again in 20s.' });
+		expect(snapshot.limits).toEqual({ history: { until: now + 20_000 } });
+		// A request's limit is not the connection's: reconnecting is not held back.
+		expect(snapshot.retryAfterMs).toBeUndefined();
+		// Nor is it any other method's: sending goes.
+		client.send('general', 'hi').promise.catch(() => undefined);
+		expect(socket.sent.filter((frame) => frame.method === 'message')).toHaveLength(1);
+		// The wait is shared: loading again, or another room's recovery, sends nothing until it is over.
+		const retried = client.loadRoom('general');
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
+		expect(room('ops')).toMatchObject({ recovering: true, limited: true });
+		await vi.advanceTimersByTimeAsync(19_000);
+		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(1);
+		expect(room('general')).toMatchObject({ recovering: true, limited: true });
+		await vi.advanceTimersByTimeAsync(1_000);
+		// Then they go one at a time, the open room's first.
+		const sent = () => socket.sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params));
+		expect(sent()).toEqual([{ room_id: 'general', before: '12' }, { room_id: 'general', before: '12' }]);
+		expect(snapshot.limits).toBeUndefined();
+		expect(room('general').limited).toBeUndefined();
+		await socket.reply('history', { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' });
+		await retried;
+		expect(sent().at(-1)).toEqual({ room_id: 'ops', before: '31' });
+		expect(room('general')).toMatchObject({ recovering: false, loaded: true });
+		expect(room('general').recoveryError).toBeUndefined();
+		expect(room('general').timeline.order).toEqual(['11']);
+	});
+
+	it('loads a thread refused for the history wait once the wait is over, without failing', async () => {
+		await socket.reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '22', history_log_id: '20' }] } });
+		let settled = false;
+		const loaded = client.loadRoom('20').then(() => (settled = true));
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 5 } } });
+		await settle();
+		expect(room('20')).toMatchObject({ loading: true, limited: true, loaded: false });
+		expect(room('20').recoveryError).toBeUndefined();
+		await vi.advanceTimersByTimeAsync(5_000);
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: '20', before: '22' });
+		expect(settled).toBe(false);
+		await socket.reply('history', { messages: [message('21', { room_id: '20' })], more: false, latest_log_id: '22', history_log_id: '20' });
+		await loaded;
+		expect(room('20')).toMatchObject({ loading: false, loaded: true });
+		expect(room('20').limited).toBeUndefined();
+	});
+
+	it('sends the next history request only once the server answers one taken back', async () => {
+		const general = socket.request('history');
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
+		// Left while its page is out: the page is for nothing, but the server is still working on it.
+		socket.receive({ method: 'room_update', params: { left: [{ room_id: 'general' }] } });
+		await settle();
+		const history = () => socket.sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params));
+		expect(history()).toEqual([{ room_id: 'general', before: '12' }]);
+		socket.receive({ id: general.id, result: { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' } });
+		await settle();
+		expect(history()).toEqual([{ room_id: 'general', before: '12' }, { room_id: 'ops', before: '31' }]);
+		expect(snapshot.limits).toBeUndefined();
+	});
+
+	it('sends the next history request after one that timed out once its late answer comes', async () => {
+		const general = socket.request('history');
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
+		await vi.advanceTimersByTimeAsync(20_000);
+		expect(room('general').recoveryError).toBe('history request timed out');
+		const history = () => socket.sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params));
+		expect(history()).toEqual([{ room_id: 'general', before: '12' }]);
+		socket.receive({ id: general.id, result: { more: false, latest_log_id: '12', history_log_id: '10' } });
+		await settle();
+		expect(history()).toEqual([{ room_id: 'general', before: '12' }, { room_id: 'ops', before: '31' }]);
+	});
+
+	it('drops an older page held for a wait when its room is rebuilt, so it goes first once the wait is over', async () => {
+		await socket.reply('history', { messages: [message('11'), message('12')], first_log_id: '11', last_log_id: '12', more: true, latest_log_id: '12', history_log_id: '10' });
+		expect(room('general').olderAvailable).toBe(true);
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 20 } } });
+		await settle();
+		const older = client.loadOlder('general').catch((cause: Error) => cause.message);
+		// Retention passes the checkpoint: rebuilt, so the page before what it had is for nothing.
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '20', history_log_id: '15' }] } });
+		expect(await older).toBe('History recovery superseded');
+		await vi.advanceTimersByTimeAsync(20_000);
+		const history = () => socket.sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params));
+		expect(history().slice(2)).toEqual([{ room_id: 'general', before: '20' }]);
+	});
+
+	it('sends a thread\'s page again after a refusal whose wait is already over', async () => {
+		await socket.reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '22', history_log_id: '20' }] } });
+		const loaded = client.loadRoom('20');
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 0 } } });
+		await vi.advanceTimersByTimeAsync(0);
+		expect(room('20').recoveryError).toBeUndefined();
+		expect(socket.sent.filter((frame) => frame.method === 'history' && (frame.params as { room_id: string }).room_id === '20')).toHaveLength(2);
+		await socket.reply('history', { messages: [message('21', { room_id: '20' })], more: false, latest_log_id: '22', history_log_id: '20' });
+		await loaded;
+		expect(room('20')).toMatchObject({ loading: false, loaded: true });
+	});
+
+	it('goes on from where a recovery refused for the history wait stopped, keeping what it had, once the wait is over', async () => {
+		await socket.reply('history', { messages: [message('11'), message('12')], first_log_id: '11', last_log_id: '12', more: true, latest_log_id: '12', history_log_id: '10' });
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '20', history_log_id: '10' }] } });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '13', before: '20' });
+		await socket.reply('history', { messages: [message('13'), message('15')], first_log_id: '13', last_log_id: '15', more: true, latest_log_id: '20', history_log_id: '10' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '16', before: '20' });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 20 } } });
+		await settle();
+		// Live meanwhile: what arrives while the rest waits stays.
+		socket.receive({ method: 'message', params: message('21') });
+		await vi.advanceTimersByTimeAsync(20_000);
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '16', before: '21' });
+		await socket.reply('history', { messages: [message('18')], first_log_id: '16', last_log_id: '21', more: false, latest_log_id: '21', history_log_id: '10' });
+		expect(room('general')).toMatchObject({ recovering: false, loaded: true, olderAvailable: true });
+		expect(room('general').timeline.order).toEqual(['11', '12', '13', '15', '18', '21']);
+	});
+
+	it('keeps showing what a room had while its rebuild waits out a history wait', async () => {
+		await socket.reply('history', { messages: [message('11'), message('12')], more: false, latest_log_id: '12', history_log_id: '10' });
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '14', history_log_id: '10' }] } });
+		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 3_600 } } });
+		await settle();
+		// The next room frame rebuilds the room (history-recovery-failure.json), but its page waits for hours.
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '15', history_log_id: '10' }] } });
+		socket.receive({ method: 'message', params: message('16') });
+		expect(room('general')).toMatchObject({ recovering: true, limited: true });
+		expect(room('general').timeline.order).toEqual(['11', '12']);
+		await vi.advanceTimersByTimeAsync(3_600_000);
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', before: '15' });
+		await socket.reply('history', { messages: [message('14'), message('15')], first_log_id: '14', last_log_id: '15', more: true, latest_log_id: '16', history_log_id: '10' });
+		// Then replaced by what the rebuild found, with what arrived live meanwhile.
+		expect(room('general').timeline.order).toEqual(['14', '15', '16']);
+	});
+
+	it('leaves a recovery that failed for another reason to loadRoom', async () => {
+		socket.receive({ id: socket.request('history').id, error: { code: -32603, message: 'Internal error' } });
+		await settle();
+		expect(room('general').recoveryError).toBe('Internal error');
+		await vi.advanceTimersByTimeAsync(120_000);
+		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(1);
 	});
 });
 
@@ -151,7 +332,7 @@ describe('a room shown for its messages (no cap rooms)', () => {
 	it('recovers a room shown for its messages up to the first one on each connection', async () => {
 		await socket.greet(['history'], { rooms: false });
 		socket.receive({ method: 'message', params: { message_id: '20', log_id: '20', room_id: 'lobby', from: { user_id: 'bob' }, body: { text: 'live' } } });
-		expect(socket.request('history').params).toMatchObject({ room_id: 'lobby', after: '1', before: '20' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'lobby', before: '20' });
 		await socket.reply('history', { messages: [{ message_id: '15', log_id: '15', room_id: 'lobby', from: { user_id: 'bob' }, body: { text: 'old' } }], more: false, latest_log_id: '20', history_log_id: '1' });
 		expect(snapshot.rooms[0].timeline.order).toEqual(['15', '20']);
 		socket.receive({ method: 'message', params: { message_id: '21', log_id: '21', room_id: 'lobby', from: { user_id: 'bob' }, body: { text: 'next' } } });
@@ -203,13 +384,44 @@ describe('after a reconnect', () => {
 		expect(snapshot.showReconnectDivider).toBe(false);
 	});
 
+	it('sends history one request at a time, and none for a kept room the listing shows has nothing new', async () => {
+		await latest().greet(['history', 'rooms'], { room: general });
+		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
+		const ops = { room_id: 'ops', log_id: '20', title: 'Ops', latest_log_id: '21', history_log_id: '20' };
+		const quiet = { room_id: 'quiet', log_id: '30', title: 'Quiet', latest_log_id: '31', history_log_id: '30' };
+		latest().receive({ method: 'room_update', params: { joined: [ops, quiet] } });
+		const history = () => latest().sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params));
+		// Each recovers in turn: the next goes once the last is answered.
+		expect(history().slice(1)).toEqual([{ room_id: 'ops', before: '21' }]);
+		await latest().reply('history', { more: false, latest_log_id: '21', history_log_id: '20' });
+		expect(history().slice(1)).toEqual([{ room_id: 'ops', before: '21' }, { room_id: 'quiet', before: '31' }]);
+		await latest().reply('history', { more: false, latest_log_id: '31', history_log_id: '30' });
+		latest().drop();
+		vi.advanceTimersByTime(5_000);
+		const again = latest();
+		again.open();
+		again.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		// The first kept room resumes right behind auth; the others wait their turn.
+		expect(history()).toEqual([{ room_id: 'general', after: '13' }]);
+		await again.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
+		// The listing says ops has nothing new and quiet has: ops's resume never goes, quiet's pages only to its head.
+		await again.reply('room_list', { joined: [general, ops, { ...quiet, latest_log_id: '35' }] });
+		expect(snapshot.rooms.find((candidate) => candidate.id === 'ops')).toMatchObject({ recovering: false, loaded: true });
+		await again.reply('history', { more: false, latest_log_id: '12', history_log_id: '10' });
+		expect(history()).toEqual([{ room_id: 'general', after: '13' }, { room_id: 'quiet', after: '32', before: '35' }]);
+	});
+
 	it('rebuilds a kept room when retention has passed its checkpoint', async () => {
 		await latest().greet(['history', 'rooms'], { room: general });
 		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
 		latest().drop();
 		vi.advanceTimersByTime(5_000);
 		await latest().greet(['history', 'rooms'], { room: { ...general, latest_log_id: '30', history_log_id: '20' } });
-		expect(latest().request('history').params).toMatchObject({ room_id: 'general', after: '20', before: '30' });
+		// The resume sent behind auth is for nothing now, but out: the rebuild goes once it is answered.
+		expect(bounds(latest().request('history').params)).toEqual({ room_id: 'general', after: '13' });
+		await latest().reply('history', { more: false, latest_log_id: '30', history_log_id: '20' });
+		// Rebuilt as a first visit is: the newest page.
+		expect(bounds(latest().request('history').params)).toEqual({ room_id: 'general', before: '30' });
 		await latest().reply('history', { messages: [entry('25')], more: false, latest_log_id: '30', history_log_id: '20' });
 		expect(snapshot.rooms.find((candidate) => candidate.id === 'general')?.timeline.order).toEqual(['25']);
 	});
@@ -229,6 +441,9 @@ describe('after a reconnect', () => {
 		// Kept, but the gap since its checkpoint is not loaded yet.
 		expect(snapshot.rooms.find((candidate) => candidate.id === '20')?.loaded).toBe(false);
 		const again = client.loadRoom('20');
+		// One at a time: after the room's resume, which went right behind auth.
+		expect(bounds(latest().request('history').params)).toEqual({ room_id: 'general', after: '13' });
+		await latest().reply('history', { more: false, latest_log_id: '12', history_log_id: '10' });
 		expect(latest().request('history').params).toMatchObject({ room_id: '20', after: '22', before: '23' });
 		await latest().reply('history', { messages: [{ ...entry('23'), room_id: '20' }], more: false, latest_log_id: '23', history_log_id: '20' });
 		await again;

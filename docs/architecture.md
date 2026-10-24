@@ -223,7 +223,10 @@ the usual reconnect. `serverSettings` reads extension `ext:settings`
 (`server.ext.settings`, only where `capabilities` lists it): with
 `guest_posting: false` a guest's snapshot is `readOnly`, and with
 `read_cursors: false` the client moves your read cursor locally without
-sending it.
+sending it. A `retry_after` refusal's `data.ext.limits` counts only where
+`capabilities` lists `ext:limits`: `limitScope` turns it, with the refused
+request, into the wait's `LimitScope`, and `heldBack` refuses what
+`limitHolds` says that wait covers before it is sent.
 `setIdle(idle, inputAt)` reports attendance, as `PagePresence.idle` decides it (no
 input for `IDLE_AFTER_MS`, hidden on a handheld, or loaded hidden and unused;
 the page's captured `keydown`, `pointerdown`, `pointermove`, `wheel` and

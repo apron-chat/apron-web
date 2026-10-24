@@ -7,6 +7,7 @@
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
 	import { sidebarRooms, threadsWithNews, type ThreadEntry } from '$lib/ui/timeline';
+	import { listInBackground } from '$lib/ui/background-listing';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
@@ -80,20 +81,29 @@
 	// From the same source as the room's thread cards: a held view's listing while it shows, so they change over together.
 	let otherThreads = $derived(canBrowse ? (session.threadSource(session.activeRoomId).directory ?? []).filter((listing) => !listing.joined) : []);
 
-	/** Changes whenever a room or thread is joined or left. */
+	/** Changes whenever a room or thread is joined or left; `roomsKey` only for a top-level room. */
 	let joinedKey = $derived(session.rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));
+	let roomsKey = $derived(rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));
+	/**
+	 * How long a listing made in the background is reused, a client choice: switching between rooms shouldn't list
+	 * again each time, and any server may rate-limit `room_list`. Joining or leaving lists afresh (the client drops what it changed), and so does opening Browse.
+	 */
+	const BACKGROUND_LISTING_MS = 60_000;
 
-	// Browse rooms and Other threads show only when there is something to join, so list both in the background
-	// (the rooms, and the active room's threads) whenever the active room or what you've joined changes. Threads
-	// you haven't joined deliver nothing live (§3.4): this listing is also what brings their cards up to date.
+	// Browse rooms and Other threads show only when there is something to join, so list both in the background:
+	// the rooms whenever the rooms you've joined change, and the active room's threads whenever it or what you've
+	// joined changes. Threads you haven't joined deliver nothing live (§3.4): this listing is also what brings their
+	// cards up to date. One refused for a while lists again once the wait is over.
+	$effect(() => {
+		void roomsKey;
+		if (!canBrowse) return;
+		return untrack(() => listInBackground(() => client.listRooms(undefined, BACKGROUND_LISTING_MS)));
+	});
 	$effect(() => {
 		const roomId = session.activeRoomId;
 		void joinedKey;
-		if (!canBrowse) return;
-		untrack(() => {
-			client.listRooms().catch(() => {});
-			if (roomId) client.listRooms(roomId).catch(() => {});
-		});
+		if (!canBrowse || !roomId) return;
+		return untrack(() => listInBackground(() => client.listRooms(roomId, BACKGROUND_LISTING_MS)));
 	});
 
 	function list(parentRoomId?: string): void {

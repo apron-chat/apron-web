@@ -17,6 +17,7 @@ export function uid(u: { user_id?: string } | undefined | null): string | undefi
 
 // What rooms and threads are called: one rule with the client's titles, kept outside the design system.
 export { roomName, roomNameTip, titled, UNTITLED } from '../../naming';
+export { LONG_WAIT_MS, punctuated, waitLabel, waitWords } from '../../words';
 
 /** How far each role stacked behind a badge peeks out past the one in front of it, in px, its 1px edge included (`.ap-role-stacked`). */
 export const ROLE_PEEK = 4;
@@ -197,3 +198,4 @@ export const PRESENCE_LABELS: Record<Presence, string> = { online: 'Online', idl
 export function plainClick(event: MouseEvent): boolean {
 	return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.defaultPrevented;
 }
+

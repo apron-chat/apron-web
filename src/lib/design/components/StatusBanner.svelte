@@ -22,6 +22,8 @@
 		action?: Snippet;
 		/** The dot's colour, instead of the one `state` gives; `none` draws it uncoloured. Every tone sits beside words that say it. */
 		tone?: Tone | 'none';
+		/** In place of the dot, such as a countdown's ring: decoration beside words that say it all. */
+		icon?: Snippet;
 		/** `alert` for an error that interrupts, `note` for one that stays. */
 		role?: 'status' | 'alert' | 'note';
 		/** Announce changes to the words to assistive tech (`aria-live="polite"`). */
@@ -31,13 +33,13 @@
 		/** Classes for the banner, added to its own. */
 		class?: ClassValue;
 	}
-	let { state, children, retryIn, action, tone: toneProp, role = 'status', live, textTestid, class: className }: Props = $props();
+	let { state, children, retryIn, action, tone: toneProp, icon, role = 'status', live, textTestid, class: className }: Props = $props();
 	const s = $derived(state ? (STATUS[state] ?? STATUS.connecting) : undefined);
 	const tone = $derived(toneProp ?? s?.[0] ?? 'none');
 </script>
 
 <div {role} class={['ap-status', action && 'ap-status-action', className]}>
-	<span class={['ap-status-dot', tone !== 'none' && `ap-status-${tone}`]} aria-hidden="true"></span>
+	{#if icon}{@render icon()}{:else}<span class={['ap-status-dot', tone !== 'none' && `ap-status-${tone}`]} aria-hidden="true"></span>{/if}
 	<span class="ap-status-text" data-testid={textTestid} aria-live={live ? 'polite' : undefined}>{#if children}{@render children()}{:else}{s?.[1]}{/if}{#if retryIn != null}<span class="ap-status-retry">{` · Retrying in ${retryIn}s`}</span>{/if}</span>
 	{@render action?.()}
 </div>

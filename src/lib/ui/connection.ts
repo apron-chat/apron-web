@@ -1,6 +1,6 @@
 import type { ClientSnapshot } from '$lib/protocol/client';
 import type { ServerParams } from '$lib/protocol/types';
-import { retryAfterLabel } from './time';
+import { retryAfterLabel } from '$lib/words';
 
 export type ConnectionState = 'connected' | 'connecting' | 'reconnecting' | 'offline';
 

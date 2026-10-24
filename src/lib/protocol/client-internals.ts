@@ -1,5 +1,6 @@
 /** `ChatClient` internals: per-room state, tuning constants, and pure helpers. */
 import { roomName, titled, UNTITLED } from '../naming';
+import { punctuated, retryAfterLabel } from '../words';
 import { compareLogIds, createTimeline, type TimelineState } from './reducer';
 import {
 	isJsonObject,
@@ -13,7 +14,7 @@ import {
 	type ReactionSet,
 	type RpcError
 } from './types';
-import { DEFAULT_ROOM_ID, type Notice, type OperationHandle } from './client-types';
+import { DEFAULT_ROOM_ID, type LimitScope, type Notice, type OperationHandle } from './client-types';
 
 /**
  * How a room is in the client's rooms: `joined` (visible and live; without capability
@@ -37,6 +38,8 @@ export interface RoomState {
 	recovery?: RecoveryState;
 	recoveryGeneration: number;
 	recoveryError?: string;
+	/** The recovery was refused for the history wait (`retry_after`): it starts again once that is over. */
+	limited?: boolean;
 	/** Settled when the running (or next) automatic recovery completes or fails. */
 	waiters: Array<{ resolve: () => void; reject: (error: Error) => void }>;
 	/** Thread checkpoint T of `loadRoom`. */
@@ -97,6 +100,13 @@ interface RecoveryState {
 	/** Next position to request; undefined means from the start of the log. */
 	nextAfter?: string;
 	/**
+	 * Without a checkpoint: only the newest page up to H, older pages
+	 * loading on demand (§4.3.5 step 3), instead of paging forward.
+	 */
+	newest?: boolean;
+	/** A rebuild whose first page isn't in yet: the room still has what it is to replace (`clearForRebuild`). */
+	rebuild?: boolean;
+	/**
 	 * Live records for the room received during the recovery. They are applied
 	 * to the store on arrival; the buffer bounds memory and lets a rebuild
 	 * restore the ones at or above the new bound.
@@ -154,12 +164,20 @@ export const IDLE_RETRY_MAX_MS = 5 * 60_000;
 /** The longest `setTimeout` delay browsers keep. */
 export const MAX_TIMER_MS = 2 ** 31 - 1;
 export const REQUEST_TIMEOUT_MS = 20_000;
+
+/** A request with no answer after REQUEST_TIMEOUT_MS: the server may yet answer it, or be working on it still. */
+export class RequestTimeout extends Error {
+	constructor(method: string) {
+		super(`${method} request timed out`);
+		this.name = 'RequestTimeout';
+	}
+}
 /** This implementation and its version, sent as `agent` with `auth` (§3.2), for the server's debugging. */
 export const AGENT = 'apron-web/0.4';
 /** The `unsupported` error code (§1.1): a method or an optional parameter the server does not implement. */
 export const UNSUPPORTED = -32601;
 const HISTORY_PAGE_SIZE = 200;
-/** A thread opens on its newest page this size; older pages load as the reader scrolls back. */
+/** A thread, or a room with no checkpoint, opens on its newest page this size; older pages load as the reader scrolls back. */
 export const THREAD_PAGE_SIZE = 50;
 const MAX_RECONNECT_DELAY_MS = 60_000;
 /** How long a typing indicator this client sends should persist without a refresh, in the `activity` frame's `typing` seconds. */
@@ -423,14 +441,57 @@ export function retryAfterMilliseconds(error: RpcError): number | undefined {
 export function userFacingRpcError(error: RpcError): string {
 	const retryAfter = retryAfterMilliseconds(error);
 	if (retryAfter !== undefined) {
-		// A daily limit (such as uploads) can be hours away.
-		const seconds = Math.max(1, Math.ceil(retryAfter / 1000));
-		const minutes = Math.ceil(seconds / 60);
-		const wait = seconds < 60 ? `${seconds}s` : minutes < 60 ? `${minutes}m` : `${Math.ceil(minutes / 60)}h`;
-		if (error.message) return `${error.message} Try again in ${wait}.`;
-		return `Temporarily limited. Try again in ${wait}.`;
+		return `${punctuated(error.message || 'Temporarily limited')} Try again in ${retryAfterLabel(retryAfter)}.`;
 	}
 	return error.message || `Request failed (${error.code})`;
+}
+
+/**
+ * The requests an `ext:limits` `write` wait holds back: posting, reacting,
+ * joining, leaving, and room changes. Not `command`, which may do anything,
+ * nor `me`.
+ */
+const WRITES = new Set(['message', 'reactions', 'room_join', 'room_leave', 'room_set']);
+
+/**
+ * A `message` or `command` that adds an upload: an `upload` embed without an
+ * `embed_id` is new (§4.8.2), a file to write once it is accepted (§4.8.3).
+ * A save that keeps an upload sends it back with its `embed_id`.
+ */
+function addsUpload(method: string, params: JsonObject): boolean {
+	const body = params.body;
+	return (method === 'message' || method === 'command') && isJsonObject(body) && Array.isArray(body.embeds)
+		&& body.embeds.some((embed) => isJsonObject(embed) && embed.kind === 'upload' && embed.embed_id === undefined);
+}
+
+/**
+ * The category of limit a refusal gives in `data.ext.limits` (extension
+ * `ext:limits`), if any. Read only while the server advertises the extension.
+ */
+export function limitCategory(error: RpcError): unknown {
+	const ext = isJsonObject(error.data) ? error.data.ext : undefined;
+	return isJsonObject(ext) ? ext.limits : undefined;
+}
+
+/**
+ * What a request refused with `retry_after` (§1.1) holds back. With
+ * `ext:limits`, a `write` category on a request it covers (`WRITES`) holds
+ * back all of those, and an `upload` category on one that adds an upload
+ * holds back those that do. Otherwise, as the protocol says only that
+ * this request should wait: further requests of its method, when that is
+ * `history` or `message`; any other method's refusal only fails its request.
+ */
+export function limitScope(method: string, params: JsonObject, category?: unknown): LimitScope | undefined {
+	if (category === 'write' && WRITES.has(method)) return 'write';
+	if (category === 'upload' && addsUpload(method, params)) return 'upload';
+	return method === 'history' || method === 'message' ? method : undefined;
+}
+
+/** Whether a wait on `scope` refuses a request before it is sent. History is queued instead. */
+export function limitHolds(scope: LimitScope, method: string, params: JsonObject): boolean {
+	if (scope === 'write') return WRITES.has(method);
+	if (scope === 'upload') return addsUpload(method, params);
+	return scope === 'message' && method === 'message';
 }
 
 /** Whether the page is hidden or the browser reports no network; false outside a browser. */

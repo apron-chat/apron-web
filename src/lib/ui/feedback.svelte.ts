@@ -1,4 +1,4 @@
-import type { OperationHandle } from '$lib/protocol/client';
+import { RateLimitError, type OperationHandle } from '$lib/protocol/client';
 
 export type Feedback = { kind: 'pending' | 'error'; text: string };
 
@@ -15,14 +15,29 @@ export class FeedbackState {
 		this.current = { kind: 'pending', text };
 	}
 
-	error(cause: unknown, fallback = 'Something went wrong'): void {
+	/**
+	 * Shows an error, returned for `dismiss`. A wait (`RateLimitError.scope`) on a `history` or `message` request isn't
+	 * one: the page shows those where they apply, counting down, and nothing is toasted. Another request a wait holds
+	 * back, such as a reaction during a `write` wait, is toasted as any error, with how long the wait is.
+	 */
+	error(cause: unknown, fallback = 'Something went wrong'): Feedback | undefined {
 		this.stopTimer();
+		if (cause instanceof RateLimitError && cause.scope && (cause.method === 'history' || cause.method === 'message')) {
+			if (this.current?.kind === 'pending') this.current = undefined;
+			return undefined;
+		}
 		this.current = { kind: 'error', text: cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : fallback };
+		return this.current;
 	}
 
 	clear(): void {
 		this.stopTimer();
 		this.current = undefined;
+	}
+
+	/** Clears `shown` if it is still the toast: one that no longer applies, not whatever replaced it. */
+	dismiss(shown: Feedback | undefined): void {
+		if (shown && this.current === shown) this.clear();
 	}
 
 	/** Shows the pending copy only when a request takes noticeably long, and its error until the next request. */

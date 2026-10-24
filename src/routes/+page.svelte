@@ -46,7 +46,7 @@
 	import { composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { FeedbackState } from '$lib/ui/feedback.svelte';
+	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
 	import { prepareUpload } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
@@ -60,6 +60,7 @@
 	import { WIDE_MIN } from '$lib/ui/breakpoints';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_SUMMARIES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
+	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
 	import AppShell from '$lib/design/components/AppShell.svelte';
 	import DropZone from '$lib/design/components/DropZone.svelte';
@@ -67,7 +68,7 @@
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
-	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
@@ -121,7 +122,10 @@
 	 */
 	const FIRST_PAINT_ITEMS = 40;
 	const REVEAL_CHUNK_ITEMS = 60;
-	/** How long a members listing stays current when the mention picker opens. */
+	/**
+	 * How long a members listing stays current when the mention picker opens, in a pane read without joining it: a
+	 * joined room's members came with its listing and stay current by memberships (§4.2.2), so it lists nothing.
+	 */
 	const MEMBERS_FRESH_MS = 15_000;
 	/** How long the open room's messages wait for its thread listing, so the cards arrive with them. */
 	const THREADS_WAIT_MS = 3000;
@@ -224,6 +228,11 @@
 	let offeringLink = $state(false);
 	/** How far back a linked message is looked for, in pages of history. */
 	const LINKED_MESSAGE_PAGES = 20;
+	/**
+	 * How far back a pane opening at its New divider loads to reach it, in pages of history: a client choice, so that
+	 * opening a room read long ago asks for a few pages, not its whole backlog. Further back, it opens at the latest.
+	 */
+	const DIVIDER_PAGES = 3;
 	/** How long a pushed room waits for its account and rooms before it is dropped. */
 	const PUSH_ROOM_WAIT_MS = 30_000;
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
@@ -283,6 +292,12 @@
 	});
 	/** The open thread's `room_id`; undefined in the room view. */
 	let activeThread = $state<string | undefined>();
+	/** The toast for the last thread that failed to load, cleared once it no longer applies. */
+	let threadError: Feedback | undefined;
+	/** The end of a wait on sending whose notice was put away (a wait of hours can outlast the visit). */
+	let dismissedSendWait = $state<number | undefined>();
+	/** The same for a wait on uploads. */
+	let dismissedUploadWait = $state<number | undefined>();
 	let selectedRoomId = $state<string | undefined>();
 	/** A thread this viewer created (`startThread`, `createThread`), opened once its `room_update` has arrived. */
 	let pendingOpen = $state<PendingThread | undefined>();
@@ -389,14 +404,33 @@
 	/** The open thread as the pane shows it: its copy held from before (a reload) while the live one loads, as the room's. */
 	let shownThreadRoom = $derived(session.heldCopy(threadRoom) ?? threadRoom);
 	let paneRoom = $derived(activeThread ? shownThreadRoom : activeRoom);
+	/** The live thread or room whose older pages load as the reader scrolls back: not a copy held from before. */
+	let olderSource = $derived(activeThread ? threadRoom : session.activeRoomHeld ? undefined : session.rooms.find((room) => room.id === session.activeRoomId));
 	/** What's new in the rooms and threads other than the one being read, as the rooms list counts it: the phone header's back button shows it. */
 	let unreadElsewhere = $derived(countElsewhere(unread.byRoom, paneRoom?.id));
 	let mentionsElsewhere = $derived(countElsewhere(mentions.byRoom, paneRoom?.id));
+	/** The waits the server asked for (`retry_after`) that are on, as the client holds them. */
+	let limits = $derived(snapshot.limits ?? {});
+	/** The pane's history waits out a refused `history`, which every room's history shares: it waits, then loads by itself. */
+	let historyWait = $derived(paneRoom?.limited ? limits.history : undefined);
+	/**
+	 * Sending waits out a refused `message`, with files or without, or a `write` wait (`ext:limits`), the longer if both
+	 * are on: Send counts down, and the draft stays. A reaction, join or the like that a `write` wait holds back is toasted.
+	 */
+	let sendWait = $derived(limits.write && limits.write.until >= (limits.message?.until ?? 0) ? limits.write : limits.message);
+	/** `sendWait`'s notice, unless it was put away. */
+	let sendNotice = $derived(sendWait && sendWait.until !== dismissedSendWait ? sendWait : undefined);
+	/** An `upload` wait (`ext:limits`) holds back only messages with files: Send counts down while files are attached, and text goes. */
+	let uploadWait = $derived(limits.upload);
+	/** `uploadWait`'s notice, unless it was put away. */
+	let uploadNotice = $derived(uploadWait && uploadWait.until !== dismissedUploadWait ? uploadWait : undefined);
+	/** Where Send counts down to: the wait that holds back this draft, the longer one if both do. */
+	let composerWait = $derived(Math.max(sendWait?.until ?? 0, drafts.files.length ? (uploadWait?.until ?? 0) : 0) || undefined);
 	/**
 	 * The open pane is catching up: its history is recovering or loading, or it shows a copy held from before
 	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
 	 */
-	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || session.showingHeld || (activeThread ? shownThreadRoom !== threadRoom : session.activeRoomHeld || awaitingThreads))));
+	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || historyWait || session.showingHeld || (activeThread ? shownThreadRoom !== threadRoom : session.activeRoomHeld || awaitingThreads))));
 	/** `paneCatchingUp` or a quiet reconnect, as the floating pill shows it: only once it outlasts a moment, then for a moment at least. */
 	let checkingShown = $state(false);
 	const checking = new SettleFlag((on) => (checkingShown = on));
@@ -433,17 +467,10 @@
 	let typingNames = $derived(snapshot.typing
 		.filter((entry) => entry.room === paneRoom?.id && entry.from.user_id !== session.you?.user_id)
 		.map((entry) => directory.name(entry.from)));
-	/** The first message after your read position, unless you wrote it: the New divider goes above it. */
-	let newDividerBefore = $derived.by(() => {
-		if (newDivider.room !== paneRoom?.id || newDivider.after === undefined) return undefined;
-		const after = newDivider.after;
-		// The first message row after the cursor.
-		for (const item of timeline) {
-			if (item.kind !== 'message' || compareLogIds(item.event.message_id, after) <= 0) continue;
-			return isOwn(item.event, session.you) ? undefined : item.event.message_id;
-		}
-		return undefined;
-	});
+	/** The first message after your read position, unless you wrote it or older unread ones are still to load: the New divider goes above it. */
+	let newDividerAt = $derived(newDivider.room === paneRoom?.id && newDivider.after !== undefined
+		? newDividerBefore(timeline, newDivider.after, session.you, Boolean(paneRoom?.olderAvailable))
+		: undefined);
 	// `server.agent` names the implementation, for debugging, not the server: the host is the label.
 	let backendLabel = $derived(backendHost(serverInput) || 'Apron');
 	let threadReplyCount = $derived(threadRoom?.loaded ? messages.length : undefined);
@@ -742,15 +769,16 @@
 		});
 	});
 
-	// A thread's first page may not fill the pane, leaving nothing to scroll back
-	// with: load older replies until it does or there are none.
+	// A thread's or a room's first page may not fill the pane, leaving nothing to
+	// scroll back with: load older pages until it does or there are none.
 	$effect(() => {
-		const room = threadRoom;
+		const room = olderSource;
 		void timeline.length;
 		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !messageScroll) return;
 		untrack(() => {
 			tick().then(() => {
-				if (messageScroll && messageScroll.scrollHeight <= messageScroll.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
+				// Not while the pane isn't laid out (a phone showing the rooms list): it would never fill, and load every page.
+				if (messageScroll && messageScroll.clientHeight > 0 && messageScroll.scrollHeight <= messageScroll.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
 			});
 		});
 	});
@@ -1427,6 +1455,8 @@
 		if (thread) mentions.clearRoom(thread);
 		stickToBottom = true;
 		reveal.from(timeline.length - FIRST_PAINT_ITEMS);
+		// A thread's failed load is about that thread: leaving it takes the toast too.
+		feedback.dismiss(threadError);
 	}
 
 	/** Writes the destination into the page's history entry, unless it is already there. */
@@ -1468,7 +1498,8 @@
 	function openDestination(roomId: string, thread: string | undefined): void {
 		if (!client) return;
 		if (activeRoom?.id !== roomId) session.chooseRoom(client, roomId);
-		setDestination(roomId, thread);
+		if (thread) showThread(roomId, thread);
+		else setDestination(roomId, undefined);
 		closeRooms();
 	}
 
@@ -1507,10 +1538,15 @@
 		chooseThread(thread);
 	}
 
-	/** Loads a thread's history (§4.3); a failure the client recorded is reported once. */
+	/**
+	 * Loads a thread's history (§4.3); a failure the client recorded is reported once. One the server refuses for a
+	 * while (`retry_after`) isn't a failure: the client waits it out and loads again, the timeline counting down
+	 * meanwhile. A load that succeeds takes the last failure's toast away.
+	 */
 	function loadThread(roomId: string): void {
-		client?.loadRoom(roomId).catch((cause: unknown) => {
-			if (session.rooms.find((room) => room.id === roomId)?.recoveryError) feedback.error(cause, 'Unable to load thread');
+		client?.loadRoom(roomId).then(() => feedback.dismiss(threadError), (cause: unknown) => {
+			if (!session.rooms.find((room) => room.id === roomId)?.recoveryError) return;
+			threadError = feedback.error(cause, 'Unable to load thread');
 		});
 	}
 
@@ -1545,6 +1581,16 @@
 	 */
 	function sendMessage(): void {
 		if (!client || !paneRoom || !canCompose) return;
+		// Sending waits as the server asked, files or not (the client holds back any message meanwhile): Send
+		// counts down, the draft and its files stay, and nothing goes by itself. A notice put away shows again.
+		if (sendWait && sendWait.until > Date.now()) {
+			dismissedSendWait = undefined;
+			return;
+		}
+		if (drafts.files.length && uploadWait && uploadWait.until > Date.now()) {
+			dismissedUploadWait = undefined;
+			return;
+		}
 		if (drafts.files.length) {
 			void sendFiles();
 			return;
@@ -1998,9 +2044,11 @@
 	/**
 	 * Opens the pane at its New divider, near the top with what is new below
 	 * it, as long as it still shows the latest: a jump, the reader, or sending
-	 * may have moved it first. A thread first loads its older replies back to
-	 * the divider (as a linked message's do), so the divider doesn't move up
-	 * out of view as they load. Either way the pane has landed after.
+	 * may have moved it first. A pane opened on its newest page first loads its
+	 * older messages back to the divider (as a linked message's do, but only
+	 * DIVIDER_PAGES of them), so the divider doesn't move up out of view as they
+	 * load. Not back to it by then, it shows no divider (`newDividerBefore`)
+	 * and stays at the latest. Either way the pane has landed after.
 	 */
 	async function landAtDivider(roomId: string): Promise<void> {
 		const visit = newDivider;
@@ -2010,7 +2058,7 @@
 		const still = () => newDivider === visit && paneRoom?.id === roomId && stickToBottom && pins === pinned;
 		try {
 			const after = visit.after;
-			for (let page = 0; page < LINKED_MESSAGE_PAGES && client && after !== undefined && still(); page++) {
+			for (let page = 0; page < DIVIDER_PAGES && client && after !== undefined && still(); page++) {
 				const oldest = paneRoom?.timeline.order[0];
 				if (!paneRoom?.olderAvailable || oldest === undefined || compareLogIds(oldest, after) <= 0) break;
 				try {
@@ -2019,7 +2067,8 @@
 					break;
 				}
 			}
-			const before = newDividerBefore;
+			// Still short of your read position: no divider, and the pane opens at the latest.
+			const before = newDividerAt;
 			if (before === undefined || !still()) return;
 			const index = timeline.findIndex((item) => item.kind === 'message' && item.event.message_id === before);
 			if (index >= 0 && index - LAND_CONTEXT_ITEMS < reveal.hidden) reveal.from(index - LAND_CONTEXT_ITEMS);
@@ -2092,12 +2141,12 @@
 	}
 
 	/**
-	 * A thread opens on its newest replies; reading back near the top loads the
-	 * page before them. The reader's place is kept: whatever was on screen stays
-	 * put while the older replies land above it.
+	 * A thread, or a room on its first visit, opens on its newest page; reading
+	 * back near the top loads the page before it. The reader's place is kept:
+	 * whatever was on screen stays put while the older messages land above it.
 	 */
 	async function loadOlderReplies(): Promise<void> {
-		const room = threadRoom;
+		const room = olderSource;
 		if (!client || !room || !messageScroll || !room.olderAvailable || room.loadingOlder) return;
 		const scroller = messageScroll;
 		const height = scroller.scrollHeight;
@@ -2384,6 +2433,8 @@
 	{@const event = rowEvent(view)}
 	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} onsave={(text, edits) => saveEdit(event, text, edits)} oncancel={() => (editingId = undefined)} />{/if}
 {/snippet}
+<!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
+{#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}
 {#snippet membersToggle()}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/snippet}
 <!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
 <!-- Kept while shut (hidden), so its border slides with the list's. -->
@@ -2433,6 +2484,7 @@
 				typing={typingNames}
 				replyCount={activeThread ? threadReplyCount : undefined}
 				moreReplies={Boolean(activeThread && threadRoom?.olderAvailable)}
+				waiting={Boolean(historyWait)}
 				canEdit={canEditPane}
 				editDisabled={!paneReady}
 				canLeave={session.canManageRooms && !session.readOnly && Boolean(paneRoom?.joined)}
@@ -2474,7 +2526,7 @@
 				{/if}
 				<!-- No messages yet: placeholders, not thread cards on their own. -->
 				{#if (messages.length === 0 || paneHeldBack) && paneCatchingUp}
-					<TimelineLoading label={activeThread ? 'Loading replies…' : 'Loading messages…'} rows={activeThread ? 3 : 6} />
+					<TimelineLoading label={activeThread ? 'Loading replies…' : 'Loading messages…'} rows={activeThread ? 3 : 6} notice={historyWait ? historyNotice : undefined} />
 				{:else if timeline.length === 0}
 					<EmptyState title={activeThread ? 'No replies yet' : 'Nothing here yet'} detail={activeThread ? 'Reply below to continue the thread.' : `Start the conversation in ${activeRoom.title}.`} />
 				{:else}
@@ -2502,7 +2554,7 @@
 								editing: editingId === event.message_id,
 								caps: capsFor(event)
 							}, messageContext)}
-							{#if event.message_id === newDividerBefore}
+							{#if event.message_id === newDividerAt}
 								<TimelineDivider kind="new" testid="new-divider" />
 							{/if}
 							<Message {view} on={messageHandlers} testids={MESSAGE_TESTIDS} editor={view.editing && messageEditor.component ? editMessage : undefined} embed={messageEmbed} />
@@ -2520,7 +2572,20 @@
 			</div>
 			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
-			{#if checkingShown && timeline.length > 0}<TimelineLoading float label={quietReconnect ? statusLabel(snapshot, session.stalled) : activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} />{/if}
+			{#if (checkingShown || historyWait) && timeline.length > 0}<TimelineLoading float label={quietReconnect ? statusLabel(snapshot, session.stalled) : activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} notice={historyWait ? historyNotice : undefined} />{/if}
+			<!-- A wait the server asked for on sending or uploads, above the composer it holds back. -->
+			{#if (sendNotice || uploadNotice) && !selection.active && !session.readOnly}
+				<div class="ap-shell-waits">
+					{#if sendNotice}
+						{@const wait = sendNotice}
+						<RateLimitNotice scope="message" until={wait.until} ondismiss={() => (dismissedSendWait = wait.until)} />
+					{/if}
+					{#if uploadNotice}
+						{@const wait = uploadNotice}
+						<RateLimitNotice scope="upload" until={wait.until} ondismiss={() => (dismissedUploadWait = wait.until)} />
+					{/if}
+				</div>
+			{/if}
 
 			{#if selection.active}
 				<SelectionBar
@@ -2545,7 +2610,8 @@
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
 					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply}
-					onmention={() => listMembers(MEMBERS_FRESH_MS)}
+					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
+					waitUntil={composerWait}
 				/>
 			{/if}
 		{:else}

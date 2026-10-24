@@ -39,14 +39,18 @@ import {
 } from './types';
 import {
 	DEFAULT_ROOM_ID,
+	RateLimitError,
 	type ChatClientOptions,
 	type ClientSnapshot,
 	type ConnectionStatus,
 	type CreateRoomOptions,
 	type EmbedEdits,
+	type HistoryStart,
 	type MessageFormat,
 	type MessagePatch,
 	type MessageResult,
+	type LimitScope,
+	type LimitWait,
 	type Notice,
 	type OperationHandle,
 	type PushRegistration,
@@ -73,6 +77,7 @@ import {
 	PASSKEY_IDLE_WAIT_MS,
 	PING_FRAME,
 	REQUEST_TIMEOUT_MS,
+	RequestTimeout,
 	RETRY_AFTER_MAX_MS,
 	ROOM_LIST_REUSE_MS,
 	STABLE_CONNECTION_MS,
@@ -87,6 +92,9 @@ import {
 	historyParams,
 	increment,
 	isEmbedded,
+	limitCategory,
+	limitHolds,
+	limitScope,
 	makeRequestId,
 	maxDefined,
 	mergeIdentity,
@@ -114,6 +122,7 @@ import {
 	type ValidHistoryResponse
 } from './client-internals';
 import { capabilitiesOf, serverSettings } from './client-views';
+import { HistoryQueue } from './history-queue';
 
 export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
@@ -268,7 +277,7 @@ export class ChatClient {
 	 * `room_id` for its threads, `#` and a `room_id` for its members), shared
 	 * while in flight and reused while recent.
 	 */
-	private readonly listings = new Map<string, { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string> }>();
+	private readonly listings = new Map<string, { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number }>();
 	/**
 	 * The `room_list` of joined rooms on this connection (capability `rooms`), until
 	 * its result arrives; `since` and `userId` when it lists only changes since
@@ -347,6 +356,13 @@ export class ChatClient {
 	 * users rename, or a value it rejects): not resent on reconnect.
 	 */
 	private declinedName?: string;
+	/** The waits the server asked for (`retry_after`, §1.1) that are still on, by scope, each with the server's words and the timer that ends it. */
+	private readonly limits = new Map<LimitScope, LimitWait & { message: string; timer: ReturnType<typeof setTimeout> }>();
+	/** Whose the waits in `limits` are: another identity's sign-in starts without them. */
+	private limitsUserId?: string;
+	/** Every `history` request not yet answered: the connection's one queue of them. */
+	private readonly historyQueue: HistoryQueue;
+	private readonly historyStart: HistoryStart;
 	private status: ConnectionStatus = 'idle';
 	private error?: string;
 	private showReconnectDivider = false;
@@ -364,14 +380,27 @@ export class ChatClient {
 	private connectionProbe?: AbortController;
 	private disconnectedAt?: number;
 
-	constructor(private serverUrl: string, displayName = '', webSocketFactory: WebSocketFactory = (url) => new WebSocket(url), private readonly now: () => number = () => Date.now()) {
+	constructor(
+		private serverUrl: string,
+		displayName = '',
+		webSocketFactory: WebSocketFactory = (url) => new WebSocket(url),
+		private readonly now: () => number = () => Date.now(),
+		{ historyStart = 'newest', historyConcurrency }: Pick<ChatClientOptions, 'historyStart' | 'historyConcurrency'> = {}
+	) {
+		this.historyStart = historyStart;
+		this.historyQueue = new HistoryQueue({
+			send: (params, allowBeforeAuth) => this.enqueueRequest('history', params, { visible: false, allowBeforeAuth }),
+			limited: () => Boolean(this.limited('history')),
+			activeRoomId: () => this.activeRoomId,
+			emit: () => this.emit()
+		}, historyConcurrency);
 		this.webSocketFactory = webSocketFactory;
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
 	}
 
 	static fromOptions(options: ChatClientOptions): ChatClient {
-		const client = new ChatClient(options.serverUrl, options.displayName, options.webSocketFactory, options.now);
+		const client = new ChatClient(options.serverUrl, options.displayName, options.webSocketFactory, options.now, options);
 		if (options.onChange) client.subscribe(options.onChange);
 		return client;
 	}
@@ -489,6 +518,8 @@ export class ChatClient {
 			request.reject(new Error('Connection stopped'));
 		}
 		this.requests.clear();
+		this.historyQueue.dropHeld('Connection stopped');
+		this.clearLimits();
 		this.signInProposal = undefined;
 		for (const connection of [...this.signInConnections]) connection.close(new Error('Connection stopped'));
 		if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'client stopped');
@@ -619,6 +650,7 @@ export class ChatClient {
 					timeline: room.timeline,
 					recovering: Boolean(room.recovery),
 					...(room.recoveryError ? { recoveryError: room.recoveryError } : {}),
+					...(this.historyLimited(room) ? { limited: true as const } : {}),
 					loaded: !history || (this.loadsOnOpen(room) ? this.threadLoaded(room) : room.checkpoint !== undefined),
 					loading: room.loading,
 					...(this.hasOlderRecords(room) ? { olderAvailable: true } : {}),
@@ -651,6 +683,7 @@ export class ChatClient {
 			threadDirectory: Object.fromEntries([...this.threadDirectory].map(([parent, listings]) => [parent, listings.map((listing) => this.withJoined(listing))])),
 			showReconnectDivider: this.showReconnectDivider,
 			retryAfterMs: this.retryAfterRemaining(),
+			...(this.limits.size ? { limits: Object.fromEntries([...this.limits].map(([scope, { until }]) => [scope, { until }])) } : {}),
 			...(this.reconnectHeld ? { held: true } : {}),
 			...(this.reconnectHeld && this.signInNeeded ? { signInNeeded: this.signInNeeded } : {}),
 			...(this.disconnectedAt !== undefined ? { disconnectedAt: this.disconnectedAt } : {})
@@ -1653,9 +1686,9 @@ export class ChatClient {
 		}, (cause: unknown) => {
 			if (this.idleReport !== report) return;
 			report.sending = false;
-			const { code, retryAfterMs } = cause as Error & { code?: number; retryAfterMs?: number };
+			const { code } = cause as Error & { code?: number };
 			if (code === undefined) report.applied = undefined;
-			let wait = retryAfterMs;
+			let wait = cause instanceof RateLimitError ? Math.max(0, cause.retryAt - Date.now()) : undefined;
 			if (wait === undefined) {
 				const failures = report.failures = (report.failures ?? 0) + 1;
 				wait = Math.min(IDLE_RETRY_MS * 2 ** (failures - 1), IDLE_RETRY_MAX_MS);
@@ -1957,26 +1990,31 @@ export class ChatClient {
 	}
 
 	/**
-	 * Listing is costly on some servers and rate limited on most, and several
+	 * Listing can be costly, any server may rate-limit it, and several
 	 * parts of the UI want it at once: a request in flight, or one answered
-	 * within `maxAgeMs`, serves them all.
+	 * within `maxAgeMs`, serves them all. One refused for a while
+	 * (`retry_after`) is refused again, without asking, until the wait is over.
 	 */
 	private cachedListing(
 		key: string, params: JsonObject, maxAgeMs: number, pick: (listed: { joined: RoomListing[]; not_joined: RoomListing[] }) => RoomListing[]
 	): Promise<RoomListing[]> {
 		const recent = this.listings.get(key);
-		if (recent && Date.now() - recent.at < maxAgeMs) return recent.promise.then((listings) => listings.map((listing) => this.withJoined(listing)));
+		if (recent && (recent.until !== undefined ? Date.now() < recent.until : Date.now() - recent.at < maxAgeMs)) {
+			return recent.promise.then((listings) => listings.map((listing) => this.withJoined(listing)));
+		}
 		const promise = this.enqueueRequest('room_list', params, { visible: false, allowBeforeAuth: false }).promise.then((result) => {
 			const listings = pick(this.applyRoomList(result, false));
 			this.emit();
 			return listings;
 		});
-		const entry: { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string> } = { at: Date.now(), promise };
+		const entry: { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number } = { at: Date.now(), promise };
 		this.listings.set(key, entry);
 		promise.then((listings) => {
 			entry.rooms = new Set(listings.map((listing) => listing.id));
-		}, () => {
-			if (this.listings.get(key) === entry) this.listings.delete(key);
+		}, (cause: unknown) => {
+			if (this.listings.get(key) !== entry) return;
+			if (cause instanceof RateLimitError) entry.until = cause.retryAt;
+			else this.listings.delete(key);
 		});
 		return promise.then((listings) => listings.map((listing) => this.withJoined(listing)));
 	}
@@ -2019,6 +2057,18 @@ export class ChatClient {
 		}, (cause: Error) => {
 			if (socket !== this.socket || this.joinedListing !== listing) return;
 			this.joinedListing = undefined;
+			if (cause instanceof RateLimitError && this.authenticated) {
+				// Refused for a while (§1.1): rather than leave the connection with no rooms, list them again
+				// once the wait is over, as long as it lasts. Meanwhile this stands as the listing under way.
+				this.joinedListing = listing;
+				setTimeout(() => {
+					if (socket !== this.socket || this.joinedListing !== listing) return;
+					this.listJoinedRooms(since);
+					this.emit();
+				}, Math.max(0, cause.retryAt - Date.now()));
+				this.emit();
+				return;
+			}
 			this.settleHeldStatuses();
 			// Behind a failed `auth` the listing likely failed too; that failure speaks for itself.
 			if (this.authenticated) this.error = `Unable to list your rooms: ${cause.message}`;
@@ -2076,7 +2126,12 @@ export class ChatClient {
 				for (const value of result.left) {
 					if (isJsonObject(value) && typeof value.room_id === 'string') this.hideRoom(value.room_id);
 				}
-				for (const room of this.rooms.values()) if (room.kind === 'pending') this.markJoined(room);
+				for (const room of this.rooms.values()) {
+					if (room.kind !== 'pending') continue;
+					this.markJoined(room);
+					// Left out: nothing in it moved past its checkpoint, so its resume, if still queued, needn't go.
+					this.settleQueuedResume(room, room.checkpoint);
+				}
 			} else {
 				// A full listing: `joined` is the whole set; anything else joined was left meanwhile.
 				for (const room of [...this.rooms.values()]) {
@@ -2220,7 +2275,7 @@ export class ChatClient {
 			if (!needed) return Promise.resolve();
 			const settled = new Promise<void>((resolve, reject) => room.waiters.push({ resolve, reject }));
 			if (!room.recovery && head) {
-				this.startRecovery(room, head, Boolean(room.recoveryError) || room.checkpoint === undefined);
+				this.startRecovery(room, head, this.rebuilds(room));
 				this.emit();
 			}
 			return settled;
@@ -2244,9 +2299,7 @@ export class ChatClient {
 				// First load: only the newest page, as recovery without a
 				// checkpoint may (§4.3.5). Everything up to H is then covered for
 				// live delivery, and older pages load on demand.
-				const result = await this.enqueueRequest('history', { room_id: room.id, before: head, limit: THREAD_PAGE_SIZE }, {
-					visible: false, allowBeforeAuth: false
-				}).promise;
+				const result = await this.historyQueue.request(room.id, { room_id: room.id, before: head, limit: THREAD_PAGE_SIZE }, { retry: true }).promise;
 				if (stale()) return;
 				if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 				this.observeHistoryResponse(room, result);
@@ -2260,9 +2313,7 @@ export class ChatClient {
 			let checkpoint: string | undefined = room.loadCheckpoint;
 			let after: string | undefined = maxDefined(checkpoint === undefined ? undefined : increment(checkpoint), room.floor) ?? FIRST_LOG_ID;
 			while (after === undefined || compareLogIds(after, head) <= 0) {
-				const result = await this.enqueueRequest('history', historyParams(room.id, after, head), {
-					visible: false, allowBeforeAuth: false
-				}).promise;
+				const result = await this.historyQueue.request(room.id, historyParams(room.id, after, head), { retry: true }).promise;
 				if (stale()) return;
 				if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 				this.observeHistoryResponse(room, result);
@@ -2312,9 +2363,7 @@ export class ChatClient {
 		this.emit();
 		try {
 			const before = decrement(room.olderBefore);
-			const result = await this.enqueueRequest('history', { room_id: room.id, before, limit: THREAD_PAGE_SIZE }, {
-				visible: false, allowBeforeAuth: false
-			}).promise;
+			const result = await this.historyQueue.request(room.id, { room_id: room.id, before, limit: THREAD_PAGE_SIZE }, { retry: true }).promise;
 			if (stale()) return;
 			if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 			this.observeHistoryResponse(room, result);
@@ -2684,6 +2733,8 @@ export class ChatClient {
 			this.emit();
 			return false;
 		}
+		// The server's waits were for whoever was signed in: another identity has its own.
+		if (this.limitsUserId !== identity.user_id) this.clearLimits();
 		// A sign-in signs the connection in as a user it isn't already signed in
 		// as (§3.2). A passkey added on this signed-in connection (`added`) is
 		// not one, nor is a repeat `auth` as the same user: the server sends no
@@ -3132,6 +3183,28 @@ export class ChatClient {
 			this.observeBoundary(room, decoded.delivery.history_log_id, listedHead ?? room.latestLogId);
 		}
 		this.recoverIfBehind(room, !existing);
+		if (listedHead !== undefined) this.settleQueuedResume(room, room.latestLogId);
+	}
+
+	/**
+	 * A kept room's resume, sent right behind `auth` before any head was known
+	 * (`requestRooms`), that is still waiting its turn in the history queue,
+	 * now that a frame says the room's head: at the checkpoint it needs no
+	 * request at all; past it, it pages forward to that head (§4.3.5).
+	 */
+	private settleQueuedResume(room: RoomState, head: string | undefined): void {
+		const recovery = room.recovery;
+		if (!recovery || recovery.head !== undefined || recovery.newest || head === undefined || recovery.requestId === undefined) return;
+		const job = this.historyQueue.queued(recovery.requestId);
+		if (!job) return;
+		if (room.checkpoint !== undefined && compareLogIds(head, room.checkpoint) <= 0) {
+			recovery.requestId = undefined;
+			this.historyQueue.cancel(job.id, 'Nothing to recover');
+			this.finishRecovery(room);
+			return;
+		}
+		recovery.head = head;
+		job.params = historyParams(room.id, recovery.nextAfter, head);
 	}
 
 	/**
@@ -3384,15 +3457,19 @@ export class ChatClient {
 	}
 
 	private startRecovery(room: RoomState, head: string | undefined, rebuild: boolean, preserveBuffer = false): void {
+		room.limited = false;
 		const retained = preserveBuffer
 			? (room.recovery?.buffer ?? []).filter((live) => isEmbedded(live) || room.floor === undefined || compareLogIds(live.record.log_id, room.floor) >= 0)
 			: [];
 		this.retireRecoveryRequest(room);
 		const generation = ++room.recoveryGeneration;
 		if (rebuild) {
-			this.store.clearRoom(room.id);
-			for (const live of retained) this.applyLive(live);
-			room.timeline = createTimeline(room.id);
+			// Older pages loaded before go with the rest: a load of one still to go is for nothing.
+			this.historyQueue.dropRoom(room.id, 'History recovery superseded');
+			room.olderBefore = undefined;
+			room.hasOlder = false;
+			room.loadingOlder = false;
+			room.loadGeneration += 1;
 		}
 		// Without a known bound, start at the lowest possible log_id.
 		const nextAfter = (rebuild
@@ -3401,16 +3478,45 @@ export class ChatClient {
 		room.recovery = {
 			...(head !== undefined ? { head } : {}),
 			nextAfter,
+			...(rebuild && this.historyStart === 'newest' ? { newest: true } : {}),
+			...(rebuild ? { rebuild: true } : {}),
 			buffer: retained,
 			bufferBytes: retained.reduce((bytes, live) => bytes + recordBytes(live.record), 0),
 			generation
 		};
 		room.recoveryError = undefined;
 		if (head !== undefined && compareLogIds(nextAfter, head) > 0) {
+			this.clearForRebuild(room);
 			this.finishRecovery(room);
 			return;
 		}
 		this.requestHistoryPage(room, generation);
+	}
+
+	/**
+	 * A rebuild replaces what the room had once its first page is in, not when
+	 * it starts: until then (hours, when a history wait holds the page) the
+	 * room shows what it had. Live records since then come back with the page.
+	 */
+	private clearForRebuild(room: RoomState): void {
+		const recovery = room.recovery;
+		if (!recovery?.rebuild) return;
+		recovery.rebuild = false;
+		this.store.clearRoom(room.id);
+		for (const live of recovery.buffer) this.applyLive(live);
+		room.timeline = createTimeline(room.id);
+	}
+
+	/**
+	 * Whether a room's next recovery rebuilds it rather than going on from its
+	 * checkpoint: it has none, its last recovery failed, or the floor has
+	 * passed it. A recovery refused for the history wait failed only for now:
+	 * it left the checkpoint where it stopped (`abortRecovery`).
+	 */
+	private rebuilds(room: RoomState): boolean {
+		if (room.checkpoint === undefined) return true;
+		if (!room.limited) return Boolean(room.recoveryError);
+		return room.floor !== undefined && compareLogIds(increment(room.checkpoint), room.floor) < 0;
 	}
 
 	private requestHistoryPage(room: RoomState, generation: number): void {
@@ -3419,15 +3525,20 @@ export class ChatClient {
 		// A room kept from the last connection resumes right behind `auth` (§3.2).
 		const pipelined = !this.authenticated && this.authRequested;
 		if (!this.authenticated && !pipelined) return;
-		const request = this.enqueueRequest('history', historyParams(room.id, recovery.nextAfter, recovery.head), {
-			visible: false, allowBeforeAuth: pipelined
-		});
+		// Without a checkpoint, the newest page (§4.3.5): up to H, or to the head the page reports when H isn't known yet.
+		const params = recovery.newest
+			? { room_id: room.id, ...(recovery.head !== undefined ? { before: recovery.head } : {}), limit: THREAD_PAGE_SIZE }
+			: historyParams(room.id, recovery.nextAfter, recovery.head);
+		const request = this.historyQueue.request(room.id, params, { allowBeforeAuth: pipelined });
 		recovery.requestId = request.id;
 		request.promise.then((result) => {
 			if (room.recovery?.requestId !== request.id || room.recovery.generation !== generation) return;
 			this.applyHistoryPage(room, result, generation);
 		}).catch((cause: Error) => {
 			if (!room.recovery || room.recovery.requestId !== request.id || room.recovery.generation !== generation) return;
+			// A page refused with `retry_after` (§1.1) is only a wait: what was recovered shows
+			// meanwhile, and the room recovers again by itself once it is over (`endLimit`).
+			room.limited = cause instanceof RateLimitError && cause.scope === 'history';
 			this.abortRecovery(room, cause.message);
 		});
 	}
@@ -3443,7 +3554,15 @@ export class ChatClient {
 		recovery.head ??= result.latest_log_id;
 		this.observeHistoryResponse(room, result);
 		if (room.recovery !== recovery || recovery.generation !== generation) return;
+		this.clearForRebuild(room);
 		this.applyPage(room, result);
+		if (recovery.newest) {
+			// Everything up to H is covered for live delivery; what is older loads as the reader scrolls back.
+			this.noteOlderPage(room, result);
+			this.finishRecovery(room);
+			this.emit();
+			return;
+		}
 		const lastId = isLogId(result.last_log_id) ? result.last_log_id : undefined;
 		if (result.more) {
 			if (!lastId || (recovery.nextAfter !== undefined && compareLogIds(lastId, recovery.nextAfter) < 0) || compareLogIds(lastId, recovery.head) >= 0) {
@@ -3537,6 +3656,9 @@ export class ChatClient {
 		}
 		recovery.buffer = recovery.buffer.filter((live) => isEmbedded(live) || compareLogIds(live.record.log_id, effective) >= 0);
 		recovery.bufferBytes = recovery.buffer.reduce((bytes, live) => bytes + recordBytes(live.record), 0);
+		// The newest page needs no position the bound could pass: the server keeps it to what is retained, and
+		// what it sends below the bound is skipped (`applyPage`).
+		if (recovery.newest) return;
 		// `nextAfter` is the first unprocessed position. Equality is safe; a
 		// strictly larger bound means a retained gap was discarded underneath us.
 		if (recovery.nextAfter === undefined || compareLogIds(effective, recovery.nextAfter) > 0) {
@@ -3555,7 +3677,14 @@ export class ChatClient {
 	}
 
 	private abortRecovery(room: RoomState, message: string): void {
-		if (!room.recovery) return;
+		const recovery = room.recovery;
+		if (!recovery) return;
+		if (room.limited) {
+			// Only a wait: once it is over the room goes on from what this recovered, or a rebuild that
+			// hadn't replaced what the room had yet starts again.
+			if (recovery.rebuild) room.checkpoint = undefined;
+			else if (recovery.nextAfter !== undefined && compareLogIds(recovery.nextAfter, FIRST_LOG_ID) > 0) room.checkpoint = decrement(recovery.nextAfter);
+		}
 		this.retireRecoveryRequest(room);
 		room.recoveryError = message;
 		// Live delivery remains authoritative even when history is incomplete:
@@ -3570,15 +3699,14 @@ export class ChatClient {
 		const id = room.recovery?.requestId;
 		if (!id) return;
 		room.recovery!.requestId = undefined;
-		const request = this.requests.get(id);
-		if (!request) return;
-		clearTimeout(request.timer);
-		this.requests.delete(id);
-		request.reject(new Error('History recovery superseded'));
+		this.historyQueue.cancel(id, 'History recovery superseded');
 	}
 
 	private discardRoom(room: RoomState, reason: string): void {
 		this.retireRecoveryRequest(room);
+		// A thread's load, an older page: for nothing now, they would only go ahead of what is wanted.
+		this.historyQueue.dropRoom(room.id, reason);
+		room.limited = false;
 		room.recovery = undefined;
 		room.loadGeneration += 1;
 		for (const waiter of room.waiters.splice(0)) waiter.reject(new Error(reason));
@@ -3613,6 +3741,7 @@ export class ChatClient {
 		room.loading = false;
 		room.loadingOlder = false;
 		room.recoveryError = undefined;
+		room.limited = false;
 		// A thread's checkpoint predates the gap; the next load catches up from it.
 		if (room.loadCheckpoint !== undefined) room.resumed = true;
 		// Reaction summaries depend on the viewer, who may be a new guest.
@@ -3714,28 +3843,112 @@ export class ChatClient {
 
 	private handleResponse(id: string, result: JsonObject, rpcError?: RpcError): void {
 		const request = this.requests.get(id);
-		if (!request) return;
+		if (!request) {
+			// A history request's answer after it timed out frees its place in the queue.
+			this.historyQueue.answered(id);
+			return;
+		}
 		this.requests.delete(id);
 		clearTimeout(request.timer);
-		if (rpcError) request.reject(this.errorFromRpc(isJsonObject(rpcError) ? rpcError : { code: -32603, message: 'Invalid error' }, request.method === 'auth'));
+		if (rpcError) request.reject(this.errorFromRpc(isJsonObject(rpcError) ? rpcError : { code: -32603, message: 'Invalid error' }, request));
 		else request.resolve(result);
 		this.emit();
 	}
 
 	/**
-	 * `connection`: a refused `auth`, whose `retry_after` holds back reconnecting.
-	 * Any other request's `retry_after` is that request's limit (a throttled
-	 * listing or history page) and stays on its error for the caller.
+	 * The error a refused `request` rejects with. `retry_after` makes it a
+	 * `RateLimitError`: on `auth` it holds back reconnecting; on any other
+	 * request it is that request's wait, and it holds back what `limitScope`
+	 * says until the wait is over (`limits`): the category in `data.ext.limits`
+	 * counts only while the server advertises `ext:limits`.
 	 */
-	private errorFromRpc(rpcError: RpcError, connection = false): Error {
+	private errorFromRpc(rpcError: RpcError, request: PendingRequest): Error {
 		const retryAfter = retryAfterMilliseconds(rpcError);
-		if (retryAfter !== undefined && connection) {
-			this.retryAfterUntil = Math.max(this.retryAfterUntil, Date.now() + retryAfter);
+		if (retryAfter === undefined) {
+			const error = new Error(userFacingRpcError(rpcError));
+			(error as Error & { code?: number }).code = rpcError.code;
+			return error;
 		}
-		const error = new Error(userFacingRpcError(rpcError));
-		(error as Error & { code?: number; retryAfterMs?: number }).code = rpcError.code;
-		if (retryAfter !== undefined) (error as Error & { code?: number; retryAfterMs?: number }).retryAfterMs = retryAfter;
-		return error;
+		const until = Date.now() + retryAfter;
+		if (request.method === 'auth') {
+			this.retryAfterUntil = Math.max(this.retryAfterUntil, until);
+			return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', until);
+		}
+		const scope = limitScope(request.method, request.params, this.hasCap('ext:limits') ? limitCategory(rpcError) : undefined);
+		if (scope) this.noteLimit(scope, until, rpcError.message ?? '', this.you?.user_id ?? this.resumingUserId);
+		return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', until, scope, request.method);
+	}
+
+	/**
+	 * A wait for `scope` until `until` (at most RETRY_AFTER_MAX_MS away), asked
+	 * of `userId` in the server's words `message`: it holds what it covers back
+	 * until then, unless one already runs longer.
+	 */
+	private noteLimit(scope: LimitScope, until: number, message: string, userId: string | undefined): void {
+		if (userId !== this.limitsUserId) {
+			for (const { timer } of this.limits.values()) clearTimeout(timer);
+			this.limits.clear();
+			this.limitsUserId = userId;
+		}
+		const current = this.limits.get(scope);
+		if (current && current.until >= until) return;
+		if (current) clearTimeout(current.timer);
+		const timer = setTimeout(() => this.endLimit(scope), Math.max(0, until - Date.now()));
+		this.limits.set(scope, { until, message, timer });
+	}
+
+	/**
+	 * A wait is over: held history goes now, and rooms whose recovery was
+	 * refused for it go on from where it stopped (`rebuilds`).
+	 */
+	private endLimit(scope: LimitScope): void {
+		if (!this.limits.has(scope)) return;
+		this.limits.delete(scope);
+		if (scope === 'history') {
+			this.historyQueue.pump();
+			for (const room of [...this.rooms.values()]) {
+				if (room.limited && !room.recovery && this.authenticated && this.recoversAutomatically(room)) this.startRecovery(room, room.latestLogId, this.rebuilds(room));
+			}
+		}
+		this.emit();
+	}
+
+	/** The wait on `scope`, while it is on. */
+	private limited(scope: LimitScope): (LimitWait & { message: string }) | undefined {
+		const limit = this.limits.get(scope);
+		return limit && limit.until > Date.now() ? limit : undefined;
+	}
+
+	/**
+	 * A request that a wait holds back (`limitHolds`): refused here rather than
+	 * sent, until the longest such wait is over (§1.1). An `ext:limits` wait
+	 * keeps the server's words, which say what limit it is.
+	 */
+	private heldBack(method: string, params: JsonObject): RateLimitError | undefined {
+		let held: { scope: LimitScope; wait: LimitWait & { message: string } } | undefined;
+		for (const scope of this.limits.keys()) {
+			const wait = this.limited(scope);
+			if (wait && limitHolds(scope, method, params) && (!held || wait.until > held.wait.until)) held = { scope, wait };
+		}
+		if (!held) return undefined;
+		const { scope, wait } = held;
+		const words = scope === 'message' ? 'Sending is paused' : wait.message;
+		const seconds = Math.max(1, Math.ceil((wait.until - Date.now()) / 1000));
+		return new RateLimitError(userFacingRpcError({ code: -32002, message: words, data: { retry_after: seconds } }), words, wait.until, scope, method);
+	}
+
+	/** A room's history waits out a `history` wait: its recovery was refused for it, or a page of it is held. */
+	private historyLimited(room: RoomState): boolean {
+		if (!this.limited('history')) return false;
+		return room.limited || this.historyQueue.holds(room.id);
+	}
+
+	/** Ends every wait: a new server or identity, or a stopped client, learns its limits afresh. History held for one goes. */
+	private clearLimits(): void {
+		if (!this.limits.size) return;
+		for (const { timer } of this.limits.values()) clearTimeout(timer);
+		this.limits.clear();
+		this.historyQueue.pump();
 	}
 
 	private enqueueRequest<T extends JsonObject = JsonObject>(
@@ -3747,6 +3960,8 @@ export class ChatClient {
 		if (this.passkeyAbort && method !== 'auth') {
 			return rejectedHandle<T>(method, new Error('Finish signing in before sending requests'), id);
 		}
+		const held = this.heldBack(method, params);
+		if (held) return rejectedHandle<T>(method, held, id);
 		let resolvePromise!: (result: T) => void;
 		let rejectPromise!: (error: Error) => void;
 		const promise = new Promise<T>((resolve, reject) => {
@@ -3757,7 +3972,7 @@ export class ChatClient {
 			const request = this.requests.get(id);
 			if (!request) return;
 			this.requests.delete(id);
-			request.reject(new Error(`${method} request timed out`));
+			request.reject(new RequestTimeout(method));
 			this.emit();
 		}, REQUEST_TIMEOUT_MS);
 		const request: PendingRequest = {
@@ -3802,6 +4017,7 @@ export class ChatClient {
 			this.requests.delete(id);
 			request.reject(new Error('Connection closed; delivery is uncertain. Please retry'));
 		}
+		this.historyQueue.dropHeld('Connection closed');
 	}
 
 	private resetSession(reason: string): void {
@@ -3811,6 +4027,8 @@ export class ChatClient {
 			request.reject(new Error(reason));
 		}
 		this.requests.clear();
+		this.historyQueue.dropHeld(reason);
+		this.clearLimits();
 		this.discardProtocolView(reason);
 		this.authenticated = false;
 		this.authRequested = false;

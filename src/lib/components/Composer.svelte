@@ -79,8 +79,10 @@
 		oncancelreply: () => void;
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
+		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
+		waitUntil?: number;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], canUploadAudio = true, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
 
 	/** Unique per composer, for the open picker's ID. */
 	const uid = $props.id();
@@ -370,6 +372,8 @@
 	const onHandheld = handheld();
 
 	function send(): void {
+		// Enter while sending waits: the draft stays as it is.
+		if (waitUntil !== undefined && waitUntil > Date.now()) return;
 		closeCompletions();
 		dismissedAutocomplete = undefined;
 		collapse(true);
@@ -628,6 +632,7 @@
 	{recording}
 	recordingTime={clockLabel(recordSeconds ?? 0)}
 	onsend={send}
+	{waitUntil}
 	field={editable}
 	onemoji={openEmoji}
 	{emojiOpen}

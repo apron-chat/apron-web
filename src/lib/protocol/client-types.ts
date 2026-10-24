@@ -96,6 +96,12 @@ export interface RoomSnapshot {
 	/** The last recovery or `loadRoom` failed; `loadRoom` retries. */
 	recoveryError?: string;
 	/**
+	 * Its history waits out a refused `history` request's `retry_after`
+	 * (`limits.history`): a page was refused, or is held until the wait is
+	 * over. It loads again by itself then.
+	 */
+	limited?: true;
+	/**
 	 * History for this room has been loaded on this connection: always true
 	 * without capability `history`; for top-level rooms after the first recovery; for
 	 * threads after `loadRoom` completed.
@@ -150,6 +156,40 @@ export interface RoomListing {
 	memberCount?: number;
 	/** The user has joined it: it is in the joined set on this connection. */
 	joined: boolean;
+}
+
+/**
+ * What a wait the server asked for (`retry_after`, §1.1) holds back: further
+ * requests of the refused request's method, `history` pages or `message`
+ * sends (with files or without); or, with extension `ext:limits`, the
+ * category the server gave: posts, reactions, joins, leaves and room changes
+ * (`write`), or only requests that add an upload (`upload`).
+ */
+export type LimitScope = 'history' | 'message' | 'write' | 'upload';
+
+/** A wait the server asked for: until requests of its scope go again, in epoch milliseconds. */
+export interface LimitWait {
+	until: number;
+}
+
+/**
+ * A request refused with `retry_after` (§1.1): what it holds back (`scope`,
+ * undefined when that is only itself), when that may go again (`retryAt`,
+ * epoch milliseconds), the server's own words, and the refused request's
+ * `method`. `message` is the same as one line, for callers that show only text.
+ */
+export class RateLimitError extends Error {
+	readonly code = -32002;
+	constructor(
+		message: string,
+		readonly serverMessage: string,
+		readonly retryAt: number,
+		readonly scope?: LimitScope,
+		readonly method?: string
+	) {
+		super(message);
+		this.name = 'RateLimitError';
+	}
 }
 
 /** The room a client posts to without naming one: the server's default room (§3.5), before its `room_id` is known. */
@@ -301,6 +341,13 @@ export interface ClientSnapshot {
 	showReconnectDivider: boolean;
 	/** Server supplied retry delay for the most recent temporary limit. */
 	retryAfterMs?: number;
+	/**
+	 * The waits the server asked for (`retry_after`, §1.1) that are still on,
+	 * by what they hold back (`LimitScope`). Meanwhile history requests wait
+	 * to be sent, and the other requests a wait holds back are refused here
+	 * without being sent. Absent when none is.
+	 */
+	limits?: Partial<Record<LimitScope, LimitWait>>;
 	/** The server denied the connection (§1.1): no reconnect until the user acts (`retryNow`). */
 	held?: boolean;
 	/**
@@ -417,4 +464,24 @@ export interface ChatClientOptions {
 	onChange?: (snapshot: ClientSnapshot) => void;
 	/** The clock that times disconnections (epoch milliseconds); `Date.now` by default. */
 	now?: () => number;
+	/**
+	 * How a top-level room without a checkpoint recovers (`HistoryStart`);
+	 * `newest` by default. For the shared session fixtures (the protocol
+	 * submodule), which page such a room `forward`: production code leaves it.
+	 */
+	historyStart?: HistoryStart;
+	/**
+	 * How many `history` requests may be out at a time on a connection; one by
+	 * default, to pace them (`HISTORY_CONCURRENCY`). For the shared session fixtures,
+	 * which interleave them: production code leaves it.
+	 */
+	historyConcurrency?: number;
 }
+
+/**
+ * How a top-level room recovers with no checkpoint to resume from (§4.3.5
+ * step 3), on its first visit or after a rebuild: its `newest` page, older
+ * ones loading on demand (`loadOlder`) as threads do, or every page
+ * `forward` from the lower bound.
+ */
+export type HistoryStart = 'newest' | 'forward';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { capabilitiesOf, type ClientSnapshot } from '$lib/protocol/client';
 import { addError, connectionStateOf, offeredSchemes, schemeUse, statusLabel, wayBackNudge, wayBackWords } from './connection';
-import { retryAfterLabel } from './time';
+import { retryAfterLabel } from '$lib/words';
 
 const snapshot = (fields: Partial<ClientSnapshot>): ClientSnapshot => ({
 	status: 'idle', authenticated: false, capabilities: capabilitiesOf(undefined), rooms: [], pending: [], typing: [], users: {}, recordedUsers: {}, userAliases: {}, uploads: {}, threadDirectory: {}, showReconnectDivider: false, ...fields

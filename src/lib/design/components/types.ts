@@ -392,3 +392,6 @@ export interface MenuChoice {
 	/** A `data-testid` for its item. */
 	testid?: string;
 }
+
+/** What a wait the server asked for (`retry_after`, §1.1) holds back: pages of history (`history`), sending (`message`), or files (`upload`). */
+export type LimitScope = 'history' | 'message' | 'upload';
