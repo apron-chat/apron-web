@@ -1,0 +1,164 @@
+import { describe, expect, it } from 'vitest';
+import { RateLimitError } from './client-types';
+import { HistoryQueue } from './history-queue';
+import type { JsonObject } from './types';
+
+/**
+ * The history queue on its own, against a connection that only records what
+ * it sends: order, how many are out, holding during a wait, and taking back.
+ * Through the client in client.recovery.test.ts and client.limits.test.ts.
+ */
+interface Sent {
+	id: string;
+	params: JsonObject;
+	resolve: (result: JsonObject) => void;
+	reject: (error: Error) => void;
+}
+
+function connection(concurrency?: number) {
+	const sent: Sent[] = [];
+	const aborted: Array<{ id: string; reason: string }> = [];
+	const state = { limited: false, active: undefined as string | undefined, emits: 0 };
+	let next = 0;
+	const queue = new HistoryQueue({
+		send: (params) => {
+			const id = `req_${next++}`;
+			const promise = new Promise<JsonObject>((resolve, reject) => {
+				sent.push({ id, params, resolve, reject });
+			});
+			return { id, promise };
+		},
+		abort: (id, reason) => {
+			aborted.push({ id, reason });
+			const request = sent.find((entry) => entry.id === id);
+			request?.reject(new Error(reason));
+		},
+		limited: () => state.limited,
+		activeRoomId: () => state.active,
+		emit: () => {
+			state.emits += 1;
+		}
+	}, concurrency);
+	const rooms = () => sent.map((entry) => entry.params.room_id);
+	return { queue, sent, aborted, state, rooms };
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const refused = () => new RateLimitError('History limited. Try again in 5s.', 'History limited', 0, 5_000, 'history');
+
+describe('the history queue', () => {
+	it('sends one at a time by default, what the reader waits for first, then the rest in the order asked', async () => {
+		const { queue, sent, state, rooms } = connection();
+		state.active = 'open';
+		queue.request('a', { room_id: 'a' });
+		queue.request('b', { room_id: 'b' });
+		queue.request('open', { room_id: 'open' });
+		queue.request('thread', { room_id: 'thread' }, { retry: true });
+		expect(rooms()).toEqual(['a']);
+		for (const expected of [['a', 'open'], ['a', 'open', 'thread'], ['a', 'open', 'thread', 'b']]) {
+			sent.at(-1)!.resolve({});
+			await settle();
+			expect(rooms()).toEqual(expected);
+		}
+	});
+
+	it('has as many out as it may', async () => {
+		const { queue, sent, rooms } = connection(2);
+		for (const room of ['a', 'b', 'c']) queue.request(room, { room_id: room });
+		expect(rooms()).toEqual(['a', 'b']);
+		sent[1].resolve({});
+		await settle();
+		expect(rooms()).toEqual(['a', 'b', 'c']);
+	});
+
+	it('answers each with its own result', async () => {
+		const { queue, sent } = connection();
+		const handle = queue.request('a', { room_id: 'a' });
+		sent[0].resolve({ more: false });
+		await expect(handle.promise).resolves.toEqual({ more: false });
+		expect(queue.holds('a')).toBe(false);
+	});
+
+	it('holds everything during a wait, and sends it once pumped after the wait', async () => {
+		const { queue, state, rooms } = connection();
+		state.limited = true;
+		queue.request('a', { room_id: 'a' });
+		queue.request('b', { room_id: 'b' });
+		expect(rooms()).toEqual([]);
+		expect(queue.holds('a')).toBe(true);
+		expect(queue.queued(queue.request('c', { room_id: 'c' }).id)).toMatchObject({ roomId: 'c' });
+		state.limited = false;
+		queue.pump();
+		expect(rooms()).toEqual(['a']);
+	});
+
+	it('holds one with retry refused for a wait, in its place, and sends it again after the wait', async () => {
+		const { queue, sent, state, rooms } = connection();
+		const handle = queue.request('thread', { room_id: 'thread' }, { retry: true });
+		queue.request('b', { room_id: 'b' });
+		state.limited = true;
+		sent[0].reject(refused());
+		await settle();
+		expect(state.emits).toBe(1);
+		expect(queue.holds('thread')).toBe(true);
+		expect(rooms()).toEqual(['thread']);
+		state.limited = false;
+		queue.pump();
+		expect(rooms()).toEqual(['thread', 'thread']);
+		sent[1].resolve({ more: false });
+		await expect(handle.promise).resolves.toEqual({ more: false });
+	});
+
+	it('fails one without retry refused for a wait, and one with retry refused for anything else', async () => {
+		const { queue, sent, state } = connection();
+		const plain = queue.request('a', { room_id: 'a' });
+		const retried = queue.request('b', { room_id: 'b' }, { retry: true });
+		state.limited = true;
+		sent[0].reject(refused());
+		await expect(plain.promise).rejects.toBeInstanceOf(RateLimitError);
+		state.limited = false;
+		queue.pump();
+		sent[1].reject(new Error('Room not found'));
+		await expect(retried.promise).rejects.toThrow('Room not found');
+		expect(queue.holds('b')).toBe(false);
+	});
+
+	it('takes back a held request without sending it', async () => {
+		const { queue, aborted, state, rooms } = connection();
+		state.limited = true;
+		const handle = queue.request('a', { room_id: 'a' });
+		queue.cancel(handle.id, 'Nothing to recover');
+		await expect(handle.promise).rejects.toThrow('Nothing to recover');
+		expect(aborted).toEqual([]);
+		state.limited = false;
+		queue.pump();
+		expect(rooms()).toEqual([]);
+		expect(queue.queued(handle.id)).toBeUndefined();
+	});
+
+	it('takes back a sent request, ignores its answer, and sends the next', async () => {
+		const { queue, sent, aborted, rooms } = connection();
+		const handle = queue.request('a', { room_id: 'a' });
+		queue.request('b', { room_id: 'b' });
+		queue.cancel(handle.id, 'History recovery superseded');
+		expect(aborted).toEqual([{ id: sent[0].id, reason: 'History recovery superseded' }]);
+		await expect(handle.promise).rejects.toThrow('History recovery superseded');
+		expect(rooms()).toEqual(['a', 'b']);
+		// A late answer to the taken-back request changes nothing.
+		sent[0].resolve({});
+		await settle();
+		expect(rooms()).toEqual(['a', 'b']);
+	});
+
+	it('drops held requests, leaving sent ones to fail with their requests', async () => {
+		const { queue, sent, aborted } = connection();
+		const out = queue.request('a', { room_id: 'a' });
+		const held = queue.request('b', { room_id: 'b' });
+		queue.dropHeld('Connection closed');
+		await expect(held.promise).rejects.toThrow('Connection closed');
+		expect(aborted).toEqual([]);
+		sent[0].reject(new Error('Connection closed; delivery is uncertain. Please retry'));
+		await expect(out.promise).rejects.toThrow('delivery is uncertain');
+		expect(sent).toHaveLength(1);
+	});
+});

@@ -128,22 +128,6 @@ export interface PendingRequest<T extends JsonObject = JsonObject> {
 	reject: (error: Error) => void;
 }
 
-/**
- * A `history` request (§4.3): sent when no history wait is on (`requestId`
- * while in flight), held while one is. One with `retry` refused for a wait
- * waits it out and goes again instead of failing.
- */
-export interface HistoryJob {
-	id: string;
-	roomId: string;
-	params: JsonObject;
-	allowBeforeAuth: boolean;
-	retry: boolean;
-	requestId?: string;
-	resolve: (result: JsonObject) => void;
-	reject: (error: Error) => void;
-}
-
 export interface TypingState {
 	room: string;
 	from: Identity;
@@ -185,8 +169,6 @@ export const UNSUPPORTED = -32601;
 const HISTORY_PAGE_SIZE = 200;
 /** A thread, or a room with no checkpoint, opens on its newest page this size; older pages load as the reader scrolls back. */
 export const THREAD_PAGE_SIZE = 50;
-/** How many `history` requests a connection has out at a time: servers may take only one, refusing the rest for a moment. */
-export const HISTORY_CONCURRENCY = 1;
 const MAX_RECONNECT_DELAY_MS = 60_000;
 /** How long a typing indicator this client sends should persist without a refresh, in the `activity` frame's `typing` seconds. */
 export const TYPING_TIMEOUT_S = 15;
