@@ -93,6 +93,17 @@ describe('waiting elsewhere', () => {
 		expect(onsend).toHaveBeenCalledOnce();
 	});
 
+	it('keeps Send off with only files to send too', () => {
+		const onsend = vi.fn();
+		dom.render(Composer, { room: 'General', onsend, attachments: dom.html('<div class="ap-attachment">notes.pdf</div>'), waitUntil: Date.now() + 28_000 });
+		const send = document.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+		expect([send.textContent, send.disabled]).toEqual(['28s', true]);
+		document.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
+		expect(onsend).not.toHaveBeenCalled();
+		wait(28_000);
+		expect([send.textContent, send.disabled]).toEqual(['Send', false]);
+	});
+
 	it('says the room is waiting in its header, counting down, in place of its note', () => {
 		dom.render(RoomHeader, { room: 'general', name: 'General', note: 'History unavailable', wait: Date.now() + 18_000 });
 		const note = document.querySelector('.ap-roomhead-wait')!;

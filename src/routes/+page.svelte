@@ -411,7 +411,7 @@
 	let limits = $derived(snapshot.limits ?? {});
 	/** The pane's history waits for the history limit, which is shared: every room's history waits it out, then loads by itself. */
 	let historyWait = $derived(paneRoom?.limited ? limits.history : undefined);
-	/** Sending waits: Send counts down, and the draft stays. */
+	/** Sending waits, with files or without: Send counts down, and the draft stays. */
 	let postWait = $derived(limits.post);
 	/** Uploads wait, unless that notice was put away. */
 	let uploadWait = $derived(limits.upload && limits.upload.until !== dismissedUploadWait ? limits.upload : undefined);
@@ -1575,8 +1575,9 @@
 	 */
 	function sendMessage(): void {
 		if (!client || !paneRoom || !canCompose) return;
-		// Sending waits for the server's limit: Send counts down, the draft stays, and nothing goes by itself.
-		if (!drafts.files.length && postWait && postWait.until > Date.now()) return;
+		// Sending waits for the server's limit, files or not (the client holds back any message meanwhile): Send
+		// counts down, the draft and its files stay, and nothing goes by itself.
+		if (postWait && postWait.until > Date.now()) return;
 		if (drafts.files.length) {
 			void sendFiles();
 			return;
