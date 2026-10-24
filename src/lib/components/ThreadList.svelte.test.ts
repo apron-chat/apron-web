@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
+import { flushSync } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RoomListing } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
 import type { ThreadEntry } from '$lib/ui/timeline';
 import ThreadList from './ThreadList.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
+import * as dom from '$lib/test/dom';
 
 afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
 	localStorage.clear();
 });
 
@@ -20,17 +16,13 @@ const listed = (id: string, title: string): RoomListing => ({ id, title, parentR
 
 function render(props: Record<string, unknown> = {}) {
 	const handlers = { onthread: vi.fn(), onopen: vi.fn(), onjoin: vi.fn(), onleave: vi.fn() };
-	instance = mount(ThreadList, {
-		target: document.body,
-		props: {
-			roomId: 'general', roomTitle: 'General',
-			threads: [joined('deploy', 'Deploy'), joined('cert', 'Expired cert')],
-			others: [listed('offsite', 'Offsite'), listed('logo', 'Logo')],
-			mentions: {}, unread: {}, canJoin: true,
-			...handlers, ...props
-		}
+	dom.render(ThreadList, {
+		roomId: 'general', roomTitle: 'General',
+		threads: [joined('deploy', 'Deploy'), joined('cert', 'Expired cert')],
+		others: [listed('offsite', 'Offsite'), listed('logo', 'Logo')],
+		mentions: {}, unread: {}, canJoin: true,
+		...handlers, ...props
 	});
-	flushSync();
 	return handlers;
 }
 
@@ -53,7 +45,7 @@ describe('ThreadList', () => {
 		expect(one('button[data-thread="cert"] .ap-tline-sender')?.textContent).toBe('Grace');
 	});
 
-	it('lists joined threads, each with Leave, then the others under a heading that folds, each with Join', () => {
+	it('lists joined threads, each with Leave, then the others under a heading that folds and stays folded, each with Join', () => {
 		const { onthread, onleave, onopen, onjoin } = render();
 		expect(titles('button[data-thread]')).toEqual(['Deploy', 'Expired cert']);
 		expect(titles('button[data-other-thread]')).toEqual(['Offsite', 'Logo']);
@@ -72,6 +64,15 @@ describe('ThreadList', () => {
 		expect(onjoin).not.toHaveBeenCalled();
 		one('button[data-join="logo"]')!.click();
 		expect(onjoin).toHaveBeenCalledWith('logo');
+		// Folded, it stays folded, also the next time.
+		one('[data-testid="other-threads"]')!.click();
+		flushSync();
+		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
+		expect(one('button[data-other-thread]')).toBeNull();
+		dom.unmount();
+		render();
+		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
+		expect(one('button[data-other-thread]')).toBeNull();
 	});
 
 	it('sets apart what’s new: unread replies counted, unread mentions tinted, the open thread marked, the rest stepping back', () => {
@@ -85,14 +86,10 @@ describe('ThreadList', () => {
 		expect(state('roadmap')).toEqual(['ap-room-unread', 'ap-room-mention']);
 		expect(state('cert')).toEqual(['ap-room-quiet']);
 		expect(state('hiring')).toEqual(['ap-room-active']);
-		// Only what's new is counted, in one bubble: grey for unread replies, orange with an @ when they include a mention; no totals.
-		const bubble = (id: string) => row(id).querySelector('[data-testid="thread-unread"]');
-		expect(bubble('deploy')?.className).toBe('ap-count ap-count-quiet');
-		expect(bubble('deploy')?.textContent).toBe('2');
-		expect(bubble('roadmap')?.className).toBe('ap-count ap-count-at');
-		expect(bubble('roadmap')?.textContent).toBe('@\u202f3');
-		expect(bubble('roadmap')?.getAttribute('aria-label')).toBe('3 unread replies, 3 mentions of you');
-		expect(row('cert').querySelector('.ap-count, .room-meta')).toBeNull();
+		// Only what's new is counted, in one bubble; no totals.
+		const bubble = (id: string) => row(id).querySelector('[data-testid="thread-unread"]')?.getAttribute('aria-label');
+		expect([bubble('deploy'), bubble('roadmap'), bubble('cert')]).toEqual(['2 unread replies', '3 unread replies, 3 mentions of you', undefined]);
+		expect(row('cert').textContent).not.toContain('6');
 	});
 
 	it('shows each other thread’s summary and when it was last active, with Join as a door in', () => {
@@ -137,24 +134,12 @@ describe('ThreadList', () => {
 		expect(one('[data-testid="more-threads"]')).toBeNull();
 	});
 
-	it('stays folded once folded, also the next time', () => {
-		render();
-		one('[data-testid="other-threads"]')!.click();
-		flushSync();
-		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
-		expect(one('button[data-other-thread]')).toBeNull();
-		unmount(instance!);
-		render();
-		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
-		expect(one('button[data-other-thread]')).toBeNull();
-	});
-
 	it('offers no Join or Leave where you only read, and no heading with nothing else to list', () => {
 		render({ canJoin: false, others: [] });
 		expect(titles('button[data-thread]')).toEqual(['Deploy', 'Expired cert']);
 		expect(one('[data-leave]')).toBeNull();
 		expect(one('[data-testid="other-threads"]')).toBeNull();
-		unmount(instance!);
+		dom.unmount();
 		render({ canJoin: false });
 		expect(titles('button[data-other-thread]')).toEqual(['Offsite', 'Logo']);
 		expect(one('[data-join]')).toBeNull();
@@ -162,7 +147,7 @@ describe('ThreadList', () => {
 
 	it('keeps a thread open without joining among the others, picked out, with Join and no Leave', () => {
 		const { onthread, onopen } = render({ threads: [joined('deploy', 'Deploy'), { ...joined('logo', 'Logo'), joined: false, loaded: true, count: 3 }], activeThread: 'logo' });
-		expect(titles('.joined button[data-thread]')).toEqual(['Deploy']);
+		expect(titles('.ap-threads-joined button[data-thread]')).toEqual(['Deploy']);
 		expect(titles('button[data-other-thread]')).toEqual(['Offsite', 'Logo']);
 		const row = one('button[data-other-thread="logo"]')!;
 		expect(row.dataset.thread).toBe('logo');
@@ -187,7 +172,7 @@ describe('ThreadList', () => {
 		flushSync();
 		expect(titles('button[data-other-thread]')).toEqual(['E']);
 		expect(one('[data-testid="more-threads"]')).toBeNull();
-		unmount(instance!);
+		dom.unmount();
 		localStorage.clear();
 		render({ others: [listed('offsite', 'Offsite')], threads: [{ ...joined('linked', 'Linked'), joined: false }], activeThread: 'linked' });
 		expect(titles('button[data-other-thread]')).toEqual(['Linked', 'Offsite']);

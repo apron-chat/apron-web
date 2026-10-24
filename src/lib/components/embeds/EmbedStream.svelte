@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { fromAction } from 'svelte/attachments';
+	import DesignEmbedStream from '$lib/design/components/EmbedStream.svelte';
 	import { readStream, sameOriginMedia } from '$lib/protocol/embeds';
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import type { Embed } from '$lib/protocol/types';
@@ -23,6 +25,8 @@
 	let live = $derived(Boolean(url) && !ended && embed.text === undefined);
 	let text = $derived(embed.text !== undefined ? String(embed.text) : streamed);
 	let terminal = $derived(format === 'terminal' ? renderTerminal(text) : []);
+	/** Highlights the Markdown's fenced code blocks as they arrive. */
+	const highlight = fromAction(highlightCode, () => text);
 
 	$effect(() => {
 		const source = url;
@@ -48,20 +52,7 @@
 	});
 </script>
 
-<div class="ap-embed ap-embed-stream ap-embed-stream-{format}" class:ap-embed-stream-live={live} data-testid="stream-embed">
-	<div class="ap-embed-streamhead">
-		<span class="ap-embed-streamkind">{embed.title || (format === 'terminal' ? 'Terminal' : format === 'markdown' ? 'Live text' : 'Output')}</span>
-		{#if live}
-			<span class="ap-embed-livebadge" role="status"><i aria-hidden="true"></i>Live</span>
-		{:else}
-			<span class="ap-embed-detail">{embed.text !== undefined ? 'Finished' : url ? 'Ended' : 'Unavailable'}</span>
-		{/if}
-	</div>
-	{#if format === 'markdown'}
-		<div class="ap-embed-streambody ap-msg-text" use:highlightCode={text}>{@html renderMarkdown(text)}{#if live}<span class="ap-embed-caret" aria-hidden="true"></span>{/if}</div>
-	{:else if format === 'terminal'}
-		<pre class="ap-embed-streambody" aria-live={live ? 'polite' : undefined}>{#each terminal as span, index (index)}{#if span.className || span.style}<span class={span.className || undefined} style={span.style || undefined}>{span.text}</span>{:else}{span.text}{/if}{/each}{#if live}<span class="ap-embed-caret" aria-hidden="true"></span>{/if}</pre>
-	{:else}
-		<pre class="ap-embed-streambody" aria-live={live ? 'polite' : undefined}>{text}{#if live}<span class="ap-embed-caret" aria-hidden="true"></span>{/if}</pre>
-	{/if}
-</div>
+{#snippet body()}{#if format === 'markdown'}{@html renderMarkdown(text)}{:else}{#each terminal as span, index (index)}{#if span.className || span.style}<span class={span.className || undefined} style={span.style || undefined}>{span.text}</span>{:else}{span.text}{/if}{/each}{/if}{/snippet}
+
+<DesignEmbedStream kind="stream" {url} done={!live} title={embed.title} {format} {text} status={embed.text !== undefined ? 'Finished' : url ? 'Ended' : 'Unavailable'}
+	children={format === 'plain' ? undefined : body} attach={format === 'markdown' ? highlight : undefined} testid="stream-embed" />

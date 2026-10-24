@@ -3,15 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PushRegistration } from '$lib/protocol/client';
 import { PushSettings, type PushSettingsClient } from './push-settings.svelte';
 import { WebPushSync, type PushBrowser } from './web-push';
+import { memoryStorage } from '$lib/test/storage';
 
 const values = new Map<string, string>();
 
 beforeEach(() => {
-	vi.stubGlobal('localStorage', {
-		getItem: (key: string) => values.get(key) ?? null,
-		setItem: (key: string, value: string) => values.set(key, value),
-		removeItem: (key: string) => values.delete(key)
-	});
+	vi.stubGlobal('localStorage', memoryStorage(values));
 });
 
 afterEach(() => {
@@ -69,7 +66,7 @@ describe('push settings', () => {
 		expect(ids).toHaveBeenLastCalledWith(['id-ada']);
 	});
 
-	it('turns push off for an account signing out while offline, and drops the subscription when none is left', async () => {
+	it('turns push off for an account signing out while offline, and drops the subscription once no account has push on', async () => {
 		const { browser, state } = fakeBrowser();
 		const { settings, badge, ids } = tab(browser);
 		const client = fakeClient();
@@ -85,11 +82,7 @@ describe('push settings', () => {
 		// Signing out of an account push was off for changes nothing.
 		await settings.signedOut(client, 'wss://a.example/\nbob');
 		expect(state.unsubscribes).toBe(1);
-	});
-
-	it('keeps the subscription for the other account when one turns push off', async () => {
-		const { browser, state } = fakeBrowser();
-		const { settings } = tab(browser);
+		// While another account has push on, the subscription stays for it.
 		await settings.turnOn(fakeClient(), 'ada', 'K1', undefined, true);
 		await settings.turnOn(fakeClient(), 'bob', 'K1', undefined, true);
 		await settings.turnOff(fakeClient(), ada);

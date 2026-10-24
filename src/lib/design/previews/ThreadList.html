@@ -1,0 +1,31 @@
+<!-- @dsCard group="Navigation" height=420 subtitle="A room's threads under its row: the joined ones along a guide, each with Leave on hover · the others under a heading that folds, along a dashed guide, each with Join, the one being read picked out with its count · the rest behind N more…" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ThreadList</title></head>
+<body>
+<div id="root" style="background:var(--bg-000);width:248px;padding:12px 8px;box-sizing:border-box"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var noop = function () {};
+  var rows = function (list) { return A.parts.apply(null, list.map(function (p) { return A.part(A.ThreadItem, p); })); };
+  add(A.RoomItem, { room: 'ops', name: 'Ops', active: true, onnewthread: noop });
+  add(A.ThreadList, {
+    room: 'Ops',
+    joined: rows([
+      { thread: 'deploy', name: 'Deploy', unread: 2, summary: 'Worker 1.9.0 crash-looped; rolled back to 1.8.3', latest: { sender: 'Dana', text: 'Re-running the migration now' }, onleave: noop },
+      { thread: 'oncall', name: 'On-call rotation', mentions: 1, summary: 'Who carries the pager, week by week', onleave: noop },
+      { thread: 'cert', name: 'Expired cert', latest: { sender: 'Linus', text: 'Renewed it, CI is green again' }, onleave: noop }
+    ]),
+    others: 6,
+    otherRows: rows([
+      { thread: 'offsite', name: 'Offsite planning', unjoined: true, summary: 'Dates, venue, and who books travel', ago: { text: '2h' }, onjoin: noop },
+      { thread: 'logo', name: 'Logo feedback', unjoined: true, private: true, active: true, count: 14, onjoin: noop },
+      { thread: 'retro', name: 'Q3 retro', unjoined: true, ago: { text: 'Tue' }, onjoin: noop }
+    ]),
+    more: 3,
+    onmore: noop
+  });
+</script>
+</body>
+</html>

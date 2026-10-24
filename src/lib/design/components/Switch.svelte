@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { ClassValue } from 'svelte/elements';
+
 	interface Props {
 		checked: boolean;
 		/** What it turns on, for screen readers: the visible title beside it. */
@@ -9,8 +11,14 @@
 		describedby?: string;
 		/** Called with the value asked for; the owner decides whether `checked` follows. */
 		onchange: (checked: boolean) => void;
+		/** Classes for the switch's button, added to its own. */
+		class?: ClassValue;
 	}
-	let { checked, label, locked = false, describedby, onchange }: Props = $props();
+	let { checked, label, locked = false, describedby, onchange, class: className }: Props = $props();
+
+	function toggle(): void {
+		if (!locked) onchange(!checked);
+	}
 </script>
 
-<button class="ap-switch" type="button" role="switch" aria-checked={checked} aria-label={label} aria-disabled={locked || undefined} aria-describedby={describedby} onclick={() => { if (!locked) onchange(!checked); }}><span></span></button>
+<button type="button" aria-label={label} aria-describedby={describedby} class={['ap-switch', className]} role="switch" aria-checked={checked} aria-disabled={locked || undefined} onclick={toggle}><span></span></button>

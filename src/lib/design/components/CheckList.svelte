@@ -1,14 +1,6 @@
 <script lang="ts">
-	/** One option of a CheckList: its value, a title, and optionally a line saying what it does (without one, the row is a single line). */
-	interface CheckOption {
-		value: string;
-		title: string;
-		text?: string;
-		/** Can't be changed here; `note` can say why. */
-		disabled?: boolean;
-		/** A short muted note beside the title, such as why it is disabled, or "Desktop only". */
-		note?: string;
-	}
+	import type { ClassValue } from 'svelte/elements';
+	import type { CheckOption } from './types';
 
 	interface Props {
 		/** Names the group (its legend). */
@@ -18,14 +10,12 @@
 		value?: string[];
 		/** Keeps at least this many checked: the last ones can't be unchecked. */
 		min?: number;
-		/** Disables every option. */
-		disabled?: boolean;
 		/** Called with the new checked values, in the options' order. */
 		onchange?: (value: string[]) => void;
-		/** Says why the last checked ones can't be unchecked (read to screen readers). */
-		minNote?: string;
+		/** Classes for the fieldset, added to its own. */
+		class?: ClassValue;
 	}
-	let { label, options, value = $bindable([]), min = 0, disabled = false, onchange, minNote = 'At least one stays checked.' }: Props = $props();
+	let { label, options, value = $bindable([]), min = 0, onchange, class: className }: Props = $props();
 	const uid = $props.id();
 
 	function toggle(option: string, checked: boolean): void {
@@ -35,7 +25,7 @@
 	}
 </script>
 
-<fieldset class="ap-checklist" {disabled}>
+<fieldset class={['ap-checklist', className]}>
 	<legend class="ap-checklist-legend">{label}</legend>
 	{#each options as option (option.value)}
 		{@const checked = value.includes(option.value)}
@@ -57,5 +47,5 @@
 			</span>
 		</label>
 	{/each}
-	{#if min > 0}<span class="ap-sr" id={`${uid}-min`}>{minNote}</span>{/if}
+	{#if min > 0}<span class="ap-sr" id={`${uid}-min`}>At least one stays checked.</span>{/if}
 </fieldset>

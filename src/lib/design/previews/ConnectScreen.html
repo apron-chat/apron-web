@@ -1,4 +1,4 @@
-<!-- @dsCard group="Layout" height=640 width=2200 page subtitle="Guest by default; token revealed; email with the server's welcome; passkey: sign in, or create an account" -->
+<!-- @dsCard group="Layout" height=640 width=2200 page subtitle="Guest by default, with recent backends; token refused, with Cancel; an emailed code, under the server's welcome; passkey: sign in, or create an account. A client with its own sign-in flow builds the same page from ConnectPage, ConnectHeader and SignInForm" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ConnectScreen</title><style>html,body{height:100%}</style></head>
@@ -8,7 +8,7 @@
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   add(A.ConnectScreen, { recent: [{ url: 'wss://chat.work.example/ws', label: 'Work' }, { url: 'wss://home.lab:8443/apron', label: 'Home lab' }] });
-  add(A.ConnectScreen, { url: 'wss://chat.work.example/ws', name: 'Alice', schemes: ['token', 'webauthn'], scheme: 'token', error: 'The server refused that token. Check it and try again.' });
+  add(A.ConnectScreen, { url: 'wss://chat.work.example/ws', name: 'Alice', schemes: ['token', 'webauthn'], scheme: 'token', error: 'The server refused that token. Check it and try again.', oncancel: function () {} });
   add(A.ConnectScreen, { url: 'wss://chat.work.example/ws', schemes: ['email', 'webauthn', 'token'], scheme: 'email', email: 'ada@example.com', codeSent: true,
     welcome: A.html('<p>Create an account with <strong>email</strong>, then add a passkey to sign in with it.</p><p>Email codes expire after 5 minutes.</p>') });
   add(A.ConnectScreen, { url: 'wss://chat.work.example/ws', name: 'Ada', schemes: ['guest', 'webauthn', 'email'], scheme: 'webauthn' });

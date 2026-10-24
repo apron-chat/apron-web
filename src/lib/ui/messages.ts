@@ -22,14 +22,6 @@ export function embedsOf(event: MessageRecord): Embed[] {
 		: [];
 }
 
-/** First and last initials, for an avatar with no image. */
-export function initials(name: string): string {
-	const parts = name.trim().split(/\s+/);
-	const first = parts[0]?.[0] ?? '?';
-	const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
-	return (first + last).toUpperCase();
-}
-
 /**
  * The hue of an avatar placeholder: FNV-1a over the `user_id`, so each person
  * keeps one color everywhere and on every client. The murmur3 finalizer
@@ -47,6 +39,11 @@ export function avatarHue(userId: string): number {
 	hash = Math.imul(hash, 0xc2b2ae35);
 	hash ^= hash >>> 16;
 	return (hash >>> 0) % 360;
+}
+
+/** The tint of an avatar placeholder, by `user_id` (`avatarHue`); none without one, which keeps the design system's denim. */
+export function hueOf(userId: string | undefined): number | undefined {
+	return userId ? avatarHue(userId) : undefined;
 }
 
 /** One line of a quoted message: the first non-empty line, about 120 characters. */
@@ -125,12 +122,4 @@ export function spanOf(order: string[], picked: string[]): string[] {
 	const indexes = picked.map((id) => order.indexOf(id)).filter((index) => index >= 0);
 	if (indexes.length < 2) return picked;
 	return order.slice(Math.min(...indexes), Math.max(...indexes) + 1);
-}
-
-/** The typing row's sentence for the people typing in the pane, or '' when no one is. */
-export function typingLine(names: readonly string[]): string {
-	if (names.length === 0) return '';
-	if (names.length === 1) return `${names[0]} is typing…`;
-	if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
-	return 'Several people are typing…';
 }

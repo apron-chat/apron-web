@@ -4,14 +4,24 @@ How the web client is put together. [behavior.md](behavior.md) describes what
 it does.
 
 The UI follows the Apron design system. `src/lib/design/tokens.css` holds its
-color, type, spacing, radius and size tokens as CSS custom properties (dark is
-the reference theme; light follows `prefers-color-scheme`, or `data-theme` on
-the root when Preferences picks one), and
-`src/lib/design/apron.css` is its component stylesheet. Text sizes are the
+tokens as CSS custom properties: color, interaction grounds (`--hover`,
+`--pressed`, `--selected`, `--chosen`), the focus ring (`--focus-ring`), fades
+(`--opacity-disabled`, `--opacity-dim`), type and line heights (`--leading-*`),
+spacing, radii, control and panel sizes, stacking (`--z-*`) and motion
+(`--duration-*`, `--ease-*`), with the breakpoints listed in a comment, since a
+media query can't read a custom property (`src/lib/ui/breakpoints.ts` holds the
+ones scripts need). Dark is the reference theme; light follows
+`prefers-color-scheme`, or `data-theme` on the root when Preferences picks one,
+so its tokens are written twice, and `tokens.test.ts` holds the two blocks
+equal. `src/lib/design/apron.css` is its component stylesheet. Text sizes are the
 `--text-*` scale (caps, xs, sm, ui, field, body, title); only glyphs sized to
 their box, such as avatar initials and emoji, and the connect screen's display
-title keep literal sizes. `npm run design:bundle` copies the scale into
-`bundle.css`, since the design system's `tokens.json` doesn't carry it yet.
+title keep literal sizes. `apron.css` states its shared rules once, at its
+top: one focus ring on every control (outside a standalone one, inside one
+flush in a row or list), one disabled fade, and one status-text treatment
+(`ap-tone-ok`, `-warn`, `-danger` on a muted note; an error is always danger).
+`tokens.test.ts` lints the stylesheet for the scales: line heights, fades and
+weights.
 
 This repository is the design system's source. `src/lib/design/components`
 holds its presentational Svelte 5 components (runes, snippets, typed `Props`,
@@ -19,24 +29,79 @@ exported from `$lib/design/components`), and `src/lib/design/previews` a live
 preview page for each. `npm run design:bundle` builds them into
 `dist-design/project/components/`: `bundle.js` (one classic script, with the
 Svelte runtime inside, that sets `window.Apron` with `render`, `html`, `part`
-and `parts` for plain pages), `bundle.css` (`apron.css` itself), `index.d.ts`
+and `parts` for plain pages), `bundle.css` (all of `tokens.css`, both themes,
+then `apron.css`, then `rail.css`, so it needs nothing else; `rail.css` styles
+`BackendRail` and `AppShell`'s column for it, which the app never renders, so
+the app doesn't import it and none of it ships with the app), `index.d.ts`
 (generated from each component's `interface Props`) and each
-`<Name>/preview.html`. Publish those files to the design system artifact. Its
-tokens stay in the artifact's `tokens.json`; keep them in step with
-`tokens.css`.
+`<Name>/preview.html`. Publish those files to the design system artifact.
+`tokens.css` is the tokens' source of truth: change a token there, and it
+reaches the design system with the next bundle.
 
-The Svelte components under `src/lib/components` wrap the `ap-*`
-classes one to one with the design system's components, adding the app's
-state and behavior — `ConnectScreen`,
-`Sidebar`, `MemberListSidebar` and `ProfileBar`, `RoomHeader` with `RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`) and
-`ThreadSummary` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `Message` (the design system's `Message` itself, which the app fills through its `avatar`, `name`, `reply`, `body`, `footer` and `actions` snippets) with its `ReactionBar` (whose chips open `ReactorsPopover`, the list of who reacted, through `reactors.svelte.ts`) and `RoleBadges`, `Composer` with its `AutocompletePicker` (for `@`, `#` and `:`) and `StagedFile` (the design system's `Attachments`), `SelectionBar`, `JumpBar`,
-`EmojiPopover` (the full emoji picker, which the design system leaves to the client),
-`PreferencesDialog` with its `FontFamilyField`, `SignInLinkDialog` (both
+Every design component follows two conventions. It declares the props it
+takes and spreads nothing onto its markup: a `class`, added to its own; a
+`testid` for its root where something queries it, and a named prop for an
+inner part's (`chipTestid`, `sendTestid`), so no design component
+hard-codes one; an `id` or a label where it fits; the handlers its callers
+use; and an attribute other code reads, such as `data-room` on a room's row
+or `data-timeline-item` on a timeline row, from a prop of its own. A
+spread stays only where a component stands in for one element any of whose
+attributes is the caller's by design, such as `Button`'s `<button>` or
+`ComposerEditable`'s field (or `Embed` handing an embed's fields on to its
+renderer), and then with a `<!-- spread: why -->` comment right before it:
+`conventions.test.ts` fails on any spread without one. Where a caller's
+handler and the component's own share an event, `chain()` from `util.ts`
+runs the caller's first, and its `preventDefault()` skips the component's
+own. Role badges beside a name stack when they don't fit (`--ap-role-overflow:
+stack`): after an unneeded handle, the name gives way first, down to
+`--ap-name-min`, then the badges stack behind the last that fits; a handle
+shows only where two people share a name, and gives way last. An untitled
+thread is called "Untitled", its room_id in the tooltip.
+
+The Svelte components under `src/lib/components` are the app's side of the
+design system: each renders a design component and adds the app's state and
+behavior (the client, `directory` lookups, stores, requests), and none has
+markup or styles of its own. The page lays itself out with the design
+system's `AppShell` (rooms panel, main pane and member-list column; the
+panels' collapse, slide and resize handles (`PanelToggle`, `PanelHandle`,
+driven by `SidebarHandle`); one pane at a time on phones; the overlaid member
+list under 960px) and renders `EmptyState`, `RoomLoading` (in `NoRoom`),
+`FloatingDay` and `DropZone`, with `Toasts` and `ConnectionNotice` beside it.
+The wrappers: `ConnectScreen` and `SignIn` (the pieces the design system's
+`ConnectScreen` is made of: `ConnectPage`, `ConnectHeader` and `SignInForm`;
+`SignIn` keeps the state machine in `$lib/ui/sign-in`), `Sidebar` (`SidebarHead`, `SidebarSection` and
+`RoomItem`) with `ThreadList` (the design system's `ThreadList`, its rows `ThreadItem`s,
+which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, with its `AddMemberForm`), `ProfileBar` (`ProfileBar` with its
+`ProfileEditor`), `RoomHeader` (`RoomHeader`, with its ⋯ `MenuButton`) with
+`RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
+`ThreadSummary` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `RoleBadges`, `MentionText` (`Mention`), the embeds (`Embed*`; the trusted-origin gate stays in `embeds/og.ts`), `MessageEditor` (`MessageEditor`), `NoticeLine` (a scoped `Message`, from `noticeView`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: a `ComposerEditable` it fills and edits) with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
+`ProfileCard`, `ReactorsPopover` and `EmojiPopover` (the full emoji picker, which the design system leaves to the client; all three in the design system's `Popover`, a bottom sheet on phones),
+`PreferencesDialog` (`SettingsSections` and `SettingRow`) with its `FontFamilyField` (`FontField`), `StatusPicker`, `PauseNotifications` and `NotifyPrompt` (`Nudge`), `SignInLinkDialog` (both
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
 choice submitted with a form a `CheckList`-style row),
 `MediaViewerHost` (the design system's `MediaViewer`, opened by image embeds through
-`media-viewer.svelte.ts`, which reads the open timeline's `data-viewer-*` links), `StatusBanner`, `UpdateNotice` (the design system's `ActionBanner`, which reads whether the page's
-`PaneDrafts` hold anything unsent through `pageDrafts`), `Avatar`. A style change goes in `apron.css`, and reaches the
+`media-viewer.svelte.ts`, which reads the open timeline's `data-viewer-*` links), `UpdateNotice` (the design system's `ActionBanner`, which reads whether the page's
+`PaneDrafts` hold anything unsent through `pageDrafts`). Avatars are the design system's `Avatar`, given an avatar
+`directory` will load and the `hue` of their `user_id` (`hueOf`).
+
+A message row has no wrapper: the page renders the design system's `Message`
+straight from a `MessageView`, plain data that `messageView` (`src/lib/ui/message-view.ts`)
+makes from the record, where it sits (grouped, selected, edited, highlighted) and what
+the viewer may do (`MessageCaps`): the sender as `directory` knows them, with a handle
+only where a name is shared, the body's sanitized markup, the reply's quote, the
+embeds with their uploads and the reaction chips. It keeps what depends only on the
+record and the directory per record, and hands back the previous view while nothing in
+it changed, so a change elsewhere redraws no row. The row draws its header, body and
+reactions itself and adds the rest only where present: the quote (`ReplyPreview`), the
+embeds (`MessageEmbeds`, each through the page's `embed` snippet, the app's `Embed`),
+the hover toolbar (`MessageActions`, built once a pointer or focus reaches the row) and
+the editor (the page's `editor` snippet, the lazy `MessageEditor`, for the row being
+edited). What its controls do is one `MessageHandlers` object for every row, each
+handler given the row's view: replying, reacting (the emoji picker through `pick`, who
+reacted through `showReactors` in `reactors.svelte.ts`), editing, deleting, starting a
+thread, copying the link, the select gestures (a shift-click, `x`, a long press),
+opening rooms and profile cards, jumping to a quote, and decorating code blocks
+(`decorateCode`). The design system's `Message` takes no other attributes. Global resets (the page's height, `box-sizing`, `font: inherit` on controls) are in `src/app.css`. A style change goes in `apron.css`, and reaches the
 design system with the next `npm run design:bundle`. A user's `status` (§4.5)
 is the design system's `StatusDot` on their `Avatar`: online a dot, idle a
 crescent, dnd a barred dot, offline a hollow ring, your own `invisible` the

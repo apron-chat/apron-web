@@ -5,8 +5,7 @@
  * `emoji-picker.svelte.ts`.
  */
 
-/** Under this width the app is one pane at a time, and the picker is a bottom sheet. */
-export const NARROW_MAX = 720;
+import { NARROW_MAX } from './breakpoints';
 
 /** The desktop popover: emoji-mart's nine 36px columns, its padding and scrollbar gutter, and our 1px hairline each side. */
 export const PICKER_WIDTH = 9 * 36 + 12 + 16 + 2;

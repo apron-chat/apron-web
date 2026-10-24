@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { ClassValue } from 'svelte/elements';
 
+	/** A modal `<dialog>`, named by its title, with a close button, its content and a footer of actions. */
 	interface Props {
 		/** Shown as a modal while true; bindable, and set false however it closes (Escape, the close button, the backdrop). */
 		open?: boolean;
@@ -25,9 +27,13 @@
 		footer?: Snippet;
 		/** The body without padding, for content that lays itself out (a section nav beside a pane). */
 		flush?: boolean;
-		testid?: string;
+		/** Classes for the `<dialog>`, added to its own. */
+		class?: ClassValue;
 	}
-	let { open = $bindable(false), title, subtitle, size = 'sm', closeLabel = 'Close', locked = false, backdropCloses = false, onsubmit, onclose, children, footer, flush = false, testid }: Props = $props();
+	let {
+		open = $bindable(false), title, subtitle, size = 'sm', closeLabel = 'Close', locked = false, backdropCloses = false, onsubmit, onclose, children, footer, flush = false,
+		class: className
+	}: Props = $props();
 
 	let dialog = $state<HTMLDialogElement | undefined>();
 	const uid = $props.id();
@@ -52,13 +58,18 @@
 	let pressedBackdrop = false;
 
 	/** The panel's content fills the dialog, so only the backdrop targets the dialog itself. */
+	function onpointerdown(event: PointerEvent): void {
+		pressedBackdrop = event.target === dialog;
+	}
+
 	function click(event: MouseEvent): void {
 		if (backdropCloses && !locked && event.target === dialog && pressedBackdrop) dialog?.close();
 		pressedBackdrop = false;
 	}
 </script>
 
-<dialog bind:this={dialog} class={['ap-dialog', 'ap-dialog-' + size]} aria-labelledby={titleId} data-testid={testid} oncancel={cancel} onclose={closed} onpointerdown={(event) => (pressedBackdrop = event.target === dialog)} onclick={click}>
+<!-- Named by its title. -->
+<dialog bind:this={dialog} class={['ap-dialog', 'ap-dialog-' + size, className]} aria-labelledby={titleId} oncancel={cancel} onclose={closed} {onpointerdown} onclick={click}>
 	<svelte:element this={onsubmit ? 'form' : 'div'} class="ap-dialog-frame" role={onsubmit ? undefined : 'presentation'} {onsubmit}>
 		<header class="ap-dialog-head">
 			<div class="ap-dialog-heading">

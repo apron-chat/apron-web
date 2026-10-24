@@ -1,0 +1,15 @@
+<!-- @dsCard group="Timeline" height=200 subtitle="The day of the messages in view, floating at the top of a scrolled timeline" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>FloatingDay</title></head>
+<body>
+<div id="root" class="ap-timeline" style="height:170px;margin:16px;border:1px solid var(--line);border-radius:10px;background:var(--bg-100)"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.FloatingDay, root, { label: 'Yesterday', shown: true });
+  A.render(A.Message, root, { view: { sender: { user_id: 'alice', name: 'Alice Chen' }, time: '18:40', body: { html: 'Rolling the worker back to 1.8.3.' } } });
+  A.render(A.Message, root, { view: { sender: { user_id: 'bob', name: 'Bob' }, time: '18:52', body: { html: 'Lock on accounts is clear; re-running 0042.' } } });
+  A.render(A.Message, root, { view: { sender: { user_id: 'dana', name: 'Dana' }, time: '19:05', body: { html: 'Green across the board.' } } });
+</script>
+</body>
+</html>

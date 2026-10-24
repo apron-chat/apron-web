@@ -11,7 +11,7 @@ describe('PagePresence', () => {
 	});
 	afterEach(() => vi.useRealTimers());
 
-	it('flags the tab for a mention while away, until focus comes back', () => {
+	it('flags the tab for a mention while away, chiming unless a desktop notification replaces it, until focus comes back', () => {
 		const presence = new PagePresence();
 		presence.noteMentions(1);
 		expect(presence.attention).toBe(false);
@@ -31,15 +31,13 @@ describe('PagePresence', () => {
 		vi.advanceTimersByTime(3000);
 		expect(presence.titleFlash).toBe(false);
 		presence.dispose();
-	});
-
-	it('can suppress the chime when a desktop notification replaces it', () => {
-		const presence = new PagePresence();
-		presence.blur();
-		presence.noteMentions(1, false);
-		expect(presence.attention).toBe(true);
-		expect(playPing).not.toHaveBeenCalled();
-		presence.dispose();
+		// Without the chime, where a desktop notification replaces it.
+		const quiet = new PagePresence();
+		quiet.blur();
+		quiet.noteMentions(1, false);
+		expect(quiet.attention).toBe(true);
+		expect(playPing).toHaveBeenCalledTimes(1);
+		quiet.dispose();
 	});
 
 	it('stays quiet while silenced (paused or do not disturb), and doesn\'t alert for those mentions afterwards', () => {

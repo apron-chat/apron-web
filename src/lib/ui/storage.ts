@@ -293,9 +293,6 @@ export function saveWebPushEnabled(accounts: string[], account: string, enabled:
 	return next;
 }
 
-/** Stored for accounts that haven't chosen: the old device-wide "Everything" setting. */
-const NOTIFY_DEFAULT = '*';
-
 function readScopeChoices(key: string): Record<string, string[]> {
 	try {
 		const parsed: unknown = JSON.parse(read(key) ?? '{}');
@@ -319,32 +316,12 @@ function remove(key: string): void {
 	}
 }
 
-/**
- * Moves the device-wide desktop setting (`apron.notificationScope`) into
- * `apron.notifyScopes` as the choice of accounts that have none:
- * "Everything" is every scope; "Mentions" was the default, now mentions and
- * replies.
- */
-function migrateNotifyScopes(): void {
-	const scope = read('apron.notificationScope');
-	if (scope === null) return;
-	if (scope === 'everything') {
-		const choices = readScopeChoices(KEY.notifyScopes);
-		choices[NOTIFY_DEFAULT] ??= ['mentions', 'replies', 'private', 'joined'];
-		write(KEY.notifyScopes, JSON.stringify(choices));
-	}
-	remove('apron.notificationScope');
-}
-
 /** What an account chose to be notified about (`notifyAccount`); undefined until it chose. */
 export function loadNotifyScopes(account: string): string[] | undefined {
-	migrateNotifyScopes();
-	const choices = readScopeChoices(KEY.notifyScopes);
-	return choices[account] ?? choices[NOTIFY_DEFAULT];
+	return readScopeChoices(KEY.notifyScopes)[account];
 }
 
 export function saveNotifyScopes(account: string, scopes: readonly string[]): void {
-	migrateNotifyScopes();
 	write(KEY.notifyScopes, JSON.stringify({ ...readScopeChoices(KEY.notifyScopes), [account]: [...scopes] }));
 }
 

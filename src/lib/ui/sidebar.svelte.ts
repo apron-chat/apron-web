@@ -2,6 +2,10 @@ import type { SidebarPrefs } from './storage';
 
 const KEY_STEP = 16;
 
+/** The panels' widths: each starts at its token's (tokens.css's --sidebar-w, --member-list-w) until you drag it. */
+export const ROOMS_LIST_WIDTHS = { defaultWidth: 248, minWidth: 160, maxWidth: 480 };
+export const MEMBER_LIST_WIDTHS = { defaultWidth: 240, minWidth: 180, maxWidth: 420 };
+
 export interface SidebarOptions {
 	/** The screen edge the panel sits on; its resizable border faces the conversation. */
 	side: 'left' | 'right';

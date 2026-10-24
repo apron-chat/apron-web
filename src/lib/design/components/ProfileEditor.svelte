@@ -1,8 +1,10 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
+	import type { ClassValue } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
 	import Button from './Button.svelte';
-	import TypingDots from './TypingDots.svelte';
 
+	/** The profile form. */
 	interface Props {
 		userId: string;
 		/** Display name — sent as `me` `{name}` (§3.3); `you.name` in the result is the answer. `bind:name` in Svelte. */
@@ -10,66 +12,100 @@
 		/** Change notification for callers that can't bind (plain pages); fires after `name` updates. */
 		oninput?: (name: string) => void;
 		avatar?: string;
+		/** Replaces the large avatar, such as with one tinted by the `user_id` and showing your status. */
+		face?: Snippet;
 		/** Caps `command` and `embed:upload`: a `/avatar` command with one `upload` embed (§4.8.6). */
 		canUpload?: boolean;
-		onchangeavatar?: () => void;
+		/** Change avatar opens a file picker for an image; this gets the one picked (the picker is cleared for the next). */
+		onavatarfile?: (file: File) => void;
 		/** Sends `me` `{avatar: ""}`. */
 		onremoveavatar?: () => void;
-		/** The request went out but `you.avatar` didn't change. */
-		avatarKept?: boolean;
-		/** saving · altered: `you.name` differs from what you asked (`serverName`) · declined */
+		/** An avatar on its way: uploading says so on its button; either keeps both avatar buttons disabled. */
+		avatarBusy?: 'uploading' | 'removing';
+		/** Why the avatar couldn't be uploaded or removed. */
+		avatarError?: string;
+		/** Not connected: the avatar buttons can't be used. */
+		offline?: boolean;
+		/** saving · altered: `you.name` differs from what you asked (`serverName`) · declined (`declinedNote`) */
 		status?: 'idle' | 'saving' | 'altered' | 'declined';
 		serverName?: string;
+		/**
+		 * The declined note's words, in place of “The server declined this handle. Your old one is still in use.”,
+		 * such as with what the server said, or what happens to the handle next.
+		 */
+		declinedNote?: string;
 		onsave?: () => void;
 		oncancel?: () => void;
-		/** `server.auth` lists `webauthn` and this session isn't one: "Add passkey" runs `auth` action "register" (§4.10). */
-		canPasskey?: boolean;
-		onaddpasskey?: () => void;
-		passkey?: 'idle' | 'waiting' | 'done' | 'declined' | 'cancelled';
+		/**
+		 * A Sign-in group under the handle: how this session signs in, and the ways to add or switch, such as
+		 * buttons for the schemes the server offers with a line saying how it stands.
+		 */
+		signin?: Snippet;
+		/** The form is the dialog (the default); off inside a <ProfileBar>, whose popover is. */
+		dialog?: boolean;
+		/** `data-testid` on the Change avatar button, its Remove, the file picker and the Handle field. */
+		changeAvatarTestid?: string;
+		removeAvatarTestid?: string;
+		avatarFileTestid?: string;
+		nameTestid?: string;
+		/** Classes for the form, added to its own. */
+		class?: ClassValue;
 	}
-	let { userId, name = $bindable(''), oninput, avatar, canUpload, onchangeavatar, onremoveavatar, avatarKept, status = 'idle', serverName, onsave, oncancel, canPasskey, onaddpasskey, passkey }: Props = $props();
+	let {
+		userId, name = $bindable(''), oninput, avatar, face, canUpload, onavatarfile, onremoveavatar, avatarBusy, avatarError, offline,
+		status = 'idle', serverName, declinedNote, onsave, oncancel, signin, dialog = true,
+		changeAvatarTestid, removeAvatarTestid, avatarFileTestid, nameTestid, class: className
+	}: Props = $props();
 	const saving = $derived(status === 'saving');
+	let fileInput = $state<HTMLInputElement | undefined>();
+
+	function save(event: SubmitEvent): void {
+		event.preventDefault();
+		onsave?.();
+	}
+
+	function picked(input: HTMLInputElement): void {
+		const file = input.files?.[0];
+		input.value = '';
+		if (file) onavatarfile?.(file);
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-<form class="ap-profedit" role="dialog" aria-label="Edit profile" onsubmit={(e) => { e.preventDefault(); onsave?.(); }}>
+<form role={dialog ? 'dialog' : undefined} aria-label={dialog ? 'Edit profile' : undefined} class={['ap-profedit', className]} onsubmit={save}>
 	<div class="ap-profedit-top">
-		<Avatar name={name || userId} src={avatar} size="lg" />
+		{#if face}{@render face()}{:else}<Avatar name={name || userId} src={avatar} size="lg" />{/if}
 		<div class="ap-profedit-av">
 			{#if canUpload}
 				<span class="ap-profedit-avbtns">
-					<Button size="sm" onclick={onchangeavatar} disabled={saving} label={avatar ? 'Change avatar' : 'Add avatar'} />
-					{#if avatar && onremoveavatar}<button type="button" class="ap-link ap-profedit-remove" onclick={onremoveavatar} disabled={saving}>Remove</button>{/if}
+					<Button size="sm" data-testid={changeAvatarTestid} disabled={saving || Boolean(avatarBusy) || offline} onclick={() => fileInput?.click()} label={avatarBusy === 'uploading' ? 'Uploading…' : avatar ? 'Change avatar' : 'Add avatar'} />
+					{#if avatar && onremoveavatar}
+						<button type="button" class="ap-link ap-profedit-remove" data-testid={removeAvatarTestid} disabled={Boolean(avatarBusy) || offline} onclick={onremoveavatar}>Remove</button>
+					{/if}
 				</span>
+				{#if onavatarfile}<input class="ap-sr" type="file" accept="image/*" tabindex="-1" aria-hidden="true" data-testid={avatarFileTestid} bind:this={fileInput} onchange={(e) => picked(e.currentTarget)} />{/if}
 			{:else if avatar && onremoveavatar}
-				<button type="button" class="ap-link ap-profedit-remove" onclick={onremoveavatar} disabled={saving}>Remove avatar</button>
+				<button type="button" class="ap-link ap-profedit-remove" disabled={Boolean(avatarBusy) || offline} onclick={onremoveavatar}>Remove avatar</button>
 			{:else}
-				<span class="ap-profedit-hint">This backend doesn’t take avatar uploads, so your avatar can’t be set here.</span>
+				<span class="ap-profedit-hint">This backend doesn’t take uploads, so your avatar can’t be set here.</span>
 			{/if}
-			{#if avatarKept}<span class="ap-profedit-hint">The server kept your previous avatar.</span>{/if}
+			{#if avatarError}<span class="ap-profedit-hint ap-tone-danger" role="alert">{avatarError}</span>{/if}
 		</div>
 	</div>
 	<label class="ap-fieldlabel">Handle
-		<input class="ap-field" bind:value={() => name, (v) => { name = v; oninput?.(v); }} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" />
+		<input class="ap-field" data-testid={nameTestid} bind:value={() => name, (v) => { name = v; oninput?.(v); }} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" dir="auto" />
 	</label>
 	<p class="ap-profedit-hint">ID <code>{userId}</code> · set by the server, can’t be changed</p>
 	{#if status === 'altered'}<p class="ap-profedit-note" role="status">The server saved your handle as “{serverName}”.</p>{/if}
-	{#if status === 'declined'}<p class="ap-profedit-note ap-profedit-err" role="alert">The server declined this handle. Your old one is still in use.</p>{/if}
-	{#if canPasskey}
-		<div class="ap-profedit-signin">
+	{#if status === 'declined'}<p class="ap-profedit-note ap-tone-danger" role="alert">{declinedNote ?? 'The server declined this handle. Your old one is still in use.'}</p>{/if}
+	{#if signin}
+		<div class="ap-profedit-signin" role="group" aria-label="Sign-in">
 			<span class="ap-fieldlabel">Sign-in</span>
-			{#if passkey === 'done'}<span class="ap-profedit-hint ap-profedit-ok">Passkey saved · this backend will ask your device next time</span>
-			{:else if passkey === 'waiting'}<span class="ap-profedit-hint"><TypingDots />{' Confirm on your device…'}</span>
-			{:else}
-				<span class="ap-profedit-row">
-					<Button size="sm" onclick={onaddpasskey} disabled={saving} label="Add passkey" />
-					<span class={['ap-profedit-hint', passkey === 'declined' && 'ap-profedit-err']}>{passkey === 'declined' ? 'The server didn’t accept it. Your token still works.' : passkey === 'cancelled' ? 'Cancelled. Your token still works.' : 'Signed in with a token'}</span>
-				</span>
-			{/if}
+			{@render signin()}
 		</div>
 	{/if}
 	<div class="ap-profedit-actions">
 		<Button variant="ghost" size="sm" onclick={oncancel} disabled={saving} label={status === 'altered' ? 'Close' : 'Cancel'} />
-		<Button type="submit" variant="primary" size="sm" disabled={saving} label={saving ? 'Saving…' : 'Save'} />
+		<Button type="submit" variant="primary" size="sm" disabled={saving || !name.trim()} label={saving ? 'Saving…' : 'Save'} />
 	</div>
 </form>

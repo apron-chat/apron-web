@@ -1,8 +1,4 @@
 <script lang="ts">
-	import Paperclip from '@lucide/svelte/icons/paperclip';
-	import Square from '@lucide/svelte/icons/square';
-	import Mic from '@lucide/svelte/icons/mic';
-	import Smile from '@lucide/svelte/icons/smile';
 	import { untrack } from 'svelte';
 	import { mentionClass, mentionLabel, type Mention, type MentionPerson } from '$lib/protocol/markdown';
 	import { collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, unchip, type DraftChip, type DraftPart } from '$lib/ui/draft';
@@ -19,11 +15,12 @@
 	import { enterAction, handheld } from '$lib/ui/handheld';
 	import type { StagedFile as Staged } from '$lib/ui/pane-drafts.svelte';
 	import AutocompletePicker from './AutocompletePicker.svelte';
-	import Avatar from './Avatar.svelte';
 	import MentionText from './MentionText.svelte';
 	import Embed from './embeds/Embed.svelte';
-	import EmbedRemove from './embeds/EmbedRemove.svelte';
 	import StagedFile from './StagedFile.svelte';
+	import DesignComposer from '$lib/design/components/Composer.svelte';
+	import ComposerEditable from '$lib/design/components/ComposerEditable.svelte';
+	import type { ComposerField } from '$lib/design/components/types';
 
 	const MENTION_MATCHES_MAX = 8;
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
@@ -89,7 +86,6 @@
 	const uid = $props.id();
 	const pickerId = `${uid}-suggestions`;
 	let field = $state<HTMLDivElement | undefined>();
-	let attachInput = $state<HTMLInputElement | undefined>();
 	let emojiButton = $state<HTMLButtonElement | undefined>();
 	/** The selection in the draft text when the field last lost focus: where a picked emoji goes. */
 	let lastSelection: { start: number; end: number } | undefined;
@@ -104,7 +100,7 @@
 	/** Where the `@` being completed starts, in the draft text. */
 	let anchor = 0;
 	/** The draft text the field shows, and the field showing it. */
-	let shown: { field: HTMLDivElement; text: string } | undefined;
+	let shown: { field: HTMLElement; text: string } | undefined;
 	let recordSeconds = $state<number | undefined>();
 	let recorder: MediaRecorder | undefined;
 	let recordTimer: ReturnType<typeof setInterval> | undefined;
@@ -173,13 +169,6 @@
 		return scored.sort((a, b) => a.rank - b.rank).map((entry) => entry.person).slice(0, MENTION_MATCHES_MAX);
 	}
 
-	/** Splits a name around the letters being typed, which read in accent. */
-	function mark(text: string): { before: string; hit: string; after: string } {
-		const typed = query ?? '';
-		const at = typed ? text.toLowerCase().indexOf(typed.toLowerCase()) : -1;
-		if (at < 0) return { before: text, hit: '', after: '' };
-		return { before: text.slice(0, at), hit: text.slice(at, at + typed.length), after: text.slice(at + typed.length) };
-	}
 
 	const isUser = (id: string): boolean => directory.resolve(id)?.kind === 'user';
 
@@ -214,6 +203,8 @@
 	}
 
 	$effect(() => () => stopRecording(false));
+	// The emoji picker lets go of its button when the button goes (`emojiAnchor`, as on a message's React).
+	$effect(() => (emojiButton ? emojiAnchor(emojiButton) : undefined));
 
 	// A draft set from outside (a room's saved draft, a cleared field) is drawn with its mentions as chips.
 	$effect(() => {
@@ -282,7 +273,7 @@
 
 	/** What a chip names, as the Mention component every rendered mention uses. */
 	function chipMention(part: DraftChip): Mention {
-		if (part.room) return { target: { kind: 'room', id: part.id, title: directory.resolveRoom(part.id)?.title ?? part.id }, hash: true };
+		if (part.room) return { target: directory.resolveRoom(part.id) ?? { kind: 'room', id: part.id, title: part.id }, hash: true };
 		const person = people.find((entry) => entry.id === part.id) ?? directory.person({ user_id: part.id });
 		const target: Mention['target'] = { kind: 'user', id: part.id, name: person?.name?.trim() || part.id, me: directory.isMe(part.id) };
 		if (directory.sharesName({ user_id: part.id })) target.shared = true;
@@ -343,7 +334,7 @@
 	}
 
 	/** Publishes what the field shows as the draft. */
-	function commit(root: HTMLDivElement, parts: DraftPart[], typed: boolean): void {
+	function commit(root: HTMLElement, parts: DraftPart[], typed: boolean): void {
 		const text = draftText(parts);
 		shown = { field: root, text };
 		empty = parts.length === 0;
@@ -352,6 +343,11 @@
 		if (empty && root.childNodes.length > 0) root.replaceChildren();
 		if (value !== text) value = text;
 		if (typed) oninput();
+	}
+
+	/** A named handler, not an arrow in the field's markup: the field keeps one listener as its attributes change while typing. */
+	function compositionEnd(): void {
+		collapse(false);
 	}
 
 	/** Chips finished mentions; `final` when sending, so one at the very end counts too. */
@@ -576,12 +572,6 @@
 		void linkPreviews.prefetch(event.clipboardData?.getData('text/plain') ?? '');
 	}
 
-	function attach(input: HTMLInputElement): void {
-		const files = [...(input.files ?? [])];
-		input.value = '';
-		if (files.length) onfiles(files);
-	}
-
 	/** Microphone: record, then hand the clip over as an audio file. */
 	async function startRecording(): Promise<void> {
 		if (disabled || !canRecord || recorder) return;
@@ -624,176 +614,75 @@
 	}
 </script>
 
-{#if reply}
-	<div class="reply-draft" data-testid="reply-draft" role="status">
-		<span>Replying to {#if reply.name}{reply.name}: <MentionText text={reply.text} />{:else}{reply.text}{/if}</span>
-		<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" aria-label="Cancel reply" onclick={oncancelreply}>Cancel reply</button>
-	</div>
-{/if}
-{#if files.length > 0}
-	<div class="ap-attachments" data-testid="staged-files" aria-label="Files to send">
-		{#each files as staged (staged.id)}
-			<StagedFile {staged} onrename={(title) => onrename(staged.id, title)} onremove={() => { onunstage(staged.id); focus(); }} />
-		{/each}
-	</div>
-{/if}
-{#if previews.length > 0}
-	<div class="previews" data-testid="link-previews" aria-label="Link previews to send">
-		{#each previews as embed (embed.url)}
-			<div class="embed-slot">
-				<Embed {embed} />
-				<EmbedRemove label="Remove preview" onremove={() => dismissPreview(embed.url ?? '')} />
-			</div>
-		{/each}
-	</div>
-{/if}
-<div class="wrap">
-	{#if pickerOpen}
-		<AutocompletePicker
-			id={pickerId}
-			items={matches}
-			active={activeIndex}
-			label="Mention someone"
-			testid="mention-picker"
-			emptyText={query ? `No one here matches “${query}”` : 'People in this room'}
-			getKey={(person) => person.id}
-			onpick={pick}
-			onhover={(index) => (active = index)}
-		>
-			{#snippet row(person)}
-				{@const label = person.name?.trim() || person.id}
-				{@const name = mark(label)}
-				{@const id = mark(person.id)}
-				<Avatar name={label} id={person.id} src={person.avatar} size="sm" />
-				<span class="ap-mpick-name">{name.before}{#if name.hit}<mark class="ap-mpick-hit">{name.hit}</mark>{/if}{name.after}</span>
-				{#if person.id !== label}
-					<span class="ap-mpick-id">@{id.before}{#if id.hit}<mark class="ap-mpick-hit">{id.hit}</mark>{/if}{id.after}</span>
-				{/if}
-			{/snippet}
-		</AutocompletePicker>
-	{:else if roomPickerOpen}
-		<AutocompletePicker
-			id={pickerId}
-			items={roomMatches}
-			active={activeIndex}
-			label="Room suggestions"
-			testid="room-autocomplete"
-			emptyText={`No room matches “${roomFound?.query ?? ''}”`}
-			getKey={(room) => room.id}
-			onpick={pickRoom}
-			onhover={(index) => (active = index)}
-		>
-			{#snippet row(room)}
-				<span class="ap-mpick-name">{room.title}</span>
-				<span class="ap-mpick-id">#{room.id}</span>
-			{/snippet}
-		</AutocompletePicker>
-	{:else if emojiPickerOpen}
-		<AutocompletePicker
-			id={pickerId}
-			items={emojiMatches}
-			active={activeIndex}
-			label="Emoji suggestions"
-			testid="emoji-autocomplete"
-			emptyText={`No emoji match “${emojiFound?.query ?? ''}”`}
-			getKey={(item) => item.id}
-			onpick={pickEmoji}
-			onhover={(index) => (active = index)}
-		>
-			{#snippet row(item)}
-				<span class="ap-mpick-emoji-glyph" aria-hidden="true">{item.native}</span>
-				<span class="ap-mpick-name">:{item.id}:</span>
-				<span class="ap-mpick-id">{item.name}</span>
-			{/snippet}
-		</AutocompletePicker>
-	{/if}
-	<form class="ap-composer" class:ap-composer-disabled={disabled} class:ap-composer-cmd={command} aria-label="Send a message" onsubmit={(event) => { event.preventDefault(); send(); }}>
-		{#if canUpload}
-			<span class="ap-composer-tools">
-				<button class="ap-iconbtn" type="button" aria-label="Attach a file" title="Attach a file" disabled={disabled || recording} onclick={() => attachInput?.click()}>
-					<Paperclip size={18} aria-hidden="true" />
-				</button>
-				{#if canRecord}
-					<button class="ap-iconbtn" class:ap-iconbtn-rec={recording} type="button" aria-label={recording ? 'Stop recording' : 'Record a voice message'} aria-pressed={recording} title={recording ? 'Stop recording' : 'Record a voice message'} {disabled} onclick={() => (recording ? stopRecording() : startRecording())}>
-						{#if recording}
-							<Square size={12} fill="currentColor" stroke="currentColor" strokeWidth={0} aria-hidden="true" />
-						{:else}
-							<Mic size={18} aria-hidden="true" />
-						{/if}
-					</button>
-				{/if}
-			</span>
-			<input class="sr" type="file" multiple tabindex="-1" aria-hidden="true" data-testid="attach-input" bind:this={attachInput} onchange={(event) => attach(event.currentTarget)} />
-		{/if}
-		{#if recordSeconds !== undefined}
-			<span class="ap-composer-recording" role="status"><span class="ap-composer-recdot" aria-hidden="true"></span>Recording <span class="ap-composer-rectime">{clockLabel(recordSeconds)}</span></span>
-		{:else}
-			{#if command}<span class="ap-composer-cmdtag" data-testid="command-tag" title="Sent to the server, not posted">Command</span>{/if}
-			<div
-				class="ap-composer-field field"
-				class:field-empty={empty}
-				id="message-input"
-				data-testid="message-input"
-				role="textbox"
-				aria-label="Message"
-				aria-multiline="true"
-				aria-placeholder={placeholder}
-				aria-disabled={disabled}
-				aria-autocomplete="list"
-				aria-controls={completion ? pickerId : undefined}
-				aria-activedescendant={completion?.count ? `${pickerId}-${activeIndex}` : undefined}
-				data-placeholder={placeholder}
-				tabindex={disabled ? -1 : 0}
-				contenteditable={disabled ? 'false' : 'plaintext-only'}
-				spellcheck="true"
-				bind:this={field}
-				onbeforeinput={beforeinput}
-				oninput={input}
-				oncompositionend={() => collapse(false)}
-				onkeydown={keydown}
-				onkeyup={refreshQuery}
-				onclick={refreshQuery}
-				onblur={blur}
-				onpaste={paste}
-			></div>
-		{/if}
-		<span class="ap-composer-tools">
-			<button
-				class="ap-iconbtn emoji"
-				type="button"
-				data-testid="emoji-button"
-				aria-label="Insert emoji"
-				title="Insert emoji"
-				aria-haspopup="dialog"
-				aria-expanded={emojiOpen}
-				disabled={disabled || recording}
-				bind:this={emojiButton}
-				use:emojiAnchor
-				onclick={openEmoji}
-			>
-				<Smile size={18} aria-hidden="true" />
-			</button>
-		</span>
-		<!-- Pressing Send leaves the focus in the field, so a phone's keyboard stays up between messages rather than dropping and coming back. -->
-		<button class="ap-btn ap-btn-primary ap-btn-sm" data-testid="send-button" type="submit" onmousedown={(event) => event.preventDefault()} aria-label={command ? 'Run command' : 'Send message'} disabled={disabled || recording || (!value.trim() && files.length === 0)}>{command ? 'Run' : 'Send'}</button>
-	</form>
-</div>
+<!-- The design system's Composer draws the field and what sits above it; this fills in the editing: chips, autocomplete, recording, files and previews. -->
+<DesignComposer
+	{placeholder}
+	{value}
+	{disabled}
+	{canCommand}
+	{canUpload}
+	{canRecord}
+	{onfiles}
+	onrecord={startRecording}
+	onstoprecording={() => stopRecording()}
+	{recording}
+	recordingTime={clockLabel(recordSeconds ?? 0)}
+	onsend={send}
+	field={editable}
+	onemoji={openEmoji}
+	{emojiOpen}
+	bind:emojiButton
+	{reply}
+	{replyText}
+	{oncancelreply}
+	attachments={files.length > 0 ? staged : undefined}
+	{previews}
+	{preview}
+	onremovepreview={(index) => dismissPreview(previews[index]?.url ?? '')}
+	{picker}
+	replyTestid="reply-draft"
+	attachmentsTestid="staged-files"
+	previewsTestid="link-previews"
+	fileInputTestid="attach-input"
+	commandTestid="command-tag"
+	emojiTestid="emoji-button"
+	sendTestid="send-button"
+/>
 
-<style>
-	/* The autocomplete picker anchors to the composer and grows upward. */
-	.wrap { position: relative; }
-	.reply-draft { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-4); font-size: var(--text-ui); line-height: 18px; color: var(--ink-muted); }
-	/* Previews of the draft's links, above the field; each can be removed before sending. */
-	.previews { display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-3) var(--space-4) var(--space-2); }
-	.embed-slot { position: relative; flex: 0 1 320px; min-width: 0; }
-	.embed-slot :global(.ap-embed) { width: 100%; min-width: 0; }
-	.reply-draft span { min-width: 0; overflow-wrap: anywhere; }
-	/* The field is an editable div so mentions can be chips; it sizes like the design system's textarea. */
-	.field { position: relative; height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
-	/* On one line, however long the room or thread's name: out of the flow, over the field's padding, cut short. */
-	.field-empty::before { content: attr(data-placeholder); position: absolute; inset: 0; padding: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-muted); pointer-events: none; }
-	.field :global(.ap-mention) { white-space: nowrap; cursor: default; user-select: all; }
-	/* The emoji button reads as pressed while its picker is open. */
-	.emoji[aria-expanded='true'] { background: var(--bg-300); color: var(--ink); }
-	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-</style>
+{#snippet editable({ placeholder, disabled }: ComposerField)}
+	<ComposerEditable
+		{placeholder}
+		{disabled}
+		{empty}
+		bind:element={field}
+		id="message-input"
+		data-testid="message-input"
+		aria-autocomplete="list"
+		aria-controls={completion ? pickerId : undefined}
+		aria-activedescendant={completion?.count ? `${pickerId}-${activeIndex}` : undefined}
+		onbeforeinput={beforeinput}
+		oninput={input}
+		oncompositionend={compositionEnd}
+		onkeydown={keydown}
+		onkeyup={refreshQuery}
+		onclick={refreshQuery}
+		onblur={blur}
+		onpaste={paste}
+	/>
+{/snippet}
+{#snippet replyText()}<MentionText text={reply?.text ?? ''} />{/snippet}
+{#snippet staged()}
+	{#each files as staged (staged.id)}
+		<StagedFile {staged} onrename={(title) => onrename(staged.id, title)} onremove={() => { onunstage(staged.id); focus(); }} />
+	{/each}
+{/snippet}
+{#snippet preview(index: number)}<Embed embed={previews[index]} />{/snippet}
+{#snippet picker()}
+	{#if pickerOpen}
+		<AutocompletePicker id={pickerId} query={query ?? ''} people={matches} active={activeIndex} testid="mention-picker" onpick={(index) => pick(matches[index])} onhover={(index) => (active = index)} />
+	{:else if roomPickerOpen}
+		<AutocompletePicker id={pickerId} query={roomFound?.query ?? ''} rooms={roomMatches} active={activeIndex} onpick={(index) => pickRoom(roomMatches[index])} onhover={(index) => (active = index)} />
+	{:else if emojiPickerOpen}
+		<AutocompletePicker id={pickerId} query={emojiFound?.query ?? ''} emoji={emojiMatches} active={activeIndex} onpick={(index) => pickEmoji(emojiMatches[index])} onhover={(index) => (active = index)} />
+	{/if}
+{/snippet}

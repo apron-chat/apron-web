@@ -1,0 +1,18 @@
+<!-- @dsCard group="Input" height=620 width=1800 page subtitle="The sign-in card on its own, run by your own flow: a code from the external sign-in page; an invite token, which asks a display name; connected as a guest, with Stay a guest; and busy" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SignInForm</title><style>html,body{height:100%}</style></head>
+<body>
+<div id="root" style="height:620px;display:grid;grid-template-columns:repeat(4,1fr)"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(props) { var box = document.createElement('div'); box.className = 'ap-connect'; root.appendChild(box); return A.render(A.SignInForm, box, props); }
+  var schemes = ['guest', 'webauthn', 'email', 'external', 'token'];
+  add({ schemes: schemes, scheme: 'external', name: 'Ada', sent: { scheme: 'external', page: 'https://chat.work.example/sso' }, submit: 'Sign in', secondary: { label: 'Cancel', onclick: function () {} } });
+  add({ schemes: schemes, scheme: 'token', token: 'apron_join_7Kq2', name: 'Ada', hint: 'Creates an account with this sign-up invite. Your user ID is picked from your display name.', submit: 'Sign in' });
+  add({ schemes: ['guest', 'webauthn', 'email'], scheme: 'webauthn', passkeyChoice: true, askName: false, hint: 'Connected as a guest. Sign in with a passkey you saved, or stay a guest.', hintStatus: true,
+    error: 'The passkey sheet was closed before it finished.', submit: 'Sign in with passkey', secondary: { label: 'Stay a guest', onclick: function () {} } });
+  add({ schemes: schemes, scheme: 'guest', name: 'Ada', hint: 'No token needed; the server picks a guest identity.', busy: true, submit: 'Connect', secondary: { label: 'Cancel', onclick: function () {} } });
+</script>
+</body>
+</html>

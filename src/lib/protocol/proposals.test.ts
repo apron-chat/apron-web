@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { findProposal, forgetProposal, newProposalState, rememberProposal, signInPageUrl, type Proposal } from './proposals';
+import { memoryStorage } from '$lib/test/storage';
 
 /** The proposals this browser made (§4.11.1), and the external pages it may open (§4.11.5). */
 describe('proposals', () => {
@@ -7,11 +8,7 @@ describe('proposals', () => {
 
 	beforeEach(() => {
 		storage.clear();
-		vi.stubGlobal('localStorage', {
-			getItem: (key: string) => storage.get(key) ?? null,
-			setItem: (key: string, value: string) => void storage.set(key, value),
-			removeItem: (key: string) => void storage.delete(key)
-		});
+		vi.stubGlobal('localStorage', memoryStorage(storage));
 	});
 
 	afterEach(() => vi.unstubAllGlobals());

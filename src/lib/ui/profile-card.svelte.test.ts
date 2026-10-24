@@ -15,15 +15,13 @@ function userButton(userId: string): HTMLElement {
 describe('profile card', () => {
 	afterEach(() => profileCard.close());
 
-	it('opens for a user button, from inside it too, and a second press closes it', () => {
+	it('opens for a user button, from inside it too, and a second press closes it; other clicks are left alone', () => {
 		const chip = userButton('ada');
 		expect(openProfileFrom(element(chip))).toBe(true);
 		expect(profileCard.current).toEqual({ anchor: chip, userId: 'ada' });
 		expect(openProfileFrom(chip)).toBe(true);
 		expect(profileCard.current).toBeUndefined();
-	});
-
-	it('leaves other clicks alone', () => {
+		// Other clicks are left alone.
 		expect(openProfileFrom(element())).toBe(false);
 		expect(openProfileFrom(null)).toBe(false);
 		expect(profileCard.current).toBeUndefined();

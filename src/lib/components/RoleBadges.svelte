@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Identity } from '$lib/protocol/types';
+	import DesignRoleBadges from '$lib/design/components/RoleBadges.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 
 	/**
@@ -10,10 +11,8 @@
 	let { user }: { user: Identity | undefined } = $props();
 	let roles = $derived.by(() => {
 		const listed = directory.person(user)?.roles;
-		return Array.isArray(listed) ? [...new Set(listed.filter((role): role is string => typeof role === 'string' && role.trim() !== ''))] : [];
+		return Array.isArray(listed) ? listed : [];
 	});
 </script>
 
-{#if roles.length}
-	<span class="ap-roles" data-testid="roles">{#each roles as role (role)}<span class="ap-role" class:ap-role-admin={role === 'admin'} class:ap-role-bot={role === 'bot'} title="Role: {role}">{role}</span>{/each}</span>
-{/if}
+<DesignRoleBadges {roles} data-testid="roles" />

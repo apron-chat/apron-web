@@ -16,18 +16,16 @@ function layoutWith(saved: Partial<SidebarPrefs>): { layout: SidebarLayout; writ
 }
 
 describe('SidebarLayout', () => {
-	it('restores a saved collapsed sidebar and its width', () => {
+	it('restores a saved collapsed sidebar and its width, clamped to the bounds', () => {
 		const { layout } = layoutWith({ width: 300, collapsed: true });
 		layout.load();
 		expect(layout.collapsed).toBe(true);
 		expect(layout.width).toBe(300);
-	});
-
-	it('clamps a saved width to the bounds', () => {
-		const { layout } = layoutWith({ width: 9000 });
-		layout.load();
-		expect(layout.width).toBe(480);
-		expect(layout.collapsed).toBe(false);
+		// A saved width out of bounds is clamped.
+		const { layout: wide } = layoutWith({ width: 9000 });
+		wide.load();
+		expect(wide.width).toBe(480);
+		expect(wide.collapsed).toBe(false);
 	});
 
 	it('saves reopening after a saved collapse, at the width it had', () => {

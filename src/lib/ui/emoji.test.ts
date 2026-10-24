@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { currentTheme, NARROW_MAX, PICKER_HEIGHT, PICKER_MIN_HEIGHT, PICKER_WIDTH, pickerColors, placePicker, rgbTriple } from './emoji';
+import { NARROW_MAX } from './breakpoints';
+import { currentTheme, PICKER_HEIGHT, PICKER_MIN_HEIGHT, PICKER_WIDTH, pickerColors, placePicker, rgbTriple } from './emoji';
 
 const desktop = { width: 1280, height: 800 };
 /** A 28px trigger with its top-left corner at (left, top). */
 const button = (left: number, top: number) => ({ left, top, right: left + 28, bottom: top + 28 });
 
 describe('placing the emoji picker', () => {
-	it('opens below a trigger when it fits, lined up with its left edge', () => {
+	it('opens below a trigger when it fits, lined up with its left edge, and flips above one near the bottom', () => {
 		expect(placePicker(button(100, 100), desktop)).toEqual({ mode: 'popover', side: 'below', top: 132, left: 100, width: PICKER_WIDTH, height: PICKER_HEIGHT });
-	});
-
-	it('flips above a trigger near the bottom, such as the composer', () => {
+		// Near the bottom, such as the composer, it flips above.
 		const placed = placePicker(button(900, 740), desktop);
 		expect(placed).toMatchObject({ mode: 'popover', side: 'above', height: PICKER_HEIGHT });
 		if (placed.mode !== 'popover') throw new Error('expected a popover');
@@ -60,7 +59,7 @@ describe('the emoji picker’s theme', () => {
 		expect(currentTheme('sepia', false)).toBe('dark');
 	});
 
-	it('reads colors as r, g, b triples', () => {
+	it('maps accent to the rust accent, text to ink and the ground to bg-200, each read as r, g, b', () => {
 		expect(rgbTriple('#f28a3c')).toBe('242, 138, 60');
 		expect(rgbTriple(' #A83C14 ')).toBe('168, 60, 20');
 		expect(rgbTriple('#fff')).toBe('255, 255, 255');
@@ -69,9 +68,6 @@ describe('the emoji picker’s theme', () => {
 		expect(rgbTriple('rgba(4 4 10 / 0.6)')).toBe('4, 4, 10');
 		expect(rgbTriple('var(--accent)')).toBeUndefined();
 		expect(rgbTriple('')).toBeUndefined();
-	});
-
-	it('maps accent to the rust accent, text to ink and the ground to bg-200', () => {
 		const tokens: Record<string, string> = { '--accent': '#f28a3c', '--ink': '#ece9e4', '--bg-200': '#1d1d29', '--bg-100': '#15151f' };
 		expect(pickerColors((token) => tokens[token] ?? '')).toEqual({
 			'--rgb-accent': '242, 138, 60',

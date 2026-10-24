@@ -40,7 +40,7 @@ describe('FloatingDay', () => {
 		expect(day.shown).toBe(false);
 	});
 
-	it('floats nothing while that day\'s own divider still shows at the top', () => {
+	it('floats nothing while that day\'s own divider still shows at the top, or at the live end', () => {
 		const day = new FloatingDay();
 		day.update(timeline(0, dividers, rows), false);
 		expect(day.shown).toBe(false);
@@ -49,12 +49,9 @@ describe('FloatingDay', () => {
 		day.update(timeline(700, dividers, rows), false);
 		expect(day.label).toBe(dayLabelOf(MAR_10));
 		expect(day.shown).toBe(true);
-		day.dispose();
-	});
-
-	it('floats nothing at the live end', () => {
-		const day = new FloatingDay();
+		// Nor at the live end.
 		day.update(timeline(400, dividers, rows), true);
 		expect(day.shown).toBe(false);
+		day.dispose();
 	});
 });

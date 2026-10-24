@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { ClassValue } from 'svelte/elements';
 
 	interface Props {
 		/** The offer, as a question: "Get notified when you’re mentioned?". */
@@ -18,9 +19,12 @@
 		 * on screen.
 		 */
 		pointer?: boolean;
+		/** Classes for the nudge, added to its own. */
+		class?: ClassValue;
+		/** A `data-testid` for the nudge. */
 		testid?: string;
 	}
-	let { title, detail, note, icon, actions, pointer = false, testid }: Props = $props();
+	let { title, detail, note, icon, actions, pointer = false, class: className, testid }: Props = $props();
 	const id = $props.id();
 </script>
 
@@ -28,7 +32,8 @@
 	A small offer made once, at the moment it's useful: not modal, and it doesn't take focus from what you're doing.
 	On the surface, unlike ActionBanner's accent: it asks, rather than reports something that happened.
 -->
-<div class={['ap-nudge', pointer && 'ap-nudge-pointer']} role="dialog" aria-labelledby="{id}-title" aria-describedby={detail ? `${id}-detail` : undefined} data-testid={testid}>
+<!-- Named and described by its title and detail. -->
+<div role="dialog" data-testid={testid} class={['ap-nudge', pointer && 'ap-nudge-pointer', className]} aria-labelledby="{id}-title" aria-describedby={detail ? `${id}-detail` : undefined}>
 	<div class="ap-nudge-top">
 		{#if icon}<span class="ap-nudge-icon" aria-hidden="true">{@render icon()}</span>{/if}
 		<span class="ap-nudge-text">

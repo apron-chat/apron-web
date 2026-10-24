@@ -1,0 +1,13 @@
+<!-- @dsCard group="Input" height=220 subtitle="Over the conversation while files are dragged onto it" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DropZone</title></head>
+<body>
+<div id="root" style="position:relative;height:180px;margin:16px;border:1px solid var(--line);border-radius:10px;background:var(--bg-100)"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.Message, root, { view: { sender: { user_id: 'alice', name: 'Alice Chen' }, time: '14:02', body: { html: 'Can you send the crash log?' } } });
+  A.render(A.DropZone, root);
+</script>
+</body>
+</html>

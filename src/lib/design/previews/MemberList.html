@@ -1,0 +1,20 @@
+<!-- @dsCard group="Navigation" height=440 subtitle="Online and Offline with their counts, offline dimmed, roles beside names, you marked; hover a row for Remove; the + opens the add form; Offline folded; placeholder rows while coming up" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>MemberList</title></head>
+<body>
+<div id="root" style="display:grid;grid-template-columns:repeat(3,260px);gap:16px;padding:16px;height:400px;box-sizing:border-box"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props) { var box = document.createElement('div'); box.style.cssText = 'display:grid;min-height:0;border:1px solid var(--line);border-radius:10px;overflow:hidden'; root.appendChild(box); return A.render(C, box, props || {}); }
+  var noop = function () {};
+  var sections = [
+    { key: 'online', label: 'Online', people: [{ user_id: 'alice', name: 'Alice Chen', status: 'online', roles: ['admin'] }, { user_id: 'bob', name: 'Bob', status: 'dnd' }, { user_id: 'sam', name: 'Sam', status: 'idle', you: true }, { user_id: 'sam2', name: 'Sam', status: 'online', handle: true }] },
+    { key: 'offline', label: 'Offline', people: [{ user_id: 'dana', name: 'Dana', status: 'offline' }, { user_id: 'deploybot', name: 'Deploy bot', status: 'offline', roles: ['bot'] }] }];
+  add(A.MemberList, { room: 'Ops', count: 6, sections: sections, onprofile: noop, onremove: noop, onaddtoggle: noop });
+  add(A.MemberList, { room: 'Ops', count: 6, sections: sections, shut: ['offline'], onaddtoggle: noop, addOpen: true, note: { text: 'Added Grace.' },
+    addForm: A.partOf(A.AddMemberForm, function (id) { return { id: id, value: '@lee', candidates: [{ user_id: 'lee', name: 'Lee' }], onadd: noop }; }) });
+  add(A.MemberList, { placeholder: true });
+</script>
+</body>
+</html>

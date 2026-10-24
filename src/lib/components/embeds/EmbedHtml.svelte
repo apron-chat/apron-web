@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DOMPurify from 'dompurify';
+	import DesignEmbedHtml from '$lib/design/components/EmbedHtml.svelte';
 	import type { Embed } from '$lib/protocol/types';
 	import EmbedFallback from './EmbedFallback.svelte';
 
@@ -19,7 +20,7 @@
 </script>
 
 {#if html !== undefined}
-	<div class="ap-embed ap-embed-html">{@html html}</div>
+	<DesignEmbedHtml kind="html" {html} />
 {:else}
 	<EmbedFallback {embed} />
 {/if}

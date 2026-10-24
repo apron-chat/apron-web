@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ProtocolStore, applyRecords, createTimeline, decodeHistoryRecords, timelineEvents, type MembershipRecord, type TimelineState } from '$lib/protocol/reducer';
-import type { RoomSnapshot } from '$lib/protocol/client';
+import { ProtocolStore, applyRecords, decodeHistoryRecords, timelineEvents, type MembershipRecord } from '$lib/protocol/reducer';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { escapeMarkdown, quoteMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadSummaryText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadSummaryText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
+import { roomSnapshot as room } from '$lib/test/builders';
 
 const DAY = 24 * 60 * 60 * 1000;
 const base = Date.UTC(2026, 8, 14, 12, 0, 0);
@@ -18,15 +18,6 @@ const message = (offset: number, from: string, fields: Partial<MessageRecord> = 
 	body: { text: `${from} says ${offset}` },
 	...fields
 });
-
-function timeline(roomId: string, messages: MessageRecord[]): TimelineState {
-	const state = createTimeline(roomId);
-	return { ...state, events: Object.fromEntries(messages.map((event) => [event.message_id, event])), order: messages.map((event) => event.message_id) };
-}
-
-function room(id: string, messages: MessageRecord[] = [], fields: Partial<RoomSnapshot> = {}): RoomSnapshot {
-	return { id, title: id, joined: true, timeline: timeline(id, messages), recovering: false, loaded: true, loading: false, notices: [], ...fields };
-}
 
 const kinds = (items: TimelineItem[]) => items.map((item) => item.kind);
 
@@ -110,7 +101,7 @@ describe('thread grouping', () => {
 		expect(threadEntry(room('opaque', [], { parentRoomId: 'general', record: { room_id: 'opaque', log_id: '42' } })).anchor).toBe('42');
 	});
 
-	it('previews the description as text and the latest message on one line', () => {
+	it('previews the description as text and the latest message on one line, with its sender', () => {
 		const latest = message(1000, 'bob', { room_id: 't1', body: { text: 'latest\n  words' } });
 		const entry = threadEntry(room('t1', [latest], { parentRoomId: 'general', description: 'Line **one**\nLine two\n\n- Line three' }));
 		expect(threadSummaryText(entry)).toBe('Line one\nLine two\nLine three');
@@ -119,16 +110,7 @@ describe('thread grouping', () => {
 		expect(threadLatest({ latestMessage: { ...latest, deleted: true } })).toEqual({ sender: '', text: 'Message deleted' });
 		expect(threadLatest({ latestMessage: message(1, 'bob', { body: { embeds: [{ kind: 'image' }] } }) })).toMatchObject({ text: 'Attachment' });
 		expect(threadLatest({ latestMessage: undefined })).toBeUndefined();
-	});
-
-	it('gives the sidebar both: the summary as text and the latest message with its sender', () => {
-		const latest = message(1000, 'bob', { room_id: 't1', body: { text: 'latest\n  words' } });
-		const entry = threadEntry(room('t1', [latest], { parentRoomId: 'general', description: 'Line **one**\nLine two' }));
-		expect(threadSummaryText(entry)).toBe('Line one\nLine two');
-		expect(threadLatest(entry)).toEqual({ sender: 'Bob', text: 'latest words' });
 		expect(threadSummaryText({ description: undefined })).toBe('');
-		expect(threadLatest({ latestMessage: undefined })).toBeUndefined();
-		expect(threadLatest({ latestMessage: { ...latest, deleted: true } })).toEqual({ sender: '', text: 'Message deleted' });
 	});
 
 	it('titles a new thread after its message’s first line', () => {
@@ -162,10 +144,6 @@ describe('thread grouping', () => {
 		const long = unquote(threadSummaryFor(message(0, 'alice', { body: { text: `Code:\n\`\`\`\`\n${'x = 1\n'.repeat(120)}\`\`\`\``, format: 'markdown' } }))!);
 		expect(long).toMatch(/\n````\n\n…$/);
 	});
-
-	it('quotes Markdown line by line', () => {
-		expect(quoteMarkdown('one\n\ntwo')).toBe('> one\n>\n> two');
-	});
 });
 
 describe('room view', () => {
@@ -178,7 +156,7 @@ describe('room view', () => {
 	const moved = threadEntry(room(String(base + 1500), [], { parentRoomId: 'general', title: 'Moved' }));
 	const bare = threadEntry(room(String(base + DAY), [], { parentRoomId: 'general', title: 'Bare' }));
 
-	it('keeps every message and puts each card where its thread was started, with date dividers', () => {
+	it('keeps every message and puts each card where its thread was started, with date dividers, and is just the messages without threads', () => {
 		const items = buildRoomTimeline({ messages: [first, plain, later], threads: [bare, moved, started], now });
 		expect(kinds(items)).toEqual(['date', 'message', 'thread', 'message', 'thread', 'date', 'thread', 'date', 'message']);
 		expect(items[1]).toMatchObject({ event: first });
@@ -187,18 +165,16 @@ describe('room view', () => {
 		expect(items[4]).toMatchObject({ key: `thread:${base + 1500}` });
 		expect(items[6]).toMatchObject({ key: `thread:${base + DAY}` });
 		expect(items[7]).toMatchObject({ label: 'Today' });
-	});
-
-	it('is just the messages without threads', () => {
-		const items = buildRoomTimeline({ messages: [first, message(1000, 'alice')], threads: [], now });
-		expect(kinds(items)).toEqual(['date', 'message', 'message']);
-		expect(items[2]).toMatchObject({ grouped: true });
+		// Without threads, just the messages.
+		const plainItems = buildRoomTimeline({ messages: [first, message(1000, 'alice')], threads: [], now });
+		expect(kinds(plainItems)).toEqual(['date', 'message', 'message']);
+		expect(plainItems[2]).toMatchObject({ grouped: true });
 		expect(buildRoomTimeline({ messages: [], threads: [bare], now }).map((item) => item.kind)).toEqual(['date', 'thread']);
 	});
 });
 
 describe('thread view', () => {
-	it('places each rename by its log position and breaks grouping around it', () => {
+	it('places each rename by its log position and breaks grouping around it, else is just its messages with date dividers', () => {
 		const first = message(1000, 'bob', { room_id: 't1' });
 		const second = message(3000, 'bob', { room_id: 't1' });
 		const renames = [{ log_id: String(base + 2000), title: 'Deploy', previous: '' }, { log_id: String(base + 4000), title: 'Deploy v2', previous: 'Deploy' }];
@@ -207,11 +183,8 @@ describe('thread view', () => {
 		expect(items[2]).toMatchObject({ title: 'Deploy' });
 		expect(items[3]).toMatchObject({ grouped: false });
 		expect(items[4]).toMatchObject({ title: 'Deploy v2' });
-	});
-
-	it('is just its messages with date dividers', () => {
-		const items = buildThreadTimeline({ messages: [message(1000, 'bob'), message(2000, 'bob')] });
-		expect(kinds(items)).toEqual(['date', 'message', 'message']);
+		// Without renames, just its messages with date dividers.
+		expect(kinds(buildThreadTimeline({ messages: [message(1000, 'bob'), message(2000, 'bob')] }))).toEqual(['date', 'message', 'message']);
 	});
 });
 
@@ -223,19 +196,15 @@ describe('message helpers', () => {
 		expect(replySnippet(message(0, 'alice', { body: {} }))).toBe('Empty message');
 	});
 
-	it('lists the people a room has seen, newest first, with the viewer always present', () => {
+	it('lists the people a room has seen, newest first, with the viewer always present, or only its listed members', () => {
 		const me = { user_id: 'sam', name: 'Sam' };
 		const people = peopleIn([message(0, 'alice'), message(1, 'bob'), message(2, 'alice')], me);
 		expect(people.map((p) => [p.id, p.me ?? false])).toEqual([['alice', false], ['bob', false], ['sam', true]]);
 		expect(peopleIn([message(0, 'sam')], me)).toEqual([{ id: 'sam', name: 'Sam', me: true }]);
-	});
-
-	it('offers only the listed members when the room has a members list', () => {
-		const me = { user_id: 'sam', name: 'Sam' };
+		// Only the listed members, when the room has a members list.
 		const messages = [message(0, 'alice'), message(1, 'bob'), message(2, 'carol')];
 		// Bob has left; Dana has joined but has not spoken.
-		const people = peopleIn(messages, me, [{ user_id: 'alice' }, { user_id: 'carol' }, { user_id: 'dana' }]);
-		expect(people.map((p) => p.id)).toEqual(['carol', 'alice', 'dana', 'sam']);
+		expect(peopleIn(messages, me, [{ user_id: 'alice' }, { user_id: 'carol' }, { user_id: 'dana' }]).map((p) => p.id)).toEqual(['carol', 'alice', 'dana', 'sam']);
 		expect(peopleIn(messages, me, []).map((p) => p.id)).toEqual(['sam']);
 		// Memberships keep the list current: posting without joining does not make a member.
 		expect(peopleIn(messages, me, [{ user_id: 'alice' }]).map((p) => p.id)).toEqual(['alice', 'sam']);
@@ -324,7 +293,7 @@ describe('join and leave lines', () => {
 		return item.kind;
 	});
 
-	it('places each record at its log_id among the messages, and a message after a line starts a new group', () => {
+	it('places each record at its log_id among the messages, by time against a notice, and a message after a line starts a new group', () => {
 		const items = buildRoomTimeline({
 			messages: [message(0, 'alice'), message(2000, 'alice'), message(4000, 'alice')],
 			threads: [],
@@ -333,6 +302,11 @@ describe('join and leave lines', () => {
 		});
 		expect(shape(items)).toEqual(['date', 'alice', '+bob/-', 'alice', 'alice+', '+/-carol']);
 		expect(items[2]).toMatchObject({ key: `members:${base + 1000}`, logId: String(base + 1000) });
+		// A notice in the same gap as a line goes by time.
+		const notice = (at: number) => ({ key: 'n', room_id: 'general', from: { user_id: '~private' }, body: { text: 'n' }, after: String(base), at });
+		const input = { messages: [message(0, 'alice')], threads: [], memberships: [joins(1000, ['bob', true])], now };
+		expect(shape(buildRoomTimeline({ ...input, notices: [notice(base + 500)] }))).toEqual(['date', 'alice', 'notice', '+bob/-']);
+		expect(shape(buildRoomTimeline({ ...input, notices: [notice(base + 1500)] }))).toEqual(['date', 'alice', '+bob/-', 'notice']);
 	});
 
 	it('merges consecutive records into one line, keyed by the first and timed by the last', () => {
@@ -356,7 +330,7 @@ describe('join and leave lines', () => {
 		expect(shape(items)).toEqual(['date', 'alice', 'alice+']);
 	});
 
-	it('breaks a run at a message, a thread card, a notice, and a date divider', () => {
+	it('breaks a run at a message, a thread card, a notice, and a date divider, which a line on a new day gets', () => {
 		const card = threadEntry(room(String(base + 1500), [], { parentRoomId: 'general', title: 'Card' }));
 		const items = buildRoomTimeline({
 			messages: [message(0, 'alice'), message(4000, 'alice')],
@@ -370,19 +344,10 @@ describe('join and leave lines', () => {
 		});
 		// bob joined before the card and left after it: two lines. The next day's churn nets to nothing, and gets no divider.
 		expect(shape(items)).toEqual(['date', 'alice', '+bob/-', 'thread', '+carol/-bob', 'alice', 'notice', '+dave/-']);
-	});
-
-	it('orders a notice and a line in the same gap by time', () => {
-		const notice = (at: number) => ({ key: 'n', room_id: 'general', from: { user_id: '~private' }, body: { text: 'n' }, after: String(base), at });
-		const input = { messages: [message(0, 'alice')], threads: [], memberships: [joins(1000, ['bob', true])], now };
-		expect(shape(buildRoomTimeline({ ...input, notices: [notice(base + 500)] }))).toEqual(['date', 'alice', 'notice', '+bob/-']);
-		expect(shape(buildRoomTimeline({ ...input, notices: [notice(base + 1500)] }))).toEqual(['date', 'alice', '+bob/-', 'notice']);
-	});
-
-	it('gives a line on a new day its date divider', () => {
-		const items = buildRoomTimeline({ messages: [message(0, 'alice')], threads: [], memberships: [joins(1000, ['bob', true]), joins(DAY, ['carol', true])], now });
-		expect(shape(items)).toEqual(['date', 'alice', '+bob/-', 'date', '+carol/-']);
-		expect(items[3]).toMatchObject({ label: 'Yesterday' });
+		// A line on a new day gets its date divider.
+		const nextDay = buildRoomTimeline({ messages: [message(0, 'alice')], threads: [], memberships: [joins(1000, ['bob', true]), joins(DAY, ['carol', true])], now });
+		expect(shape(nextDay)).toEqual(['date', 'alice', '+bob/-', 'date', '+carol/-']);
+		expect(nextDay[3]).toMatchObject({ label: 'Yesterday' });
 	});
 
 	it('shows a compacted record’s entries as one line, and skips a baseline without breaking the run', () => {

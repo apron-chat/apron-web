@@ -1,4 +1,4 @@
-<!-- @dsCard group="Input" height=232 subtitle="Room, thread, recording, command" -->
+<!-- @dsCard group="Input" height=560 subtitle="Room, thread, recording, command; replying with a file and a link preview" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Composer</title></head>
@@ -7,10 +7,15 @@
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
-  add(A.Composer, { room: 'Ops', canUpload: true });
-  add(A.Composer, { room: 'Ops', thread: { thread: 'deploy', name: 'Deploy' }, canUpload: true });
-  add(A.Composer, { room: 'Ops', canUpload: true, recording: true, recordingTime: '0:12' });
-  add(A.Composer, { room: 'Ops', canUpload: true, canCommand: true, value: '/kick @guest_1234 spamming' });
+  function emoji() {}
+  add(A.Composer, { room: 'Ops', canUpload: true, onemoji: emoji });
+  add(A.Composer, { room: 'Ops', thread: { thread: 'deploy', name: 'Deploy' }, canUpload: true, onemoji: emoji });
+  add(A.Composer, { room: 'Ops', canUpload: true, onemoji: emoji, recording: true, recordingTime: '0:12' });
+  add(A.Composer, { room: 'Ops', canUpload: true, onemoji: emoji, canCommand: true, value: '/kick @guest_1234 spamming' });
+  add(A.Composer, { room: 'Ops', canUpload: true, onemoji: emoji, value: 'Here is the plan: https://github.com/apron/web/pull/12',
+    reply: { name: 'Dana', text: 'Can someone write down the rollout?' }, oncancelreply: function () {},
+    attachments: A.part(A.AttachmentTile, { kind: 'file', name: 'rollout-plan.pdf', detail: '84 KB', onremove: function () {}, onrename: function () {} }),
+    previews: [{ kind: 'link', url: 'https://github.com/apron/web/pull/12', og: { site_name: 'GitHub · apron/web', title: 'Pull request #12' } }], onremovepreview: function () {} });
 </script>
 </body>
 </html>

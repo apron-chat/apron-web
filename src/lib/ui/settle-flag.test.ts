@@ -16,12 +16,22 @@ describe('SettleFlag', () => {
 		vi.useRealTimers();
 	});
 
-	it('shows nothing for work quicker than the delay', () => {
+	it('shows nothing for work quicker than the delay, counted from the latest start', () => {
 		flag.set(true);
 		vi.advanceTimersByTime(SHOW_AFTER_MS - 1);
 		flag.set(false);
 		vi.advanceTimersByTime(5_000);
 		expect(changes).toEqual([]);
+		// The delay counts from the latest start, and repeats of the same state change nothing.
+		flag.set(true);
+		vi.advanceTimersByTime(SHOW_AFTER_MS - 100);
+		flag.set(true);
+		vi.advanceTimersByTime(100);
+		expect(changes).toEqual([true]);
+		flag.set(false);
+		flag.set(false);
+		vi.advanceTimersByTime(Math.max(MIN_SHOWN_MS, LINGER_MS));
+		expect(changes).toEqual([true, false]);
 	});
 
 	it('turns on once the work has gone on for the delay, and off a moment after it ends', () => {
@@ -36,16 +46,6 @@ describe('SettleFlag', () => {
 		expect(changes).toEqual([true, false]);
 	});
 
-	it('reads work in steps as one: a next step within the linger keeps it on', () => {
-		flag.set(true);
-		vi.advanceTimersByTime(SHOW_AFTER_MS + MIN_SHOWN_MS + 500);
-		flag.set(false);
-		vi.advanceTimersByTime(LINGER_MS - 50);
-		flag.set(true);
-		vi.advanceTimersByTime(2_000);
-		expect(changes).toEqual([true]);
-	});
-
 	it('stays on for the minimum when the work ends just after it showed', () => {
 		flag.set(true);
 		vi.advanceTimersByTime(SHOW_AFTER_MS + 50);
@@ -56,7 +56,7 @@ describe('SettleFlag', () => {
 		expect(changes).toEqual([true, false]);
 	});
 
-	it('stays on, without blinking, when the work starts again while it waits to hide', () => {
+	it('stays on, without blinking, when the work starts again while it waits to hide: work in steps reads as one', () => {
 		flag.set(true);
 		vi.advanceTimersByTime(SHOW_AFTER_MS);
 		flag.set(false);
@@ -64,17 +64,12 @@ describe('SettleFlag', () => {
 		flag.set(true);
 		vi.advanceTimersByTime(5_000);
 		expect(changes).toEqual([true]);
-	});
-
-	it('counts the delay from the latest start, and repeats of the same state change nothing', () => {
+		// Past the minimum, a next step within the linger keeps it on too.
+		vi.advanceTimersByTime(MIN_SHOWN_MS + 500);
+		flag.set(false);
+		vi.advanceTimersByTime(LINGER_MS - 50);
 		flag.set(true);
-		vi.advanceTimersByTime(SHOW_AFTER_MS - 100);
-		flag.set(true);
-		vi.advanceTimersByTime(100);
+		vi.advanceTimersByTime(2_000);
 		expect(changes).toEqual([true]);
-		flag.set(false);
-		flag.set(false);
-		vi.advanceTimersByTime(Math.max(MIN_SHOWN_MS, LINGER_MS));
-		expect(changes).toEqual([true, false]);
 	});
 });

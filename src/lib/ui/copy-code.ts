@@ -1,3 +1,5 @@
+import { highlightCode } from './highlight';
+
 /**
  * A Svelte action that gives each code block (`pre`) inside the node a Copy
  * button, such as for the bot token a `/invite-bot` notice carries. Pass the
@@ -36,4 +38,10 @@ export function copyCode(node: HTMLElement, _html?: string): { update: (html?: s
 			for (const timer of timers) clearTimeout(timer);
 		}
 	};
+}
+
+/** A message body's code blocks, for a Message's `on.code`: highlighted, and with `copy` (on a notice) a Copy button each. */
+export function decorateCode(body: HTMLElement, copy: boolean): (() => void) | undefined {
+	highlightCode(body);
+	return copy ? copyCode(body).destroy : undefined;
 }

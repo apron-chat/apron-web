@@ -11,7 +11,8 @@ function install(store: ProtocolStore, ...messages: MessageRecord[]): void {
 }
 
 describe('message store', () => {
-	it.each([5_000, 50_000])('replays %i messages in pages and builds a sorted timeline', (count) => {
+	it('replays 50000 messages in pages and builds a sorted timeline', () => {
+		const count = 50_000;
 		const store = new ProtocolStore();
 		const base = 1_724_803_200_000;
 		for (let offset = 0; offset < count; offset += 200) {

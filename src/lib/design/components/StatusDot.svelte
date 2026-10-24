@@ -1,7 +1,9 @@
 <script lang="ts">
+	import type { ClassValue } from 'svelte/elements';
 	import type { Presence } from './types';
 	import { presence, presenceLabel } from './util';
 
+	/** A user's status as a dot; its role and label are set by `label` and `decorative`. */
 	interface Props {
 		/**
 		 * A user's `status` (§4.5) from the kept current object: `online`, `idle`, `dnd` or `offline`, or your own
@@ -15,8 +17,10 @@
 		label?: string;
 		/** Beside words that already say the status (or on an avatar the name follows): hidden from screen readers, tooltip kept. */
 		decorative?: boolean;
+		/** Classes for the dot, added to its own. */
+		class?: ClassValue;
 	}
-	let { status, size = 'md', label, decorative = false }: Props = $props();
+	let { status, size = 'md', label, decorative = false, class: className }: Props = $props();
 
 	const shown = $derived(presence(status));
 	const words = $derived(shown ? label || presenceLabel(status) || '' : '');
@@ -24,5 +28,5 @@
 
 {#if shown}
 	<!-- Shape and color both say the status: a dot, a crescent, a dot with a bar, a hollow ring (offline or invisible), a dashed ring (unknown). -->
-	<span class="ap-presence ap-presence-{size} ap-presence-{shown}" title={words} role={decorative ? undefined : 'img'} aria-label={decorative ? undefined : words} aria-hidden={decorative ? 'true' : undefined}></span>
+	<span title={words} class={['ap-presence', `ap-presence-${size}`, `ap-presence-${shown}`, className]} role={decorative ? undefined : 'img'} aria-label={decorative ? undefined : words} aria-hidden={decorative ? 'true' : undefined}></span>
 {/if}

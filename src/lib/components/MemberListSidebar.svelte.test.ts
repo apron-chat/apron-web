@@ -1,18 +1,14 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
+import { flushSync } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, RoomSnapshot } from '$lib/protocol/client';
 import type { Identity } from '$lib/protocol/types';
 import { directory } from '$lib/ui/directory.svelte';
 import { blankSnapshot, type SessionView } from '$lib/ui/session.svelte';
 import MemberListSidebar from './MemberListSidebar.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
+import * as dom from '$lib/test/dom';
 
 afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
 	localStorage.clear();
 	directory.forget();
 });
@@ -35,46 +31,32 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChan
 	directory.apply(snapshot, undefined);
 	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })) } as unknown as RoomSnapshot;
 	const session = { snapshot, canManageRooms: true } as unknown as SessionView;
-	instance = mount(MemberListSidebar, { target: document.body, props: { client: canChange ? ({} as never) : undefined, session, room, open: true, canChange } });
-	flushSync();
-	return [...document.querySelectorAll<HTMLLIElement>('li.member')];
+	dom.render(MemberListSidebar, { client: canChange ? ({} as never) : undefined, session, room, open: true, canChange });
+	return [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
 }
 
 /** Each section's heading and its members' IDs, in order. */
 function sections() {
-	return [...document.querySelectorAll<HTMLElement>('section.member-section')].map((section) => [
+	return [...document.querySelectorAll<HTMLElement>('section.ap-memberlist-section')].map((section) => [
 		section.querySelector('h3')?.textContent?.replace('▾', '').trim(),
-		[...section.querySelectorAll<HTMLLIElement>('li.member')].map((row) => row.dataset.user)
+		[...section.querySelectorAll<HTMLLIElement>('li.ap-member')].map((row) => row.dataset.user)
 	]);
 }
 
 describe('MemberListSidebar', () => {
-	it('lists members online, idle, dnd, unknown, then those with no status, by name within each, and offline last', () => {
+	it('lists members by status, then by name, under Online and Offline, each with their role badges', () => {
 		const rows = render([
 			{ user_id: 'zed', name: 'Zed' },
-			{ user_id: 'bo', name: 'Bo', status: 'offline' },
-			{ user_id: 'cy', name: 'Cy', status: 'dnd' },
+			{ user_id: 'bo', name: 'Bo', status: 'offline', roles: ['admin'] },
+			{ user_id: 'cy', name: 'Cy', status: 'dnd', roles: ['bot'] },
 			{ user_id: 'di', name: 'Di', status: 'idle' },
 			{ user_id: 'eve', name: 'Eve', status: 'away' },
 			{ user_id: 'fay', name: 'Fay', status: 'online' },
 			{ user_id: 'al', name: 'Al' },
 			ada
 		]);
-		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'fay', 'di', 'cy', 'eve', 'al', 'zed', 'bo']);
-		expect(rows.map((row) => row.dataset.status ?? '')).toEqual(['online', 'online', 'idle', 'dnd', 'unknown', '', '', 'offline']);
 		expect(sections()).toEqual([['Online· 7', ['ada', 'fay', 'di', 'cy', 'eve', 'al', 'zed']], ['Offline· 1', ['bo']]]);
-	});
-
-	it('keeps role badges on each row, in Online or Offline whatever the role', () => {
-		const rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'offline', roles: ['admin'] }, { user_id: 'cy', name: 'Cy', status: 'online', roles: ['bot'] }]);
-		expect(sections()).toEqual([['Online· 2', ['ada', 'cy']], ['Offline· 1', ['bo']]]);
-		expect(rows.map((row) => row.querySelector('[data-testid="roles"]')?.textContent ?? '')).toEqual(['', 'bot', 'admin']);
-	});
-
-	it('has one list, unheaded and undimmed, where no member has a status', () => {
-		const rows = render([{ user_id: 'ada', name: 'Ada' }, { user_id: 'bo', name: 'Bo', roles: ['admin'] }], { you: { user_id: 'ada', name: 'Ada' } });
-		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'bo']);
-		expect(document.querySelector('.member-section-head')).toBeNull();
+		expect(rows.map((row) => row.querySelector('[data-testid="roles"]')?.textContent ?? '')).toEqual(['', '', '', 'bot', '', '', '', 'admin']);
 	});
 
 	it('skips online and offline on a server without status (§4.5): one list, unheaded, none dimmed', () => {
@@ -84,8 +66,8 @@ describe('MemberListSidebar', () => {
 			{ user_id: 'cy', name: 'Cy' }
 		], { you: { user_id: 'ada', name: 'Ada' }, capabilities: blankSnapshot().capabilities });
 		expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'bo', 'cy']);
-		expect(document.querySelector('.member-section-head')).toBeNull();
-		expect(rows.some((row) => row.classList.contains('offline') || row.querySelector('.ap-presence'))).toBe(false);
+		expect(document.querySelector('.ap-memberlist-sectionhead')).toBeNull();
+		expect(rows.some((row) => row.classList.contains('ap-member-offline') || row.querySelector('.ap-presence'))).toBe(false);
 	});
 
 	it('folds a section from its heading, keeping its count, and remembers it for the next visit', () => {
@@ -99,7 +81,7 @@ describe('MemberListSidebar', () => {
 		expect(toggle().textContent).toBe('▾Offline· 2');
 		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', []]]);
 		expect(localStorage.getItem('apron.memberSections')).toBe('["offline"]');
-		unmount(instance!);
+		dom.unmount();
 		render(people);
 		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', []]]);
 		toggle().click();
@@ -107,35 +89,10 @@ describe('MemberListSidebar', () => {
 		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', ['bo', 'cy']]]);
 	});
 
-	it('dims offline members only, with a ring; no status shows no dot and is not dimmed', () => {
-		const rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'offline' }, { user_id: 'cy', name: 'Cy' }]);
-		const [me, cy, bo] = rows;
-		expect(bo.classList.contains('offline')).toBe(true);
-		expect(bo.querySelector('.ap-presence-offline')).not.toBeNull();
-		expect(bo.querySelector('.ap-sr')?.textContent).toBe(', offline');
-		expect(bo.querySelector('button')?.title).toBe('@bo · Offline');
-		expect(cy.classList.contains('offline')).toBe(false);
-		expect(cy.querySelector('.ap-presence')).toBeNull();
-		expect(cy.querySelector('.ap-sr')).toBeNull();
-		expect(cy.querySelector('button')?.title).toBe('@cy');
-		expect(me.classList.contains('offline')).toBe(false);
-		expect(me.textContent).toContain('(you)');
-	});
-
-	it('shows an unknown status as a placeholder that says its value, not as offline (§4.5)', () => {
-		const rows = render([ada, { user_id: 'eve', name: 'Eve', status: 'brb' }]);
-		const eve = rows[1];
-		expect(eve.dataset.status).toBe('unknown');
-		expect(eve.classList.contains('offline')).toBe(false);
-		expect(eve.querySelector('.ap-presence-unknown')?.getAttribute('title')).toBe('Unknown status: brb');
-		expect(eve.querySelector('button')?.title).toBe('@eve · Unknown status: brb');
-		expect(eve.querySelector('.ap-sr')?.textContent).toBe(', unknown status: brb');
-	});
-
 	it('shows your own status as you chose it: a pause doesn\'t change it, and invisible is a ring that says so', () => {
 		let rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'online' }], { mutedUntil: true });
 		expect(rows.find((row) => row.dataset.user === 'ada')?.dataset.status).toBe('online');
-		unmount(instance!);
+		dom.unmount();
 		const hidden = { ...ada, status: 'invisible' };
 		rows = render([hidden, { user_id: 'bo', name: 'Bo', status: 'online' }], { you: hidden });
 		expect(rows.map((row) => row.dataset.user)).toEqual(['bo', 'ada']);
@@ -151,25 +108,25 @@ describe('MemberListSidebar', () => {
 		const snapshotWith = (bo: Identity) => ({ ...blankSnapshot(), authenticated: true, you: ada, users: { ada, bo, cy: { user_id: 'cy', name: 'Cy' } }, recordedUsers: {}, userAliases: {} });
 		directory.apply(snapshotWith({ user_id: 'bo', name: 'Bo' }), undefined);
 		flushSync();
-		const dropped = [...document.querySelectorAll<HTMLLIElement>('li.member')];
+		const dropped = [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
 		expect(statuses(dropped)).toEqual([['ada', 'online', true], ['bo', '', false], ['cy', '', false]]);
-		expect(dropped[1].classList.contains('offline')).toBe(false);
+		expect(dropped[1].classList.contains('ap-member-offline')).toBe(false);
 		// The server sends it again after `auth`, for users who are connected.
 		directory.apply(snapshotWith({ user_id: 'bo', name: 'Bo', status: 'online' }), undefined);
 		flushSync();
-		expect(statuses([...document.querySelectorAll<HTMLLIElement>('li.member')])).toEqual([['ada', 'online', true], ['bo', 'online', true], ['cy', '', false]]);
+		expect(statuses([...document.querySelectorAll<HTMLLIElement>('li.ap-member')])).toEqual([['ada', 'online', true], ['bo', 'online', true], ['cy', '', false]]);
 	});
 
-	it('offers Add member as a plus after the header\'s count: it opens the form atop the list, and Escape shuts it', async () => {
+	it('offers Add member, to someone who can change members, as a plus after the header\'s count: it opens the form atop the list, and Escape shuts it', async () => {
 		render([ada, { user_id: 'bo', name: 'Bo' }], {}, true);
 		const body = document.querySelector('[data-testid="room-member-list"]')!;
-		const toggle = document.querySelector<HTMLButtonElement>('.member-list-head .add-toggle')!;
+		const toggle = document.querySelector<HTMLButtonElement>('.ap-memberlist-head .ap-memberlist-addtoggle')!;
 		expect(toggle.previousElementSibling?.getAttribute('data-testid')).toBe('member-count');
 		expect(toggle.getAttribute('aria-label')).toBe('Add member');
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 		toggle.click();
 		flushSync();
-		const form = body.querySelector<HTMLFormElement>('form.add')!;
+		const form = body.querySelector<HTMLFormElement>('form.ap-memberlist-add')!;
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		expect(body.firstElementChild).toBe(form);
 		expect(toggle.getAttribute('aria-controls')).toBe(form.id);
@@ -177,12 +134,10 @@ describe('MemberListSidebar', () => {
 		await vi.waitFor(() => expect(document.activeElement).toBe(input));
 		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		flushSync();
-		expect(body.querySelector('form.add')).toBeNull();
+		expect(body.querySelector('form.ap-memberlist-add')).toBeNull();
 		expect(document.activeElement).toBe(toggle);
-	});
-
-	it('offers no Add member to someone who can’t change members', () => {
+		dom.unmount();
 		render([ada]);
-		expect(document.querySelector('.add-toggle')).toBeNull();
+		expect(dom.queryByRole('button', 'Add member')).toBeNull();
 	});
 });

@@ -5,6 +5,7 @@
 	 * (x) on its corner takes it off.
 	 */
 	import { tick } from 'svelte';
+	import type { ClassValue } from 'svelte/elements';
 	import FileGlyph from './FileGlyph.svelte';
 
 	interface Props {
@@ -25,8 +26,10 @@
 		removeLabel?: string;
 		/** `data-testid` on the name and detail. */
 		labelTestid?: string;
+		/** Classes for the tile, added to its own. */
+		class?: ClassValue;
 	}
-	let { name, detail, kind = 'file', src, onrename, onremove, removeLabel, labelTestid }: Props = $props();
+	let { name, detail, kind = 'file', src, onrename, onremove, removeLabel, labelTestid, class: className }: Props = $props();
 
 	/** Long names lose their middle, not their end: the last characters, such as the extension, stay in view. */
 	const TAIL = 8;
@@ -95,7 +98,7 @@
 	{/if}
 {/snippet}
 
-<div class={['ap-attachment', renaming && 'ap-attachment-renaming']}>
+<div class={['ap-attachment', renaming && 'ap-attachment-renaming', className]}>
 	{#if kind === 'image'}
 		<figure class="ap-embed ap-attachment-thumb" title={renaming ? undefined : detail ? `${name} · ${detail}` : name}>
 			<img {src} alt={name} />

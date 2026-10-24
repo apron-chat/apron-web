@@ -1,6 +1,5 @@
 <script lang="ts">
-	import Lock from '@lucide/svelte/icons/lock';
-	import Plus from '@lucide/svelte/icons/plus';
+	import { newRoomDialog } from './lazy';
 	import { untrack } from 'svelte';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -9,10 +8,11 @@
 	import type { PausedUntil } from '$lib/ui/pause';
 	import { sidebarRooms, threadsWithNews, type ThreadEntry } from '$lib/ui/timeline';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
-	import NewRoomDialog from './NewRoomDialog.svelte';
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
-	import UnreadCount from '$lib/design/components/UnreadCount.svelte';
+	import RoomItem from '$lib/design/components/RoomItem.svelte';
+	import SidebarHead from '$lib/design/components/SidebarHead.svelte';
+	import SidebarSection from '$lib/design/components/SidebarSection.svelte';
 
 	interface Props {
 		client: ChatClient;
@@ -101,116 +101,51 @@
 		client.listRooms(parentRoomId).catch((cause: unknown) => (listError = cause instanceof Error ? cause.message : 'Unable to list rooms'));
 	}
 
-	function toggleBrowse(): void {
-		browseOpen = !browseOpen;
-		if (browseOpen) list();
-	}
-
 </script>
 
 <aside class="ap-shell-side" aria-label="Rooms">
-	<div class="ap-shell-sidehead">
-		<span class="backend">{backendLabel}</span>
-		<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" aria-label="Connection settings" onclick={onconnect}>Connect</button>
-		<!-- On phones, the room header's ‹ mirrored: back to the room or thread the list opened over. -->
-		{#if returnTo !== undefined && onreturn}
-			<button class="return" type="button" data-testid="rooms-return" aria-label={`Back to ${returnTo}`} title={`Back to ${returnTo}`} onclick={onreturn}>›</button>
-		{/if}
-	</div>
+	<SidebarHead name={backendLabel} {onconnect} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
-		<section class="ap-sect">
-			<div class="ap-sect-head">
-				<span class="ap-sect-toggle" role="heading" aria-level="2">Rooms</span>
-				{#if canCreateRoom}
-					<button class="ap-btn ap-btn-ghost ap-btn-sm create-room-trigger" type="button" aria-label="Create room" title="Create room" onclick={() => (createOpen = true)}><Plus size={18} aria-hidden="true" /></button>
-				{/if}
-			</div>
-			<div class="ap-sect-body" data-testid="room-list">
-				{#if rooms.length === 0 && session.starting}
-					<div class="placeholder" aria-hidden="true"><span class="ap-skel" style:width="70%"></span><span class="ap-skel" style:width="52%"></span><span class="ap-skel" style:width="61%"></span></div>
-				{:else if rooms.length === 0}
-					<p class="muted">{session.snapshot.status === 'connected' ? 'No rooms yet.' : 'Waiting for rooms…'}</p>
-				{:else}
-					{#each rooms as room (room.id)}
-						{@const active = room.id === session.activeRoomId}
-						{@const current = active && !activeThread}
-						<!-- What's new in the room itself (its threads show their own): none while you're reading it. -->
-						{@const roomUnread = current ? 0 : (unread[room.id] ?? 0)}
-						{@const roomMentions = current ? 0 : (mentions[room.id] ?? 0)}
-						<div class="room-row">
-							<button class="ap-room" class:ap-room-active={current} class:ap-room-unread={roomUnread > 0 || roomMentions > 0} class:can-start={active && canCreateRoom} type="button" data-room={room.id} aria-current={current ? 'page' : undefined} onclick={() => onroom(room)}>
-								<span class="ap-room-text">
-									<span class="ap-room-name">{room.title}{#if room.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
-								</span>
-								<UnreadCount unread={roomUnread} mentions={roomMentions} testid="room-unread" />
-								{#if room.recovering}<span class="room-meta" aria-label="Loading history">…</span>{/if}
-							</button>
-							{#if active && canCreateRoom}
-								<button class="ap-iconbtn new-thread" type="button" data-testid="create-thread" aria-label={`New thread in ${room.title}`} title="New thread" onclick={() => onnewthread(room)}><Plus size={16} aria-hidden="true" /></button>
-							{/if}
-						</div>
-						{#if active}
-							<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
-						{:else}
-							<!-- Under a room that isn't open, only its joined threads with news, so activity there isn't missed. -->
-							{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
-							{#if news.length > 0}
-								<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
-							{/if}
+		<SidebarSection title="Rooms" collapsible={false} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && session.starting} bodyTestid="room-list">
+			{#if rooms.length === 0}
+				<p class="ap-sect-note">{session.snapshot.status === 'connected' ? 'No rooms yet.' : 'Waiting for rooms…'}</p>
+			{:else}
+				{#each rooms as room (room.id)}
+					{@const active = room.id === session.activeRoomId}
+					{@const current = active && !activeThread}
+					<!-- What's new in the room itself (its threads show their own): none while you're reading it. -->
+					<RoomItem
+						room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={room.private} active={current}
+						unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering}
+						onselect={() => onroom(room)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
+					/>
+					{#if active}
+						<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+					{:else}
+						<!-- Under a room that isn't open, only its joined threads with news, so activity there isn't missed. -->
+						{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
+						{#if news.length > 0}
+							<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 						{/if}
-					{/each}
-				{/if}
-			</div>
-		</section>
+					{/if}
+				{/each}
+			{/if}
+		</SidebarSection>
 		{#if canBrowse && unjoined.length > 0}
-			<section class="ap-sect" class:ap-sect-closed={!browseOpen}>
-				<div class="ap-sect-head">
-					<button class="ap-sect-toggle" type="button" aria-expanded={browseOpen} data-testid="browse-rooms" onclick={toggleBrowse}><span class="ap-sect-caret" aria-hidden="true">▾</span>Browse rooms</button>
-				</div>
-				{#if browseOpen}
-					<div class="ap-sect-body" data-testid="room-directory">
-						<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
-						<p class="muted">Most active rooms</p>
-						{#each unjoined as listing (listing.id)}
-							<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
-							{@const members = listing.memberCount ?? listing.members.length}
-							<button class="ap-room" type="button" data-join={listing.id} onclick={() => onjoin(listing.id)}>
-								<span class="ap-room-text">
-									<span class="ap-room-name">{listing.title}</span>
-									<span class="ap-room-topic">{#if members > 0}{members} {members === 1 ? 'member' : 'members'} · {/if}{action}</span>
-								</span>
-							</button>
-						{/each}
-						{#if listError}<p class="muted" role="alert">{listError}</p>{/if}
-					</div>
-				{/if}
-			</section>
+			<SidebarSection title="Browse rooms" bind:open={browseOpen} ontoggle={(open) => { if (open) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
+				<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
+				<p class="ap-sect-note">Most active rooms</p>
+				{#each unjoined as listing (listing.id)}
+					<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
+					{@const members = listing.memberCount ?? listing.members.length}
+					<RoomItem room={listing.id} name={listing.title} topic={`${members > 0 ? `${members} ${members === 1 ? 'member' : 'members'} · ` : ''}${action}`} listed onselect={() => onjoin(listing.id)} />
+				{/each}
+				{#if listError}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
+			</SidebarSection>
 		{/if}
 	</div>
 	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} />
 </aside>
 
-{#if createOpen}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}
+{#if createOpen && newRoomDialog.component}{@const NewRoomDialog = newRoomDialog.component}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}
 
-<style>
-	.ap-shell-side { overflow: hidden; }
-	.ap-shell-sidehead { gap: var(--space-2); }
-	.create-room-trigger { width: 28px; padding: 0; justify-content: center; }
-	/* As the room header's ‹ (apron.css .ap-roomhead-back). */
-	.return { display: none; flex: none; width: 32px; height: 32px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--denim); font: inherit; font-size: 22px; cursor: pointer; }
-	.return:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-	@media (max-width: 719px) {
-		.return { display: block; }
-	}
-	.backend { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
-	.placeholder .ap-skel { height: 12px; }
-	.muted { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: 18px; }
-	.room-meta { flex: none; font-size: var(--text-sm); line-height: 16px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-	.room-row { position: relative; }
-	.can-start { padding-right: 40px; }
-	.new-thread { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); }
-	@media (max-width: 719px) {
-		.ap-shell-side { border-right: 0; }
-	}
-</style>

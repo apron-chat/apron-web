@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=200 subtitle="Quote above a reply, its spine from the avatar; cozy, deleted, compact" -->
+<!-- @dsCard group="Timeline" height=200 subtitle="Quote above a reply, its spine from the avatar; of a deleted message; of one that can't be found" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ReplyPreview</title></head>
@@ -8,9 +8,10 @@
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' };
-  add(A.Message, { sender: bob, time: '14:05', text: 'Yes — but only after the canary has been green for ten minutes.', replyTo: { messageId: '1', sender: alice, snippet: 'Deploy is green, rolling to prod now. Anyone object if I skip the canary wait?' } });
-  add(A.Message, { sender: alice, time: '14:06', text: 'Fair. Waiting.', replyTo: { messageId: '2', sender: bob, deleted: true } });
-  add(A.Message, { density: 'compact', sender: bob, time: '14:07', text: 'Green for ten. Go.', replyTo: { messageId: '3', sender: alice, snippet: 'Fair. Waiting.' } });
+  // A Message's `view.reply`: who wrote the quoted message and a line of it; without an `id` it couldn't be found.
+  add(A.Message, { view: { sender: bob, time: '14:05', body: { html: 'Yes — but only after the canary has been green for ten minutes.' }, reply: { id: '1', name: alice.name, snippet: ['Deploy is green, rolling to prod now. Anyone object if I skip the canary wait?'] } } });
+  add(A.Message, { view: { sender: alice, time: '14:06', body: { html: 'Fair. Waiting.' }, reply: { id: '2', name: bob.name, deleted: true } } });
+  add(A.Message, { view: { sender: bob, time: '14:07', body: { html: 'Green for ten. Go.' }, reply: {} } });
 </script>
 </body>
 </html>

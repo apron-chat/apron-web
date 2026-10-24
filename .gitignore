@@ -29,5 +29,8 @@ vite.config.ts.timestamp-*
 devenv.local.nix
 devenv.local.yaml
 
+# QA snapshots, screenshots and reports (scripts/qa)
+/.qa
+
 # Design system bundle output
 /dist-design

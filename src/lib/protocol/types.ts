@@ -168,19 +168,6 @@ export interface ServerParams {
 }
 
 /**
- * Extension `ext:settings`, in `server.ext.settings`: how this server runs,
- * for clients to fit in. A setting left out is `true`.
- */
-export interface ServerSettings extends JsonObject {
-	/** `false` when guests only read: posting, reacting, and room changes need a sign-in. */
-	guest_posting?: boolean;
-	/** `false` when the server keeps no read cursors, so `read_message_id` is not worth sending. */
-	read_cursors?: boolean;
-	/** `false` when only an admin may add other people to rooms (`room_join` with `user_id`, §4.2.2). */
-	add_members?: boolean;
-}
-
-/**
  * Delivery fields of a room record (§4.2): this client's view, not logged.
  * Clients always take the latest values.
  */

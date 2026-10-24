@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'svelte';
+import { describe, expect, it, vi } from 'vitest';
 import CheckList from './CheckList.svelte';
+import * as dom from '$lib/test/dom';
 
 const options = [
 	{ value: 'mentions', title: 'Mentions', text: 'When someone @-mentions you' },
@@ -9,22 +10,13 @@ const options = [
 	{ value: 'private', title: 'Private rooms', text: 'Every message in private rooms you’re in', disabled: true, note: 'Not offered by this server' }
 ];
 
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
-
 function render(props: Record<string, unknown>) {
-	instance = mount(CheckList, { target: document.body, props: { label: 'Notify me about', options, ...props } as never });
-	flushSync();
+	dom.render(CheckList, { label: 'Notify me about', options, ...props } as never);
 	return [...document.querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
 }
 
 describe('CheckList', () => {
-	it('names its group and each box by its label, and disables what isn\'t offered, saying why', () => {
+	it('names its group and each box by its label, a box without a description on one line, and disables what isn\'t offered, saying why', () => {
 		const boxes = render({ value: ['mentions'] });
 		expect(document.querySelector('fieldset legend')?.textContent).toBe('Notify me about');
 		expect(boxes.map((box) => box.closest('label')?.querySelector('.ap-choice-title')?.textContent)).toEqual(['Mentions', 'Replies', 'Private rooms']);
@@ -38,12 +30,11 @@ describe('CheckList', () => {
 		flushSync();
 		expect(boxes[2].checked).toBe(false);
 		expect(document.body.textContent?.match(/Not offered/g)).toHaveLength(1);
-	});
-
-	it('renders an option without a description as one line, its note inline beside the title', () => {
-		const boxes = render({ value: ['joined'], options: [{ value: 'joined', title: 'All messages in joined rooms', note: 'Desktop only' }] });
-		const row = boxes[0].closest('label')!;
-		expect(boxes[0].hasAttribute('aria-disabled')).toBe(false);
+		dom.unmount();
+		// An option without a description is one line, its note inline beside the title.
+		const single = render({ value: ['joined'], options: [{ value: 'joined', title: 'All messages in joined rooms', note: 'Desktop only' }] });
+		const row = single[0].closest('label')!;
+		expect(single[0].hasAttribute('aria-disabled')).toBe(false);
 		expect(row.querySelector('.ap-choice-text')).toBeNull();
 		expect(row.querySelector('.ap-checklist-head')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('All messages in joined rooms Desktop only');
 	});

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=72 subtitle="Hover toolbar; Start thread opens a RoomForm to name the thread" -->
+<!-- @dsCard group="Timeline" height=72 subtitle="Hover toolbar; the rarer actions behind ⋯, Copy link saying Copied; Start thread opens a RoomForm to name the thread" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>MessageActions</title></head>
@@ -7,8 +7,9 @@
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
-  add(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }, { label: 'Edit', glyph: 'Edit' }, { label: 'Start thread', glyph: 'Thread' }, { label: 'Move to thread', glyph: 'Move' }], onmore: function () {} });
-  add(A.MessageActions, { items: [{ label: 'Reply in thread', glyph: 'Reply' }] });
+  add(A.MessageActions, { items: [{ label: 'Reply in thread', title: 'Reply in thread', glyph: 'Reply' }, { label: 'Edit', title: 'Edit', glyph: 'Edit' }, { label: 'Start thread', title: 'Start thread', glyph: 'Thread' }, { label: 'Move to thread', title: 'Move to thread', glyph: 'Move' }],
+    more: [{ label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', done: { label: 'Link copied', glyph: 'Copied' }, onclick: function () { return Promise.resolve(true); } }, { label: 'Delete message', title: 'Delete', glyph: 'Delete', danger: true }] });
+  add(A.MessageActions, { items: [{ label: 'Reply in thread', title: 'Reply in thread', glyph: 'Reply' }] });
 </script>
 </body>
 </html>

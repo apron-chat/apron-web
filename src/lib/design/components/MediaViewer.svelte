@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { ClassValue } from 'svelte/elements';
 	import type { MediaItem } from './types';
 
 	interface Props {
@@ -10,8 +11,10 @@
 		index?: number;
 		/** It closed, whichever way: put focus back on what opened it. */
 		onclose?: () => void;
+		/** Classes for its `<dialog>`, added to its own. */
+		class?: ClassValue;
 	}
-	let { open = $bindable(false), items, index = $bindable(0), onclose }: Props = $props();
+	let { open = $bindable(false), items, index = $bindable(0), onclose, class: className }: Props = $props();
 
 	let dialog = $state<HTMLDialogElement | undefined>();
 	let closeButton = $state<HTMLButtonElement | undefined>();
@@ -55,7 +58,16 @@
 	}
 </script>
 
-<dialog bind:this={dialog} class="ap-viewer" aria-labelledby={`${uid}-title`} onclose={closed} onkeydown={keydown} onpointerdown={(event) => (pressedGround = ground(event.target))} onclick={click}>
+<!-- Its title names it. -->
+<dialog
+	bind:this={dialog}
+	class={['ap-viewer', className]}
+	aria-labelledby={`${uid}-title`}
+	onclose={closed}
+	onkeydown={keydown}
+	onpointerdown={(event) => (pressedGround = ground(event.target))}
+	onclick={click}
+>
 	{#if item}
 		<header class="ap-viewer-bar">
 			<div class="ap-viewer-text">

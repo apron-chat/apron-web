@@ -1,50 +1,38 @@
-<script lang="ts" generics="T">
-	import type { Snippet } from 'svelte';
+<script lang="ts">
+	import MentionPicker from '$lib/design/components/MentionPicker.svelte';
+	import type { MentionPerson } from '$lib/protocol/markdown';
+	import type { EmojiSuggestion } from '$lib/ui/emoji-autocomplete';
+	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
+	import Avatar from '$lib/design/components/Avatar.svelte';
+	import { hueOf } from '$lib/ui/messages';
 
-	interface Props<T> {
+	/**
+	 * The composer's autocomplete (the design system's `MentionPicker`): the
+	 * people an `@` can name, the rooms a `#` can, or the emoji a `:shortcode`
+	 * can put in, whichever is given, each person's face tinted by their ID.
+	 */
+	interface Props {
 		/** The list's ID, which the field names in `aria-controls`; option `i` is `${id}-${i}`, its `aria-activedescendant`. */
 		id: string;
-		items: T[];
+		/** What has been typed after the `@`, `#` or `:`. */
+		query: string;
+		people?: MentionPerson[];
+		rooms?: RoomSuggestion[];
+		emoji?: EmojiSuggestion[];
 		active: number;
-		label: string;
-		testid: string;
-		emptyText: string;
-		getKey: (item: T) => string;
-		onpick: (item: T) => void;
+		/** A pick, by its index in the list. */
+		onpick: (index: number) => void;
 		onhover: (index: number) => void;
-		row: Snippet<[T]>;
+		/** A `data-testid` for the list. */
+		testid?: string;
 	}
-	let { id, items, active, label, testid, emptyText, getKey, onpick, onhover, row }: Props<T> = $props();
-	let listbox = $state<HTMLUListElement>();
+	let { id, query, people, rooms, emoji, active, onpick, onhover, testid }: Props = $props();
 
-	// Keep keyboard navigation visible when the suggestion list scrolls.
-	$effect(() => {
-		if (!items[active] || !listbox) return;
-		const option = listbox.querySelectorAll<HTMLElement>('[role="option"]')[active];
-		option?.scrollIntoView?.({ block: 'nearest' });
-	});
+	let senders = $derived(people?.map((person) => ({ user_id: person.id, name: person.name, avatar: person.avatar })));
 </script>
 
-{#if items.length === 0}
-	<div class="ap-mpick" {id} role="listbox" aria-label={label} data-testid={testid}>
-		<div class="ap-mpick-empty">{emptyText}</div>
-	</div>
-{:else}
-	<ul class="ap-mpick" {id} role="listbox" aria-label={label} data-testid={testid} bind:this={listbox}>
-		{#each items as item, index (getKey(item))}
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<li
-				id={`${id}-${index}`}
-				role="option"
-				aria-selected={index === active}
-				class="ap-mpick-item"
-				class:ap-mpick-active={index === active}
-				onmousedown={(event) => { event.preventDefault(); onpick(item); }}
-				onmouseenter={() => onhover(index)}
-			>
-				{@render row(item)}
-				{#if index === active}<kbd class="ap-mpick-kbd">Tab</kbd>{/if}
-			</li>
-		{/each}
-	</ul>
-{/if}
+{#snippet face(person: { user_id: string; name?: string; avatar?: string })}
+	<Avatar name={person.name?.trim() || person.user_id} hue={hueOf(person.user_id)} src={person.avatar} size="sm" />
+{/snippet}
+
+<MentionPicker {id} {query} people={senders} {rooms} {emoji} {active} avatar={face} {testid} onpick={(_, index) => onpick(index)} {onhover} />

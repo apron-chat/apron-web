@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createRawSnippet, flushSync, tick } from 'svelte';
+import { describe, expect, it, vi } from 'vitest';
 import MenuButton from './MenuButton.svelte';
+import * as dom from '$lib/test/dom';
 
 const choices = [
 	{ value: '1h', label: 'For 1 hour', hint: 'until 14:30' },
@@ -9,17 +10,8 @@ const choices = [
 	{ value: 'resume', label: 'Until I resume' }
 ];
 
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
-
 function render(onselect = vi.fn()) {
-	instance = mount(MenuButton, { target: document.body, props: { label: 'Pause…', choices, onselect } });
-	flushSync();
+	dom.render(MenuButton, { label: 'Pause…', choices, onselect });
 	return { trigger: document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!, onselect };
 }
 
@@ -44,7 +36,7 @@ describe('MenuButton', () => {
 		expect(document.activeElement).toBe(trigger);
 	});
 
-	it('opens from the keyboard with the arrows, moves through the choices, and closes with Escape', async () => {
+	it('opens from the keyboard with the arrows, moves through the choices, and closes with Escape, or Tab, its items out of the tab order', async () => {
 		const { trigger } = render();
 		trigger.focus();
 		key(trigger, 'ArrowUp');
@@ -63,12 +55,19 @@ describe('MenuButton', () => {
 		flushSync();
 		await tick();
 		expect(document.activeElement).toBe(items()[0]);
+		// Its items are out of the tab order: Tab closes it with focus back on the button, to move on from there.
+		expect(items().map((item) => item.tabIndex)).toEqual([-1, -1, -1]);
+		key(items()[0], 'ArrowDown');
+		key(items()[1], 'Tab');
+		flushSync();
+		expect(items()).toEqual([]);
+		expect(trigger.getAttribute('aria-expanded')).toBe('false');
+		expect(document.activeElement).toBe(trigger);
 	});
 
 	it('as a picker, checks the selected choice, opens on it, and draws a lead before each label', async () => {
 		const onselect = vi.fn();
-		instance = mount(MenuButton, { target: document.body, props: { label: '8 hours', choices, onselect, selected: '8h', ariaLabel: 'Pause: 8 hours', lead: createRawSnippet((value: () => string) => ({ render: () => `<i class="lead">${value()}</i>` })) } });
-		flushSync();
+		dom.render(MenuButton, { label: '8 hours', choices, onselect, selected: '8h', ariaLabel: 'Pause: 8 hours', lead: createRawSnippet((value: () => string) => ({ render: () => `<i class="lead">${value()}</i>` })) });
 		const trigger = document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
 		expect(trigger.getAttribute('aria-label')).toBe('Pause: 8 hours');
 		trigger.click();
@@ -84,24 +83,9 @@ describe('MenuButton', () => {
 		expect(onselect).toHaveBeenCalledWith('resume');
 	});
 
-	it('keeps its items out of the tab order, and on Tab closes with focus back on the button, to move on from there', async () => {
-		const { trigger } = render();
-		trigger.click();
-		flushSync();
-		await tick();
-		expect(items().map((item) => item.tabIndex)).toEqual([-1, -1, -1]);
-		key(items()[1], 'ArrowDown');
-		key(items()[2], 'Tab');
-		flushSync();
-		expect(items()).toEqual([]);
-		expect(trigger.getAttribute('aria-expanded')).toBe('false');
-		expect(document.activeElement).toBe(trigger);
-	});
-
 	it('while busy, keeps focus and stays closed instead of being disabled', async () => {
 		const props = $state({ label: 'Saving…', choices, onselect: vi.fn(), busy: true });
-		instance = mount(MenuButton, { target: document.body, props });
-		flushSync();
+		dom.render(MenuButton, props);
 		const trigger = document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
 		trigger.focus();
 		expect(trigger.disabled).toBe(false);
@@ -121,19 +105,27 @@ describe('MenuButton', () => {
 		expect(items()).toHaveLength(3);
 	});
 
-	it('draws an icon button named by its label, and marks the items for tests', async () => {
+	it('draws an icon button named by its label, on while open', async () => {
 		const icon = createRawSnippet(() => ({ render: () => '<svg aria-hidden="true"></svg>' }));
-		const actions = [{ value: 'edit', label: 'Edit room', testid: 'edit-room' }, { value: 'leave', label: 'Leave room', testid: 'leave-room' }];
-		instance = mount(MenuButton, { target: document.body, props: { label: 'Room actions', icon, testid: 'room-actions', choices: actions, onselect: vi.fn() } });
-		flushSync();
-		const trigger = document.querySelector<HTMLButtonElement>('[data-testid="room-actions"]')!;
-		expect(trigger.classList.contains('ap-iconbtn')).toBe(true);
-		expect(trigger.getAttribute('aria-label')).toBe('Room actions');
-		expect(trigger.textContent).toBe('');
+		const actions = [{ value: 'edit', label: 'Edit room' }, { value: 'leave', label: 'Leave room' }];
+		dom.render(MenuButton, { label: 'Room actions', icon, choices: actions, onselect: vi.fn() });
+		const trigger = dom.button('Room actions');
+		expect([trigger.classList.contains('ap-iconbtn'), trigger.textContent]).toEqual([true, '']);
 		trigger.click();
 		flushSync();
 		await tick();
 		expect(trigger.classList.contains('ap-iconbtn-on')).toBe(true);
-		expect(document.querySelector('[data-testid="leave-room"]')?.textContent).toBe('Leave room');
+		expect(items().map((item) => item.textContent)).toEqual(['Edit room', 'Leave room']);
+	});
+
+	it('takes a class on its box beside its own, and opens from the arrow keys', async () => {
+		dom.render(MenuButton, { label: 'Pause…', choices, onselect: vi.fn(), class: 'mine' });
+		const trigger = dom.button('Pause…');
+		expect([...trigger.parentElement!.classList]).toEqual(['ap-menubtn', 'mine']);
+		expect(items()).toHaveLength(0);
+		key(trigger, 'ArrowUp');
+		flushSync();
+		await tick();
+		expect(items()).toHaveLength(3);
 	});
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import X from '@lucide/svelte/icons/x';
+	import { messageEditor, newThreadDialog, roomEditor, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
+	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
@@ -16,46 +17,61 @@
 	import { SettleFlag } from '$lib/ui/settle-flag';
 	import type { Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
-	import Message, { type MessageCaps } from '$lib/components/Message.svelte';
+	import Message from '$lib/design/components/Message.svelte';
+	import EmbedItem from '$lib/components/embeds/Embed.svelte';
+	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
+	import { messageView, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
+	import { decorateCode } from '$lib/ui/copy-code';
+	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
+	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
+	import { showReactors } from '$lib/ui/reactors.svelte';
 	import RoomHeader from '$lib/components/RoomHeader.svelte';
 	import SelectionBar from '$lib/components/SelectionBar.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import SidebarHandle from '$lib/components/SidebarHandle.svelte';
 	import MemberListSidebar from '$lib/components/MemberListSidebar.svelte';
 	import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
-	import PanelToggle from '$lib/components/PanelToggle.svelte';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
 	import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
-	import StatusBanner from '$lib/components/StatusBanner.svelte';
+	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
+	import ConnectionNotice from '$lib/components/ConnectionNotice.svelte';
+	import NoRoom from '$lib/components/NoRoom.svelte';
+	import Toasts from '$lib/components/Toasts.svelte';
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
 	import ThreadSummary from '$lib/components/ThreadSummary.svelte';
-	import RoomEditor from '$lib/components/RoomEditor.svelte';
-	import NewThreadDialog from '$lib/components/NewThreadDialog.svelte';
-	import TypingDots from '$lib/components/TypingDots.svelte';
+	import TimelineDivider from '$lib/design/components/TimelineDivider.svelte';
+	import TypingIndicator from '$lib/design/components/TypingIndicator.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import { composerAction } from '$lib/ui/commands';
-	import { addError, backendHost, statusLabel } from '$lib/ui/connection';
+	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState } from '$lib/ui/feedback.svelte';
 	import { prepareUpload } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
-	import { IncomingMessageTracker, notificationsByRoom } from '$lib/ui/incoming-messages';
+	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
 	import { ReadPositions } from '$lib/ui/read-positions';
-	import { isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, typingLine } from '$lib/ui/messages';
+	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, textOf } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
-	import { SidebarLayout } from '$lib/ui/sidebar.svelte';
+	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
+	import { WIDE_MIN } from '$lib/ui/breakpoints';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
-	import { clearView, loadView, saveView } from '$lib/ui/session-cache';
-	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadLostPrivacy, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
-	import { askedLinkFailure, linkUse, runSignInLink, sessionSettled, takeSignInLink, type LinkUse, type SignInLink } from '$lib/ui/sign-in-link';
+	import SystemLine from '$lib/design/components/SystemLine.svelte';
+	import AppShell from '$lib/design/components/AppShell.svelte';
+	import DropZone from '$lib/design/components/DropZone.svelte';
+	import EmptyState from '$lib/design/components/EmptyState.svelte';
+	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
+	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
+	import { ViewKeeper } from '$lib/ui/view-keeper';
+	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
+	import { takeSignInLink } from '$lib/ui/sign-in-link';
+	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
-	import SignInLinkDialog from '$lib/components/SignInLinkDialog.svelte';
-	import { idDateTime, idIso, idTime } from '$lib/ui/time';
+	import { idMillis } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
 	import { trackKeyboard } from '$lib/ui/viewport';
@@ -69,21 +85,11 @@
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
 	import { PushSettings } from '$lib/ui/push-settings.svelte';
-	import { inMutedRoom, inNotifyScopes, notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
+	import { notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
+	import { arrivalAlerts } from '$lib/ui/alerts';
+	import { readAction } from '$lib/ui/read-action';
+	import { createdRoom, createdThread, moveCheck, type PendingThread } from '$lib/ui/created';
 	import { accountServer, canOfferInstall, isStandalone, keepsPushOff, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
-
-	/**
-	 * A thread this viewer created, opened once its `room_update` has arrived;
-	 * `replyTo`, the message it was started from, which its composer then
-	 * replies to (the thread-from-message convention: see `startThread`).
-	 */
-	type PendingOpen = {
-		room: string;
-		thread: string;
-		replyTo?: string;
-		/** Messages were moved into it already: it opens whatever privacy its record shows, as that was checked before they moved. */
-		moved?: true;
-	};
 
 	/**
 	 * A thread being started, named in the NewThreadDialog: under `room`, with
@@ -119,12 +125,8 @@
 	const MEMBERS_FRESH_MS = 15_000;
 	/** How long the open room's messages wait for its thread listing, so the cards arrive with them. */
 	const THREADS_WAIT_MS = 3000;
-	/** The shortest gap between keeping the view on this device; leaving the page keeps it at once. */
-	const VIEW_SAVE_MS = 2000;
 	/** The shortest gap between listings made because the pane has no members. */
 	const MEMBERS_RETRY_MS = 10_000;
-	/** A new thread of a private room that the server made visible to others (§4.2.4). */
-	const PRIVACY_LOST = 'The server made the new thread visible to people outside this private room, so nothing was posted or moved into it. Leave it, or use it knowing that.';
 
 	const session = new SessionView();
 	const feedback = new FeedbackState();
@@ -227,9 +229,10 @@
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
 	const tabId = Math.random().toString(36).slice(2);
 	const selection = new MessageSelection();
-	const sidebar = new SidebarLayout({ side: 'left', defaultWidth: 248, minWidth: 160, maxWidth: 480, load: loadSidebarPrefs, save: saveSidebarPrefs });
+	/** The rooms list's width and whether it's collapsed. */
+	const sidebar = new SidebarLayout({ side: 'left', ...ROOMS_LIST_WIDTHS, load: loadSidebarPrefs, save: saveSidebarPrefs });
 	/** The member list's width and, on wide screens, whether it's collapsed. */
-	const memberList = new SidebarLayout({ side: 'right', defaultWidth: 240, minWidth: 180, maxWidth: 420, load: loadMemberListPrefs, save: saveMemberListPrefs });
+	const memberList = new SidebarLayout({ side: 'right', ...MEMBER_LIST_WIDTHS, load: loadMemberListPrefs, save: saveMemberListPrefs });
 
 	/** `/__preview` passes its in-memory server's sockets; every other visit connects for real. */
 	let { webSocketFactory }: { webSocketFactory?: WebSocketFactory } = $props();
@@ -252,18 +255,37 @@
 	let editingId = $state<string | undefined>();
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
-	/** A sign-in link of no proposal this browser made (§4.11.2), until the viewer answers whether to use it. */
-	let askedLink = $state<SignInLink | undefined>();
-	/** A link is being used: its token goes out as a fresh connection's first `auth`, or adds to this account. */
-	let linkBusy = $state(false);
-	/** A link for an addition this browser proposed (§4.11.3), waiting for the session of the account that proposed it. */
-	let linkAddition = $state<Extract<LinkUse, { kind: 'addition' }> | undefined>();
-	/** Why a sign-in link didn't sign in, for the connect screen. */
-	let linkFailure = $state<{ error: string } | undefined>();
+	/**
+	 * Sign-in links (§4.11.2): one of no proposal this browser made waits for the viewer's answer (`asked`), one
+	 * for an addition proposed here for its account's session (`addition`), and why one didn't sign in (`failure`).
+	 */
+	const links = new SignInLinks({
+		client: () => client,
+		feedback,
+		findProposal: (state) => findProposal(state),
+		// Another account from here on: the view held for the current one goes, and on this
+		// server it is signed out of, push going off for it as a sign-out does.
+		beforeSwitch: (switched) => (switched ? leaveBackend() : signedOut()()),
+		signedIn: (server, switched) => {
+			// Only now is a switch to the link's server remembered, and the server listed as recent.
+			if (switched) {
+				serverInput = server;
+				saveServerUrl(server);
+			}
+			connected();
+		},
+		failed: ({ server, scheme }) => {
+			// The connect screen can start again, on the link's server, which is not remembered unless that works.
+			serverInput = server;
+			connectScheme = scheme;
+			connectOpen = true;
+		}
+	});
 	/** The open thread's `room_id`; undefined in the room view. */
 	let activeThread = $state<string | undefined>();
 	let selectedRoomId = $state<string | undefined>();
-	let pendingOpen = $state<PendingOpen | undefined>();
+	/** A thread this viewer created (`startThread`, `createThread`), opened once its `room_update` has arrived. */
+	let pendingOpen = $state<PendingThread | undefined>();
 	/** A room or thread joined from the directory or just created, opened once its `room_update` has arrived. */
 	let pendingJoin = $state<string | undefined>();
 	/** `pendingJoin` was created as a private room: its record must say `private: true` before it is used (§4.2.4). */
@@ -354,19 +376,14 @@
 	});
 	$effect(() => session.awaitThreads(awaitingThreads ? session.activeRoomId : undefined));
 
-	/** When the view was last kept on this device: a busy room saves at most once per `VIEW_SAVE_MS`. */
-	let viewSavedAt = 0;
+	/** The view kept on this device for the next visit: only for a session saved here (a passkey or email account). */
+	const viewKeeper = new ViewKeeper({ enabled: !previewMode });
 	function keepView(): void {
-		const view = untrack(() => session.keepable);
-		const you = untrack(() => session.snapshot.you);
-		// Only for a session saved here (a passkey or email account): a guest's next visit is someone new.
-		if (previewMode || !client || !view || !you || !client.keptSessionFor(client.url)) return;
-		viewSavedAt = Date.now();
-		void saveView(client.url, you.user_id, view);
+		void viewKeeper.keep(client, untrack(() => session.keepable), untrack(() => session.snapshot.you));
 	}
 	$effect(() => {
 		if (!session.keepable) return;
-		const timer = setTimeout(keepView, Math.max(0, viewSavedAt + VIEW_SAVE_MS - Date.now()));
+		const timer = setTimeout(keepView, viewKeeper.wait());
 		return () => clearTimeout(timer);
 	});
 	/** The open thread as the pane shows it: its copy held from before (a reload) while the live one loads, as the room's. */
@@ -403,6 +420,8 @@
 	let canAttach = $derived(canCompose && snapshot.capabilities['embed:upload'] && !selection.active);
 	/** Files are being dragged over the conversation. */
 	let dropping = $state(false);
+	/** Files dropped on the conversation pane's `<main>`. */
+	const dropFiles = fromAction(fileDrop, () => ({ enabled: canAttach, onfiles: stageFiles, onactive: (active: boolean) => (dropping = active) }));
 	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...messages], session.you, paneRoom?.members));
 	let roomSuggestions = $derived.by(() => {
 		const rooms = new Map<string, { id: string; title: string }>();
@@ -475,28 +494,22 @@
 		});
 	});
 
+	// What arrives alerts: mentions you'd hear chime and flash the tab, the first offers notifications (until
+	// they're chosen on this device), and while you're away they notify. Never from a held view (`arrivalAlerts`).
 	$effect(() => {
-		// A held view (a reconnect, or one kept on this device) is from before: nothing in it has just arrived.
-		if (session.showingHeld) return;
-		const arrivedMentions = mentions.observe(session.rooms, session.you, paneRoom?.id, latestVisible);
-		const arrivedMessages = incomingMessages.observe(session.rooms, session.you);
-		// A mention in a room you muted (§4.5) doesn't alert the tab either.
-		const audible = arrivedMentions.filter((event) => !inMutedRoom(event, session.rooms)).length;
-		if (audible) untrack(() => (audibleMentions += audible));
-		// The first mention you'd hear offers notifications, until they're chosen on this device.
-		const offered = audible > 0 && untrack(() => !notifyOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced }));
-		if (offered) {
-			const first = arrivedMentions.find((event) => !inMutedRoom(event, session.rooms));
-			const room = first && session.rooms.find((candidate) => candidate.id === first.room_id);
-			if (first) untrack(() => (notifyOffer = { from: senderName(first), room: room?.title ?? first.room_id }));
-		}
-		if (!notificationsActive || !presence.away || silenced) return;
-		const mentioned = new Set(arrivedMentions.map((event) => event.message_id));
-		// The checked scopes, judged here; an edit that adds you counts as a mention.
-		const context = { me: session.you, rooms: session.rooms };
-		const selected = [...arrivedMessages, ...arrivedMentions]
-			.filter((event) => inNotifyScopes(event, notifyScopes, { ...context, mentioned: mentioned.has(event.message_id) }));
-		for (const event of notificationsByRoom(selected, mentioned)) untrack(() => void notifyMessage(event, mentioned.has(event.message_id)));
+		const alerts = arrivalAlerts(
+			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible },
+			{ mentions, messages: incomingMessages },
+			{
+				offerable: untrack(() => !notifyOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
+				active: notificationsActive, away: presence.away, silenced, scopes: notifyScopes
+			}
+		);
+		untrack(() => {
+			if (alerts.audible) audibleMentions += alerts.audible;
+			if (alerts.offer) notifyOffer = alerts.offer;
+			for (const { event, mention } of alerts.notify) void notifyMessage(event, mention);
+		});
 	});
 
 	// Your read cursors as the server reports them, and your own newest messages, move your read positions.
@@ -640,23 +653,20 @@
 
 	// Reading the latest message advances your read position, and your read cursor (capability `activity`),
 	// which the server syncs to your other devices.
+	// Only from a live, visible, loaded pane at its latest message, once it has opened at its divider (`readAction`).
 	$effect(() => {
-		const room = paneRoom;
-		const last = messages[messages.length - 1];
-		// Only once this pane has opened at its divider: advancing first would hide what was new.
-		if (!client || !room || !last || !readingLatest || !presence.visible || !room.loaded || !session.ready) return;
-		const looking = !presence.away;
+		const action = readAction(
+			{ server: client?.url, room: paneRoom, last: messages[messages.length - 1]?.message_id, ready: session.ready, readingLatest, visible: presence.visible, away: presence.away },
+			untrack(() => ({ pushId: accountPushId, closedThrough }))
+		);
+		if (!action) return;
 		untrack(() => {
-			readPositions.read(room.id, last.message_id);
-			client?.markRead(room.id, last.message_id);
-			// What you just read here no longer needs its notifications on this device. Only once
-			// you're looking (focused too): an unfocused window shows its own desktop notification
-			// of what arrives, which must stay until you come back.
-			if (!looking) return;
-			const read = `${accountPushId ?? ''}:${client?.url}:${room.id}:${last.message_id}`;
-			if (read === closedThrough || !client) return;
-			closedThrough = read;
-			void closeReadNotifications(accountPushId ? { group: notificationGroup(accountPushId, room.id) } : { tag: `apron:${client.url}:${room.id}` }, last.message_id);
+			readPositions.read(action.room, action.message);
+			client?.markRead(action.room, action.message);
+			// What you just read here no longer needs its notifications on this device.
+			if (!action.close) return;
+			closedThrough = action.close.key;
+			void closeReadNotifications(action.close.target, action.message);
 		});
 	});
 
@@ -676,12 +686,12 @@
 		if (!room) return;
 		pendingJoin = undefined;
 		// A server that doesn't keep private rooms may create an ordinary one anyway: say so, and don't open it to post in.
-		if (untrack(() => pendingPrivate) && !room.private) {
-			pendingPrivate = false;
-			untrack(() => feedback.error(`The server made “${room.title}” an ordinary room that others can see and join, not a private one. Leave it, or use it knowing that.`));
+		const step = createdRoom(room, untrack(() => pendingPrivate));
+		pendingPrivate = false;
+		if ('refuse' in step) {
+			untrack(() => feedback.error(step.refuse));
 			return;
 		}
-		pendingPrivate = false;
 		untrack(() => {
 			if (room.parentRoomId !== undefined && session.rooms.some((candidate) => candidate.id === room.parentRoomId)) openDestination(room.parentRoomId, room.id);
 			else chooseRoom(room);
@@ -695,7 +705,7 @@
 	let promptedSignIn = false;
 	$effect(() => {
 		const server = snapshot.server;
-		if (previewMode || promptedSignIn || connectOpen || askedLink || linkBusy || linkAddition || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
+		if (previewMode || promptedSignIn || connectOpen || links.asked || links.busy || links.addition || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
 		const needed = snapshot.signInNeeded && session.rooms.length === 0 ? snapshot.signInNeeded : undefined;
 		if (!needed && (server.auth.includes('guest') || server.signup?.includes('guest') || !snapshot.error)) return;
 		promptedSignIn = true;
@@ -717,11 +727,13 @@
 	// A thread this viewer just created opens once its `room_update` has arrived.
 	$effect(() => {
 		const pending = pendingOpen;
-		if (!pending || !session.rooms.some((room) => room.id === pending.thread)) return;
+		if (!pending) return;
+		const step = createdThread(pending, session.rooms);
+		if (step === 'wait') return;
 		pendingOpen = undefined;
 		// A thread of a private room is private too (§4.2.4); one the server made visible isn't opened to reply in.
-		if (!pending.moved && threadLostPrivacy(session.rooms, pending.room, pending.thread)) {
-			untrack(() => feedback.error(PRIVACY_LOST));
+		if (step !== 'open') {
+			untrack(() => feedback.error(step.refuse));
 			return;
 		}
 		untrack(() => {
@@ -858,7 +870,7 @@
 		sidebar.load();
 		memberList.load();
 		requestAnimationFrame(() => requestAnimationFrame(() => (slidesReady = true)));
-		const memberListMedia = window.matchMedia('(min-width: 960px)');
+		const memberListMedia = window.matchMedia(`(min-width: ${WIDE_MIN}px)`);
 		const memberListMediaChange = ({ matches }: { matches: boolean }) => {
 			memberListWide = matches;
 			memberListOverlay = false;
@@ -871,7 +883,7 @@
 		const hashChanged = () => {
 			const link = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 			if (link) {
-				followLink(link);
+				links.follow(link);
 				return;
 			}
 			// A message link differing only in its fragment doesn't reload the page: go to it here.
@@ -942,11 +954,9 @@
 		);
 		// The view from this device's last visit, while this one signs in and catches up: only for the session
 		// saved here, which is the account it was kept for (a sign-in as anyone else drops it).
-		if (!previewMode && chat.keptSessionFor(chat.url)) {
-			void loadView(chat.url).then((kept) => {
-				if (kept && client === chat) session.prime(kept.view);
-			});
-		}
+		void viewKeeper.restore(chat, (view) => {
+			if (client === chat) session.prime(view);
+		});
 		const unsubscribe = chat.subscribe((next) => {
 			serverUrl = chat.url;
 			session.apply(next, chat);
@@ -954,7 +964,7 @@
 		});
 		chat.start();
 		client = chat;
-		if (signInLink) followLink(signInLink);
+		if (signInLink) links.follow(signInLink);
 		if (pushed) void followPush(chat, pushed);
 		if (link.room) linked = { ...link, server: offeredServer ?? chat.url, room: link.room };
 		if (offeredServer) {
@@ -987,108 +997,9 @@
 
 	// --- Connecting ---
 
-	/**
-	 * A sign-in link (§4.11.2), emailed or the return from an external
-	 * sign-in page. One with the `state` of a sign-in this browser proposed
-	 * is used at once, on the server it was proposed to; one for an addition
-	 * waits for the session of the account that proposed it; any other is a
-	 * credential someone else may have crafted or forwarded, and the viewer
-	 * is asked first.
-	 */
-	function followLink(link: SignInLink): void {
-		const use = linkUse(link, (state) => findProposal(state));
-		if (!use) return;
-		if (use.kind === 'addition') linkAddition = use;
-		else if (use.kind === 'own') useLink(use);
-		else askedLink = use.link;
-	}
-
-	/**
-	 * Signs in with a link of this browser's own proposal, or one the viewer
-	 * confirmed having been shown its server: the client presents its token
-	 * on a fresh connection that is not signed in (§4.11.3), and carries on
-	 * with that connection once it has worked, when the page lets go of the
-	 * view it held. A link adds to an account only with the `state` of an
-	 * addition proposed here (`linkAddition`), or once the viewer says a
-	 * link of no proposal here is one (`addAskedLink`). A failure changes
-	 * nothing and opens the connect screen on the link's scheme and server,
-	 * with the reason.
-	 */
-	function useLink(use: Exclude<LinkUse, { kind: 'addition' }>): void {
-		const chat = client;
-		askedLink = undefined;
-		if (!chat) return;
-		linkBusy = true;
-		feedback.pending('Signing in…');
-		void runSignInLink(use, chat, {
-			// Another account from here on: the view held for the current one goes, and on this
-			// server it is signed out of, push going off for it as a sign-out does.
-			beforeSwitch: (switched) => (switched ? leaveBackend() : signedOut()()),
-			onSignedIn: (server, switched) => {
-				feedback.clear();
-				linkFailure = undefined;
-				// Only now is a switch to the link's server remembered, and the server listed as recent.
-				if (switched) {
-					serverInput = server;
-					saveServerUrl(server);
-				}
-				connected();
-			},
-			onFailed: (error, server) => {
-				feedback.clear();
-				// The link may have expired or been used: the connect screen can start again, on the
-				// link's server, which is not remembered unless that works. One of no proposal here
-				// may have been for an addition instead, which a new sign-in code wouldn't help with.
-				serverInput = server;
-				linkFailure = {
-					error: use.kind === 'own'
-						? `The sign-in link didn’t work (${error}). ${use.scheme === 'email' ? 'Send a new code' : 'Sign in again'} to try again, or pick another server.`
-						: askedLinkFailure(error)
-				};
-				connectScheme = use.kind === 'own' ? use.scheme : undefined;
-				connectOpen = true;
-			}
-		}).finally(() => (linkBusy = false));
-	}
-
-	/**
-	 * Adds a link of no proposal here to the account this page is signed in
-	 * to, once the viewer said it was sent for that (§4.11.3): the server
-	 * approves it only if that account proposed it, so any other link is
-	 * refused, and changes nothing.
-	 */
-	function addAskedLink(link: SignInLink): void {
-		const chat = client;
-		askedLink = undefined;
-		if (!chat) return;
-		linkBusy = true;
-		feedback.pending('Adding the sign-in…');
-		chat.addWithConfirmedLink(link.token)
-			.then(() => feedback.clear(), (cause: unknown) => feedback.error(addError(cause, 'link')))
-			.finally(() => (linkBusy = false));
-	}
-
 	// A link for an addition this browser proposed (§4.11.3) approves only on a connection signed in to the
-	// account that proposed it: once this page's session has settled (a kept one resumed, or past resuming), it
-	// adds there, or says it can't.
-	$effect(() => {
-		const addition = linkAddition;
-		const chat = client;
-		if (!addition || !chat || !sessionSettled(snapshot)) return;
-		const signedInAs = snapshot.authenticated ? snapshot.you?.user_id : undefined;
-		untrack(() => {
-			linkAddition = undefined;
-			if (chat.url !== addition.server || signedInAs !== addition.account) {
-				feedback.error(`The link adds a sign-in to @${addition.account} on ${backendHost(addition.server) || addition.server}, which this page isn’t signed in as now. Sign in as @${addition.account} there, and add it again.`);
-				return;
-			}
-			linkBusy = true;
-			feedback.pending('Adding the sign-in…');
-			chat.addWithLink(addition.token, addition.state)
-				.then(() => feedback.clear(), (cause: unknown) => feedback.error(addError(cause, findProposal(addition.state)?.scheme)))
-				.finally(() => (linkBusy = false));
-		});
-	});
+	// account that proposed it: once this page's session has settled, it adds there, or says it can't.
+	$effect(() => links.settle(snapshot));
 
 	/** Replaces the page's URL without adding a history entry: through the router once it runs, else the browser. */
 	function scrubUrl(url: string): void {
@@ -1112,7 +1023,7 @@
 		const any = [...offered, ...(session.server?.signup ?? [])];
 		const passkeyFirst = offered.includes('webauthn') ? offered.includes('guest') || !offered.includes('email') : !any.includes('email');
 		connectScheme = options.scheme ?? (options.signIn ? (passkeyFirst ? 'webauthn' : 'email') : undefined);
-		linkFailure = undefined;
+		links.failure = undefined;
 		if (options.name) displayName = options.name;
 		connectOpen = true;
 	}
@@ -1335,7 +1246,7 @@
 		const chat = client;
 		return () => {
 			if (chat && account) void pushSettings.signedOut(chat, account);
-			if (chat) void clearView(chat.url);
+			if (chat) void viewKeeper.forget(chat.url);
 			session.forget();
 		};
 	}
@@ -1802,7 +1713,7 @@
 		});
 	}
 
-	/** How long a side panel takes to slide open or shut: --slide-time in the CSS. */
+	/** How long a side panel takes to slide open or shut: --duration-slide in tokens.css. */
 	const SLIDE_MS = 240;
 	let heldTimeline: { scroller: HTMLElement; width: number; release: () => void } | undefined;
 
@@ -1974,6 +1885,72 @@
 		if (!client || !session.canReact || event.deleted) return;
 		feedback.track(client.toggleReaction(event.message_id, emoji), 'Reacting…');
 	}
+
+	// --- Message rows ---
+
+	/** The test ids interop finds a message's parts by. */
+	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message' };
+
+	/** What every row reads from, each field only where a row needs it. */
+	const messageContext: MessageContext = {
+		resolve: resolveMessage,
+		get uploads() {
+			return snapshot.uploads;
+		}
+	};
+
+	/** The record a row shows: the open pane's, else wherever it is. */
+	function rowEvent(view: MessageView): MessageRecord | undefined {
+		return view.id ? (paneRoom?.timeline.events[view.id] ?? resolveMessage(view.id)) : undefined;
+	}
+
+	/** Runs `action` on the row's record, if it is still there. */
+	function onRow(action: (event: MessageRecord) => void): (view: MessageView) => void {
+		return (view) => {
+			const event = rowEvent(view);
+			if (event) action(event);
+		};
+	}
+
+	/** The picker the React action opened last, and on which message: it's open for that row while it is the open one. */
+	let reactPick: { id: string; request: EmojiPickerRequest } | undefined;
+
+	/** One set of handlers for every row; each finds its message by the row's id. */
+	const messageHandlers: MessageHandlers = {
+		reply: onRow(beginReply),
+		react: (view, emoji) => onRow((event) => react(event, emoji))(view),
+		// React opens the full picker; a pick toggles that reaction, as a chip does.
+		pick: (view, anchor) => onRow((event) => {
+			const request: EmojiPickerRequest = { anchor, onpick: (emoji) => react(event, emoji), caption: { lead: `React to ${view.sender.name}`, text: replySnippet(event) } };
+			reactPick = { id: event.message_id, request };
+			emojiPicker.toggle(request);
+		})(view),
+		picking: (view) => emojiPicker.current !== undefined && emojiPicker.current === reactPick?.request && reactPick.id === view.id,
+		pickAnchor: emojiAnchor,
+		// Who reacted, read from the current chips, so the open list follows changes.
+		reactors: (view, emoji, anchor) => showReactors(anchor, emoji, () => {
+			const event = rowEvent(view);
+			return event ? reactionsFor(event) : [];
+		}),
+		edit: onRow((event) => (editingId = event.message_id)),
+		delete: onRow(deleteMessage),
+		startThread: onRow(startThread),
+		copyLink: async (view) => {
+			const event = rowEvent(view);
+			return event ? copyMessageLink(event) : false;
+		},
+		select: (view, range) => {
+			if (view.id) selection.toggle(view.id, selectableOrder, range);
+		},
+		beginSelect: onRow(beginSelect),
+		removeReply: onRow(removeReply),
+		removeEmbed: (view, embed) => onRow((event) => removeEmbed(event, embed as unknown as Embed))(view),
+		openRoom: openMentionedRoom,
+		// A user mention, or the sender's name or avatar, opens their profile card.
+		openProfile: openProfileFrom,
+		jump: jumpToMessage,
+		code: decorateCode
+	};
 
 	// --- Reading ---
 
@@ -2268,7 +2245,7 @@
 				parentRoomId: roomId,
 				...thread,
 				// Nothing moves out of a private room into a thread others can see.
-				check: (threadId) => threadLostPrivacy(session.rooms, roomId, threadId) ? new Error(PRIVACY_LOST) : undefined,
+				check: moveCheck(() => session.rooms, roomId),
 				own: ownMessage,
 				movable,
 				authors: moveAuthors()
@@ -2374,62 +2351,76 @@
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
 </svelte:head>
 
-{#if client && askedLink}
+{#if client && links.asked && signInLinkDialog.component}
+	{@const SignInLinkDialog = signInLinkDialog.component}
 	<!-- Signed in here, guests too, where a link can add a way in (`addAs`): the link may have been sent for that. -->
 	<SignInLinkDialog
-		link={askedLink}
+		link={links.asked}
 		current={{
 			url: client.url, keptSession: Boolean(snapshot.keptSession),
-			...(askedLink.server && askedLink.server !== client.url ? { targetKeptSession: client.keptSessionFor(askedLink.server) } : {}),
+			...(links.asked.server && links.asked.server !== client.url ? { targetKeptSession: client.keptSessionFor(links.asked.server) } : {}),
 			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}),
 			...(snapshot.authenticated && snapshot.you && snapshot.server?.auth.some((scheme) => scheme === 'email' || scheme === 'external') ? { addAs: snapshot.you.name ? `${snapshot.you.name} (@${snapshot.you.user_id})` : `@${snapshot.you.user_id}` } : {})
 		}}
-		onconfirm={() => askedLink && useLink({ kind: 'ask', link: askedLink })} onadd={() => askedLink && addAskedLink(askedLink)} oncancel={() => (askedLink = undefined)}
+		onconfirm={() => links.confirm()} onadd={() => links.addAsked()} oncancel={() => links.cancel()}
 	/>
 {/if}
 {#if !client}
-	<div class="app ap-shell ap-shell-norail"></div>
+	<AppShell viewport />
 {:else if connectOpen}
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
 		canCancel={session.rooms.length > 0 || session.ready || offeringLink} initialScheme={connectScheme}
-		initialError={linkFailure?.error}
+		initialError={links.failure?.error}
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
 	/>
 {:else}
-<div
-	class="app ap-shell ap-shell-norail"
-	class:slides={slidesReady}
-	class:side-collapsed={sidebar.collapsed}
-	class:side-resizing={sidebar.resizing || memberList.resizing}
-	class:member-list-open={memberListOpen}
-	class:member-list-wide={memberListWide}
-	data-pane={mobilePane}
-	style:--sidebar-w="{roomsTrack}px"
-	style:--rooms-w="{sidebar.width}px"
-	style:--member-list-w="{memberList.width}px"
-	style:--member-list-track="{membersTrack}px"
+<!-- A message row's embed, through the app's media gates; and the row being edited, in the editor loaded for it. -->
+{#snippet messageEmbed(item: MessageEmbed)}<EmbedItem embed={item.embed as unknown as Embed} upload={item.upload} detail={item.detail} />{/snippet}
+{#snippet editMessage(view: MessageView)}
+	{@const MessageEditor = messageEditor.component}
+	{@const event = rowEvent(view)}
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} onsave={(text, edits) => saveEdit(event, text, edits)} oncancel={() => (editingId = undefined)} />{/if}
+{/snippet}
+{#snippet membersToggle()}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/snippet}
+<!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
+<!-- Kept while shut (hidden), so its border slides with the list's. -->
+{#snippet membersHandle()}<SidebarHandle layout={memberList} name="member list" oncollapse={() => memberListToggle?.focus()} />{/snippet}
+<AppShell
+	viewport
+	slides={slidesReady}
+	sideCollapsed={sidebar.collapsed}
+	resizing={sidebar.resizing || memberList.resizing}
+	membersOpen={memberListOpen}
+	membersWide={memberListWide}
+	pane={mobilePane}
+	sideWidth={sidebar.width}
+	membersWidth={memberList.width}
+	mainLabel="Conversation"
+	mainAttach={dropFiles}
+	membersToggle={memberListWide ? membersToggle : undefined}
+	membersHandle={memberListWide ? membersHandle : undefined}
 >
-	<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />
-	<Sidebar
-		{client} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
-		notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
-		webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
-		pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
-		onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
-		returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
-		onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut}
-	/>
-	<SidebarHandle layout={sidebar} />
+	{#snippet sideToggle()}<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />{/snippet}
+	{#snippet side()}
+		<Sidebar
+			client={client!} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
+			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
+			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
+			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
+			onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
+			returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
+			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut}
+		/>
+	{/snippet}
+	{#snippet sideHandle()}<SidebarHandle layout={sidebar} />{/snippet}
 	<!-- The first-mention offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->
-	<div class="notify-anchored" aria-live="polite">
+	{#snippet nudge()}
 		{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} pointer onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />{/if}
-	</div>
+	{/snippet}
 
-	<main class="ap-shell-main" aria-label="Conversation" use:fileDrop={{ enabled: canAttach, onfiles: stageFiles, onactive: (active) => (dropping = active) }}>
-		{#if dropping}
-			<div class="drop-zone" data-testid="drop-zone" aria-hidden="true"><span>Drop files to attach</span></div>
-		{/if}
+	{#snippet main()}
+		{#if dropping}<DropZone />{/if}
 		{#if activeRoom}
 			<RoomHeader
 				room={activeRoom}
@@ -2450,34 +2441,16 @@
 				{mentionsElsewhere}
 				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
 			/>
-			{#if roomEditorOpen && editTarget}
+			{#if roomEditorOpen && editTarget && roomEditor.component}
+				{@const RoomEditor = roomEditor.component}
 				{#key editTarget.id}
-					<RoomEditor {client} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} onclose={() => (roomEditorOpen = false)} />
+					<RoomEditor client={client!} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} onclose={() => (roomEditorOpen = false)} />
 				{/key}
 			{/if}
 
-			{#if session.connection === 'reconnecting' && !session.reconnectNeedsAttention}
-				<!-- A short blip stays quiet: the room, history, and identity are kept in place, and the pill above the composer says it. -->
-				<span class="sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
-			{:else if session.starting && session.connection === 'connecting'}
-				<!-- Coming up with a view from before: the timeline's foot says it's checking; a banner would only alarm. -->
-				<span class="sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
-			{:else if session.connection !== 'connected'}
-				<div class="banner">
-					<StatusBanner tone={session.connection === 'connecting' ? 'warn' : 'danger'} testid="connection-status" live>
-						{statusLabel(snapshot, session.stalled)}
-						{#snippet action()}
-							{#if session.reconnectNeedsAttention}
-								<button class="ap-btn ap-btn-sm" type="button" data-testid="reconnect-retry" disabled={Boolean(snapshot.retryAfterMs)} onclick={signInAgain}>{snapshot.held ? 'Sign in' : 'Try Again'}</button>
-							{/if}
-						{/snippet}
-					</StatusBanner>
-				</div>
-			{:else}
-				<span class="sr" data-testid="connection-status" role="status" aria-live="polite">Connected</span>
-			{/if}
+			<ConnectionNotice {session} onretry={signInAgain} />
 			{#if activeThread && !activeThreadEntry}
-				<div class="banner">
+				<div class="ap-shell-banner">
 					<StatusBanner tone="danger">
 						This thread is no longer available on the server.
 						{#snippet action()}<button class="ap-btn ap-btn-sm" type="button" onclick={backToRoom}>Back to room</button>{/snippet}
@@ -2493,22 +2466,19 @@
 			{/if}
 
 			<div class="ap-timeline" bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
-				<div class="day-float" class:day-float-shown={floatingDay.shown} aria-hidden="true" data-testid="floating-day"><span>{floatingDay.label}</span></div>
+				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown} testid="floating-day" />
 				{#if snapshot.showReconnectDivider}
-					<div class="ap-divider ap-divider-gap" role="separator" data-testid="reconnect-divider"><span>Reconnected · earlier messages aren’t available</span></div>
+					<TimelineDivider kind="gap" testid="reconnect-divider" />
 				{/if}
 				<!-- No messages yet: placeholders, not thread cards on their own. -->
 				{#if (messages.length === 0 || paneHeldBack) && paneCatchingUp}
 					<TimelineLoading label={activeThread ? 'Loading replies…' : 'Loading messages…'} rows={activeThread ? 3 : 6} />
 				{:else if timeline.length === 0}
-					<div class="empty">
-						<h2>{activeThread ? 'No replies yet' : 'Nothing here yet'}</h2>
-						<p>{activeThread ? 'Reply below to continue the thread.' : `Start the conversation in ${activeRoom.title}.`}</p>
-					</div>
+					<EmptyState title={activeThread ? 'No replies yet' : 'Nothing here yet'} detail={activeThread ? 'Reply below to continue the thread.' : `Start the conversation in ${activeRoom.title}.`} />
 				{:else}
 					{#each shownTimeline as item (item.key)}
 						{#if item.kind === 'date'}
-							<div class="ap-divider ap-divider-date" role="separator"><span>{item.label}</span></div>
+							<TimelineDivider label={item.label} sticky={false} />
 						{:else if item.kind === 'thread'}
 							<ThreadCard entry={item.entry} unread={unread.byRoom[item.entry.id]} mentions={mentions.byRoom[item.entry.id]} onopen={() => openThreadCard(item.entry.id)} />
 						{:else if item.kind === 'notice'}
@@ -2516,43 +2486,24 @@
 						{:else if item.kind === 'members'}
 							<MembershipLine joined={item.joined} left={item.left} logId={item.logId} />
 						{:else if item.kind === 'renamed'}
-							<div data-timeline-item class="ap-msg ap-msg-system" data-testid="thread-renamed">
-								<div class="ap-msg-system-body">{#if item.title}Thread renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}Thread name cleared{/if}</div>
-								{#if idTime(item.logId)}<time class="ap-msg-system-time" datetime={idIso(item.logId)} title={idDateTime(item.logId)}>{idTime(item.logId)}</time>{/if}
-							</div>
+							<SystemLine timestamp={idMillis(item.logId)} timelineItem testid="thread-renamed">{#if item.title}Thread renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}Thread name cleared{/if}</SystemLine>
 						{:else}
 							{@const event = item.event}
+							{@const view = messageView(event, {
+								grouped: item.grouped,
+								reactions: reactionsFor(event),
+								mention: mentionsMe(event, session.you),
+								pinged: mentions.pinged.includes(event.message_id),
+								highlighted: highlightedId === event.message_id,
+								selecting: selection.active,
+								selected: selection.has(event.message_id),
+								editing: editingId === event.message_id,
+								caps: capsFor(event)
+							}, messageContext)}
 							{#if event.message_id === newDividerBefore}
-								<div class="ap-divider ap-divider-new" role="separator" data-testid="new-divider"><span>New</span></div>
+								<TimelineDivider kind="new" testid="new-divider" />
 							{/if}
-							<Message
-								{event}
-								grouped={item.grouped}
-								resolve={resolveMessage}
-								reactions={reactionsFor(event)}
-								uploads={snapshot.uploads}
-								mention={mentionsMe(event, session.you)}
-								pinged={mentions.pinged.includes(event.message_id)}
-								highlighted={highlightedId === event.message_id}
-								selecting={selection.active}
-								selected={selection.has(event.message_id)}
-								editing={editingId === event.message_id}
-								caps={capsFor(event)}
-								onreply={() => beginReply(event)}
-								onjump={jumpToMessage}
-								onopenroom={openMentionedRoom}
-								onedit={() => (editingId = event.message_id)}
-								onsave={(text, edits) => saveEdit(event, text, edits)}
-								oncanceledit={() => (editingId = undefined)}
-								ondelete={() => deleteMessage(event)}
-								onremovereply={() => removeReply(event)}
-								onremoveembed={(embed) => removeEmbed(event, embed)}
-								onstartthread={() => startThread(event)}
-								oncopylink={() => copyMessageLink(event)}
-								onreact={(emoji) => react(event, emoji)}
-								onbeginselect={() => beginSelect(event)}
-								onselect={(range) => selection.toggle(event.message_id, selectableOrder, range)}
-							/>
+							<Message {view} on={messageHandlers} testids={MESSAGE_TESTIDS} editor={view.editing && messageEditor.component ? editMessage : undefined} embed={messageEmbed} />
 						{/if}
 					{/each}
 				{/if}
@@ -2562,15 +2513,10 @@
 				<JumpBar count={unseenCount} mentions={mentions.unseen.length} onjump={jumpToLatest} onjumpmention={jumpToMention} />
 			{/if}
 
-			<div class="notify-inline" aria-live="polite">
+			<div class="ap-shell-nudge-inline" aria-live="polite">
 				{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />{/if}
 			</div>
-			<div class="ap-typing typing-row" aria-live="polite">
-				{#if typingNames.length > 0}
-					<TypingDots />
-					{typingLine(typingNames)}
-				{/if}
-			</div>
+			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
 			{#if checkingShown && timeline.length > 0}<TimelineLoading float label={quietReconnect ? statusLabel(snapshot, session.stalled) : activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} />{/if}
 
@@ -2600,173 +2546,31 @@
 					onmention={() => listMembers(MEMBERS_FRESH_MS)}
 				/>
 			{/if}
-		{:else if session.starting}
-			<!-- Coming up (connecting, signing in, listing rooms): placeholders where the room will be, not "No room open". -->
-			<div class="starting">
-				<header class="ap-roomhead"><span class="ap-skel starting-title" aria-hidden="true"></span></header>
-				<div class="ap-timeline starting-timeline">
-					<span class="sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
-					<TimelineLoading label={session.connection === 'connected' ? 'Loading messages…' : 'Connecting…'} rows={6} />
-				</div>
-			</div>
 		{:else}
-			<div class="empty empty-room">
-				{#if session.connection !== 'connected'}
-					<StatusBanner tone={session.connection === 'offline' ? 'danger' : 'warn'} testid="connection-status" live>{statusLabel(snapshot, session.stalled)}</StatusBanner>
-				{:else}
-					<span class="sr" data-testid="connection-status" role="status" aria-live="polite">Connected</span>
-					<h2>No room open</h2>
-					<p>Pick a room from the list.</p>
-				{/if}
-				<button class="ap-btn ap-btn-sm" type="button" onclick={() => openConnect()}>Connect to a backend</button>
-			</div>
+			<NoRoom {session} onconnect={() => openConnect()} />
 		{/if}
-	</main>
+	{/snippet}
+	{#snippet members()}
+		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
+	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
 		so the + on a room's row would open nothing. It floats over whichever pane is up; the new thread opens in the
 		conversation pane once it exists.
 	-->
-	{#if newThread}
+	{#if newThread && newThreadDialog.component}
 		{@const start = newThread}
+		{@const NewThreadDialog = newThreadDialog.component}
 		{#key start}
 			<NewThreadDialog room={start.room} title={start.title} summary={start.summary} moving={start.moving}
 				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
 				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
 		{/key}
 	{/if}
-	{#if memberListWide}<PanelToggle bind:this={memberListToggle} side="right" panel="member list" open={memberListOpen} ontoggle={toggleMemberList} />{/if}
-	<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
+	<!-- Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut. -->
 	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} onmention={(userId) => composer?.mention(userId)} />
 	<ReactorsPopover />
-	<!-- Kept through a drag that collapses the list, so the drag still ends on it. -->
-	<!-- Kept while shut (hidden), so its border slides with the list's. -->
-	{#if memberListWide}<SidebarHandle layout={memberList} name="member list" oncollapse={() => memberListToggle?.focus()} />{/if}
-
-	<!-- An error stays until closed or the next request; a pending line goes by itself. -->
-	{#snippet close(label: string, onclose: () => void)}
-		<button class="ap-iconbtn toast-close" type="button" aria-label={label} title="Dismiss" onclick={onclose}><X size={14} aria-hidden="true" /></button>
-	{/snippet}
-	{#if feedback.current}
-		{@const error = feedback.current.kind === 'error'}
-		<div class="toast">
-			<StatusBanner tone={error ? 'danger' : 'warn'} role={error ? 'alert' : 'status'} action={error ? dismissFeedback : undefined}>{feedback.current.text}</StatusBanner>
-		</div>
-	{/if}
-	{#snippet dismissFeedback()}{@render close('Dismiss', () => feedback.clear())}{/snippet}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
-	{#if snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting'}
-		<div class="toast toast-right">
-			<StatusBanner tone="danger" role="alert" action={dismissClientError}>{snapshot.error}</StatusBanner>
-		</div>
-	{/if}
-	{#snippet dismissClientError()}{@render close('Dismiss connection error', () => (dismissedError = snapshot.error))}{/snippet}
-</div>
+	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
+</AppShell>
 {/if}
-
-<style>
-	/* App glue over the Apron design system: layout height, the sidebar's collapse and the
-	   phone's one-pane-at-a-time. Everything else is ap-* from apron.css, inside the components. */
-	:global(html), :global(body) { height: 100%; }
-	:global(*), :global(*::before), :global(*::after) { box-sizing: border-box; }
-	:global(button), :global(input), :global(textarea), :global(select) { font: inherit; }
-	/*
-	 * --corner: how far a header's content keeps clear of a PanelToggle in the window's corner.
-	 * --slide: how both side panels open and shut. Their grid columns move (the grid's own transition, not an
-	 * inherited variable, so nothing else restyles each frame); each panel's contents keep their width against its
-	 * inner edge, so they ride the moving border rather than squeeze, and fade; the timeline keeps its final width
-	 * meanwhile (prepareSlide). A drag follows the pointer instead.
-	 */
-	.app { --corner: calc(var(--space-3) + 28px + var(--space-2)); --slide-time: 240ms; --slide-ease: cubic-bezier(0.2, 0, 0, 1); height: 100dvh; min-height: 100%; position: relative; overflow: clip; }
-	.slides { transition: grid-template-columns var(--slide-time) var(--slide-ease); }
-	/*
-	 * While an on-screen keyboard is up (trackKeyboard), the app is the part of the page above it: its header stays at
-	 * the top and the composer sits on the keyboard, rather than the browser panning the page up under the status bar.
-	 * Fixed, so it stays put however the browser scrolls the page behind it; moved down as far as the browser panned
-	 * (by top, not a transform, which would make it the box its own fixed popovers are placed in).
-	 */
-	:global(html[data-keyboard]) .app { position: fixed; top: var(--app-top); left: 0; right: 0; height: var(--app-height); min-height: 0; }
-	:global(html[data-keyboard]) .app :global(.ap-composer) { margin-bottom: var(--space-2); }
-	/* The rooms list's toggle sits over its header, then over the room's once it's shut: the room's keeps clear of it. */
-	.app :global(.ap-shell-sidehead) { padding-left: var(--corner); }
-	.side-collapsed :global(.ap-roomhead) { padding-left: var(--corner); }
-	/* With a column of its own, the member list's toggle sits over its header, then over the room's. */
-	.member-list-wide :global(.member-list-head) { padding-right: var(--corner); }
-	.member-list-wide:not(.member-list-open) :global(.ap-roomhead) { padding-right: var(--corner); }
-	.slides :global(.ap-roomhead) { transition: padding var(--slide-time) var(--slide-ease); }
-	/* Each panel's contents keep its open width, against the edge that faces the conversation. */
-	.app :global(.ap-shell-side) { align-items: flex-end; }
-	.app :global(.ap-shell-side > *) { width: calc(var(--rooms-w) - 1px); }
-	.member-list-wide :global(.member-list) { overflow: hidden; align-items: flex-start; }
-	.member-list-wide :global(.member-list > *) { width: calc(var(--member-list-w) - 1px); }
-	/* Shut, a panel fades as it slides, then hides (from the keyboard and screen readers too). */
-	.slides :global(.ap-shell-side), .slides.member-list-wide :global(.member-list) { transition: opacity var(--slide-time) var(--slide-ease), visibility 0s; }
-	.side-collapsed :global(.ap-shell-side), .member-list-wide:not(.member-list-open) :global(.member-list) { opacity: 0; visibility: hidden; }
-	.slides.side-collapsed :global(.ap-shell-side), .slides.member-list-wide:not(.member-list-open) :global(.member-list) { transition: opacity var(--slide-time) var(--slide-ease), visibility 0s var(--slide-time); }
-	.side-resizing, .side-resizing :global(.ap-shell-side), .side-resizing :global(.member-list), .side-resizing :global(.ap-roomhead) { transition: none; }
-	.side-resizing, .side-resizing :global(*) { user-select: none; }
-	.banner { padding: var(--space-2) var(--space-4) 0; }
-	/* Over the conversation while files are dragged onto it; drag events pass through to the pane. */
-	.drop-zone {
-		position: absolute; inset: var(--space-2); z-index: 20; display: grid; place-items: center;
-		border: 2px dashed var(--accent); border-radius: var(--radius-lg);
-		background: color-mix(in srgb, var(--bg-100) 85%, transparent); color: var(--ink);
-		font-weight: 600; pointer-events: none;
-	}
-	.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-	.starting { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-	.starting-title { width: 120px; height: 14px; }
-	.starting-timeline { display: flex; flex-direction: column; }
-	.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; }
-	.empty h2 { margin: 0; font-size: var(--text-title); line-height: 24px; font-weight: 600; color: var(--ink); }
-	.empty p { margin: 0; }
-	.empty .ap-btn { margin-top: var(--space-2); }
-	.typing-row { min-height: 20px; padding-top: var(--space-1); }
-	/*
-	 * The first-mention offer. Over the rooms list's foot, pointing at the Preferences gear (32px, its center 25px in
-	 * from the list's right edge): its left edge 8px in, or further right on a list wider than it, to reach the gear.
-	 */
-	.notify-anchored { --notify-left: max(var(--space-2), calc(var(--sidebar-w) - 300px - var(--space-2))); position: absolute; z-index: 7; left: var(--notify-left); bottom: calc(var(--header-h) + 10px); width: 300px; max-width: calc(100vw - var(--space-4)); display: none; }
-	.notify-anchored :global(.ap-nudge) { --ap-nudge-tip: calc(var(--sidebar-w) - 30px - var(--notify-left)); }
-	.notify-inline { padding: 0 var(--space-4); }
-	.notify-inline:not(:empty) { padding-top: var(--space-2); }
-	.notify-inline :global(.ap-nudge) { width: auto; }
-	@media (min-width: 720px) {
-		.app:not(.side-collapsed) .notify-anchored { display: block; }
-		.app:not(.side-collapsed) .notify-inline { display: none; }
-	}
-	/* A zero-height sticky row, so the pill floats over the timeline without taking space. */
-	.day-float { position: sticky; top: var(--space-2); z-index: 2; height: 0; display: flex; align-items: flex-start; justify-content: center; pointer-events: none; }
-	.day-float span { padding: 3px var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); box-shadow: var(--shadow-float); color: var(--ink); font-size: var(--text-sm); line-height: 16px; font-weight: 500; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity .2s, transform .2s; }
-	.day-float-shown span { opacity: 1; transform: none; }
-	@media (prefers-reduced-motion: reduce) {
-		.day-float span { transition: none; transform: none; }
-		.app, .app :global(.ap-shell-side), .app :global(.member-list), .app :global(.ap-roomhead) { transition: none; }
-	}
-	.toast { position: fixed; z-index: 10; left: 50%; bottom: calc(var(--space-4) + 64px); transform: translateX(-50%); max-width: min(480px, calc(100% - var(--space-8))); }
-	.toast :global(.ap-status) { box-shadow: var(--shadow-float); }
-	.toast-right { left: auto; right: var(--space-4); transform: none; }
-	/* Smaller than an icon button, so a toast that can be closed is no taller than one that can't. */
-	.toast-close { width: 22px; height: 22px; margin: -2px 0; flex: none; }
-
-	/* Wide screens give an open member list its own column; narrower ones overlay it. */
-	@media (min-width: 960px) {
-		/* Its column is there while shut too, at 0, so it can slide. */
-		.app.member-list-wide { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--member-list-track); }
-	}
-	/* Under 720px it's one pane at a time: rooms, then the room or thread, pushed like pages. */
-	@media (max-width: 719px) {
-		.app { grid-template-columns: minmax(0, 1fr); }
-		/* Phones go back to the rooms list instead. */
-		.app > :global(.panel-toggle.left) { display: none; }
-		.app :global(.ap-shell-sidehead) { padding-left: var(--space-4); }
-		.app :global(.ap-roomhead) { padding-left: var(--space-4); }
-		.app :global(.ap-shell-side) { align-items: stretch; }
-		.app :global(.ap-shell-side > *) { width: auto; }
-		.app[data-pane='main'] :global(.ap-shell-side) { display: none; }
-		.app[data-pane='rooms'] .ap-shell-main, .app[data-pane='rooms'] :global(.member-list) { display: none; }
-		.side-collapsed :global(.ap-shell-side), .slides.side-collapsed :global(.ap-shell-side) { opacity: 1; visibility: visible; transition: none; }
-		.typing-row { display: none; }
-		.toast-right { right: var(--space-4); left: var(--space-4); max-width: none; }
-	}
-</style>

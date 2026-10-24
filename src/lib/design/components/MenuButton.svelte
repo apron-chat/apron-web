@@ -1,29 +1,19 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
+	import type { ClassValue } from 'svelte/elements';
+	import type { MenuChoice } from './types';
 
-	/** One choice of a MenuButton: its value, a label, and an optional muted hint after it. */
-	interface MenuChoice {
-		value: string;
-		label: string;
-		hint?: string;
-		/** A `data-testid` for its item. */
-		testid?: string;
-	}
-
+	/** A button that opens a menu of choices. Its `onselect` is the choice's, not the DOM event. */
 	interface Props {
 		/** The button's text; with `icon`, its name for screen readers and its tooltip. */
 		label: string;
 		/** Draws the button as an icon button instead, such as ⋯ for more actions. */
 		icon?: Snippet;
 		/** A `data-testid` for the button. */
-		testid?: string;
+		buttonTestid?: string;
 		choices: MenuChoice[];
 		/** Called with the chosen value; the menu closes. */
 		onselect: (value: string) => void;
-		variant?: 'quiet' | 'primary' | 'ghost';
-		size?: 'md' | 'sm';
-		/** Where the menu opens: under the button (the default) or above it. */
-		placement?: 'below' | 'above';
 		disabled?: boolean;
 		/**
 		 * Working on the last choice, such as a request in flight: the button
@@ -39,8 +29,13 @@
 		lead?: Snippet<[string]>;
 		/** Words for screen readers instead of `label`, such as "Status: Online". */
 		ariaLabel?: string;
+		/** Classes for its box (the button and the menu), added to its own. */
+		class?: ClassValue;
 	}
-	let { label, icon, testid, choices, onselect, variant = 'quiet', size = 'sm', placement = 'below', disabled = false, busy = false, open = $bindable(false), selected, lead, ariaLabel }: Props = $props();
+	let {
+		label, icon, buttonTestid, choices, onselect, disabled = false, busy = false, open = $bindable(false), selected, lead, ariaLabel,
+		class: className
+	}: Props = $props();
 
 	let root = $state<HTMLElement | undefined>();
 	let trigger = $state<HTMLButtonElement | undefined>();
@@ -107,14 +102,14 @@
 
 <svelte:window onpointerdown={outside} />
 
-<div class="ap-menubtn" bind:this={root} onkeydown={keydown} role="presentation">
+<div role="presentation" class={['ap-menubtn', className]} bind:this={root} onkeydown={keydown}>
 	{#if icon}
-		<button bind:this={trigger} type="button" class={['ap-iconbtn', open && 'ap-iconbtn-on']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel ?? label} title={label} data-testid={testid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{@render icon()}</button>
+		<button bind:this={trigger} type="button" class={['ap-iconbtn', open && 'ap-iconbtn-on']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel ?? label} title={label} data-testid={buttonTestid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{@render icon()}</button>
 	{:else}
-		<button bind:this={trigger} type="button" class={['ap-btn', 'ap-btn-' + variant, size === 'sm' && 'ap-btn-sm']} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel} data-testid={testid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{label}</button>
+		<button bind:this={trigger} type="button" class="ap-btn ap-btn-quiet ap-btn-sm" aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel} data-testid={buttonTestid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{label}</button>
 	{/if}
 	{#if open}
-		<ul class={['ap-menu', placement === 'below' && 'ap-menu-below', selected !== undefined && 'ap-menu-pick']} role="menu" aria-label={ariaLabel ?? label}>
+		<ul class={['ap-menu', 'ap-menu-below', selected !== undefined && 'ap-menu-pick']} role="menu" aria-label={ariaLabel ?? label}>
 			{#each choices as choice (choice.value)}
 				{@const on = selected !== undefined && choice.value === selected}
 				<li role="none">

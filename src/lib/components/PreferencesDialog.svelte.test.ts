@@ -1,15 +1,8 @@
 // @vitest-environment jsdom
-import { flushSync, mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { flushSync, tick } from 'svelte';
+import { describe, expect, it } from 'vitest';
 import PreferencesDialog from './PreferencesDialog.svelte';
-
-let instance: ReturnType<typeof mount> | undefined;
-
-afterEach(() => {
-	if (instance) unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
-});
+import { render, cleanup } from '$lib/test/dom';
 
 /** The dialog's props, as the page gives them, with `notifications` overrides. */
 function notificationProps(overrides: Record<string, unknown> = {}) {
@@ -34,14 +27,11 @@ const push = { supported: true, homeScreen: false, enabled: false, offered: ['me
 
 /** The one Notifications switch's note, its action (if any), and how many switches the section has. */
 function notifications(props: Record<string, unknown>) {
-	instance = mount(PreferencesDialog, { target: document.body, props: notificationProps(props) });
-	flushSync();
+	render(PreferencesDialog, notificationProps(props));
 	const note = document.getElementById('ap-pref-notifications-note')?.textContent ?? '';
 	const action = [...document.querySelectorAll<HTMLButtonElement>('.ap-pref-test button')].find((button) => !button.textContent?.includes('test'));
 	const switches = document.querySelectorAll('.ap-preferences-content [role="switch"], .ap-preferences-content input[type="checkbox"][role="switch"]').length;
-	unmount(instance);
-	instance = undefined;
-	document.body.innerHTML = '';
+	cleanup();
 	return { note, action: action?.textContent?.trim(), switches };
 }
 
@@ -66,8 +56,7 @@ describe('PreferencesDialog', () => {
 		expect(held.action).toBe('Alert for this server instead');
 		// The action is push's.
 		let pushed = 0;
-		instance = mount(PreferencesDialog, { target: document.body, props: notificationProps({ webPush: push, onwebpush: () => pushed++ }) });
-		flushSync();
+		render(PreferencesDialog, notificationProps({ webPush: push, onwebpush: () => pushed++ }));
 		[...document.querySelectorAll<HTMLButtonElement>('.ap-pref-test button')].find((button) => button.textContent?.includes('closed'))!.click();
 		expect(pushed).toBe(1);
 	});
@@ -99,8 +88,7 @@ describe('PreferencesDialog', () => {
 				onunsupported: () => undefined
 			}
 		});
-		instance = mount(PreferencesDialog, { target: document.body, props });
-		flushSync();
+		render(PreferencesDialog, props);
 		const live = document.querySelector('.ap-sr[aria-live="polite"]')!;
 		document.querySelector<HTMLButtonElement>('.ap-status-pick button[aria-haspopup="menu"]')!.click();
 		flushSync();

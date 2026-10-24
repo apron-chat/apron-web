@@ -5,14 +5,12 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 	new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } });
 
 describe('GitHub links', () => {
-	it('reads pull requests, issues, commits, and repositories', () => {
+	it('reads pull requests, issues, commits, and repositories, and ignores other pages and hosts', () => {
 		expect(parseGitHubLink('https://github.com/shazow/apron/pull/60/files#diff')).toEqual({ type: 'issue', owner: 'shazow', repo: 'apron', number: 60, url: 'https://github.com/shazow/apron/pull/60' });
 		expect(parseGitHubLink('https://www.github.com/shazow/apron/issues/7')).toMatchObject({ type: 'issue', number: 7, url: 'https://github.com/shazow/apron/issues/7' });
 		expect(parseGitHubLink('https://github.com/shazow/apron/commit/5B0CC30abc')).toMatchObject({ type: 'commit', sha: '5b0cc30abc' });
 		expect(parseGitHubLink('https://github.com/shazow/apron.git')).toEqual({ type: 'repo', owner: 'shazow', repo: 'apron', url: 'https://github.com/shazow/apron' });
-	});
-
-	it('ignores other pages and hosts', () => {
+		// Not other pages and hosts.
 		expect(parseGitHubLink('https://github.com/shazow')).toBeUndefined();
 		expect(parseGitHubLink('https://github.com/features/copilot')).toBeUndefined();
 		expect(parseGitHubLink('https://github.com/shazow/apron/tree/main')).toBeUndefined();
@@ -34,7 +32,7 @@ describe('previews', () => {
 		expect(excerpt(null)).toBeUndefined();
 	});
 
-	it('describes pull requests and issues with their state and author', () => {
+	it('describes pull requests and issues with their state and author, and commits and repositories', () => {
 		const pull = parseGitHubLink('https://github.com/a/b/pull/60')!;
 		expect(previewFromApi(pull, { title: 'Remove the Go server', state: 'closed', user: { login: 'shazow' }, body: 'Now in its own repo.', pull_request: { merged_at: '2026-09-01T00:00:00Z' } })).toEqual({
 			site_name: 'GitHub · a/b', title: 'Remove the Go server', description: 'Pull request #60 · Merged · by shazow — Now in its own repo.'
@@ -42,9 +40,6 @@ describe('previews', () => {
 		const issue = parseGitHubLink('https://github.com/a/b/issues/3')!;
 		expect(previewFromApi(issue, { title: 'Bug', state: 'closed', state_reason: 'not_planned', body: '' })?.description).toBe('Issue #3 · Closed as not planned');
 		expect(previewFromApi(issue, {})).toBeUndefined();
-	});
-
-	it('describes commits and repositories', () => {
 		const commit = parseGitHubLink('https://github.com/a/b/commit/5b0cc30')!;
 		expect(previewFromApi(commit, { commit: { message: 'Fix it\n\nBecause.', author: { name: 'Ada' } } })).toEqual({ site_name: 'GitHub · a/b', title: 'Fix it', description: 'Commit 5b0cc30 · by Ada — Because.' });
 		const repo = parseGitHubLink('https://github.com/a/b')!;
@@ -66,13 +61,17 @@ describe('LinkPreviews', () => {
 		expect(previews.embeds(text)[0].og).toEqual({ site_name: 'GitHub · a/b', title: 'Remove the Go server', description: 'Issue #60 · Open · by shazow' });
 	});
 
-	it('falls back to the URL for private links, and attaches nothing for an unknown repository', async () => {
+	it('falls back to the URL for private links and failed requests, and attaches nothing for an unknown repository', async () => {
 		const fetcher = vi.fn(async () => json({ message: 'Not Found' }, 404));
 		const previews = new LinkPreviews(fetcher as unknown as typeof fetch);
 		await previews.prefetch('https://github.com/a/b/pull/1 https://github.com/c/d');
 		expect(previews.embeds('https://github.com/a/b/pull/1 https://github.com/c/d')).toEqual([{ kind: 'link', url: 'https://github.com/a/b/pull/1', og: { site_name: 'GitHub · a/b', title: 'Pull request #1' } }]);
 		await previews.prefetch('https://github.com/a/b/pull/1');
 		expect(fetcher).toHaveBeenCalledTimes(2);
+		// A request that fails falls back to the URL too.
+		const offline = new LinkPreviews((async () => { throw new TypeError('offline'); }) as unknown as typeof fetch);
+		await offline.prefetch('https://github.com/a/b/pull/1');
+		expect(offline.embeds('https://github.com/a/b/pull/1')[0].og?.title).toBe('Pull request #1');
 	});
 
 	it('stops asking while rate limited, and retries a link after', async () => {
@@ -101,11 +100,5 @@ describe('LinkPreviews', () => {
 		unsubscribe();
 		await previews.prefetch('https://github.com/a/b/pull/2');
 		expect(listener).toHaveBeenCalledTimes(1);
-	});
-
-	it('survives a failed request', async () => {
-		const previews = new LinkPreviews((async () => { throw new TypeError('offline'); }) as unknown as typeof fetch);
-		await previews.prefetch('https://github.com/a/b/pull/1');
-		expect(previews.embeds('https://github.com/a/b/pull/1')[0].og?.title).toBe('Pull request #1');
 	});
 });

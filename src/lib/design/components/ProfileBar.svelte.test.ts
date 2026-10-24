@@ -1,0 +1,49 @@
+// @vitest-environment jsdom
+import { describe, expect, it, vi } from 'vitest';
+import ProfileBar from './ProfileBar.svelte';
+import ProfileEditor from './ProfileEditor.svelte';
+import * as dom from '$lib/test/dom';
+
+function render(props: Record<string, unknown>) {
+	dom.render(ProfileBar, { backend: 'Work', ...props });
+	return document.querySelector<HTMLButtonElement>('.ap-profile-me')!;
+}
+
+describe('ProfileBar', () => {
+	it('names you, your status and what to add in its label, or what it’s waiting for before there is a you', () => {
+		const me = render({ you: { user_id: 'alice', name: 'Alice' }, status: 'dnd', note: 'add a sign-in' });
+		expect(me.getAttribute('aria-label')).toBe('Your profile on Work: Alice, do not disturb. Edit');
+		expect(me.querySelector('.ap-profile-sub')?.textContent).toBe('on Work · add a sign-in');
+		dom.unmount();
+		const waiting = render({ placeholder: 'Signing in…' });
+		expect(waiting.getAttribute('aria-label')).toBe('Your profile on Work: signing in. Edit');
+		expect(waiting.querySelector('.ap-profile-name')?.textContent).toBe('Signing in…');
+	});
+
+	it('offers the preferences on a gear, marked while notifications are paused', () => {
+		const onpreferences = vi.fn();
+		render({ you: { user_id: 'alice' }, onpreferences, paused: 'until 14:30' });
+		const gear = document.querySelector<HTMLButtonElement>('.ap-profile-settings')!;
+		expect(gear.getAttribute('aria-label')).toBe('Open preferences. Notifications paused until 14:30');
+		expect(gear.querySelector('.ap-profile-paused')).not.toBeNull();
+		gear.click();
+		expect(onpreferences).toHaveBeenCalledOnce();
+	});
+});
+
+describe('ProfileEditor', () => {
+	it('picks an avatar with its own file input, and says why a handle was declined', () => {
+		const onavatarfile = vi.fn();
+		dom.render(ProfileEditor, { userId: 'guest_7', name: 'root', canUpload: true, onavatarfile, status: 'declined', declinedNote: 'The server declined this handle (reserved). Sign in and it’s applied.', dialog: false });
+		expect(document.querySelector('form')?.getAttribute('role')).toBeNull();
+		const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+		const picked = vi.spyOn(input, 'click');
+		dom.button('Add avatar').click();
+		expect(picked).toHaveBeenCalledOnce();
+		const file = new File(['png'], 'face.png', { type: 'image/png' });
+		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+		input.dispatchEvent(new Event('change', { bubbles: true }));
+		expect(onavatarfile).toHaveBeenCalledExactlyOnceWith(file);
+		expect(dom.byRole('alert').textContent).toBe('The server declined this handle (reserved). Sign in and it’s applied.');
+	});
+});

@@ -19,7 +19,10 @@ export interface ThreadEntry {
 	/** The thread's own `room_id`. */
 	id: string;
 	parentRoomId: string;
+	/** Its title, "Untitled" without one (`untitled`). */
 	title: string;
+	/** It has no title: the design system calls it "Untitled" itself, with its `room_id` on hover (`designTitle`). */
+	untitled?: true;
 	/** The thread's `description` (§3.4): Markdown, its summary or what started it. */
 	description?: string;
 	/** Visible only to its members (§4.2.4). */
@@ -65,6 +68,14 @@ export function sidebarRooms(rooms: readonly RoomSnapshot[]): RoomSnapshot[] {
 	return rooms.filter((room) => room.joined && (room.parentRoomId === undefined || !visible.has(room.parentRoomId)));
 }
 
+/**
+ * The title to hand a design component that names a thread: none for an untitled one, so the component falls back to
+ * "Untitled" itself and puts the `room_id` on hover.
+ */
+export function designTitle(thread: { title: string; untitled?: true }): string | undefined {
+	return thread.untitled ? undefined : thread.title;
+}
+
 /** One thread room as a card and sidebar row. */
 export function threadEntry(room: RoomSnapshot): ThreadEntry {
 	const messages = timelineMessages(room);
@@ -79,6 +90,7 @@ export function threadEntry(room: RoomSnapshot): ThreadEntry {
 		id: room.id,
 		parentRoomId: room.parentRoomId ?? '',
 		title: room.title,
+		...(room.untitled ? { untitled: true as const } : {}),
 		...(room.description ? { description: room.description } : {}),
 		...(room.private ? { private: true } : {}),
 		...(room.loaded ? { count: messages.length } : {}),
@@ -98,6 +110,7 @@ function unjoinedThreadEntry(listing: RoomListing): ThreadEntry {
 		id: listing.id,
 		parentRoomId: listing.parentRoomId ?? '',
 		title: listing.title,
+		...(listing.untitled ? { untitled: true as const } : {}),
 		...(typeof description === 'string' && description ? { description } : {}),
 		...(listing.record.private === true ? { private: true } : {}),
 		loaded: false,

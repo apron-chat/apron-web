@@ -49,8 +49,10 @@ export interface Notice {
  */
 export interface RoomSnapshot {
 	id: string;
-	/** Display title: the record's `title`, falling back to the `room_id`. */
+	/** Display title: the record's `title`, falling back to the `room_id`, or for a thread to "Untitled" (`untitled`). */
 	title: string;
+	/** A thread without a title: `title` is "Untitled", and where it's shown its `room_id` goes on hover. */
+	untitled?: true;
 	/**
 	 * The user has joined it (or, without capability `rooms`, it is a room messages
 	 * arrive in): it delivers live. A room opened with `viewRoom` is not joined
@@ -133,7 +135,9 @@ export interface RoomSnapshot {
  */
 export interface RoomListing {
 	id: string;
+	/** As in `RoomSnapshot`, with `untitled`. */
 	title: string;
+	untitled?: true;
 	record: RoomRecord;
 	/** As in `RoomSnapshot`. */
 	firstRecordLogId?: string;

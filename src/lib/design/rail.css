@@ -1,0 +1,32 @@
+/* BackendRail, and AppShell's column for it: the design bundle's alone (npm run design:bundle puts it after apron.css in
+   bundle.css). The app shows one backend and never renders a rail, so it doesn't import this file and none of it ships
+   with the app. Its tile, .ap-rail-tile, stays in apron.css: ConnectPage's recent backends use it too. */
+:root { --rail-w: 64px; }
+
+/* BackendRail — one tile per connected backend */
+.ap-rail { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: var(--rail-w); padding: var(--space-3) 0; box-sizing: border-box; background: var(--bg-rail); }
+.ap-rail-item { position: relative; display: grid; place-items: center; width: 100%; height: var(--rail-tile); padding: 0; border: 0; background: none; cursor: pointer; }
+:where(.ap-rail-item):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.ap-rail-item:hover .ap-rail-tile { background: var(--accent-soft); color: var(--accent); border-radius: var(--radius-full); }
+.ap-rail-active .ap-rail-tile, .ap-rail-active:hover .ap-rail-tile { background: var(--accent); color: var(--on-accent); border-radius: var(--radius-full); }
+.ap-rail-offline .ap-rail-tile { opacity: var(--opacity-dim); }
+.ap-rail-pip { position: absolute; left: 0; top: 50%; width: 4px; height: 0; transform: translateY(-50%); border-radius: 0 var(--radius-full) var(--radius-full) 0; background: var(--ink); }
+.ap-rail-unread .ap-rail-pip { height: 8px; }
+.ap-rail-item:hover .ap-rail-pip { height: 20px; }
+.ap-rail-active .ap-rail-pip, .ap-rail-active:hover .ap-rail-pip { height: var(--rail-tile); }
+.ap-rail-count { position: absolute; right: 8px; bottom: -4px; box-shadow: 0 0 0 3px var(--bg-rail); }
+.ap-rail-add .ap-rail-tile { background: transparent; border: 1px dashed var(--line-strong); color: var(--ink-muted); font-size: 18px; font-weight: 400; box-sizing: border-box; }
+.ap-rail-add:hover .ap-rail-tile { border-style: solid; }
+
+/* AppShell with a rail (no ap-shell-norail): the rail's column first, then apron.css's columns. */
+.ap-shell:not(.ap-shell-norail) { grid-template-columns: var(--rail-w) var(--side-col, var(--sidebar-w)) minmax(0, 1fr); }
+/* Beside a rail, what is placed against the rooms list's left edge moves over by it. */
+.ap-shell:not(.ap-shell-norail) :is(.ap-shell-toggle-left, .ap-shell-nudge), .ap-shell:not(.ap-shell-norail) .ap-shell-handle:not(.ap-shell-handle-right) { margin-left: var(--rail-w); }
+@media (min-width: 960px) {
+	.ap-shell-members-wide:not(.ap-shell-norail) { grid-template-columns: var(--rail-w) var(--side-col, var(--sidebar-w)) minmax(0, 1fr) var(--member-list-track); }
+}
+/* Under 720px, one pane at a time, as in apron.css: no rail. */
+@media (max-width: 719px) {
+	.ap-shell:not(.ap-shell-norail) { grid-template-columns: minmax(0, 1fr); }
+	.ap-shell .ap-rail { display: none; }
+}

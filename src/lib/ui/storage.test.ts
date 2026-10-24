@@ -1,15 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pushIdFor, hideSummary, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadHiddenSummaries, showSummary, summaryHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
+import { memoryStorage } from '$lib/test/storage';
 
 const values = new Map<string, string>();
 
 beforeEach(() => {
-	vi.stubGlobal('localStorage', {
-		getItem: (key: string) => values.get(key) ?? null,
-		setItem: (key: string, value: string) => values.set(key, value),
-		removeItem: (key: string) => values.delete(key)
-	});
+	vi.stubGlobal('localStorage', memoryStorage(values));
 });
 
 afterEach(() => {
@@ -75,22 +72,6 @@ describe('preference storage', () => {
 		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'ada'))).toBeUndefined();
 		values.set('apron.notifyScopes', '{broken');
 		expect(loadNotifyScopes(ada)).toBeUndefined();
-	});
-
-	it('carries over the device-wide "Everything", then drops the old key', () => {
-		values.set('apron.notificationScope', 'everything');
-		// Accounts without a choice take what "Everything" meant: every scope.
-		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'bob'))).toEqual(['mentions', 'replies', 'private', 'joined']);
-		expect(values.has('apron.notificationScope')).toBe(false);
-		// A choice made since wins over it.
-		saveNotifyScopes(notifyAccount('wss://b.example/', 'bob'), ['mentions']);
-		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'bob'))).toEqual(['mentions']);
-	});
-
-	it('takes the old "Mentions" setting as the default, mentions and replies', () => {
-		values.set('apron.notificationScope', 'mentions');
-		expect(loadNotifyScopes(notifyAccount('wss://a.example/', 'ada'))).toBeUndefined();
-		expect(values.has('apron.notificationScope')).toBe(false);
 	});
 
 	it('makes each account a random push_id once, and keeps it', () => {

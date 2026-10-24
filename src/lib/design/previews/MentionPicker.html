@@ -1,14 +1,21 @@
-<!-- @dsCard group="Input" height=220 subtitle="Filtering on a prefix" -->
+<!-- @dsCard group="Input" height=640 subtitle="@ people filtering on a prefix, # rooms, : emoji" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>MentionPicker</title></head>
 <body>
-<div id="root" style="position:relative;height:200px"><div id="pick" style="position:absolute;left:0;right:0;bottom:72px"></div><div id="field" style="position:absolute;left:0;right:0;bottom:0"></div></div>
+<div id="root"></div>
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
-  add(A.Composer, { room: 'Ops', canUpload: true, value: 'Handing this to @da' }, document.getElementById('field'));
-  add(A.MentionPicker, { query: 'da', active: 0, people: [{ user_id: 'dana', name: 'Dana' }, { user_id: 'dave.k', name: 'Dave Kim' }, { user_id: 'amanda', name: 'Amanda' }] }, document.getElementById('pick'));
+  // Each picker anchors above its composer's row, as in the app.
+  function pair(value, picker) {
+    var box = document.createElement('div'); box.style.cssText = 'position:relative;height:210px;display:flex;flex-direction:column;justify-content:flex-end';
+    root.appendChild(box);
+    add(A.Composer, { room: 'Ops', canUpload: true, value: value, picker: A.part(A.MentionPicker, picker) }, box);
+  }
+  pair('Handing this to @da', { query: 'da', active: 0, people: [{ user_id: 'dana', name: 'Dana' }, { user_id: 'dave.k', name: 'Dave Kim' }, { user_id: 'amanda', name: 'Amanda' }] });
+  pair('Moved to #dep', { query: 'dep', active: 0, rooms: [{ id: 'deploy', title: 'Deploy' }, { id: 'deploy-4-2', title: 'Deploy 4.2' }] });
+  pair('Ship it :tad', { query: 'tad', active: 0, emoji: [{ id: 'tada', native: '🎉', name: 'Party Popper' }] });
 </script>
 </body>
 </html>

@@ -14,7 +14,8 @@ sets to `https://media.apron.chat`, the Cloudflare demo server's upload bucket.
 Streams load from the chat server's origin only. Every link in chat, from
 message text, link cards, uploads and HTML embeds, opens in a new tab.
 
-`/__preview` mounts this same app against a page-local in-memory WebSocket
+`/__preview` (in development builds only: `vite dev`, or `APRON_PREVIEW=1 vite build`, which the QA tools and
+`npm run e2e` use; production builds leave it out) mounts this same app against a page-local in-memory WebSocket
 server, not the saved, configured, or same-origin backend. It seeds a guest,
 rooms, a thread, people, CommonMark examples, and a message moved into the thread,
 and implements the app's protocol
@@ -136,16 +137,23 @@ identity: the same account under a new `user_id`, such as a guest that
 becomes a new account. Signing in to an existing account isn't one: others
 see the guest leave (a membership leave, `offline`) and the account arrive,
 two people, the guest's messages staying the guest's, and the connection
-that signed in takes its own identity from the `auth` result or `you`. Message headers show the name with the muted `@user_id` beside it,
-always when another user the client knows of shows under the same name, so no
-one can pass as someone else; a name that is the user's own `user_id` needs no
-handle beside it. Without an avatar, a
+that signed in takes its own identity from the `auth` result or `you`. Message headers, the member list and the list of who reacted show the muted
+`@user_id` beside a name only where it tells people apart: when another user the
+client knows of shows under the same name, so no one can pass as someone else (a
+name that is the user's own `user_id` needs no handle beside it). A handle that
+merely differs from the name says nothing more, so it isn't shown; one that is
+shown is needed, so it stays whole, giving way only after the name and the role
+badges. The profile card always shows the `@user_id`, and the mention picker
+lists it to pick by. Without an avatar, a
 person's initials sit on a muted tint whose hue is hashed from their `user_id`,
 so the same person has the same color on every client. A user's `roles`
 ([PROTOCOL.md §3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)),
 such as "admin" or "bot", show as small outlined badges beside the name in
 message headers and the member list, never as part of it, so no name can pass
-as a role; they grant nothing here. Senders whose `user_id` starts with `~`
+as a role; they grant nothing here. Short of room, the badges come first: the
+name truncates, down to 6em (or all of a shorter name), before the badges that
+don't fit stack behind the last one that does (its tooltip names every role),
+then the first narrows, then they go; the time never wraps or shrinks. Senders whose `user_id` starts with `~`
 (system identities, Appendix A.1) render as quiet centered system lines, except
 the three that state a scope (`~private`, `~room`, `~server`), which render as
 the design system's notice card: left-aligned, and titled by the sender as the
@@ -594,7 +602,12 @@ membership records in its `memberships` ([PROTOCOL.md §4.2.2](https://github.co
 without a `room_id` until a message names it, plus any room a message arrives
 in, titled by its `room_id`.
 
-Threads are rooms with a `parent_room_id`. The sidebar lists top-level rooms
+Threads are rooms with a `parent_room_id`. A thread without a title is called
+"Untitled" wherever it's named (its sidebar row, card and Moved to line, the
+header, the move menu, the composer's "Reply in Untitled", room chips,
+notifications), with its `room_id` on hover; a top-level room without one is
+still called by its `room_id`, since several untitled rooms side by side would
+be indistinguishable. The sidebar lists top-level rooms
 and, under the open room, its threads in two groups. Under a room that isn't
 open, it lists only that room's joined threads with news (unread replies or
 mentions), in the same rows, so activity there isn't missed; picking one opens
@@ -607,7 +620,7 @@ ink too with unread replies. Either line shows alone when the thread has only
 that one, and the icon says which it is. Only what's new is counted, in one
 bubble: unread replies in grey, turning orange with an `@` when they include a
 mention of you (the row tinted too); a thread with nothing new shows no number
-and steps back, its title and lines muted and the row faded. A room shows the
+and steps back, its title muted and its lines dimmed. A room shows the
 same bubble for its own unread messages (its threads count their own), with
 its name in bold, and none while you're reading it. The open room or thread has a neutral fill and an
 accent bar at its left (on the guide line, for a thread), so it never looks

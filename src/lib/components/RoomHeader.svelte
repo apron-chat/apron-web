@@ -1,14 +1,7 @@
 <script lang="ts">
-	import Ellipsis from '@lucide/svelte/icons/ellipsis';
-	import Lock from '@lucide/svelte/icons/lock';
-	import LogOut from '@lucide/svelte/icons/log-out';
-	import Pencil from '@lucide/svelte/icons/pencil';
-	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
-	import Users from '@lucide/svelte/icons/users';
 	import type { RoomSnapshot } from '$lib/protocol/client';
 	import { markdownText } from '$lib/protocol/markdown';
-	import MenuButton from '$lib/design/components/MenuButton.svelte';
-	import { count99 } from '$lib/design/components/util';
+	import DesignRoomHeader from '$lib/design/components/RoomHeader.svelte';
 
 	interface Props {
 		/** The top-level room. */
@@ -61,91 +54,37 @@
 	/** The room's description (§3.4) as one line of text under its title, once its pinned summary is put away; a thread has only its summary. */
 	let topic = $derived(showTopic && threadTitle === undefined && room.description ? markdownText(room.description).split('\n')[0] : '');
 	let thread = $derived(threadTitle !== undefined);
-	let noun = $derived(thread ? 'thread' : 'room');
-	/** What's new elsewhere, on the back button (phones): a mention may be an edit adding you to a read message, so it counts at least once. */
-	let elsewhere = $derived(Math.max(unreadElsewhere, mentionsElsewhere));
-	let backLabel = $derived(elsewhere
-		? `Back to rooms, ${elsewhere} unread ${elsewhere === 1 ? 'message' : 'messages'}${mentionsElsewhere ? `, ${mentionsElsewhere === 1 ? 'a mention' : `${mentionsElsewhere} mentions`} of you` : ''}`
-		: 'Back to rooms');
-	/** The occasional actions, in the ⋯ menu: Join stays a button, since it's what a pane read without joining is for. */
-	let actions = $derived([
-		...(canEdit ? [{ value: 'edit', label: `Edit ${noun}`, testid: 'edit-room' }] : []),
-		...(canLeave ? [{ value: 'leave', label: `Leave ${noun}`, testid: 'leave-room' }] : [])
-	]);
-
-	function act(value: string): void {
-		if (value === 'edit') onedit();
-		else if (value === 'leave') onleave();
-	}
 </script>
 
-<header class="ap-roomhead" class:ap-roomhead-private={pane.private}>
-	<!-- With something new elsewhere, the back arrow becomes the point of a tag holding the count: grey for unread, orange with an @ for a mention, as in the rooms list. -->
-	<button class="ap-roomhead-back" class:tagged={elsewhere > 0} type="button" aria-label={backLabel} onclick={onback}>
-		{#if elsewhere > 0}<span class={['back-tag', mentionsElsewhere ? 'back-tag-at' : 'back-tag-quiet']} data-testid="back-unread" aria-hidden="true">{#if mentionsElsewhere}@&#8239;{/if}{count99(elsewhere)}</span>{:else}‹{/if}
-	</button>
-	<div class="ap-roomhead-text">
-		{#if threadTitle !== undefined}
-			<h1 class="ap-roomhead-name">
-				<button class="ap-roomhead-crumb" type="button" aria-label="Back to room" onclick={onroom}>{room.title}</button>
-				<span class="ap-roomhead-sep" aria-hidden="true"> › </span>
-				{threadTitle}{#if pane.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}
-			</h1>
-		{:else}
-			<h1 class="ap-roomhead-name">{room.title}{#if room.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</h1>
-		{/if}
-		{#if typing.length > 0}
-			<p class="ap-roomhead-sub ap-roomhead-typing typing-head">{typing.length === 1 ? `${typing[0]} is typing…` : `${typing.length} people are typing…`}</p>
-		{:else if replyCount !== undefined}
-			<p class="ap-roomhead-sub">{replyCount}{moreReplies ? '+' : ''} {replyCount === 1 && !moreReplies ? 'reply' : 'replies'}</p>
-		{:else if topic}
-			<p class="ap-roomhead-sub" data-testid="room-description" title={room.description}>{topic}</p>
-		{/if}
-	</div>
-	<!-- Recovering or loading shows at the foot of the timeline (TimelineLoading), where the new messages will appear. -->
-	{#if pane.recoveryError}
-		<span class="ap-roomhead-sub" role="status">History unavailable</span>
-	{/if}
-	{#if canJoin}
-		<button class="ap-btn ap-btn-sm" type="button" data-testid="join-room" aria-label={thread ? 'Join thread' : 'Join room'} title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={editDisabled} onclick={onjoin}>Join</button>
-	{/if}
-	{#if memberListToggle}
-		<button class={['ap-iconbtn', 'member-list-toggle', memberListOpen && 'ap-iconbtn-on']} type="button" aria-label={memberListOpen ? 'Hide member list' : 'Show member list'} aria-expanded={memberListOpen} title={memberListOpen ? 'Hide member list' : 'Show member list'} onclick={onmemberlist}>
-			<Users size={18} strokeWidth={1.8} aria-hidden="true" />
-		</button>
-	{/if}
-	{#if onsummary}
-		<button class="ap-btn ap-btn-sm ap-btn-ghost summary-show" type="button" data-testid="show-summary" aria-label={`Show the ${noun} summary`} title={`Show the ${noun} summary`} onclick={onsummary}>
-			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="summary-word">Summary</span>
-		</button>
-	{/if}
-	{#if actions.length > 0}
-		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} testid="room-actions" choices={actions} disabled={editDisabled} onselect={act}>
-			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
-			{#snippet lead(value)}{#if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
-		</MenuButton>
-	{/if}
-</header>
-
-<style>
-	.ap-roomhead-back { display: none; }
-	.ap-roomhead-name { max-width: 100%; }
-	.member-list-toggle { flex: none; }
-	.summary-show { flex: none; }
-	/* Typing shows in the header's subtitle only on phones; wide layouts have the row above the composer. */
-	.typing-head { display: none; }
-	@media (max-width: 719px) {
-		.ap-roomhead-back { display: block; }
-		.typing-head { display: block; }
-		/* Phones keep the header's room for the title: the icon alone, its name in its label. */
-		.summary-show { padding: 0 var(--space-2); }
-		.summary-word { display: none; }
-		/* The tag's point hangs into the button's left padding, where the arrow sits. */
-		.ap-roomhead-back.tagged { display: flex; flex: none; align-items: center; width: auto; min-width: 32px; padding: 0 2px 0 10px; }
-	}
-	.back-tag { position: relative; display: inline-flex; align-items: center; height: 22px; padding: 0 7px 0 3px; border-radius: 0 6px 6px 0; isolation: isolate; font-size: var(--text-sm); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
-	/* The point: a square turned on its corner, rounded at the tip, behind the count. */
-	.back-tag::before { content: ''; position: absolute; z-index: -1; left: -7.78px; top: 3.22px; width: 15.56px; height: 15.56px; border-bottom-left-radius: 3px; background: inherit; transform: rotate(45deg); }
-	.back-tag-quiet { background: var(--bg-300); color: var(--ink); }
-	.back-tag-at { background: var(--accent); color: var(--on-accent); font-weight: 700; }
-</style>
+<!-- The design system's RoomHeader draws it; the app says which of its buttons apply. Recovering or loading shows at the foot of the timeline (TimelineLoading), where the new messages will appear. -->
+<DesignRoomHeader
+	room={room.id}
+	name={room.title}
+	{topic}
+	topicTitle={room.description}
+	private={pane.private}
+	{typing}
+	replies={replyCount !== undefined ? { count: replyCount, more: moreReplies } : undefined}
+	note={pane.recoveryError ? 'History unavailable' : undefined}
+	{onback}
+	{unreadElsewhere}
+	{mentionsElsewhere}
+	thread={thread ? pane.id : undefined}
+	threadName={thread && pane.untitled ? undefined : threadTitle}
+	{onroom}
+	{canJoin}
+	{onjoin}
+	onmemberlist={memberListToggle ? onmemberlist : undefined}
+	{memberListOpen}
+	onedit={canEdit ? onedit : undefined}
+	onleave={canLeave ? onleave : undefined}
+	busy={editDisabled}
+	{onsummary}
+	tagTestid="back-unread"
+	topicTestid="room-description"
+	joinTestid="join-room"
+	summaryTestid="show-summary"
+	actionsTestid="room-actions"
+	editTestid="edit-room"
+	leaveTestid="leave-room"
+/>

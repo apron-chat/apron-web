@@ -54,9 +54,13 @@ class EmojiPicker {
 
 export const emojiPicker = new EmojiPicker();
 
-/** A trigger's action: when its button leaves the page, a picker it opened closes with it. */
-export function emojiAnchor(node: HTMLElement): { destroy: () => void } {
-	return { destroy: () => emojiPicker.release(node) };
+/**
+ * The one way a trigger lets go of the picker: when its button leaves the page, a picker it opened closes with it.
+ * An attachment (`{@attach emojiAnchor}` on the button), whose cleanup releases; a button drawn inside another
+ * component (the Composer's) is tied from an effect on the bound element instead, `$effect(() => emojiAnchor(button))`.
+ */
+export function emojiAnchor(node: HTMLElement): () => void {
+	return () => emojiPicker.release(node);
 }
 
 export interface EmojiMart {

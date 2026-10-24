@@ -25,15 +25,13 @@ async function mount(source: string): Promise<HTMLElement> {
 }
 
 describe('languageOf', () => {
-	it('takes names and common aliases, in any case', () => {
+	it('takes names and common aliases, in any case, and leaves unknown names and object keys alone', () => {
 		expect(languageOf('typescript')).toBe('typescript');
 		expect(languageOf('TS')).toBe('typescript');
 		expect(languageOf('sh')).toBe('bash');
 		expect(languageOf('html')).toBe('xml');
 		expect(languageOf('c++')).toBe('cpp');
-	});
-
-	it('leaves unknown names and object keys alone', () => {
+		// Unknown names, and object keys, are no language.
 		expect(languageOf('brainfuck')).toBeUndefined();
 		expect(languageOf('constructor')).toBeUndefined();
 		expect(languageOf('__proto__')).toBeUndefined();
@@ -42,7 +40,7 @@ describe('languageOf', () => {
 });
 
 describe('highlightCode', () => {
-	it('highlights a fenced block with a known language, keeping its text', async () => {
+	it('highlights a fenced block with a known language, diffs too, keeping its text', async () => {
 		const source = 'const answer = 42; // why';
 		const node = await mount('```ts\n' + source + '\n```');
 		const code = node.querySelector('pre > code')!;
@@ -51,17 +49,14 @@ describe('highlightCode', () => {
 		expect(code.querySelector('.hljs-number')?.textContent).toBe('42');
 		expect(code.querySelector('.hljs-comment')?.textContent).toBe('// why');
 		expect(code.textContent).toBe(source + '\n');
+		const diff = await mount('```diff\n-old\n+new\n```');
+		expect(diff.querySelector('.hljs-deletion')?.textContent).toContain('-old');
+		expect(diff.querySelector('.hljs-addition')?.textContent).toContain('+new');
 	});
 
 	it('leaves blocks without a language, with an unknown one, and inline code alone', async () => {
 		const node = await mount('```\nconst a = 1\n```\n\n```brainfuck\n+++\n```\n\n`const b = 2`');
 		expect(node.querySelector('.hljs, [class^="hljs-"]')).toBeNull();
-	});
-
-	it('marks up diffs', async () => {
-		const node = await mount('```diff\n-old\n+new\n```');
-		expect(node.querySelector('.hljs-deletion')?.textContent).toContain('-old');
-		expect(node.querySelector('.hljs-addition')?.textContent).toContain('+new');
 	});
 
 	it('keeps markup in code as text', async () => {

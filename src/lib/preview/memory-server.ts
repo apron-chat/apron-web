@@ -28,7 +28,9 @@ type PreviewSocket = {
 	deliver(frame: WireFrame): void;
 };
 
-const people: Record<string, { user_id: string; name: string; avatar?: string; roles?: string[]; ext?: JsonObject }> = {
+type Person = { user_id: string; name: string; avatar?: string; roles?: string[]; status?: string; ext?: JsonObject };
+
+const basePeople: Record<string, Person> = {
 	preview_guest: { user_id: 'preview_guest', name: 'You' },
 	ada: { user_id: 'ada', name: 'Ada Lovelace', roles: ['admin'] },
 	grace: { user_id: 'grace', name: 'Grace Hopper' },
@@ -37,6 +39,53 @@ const people: Record<string, { user_id: string; name: string; avatar?: string; r
 };
 
 const roomId = 'general';
+
+/** What the demo server advertises (§3.1). */
+export const PREVIEW_CAPABILITIES = ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'ext'];
+
+/**
+ * Knobs for the browser suite (`e2e/`), read from `window.__APRON_PREVIEW__` when the page's first socket
+ * opens (Playwright sets it with `addInitScript`). Without them the preview is the demo, unchanged. With
+ * them, the server is also reachable as `window.__apronPreview`, for its `frames` and `post`.
+ */
+export interface PreviewKnobs {
+	/** Capabilities to advertise beyond `PREVIEW_CAPABILITIES`, e.g. `embed:upload` or `status`. */
+	capabilities?: string[];
+	/**
+	 * Plays a server that doesn't keep private rooms (§4.2.4): rooms (`rooms`) or threads (`threads`) created
+	 * through `room_set` come back without `private`, whatever was asked.
+	 */
+	dropPrivate?: 'rooms' | 'threads';
+	/** `rich` adds `richPeople` and `richMessages`: long names with four roles, a name clash, avatars, a reply, a mention of you, every embed kind, and a room and a thread to browse. */
+	seed?: 'rich';
+}
+
+/**
+ * The `rich` seed, for layout and contract checks: people whose names and roles push the message header and
+ * member list to their limits, and one of each thing the demo seed doesn't show.
+ */
+const richPeople: Record<string, Person> = {
+	wilhelmina: { user_id: 'wilhelmina', name: 'Wilhelmina Featherstonehaugh-Cholmondeley', roles: ['admin', 'moderator', 'release manager', 'on call'] },
+	bartholomew: { user_id: 'bartholomew', name: 'Bartholomew Oyelaran-Castellanos de la Vega y Montoya', roles: ['owner', 'moderator', 'reviewer', 'infrastructure'] },
+	maximiliana: { user_id: 'maximiliana', name: 'Maximiliana_Konstantinopoulou-Wolfeschlegelsteinhausen', roles: ['admin', 'moderator', 'triage', 'documentation'] },
+	ada_b: { user_id: 'ada_b', name: 'Ada Lovelace' },
+	rosalind: { user_id: 'rosalind', name: 'Rosalind Franklin', avatar: DAWN.url }
+};
+
+const richMessages: { id: string; from: string; text: string; fields?: JsonObject; body?: JsonObject }[] = [
+	{ id: '1710000000040', from: 'wilhelmina', text: 'Long names and four roles: the badges stack and the name gives way, but nothing is cut off.' },
+	{ id: '1710000000041', from: 'bartholomew', text: 'Replying to the welcome, with an even longer name.', fields: { reply_to: { message_id: '1710000000001' } } },
+	{ id: '1710000000042', from: 'maximiliana', text: 'A name with no spaces to break at, and a link with none either: https://example.com/releases/2026/october/apron-web-release-candidate-with-an-unusually-long-file-name.tar.gz' },
+	{ id: '1710000000043', from: 'ada_b', text: 'Another Ada Lovelace: the handle tells us apart.' },
+	{ id: '1710000000044', from: 'rosalind', text: 'An avatar, and a mention of @preview_guest.', body: { mentions: ['preview_guest'] } },
+	{ id: '1710000000045', from: 'linus', text: 'One embed of each kind.', body: { embeds: [
+		{ kind: 'iframe', url: 'https://apron-preview.invalid/live', title: 'Live view', height: 160 },
+		{ kind: 'html', html: '<p><b>Bold</b> relayed HTML.</p><script>window.__embedRan = true</script>' },
+		{ kind: 'stream', title: 'build.log', format: 'terminal', text: '\u001b[32mok\u001b[0m 12 tests passed\n' },
+		{ kind: 'upload', url: 'https://apron-preview.invalid/files/notes.txt', title: 'notes.txt', og: { type: 'text/plain' } },
+		{ kind: 'poll', url: 'https://apron-preview.invalid/polls/lunch', title: 'Lunch poll' }
+	] } }
+];
 
 /**
  * Two finished image uploads (§4.8.4), shaped as a server sends them: `og.image` is the file itself. The
@@ -71,8 +120,14 @@ export class MemoryProtocolServer {
 	private rooms = new Map<string, PreviewRoom>();
 	private serial = 1710000000100;
 	private roomSerial = 1;
+	private people: Record<string, Person> = structuredClone(basePeople);
+	private knobs: PreviewKnobs;
+	/** Every frame a client sent, parsed, in the order it arrived: what the browser suite asserts the wire by. */
+	readonly frames: WireFrame[] = [];
 
-	constructor() {
+	constructor(knobs: PreviewKnobs = {}) {
+		this.knobs = knobs;
+		const people = this.people;
 		const general = this.makeRoom(roomId, 'general', ['preview_guest', 'ada', 'grace', 'linus', 'margaret']);
 		general.description = 'Say hello. Everything here lives only as long as this page.';
 		for (const item of seed) {
@@ -129,6 +184,41 @@ export class MemoryProtocolServer {
 				room.log_id = Number(n);
 			}
 		}
+		if (knobs.seed === 'rich') this.seedRich(general);
+	}
+
+	private seedRich(general: PreviewRoom): void {
+		Object.assign(this.people, structuredClone(richPeople));
+		// You have an avatar too, which the profile offers to remove.
+		this.people.preview_guest.avatar = DUSK.url;
+		for (const id of Object.keys(richPeople)) general.members.add(id);
+		for (const item of richMessages) {
+			general.messages.push({ message_id: item.id, log_id: item.id, room_id: general.room_id, from: { ...this.people[item.from] },
+				body: { text: item.text, format: 'markdown', ...item.body }, ...item.fields });
+			general.log_id = Number(item.id);
+		}
+		// A room to browse (not joined), and a fourth thread not joined, which the sidebar folds behind "N more…".
+		const design = this.makeRoom('design', 'Design reviews', ['ada', 'grace']);
+		design.description = 'Critiques, every other Thursday.';
+		const thread = this.makeRoom('thread_fonts', 'Font licensing', ['grace', 'margaret'], 'general');
+		thread.messages.push({ message_id: '1710000000025', log_id: '1710000000025', room_id: thread.room_id, from: { ...this.people.grace }, body: { text: 'The display face needs a web license.', format: 'plain' } });
+		thread.log_id = 1710000000025;
+	}
+
+	/**
+	 * A message from someone else (not you), as if they sent it now: stored, and delivered live to the room's
+	 * members. `body` is the text, or the whole body. Returns its `message_id`.
+	 */
+	post(roomId: string, from: string, body: string | JsonObject, fields: JsonObject = {}): string {
+		const room = this.rooms.get(roomId);
+		const author = this.people[from];
+		if (!room || !author) throw new Error(`Unknown room or user: ${roomId}, ${from}`);
+		const id = this.nextLog(room);
+		const record: JsonObject = { message_id: id, log_id: id, room_id: room.room_id, from: { ...author },
+			body: typeof body === 'string' ? { text: body, format: 'markdown' } : body, ...fields };
+		room.messages.push(record);
+		this.broadcast({ method: 'message', params: record }, room);
+		return id;
 	}
 
 	factory: WebSocketFactory = (url) => this.createSocket(url);
@@ -169,13 +259,17 @@ export class MemoryProtocolServer {
 			server.sockets.add(socket);
 			socket.readyState = 1;
 			socket.onopen?.({} as Event);
-			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities: ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'ext'] } });
+			const capabilities = [...PREVIEW_CAPABILITIES, ...(server.knobs.capabilities ?? [])];
+			// With `status`, the optional statuses it takes (§4.5).
+			const statuses = capabilities.includes('status') ? { status: ['dnd', 'invisible'] } : {};
+			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses } });
 		});
 		return socket as unknown as WebSocket;
 	}
 
 	private receive(socket: PreviewSocket, frame: WireFrame): void {
 		if (socket.readyState !== 1) return;
+		this.frames.push(frame);
 		if (frame.method === 'ping') { socket.deliver({ method: 'pong' }); return; }
 		const params = frame.params ?? {};
 		const reply = (result: JsonObject = {}) => { if (frame.id) socket.deliver({ id: frame.id, result }); };
@@ -183,9 +277,9 @@ export class MemoryProtocolServer {
 		try {
 			switch (frame.method) {
 				case 'auth': {
-					if (typeof params.name === 'string' && params.name) people.preview_guest.name = params.name;
+					if (typeof params.name === 'string' && params.name) this.people.preview_guest.name = params.name;
 					// The complete `you` (§3.3); anything the sign-in causes would follow the result (§3.2).
-					reply({ you: structuredClone(people.preview_guest) });
+					reply({ you: structuredClone(this.people.preview_guest) });
 					return;
 				}
 				case 'room_list': reply(this.listRooms(params)); return;
@@ -198,6 +292,8 @@ export class MemoryProtocolServer {
 				case 'me': this.updateMe(socket, params, reply); return;
 				case 'activity': this.activity(socket, params); return;
 				case 'command': this.command(socket, params, reply, fail); return;
+				// `idle` and mutes (§4.5), for a server given the `status` capability: taken, and kept nowhere.
+				case 'status': reply(); return;
 				default: fail(`Unsupported preview method: ${String(frame.method)}`, -32601);
 			}
 		} catch (error) { fail(error instanceof Error ? error.message : 'Preview request failed'); }
@@ -224,9 +320,9 @@ export class MemoryProtocolServer {
 		const withMembers = params.members === true;
 		const joined = rooms.filter((room) => room.members.has('preview_guest')).map((room) => this.roomRecord(room, withMembers));
 		const notJoined = rooms.filter((room) => !room.members.has('preview_guest')).map((room) => this.roomRecord(room, withMembers));
-		if (params.filter === 'joined') return { joined, users: Object.values(people) };
-		if (params.filter === 'not_joined') return { not_joined: notJoined, users: Object.values(people) };
-		return { joined, not_joined: notJoined, users: Object.values(people) };
+		if (params.filter === 'joined') return { joined, users: Object.values(this.people) };
+		if (params.filter === 'not_joined') return { not_joined: notJoined, users: Object.values(this.people) };
+		return { joined, not_joined: notJoined, users: Object.values(this.people) };
 	}
 
 	/** A private room, or a thread of one, the viewer isn't in. */
@@ -272,7 +368,7 @@ export class MemoryProtocolServer {
 				}
 			}
 		}
-		const from = previous && isJsonObject(previous.message.from) ? previous.message.from : { ...people.preview_guest };
+		const from = previous && isJsonObject(previous.message.from) ? previous.message.from : { ...this.people.preview_guest };
 		// A save merges `ext` into the stored one, a creation into nothing (§4.12); a tombstone has neither `body` nor `ext` (§4.4).
 		const kept = previous && isJsonObject(previous.message.ext) ? previous.message.ext : undefined;
 		const ext = p.deleted ? undefined : mergedExt(kept, p.ext);
@@ -297,7 +393,7 @@ export class MemoryProtocolServer {
 		byUser.set('preview_guest', Array.isArray(p.emojis) ? p.emojis.filter((e): e is string => typeof e === 'string') : []);
 		room.reactions.set(target.message.message_id as string, byUser);
 		const log = this.nextLog(room);
-		const record = { room_id: room.room_id, log_id: log, message_id: target.message.message_id, reactions: [...byUser].map(([user, emojis]) => ({ from: { ...people[user] }, emojis })) };
+		const record = { room_id: room.room_id, log_id: log, message_id: target.message.message_id, reactions: [...byUser].map(([user, emojis]) => ({ from: { ...this.people[user] }, emojis })) };
 		this.broadcast({ method: 'reactions', params: record }, room);
 		reply();
 	}
@@ -320,8 +416,9 @@ export class MemoryProtocolServer {
 			if (parent && !this.rooms.has(parent)) return fail('Unknown parent room');
 			const id = parent ? `thread_preview_${this.roomSerial++}` : `room_preview_${this.roomSerial++}`;
 			room = this.makeRoom(id, typeof p.title === 'string' ? p.title : id, ['preview_guest'], parent);
-			// A thread created without `private` takes its parent's (§4.2.4).
-			if (p.private === true || (p.private === undefined && parent && this.rooms.get(parent)?.private)) room.private = true;
+			// A thread created without `private` takes its parent's (§4.2.4), unless a test knob plays a server that drops it.
+			const dropped = this.knobs.dropPrivate === (parent ? 'threads' : 'rooms');
+			if (!dropped && (p.private === true || (p.private === undefined && parent && this.rooms.get(parent)?.private))) room.private = true;
 		} else {
 			// An update resubmits every client field; one left out is cleared, except `private`, which is kept,
 			// and `ext`, which merges (§4.2.4, §4.12). It is a new room record.
@@ -331,7 +428,7 @@ export class MemoryProtocolServer {
 		room.description = typeof p.description === 'string' && p.description ? p.description : undefined;
 		room.ext = mergedExt(room.ext, p.ext);
 		const record = this.roomRecord(room, true);
-		socket.deliver({ method: 'room_update', params: { joined: [record], users: Object.values(people) } });
+		socket.deliver({ method: 'room_update', params: { joined: [record], users: Object.values(this.people) } });
 		this.broadcast({ method: 'room_update', params: { updated: [this.roomRecord(room)] } }, room);
 		reply({ room_id: room.room_id, log_id: String(room.log_id) });
 	}
@@ -341,7 +438,7 @@ export class MemoryProtocolServer {
 		if (!room || this.hidden(room)) return fail('Unknown room');
 		if (typeof p.user_id === 'string' && p.user_id !== 'preview_guest') return this.changeMember(room, p.user_id, true, reply, fail);
 		room.members.add('preview_guest');
-		socket.deliver({ method: 'room_update', params: { joined: [this.roomRecord(room, true)], users: Object.values(people) } });
+		socket.deliver({ method: 'room_update', params: { joined: [this.roomRecord(room, true)], users: Object.values(this.people) } });
 		reply();
 	}
 	private leaveRoom(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
@@ -353,8 +450,8 @@ export class MemoryProtocolServer {
 	}
 	/** Adds or removes another user (§4.2.2): a membership record in `room_update` to the room's members, before and after. */
 	private changeMember(room: PreviewRoom, userId: string, joined: boolean, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
-		const user = people[userId];
-		if (!user || !Object.hasOwn(people, userId)) return fail('Unknown user');
+		const user = this.people[userId];
+		if (!user || !Object.hasOwn(this.people, userId)) return fail('Unknown user');
 		if (joined) room.members.add(userId);
 		const record = { log_id: this.nextLog(room), room_id: room.room_id, members: [{ user: { ...user }, joined }] };
 		this.broadcast({ method: 'room_update', params: { memberships: [record] } }, room);
@@ -364,13 +461,18 @@ export class MemoryProtocolServer {
 
 	/** `me` (§3.3): given fields replace, `""` clears, omitted ones stay, and `ext` merges by its keys (§4.12). */
 	private updateMe(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void): void {
-		const me = people.preview_guest;
+		const me = this.people.preview_guest;
 		const changed: JsonObject = { user_id: me.user_id };
 		if (typeof p.name === 'string') changed.name = me.name = p.name || 'You';
 		if (typeof p.avatar === 'string') {
 			if (p.avatar) me.avatar = p.avatar;
 			else delete me.avatar;
 			changed.avatar = p.avatar;
+		}
+		if (typeof p.status === 'string') {
+			if (p.status) me.status = p.status;
+			else delete me.status;
+			changed.status = p.status;
 		}
 		if (isJsonObject(p.ext) && Object.keys(p.ext).length) {
 			const ext = mergedExt(me.ext, p.ext);
@@ -385,7 +487,7 @@ export class MemoryProtocolServer {
 	}
 	private activity(socket: PreviewSocket, p: JsonObject): void {
 		if (typeof p.room_id !== 'string') return;
-		this.broadcast({ method: 'activity', params: { ...p, from: { ...people.preview_guest } } }, this.rooms.get(p.room_id));
+		this.broadcast({ method: 'activity', params: { ...p, from: { ...this.people.preview_guest } } }, this.rooms.get(p.room_id));
 	}
 	private command(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const text = (p.body as JsonObject | undefined)?.text;
@@ -398,6 +500,11 @@ export class MemoryProtocolServer {
 
 let previewServer: MemoryProtocolServer | undefined;
 export const previewWebSocketFactory: WebSocketFactory = (url) => {
-	previewServer ??= new MemoryProtocolServer();
+	if (!previewServer) {
+		const scope = globalThis as { __APRON_PREVIEW__?: PreviewKnobs; __apronPreview?: MemoryProtocolServer };
+		previewServer = new MemoryProtocolServer(scope.__APRON_PREVIEW__);
+		// Only a test that set knobs reaches the server; the demo exposes nothing.
+		if (scope.__APRON_PREVIEW__) scope.__apronPreview = previewServer;
+	}
 	return previewServer.factory(url);
 };

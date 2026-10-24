@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { previewWebSocketFactory } from '$lib/preview/memory-server';
 	import { keepSettingsInMemory } from '$lib/ui/storage';
 	import AppPage from '../+page.svelte';
+
+	let { data } = $props();
 
 	// Before the app mounts, so nothing it saves while previewing replaces the real settings.
 	keepSettingsInMemory();
@@ -9,4 +10,4 @@
 
 <svelte:head><meta name="robots" content="noindex" /></svelte:head>
 
-<AppPage webSocketFactory={previewWebSocketFactory} />
+<AppPage webSocketFactory={data.webSocketFactory} />

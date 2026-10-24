@@ -1,12 +1,11 @@
 <script lang="ts">
-	import ThreadLines from '$lib/design/components/ThreadLines.svelte';
+	import ThreadMarker from '$lib/design/components/ThreadMarker.svelte';
 	import { minuteNow } from '$lib/ui/clock.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
-	import { idDateTime, idIso, idSince } from '$lib/ui/time';
-	import UnreadCount from '$lib/design/components/UnreadCount.svelte';
-	import Lock from '@lucide/svelte/icons/lock';
-	import Avatar from './Avatar.svelte';
+	import { designTitle, threadLatest, threadSummaryText, type ThreadEntry } from '$lib/ui/timeline';
+	import { idMillis, idSince } from '$lib/ui/time';
+	import Avatar from '$lib/design/components/Avatar.svelte';
+	import { hueOf } from '$lib/ui/messages';
 
 	/** A thread's card in its parent room: faces, title (ellipsized), what's new in it and when it was last replied to (at the right), all on one row, then its summary (in plum when it's private) and newest message, as its sidebar row shows them. */
 	let { entry, unread = 0, mentions = 0, onopen }: {
@@ -21,29 +20,15 @@
 	let since = $derived(entry.lastReplyId !== undefined ? idSince(entry.lastReplyId, minuteNow()) : '');
 </script>
 
-<div class="row">
-	<button class="ap-thread" class:ap-thread-2={summary || latest} class:ap-thread-private={entry.private} data-timeline-item data-testid="thread-card" data-thread={entry.id} type="button" onclick={onopen}>
-		<span class="ap-thread-head">
-			{#if entry.participants.length > 0}
-				<span class="ap-thread-faces" aria-hidden="true">
-					{#each entry.participants as participant (participant.user_id)}
-						<Avatar name={directory.name(participant)} id={directory.person(participant)?.user_id} src={directory.avatar(participant)} size="sm" />
-					{/each}
-				</span>
-			{/if}
-			<!-- The lock leads the title, so its ellipsis never cuts it off. -->
-			<span class="ap-thread-name">{#if entry.private}<Lock class="ap-lock" aria-label="Private" role="img" />{/if}{entry.title}</span>
-			<UnreadCount {unread} {mentions} noun="reply" testid="thread-unread" />
-			{#if since}<time class="ap-thread-last" data-testid="thread-last-reply" datetime={idIso(entry.lastReplyId ?? '')} title={`Last reply ${idDateTime(entry.lastReplyId ?? '')}`}>{since}</time>{/if}
-		</span>
-		<ThreadLines {summary} {latest} summaryLines={3} testid="thread-preview" />
-	</button>
-</div>
+<!-- The design system's ThreadMarker, on a row of its own; the app fills in the faces, hued by user ID as everywhere else. -->
+{#snippet faces()}
+	{#each entry.participants as participant (participant.user_id)}
+		<Avatar name={directory.name(participant)} hue={hueOf(directory.person(participant)?.user_id)} src={directory.avatar(participant)} size="sm" />
+	{/each}
+{/snippet}
 
-<style>
-	.row { margin: var(--space-2) var(--space-4) 0 calc(var(--space-4) + var(--avatar-md) + var(--space-3)); }
-	.row .ap-thread { margin-top: 0; }
-	@media (max-width: 719px) {
-		.row { margin-left: var(--space-4); }
-	}
-</style>
+<ThreadMarker
+	row timelineItem testid="thread-card" thread={entry.id} name={designTitle(entry)} private={entry.private} {unread} {mentions}
+	faces={entry.participants.length > 0 ? faces : undefined} {summary} {latest} lastReply={since || undefined} lastReplyAt={idMillis(entry.lastReplyId ?? '')} {onopen}
+	unreadTestid="thread-unread" lastReplyTestid="thread-last-reply" summaryTestid="thread-preview-summary" latestTestid="thread-preview-latest"
+/>

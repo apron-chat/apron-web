@@ -20,6 +20,7 @@ npm test          # reducer and replay unit tests
 npm run build     # writes the static site to build/
 npm run design:bundle  # builds the design system's components to dist-design/
 npm run preview
+npm run qa -- ab --base main  # local visual/perf QA of your changes on /__preview: scripts/qa/README.md
 ```
 
 `npm run dev` needs a backend on port 8080: the Go reference server from

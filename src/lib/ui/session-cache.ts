@@ -80,17 +80,20 @@ export function usableView(kept: unknown, now = Date.now()): KeptView | undefine
 	return candidate as KeptView;
 }
 
-function open(): Promise<IDBDatabase> {
+/** Where views are kept: this browser's IndexedDB, unless a caller passes another. */
+type Databases = Pick<IDBFactory, 'open'>;
+
+function open(databases: Databases = globalThis.indexedDB): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
-		const request = globalThis.indexedDB.open(DB, 1);
+		const request = databases.open(DB, 1);
 		request.onupgradeneeded = () => request.result.createObjectStore(STORE);
 		request.onsuccess = () => resolve(request.result);
 		request.onerror = () => reject(request.error);
 	});
 }
 
-async function run<T>(mode: IDBTransactionMode, step: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-	const db = await open();
+async function run<T>(databases: Databases | undefined, mode: IDBTransactionMode, step: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+	const db = await open(databases);
 	try {
 		return await new Promise<T>((resolve, reject) => {
 			const request = step(db.transaction(STORE, mode).objectStore(STORE));
@@ -103,10 +106,10 @@ async function run<T>(mode: IDBTransactionMode, step: (store: IDBObjectStore) =>
 }
 
 /** The view kept for `server`, if there is a usable one. Never throws: without IndexedDB there is nothing kept. */
-export async function loadView(server: string): Promise<KeptView | undefined> {
+export async function loadView(server: string, databases?: Databases): Promise<KeptView | undefined> {
 	try {
-		const kept = usableView(await run('readonly', (store) => store.get(server)));
-		if (!kept) void clearView(server);
+		const kept = usableView(await run(databases, 'readonly', (store) => store.get(server)));
+		if (!kept) void clearView(server, databases);
 		return kept;
 	} catch {
 		return undefined;
@@ -114,19 +117,19 @@ export async function loadView(server: string): Promise<KeptView | undefined> {
 }
 
 /** Keeps `view` for `server` as `userId`'s, trimmed (`keptView`). Failing to write only loses the head start. */
-export async function saveView(server: string, userId: string, view: HeldSession): Promise<void> {
+export async function saveView(server: string, userId: string, view: HeldSession, databases?: Databases): Promise<void> {
 	const kept: KeptView = { v: VERSION, savedAt: Date.now(), userId, view: keptView(view) };
 	try {
-		await run('readwrite', (store) => store.put(kept, server));
+		await run(databases, 'readwrite', (store) => store.put(kept, server));
 	} catch {
 		// Private mode, a full quota, or a value the browser can't clone: the next reload starts as before.
 	}
 }
 
 /** Removes what is kept for `server` (a sign-out, or another account), or for every server. */
-export async function clearView(server?: string): Promise<void> {
+export async function clearView(server?: string, databases?: Databases): Promise<void> {
 	try {
-		await run('readwrite', (store) => (server === undefined ? store.clear() : store.delete(server)));
+		await run(databases, 'readwrite', (store) => (server === undefined ? store.clear() : store.delete(server)));
 	} catch {
 		// Nothing to remove, or no IndexedDB.
 	}

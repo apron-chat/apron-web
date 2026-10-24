@@ -88,11 +88,6 @@ export function safeAvatar(value: unknown, origin: string | undefined): string |
 	return link?.startsWith('https:') ? link : undefined;
 }
 
-export interface WriteProgress {
-	/** Fraction written, 0–1, when the size is known. */
-	progress: number;
-}
-
 /**
  * Writes a file to an embed's `write_url` (§4.8.3). Reports upload
  * progress where the platform can (XMLHttpRequest); resolves when the server

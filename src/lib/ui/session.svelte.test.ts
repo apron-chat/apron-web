@@ -72,13 +72,19 @@ describe('SessionView, primed with a view kept on this device', () => {
 		expect(chat.selectRoom).toHaveBeenCalledWith('thread_1');
 	});
 
-	it('drops it when the session signs in as someone else', () => {
+	it('drops it when the session signs in as someone else, and comes too late once the session is ready', () => {
 		const session = new SessionView();
 		session.prime(kept);
 		session.apply(ready({ you: { user_id: 'bo' }, roomsListed: false }), client());
 		flushSync();
 		expect(session.rooms).toEqual([]);
 		expect(session.showingHeld).toBe(false);
+		// Primed once the session is ready, it comes too late.
+		const late = new SessionView();
+		late.apply(ready({ rooms: [room('general', ['9'])], activeRoom: 'general' }), client());
+		late.prime(kept);
+		flushSync();
+		expect(late.activeRoom?.timeline.order).toEqual(['9']);
 	});
 
 	it('keeps a thread’s copy, not loaded on this connection, to stand in until it loads', () => {
@@ -121,14 +127,6 @@ describe('SessionView, primed with a view kept on this device', () => {
 		session.apply(ready({ rooms: [general, thread('6')], activeRoom: 'general' }), chat);
 		flushSync();
 		expect(session.threadSource('general').rooms.find((r) => r.id === 'thread_1')?.timeline.order).toEqual([]);
-	});
-
-	it('comes too late once the session is ready', () => {
-		const session = new SessionView();
-		session.apply(ready({ rooms: [room('general', ['9'])], activeRoom: 'general' }), client());
-		session.prime(kept);
-		flushSync();
-		expect(session.activeRoom?.timeline.order).toEqual(['9']);
 	});
 });
 

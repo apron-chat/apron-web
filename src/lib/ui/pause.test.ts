@@ -5,16 +5,14 @@ describe('pausing notifications', () => {
 	const now = new Date(2026, 9, 2, 13, 30);
 	const clock = (hours: number, minutes = 0) => new Date(2026, 9, 2, hours, minutes).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
-	it('offers an hour, eight hours, tomorrow at 9:00, and until resumed, each with when it ends', () => {
+	it('offers an hour, eight hours, tomorrow (or before then, this morning) at 9:00, and until resumed, each with when it ends', () => {
 		const choices = pauseChoices(now);
 		expect(choices.map((choice) => choice.label)).toEqual(['For 1 hour', 'For 8 hours', 'Until tomorrow', 'Until I resume']);
 		expect(choices[0]).toMatchObject({ hint: `until ${clock(14, 30)}`, until: now.getTime() + 3_600_000 });
 		expect(choices[1]).toMatchObject({ hint: `until ${clock(21, 30)}`, until: now.getTime() + 8 * 3_600_000 });
 		expect(choices[2]).toMatchObject({ hint: clock(9), until: new Date(2026, 9, 3, 9).getTime() });
 		expect(choices[3]).toEqual({ value: 'resume', label: 'Until I resume', until: true });
-	});
-
-	it('pauses until this morning at 9:00 when it is not 9:00 yet', () => {
+		// Before 9:00, until this morning at 9:00.
 		const early = new Date(2026, 9, 2, 2, 15);
 		const morning = pauseChoices(early)[2];
 		expect(morning).toMatchObject({ label: 'Until this morning', hint: clock(9), until: new Date(2026, 9, 2, 9).getTime() });

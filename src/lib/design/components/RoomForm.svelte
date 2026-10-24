@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import type { ClassValue } from 'svelte/elements';
 	import Button from './Button.svelte';
 	import Dialog from './Dialog.svelte';
 
@@ -9,7 +10,7 @@
 		/** A room (title and description), or a thread (title and summary): a room with a `parent_room_id` (§3.4). */
 		kind?: 'room' | 'thread';
 		/**
-		 * `create` a room or start a thread (`room_create`, §4.2.4), or `edit` an existing one (`room_set`). A thread
+		 * `create` a room or start a thread (`room_set` without a `room_id`, §4.2.4), or `edit` an existing one (`room_set` with it). A thread
 		 * starts from its room, from a message (its text quoted as the summary), or from selected messages.
 		 */
 		mode?: 'create' | 'edit';
@@ -34,8 +35,10 @@
 		onsubmit?: () => void;
 		/** It closed, whichever way: Cancel, Escape, the close button. */
 		onclose?: () => void;
+		/** Classes for its Dialog's `<dialog>`, added to its own. */
+		class?: ClassValue;
 	}
-	let { open = $bindable(false), kind = 'thread', mode = 'edit', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), summary = $bindable(''), status = 'idle', error, disabled = false, onsubmit, onclose }: Props = $props();
+	let { open = $bindable(false), kind = 'thread', mode = 'edit', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), summary = $bindable(''), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
 	const uid = $props.id();
 	const saving = $derived(status === 'saving');
 	const creating = $derived(mode === 'create');
@@ -63,14 +66,14 @@
 </script>
 
 <!-- Escape, the close button and Cancel do nothing while it saves. -->
-<Dialog bind:open size="md" title={heading} {subtitle} locked={saving} testid="room-form" {onclose}
+<Dialog class={className} bind:open size="md" title={heading} {subtitle} locked={saving} {onclose}
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled) onsubmit?.(); }}>
 	<label class="ap-fieldlabel" for="{uid}-name">Title
-		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true"
+		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
 			placeholder={creating ? (thread ? 'What it’s about' : 'What to call it') : ''} />
 	</label>
 	<label class="ap-fieldlabel" for="{uid}-summary"><span class="ap-fieldlabel-row"><span>{thread ? 'Summary' : 'Description'}</span><span class="ap-fieldlabel-hint">Markdown{creating ? ', optional' : ''}</span></span>
-		<textarea id="{uid}-summary" class="ap-field ap-field-multi" aria-label={thread ? 'Thread summary' : 'Room description'} rows={creating && !summary ? 4 : 8} bind:value={summary} disabled={saving} spellcheck="true"
+		<textarea id="{uid}-summary" class="ap-field ap-field-multi" aria-label={thread ? 'Thread summary' : 'Room description'} rows={creating && !summary ? 4 : 8} bind:value={summary} disabled={saving} spellcheck="true" dir="auto"
 			placeholder={thread ? 'What this thread is about, or what it settled. Shows on its card and at the top of the thread.' : 'What this room is for.'}></textarea>
 	</label>
 	{#if creating && !thread}
@@ -80,7 +83,7 @@
 		</label>
 	{/if}
 	{#if note}<p class="ap-roomform-note">{note}</p>{/if}
-	{#if error}<p class="ap-profedit-note ap-profedit-err" role="alert">{error}</p>{/if}
+	{#if error}<p class="ap-profedit-note ap-tone-danger" role="alert">{error}</p>{/if}
 	{#snippet footer()}
 		<Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={saving} label="Cancel" />
 		<Button type="submit" variant="primary" size="sm" disabled={saving || disabled} label={action} />

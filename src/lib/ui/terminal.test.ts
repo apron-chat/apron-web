@@ -25,24 +25,20 @@ describe('terminal output', () => {
 		]);
 	});
 
-	it('overwrites a line after a carriage return, as progress bars do', () => {
+	it('rewrites a line as a terminal does: after a carriage return, as progress bars do, erasing in line and backing up over backspaces', () => {
 		expect(shown('downloading  10%\rdownloading 100%\ndone\n')).toBe('downloading 100%\ndone\n');
 		expect(shown('50%\r1')).toBe('10%');
 		expect(shown('line\r\nnext')).toBe('line\nnext');
-	});
-
-	it('erases in line and backs up over backspaces', () => {
+		// Erasing in line, and backing up over backspaces.
 		expect(shown('building a long step\r\u001b[Kok')).toBe('ok');
 		expect(shown('abc\u001b[2Kd')).toBe('   d');
 		expect(shown('ab\bc')).toBe('ac');
 	});
 
-	it('drops other escape sequences and control characters', () => {
+	it('drops other escape sequences and control characters, waiting for the rest of one split across chunks', () => {
 		expect(shown('\u001b]0;title\u0007\u001b(Bhi\u001b[2A\u001b[?25l\u0007!')).toBe('hi!');
 		expect(shown('a\u001b]8;;https://x\u001b\\link\u001b]8;;\u001b\\b')).toBe('alinkb');
-	});
-
-	it('waits for the rest of an escape sequence split across chunks', () => {
+		// One split across chunks waits for the rest.
 		expect(shown('ok\u001b[3')).toBe('ok');
 		expect(shown('ok\u001b')).toBe('ok');
 		expect(shown('ok\u001b[32mgo')).toBe('okgo');

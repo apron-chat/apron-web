@@ -102,6 +102,7 @@ import {
 	roomTitle,
 	sameEmojiSet,
 	typingKey,
+	untitledThread,
 	userFacingRpcError,
 	validHistoryMetadata,
 	type LiveRecord,
@@ -325,8 +326,6 @@ export class ChatClient {
 	private signedInWith?: SignInMethod;
 	/** Ways back into the account this browser added to it since (§4.10, §4.11), kept beside the token. */
 	private addedMethods = new Set<SignInMethod>();
-	/** This browser has signed in here with a passkey: how a session kept from before sign-in methods were remembered is read. */
-	private passkeyHint = false;
 	// Keep bearer credentials in memory, scoped to this server and mounted client.
 	private sessionToken?: string;
 	private passkeyRequired = false;
@@ -369,7 +368,6 @@ export class ChatClient {
 		this.webSocketFactory = webSocketFactory;
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
-		this.passkeyHint = this.loadPasskeyHint();
 	}
 
 	static fromOptions(options: ChatClientOptions): ChatClient {
@@ -606,6 +604,7 @@ export class ChatClient {
 				return {
 					id: room.id,
 					title: roomTitle(room.id, record),
+					...(untitledThread(record) ? { untitled: true as const } : {}),
 					joined: room.kind === 'joined',
 					...(record ? { record } : {}),
 					...(thread ? { parentRoomId: record!.parent_room_id } : {}),
@@ -1142,7 +1141,6 @@ export class ChatClient {
 	 */
 	private noteWayAdded(scheme: ProposalScheme | 'link'): void {
 		if (this.registeredSession) {
-			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
 			this.noteAdded(scheme);
 			return;
 		}
@@ -2060,6 +2058,7 @@ export class ChatClient {
 				listed[key].push({
 					id: record.room_id,
 					title: roomTitle(record.room_id, record),
+					...(untitledThread(record) ? { untitled: true as const } : {}),
 					record,
 					...(first !== undefined ? { firstRecordLogId: first } : {}),
 					...(record.parent_room_id !== undefined ? { parentRoomId: record.parent_room_id } : {}),
@@ -2701,9 +2700,7 @@ export class ChatClient {
 		this.resumingUserId = undefined;
 		if (signedIn && added && this.registeredSession) {
 			// Added to the account (§4.10, §4.11): another way back in, not how this session signed in,
-			// and never a reason to drop its token. A session kept before sign-in methods were
-			// remembered gets the same guess as a resume.
-			if (this.signedInWith === undefined) this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
+			// and never a reason to drop its token.
 			this.noteAdded(signedIn);
 		} else if (signedIn) {
 			// Signed in another way (a passkey, a link): a sign-in code proposed meanwhile is for nothing now.
@@ -2719,9 +2716,8 @@ export class ChatClient {
 			}
 		} else if (typeof result.token === 'string' && this.signedInWith === undefined) {
 			// A token without a ceremony: a guest's, or an invite's (Appendix B).
-			this.noteSignIn(this.passkeyHint ? 'webauthn' : 'token');
+			this.noteSignIn('token');
 		}
-		if (signedIn === 'webauthn') this.rememberPasskey();
 		if (typeof result.token === 'string') {
 			this.sessionToken = result.token;
 			this.passkeyRequired = true;
@@ -3181,6 +3177,7 @@ export class ChatClient {
 		const listing = (members: Identity[]): RoomListing => ({
 			id: record.room_id,
 			title: roomTitle(record.room_id, record),
+			...(untitledThread(record) ? { untitled: true as const } : {}),
 			record,
 			...(first !== undefined ? { firstRecordLogId: first } : {}),
 			...(record.parent_room_id !== undefined ? { parentRoomId: record.parent_room_id } : {}),
@@ -3899,29 +3896,6 @@ export class ChatClient {
 		return `apron.session:${this.serverUrl}`;
 	}
 
-	/** Remembers that this browser has a passkey for this server, for reading a session kept from before sign-in methods were. */
-	private passkeyHintKey(): string {
-		return `apron.passkey:${this.serverUrl}`;
-	}
-
-	private loadPasskeyHint(): boolean {
-		try {
-			return this.sessionToken !== undefined || globalThis.localStorage?.getItem(this.passkeyHintKey()) === '1';
-		} catch {
-			return this.sessionToken !== undefined;
-		}
-	}
-
-	/** Kept across sign-out: the passkey itself stays on the device. */
-	private rememberPasskey(): void {
-		this.passkeyHint = true;
-		try {
-			globalThis.localStorage?.setItem(this.passkeyHintKey(), '1');
-		} catch {
-			// Best effort; such a session then reads as a token's.
-		}
-	}
-
 	private loadStoredSession(): void {
 		let stored: string | null = null;
 		let method: string | null = null;
@@ -3937,7 +3911,6 @@ export class ChatClient {
 		this.sessionToken = stored;
 		this.passkeyRequired = true;
 		this.registeredSession = true;
-		// A session kept before this was remembered: a passkey's, if this browser has used one here.
 		this.signedInWith = isSignInMethod(method) ? method : undefined;
 		this.addedMethods = new Set(readMethods(added));
 	}

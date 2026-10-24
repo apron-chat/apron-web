@@ -1,0 +1,12 @@
+<!-- @dsCard group="Layout" height=420 subtitle="The main pane while the app comes up: a header and placeholder rows where the room will be" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>RoomLoading</title></head>
+<body>
+<div id="root" style="display:flex;flex-direction:column;height:380px;margin:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg-100)"></div>
+<script>
+  var A = window.Apron;
+  A.render(A.RoomLoading, document.getElementById('root'), { label: 'Connecting…' });
+</script>
+</body>
+</html>

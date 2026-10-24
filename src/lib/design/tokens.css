@@ -1,6 +1,8 @@
-/* Apron design tokens (project/tokens.json). Dark is the reference theme; light is its equal.
+/* Apron design tokens, the source of truth: npm run design:bundle carries this whole file, both themes, into the
+   design system's components/bundle.css. Dark is the reference theme; light is its equal.
    Two hues with jobs: accent (rust) is what you can do, denim is where you can go.
-   Every other color is a status and always carries a word. */
+   Every other color is a status and always carries a word.
+   A token that differs by theme goes in both light blocks below, the system preference's and Preferences' (tokens.test.ts holds them equal). */
 :root {
 	color-scheme: dark light;
 
@@ -40,6 +42,8 @@
 	--presence-unknown: var(--ink-muted);
 	--shadow-popover: 0 8px 24px rgba(4, 4, 10, 0.6);
 	--shadow-float: 0 2px 8px rgba(4, 4, 10, 0.55);
+	/* The same in both themes: a chosen segment or choice, lifted a little off its track. */
+	--shadow-chosen: 0 1px 2px rgba(0, 0, 0, 0.15);
 	/* The same in both themes. A modal's backdrop; and the media viewer, dark like a photo viewer whatever the theme. */
 	--scrim: rgba(5, 5, 12, 0.68);
 	--viewer-ground: rgba(8, 8, 14, 0.96);
@@ -47,6 +51,26 @@
 	--viewer-ink-muted: #a8a6b2;
 	--viewer-control: rgba(236, 233, 228, 0.1);
 	--viewer-control-hover: rgba(236, 233, 228, 0.18);
+
+	/* Interaction grounds, named for what they say: each follows the grounds above, so both themes get it. A control on an
+	   unusual ground derives its hover from these rather than picking a ground of its own. */
+	--hover: var(--bg-300);         /* a control or row under the pointer, and the option the keyboard is on */
+	--hover-soft: var(--bg-200);    /* a message under the pointer: a broad surface, a step up, so its own controls still show --hover */
+	--hover-inset: var(--bg-100);   /* a control on a row that's already raised (hovered, open or highlighted): back down to the page */
+	--hover-lift: brightness(1.08); /* a filled control (the accent, a thread card), which brightens instead: a filter */
+	--pressed: var(--bg-300);       /* a toggle that's on, a button whose menu or popover is open */
+	--selected: color-mix(in srgb, var(--ink) 8%, transparent); /* the open room or thread, the open section: neutral, so it never reads as unread */
+	--chosen: var(--bg-100);        /* a chosen segment or choice, lifted off its track with --shadow-chosen */
+
+	/* Focus: one ring, in --focus. Outside a standalone control; inside one that fills its row, list or track, where an
+	   outer ring would be clipped or cross its neighbours. */
+	--focus-ring: 2px solid var(--focus);
+	--focus-offset: 2px;
+	--focus-offset-inset: -2px;
+
+	/* Fades. */
+	--opacity-disabled: 0.5; /* a control that can't be used now, whatever it is */
+	--opacity-dim: 0.6;      /* content that's there but recedes: offline members, an offline backend, a terminal's dim text */
 
 	/* Type: system faces only; Apron ships no font files. A font chosen in
 	   Preferences goes in front of the system stack (appearance.svelte.ts). */
@@ -68,9 +92,20 @@
 	--text-body: 15px;   /* messages and running text; room and panel titles */
 	--text-title: 18px;  /* dialog and card titles */
 	--text-field-ios: 16px; /* the least a field may be on iOS, which zooms the page into anything smaller as it takes focus */
+	/* Line heights, named for the size they usually set; a smaller size may take a larger line to sit on its row. */
+	--leading-xs: 14px;      /* the tightest caption, lines stacked on a picture: an attachment's name and size */
+	--leading-sm: 16px;      /* meta and hints, one-line labels and captions */
+	--leading-ui: 18px;      /* controls, menus, rows and notes */
+	--leading-field: 20px;   /* fields, dialog copy, panel titles */
+	--leading-body: 22px;    /* messages and running text, and the times in their gutter */
+	--leading-title: 24px;   /* dialog and card titles */
+	--leading-display: 32px; /* the connect screen's display title */
 
-	/* Spacing: the 4px scale. */
+	/* Spacing: the 4px scale, with two half steps for tight work: --space-0_5 between rows or buttons set close
+	   together, --space-1_5 inside small rows and bubbles (a menu's items, a count). */
+	--space-0_5: 2px;
 	--space-1: 4px;
+	--space-1_5: 6px;
 	--space-2: 8px;
 	--space-3: 12px;
 	--space-4: 16px;
@@ -79,6 +114,7 @@
 
 	/* Radii: nothing interactive has a sharp corner. */
 	--radius-sm: 6px;
+	--radius-inner: 8px; /* a control nested in a rounded box: the composer's buttons and icon buttons (--radius-lg less its --space-2), a segment in its --radius-md track, a row's Exit */
 	--radius-md: 10px;
 	--radius-lg: 16px;
 	--radius-full: 9999px;
@@ -92,9 +128,59 @@
 	--embed-max-w: 480px;
 	--embed-max-h: 360px;
 	--iframe-max-h: 480px;
-	--rail-w: 64px;
-	--rail-tile: 40px;
+	--rail-tile: 40px;  /* a backend's tile; the rail's own width, --rail-w, is in rail.css, the design bundle's alone */
 	--header-h: 48px;
+	/* The member list's width until the page sets the one you dragged it to (the page's own default is the same: +page.svelte). */
+	--member-list-w: 240px;
+
+	/* Control boxes: the height (and width, when square) of buttons, icon buttons, small fields and tiles. */
+	--control-xs: 22px;  /* a close or remove on a corner: an embed's ×, a toast's */
+	--control-sm: 24px;  /* a row's own action: a thread row's Exit or Join, a member's remove, a summary's × */
+	--control-md: 28px;  /* icon buttons, small buttons and fields, the composer's line, toolbar buttons */
+	--control-lg: 32px;  /* buttons and fields, a header's back, the gear */
+	--control-xl: 40px;  /* the floating jump-to-latest button */
+	--chip-h: 26px;      /* a reaction chip, and its + */
+	--touch-target: 44px; /* the least a control meant for a finger takes: the media viewer's ‹ and › */
+
+	/* Floating widths. */
+	--nudge-w: 300px;         /* a Nudge, and where the page anchors one */
+	--toast-max-w: 480px;     /* a toast or a notice floating over the page */
+	--embed-card-w: 420px;    /* a link's preview card */
+	--pref-note-w: 420px;     /* a Preferences setting's description, and its fields (a font) */
+	--pref-panel-w: 460px;    /* what a Preferences setting opens under it: push setup, scopes, a status's answer or a refusal */
+
+	/* Stacking, lowest first. Each is relative to the nearest stacking context: a dialog, opened in the top layer, has its own. */
+	--z-raised: 1;    /* over its neighbors in the flow: a sticky divider or loading pill, an active row's bar, a summary's × */
+	--z-float: 2;     /* over those: a message's hover actions, the floating day and loading pill */
+	--z-handle: 4;    /* a panel's resize handle, on its border */
+	--z-menu: 5;      /* menus and pickers opened in place: the profile popover, a menu, autocomplete, a font field's suggestions */
+	--z-toggle: 5;    /* a panel's toggle in the window's corner */
+	--z-overlay: 6;   /* the member list, over the conversation on narrower screens */
+	--z-nudge: 7;     /* a Nudge over the rooms list's foot */
+	--z-toast: 10;    /* a toast */
+	--z-drop: 20;     /* the drop zone over the conversation while files are dragged */
+	--z-banner: 20;   /* a notice floating at the top: a new version */
+	--z-sheet: 40;    /* fixed popovers that turn into bottom sheets on phones: emoji, profile card, who reacted */
+
+	/* Motion: short and soft, all of it off when the viewer asks (prefers-reduced-motion). */
+	--duration-fast: 120ms;    /* hover and press: colors and fills */
+	--duration-medium: 150ms;  /* a state change: a switch, a fade in or out, something arriving (the media viewer, a loading pill) */
+	--duration-slow: 200ms;    /* the floating day pill; a shape changing (a rail tile's corners rounding) */
+	--duration-slide: 240ms;   /* the side panels opening and shutting (the page's SLIDE_MS) */
+	--ease-slide: cubic-bezier(0.2, 0, 0, 1);
+
+	/* Role badges that don't fit beside a name: `drop` them whole, or `stack` them as layers behind the last that fits (RoleBadges). */
+	--ap-role-overflow: stack;
+	/* The least a name beside role badges truncates to before they give way (a message's header, member rows). */
+	--ap-name-min: 6em;
+
+	/* Breakpoints. Media queries can't read custom properties, so these are written out where used
+	   (and in src/lib/ui/breakpoints.ts for scripts); these are the only ones:
+	   560px  (max-width: 560px)  dialogs and the media viewer go edge to edge; Preferences narrows its nav.
+	          @container (max-width: 560px) on the main pane stacks the room header's name over its topic.
+	   720px  (max-width: 719px)  one pane at a time: rooms, then the room or thread; popovers become bottom sheets.
+	          (min-width: 720px)  above it.
+	   960px  (min-width: 960px)  the member list gets a column of its own; (max-width: 959px) overlays it. */
 }
 
 @media (prefers-color-scheme: light) {
