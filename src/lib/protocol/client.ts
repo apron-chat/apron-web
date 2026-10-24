@@ -144,7 +144,8 @@ export {
 	timelineMessages,
 	topLevelRooms,
 	userIn,
-	webPushKey
+	webPushKey,
+	yourPermissions
 } from './client-views';
 
 /**

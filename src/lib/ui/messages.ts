@@ -57,12 +57,13 @@ export function isOwn(event: MessageRecord, me: Identity | undefined): boolean {
 	return Boolean(me && event.from?.user_id === me.user_id);
 }
 
-/** Roles whose holders may move other users' messages, into a thread or back out (an `admin` or a `mod`). */
-const MOVER_ROLES = ['admin', 'mod'];
-
-/** Whether you may move the message to another room: your own, or anyone's with a mover role. */
-export function mayMove(event: MessageRecord, me: Identity | undefined): boolean {
-	return isOwn(event, me) || Boolean(me?.roles?.some((role) => MOVER_ROLES.includes(role)));
+/**
+ * Whether you may move the message to another room, into a thread or back
+ * out: your own, or anyone's where the server lets you (`moveAny`, from
+ * `ext:permissions`).
+ */
+export function mayMove(event: MessageRecord, me: Identity | undefined, moveAny = false): boolean {
+	return isOwn(event, me) || (moveAny && me !== undefined);
 }
 
 /** The `user_id`s a message mentions: `body.mentions` (§3.5), whatever its text shows. */

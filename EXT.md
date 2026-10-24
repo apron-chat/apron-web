@@ -33,6 +33,7 @@ the fallback of that capability:
 | `ext:settings` | follows the server's settings ([§3](#3-extsettings))                                            | every setting is `true`            |
 | `ext:limits`   | holds back the requests that a refused request's category of limit covers ([§4](#4-extlimits)) | holds back by method ([§2](#2-the-boundary)) |
 | `ext:media`    | loads embed media from the server's media origins, and fits files to its limits ([§6](#6-extmedia)) | loads embed media from the server's origin; refuses no file |
+| `ext:permissions` | moves other users' messages, and adds their authors, as `you` allows ([§7](#7-extpermissions)) | moves your own messages only       |
 
 Some features have no capability:
 
@@ -75,9 +76,6 @@ These predate this document. Each one is to move behind an extension, or go:
 
 - apron-web asks for a display name with a pasted token only when the token
   starts with `apron_join_`.
-- apron-web offers to move the messages of other users only to users with role
-  `admin` or `mod`. For role `admin`, it adds the authors of moved messages
-  also while `add_members` is `false`.
 
 ---
 
@@ -139,7 +137,8 @@ class Server {
   `user_id`
   ([§4.2.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#422-membership)).
 - When apron-web moves messages into a thread, it adds their authors to that
-  thread only while `add_members` is `true`.
+  thread only while `add_members` is `true`, or while `ext:permissions` grants
+  `add_members` ([§7](#7-extpermissions)).
 
 ---
 
@@ -436,3 +435,57 @@ class Limits {
 - With `upload`, apron-web offers voice clips only when it takes `audio/webm`,
   `audio/ogg`, or `audio/mp4`, in that order, and the browser records that
   type. It records the clip as that type, and stops it at 95% of `max_bytes`.
+
+---
+
+## 7. `ext:permissions`
+
+Roles are for display only
+([§3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)),
+so a client cannot tell from them what a user may do. A server can tell each
+user what it lets them do beyond their own messages, so that the client offers
+those controls.
+
+Adds permissions to the user object of the signed-in user, `you`
+([§3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)):
+
+```ts
+class Identity {
+  // "ext:permissions" capability, in `you` only
+  ext?: {
+    permissions?: string[];
+  };
+}
+```
+
+| permission    | the user may                                                                            |
+|---------------|-----------------------------------------------------------------------------------------|
+| `move_any`    | move the messages of other users to another room: into a thread, or back out of one     |
+| `add_members` | add other users to rooms, with `room_join` and `user_id` ([§4.2.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#422-membership)), also while `ext:settings` says `add_members: false` |
+
+```jsonc
+// <-
+{"id": "c1", "result": {"you": {"user_id": "ada", "name": "Ada", "roles": ["admin"], "ext": {"permissions": ["move_any", "add_members"]}}}}
+```
+
+- The server lists `ext:permissions` in `capabilities`.
+- The server sends `permissions` in `you`: in an `auth` or `me` result, and in
+  a `user` notification. A change of permissions is a `user` notification
+  with `you`
+  ([§3.3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#333-changes)).
+- Clients read `permissions` only from `you`, never from the object of
+  another user.
+- Clients ignore unknown permissions, and entries that are not strings.
+- Without `move_any`, clients offer to move only the user's own messages.
+  Without `add_members`, `ext:settings` decides ([§3.3](#33-add_members)).
+- The server owns `ext.permissions`. A `me` request MUST NOT change it.
+- The permissions describe server policy. The server still checks each
+  request.
+
+### 7.1 apron-web
+
+- apron-web offers to move the messages of other users only with `move_any`.
+  Without it, it offers to move only your own messages.
+- When apron-web moves messages into a thread, it adds their authors with
+  `add_members`, or while `ext:settings` allows it.
+- apron-web shows roles as badges only. They grant nothing.

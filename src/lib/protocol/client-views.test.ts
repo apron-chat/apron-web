@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mediaLimit, serverMedia } from './client-views';
+import { mediaLimit, serverMedia, yourPermissions } from './client-views';
 import type { ServerParams } from './types';
 
 const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 9, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
@@ -46,5 +46,18 @@ describe('serverMedia (ext:media)', () => {
 		expect(mediaLimit({ 'image/*': {} }, 'audio/ogg')).toBeUndefined();
 		expect(mediaLimit({ 'application/octet-stream': {} }, '')).toEqual({});
 		expect(mediaLimit({ 'audio/*': {} }, 'Audio/MP4')).toEqual({});
+	});
+});
+
+describe('yourPermissions (ext:permissions)', () => {
+	const you = { user_id: 'ada', roles: ['admin'], ext: { permissions: ['move_any', 7, 'delete_any', 'add_members'] } };
+
+	it('reads known permissions from you, only while the server advertises the extension', () => {
+		expect(yourPermissions(server(['ext:permissions']), you)).toEqual({ move_any: true, add_members: true });
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: ['move_any'] } })).toEqual({ move_any: true, add_members: false });
+		// Without the extension, or without the list, roles grant nothing.
+		expect(yourPermissions(server([]), you)).toEqual({ move_any: false, add_members: false });
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', roles: ['admin'], ext: { permissions: 'move_any' } })).toEqual({ move_any: false, add_members: false });
+		expect(yourPermissions(server(['ext:permissions']), undefined)).toEqual({ move_any: false, add_members: false });
 	});
 });

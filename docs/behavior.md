@@ -737,7 +737,8 @@ selection bar replaces the composer with the count, **Move to thread** (or, in a
 thread, back to the room), **New thread** (with the `rooms` capability) and Cancel. A
 move is a save of the message with the destination's `room_id`, one request per
 message. Anyone's messages can be picked, and the server decides whose you may
-move (this server: your own, and anyone's for an admin or a mod). A move is all
+move: your own, and anyone's where the server grants `move_any`
+([EXT.md §7](../EXT.md#7-extpermissions)). A move is all
 or nothing as far as that goes: when the selection holds a message that isn't
 yours, that one is sent first, alone, and if the server refuses it nothing else
 is sent, the selection stays, and the error says no messages were moved. Otherwise
@@ -746,14 +747,15 @@ new thread**, saying how many messages move) with the earliest selected
 message's first line as the title and an empty Summary; Escape there closes the
 dialog and keeps the selection. The thread is created first and the moves follow
 once the server has named it; the dialog isn't offered when the selection holds
-someone else's message and you have neither `admin` nor `mod`, so a refused move
+someone else's message and you lack `move_any`, so a refused move
 never leaves an empty thread. If the moves fail once the thread exists, the
 dialog closes and the error says so, as for any move. Messages refused after the first (say, over a posting limit)
 stay selected and the bar says how many didn't move. A thread delivers to its
 members only, so once messages move into one (new or existing, but not back to
 the room), each of their authors who isn't in it yet is added to it (`room_join`
 with their `user_id`, §4.2.2), where you may add people: while
-`server.ext.settings.add_members` isn't `false`, or as an `admin`. The server
+`server.ext.settings.add_members` isn't `false`, or where the server grants
+`add_members`. The server
 decides each (it adds no guests); the moves stand either way, and the toast says
 how many authors weren't added and why. Escape leaves select mode.
 

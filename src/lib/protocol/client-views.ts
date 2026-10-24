@@ -11,7 +11,7 @@ import type {
 } from './types';
 import type { Capabilities, ClientSnapshot, RoomSnapshot } from './client-types';
 
-const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media'];
+const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions'];
 
 /**
  * How to render a user (§3.3): field by field, the kept object for its
@@ -83,6 +83,18 @@ export function serverSettings(server: ServerParams | undefined): { guest_postin
 	const ext = hasCapability(server, 'ext:settings') ? server?.ext : undefined;
 	const settings = isJsonObject(ext) && isJsonObject(ext.settings) ? ext.settings : {};
 	return { guest_posting: settings.guest_posting !== false, read_cursors: settings.read_cursors !== false, add_members: settings.add_members !== false };
+}
+
+/**
+ * What the signed-in user may do that the core leaves to the server
+ * (extension `ext:permissions`, `you.ext.permissions`): move other users'
+ * messages, and add other users to rooms. Read from `you` only; each is
+ * `false` without the extension.
+ */
+export function yourPermissions(server: ServerParams | undefined, you: Identity | undefined): { move_any: boolean; add_members: boolean } {
+	const ext = hasCapability(server, 'ext:permissions') ? you?.ext : undefined;
+	const granted: unknown[] = isJsonObject(ext) && Array.isArray(ext.permissions) ? ext.permissions : [];
+	return { move_any: granted.includes('move_any'), add_members: granted.includes('add_members') };
 }
 
 /** What a server takes of one type of file (`ext:media`): the largest file, and the longest image side it keeps. */
