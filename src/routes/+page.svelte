@@ -68,7 +68,7 @@
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
-	import { buildRoomTimeline, buildThreadTimeline, threadEntries, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
@@ -456,17 +456,10 @@
 	let typingNames = $derived(snapshot.typing
 		.filter((entry) => entry.room === paneRoom?.id && entry.from.user_id !== session.you?.user_id)
 		.map((entry) => directory.name(entry.from)));
-	/** The first message after your read position, unless you wrote it: the New divider goes above it. */
-	let newDividerBefore = $derived.by(() => {
-		if (newDivider.room !== paneRoom?.id || newDivider.after === undefined) return undefined;
-		const after = newDivider.after;
-		// The first message row after the cursor.
-		for (const item of timeline) {
-			if (item.kind !== 'message' || compareLogIds(item.event.message_id, after) <= 0) continue;
-			return isOwn(item.event, session.you) ? undefined : item.event.message_id;
-		}
-		return undefined;
-	});
+	/** The first message after your read position, unless you wrote it or older unread ones are still to load: the New divider goes above it. */
+	let newDividerAt = $derived(newDivider.room === paneRoom?.id && newDivider.after !== undefined
+		? newDividerBefore(timeline, newDivider.after, session.you, Boolean(paneRoom?.olderAvailable))
+		: undefined);
 	// `server.agent` names the implementation, for debugging, not the server: the host is the label.
 	let backendLabel = $derived(backendHost(serverInput) || 'Apron');
 	let threadReplyCount = $derived(threadRoom?.loaded ? messages.length : undefined);
@@ -2040,7 +2033,8 @@
 	 * may have moved it first. A pane opened on its newest page first loads its
 	 * older messages back to the divider (as a linked message's do, but only
 	 * DIVIDER_PAGES of them), so the divider doesn't move up out of view as they
-	 * load. Either way the pane has landed after.
+	 * load. Not back to it by then, it shows no divider (`newDividerBefore`)
+	 * and stays at the latest. Either way the pane has landed after.
 	 */
 	async function landAtDivider(roomId: string): Promise<void> {
 		const visit = newDivider;
@@ -2059,7 +2053,8 @@
 					break;
 				}
 			}
-			const before = newDividerBefore;
+			// Still short of your read position: no divider, and the pane opens at the latest.
+			const before = newDividerAt;
 			if (before === undefined || !still()) return;
 			const index = timeline.findIndex((item) => item.kind === 'message' && item.event.message_id === before);
 			if (index >= 0 && index - LAND_CONTEXT_ITEMS < reveal.hidden) reveal.from(index - LAND_CONTEXT_ITEMS);
@@ -2545,7 +2540,7 @@
 								editing: editingId === event.message_id,
 								caps: capsFor(event)
 							}, messageContext)}
-							{#if event.message_id === newDividerBefore}
+							{#if event.message_id === newDividerAt}
 								<TimelineDivider kind="new" testid="new-divider" />
 							{/if}
 							<Message {view} on={messageHandlers} testids={MESSAGE_TESTIDS} editor={view.editing && messageEditor.component ? editMessage : undefined} embed={messageEmbed} />

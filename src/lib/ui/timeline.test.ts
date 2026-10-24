@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ProtocolStore, applyRecords, decodeHistoryRecords, timelineEvents, type MembershipRecord } from '$lib/protocol/reducer';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadSummaryText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, newDividerBefore, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadSummaryText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
 import { roomSnapshot as room } from '$lib/test/builders';
@@ -391,5 +391,25 @@ describe('join and leave lines', () => {
 		// Retention drops the records below the bound with the messages.
 		store.evictBefore('general', String(base + 3000));
 		expect(store.timeline('general').memberships.map((record) => record.log_id)).toEqual([String(base + 3000), String(base + 5000), String(base + 6000)]);
+	});
+});
+
+describe('the New divider', () => {
+	const ids = (offsets: number[], from = 'alice') => buildThreadTimeline({ messages: offsets.map((offset) => message(offset, from)), now: new Date(base) });
+	const at = (offset: number) => String(base + offset);
+
+	it('goes above the first message after your read position, unless you wrote it', () => {
+		expect(newDividerBefore(ids([1, 2, 3]), at(1), undefined, false)).toBe(at(2));
+		expect(newDividerBefore(ids([1, 2, 3]), at(3), undefined, false)).toBeUndefined();
+		expect(newDividerBefore(ids([1, 2], 'ada'), at(1), { user_id: 'ada' }, false)).toBeUndefined();
+	});
+
+	it('shows nowhere while older unread messages are still to load, and above the oldest once there are none', () => {
+		// Read long ago: the oldest loaded message is unread, and so are the older ones not loaded yet.
+		expect(newDividerBefore(ids([5, 6, 7]), at(1), undefined, true)).toBeUndefined();
+		// Paged back to your read position: it goes where it belongs.
+		expect(newDividerBefore(ids([1, 2, 5, 6, 7]), at(1), undefined, true)).toBe(at(2));
+		// The start of what is retained: everything loaded is unread.
+		expect(newDividerBefore(ids([5, 6, 7]), at(1), undefined, false)).toBe(at(5));
 	});
 });

@@ -3,7 +3,7 @@ import { compareLogIds, type MembershipRecord } from '$lib/protocol/reducer';
 import { isLogId, type Identity, type MessageRecord } from '$lib/protocol/types';
 import { markdownText } from '$lib/protocol/markdown';
 import { isBaseline, MembershipRun } from './membership';
-import { embedsOf, senderName, textOf } from './messages';
+import { embedsOf, isOwn, senderName, textOf } from './messages';
 import { dayKey, dayKeyOf, dayLabel, dayLabelOf, isGrouped } from './time';
 
 /** Longest title a thread started from a message gets, in characters. */
@@ -433,4 +433,25 @@ export function buildThreadTimeline({ messages, renames = [], now = new Date(), 
 	pushRenames();
 	pushNotices();
 	return items;
+}
+
+/**
+ * The message the New divider goes above: the first after your read
+ * position `after`, unless you wrote it. None while nothing at or before
+ * `after` is loaded and older messages remain (`olderAvailable`): what is
+ * unread starts further back, and the divider would only sit on the oldest
+ * loaded message, then move up as older pages load.
+ */
+export function newDividerBefore(items: readonly TimelineItem[], after: string, you: Identity | undefined, olderAvailable: boolean): string | undefined {
+	let reached = false;
+	for (const item of items) {
+		if (item.kind !== 'message') continue;
+		if (compareLogIds(item.event.message_id, after) <= 0) {
+			reached = true;
+			continue;
+		}
+		if (!reached && olderAvailable) return undefined;
+		return isOwn(item.event, you) ? undefined : item.event.message_id;
+	}
+	return undefined;
 }
