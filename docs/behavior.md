@@ -1,7 +1,8 @@
 # Client behavior
 
 What the web client does, feature by feature, and which protocol capabilities
-each needs. [architecture.md](architecture.md) covers how the code is laid out.
+each needs. [architecture.md](architecture.md) covers how the code is laid out,
+and [EXT.md](../EXT.md) the extensions it understands beyond the protocol.
 
 The default connection is `VITE_DEFAULT_SERVER_URL` from the build, which
 `.env.production` sets to `wss://server.apron.chat/` for every production build

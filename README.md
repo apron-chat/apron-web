@@ -96,3 +96,6 @@ The apex `apron.chat` is reserved for docs.
   feature, and the protocol capabilities each one needs.
 - [docs/architecture.md](docs/architecture.md): the design system, the code
   layout, and how the protocol session keeps and recovers state.
+- [EXT.md](EXT.md): the extensions apron-web understands beyond the
+  protocol, what a server implements to use each one, and the boundary:
+  nothing server-specific outside them.
