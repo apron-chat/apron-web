@@ -357,6 +357,8 @@ export class ChatClient {
 	private declinedName?: string;
 	/** The waits the server asked for (`retry_after`, §1.1) that are still on, by scope, each with the timer that ends it. */
 	private readonly limits = new Map<LimitScope, LimitWait & { timer: ReturnType<typeof setTimeout> }>();
+	/** Whose the waits in `limits` are: another identity's sign-in starts without them. */
+	private limitsUserId?: string;
 	/** Every `history` request not yet answered: the connection's one queue of them. */
 	private readonly historyQueue: HistoryQueue;
 	private readonly historyStart: HistoryStart;
@@ -422,7 +424,6 @@ export class ChatClient {
 		this.signedInWith = undefined;
 		this.addedMethods = new Set();
 		this.retryAfterUntil = 0;
-		this.clearLimits();
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
 		// A registration belongs to the server it was made for.
@@ -2063,7 +2064,7 @@ export class ChatClient {
 					if (socket !== this.socket || this.joinedListing !== listing) return;
 					this.listJoinedRooms(since);
 					this.emit();
-				}, Math.min(MAX_TIMER_MS, Math.max(0, cause.retryAt - Date.now())));
+				}, Math.max(0, cause.retryAt - Date.now()));
 				this.emit();
 				return;
 			}
@@ -2731,6 +2732,8 @@ export class ChatClient {
 			this.emit();
 			return false;
 		}
+		// The server's waits were for whoever was signed in: another identity has its own.
+		if (this.limitsUserId !== identity.user_id) this.clearLimits();
 		// A sign-in signs the connection in as a user it isn't already signed in
 		// as (§3.2). A passkey added on this signed-in connection (`added`) is
 		// not one, nor is a repeat `auth` as the same user: the server sends no
@@ -3871,16 +3874,25 @@ export class ChatClient {
 			return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', since, since + retryAfter);
 		}
 		const scope = limitScope(request.method, request.params, rpcError, retryAfter);
-		if (scope) this.noteLimit(scope, since, since + retryAfter);
+		if (scope) this.noteLimit(scope, since, since + retryAfter, this.you?.user_id ?? this.resumingUserId);
 		return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', since, since + retryAfter, scope);
 	}
 
-	/** A wait for `scope` until `until`: it holds what it covers back until then, unless one already runs longer. */
-	private noteLimit(scope: LimitScope, since: number, until: number): void {
+	/**
+	 * A wait for `scope` until `until` (at most RETRY_AFTER_MAX_MS away), asked
+	 * of `userId`: it holds what it covers back until then, unless one already
+	 * runs longer.
+	 */
+	private noteLimit(scope: LimitScope, since: number, until: number, userId: string | undefined): void {
+		if (userId !== this.limitsUserId) {
+			for (const { timer } of this.limits.values()) clearTimeout(timer);
+			this.limits.clear();
+			this.limitsUserId = userId;
+		}
 		const current = this.limits.get(scope);
 		if (current && current.until >= until) return;
 		if (current) clearTimeout(current.timer);
-		const timer = setTimeout(() => this.endLimit(scope), Math.min(MAX_TIMER_MS, Math.max(0, until - Date.now())));
+		const timer = setTimeout(() => this.endLimit(scope), Math.max(0, until - Date.now()));
 		this.limits.set(scope, { since, until, timer });
 	}
 
@@ -3889,13 +3901,7 @@ export class ChatClient {
 	 * refused for it go on from where it stopped (`rebuilds`).
 	 */
 	private endLimit(scope: LimitScope): void {
-		const limit = this.limits.get(scope);
-		if (!limit) return;
-		if (limit.until > Date.now()) {
-			// Past the longest timer: wait the rest.
-			limit.timer = setTimeout(() => this.endLimit(scope), Math.min(MAX_TIMER_MS, limit.until - Date.now()));
-			return;
-		}
+		if (!this.limits.has(scope)) return;
 		this.limits.delete(scope);
 		if (scope === 'history') {
 			this.historyQueue.pump();
@@ -3934,10 +3940,12 @@ export class ChatClient {
 		return room.limited || this.historyQueue.holds(room.id);
 	}
 
-	/** Ends every wait: a new server, or a stopped client, learns its limits afresh. */
+	/** Ends every wait: a new server or identity, or a stopped client, learns its limits afresh. History held for one goes. */
 	private clearLimits(): void {
+		if (!this.limits.size) return;
 		for (const { timer } of this.limits.values()) clearTimeout(timer);
 		this.limits.clear();
+		this.historyQueue.pump();
 	}
 
 	private enqueueRequest<T extends JsonObject = JsonObject>(
@@ -4017,6 +4025,7 @@ export class ChatClient {
 		}
 		this.requests.clear();
 		this.historyQueue.dropHeld(reason);
+		this.clearLimits();
 		this.discardProtocolView(reason);
 		this.authenticated = false;
 		this.authRequested = false;

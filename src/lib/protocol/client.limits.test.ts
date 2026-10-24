@@ -77,6 +77,38 @@ describe('a refusal with retry_after', () => {
 		expect(socket.sent.filter((frame) => frame.method === 'message')).toHaveLength(2);
 	});
 
+	it('ends with the identity: signing out, or in as someone else, learns its limits afresh', async () => {
+		await socket.greet(['rooms', 'embed:upload'], { room: { room_id: 'general', title: 'General' } });
+		const posts = () => FakeSocket.latest().sent.filter((frame) => frame.method === 'message').length;
+		const upload = () => {
+			const { sent, uploaded } = client.sendFiles('general', '', [new File(['x'], 'x.txt')]);
+			quiet(sent);
+			quiet(uploaded);
+		};
+		const reconnect = () => {
+			FakeSocket.latest().drop();
+			vi.advanceTimersByTime(5_000);
+			return FakeSocket.latest();
+		};
+		upload();
+		refuse(socket.request('message').id, 3 * 3600, 'Daily upload limit reached', { limit: 'upload' });
+		await settle();
+		expect(Object.keys(snapshot.limits ?? {})).toEqual(['upload']);
+		// Back as the same guest: still waiting.
+		await reconnect().greet(['rooms', 'embed:upload'], { room: { room_id: 'general', title: 'General' } });
+		expect(Object.keys(snapshot.limits ?? {})).toEqual(['upload']);
+		// A token resume that signs in someone else: their uploads aren't held back by the guest's wait.
+		await reconnect().greet(['rooms', 'embed:upload'], { room: { room_id: 'general', title: 'General' }, you: { user_id: 'ada', name: 'Ada' } });
+		expect(snapshot.limits).toBeUndefined();
+		upload();
+		expect(posts()).toBe(1);
+		FakeSocket.latest().receive({ id: FakeSocket.latest().request('message').id, error: { code: -32002, message: 'Daily upload limit reached', data: { retry_after: 3 * 3600, limit: 'upload' } } });
+		await settle();
+		expect(snapshot.limits?.upload).toBeDefined();
+		client.signOut();
+		expect(snapshot.limits).toBeUndefined();
+	});
+
 	it('ends with the client: a stopped client, or another server, learns its limits afresh', async () => {
 		await socket.greet(['rooms'], { room: { room_id: 'general', title: 'General' } });
 		quiet(client.send('general', 'one'));
@@ -99,7 +131,7 @@ describe('limitScope', () => {
 		expect(limitScope('room_join', {}, error('Posting limit reached'), 28_000)).toBe('post');
 		expect(limitScope('room_list', {}, error('Room listing limited'), 20_000)).toBeUndefined();
 		expect(limitScope('status', {}, error('Idle changes limited'), 20_000)).toBeUndefined();
-		expect(limitScope('message', {}, error('Slow down', { limit: 'uploads' }), 1_000)).toBe('upload');
+		expect(limitScope('message', {}, error('Slow down', { limit: 'upload' }), 1_000)).toBe('upload');
 		expect(limitScope('status', {}, error('Slow down', { limit: 'History' }), 1_000)).toBe('history');
 		// A name it doesn't know (nor one off Object's prototype) is no name.
 		expect(limitScope('message', {}, error('Slow down', { limit: 'constructor' }), 1_000)).toBe('post');
@@ -124,6 +156,7 @@ describe('limitScope', () => {
 	it('guesses as without a name when the name is one it doesn\'t know', () => {
 		expect(limitScope('message', files, error('Daily upload limit reached', { limit: 'storage' }), 3_600_000)).toBe('upload');
 		expect(limitScope('message', files, error('Posting limit reached', { limit: 'burst' }), 28_000)).toBe('post');
+		expect(limitScope('message', files, error('Posting limit reached', { limit: 'uploads' }), 28_000)).toBe('post');
 		expect(limitScope('history', {}, error('Slow down', { limit: 'requests' }), 1_000)).toBe('history');
 		expect(limitScope('room_list', {}, error('Slow down', { limit: 'room_list' }), 1_000)).toBeUndefined();
 		expect(limitScope('message', files, error('Upload limit reached', { limit: 7 }), 1_000)).toBe('upload');

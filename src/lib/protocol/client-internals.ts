@@ -454,10 +454,8 @@ export function userFacingRpcError(error: RpcError): string {
 export const DAILY_WAIT_MS = 60 * 60 * 1000;
 /** The requests that post: each counts against the server's posting limit, whichever it is. */
 const POSTS = new Set(['message', 'command', 'reactions', 'room_set', 'room_join', 'room_leave']);
-/** `data.limit` names a server may give its limits by. */
-const LIMIT_NAMES = new Map<string, LimitScope>([
-	['history', 'history'], ['post', 'post'], ['posts', 'post'], ['posting', 'post'], ['message', 'post'], ['messages', 'post'], ['upload', 'upload'], ['uploads', 'upload']
-]);
+/** `data.limit` names a server gives its limits by. */
+const LIMIT_NAMES = new Map<string, LimitScope>([['history', 'history'], ['post', 'post'], ['upload', 'upload']]);
 
 /** A message's or command's params carry `upload` embeds (§4.8.3): files to write once it is accepted. */
 export function carriesUploads(params: JsonObject): boolean {
