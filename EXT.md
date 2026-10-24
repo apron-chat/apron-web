@@ -30,6 +30,8 @@ the fallback of that capability:
 | `activity`     | sends and shows typing and read cursors                                                         | no typing or read indicators       |
 | `reactions`    | sets and shows reactions                                                                        | no reaction controls               |
 | `embed:upload` | attaches files, and sets an avatar with `/avatar` when `command` is also advertised             | no attachments                     |
+| `ext:settings` | follows the server's settings ([§3](#3-extsettings))                                            | every setting is `true`            |
+| `ext:limits`   | holds back the requests that a refused request's category of limit covers ([§4](#4-extlimits)) | holds back by method ([§2](#2-the-boundary)) |
 
 Some features have no capability:
 
@@ -54,10 +56,11 @@ Some features have no capability:
   ([§1.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#11-envelope-and-replies)).
 - apron-web ignores unknown keys
   ([§1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#1-transport--framing)),
-  such as keys of an error's `data` other than `retry_after`.
+  such as keys of an error's `data` other than `retry_after` and, with
+  `ext:limits`, `ext`.
 - After `retry_after` on a `history` or `message` request, apron-web holds
   back requests of that method until the delay ends. It holds back no other
-  method.
+  method, unless `ext:limits` gives a category ([§4](#4-extlimits)).
 
 ### 2.1 Known departures
 
@@ -140,18 +143,124 @@ class Server {
 
 ---
 
-## 4. Proposed extensions
+## 4. `ext:limits`
 
-apron-web does not implement these.
+`retry_after` says that a request waits, but not which limit it hit, or what
+else that limit counts. A client that knows can hold back every request that
+the limit counts, rather than send each one to be refused, and show the user
+what waits.
 
-### 4.1 `ext:limits`
+Adds a category of limit to `retry_after` errors
+([§1.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#11-envelope-and-replies)):
 
-`retry_after` does not say which limit a request hit. A client that knows it
-can hold back every request that the limit covers, and name the limit to the
-user.
+```ts
+class Server {
+  capabilities: string[];  // lists "ext:limits"
+}
+
+class RetryAfterError {  // code -32002
+  message: string;         // which limit the request hit
+  data: {
+    retry_after: number;
+    // "ext:limits" capability
+    ext?: {
+      limits?: "read" | "write" | "upload";
+    };
+  };
+}
+```
+
+Each category covers a set of requests. Until the delay ends, clients hold
+back these requests:
+
+| category | requests it covers                                                                    | what clients hold back                          |
+|----------|---------------------------------------------------------------------------------------|-------------------------------------------------|
+| `read`   | `history`, `room_list`                                                                | requests of the refused method                  |
+| `write`  | `message`, `command`, `reactions`, `room_join`, `room_leave`, `room_set`, `me`        | every request that `write` covers               |
+| `upload` | `message` and `command` requests that carry `upload` embeds ([§4.8.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#484-embedupload)) | every request that `upload` covers |
+
+The server advertises the extension:
+
+```json
+{
+  "method": "server", "params": {
+    "apron": 9, "capabilities": ["rooms", "history", "reactions", "embed:upload", "ext:limits"], "auth": ["guest", "webauthn"]
+  }
+}
+```
+
+A refused page of history, from a limit on reading:
+
+```jsonc
+// ->
+{"method": "history", "id": "c9", "params": {"room_id": "general", "before": "1724806800000"}}
+// <-
+{"id": "c9", "error": {"code": -32002, "message": "History request limit reached", "data": {"retry_after": 20, "ext": {"limits": "read"}}}}
+```
+
+A refused post, from a limit that counts every request that `write` covers:
+
+```jsonc
+// ->
+{"method": "message", "id": "c42", "params": {"room_id": "general", "body": {"text": "hello", "format": "plain"}}}
+// <-
+{"id": "c42", "error": {"code": -32002, "message": "Posting limit reached", "data": {"retry_after": 40, "ext": {"limits": "write"}}}}
+```
+
+A refused upload, from a limit on files. Messages without files still go:
+
+```jsonc
+// ->
+{
+  "method": "message", "id": "c43", "params": {
+    "room_id": "general",
+    "body": {"text": "Before the fix:", "embeds": [{"kind": "upload", "title": "before.png"}]}
+  }
+}
+// <-
+{"id": "c43", "error": {"code": -32002, "message": "Daily upload limit reached", "data": {"retry_after": 19800, "ext": {"limits": "upload"}}}}
+```
+
+A refusal from a limit that fits no category:
+
+```jsonc
+// ->
+{"method": "auth", "id": "c1", "params": {"scheme": "guest", "name": "Ada"}}
+// <-
+{"id": "c1", "error": {"code": -32002, "message": "Sign-in attempts limited for this network", "data": {"retry_after": 600}}}
+```
 
 - The server lists `ext:limits` in `capabilities`.
-- A `retry_after` error then MAY carry `data.ext.limits`, a string that names
-  the limit, such as `"post"` or `"upload"`.
-- apron-web would show the named limit only while `ext:limits` is advertised.
-  Without it, apron-web holds back requests by method.
+- A `retry_after` error that replies to a request MAY carry `data.ext.limits`.
+- The server MUST send a category only on a request that the category covers.
+- The server MUST send `write` only for a limit that counts every request that
+  `write` covers.
+- The server MUST send `upload` only for a limit that counts every request
+  that `upload` covers.
+- The server SHOULD send no category for a limit that fits none, or when it is
+  not sure that a limit fits one.
+- The category describes server policy. The server still refuses each request
+  over a limit.
+- `message` SHOULD say which limit the request hit. It SHOULD NOT state
+  amounts, rates, thresholds, or the delay. `retry_after` carries the delay.
+- Clients MUST ignore `data.ext.limits` unless the latest `server` frame lists
+  `ext:limits`.
+- Until the delay ends, clients SHOULD hold back the requests that the table
+  lists for the category. They MUST NOT hold back other requests for it.
+- Without a category, with a category that clients do not know, or with one
+  that does not cover the refused request, clients handle the error as without
+  `ext:limits`.
+
+### 4.1 apron-web
+
+- During a `write` or `upload` wait, apron-web refuses each request that the
+  wait holds back without sending it. The error carries the server's `message`
+  and the time left.
+- After `write`, a notice above the composer says that sending is paused, and
+  Send counts down. A held reaction, join, or leave shows the server's
+  `message` and the time left.
+- After `upload`, a notice above the composer says that uploads are paused.
+  Send counts down only while files are attached, and text still sends.
+- After `read`, without a category, or with a category that apron-web does not
+  use for the request, apron-web holds back by method
+  ([§2](#2-the-boundary)).
