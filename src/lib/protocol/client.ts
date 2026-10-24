@@ -45,6 +45,7 @@ import {
 	type ConnectionStatus,
 	type CreateRoomOptions,
 	type EmbedEdits,
+	type HistoryStart,
 	type MessageFormat,
 	type MessagePatch,
 	type MessageResult,
@@ -374,14 +375,20 @@ export class ChatClient {
 	private connectionProbe?: AbortController;
 	private disconnectedAt?: number;
 
-	constructor(private serverUrl: string, displayName = '', webSocketFactory: WebSocketFactory = (url) => new WebSocket(url), private readonly now: () => number = () => Date.now()) {
+	constructor(
+		private serverUrl: string,
+		displayName = '',
+		webSocketFactory: WebSocketFactory = (url) => new WebSocket(url),
+		private readonly now: () => number = () => Date.now(),
+		private readonly historyStart: HistoryStart = 'newest'
+	) {
 		this.webSocketFactory = webSocketFactory;
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
 	}
 
 	static fromOptions(options: ChatClientOptions): ChatClient {
-		const client = new ChatClient(options.serverUrl, options.displayName, options.webSocketFactory, options.now);
+		const client = new ChatClient(options.serverUrl, options.displayName, options.webSocketFactory, options.now, options.historyStart);
 		if (options.onChange) client.subscribe(options.onChange);
 		return client;
 	}
@@ -3403,6 +3410,11 @@ export class ChatClient {
 			this.store.clearRoom(room.id);
 			for (const live of retained) this.applyLive(live);
 			room.timeline = createTimeline(room.id);
+			// Older pages loaded before are gone with the rest: a load of one still out is for nothing.
+			room.olderBefore = undefined;
+			room.hasOlder = false;
+			room.loadingOlder = false;
+			room.loadGeneration += 1;
 		}
 		// Without a known bound, start at the lowest possible log_id.
 		const nextAfter = (rebuild
@@ -3411,6 +3423,7 @@ export class ChatClient {
 		room.recovery = {
 			...(head !== undefined ? { head } : {}),
 			nextAfter,
+			...(rebuild && this.historyStart === 'newest' ? { newest: true } : {}),
 			buffer: retained,
 			bufferBytes: retained.reduce((bytes, live) => bytes + recordBytes(live.record), 0),
 			generation
@@ -3429,7 +3442,11 @@ export class ChatClient {
 		// A room kept from the last connection resumes right behind `auth` (§3.2).
 		const pipelined = !this.authenticated && this.authRequested;
 		if (!this.authenticated && !pipelined) return;
-		const request = this.requestHistory(room.id, historyParams(room.id, recovery.nextAfter, recovery.head), { allowBeforeAuth: pipelined });
+		// Without a checkpoint, the newest page (§4.3.5): up to H, or to the head the page reports when H isn't known yet.
+		const params = recovery.newest
+			? { room_id: room.id, ...(recovery.head !== undefined ? { before: recovery.head } : {}), limit: THREAD_PAGE_SIZE }
+			: historyParams(room.id, recovery.nextAfter, recovery.head);
+		const request = this.requestHistory(room.id, params, { allowBeforeAuth: pipelined });
 		recovery.requestId = request.id;
 		request.promise.then((result) => {
 			if (room.recovery?.requestId !== request.id || room.recovery.generation !== generation) return;
@@ -3455,6 +3472,13 @@ export class ChatClient {
 		this.observeHistoryResponse(room, result);
 		if (room.recovery !== recovery || recovery.generation !== generation) return;
 		this.applyPage(room, result);
+		if (recovery.newest) {
+			// Everything up to H is covered for live delivery; what is older loads as the reader scrolls back.
+			this.noteOlderPage(room, result);
+			this.finishRecovery(room);
+			this.emit();
+			return;
+		}
 		const lastId = isLogId(result.last_log_id) ? result.last_log_id : undefined;
 		if (result.more) {
 			if (!lastId || (recovery.nextAfter !== undefined && compareLogIds(lastId, recovery.nextAfter) < 0) || compareLogIds(lastId, recovery.head) >= 0) {
@@ -3548,6 +3572,9 @@ export class ChatClient {
 		}
 		recovery.buffer = recovery.buffer.filter((live) => isEmbedded(live) || compareLogIds(live.record.log_id, effective) >= 0);
 		recovery.bufferBytes = recovery.buffer.reduce((bytes, live) => bytes + recordBytes(live.record), 0);
+		// The newest page needs no position the bound could pass: the server keeps it to what is retained, and
+		// what it sends below the bound is skipped (`applyPage`).
+		if (recovery.newest) return;
 		// `nextAfter` is the first unprocessed position. Equality is safe; a
 		// strictly larger bound means a retained gap was discarded underneath us.
 		if (recovery.nextAfter === undefined || compareLogIds(effective, recovery.nextAfter) > 0) {

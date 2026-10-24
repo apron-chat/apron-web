@@ -1,5 +1,5 @@
 import { onTestFinished, vi } from 'vitest';
-import { ChatClient, type ClientSnapshot } from '$lib/protocol/client';
+import { ChatClient, type ClientSnapshot, type HistoryStart } from '$lib/protocol/client';
 import { FakeSocket, settle, type GreetOptions } from './fake-socket';
 import { memoryStorage } from './storage';
 
@@ -26,6 +26,8 @@ export interface ClientOptions {
 	storage?: Map<string, string>;
 	/** Called with each snapshot the client publishes, the first one included. */
 	onSnapshot?: (snapshot: ClientSnapshot) => void;
+	/** How a room with no checkpoint recovers. Default the client's, `newest`. */
+	historyStart?: HistoryStart;
 }
 
 export interface ClientHarness {
@@ -54,7 +56,7 @@ export function startClient(options: ClientOptions = {}): ClientHarness {
 	FakeSocket.instances = [];
 	vi.stubGlobal('WebSocket', FakeSocket);
 	if (options.storage) vi.stubGlobal('localStorage', memoryStorage(options.storage));
-	const client = new ChatClient(options.url ?? SERVER_URL);
+	const client = new ChatClient(options.url ?? SERVER_URL, undefined, undefined, undefined, options.historyStart);
 	let latest: ClientSnapshot | undefined;
 	client.subscribe((next) => {
 		latest = next;

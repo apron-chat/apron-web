@@ -468,4 +468,14 @@ export interface ChatClientOptions {
 	onChange?: (snapshot: ClientSnapshot) => void;
 	/** The clock that times disconnections (epoch milliseconds); `Date.now` by default. */
 	now?: () => number;
+	/** How a top-level room without a checkpoint recovers (`HistoryStart`); `newest` by default. */
+	historyStart?: HistoryStart;
 }
+
+/**
+ * How a top-level room recovers with no checkpoint to resume from (§4.3.5
+ * step 3), on its first visit or after a rebuild: its `newest` page, older
+ * ones loading on demand (`loadOlder`) as threads do, or every page
+ * `forward` from the lower bound.
+ */
+export type HistoryStart = 'newest' | 'forward';

@@ -95,7 +95,9 @@ for (const [file, fixture] of fixtures) {
 async function runVariant(fixture: Fixture, variant: Variant, envelope: 'minimal' | 'jsonrpc'): Promise<void> {
 	expect(fixture.format).toBe(4);
 	expect(fixture.kind).toBe('session');
-	const { client } = startClient({ storage: new Map() });
+	// The fixtures page a room with no checkpoint forward from its lower bound, one way §4.3.5 allows; the
+	// client's default, its newest page with older ones on demand, is the other (client.recovery.test.ts).
+	const { client } = startClient({ storage: new Map(), historyStart: 'forward' });
 	const requests = new Map<string, ObjectValue>();
 	const unmatched: ObjectValue[] = [];
 	const operations: Record<string, string> = {};

@@ -100,6 +100,11 @@ interface RecoveryState {
 	/** Next position to request; undefined means from the start of the log. */
 	nextAfter?: string;
 	/**
+	 * Without a checkpoint: only the newest page up to H, older pages
+	 * loading on demand (§4.3.5 step 3), instead of paging forward.
+	 */
+	newest?: boolean;
+	/**
 	 * Live records for the room received during the recovery. They are applied
 	 * to the store on arrival; the buffer bounds memory and lets a rebuild
 	 * restore the ones at or above the new bound.
@@ -178,7 +183,7 @@ export const AGENT = 'apron-web/0.4';
 /** The `unsupported` error code (§1.1): a method or an optional parameter the server does not implement. */
 export const UNSUPPORTED = -32601;
 const HISTORY_PAGE_SIZE = 200;
-/** A thread opens on its newest page this size; older pages load as the reader scrolls back. */
+/** A thread, or a room with no checkpoint, opens on its newest page this size; older pages load as the reader scrolls back. */
 export const THREAD_PAGE_SIZE = 50;
 const MAX_RECONNECT_DELAY_MS = 60_000;
 /** How long a typing indicator this client sends should persist without a refresh, in the `activity` frame's `typing` seconds. */

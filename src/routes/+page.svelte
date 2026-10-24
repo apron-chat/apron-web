@@ -394,6 +394,8 @@
 	/** The open thread as the pane shows it: its copy held from before (a reload) while the live one loads, as the room's. */
 	let shownThreadRoom = $derived(session.heldCopy(threadRoom) ?? threadRoom);
 	let paneRoom = $derived(activeThread ? shownThreadRoom : activeRoom);
+	/** The live thread or room whose older pages load as the reader scrolls back: not a copy held from before. */
+	let olderSource = $derived(activeThread ? threadRoom : session.activeRoomHeld ? undefined : session.rooms.find((room) => room.id === session.activeRoomId));
 	/** What's new in the rooms and threads other than the one being read, as the rooms list counts it: the phone header's back button shows it. */
 	let unreadElsewhere = $derived(countElsewhere(unread.byRoom, paneRoom?.id));
 	let mentionsElsewhere = $derived(countElsewhere(mentions.byRoom, paneRoom?.id));
@@ -755,10 +757,10 @@
 		});
 	});
 
-	// A thread's first page may not fill the pane, leaving nothing to scroll back
-	// with: load older replies until it does or there are none.
+	// A thread's or a room's first page may not fill the pane, leaving nothing to
+	// scroll back with: load older pages until it does or there are none.
 	$effect(() => {
-		const room = threadRoom;
+		const room = olderSource;
 		void timeline.length;
 		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !messageScroll) return;
 		untrack(() => {
@@ -2119,12 +2121,12 @@
 	}
 
 	/**
-	 * A thread opens on its newest replies; reading back near the top loads the
-	 * page before them. The reader's place is kept: whatever was on screen stays
-	 * put while the older replies land above it.
+	 * A thread, or a room on its first visit, opens on its newest page; reading
+	 * back near the top loads the page before it. The reader's place is kept:
+	 * whatever was on screen stays put while the older messages land above it.
 	 */
 	async function loadOlderReplies(): Promise<void> {
-		const room = threadRoom;
+		const room = olderSource;
 		if (!client || !room || !messageScroll || !room.olderAvailable || room.loadingOlder) return;
 		const scroller = messageScroll;
 		const height = scroller.scrollHeight;

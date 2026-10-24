@@ -44,7 +44,8 @@ describe('history per room', () => {
 	});
 
 	it('holds the published timeline until the recovery completes', async () => {
-		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '10', before: '12' });
+		// No checkpoint yet: only the newest page, up to the head (§4.3.5).
+		expect(socket.request('history').params).toEqual({ room_id: 'general', before: '12', limit: 50 });
 		socket.receive({ method: 'message', params: message('13') });
 		expect(room('general')).toMatchObject({ recovering: true, loaded: false });
 		expect(room('general').timeline.order).toEqual([]);
@@ -127,9 +128,44 @@ describe('history per room', () => {
 		expect(client.message('6')?.body).toEqual({ text: 'older' });
 	});
 
-	it('starts at the lowest log_id when no bound is known', async () => {
+	it('opens a room on its newest page, loads older pages backward on demand, and resumes forward from there', async () => {
+		await socket.reply('history', { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '90', history_log_id: '30' }] } });
+		const ops = (id: string) => message(id, { room_id: 'ops' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'ops', before: '90' });
+		// Live records meanwhile are kept, as in any recovery.
+		socket.receive({ method: 'message', params: ops('91') });
+		await socket.reply('history', { messages: [ops('80'), ops('90')], first_log_id: '80', last_log_id: '90', more: true, latest_log_id: '91', history_log_id: '30' });
+		expect(room('ops')).toMatchObject({ recovering: false, loaded: true, olderAvailable: true });
+		expect(room('ops').timeline.order).toEqual(['80', '90', '91']);
+		// One request opened it, however long its log.
+		expect(socket.sent.filter((frame) => frame.method === 'history' && (frame.params as { room_id: string }).room_id === 'ops')).toHaveLength(1);
+		const older = client.loadOlder('ops');
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'ops', before: '79' });
+		await socket.reply('history', { rooms: [{ room_id: 'ops', log_id: '30', title: 'Ops' }], messages: [ops('40')], first_log_id: '30', last_log_id: '40', more: false, latest_log_id: '91', history_log_id: '30' });
+		await older;
+		expect(room('ops').timeline.order).toEqual(['40', '80', '90', '91']);
+		expect(room('ops').olderAvailable).toBeUndefined();
+		// Its checkpoint is the head it opened at: a newer head resumes forward from there.
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '93', history_log_id: '30' }] } });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'ops', after: '91', before: '93' });
+	});
+
+	it('opens a room with no lower bound known on its newest page too, and skips one whose history is all gone', async () => {
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'nobound', log_id: '30', latest_log_id: '40' }] } });
-		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'nobound', after: '1', before: '40' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'nobound', before: '40' });
+		const sent = socket.sent.length;
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'gone', log_id: '30', latest_log_id: '40', history_log_id: null }] } });
+		expect(room('gone')).toMatchObject({ recovering: false, loaded: true });
+		expect(socket.sent.slice(sent).filter((frame) => frame.method === 'history')).toEqual([]);
+	});
+
+	it('keeps the newest page it asked for when retention moves meanwhile, without what fell below the bound', async () => {
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '11' }] } });
+		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(1);
+		await socket.reply('history', { messages: [message('10'), message('11'), message('12')], first_log_id: '10', last_log_id: '12', more: false, latest_log_id: '12', history_log_id: '11' });
+		expect(room('general')).toMatchObject({ recovering: false, loaded: true });
+		expect(room('general').timeline.order).toEqual(['11', '12']);
 	});
 
 	it('retries a failed top-level recovery through loadRoom', async () => {
@@ -137,7 +173,7 @@ describe('history per room', () => {
 		await settle();
 		expect(room('general').recoveryError).toBe('Busy');
 		const retried = client.loadRoom('general');
-		expect(socket.request('history').params).toMatchObject({ after: '10', before: '12' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', before: '12' });
 		await socket.reply('history', { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' });
 		await retried;
 		expect(room('general').recoveryError).toBeUndefined();
@@ -162,9 +198,9 @@ describe('history per room', () => {
 		await vi.advanceTimersByTimeAsync(1_000);
 		const sent = socket.sent.filter((frame) => frame.method === 'history');
 		expect(sent.map((frame) => bounds(frame.params))).toEqual([
-			{ room_id: 'general', after: '10', before: '12' },
-			{ room_id: 'general', after: '10', before: '12' },
-			{ room_id: 'ops', after: '30', before: '31' }
+			{ room_id: 'general', before: '12' },
+			{ room_id: 'general', before: '12' },
+			{ room_id: 'ops', before: '31' }
 		]);
 		expect(snapshot.limits).toBeUndefined();
 		expect(room('general').limited).toBeUndefined();
@@ -206,7 +242,7 @@ describe('a room shown for its messages (no cap rooms)', () => {
 	it('recovers a room shown for its messages up to the first one on each connection', async () => {
 		await socket.greet(['history'], { rooms: false });
 		socket.receive({ method: 'message', params: { message_id: '20', log_id: '20', room_id: 'lobby', from: { user_id: 'bob' }, body: { text: 'live' } } });
-		expect(socket.request('history').params).toMatchObject({ room_id: 'lobby', after: '1', before: '20' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'lobby', before: '20' });
 		await socket.reply('history', { messages: [{ message_id: '15', log_id: '15', room_id: 'lobby', from: { user_id: 'bob' }, body: { text: 'old' } }], more: false, latest_log_id: '20', history_log_id: '1' });
 		expect(snapshot.rooms[0].timeline.order).toEqual(['15', '20']);
 		socket.receive({ method: 'message', params: { message_id: '21', log_id: '21', room_id: 'lobby', from: { user_id: 'bob' }, body: { text: 'next' } } });
@@ -264,7 +300,8 @@ describe('after a reconnect', () => {
 		latest().drop();
 		vi.advanceTimersByTime(5_000);
 		await latest().greet(['history', 'rooms'], { room: { ...general, latest_log_id: '30', history_log_id: '20' } });
-		expect(latest().request('history').params).toMatchObject({ room_id: 'general', after: '20', before: '30' });
+		// Rebuilt as a first visit is: the newest page.
+		expect(bounds(latest().request('history').params)).toEqual({ room_id: 'general', before: '30' });
 		await latest().reply('history', { messages: [entry('25')], more: false, latest_log_id: '30', history_log_id: '20' });
 		expect(snapshot.rooms.find((candidate) => candidate.id === 'general')?.timeline.order).toEqual(['25']);
 	});
