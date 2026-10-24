@@ -468,9 +468,17 @@ export interface ChatClientOptions {
 	onChange?: (snapshot: ClientSnapshot) => void;
 	/** The clock that times disconnections (epoch milliseconds); `Date.now` by default. */
 	now?: () => number;
-	/** How a top-level room without a checkpoint recovers (`HistoryStart`); `newest` by default. */
+	/**
+	 * How a top-level room without a checkpoint recovers (`HistoryStart`);
+	 * `newest` by default. For the shared session fixtures (the protocol
+	 * submodule), which page such a room `forward`: production code leaves it.
+	 */
 	historyStart?: HistoryStart;
-	/** How many `history` requests may be out at a time on a connection; one by default, as some servers allow no more. */
+	/**
+	 * How many `history` requests may be out at a time on a connection; one by
+	 * default, as some servers allow no more. For the shared session fixtures,
+	 * which interleave them: production code leaves it.
+	 */
 	historyConcurrency?: number;
 }
 

@@ -26,9 +26,9 @@ export interface ClientOptions {
 	storage?: Map<string, string>;
 	/** Called with each snapshot the client publishes, the first one included. */
 	onSnapshot?: (snapshot: ClientSnapshot) => void;
-	/** How a room with no checkpoint recovers. Default the client's, `newest`. */
+	/** How a room with no checkpoint recovers. Default the client's, `newest`; only the wire fixtures set it. */
 	historyStart?: HistoryStart;
-	/** How many history requests may be out at once. Default the client's, one. */
+	/** How many history requests may be out at once. Default the client's, one; only the wire fixtures set it. */
 	historyConcurrency?: number;
 }
 
