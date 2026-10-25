@@ -5,16 +5,25 @@
  * Large images are scaled so their longest side fits and encoded as WebP, or
  * JPEG where the browser can't encode WebP, stepping the quality down until
  * the file fits. Animated images can't go through a canvas without losing
- * their animation: they're sent unchanged, or refused when too large.
+ * their animation: they're sent unchanged.
+ *
+ * What fits is the client's own preference, below, unless the server states
+ * its limits (`ext:media`, EXT.md §6): then a file goes out only as a type the
+ * server takes, within that type's limits, and one that can't is refused here.
+ * Without stated limits nothing is refused here: the server's 413 or 415 decides.
  */
 
-/** Uploads are capped at 5 MB, avatars at 256 KB, by the servers we know. */
+import { mediaLimit, type MediaTypes } from '$lib/protocol/client';
+
+/** What the client aims for: uploads under 5 MB, avatars under 256 KB. */
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 export const AVATAR_MAX_BYTES = 256 * 1024;
 /** The longest side an uploaded image is scaled to. */
 export const UPLOAD_MAX_SIDE = 2048;
 /** Avatar squares, largest first: the first that fits under the limit wins. */
 export const AVATAR_SIDES = [512, 256];
+/** What an image is re-encoded as, by preference: WebP, else JPEG where the browser can't encode WebP. */
+const ENCODINGS = ['image/webp', 'image/jpeg'];
 const QUALITIES = [0.85, 0.75, 0.65, 0.6];
 /** How far a too-large image shrinks per step once the quality floor is reached, and the smallest side tried. */
 const SHRINK = 0.75;
@@ -57,9 +66,12 @@ export interface Crop {
 
 export class ImageTooLargeError extends Error {}
 
+/** A file the server said it doesn't take (`ext:media`): of a type it doesn't list, or larger than that type's limit. */
+export class NotAcceptedError extends Error {}
+
 /**
- * Identifies an image the server accepts from its first bytes, the way the
- * server does: PNG, JPEG, GIF, or WebP. Anything else is undefined.
+ * Identifies an image from its first bytes, as a server that reads content
+ * would: PNG, JPEG, GIF, or WebP. Anything else is undefined.
  */
 export function sniffImage(bytes: Uint8Array): ImageFacts | undefined {
 	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
@@ -152,18 +164,56 @@ async function headOf(file: Blob): Promise<Uint8Array> {
 	return new Uint8Array(await slice.arrayBuffer());
 }
 
+/** The type a file goes out as, which is the one the server's limits apply to: `application/octet-stream` without one. */
+function declared(file: Blob): string {
+	return file.type || 'application/octet-stream';
+}
+
 /**
- * Encodes at each quality step, WebP first and JPEG once the browser shows it
- * can't encode WebP; resolves with the first Blob under `maxBytes`.
+ * Throws `NotAcceptedError` for a file that goes as it is when the server
+ * stated what it takes (`limits`) and this isn't it.
  */
-async function encodeUnder(codec: ImageCodec, image: DecodedImage, crop: Crop, width: number, height: number, maxBytes: number): Promise<Blob | undefined> {
-	let type = 'image/webp';
+function accept(file: File, limits: MediaTypes | undefined): void {
+	if (!limits) return;
+	const limit = mediaLimit(limits, declared(file));
+	if (!limit) throw new NotAcceptedError(`This server doesn't take this type of file${file.name ? ` (${file.name})` : ''}`);
+	if (limit.max_bytes !== undefined && file.size > limit.max_bytes) {
+		throw new NotAcceptedError(`${file.name || 'The file'} is too large to send: this server takes ${kindOf(declared(file))} up to ${limitSize(limit.max_bytes)}`);
+	}
+}
+
+/**
+ * What a re-encoded image goes out as and must fit: the `ENCODINGS` the server
+ * takes, held to the strictest of their limits, and otherwise to the
+ * client's own. Without stated limits, both encodings and the client's own.
+ */
+function reencoding(limits: MediaTypes | undefined, maxBytes: number, maxSide: number): { types: string[]; maxBytes: number; maxSide: number } {
+	if (!limits) return { types: ENCODINGS, maxBytes, maxSide };
+	const taken = ENCODINGS.flatMap((type) => {
+		const limit = mediaLimit(limits, type);
+		return limit ? [{ type, limit }] : [];
+	});
+	return {
+		types: taken.map(({ type }) => type),
+		maxBytes: Math.min(...taken.map(({ limit }) => limit.max_bytes ?? maxBytes)),
+		maxSide: Math.min(maxSide, ...taken.map(({ limit }) => limit.max_side ?? maxSide))
+	};
+}
+
+/**
+ * Encodes at each quality step as the first of `types`, and as the next once
+ * the browser shows it can't encode one; resolves with the first Blob under
+ * `maxBytes`.
+ */
+async function encodeUnder(codec: ImageCodec, image: DecodedImage, crop: Crop, width: number, height: number, maxBytes: number, types = ENCODINGS): Promise<Blob | undefined> {
+	let index = 0;
 	for (const quality of QUALITIES) {
-		let blob = await codec.encode(image, crop, width, height, type, quality);
-		if (blob.type !== type && type === 'image/webp') {
-			type = 'image/jpeg';
-			blob = await codec.encode(image, crop, width, height, type, quality);
+		let blob = await codec.encode(image, crop, width, height, types[index], quality);
+		while (blob.type !== types[index] && index + 1 < types.length) {
+			index++;
+			blob = await codec.encode(image, crop, width, height, types[index], quality);
 		}
+		if (blob.type !== types[index]) return undefined;
 		if (blob.size <= maxBytes) return blob;
 	}
 	return undefined;
@@ -171,40 +221,44 @@ async function encodeUnder(codec: ImageCodec, image: DecodedImage, crop: Crop, w
 
 /**
  * Readies a file for an upload embed. Images are scaled so their longest side
- * is at most 2048 px and re-encoded under 5 MB; small images without
- * metadata go as they are. Photos are always re-encoded so their EXIF is
- * dropped. Animated images go unchanged, or throw `ImageTooLargeError` when
- * over the limit. Anything else, or an image the browser can't decode,
- * passes through untouched for the server to judge.
+ * is at most 2048 px, or the server's `max_side` if smaller, and re-encoded
+ * under 5 MB, or the server's `max_bytes`; small images without metadata, of
+ * a type the server takes, go as they are. Photos are always re-encoded so
+ * their EXIF is dropped. What can't be re-encoded (an animated image, audio,
+ * video, any other file, an image the browser can't decode) goes as it is:
+ * refused with `NotAcceptedError` only by the server's stated `limits`
+ * (`ext.media.upload`), and otherwise left for the server to judge.
  */
 export async function prepareUpload(
 	file: File,
-	{ maxBytes = UPLOAD_MAX_BYTES, maxSide = UPLOAD_MAX_SIDE, codec = browserCodec() }: { maxBytes?: number; maxSide?: number; codec?: ImageCodec | undefined } = {}
+	{ maxBytes = UPLOAD_MAX_BYTES, maxSide = UPLOAD_MAX_SIDE, limits, codec = browserCodec() }: { maxBytes?: number; maxSide?: number; limits?: MediaTypes; codec?: ImageCodec | undefined } = {}
 ): Promise<Attachment> {
-	const facts = sniffImage(await headOf(file));
-	// Other formats the browser decodes (HEIC, AVIF, BMP) are converted, since the server takes only these four.
-	if (!facts && !file.type.startsWith('image/')) return { file };
-	if (facts?.animated) {
-		if (file.size > maxBytes) throw new ImageTooLargeError(`${file.name || 'The animated image'} is too large to send (over ${megabytes(maxBytes)}); animation can't be kept while shrinking it`);
-		const size = codec ? await dimensions(codec, file) : undefined;
+	const asIs = (size?: { width: number; height: number }): Attachment => {
+		accept(file, limits);
 		return { file, ...size };
-	}
-	if (!codec) return { file };
+	};
+	const facts = sniffImage(await headOf(file));
+	// Other formats the browser decodes (HEIC, AVIF, BMP) are converted, since not every browser shows them.
+	if (!facts && !file.type.startsWith('image/')) return asIs();
+	if (facts?.animated) return asIs(codec ? await dimensions(codec, file) : undefined);
+	const fit = reencoding(limits, maxBytes, maxSide);
+	if (!codec || !fit.types.length) return asIs();
 	let image: DecodedImage;
 	try {
 		image = await codec.decode(file);
 	} catch {
-		return { file };
+		return asIs();
 	}
 	try {
 		const original = { width: image.width, height: image.height };
-		const fits = Math.max(original.width, original.height) <= maxSide && file.size <= maxBytes;
+		const own = limits ? mediaLimit(limits, declared(file)) : {};
+		const fits = own !== undefined && Math.max(original.width, original.height) <= Math.min(maxSide, own.max_side ?? maxSide) && file.size <= (own.max_bytes ?? maxBytes);
 		if (facts && fits && !facts.metadata) return { file, ...original };
 		const crop = { x: 0, y: 0, ...original };
-		let side = Math.min(maxSide, Math.max(original.width, original.height));
+		let side = Math.min(fit.maxSide, Math.max(original.width, original.height));
 		for (;;) {
 			const target = fitWithin(original.width, original.height, side);
-			const blob = await encodeUnder(codec, image, crop, target.width, target.height, maxBytes);
+			const blob = await encodeUnder(codec, image, crop, target.width, target.height, fit.maxBytes, fit.types);
 			if (blob) return { file: new File([blob], renamed(file.name, blob.type), { type: blob.type, lastModified: file.lastModified }), ...target };
 			if (side <= MIN_SIDE) break;
 			side = Math.max(MIN_SIDE, Math.round(side * SHRINK));
@@ -218,13 +272,19 @@ export async function prepareUpload(
 /**
  * Readies an avatar for `/avatar`: center-cropped to a square, scaled to
  * 512×512 when that fits under 256 KB and to 256×256 otherwise, and
- * re-encoded, which also drops its metadata.
+ * re-encoded, which also drops its metadata. The server's stated `limits`
+ * (`ext.media.avatar`) take the place of 256 KB, and cap the sides.
  */
 export async function prepareAvatar(
 	file: File,
-	{ maxBytes = AVATAR_MAX_BYTES, sides = AVATAR_SIDES, codec = browserCodec() }: { maxBytes?: number; sides?: number[]; codec?: ImageCodec | undefined } = {}
+	{ maxBytes = AVATAR_MAX_BYTES, sides = AVATAR_SIDES, limits, codec = browserCodec() }: { maxBytes?: number; sides?: number[]; limits?: MediaTypes; codec?: ImageCodec | undefined } = {}
 ): Promise<Attachment> {
-	if (!codec) return { file };
+	if (!codec) {
+		accept(file, limits);
+		return { file };
+	}
+	const fit = reencoding(limits, maxBytes, Math.max(...sides));
+	if (!fit.types.length) throw new NotAcceptedError("This server doesn't take avatars as WebP or JPEG");
 	let image: DecodedImage;
 	try {
 		image = await codec.decode(file);
@@ -233,12 +293,12 @@ export async function prepareAvatar(
 	}
 	try {
 		const crop = centerSquare(image.width, image.height);
-		for (const wanted of sides) {
+		for (const wanted of new Set(sides.map((side) => Math.min(side, fit.maxSide)))) {
 			const side = Math.min(wanted, crop.width);
-			const blob = await encodeUnder(codec, image, crop, side, side, maxBytes);
+			const blob = await encodeUnder(codec, image, crop, side, side, fit.maxBytes, fit.types);
 			if (blob) return { file: new File([blob], renamed(file.name || 'avatar', blob.type), { type: blob.type }), width: side, height: side };
 		}
-		throw new ImageTooLargeError(`The avatar couldn't be made smaller than ${Math.round(maxBytes / 1024)} KB`);
+		throw new ImageTooLargeError(`The avatar couldn't be made smaller than ${limitSize(fit.maxBytes)}`);
 	} finally {
 		image.close?.();
 	}
@@ -254,8 +314,17 @@ async function dimensions(codec: ImageCodec, file: Blob): Promise<{ width: numbe
 	}
 }
 
-function megabytes(bytes: number): string {
-	return `${Math.round(bytes / (1024 * 1024))} MB`;
+/** A limit for people: bytes, whole KB, or MB to at most one decimal. */
+function limitSize(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+	return `${Number((bytes / (1024 * 1024)).toFixed(1))} MB`;
+}
+
+/** What files of a type are called, for a limit: images, audio, video, or files like it. */
+function kindOf(type: string): string {
+	const group = type.split('/')[0];
+	return group === 'image' ? 'images' : group === 'audio' || group === 'video' ? group : 'files like this';
 }
 
 /** A file's size for people: bytes, whole KB, or MB to one decimal. */

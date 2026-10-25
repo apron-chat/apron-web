@@ -1,4 +1,4 @@
-import { userIn, type ClientSnapshot } from '$lib/protocol/client';
+import { serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
 import { safeAvatar } from '$lib/protocol/embeds';
 import type { MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
@@ -8,14 +8,17 @@ type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
 /**
  * Who and where names refer to on the active backend: the kept user object
  * per `user_id` (§3.3), followed through renames, the latest recorded object
- * as a fallback, room titles for `#room_id` references, and the
- * chat server's origin, the only one embed media and streams load from.
+ * as a fallback, room titles for `#room_id` references, the chat server's
+ * origin, the only one streams load from, and the origins besides it that
+ * embed media load from (`ext:media`).
  * Every message renders its sender from here, field by field: the kept
  * object, then the `from` the message carries, then the `user_id`. So a
  * rename or a new avatar shows on old messages too.
  */
 class Directory {
 	origin = $state<string | undefined>();
+	/** The origins the server names for its media (`ext.media.origins`, EXT.md §6); replaced only when they change. */
+	mediaOrigins = $state.raw<readonly string[]>([]);
 	you = $state.raw<Identity | undefined>();
 	private users = $state.raw<Users>({ users: {}, recordedUsers: {}, userAliases: {} });
 	private rooms = $state.raw<Record<string, string>>({});
@@ -49,6 +52,8 @@ class Directory {
 	 */
 	apply(snapshot: ClientSnapshot, origin: string | undefined): void {
 		this.origin = origin;
+		const { origins } = serverMedia(snapshot.server);
+		if (origins.join(' ') !== this.mediaOrigins.join(' ')) this.mediaOrigins = origins;
 		if (!snapshot.authenticated) return;
 		this.you = snapshot.you;
 		const current = this.users;

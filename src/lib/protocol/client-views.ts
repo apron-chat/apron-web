@@ -1,4 +1,5 @@
 /** Pure helpers over client snapshots, capabilities, and server URLs. */
+import { parseOrigins } from './embeds';
 import { timelineEvents } from './reducer';
 import { isJsonObject } from './types';
 import type {
@@ -10,7 +11,7 @@ import type {
 } from './types';
 import type { Capabilities, ClientSnapshot, RoomSnapshot } from './client-types';
 
-const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits'];
+const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions'];
 
 /**
  * How to render a user (§3.3): field by field, the kept object for its
@@ -82,6 +83,83 @@ export function serverSettings(server: ServerParams | undefined): { guest_postin
 	const ext = hasCapability(server, 'ext:settings') ? server?.ext : undefined;
 	const settings = isJsonObject(ext) && isJsonObject(ext.settings) ? ext.settings : {};
 	return { guest_posting: settings.guest_posting !== false, read_cursors: settings.read_cursors !== false, add_members: settings.add_members !== false };
+}
+
+/**
+ * What the signed-in user may do that the core leaves to the server
+ * (extension `ext:permissions`, `you.ext.permissions`): move other users'
+ * messages, and add other users to rooms. Read from `you` only; each is
+ * `false` without the extension.
+ */
+export function yourPermissions(server: ServerParams | undefined, you: Identity | undefined): { move_any: boolean; add_members: boolean } {
+	const ext = hasCapability(server, 'ext:permissions') ? you?.ext : undefined;
+	const granted: unknown[] = isJsonObject(ext) && Array.isArray(ext.permissions) ? ext.permissions : [];
+	return { move_any: granted.includes('move_any'), add_members: granted.includes('add_members') };
+}
+
+/** What a server takes of one type of file (`ext:media`): the largest file, and the longest image side it keeps. */
+export interface MediaLimit {
+	max_bytes?: number;
+	max_side?: number;
+}
+
+/** A category of files (`ext:media` `upload` or `avatar`): each MIME pattern it takes (`type/subtype`, `type/*`, `*\/*`), with its limits. */
+export type MediaTypes = Record<string, MediaLimit>;
+
+/** What a server says about media (`ext:media`): origins besides its own, and the files it takes, by category. */
+export interface ServerMedia {
+	/** Where embed media may also load from: exact `https:` origins, or `http:` ones on localhost. */
+	origins: string[];
+	/** Message attachments (§4.8.4). Absent: nothing is known. */
+	upload?: MediaTypes;
+	/** `/avatar` (§4.8.6). Absent: nothing is known. */
+	avatar?: MediaTypes;
+}
+
+const MIME_PATTERN = /^(\*\/\*|[\w!#$&^.+-]+\/(\*|[\w!#$&^.+-]+))$/;
+const MEDIA_LIMITS = ['max_bytes', 'max_side'] as const;
+
+/**
+ * The server's media (extension `ext:media`, `server.ext.media`), field by
+ * field: an origin, a pattern, or a limit of the wrong shape is left out,
+ * and so is a category that isn't an object. Without the extension, no
+ * origins and no categories.
+ */
+export function serverMedia(server: ServerParams | undefined): ServerMedia {
+	const ext = hasCapability(server, 'ext:media') ? server?.ext : undefined;
+	const media = isJsonObject(ext) && isJsonObject(ext.media) ? ext.media : {};
+	const upload = mediaTypes(media.upload);
+	const avatar = mediaTypes(media.avatar);
+	return { origins: parseOrigins(media.origins), ...(upload ? { upload } : {}), ...(avatar ? { avatar } : {}) };
+}
+
+function mediaTypes(value: unknown): MediaTypes | undefined {
+	if (!isJsonObject(value)) return undefined;
+	const types: MediaTypes = {};
+	for (const [pattern, limits] of Object.entries(value)) {
+		if (!MIME_PATTERN.test(pattern) || !isJsonObject(limits)) continue;
+		const limit: MediaLimit = {};
+		for (const name of MEDIA_LIMITS) {
+			const amount = limits[name];
+			if (typeof amount === 'number' && Number.isSafeInteger(amount) && amount > 0) limit[name] = amount;
+		}
+		types[pattern.toLowerCase()] = limit;
+	}
+	return types;
+}
+
+/**
+ * What a category takes of a file of `type`, the type the client declares
+ * for it (`File.type`, or `application/octet-stream` without one): the
+ * limits of its most specific pattern, `type/subtype`, then `type/*`, then
+ * `*\/*`. Undefined when no pattern matches: the server doesn't take it.
+ */
+export function mediaLimit(types: MediaTypes, type: string): MediaLimit | undefined {
+	const exact = (type.split(';')[0].trim() || 'application/octet-stream').toLowerCase();
+	for (const pattern of [exact, `${exact.split('/')[0]}/*`, '*/*']) {
+		if (Object.hasOwn(types, pattern)) return types[pattern];
+	}
+	return undefined;
 }
 
 /** The VAPID public key (base64url) of the server's `webpush` push kind (§4.9), if it offers one. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { centerSquare, fileSize, fitWithin, ImageTooLargeError, prepareAvatar, prepareUpload, sniffImage, type Crop, type ImageCodec } from './images';
+import { centerSquare, fileSize, fitWithin, ImageTooLargeError, NotAcceptedError, prepareAvatar, prepareUpload, sniffImage, type Crop, type ImageCodec } from './images';
 
 const JPEG = [0xff, 0xd8, 0xff, 0xe1];
 const bytes = (...parts: Array<number[] | string>) => new Uint8Array(parts.flatMap((part) => (typeof part === 'string' ? [...part].map((char) => char.charCodeAt(0)) : part)));
@@ -117,13 +117,59 @@ describe('prepareUpload', () => {
 		expect((await prepareUpload(photo, { codec })).file).toMatchObject({ name: 'photo.jpg', type: 'image/jpeg' });
 	});
 
-	it('sends an animated GIF unchanged, or refuses one over the limit', async () => {
+	it('sends an animated GIF unchanged, whatever its size, for the server to judge', async () => {
 		const small = file(gif(2), 'party.gif', 'image/gif');
 		const { codec, encodes } = fakeCodec(300, 200, () => 1);
 		expect(await prepareUpload(small, { codec })).toEqual({ file: small, width: 300, height: 200 });
 		const large = file(gif(2), 'huge.gif', 'image/gif', 64);
-		await expect(prepareUpload(large, { codec, maxBytes: 32 })).rejects.toBeInstanceOf(ImageTooLargeError);
+		expect(await prepareUpload(large, { codec, maxBytes: 32 })).toEqual({ file: large, width: 300, height: 200 });
 		expect(encodes).toEqual([]);
+	});
+});
+
+describe('prepareUpload with the server\'s limits (ext:media)', () => {
+	const limits = { 'image/*': { max_bytes: 5000, max_side: 1000 }, 'image/gif': { max_bytes: 100 }, 'audio/*': { max_bytes: 10_485_760 } };
+
+	it('shrinks to the server\'s max_side and max_bytes when they are smaller than its own', async () => {
+		const big = file(png(), 'big.png', 'image/png');
+		const { codec, encodes } = fakeCodec(4000, 3000, (_w, _h, quality) => (quality > 0.7 ? 6000 : 4000));
+		const prepared = await prepareUpload(big, { codec, limits });
+		expect(prepared).toMatchObject({ width: 1000, height: 750 });
+		expect(encodes.map((encode) => encode.quality)).toEqual([0.85, 0.75, 0.65]);
+		// A small image without metadata, of a type the server takes, still goes as it is.
+		const shot = file(png(), 'shot.png', 'image/png');
+		const { codec: small } = fakeCodec(800, 600, () => 1);
+		expect(await prepareUpload(shot, { codec: small, limits })).toEqual({ file: shot, width: 800, height: 600 });
+	});
+
+	it('re-encodes only as a type the server takes', async () => {
+		const shot = file(png(), 'shot.png', 'image/png');
+		const { codec, encodes } = fakeCodec(800, 600, () => 10);
+		const prepared = await prepareUpload(shot, { codec, limits: { 'image/jpeg': {} } });
+		expect(prepared.file).toMatchObject({ name: 'shot.jpg', type: 'image/jpeg' });
+		expect(encodes.map((encode) => encode.type)).toEqual(['image/jpeg']);
+	});
+
+	it('refuses what it cannot re-encode when the server does not take its type or size', async () => {
+		const { codec } = fakeCodec(300, 200, () => 1);
+		const party = file(gif(2), 'party.gif', 'image/gif', 200);
+		await expect(prepareUpload(party, { codec, limits })).rejects.toThrow(new NotAcceptedError('party.gif is too large to send: this server takes images up to 100 B'));
+		const voice = file(bytes('ogg'), 'voice.ogg', 'audio/ogg');
+		expect(await prepareUpload(voice, { codec, limits })).toEqual({ file: voice });
+		await expect(prepareUpload(voice, { codec, limits: { 'audio/*': { max_bytes: 2 } } })).rejects.toThrow('this server takes audio up to 2 B');
+		const notes = file(bytes('hello'), 'notes.txt', 'text/plain');
+		await expect(prepareUpload(notes, { codec, limits })).rejects.toThrow("This server doesn't take this type of file (notes.txt)");
+		// A file without a type is `application/octet-stream`.
+		const blob = file(bytes('?'), 'blob', '');
+		expect(await prepareUpload(blob, { codec, limits: { 'application/octet-stream': {} } })).toEqual({ file: blob });
+	});
+
+	it('fits an avatar to the server\'s limits', async () => {
+		const { codec, encodes } = fakeCodec(1000, 1000, (w) => (w > 128 ? 50_000 : 20_000));
+		const prepared = await prepareAvatar(file(png(), 'me.png', 'image/png'), { codec, limits: { 'image/*': { max_bytes: 30_000, max_side: 128 } } });
+		expect(prepared).toMatchObject({ width: 128, height: 128 });
+		expect(new Set(encodes.map((encode) => encode.width))).toEqual(new Set([128]));
+		await expect(prepareAvatar(file(png(), 'me.png', 'image/png'), { codec, limits: { 'image/png': {} } })).rejects.toBeInstanceOf(NotAcceptedError);
 	});
 });
 

@@ -32,12 +32,12 @@ describe('mentionsMe', () => {
 
 describe('mayMove', () => {
 	const event = (user_id: string) => ({ message_id: '1', log_id: '1', room_id: 'general', from: { user_id } }) as MessageRecord;
-	it('allows your own messages, and anyone\'s for an admin or a mod', () => {
+	it('allows your own messages, and anyone\'s where the server lets you move any', () => {
 		expect(mayMove(event('alice'), { user_id: 'alice' })).toBe(true);
 		expect(mayMove(event('bob'), { user_id: 'alice' })).toBe(false);
-		expect(mayMove(event('bob'), { user_id: 'alice', roles: ['helper'] })).toBe(false);
-		expect(mayMove(event('bob'), { user_id: 'alice', roles: ['mod'] })).toBe(true);
-		expect(mayMove(event('bob'), { user_id: 'alice', roles: ['admin'] })).toBe(true);
-		expect(mayMove(event('bob'), undefined)).toBe(false);
+		// Roles are for display only (§3.3): they grant nothing.
+		expect(mayMove(event('bob'), { user_id: 'alice', roles: ['admin'] })).toBe(false);
+		expect(mayMove(event('bob'), { user_id: 'alice' }, true)).toBe(true);
+		expect(mayMove(event('bob'), undefined, true)).toBe(false);
 	});
 });

@@ -1,8 +1,9 @@
 /**
  * HTTP side of embeds (PROTOCOL.md §4.8.3, §4.8.5): writing an upload or a
  * stream's content to its `write_url`, reading a live stream, and deciding
- * which embed URLs are safe to load. Media and streams load only from the chat
- * server's own origin; links may point anywhere `http(s)`.
+ * which embed URLs are safe to load. Media loads only from the chat server's
+ * own origin and the origins it names (`ext:media`, EXT.md §6), streams only
+ * from its own; links may point anywhere `http(s)`.
  */
 
 /** The HTTP origin of a WebSocket server URL (`wss://chat.example/ws` → `https://chat.example`). */
@@ -42,15 +43,17 @@ export function sameOriginMedia(value: unknown, origin: string | undefined): str
 }
 
 /**
- * Parses a comma- or space-separated list of exact `https:` origins (or
- * `http:` ones on localhost), dropping anything else.
+ * The exact `https:` origins in a list (or `http:` ones on localhost),
+ * such as `ext.media.origins`, dropping anything else: a path, a query, or
+ * anything that isn't a string.
  */
-export function parseOrigins(value: string | undefined): string[] {
-	return (value ?? '').split(/[\s,]+/).flatMap((entry) => {
+export function parseOrigins(value: unknown): string[] {
+	return (Array.isArray(value) ? value : []).flatMap((entry) => {
+		if (typeof entry !== 'string') return [];
 		try {
 			const url = new URL(entry);
-			const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-			return url.origin === entry.replace(/\/$/, '') && (url.protocol === 'https:' || (url.protocol === 'http:' && local)) ? [url.origin] : [];
+			const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+			return url.origin === entry && (url.protocol === 'https:' || (url.protocol === 'http:' && local)) ? [url.origin] : [];
 		} catch {
 			return [];
 		}
@@ -58,18 +61,11 @@ export function parseOrigins(value: string | undefined): string[] {
 }
 
 /**
- * Hosts the build trusts to serve embed media besides the chat server itself,
- * such as a server's storage bucket (`VITE_TRUSTED_MEDIA_ORIGINS`). Outside
- * Vite (the protocol modules also load under plain Node, as apron-server-go's
- * wire tests do) there is no `import.meta.env`, and no extra hosts.
- */
-export const TRUSTED_MEDIA_ORIGINS = parseOrigins(import.meta.env?.VITE_TRUSTED_MEDIA_ORIGINS);
-
-/**
  * `og` media the client may load (§4.8.1): what `sameOriginMedia` allows,
- * plus files on a trusted media origin.
+ * plus files on the origins the chat server names for its media
+ * (`ext:media`), such as its storage bucket.
  */
-export function embedMedia(value: unknown, origin: string | undefined, trusted: readonly string[] = TRUSTED_MEDIA_ORIGINS): string | undefined {
+export function embedMedia(value: unknown, origin: string | undefined, trusted: readonly string[] = []): string | undefined {
 	const own = sameOriginMedia(value, origin);
 	if (own) return own;
 	const link = safeLink(value);
@@ -134,12 +130,10 @@ export class WriteError extends Error {
 	}
 }
 
+/** Only the standard meanings of a status (RFC 9110): what else a server means by one is its own. */
 function writeError(status: number): string {
 	if (status === 413) return 'The file is larger than this server accepts';
 	if (status === 415) return 'The server does not accept this type of file';
-	if (status === 409) return 'This upload link was already used';
-	if (status === 410) return 'The message was removed before the upload finished';
-	if (status === 404) return 'The upload expired; attach the file again';
 	return `The server refused the upload (${status})`;
 }
 

@@ -325,11 +325,6 @@ export interface ClientSnapshot {
 	/** Files being written to upload embeds, by `embed_id`. */
 	uploads: Record<string, UploadState>;
 	/**
-	 * The server refused a file that isn't an image as the wrong type (415):
-	 * it takes images only, so voice clips have nowhere to go.
-	 */
-	imageOnlyUploads?: boolean;
-	/**
 	 * The server answered adding or removing another member (`room_join` or
 	 * `room_leave` with `user_id`) `unsupported` (§4.2.2): don't offer it.
 	 */

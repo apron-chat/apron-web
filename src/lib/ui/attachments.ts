@@ -17,7 +17,7 @@ export interface EmbedTile {
  * frame) as a card named by its title or address. Media load only from where
  * the timeline would load them (`embedMedia`).
  */
-export function embedTile(embed: Embed, origin: string | undefined): EmbedTile {
+export function embedTile(embed: Embed, origin: string | undefined, trusted: readonly string[] = []): EmbedTile {
 	const og = embed.og ?? {};
 	const url = safeLink(embed.url);
 	if (embed.kind !== 'upload') {
@@ -26,8 +26,8 @@ export function embedTile(embed: Embed, origin: string | undefined): EmbedTile {
 	}
 	const name = embed.title || og.title || 'File';
 	if (!url) return { kind: 'file', name, detail: 'Uploading…', renamable: true };
-	const image = embedMedia(og.image?.url, origin);
-	const audio = embedMedia(og.audio?.url, origin);
+	const image = embedMedia(og.image?.url, origin, trusted);
+	const audio = embedMedia(og.audio?.url, origin, trusted);
 	if (og.video) return image ? { kind: 'image', name, detail: 'Video', src: image, renamable: true } : { kind: 'file', name, detail: 'Video', renamable: true };
 	if (audio) return { kind: 'audio', name, src: audio, renamable: true };
 	if (image) {

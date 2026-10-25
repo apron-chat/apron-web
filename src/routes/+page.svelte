@@ -5,7 +5,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, serverSettings, timelineMessages, webPushKey, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
@@ -1679,12 +1679,14 @@
 	/**
 	 * Attaches picked, pasted or recorded files to the open pane's draft
 	 * (capability `embed:upload`), to go out when it is sent. Images start
-	 * shrinking and losing their metadata right away; one that can't be
-	 * readied is taken back off with the reason.
+	 * shrinking and losing their metadata right away, to the server's limits
+	 * where it states them (`ext:media`); one that can't be readied, or that
+	 * the server said it doesn't take, is taken back off with the reason.
 	 */
 	function stageFiles(picked: File[]): void {
 		if (!canCompose || !session.snapshot.capabilities['embed:upload']) return;
-		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: prepareUpload(file) }));
+		const limits = serverMedia(session.server).upload;
+		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: prepareUpload(file, { limits }) }));
 		for (const { id, prepared } of staged) {
 			prepared.catch((cause: unknown) => {
 				drafts.unstage(id);
@@ -2187,21 +2189,22 @@
 		return event !== undefined && isOwn(event, session.you);
 	}
 
-	/** Whether you may move a picked message to a new thread: yours, or anyone's for an admin or a mod. */
+	/** Whether you may move a picked message to a new thread: yours, or anyone's where `ext:permissions` grants `move_any`. */
 	function movable(id: string): boolean {
 		const event = resolveMessage(id);
-		return event !== undefined && mayMove(event, session.you);
+		return event !== undefined && mayMove(event, session.you, yourPermissions(session.server, session.you).move_any);
 	}
 
 	/**
 	 * Who comes along when picked messages move into a thread: each moved
 	 * message's author not in it yet is added to it (§4.2.2), so they still
 	 * see their messages. Only where this viewer may add people: with
-	 * `server.ext.settings.add_members` on, or as an admin.
+	 * `server.ext.settings.add_members` on, or with `add_members` in
+	 * `you.ext.permissions`.
 	 */
 	function moveAuthors(): MoveAuthors | undefined {
 		if (!canChangeMembers || session.snapshot.memberChangesUnsupported) return undefined;
-		if (!serverSettings(session.server).add_members && !session.you?.roles?.includes('admin')) return undefined;
+		if (!serverSettings(session.server).add_members && !yourPermissions(session.server, session.you).add_members) return undefined;
 		return {
 			of: (id) => resolveMessage(id)?.from?.user_id,
 			skip: (userId, room) => userId === session.you?.user_id || Boolean(session.rooms.find((other) => other.id === room)?.members?.some((member) => member.user_id === userId))
@@ -2604,7 +2607,7 @@
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!canCompose}
 					canUpload={snapshot.capabilities['embed:upload']}
-					canUploadAudio={!snapshot.imageOnlyUploads}
+					uploadLimits={serverMedia(session.server).upload}
 					canCommand={snapshot.capabilities.command}
 					{people}
 					rooms={roomSuggestions}

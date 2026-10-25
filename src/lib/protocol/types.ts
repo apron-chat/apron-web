@@ -15,7 +15,7 @@ export interface JsonObject {
  * Optional features of `server.capabilities` (§4) that this client uses;
  * it ignores the rest.
  */
-export type Capability = 'history' | 'edit' | 'rooms' | 'reactions' | 'activity' | 'embed:upload' | 'embed:stream' | 'command' | 'status' | 'ext' | 'ext:settings' | 'ext:limits';
+export type Capability = 'history' | 'edit' | 'rooms' | 'reactions' | 'activity' | 'embed:upload' | 'embed:stream' | 'command' | 'status' | 'ext' | 'ext:settings' | 'ext:limits' | 'ext:media' | 'ext:permissions';
 
 /**
  * A user object (§3.3). Current objects (`you`, `new` in `user`, room

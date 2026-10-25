@@ -44,9 +44,8 @@ The server the client opens first is `VITE_DEFAULT_SERVER_URL` from the build
   same-origin `/ws`.
 
 Embed media (upload previews, link card images) loads only from the chat
-server's own origin, plus the origins listed in `VITE_TRUSTED_MEDIA_ORIGINS`
-(comma-separated, set the same way). `.env.production` trusts
-`https://media.apron.chat`, where the demo server serves uploads.
+server's own origin, plus the origins that server names in its `server` frame
+(`ext:media`, [EXT.md §6](EXT.md#6-extmedia)), such as a storage bucket.
 
 The unit tests replay the implementation-agnostic protocol fixtures in
 [shazow/apron](https://github.com/shazow/apron), checked out as the `protocol`

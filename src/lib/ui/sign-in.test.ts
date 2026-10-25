@@ -116,9 +116,8 @@ describe('hints', () => {
 		expect(hint({ phase: 'idle', here: false, guest: false, use: { signIn: false, signUp: true } })).toMatch(/^Creates an account and saves a new passkey/);
 	});
 
-	it('says a sign-up invite names the account it creates', () => {
-		expect(hint({ scheme: 'token' })).toMatch(/^Signs in with a token/);
-		expect(hint({ scheme: 'token', invite: true })).toMatch(/user ID is picked from your display name/);
+	it('says a token is the server\'s, and that a name goes with an invite', () => {
+		expect(hint({ scheme: 'token' })).toBe('Signs in with a token the server gave you. If it’s an invite, add your name for the account it creates.');
 	});
 
 	it('warns that guests only read where they do', () => {

@@ -38,6 +38,8 @@
 		canUpload?: boolean;
 		/** Picked files: Attach opens the browser's file picker (a hidden file input) and hands them over. */
 		onfiles?: (files: File[]) => void;
+		/** The types the file picker offers, as its `accept`, such as `image/*,audio/*`. Omit for any file. */
+		accept?: string;
 		disabled?: boolean;
 		/** Hide the microphone (no getUserMedia, or a policy choice). */
 		canRecord?: boolean;
@@ -94,7 +96,7 @@
 		class?: ClassValue;
 	}
 	let {
-		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand,
+		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
 		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, emojiTestid, sendTestid, class: className
 	}: Props = $props();
@@ -146,7 +148,7 @@
 					</button>
 				{/if}
 			</span>
-			{#if onfiles}<input class="ap-sr" type="file" multiple tabindex="-1" aria-hidden="true" data-testid={fileInputTestid} bind:this={fileInput} onchange={(e) => picked(e.currentTarget)} />{/if}
+			{#if onfiles}<input class="ap-sr" type="file" multiple {accept} tabindex="-1" aria-hidden="true" data-testid={fileInputTestid} bind:this={fileInput} onchange={(e) => picked(e.currentTarget)} />{/if}
 		{/if}
 		{#if recording}
 			<span class="ap-composer-recording" role="status"><span class="ap-composer-recdot" aria-hidden="true"></span>Recording <span class="ap-composer-rectime">{recordingTime || '0:00'}</span></span>

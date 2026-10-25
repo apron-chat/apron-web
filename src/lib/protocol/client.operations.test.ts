@@ -355,19 +355,18 @@ describe('uploads', () => {
 		expect(snapshot.uploads).toEqual({});
 	});
 
-	it('learns uploads are image-only from a 415 on a voice clip, and names a reused write URL', async () => {
+	it('reads a refused write by its standard HTTP meaning only', async () => {
+		// What a 409 means beyond "conflict" is the server's own: it is only a refusal here.
 		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 409 })));
 		const reused = client.sendFiles('general', '', [new File(['png'], 'me.png', { type: 'image/png' })]);
 		await socket.reply('message', { message_id: '52', embeds: [{ embed_id: 'embed_3', kind: 'upload', write_url: 'http://fake.test/write/y' }] });
-		await expect(reused.uploaded).rejects.toThrow('This upload link was already used');
-		expect(snapshot.imageOnlyUploads).toBeUndefined();
+		await expect(reused.uploaded).rejects.toThrow('The server refused the upload (409)');
 		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 415 })));
 		const voice = client.sendFiles('general', '', [{ file: new File(['ogg'], 'voice-message.ogg', { type: 'audio/ogg' }), title: 'standup notes' }]);
 		// A file renamed before sending goes out under its new name.
 		expect((socket.request('message').params.body as { embeds: unknown }).embeds).toEqual([{ kind: 'upload', title: 'standup notes' }]);
 		await socket.reply('message', { message_id: '53', embeds: [{ embed_id: 'embed_4', kind: 'upload', write_url: 'http://fake.test/write/z' }] });
 		await expect(voice.uploaded).rejects.toThrow(/does not accept this type/);
-		expect(snapshot.imageOnlyUploads).toBe(true);
 	});
 
 	it('uploads an avatar with a /avatar command carrying one upload embed', async () => {

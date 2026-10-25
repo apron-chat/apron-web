@@ -30,12 +30,12 @@
 		passkeyChoice?: boolean;
 		passkeyMode?: 'login' | 'register';
 		onpasskeymode?: (mode: 'login' | 'register') => void;
-		/** `bind:token`, `bind:email`, `bind:code` and `bind:name` (the display name). */
+		/** `bind:token`, `bind:email`, `bind:code` and `bind:name` (the display name; under Token, an optional name for an invite). */
 		token?: string;
 		email?: string;
 		code?: string;
 		name?: string;
-		/** Asks a display name; not where it isn't used, such as signing in with a passkey or a token. */
+		/** Asks a display name; not where it isn't used, such as signing in with a passkey. Under Token it asks an optional name, for an invite. */
 		askName?: boolean;
 		/**
 		 * The code asked for (§4.11): its field shows, and the hint says where it went: emailed to `email`,
@@ -98,7 +98,7 @@
 	{/if}
 	{#if scheme === 'token'}
 		<label class="ap-fieldlabel">Token
-			<input class="ap-field ap-field-mono" data-testid={tokenTestid} type="password" bind:value={token} placeholder="apron_bot_…" disabled={busy} autocomplete="off" spellcheck="false" />
+			<input class="ap-field ap-field-mono" data-testid={tokenTestid} type="password" bind:value={token} placeholder="From the server" disabled={busy} autocomplete="off" spellcheck="false" />
 		</label>
 		{#if askName}
 			{@render nameField()}
@@ -142,7 +142,7 @@
 </form>
 
 {#snippet nameField()}
-	<label class="ap-fieldlabel">Display name
-		<input class="ap-field" data-testid={nameTestid} bind:value={name} placeholder={scheme === 'webauthn' ? 'Names your account and its passkey' : 'How others see you'} disabled={busy} maxlength="64" autocomplete="nickname" spellcheck="false" />
+	<label class="ap-fieldlabel">{scheme === 'token' ? 'Your name, if this is an invite' : 'Display name'}
+		<input class="ap-field" data-testid={nameTestid} bind:value={name} placeholder={scheme === 'webauthn' ? 'Names your account and its passkey' : scheme === 'token' ? 'Optional' : 'How others see you'} disabled={busy} maxlength="64" autocomplete="nickname" spellcheck="false" />
 	</label>
 {/snippet}

@@ -2,7 +2,7 @@
 	import { preferencesDialog } from './lazy';
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
-	import type { ChatClient, OperationHandle } from '$lib/protocol/client';
+	import { serverMedia, type ChatClient, type OperationHandle } from '$lib/protocol/client';
 	import { addError, passkeyMessage, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { returnUrl } from '$lib/ui/sign-in-link';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -138,8 +138,8 @@
 		avatarStatus = 'uploading';
 		avatarError = '';
 		try {
-			// Cropped square, shrunk under the avatar limit, and stripped of metadata.
-			const { file: avatar } = await prepareAvatar(file);
+			// Cropped square, shrunk under the avatar limit (the server's, where it states one), and stripped of metadata.
+			const { file: avatar } = await prepareAvatar(file, { limits: serverMedia(session.server).avatar });
 			await client.uploadAvatar(avatar);
 		} catch (cause) {
 			avatarError = cause instanceof Error ? cause.message : 'The avatar could not be uploaded';

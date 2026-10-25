@@ -10,8 +10,8 @@ The default connection is `VITE_DEFAULT_SERVER_URL` from the build, which
 `VITE_DEFAULT_SERVER_URL=` (empty), use same-origin `/ws` instead.
 
 Embed media (`og` images, video and audio) loads from the chat server's origin
-and from the origins in `VITE_TRUSTED_MEDIA_ORIGINS`, which `.env.production`
-sets to `https://media.apron.chat`, the Cloudflare demo server's upload bucket.
+and from the origins that server names for its media, such as its upload bucket
+(`ext.media.origins`, [EXT.md §6](../EXT.md#6-extmedia)).
 Streams load from the chat server's origin only. Every link in chat, from
 message text, link cards, uploads and HTML embeds, opens in a new tab.
 
@@ -29,9 +29,11 @@ route, never with the app itself.
 Local development and builds with an empty `VITE_DEFAULT_SERVER_URL` retain the
 same-origin default.
 After a failed WebSocket handshake, the client makes a bounded HTTP diagnostic
-request to the same URL with `?apron_connection_status=1`. Supporting servers
-can expose a capacity error and `Retry-After` through CORS; the client displays
-the reason and waits before retrying, including manual retries. Servers without
+request to the same URL with `?apron_connection_status=1`
+([EXT.md §5](../EXT.md#5-connection-status)). A reply marked
+`Apron-Connection-Status: 1` can carry a capacity error and `Retry-After`,
+exposed through CORS; the client displays the reason and waits before retrying,
+including manual retries. Any other reply is ignored, and servers without
 this optional endpoint retain ordinary reconnect behavior.
 Repeated connection failures back off from 500 ms to about one attempt per minute
 with jitter. An explicit server retry window takes precedence, including a
@@ -735,7 +737,8 @@ selection bar replaces the composer with the count, **Move to thread** (or, in a
 thread, back to the room), **New thread** (with the `rooms` capability) and Cancel. A
 move is a save of the message with the destination's `room_id`, one request per
 message. Anyone's messages can be picked, and the server decides whose you may
-move (this server: your own, and anyone's for an admin or a mod). A move is all
+move: your own, and anyone's where the server grants `move_any`
+([EXT.md §7](../EXT.md#7-extpermissions)). A move is all
 or nothing as far as that goes: when the selection holds a message that isn't
 yours, that one is sent first, alone, and if the server refuses it nothing else
 is sent, the selection stays, and the error says no messages were moved. Otherwise
@@ -744,14 +747,15 @@ new thread**, saying how many messages move) with the earliest selected
 message's first line as the title and an empty Summary; Escape there closes the
 dialog and keeps the selection. The thread is created first and the moves follow
 once the server has named it; the dialog isn't offered when the selection holds
-someone else's message and you have neither `admin` nor `mod`, so a refused move
+someone else's message and you lack `move_any`, so a refused move
 never leaves an empty thread. If the moves fail once the thread exists, the
 dialog closes and the error says so, as for any move. Messages refused after the first (say, over a posting limit)
 stay selected and the bar says how many didn't move. A thread delivers to its
 members only, so once messages move into one (new or existing, but not back to
 the room), each of their authors who isn't in it yet is added to it (`room_join`
 with their `user_id`, §4.2.2), where you may add people: while
-`server.ext.settings.add_members` isn't `false`, or as an `admin`. The server
+`server.ext.settings.add_members` isn't `false`, or where the server grants
+`add_members`. The server
 decides each (it adds no guests); the moves stand either way, and the toast says
 how many authors weren't added and why. Escape leaves select mode.
 
@@ -815,7 +819,13 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   keeps the new name, Escape the old one, and an empty name changes nothing.
   The file is sent under that name, as the embed's `title`. A long name
   loses its middle rather than its end, so its extension stays in view. Images start shrinking as soon as they are attached; one that
-  can't be made small enough comes off again with the reason. Send (with or
+  can't be made small enough comes off again with the reason. Where the server
+  states the types it takes and their limits
+  ([EXT.md §6](../EXT.md#6-extmedia)), images shrink to those limits, the
+  file picker offers only those types, the microphone shows only when one of
+  them is an audio type the browser records, and a file of another type, or
+  one over its type's limit that can't be shrunk (audio, video, an animated
+  image), comes off again with the limit. Send (with or
   without text) posts the message with one `upload` embed per attached file,
   then writes each file to the `write_url` in the result. A failed send gives
   the draft back with its files. The message shows a pending
@@ -875,8 +885,9 @@ first, since the server deletes its content. A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
-Media in `og` and stream URLs load only from the chat server's own origin;
-links may point anywhere `http(s)`.
+Media in `og` loads only from the chat server's own origin and the origins it
+names with `ext:media`, and stream URLs only from its own origin; links may
+point anywhere `http(s)`.
 
 **Connect** in the
 sidebar header opens the connect screen: a WebSocket URL or an HTTP(S) server
@@ -1138,6 +1149,13 @@ signed out after a reconnect, never as a guest, unless a passkey was added to
 the account, which then signs it back in (with a tap, as below); where the
 scheme only signs up, the message points to another way in rather than to it. The link dialog also
 warns when the server a link switches to has a saved session here.
+
+**Token** signs in with a token the server gave you, pasted into the form
+(`scheme: "token"`), and keeps it like a session token (below). Its optional
+name field, "Your name, if this is an invite", goes with the token as `name`
+only when filled, for an invite that creates an account
+([PROTOCOL.md Appendix B.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#b3-an-invite-token-signs-up-several-people));
+left empty, no name is sent, and the account keeps the one the server gives it.
 
 When the server advertises token authentication, the session token it returns
 (after a passkey or email sign-in, or a replacement in reply to a token resume)

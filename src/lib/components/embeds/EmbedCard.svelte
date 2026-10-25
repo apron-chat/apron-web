@@ -9,4 +9,4 @@
 	let { embed }: { embed: Embed } = $props();
 </script>
 
-<DesignEmbedCard kind={embed.kind} url={safeLink(embed.url)} title={embed.title} og={loadableOg(embed.og, directory.origin)} />
+<DesignEmbedCard kind={embed.kind} url={safeLink(embed.url)} title={embed.title} og={loadableOg(embed.og, directory.origin, directory.mediaOrigins)} />

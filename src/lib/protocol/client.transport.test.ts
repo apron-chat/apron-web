@@ -176,7 +176,7 @@ describe('failed handshake diagnostics', () => {
 
 	it('surfaces capacity errors and honors Retry-After, including manual retry', async () => {
 		fetchStatus.mockResolvedValue(Response.json({ error: 'Daily demo capacity reached' }, {
-			status: 429, headers: { 'Retry-After': '3600' }
+			status: 429, headers: { 'Retry-After': '3600', 'Apron-Connection-Status': '1' }
 		}));
 		latest().drop();
 		await vi.advanceTimersByTimeAsync(0);
@@ -188,6 +188,18 @@ describe('failed handshake diagnostics', () => {
 		await vi.advanceTimersByTimeAsync(3599999);
 		expect(FakeSocket.instances).toHaveLength(1);
 		await vi.advanceTimersByTimeAsync(1);
+		expect(FakeSocket.instances).toHaveLength(2);
+	});
+
+	it('ignores a reply without the connection status marker', async () => {
+		// Such as a proxy's or a host's own 429 page, which says nothing about this chat server.
+		fetchStatus.mockResolvedValue(Response.json({ error: 'Slow down' }, { status: 429, headers: { 'Retry-After': '3600' } }));
+		latest().drop();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchStatus).toHaveBeenCalledOnce();
+		expect(snapshot.error).toBeUndefined();
+		expect(snapshot.retryAfterMs).toBeUndefined();
+		await vi.advanceTimersByTimeAsync(5000);
 		expect(FakeSocket.instances).toHaveLength(2);
 	});
 
@@ -203,7 +215,7 @@ describe('failed handshake diagnostics', () => {
 		fetchStatus.mockReturnValue(new Promise(done => { resolve = done; }));
 		latest().drop();
 		client.setUrl('wss://other.test/');
-		resolve(Response.json({ error: 'Old capacity error' }, { status: 429, headers: { 'Retry-After': '86400' } }));
+		resolve(Response.json({ error: 'Old capacity error' }, { status: 429, headers: { 'Retry-After': '86400', 'Apron-Connection-Status': '1' } }));
 		await vi.advanceTimersByTimeAsync(0);
 		expect(latest().url).toBe('wss://other.test/');
 		expect(snapshot.error).toBeUndefined();
@@ -435,8 +447,8 @@ describe('capability gating', () => {
 	it('derives feature flags from the latest server frame', () => {
 		// Unknown capabilities are ignored.
 		const server = { apron: 9, auth: ['guest'], capabilities: ['history', 'reactions', 'activity', 'command', 'frobnicate', 'ext:irc'] };
-		expect(capabilitiesOf(server)).toEqual({ history: true, edit: false, rooms: false, reactions: true, activity: true, 'embed:upload': false, 'embed:stream': false, command: true, status: false, ext: false, 'ext:settings': false, 'ext:limits': false });
-		expect(capabilitiesOf(undefined)).toEqual({ history: false, edit: false, rooms: false, reactions: false, activity: false, 'embed:upload': false, 'embed:stream': false, command: false, status: false, ext: false, 'ext:settings': false, 'ext:limits': false });
+		expect(capabilitiesOf(server)).toEqual({ history: true, edit: false, rooms: false, reactions: true, activity: true, 'embed:upload': false, 'embed:stream': false, command: true, status: false, ext: false, 'ext:settings': false, 'ext:limits': false, 'ext:media': false, 'ext:permissions': false });
+		expect(capabilitiesOf(undefined)).toEqual({ history: false, edit: false, rooms: false, reactions: false, activity: false, 'embed:upload': false, 'embed:stream': false, command: false, status: false, ext: false, 'ext:settings': false, 'ext:limits': false, 'ext:media': false, 'ext:permissions': false });
 		expect([canEdit(server), canManageRooms(server), canReact(server), hasHistory(server)]).toEqual([false, false, true, true]);
 	});
 });

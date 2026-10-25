@@ -78,8 +78,12 @@
 	let codeBusy = $state(false);
 	/** The pasted token for the Token scheme; cleared once handed to the client. */
 	let token = $state('');
-	/** A sign-up invite from `/invite`: it creates an account, named as asked, the server picking its user_id from the name. */
-	let inviteToken = $derived(token.trim().startsWith('apron_join_'));
+	/**
+	 * The name typed under the Token scheme, empty unless the user fills it:
+	 * sent with the token for an invite to name the account it creates
+	 * (Appendix B.3), and never otherwise, since a name renames any account.
+	 */
+	let tokenName = $state('');
 	let snapshot = $derived(session.snapshot);
 	let normalizedInput = $derived.by(() => {
 		try {
@@ -137,7 +141,7 @@
 	 * asks no display name for it, and none is applied to that account.
 	 */
 	let passkeyLogin = $derived(chosen === 'webauthn' && mode === 'login' && !(here && registered));
-	let hint = $derived(signInHint({ scheme: chosen, use, passkey: passkeyChosen, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly, invite: inviteToken }));
+	let hint = $derived(signInHint({ scheme: chosen, use, passkey: passkeyChosen, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly }));
 	$effect(() => {
 		busy = view.phase === 'busy' || view.phase === 'connecting';
 	});
@@ -295,8 +299,8 @@
 	/**
 	 * Reconnects to the server in the field and signs in with the pasted token.
 	 * The server names a token's identity (a bot is named after its owner), so
-	 * no display name follows as `me`; a sign-up invite takes the display name
-	 * with it, to name the account it creates.
+	 * no display name follows as `me`; a name typed for an invite goes with the
+	 * token, to name the account it creates.
 	 */
 	function signInWithToken(normalized: string): void {
 		if (!token.trim()) {
@@ -307,7 +311,8 @@
 		if (normalized === client.url) onsignout()();
 		else onconnect();
 		joinedAsGuest = false;
-		const name = inviteToken ? displayName.trim() : '';
+		const name = tokenName.trim();
+		tokenName = '';
 		if (name) {
 			displayName = name;
 			saveDisplayName(name);
@@ -457,7 +462,7 @@
 	label="Sign in" phase={view.phase} onsubmit={submit}
 	{header} {schemes} scheme={chosen} onscheme={(candidate) => (scheme = candidate as Scheme)}
 	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }}
-	bind:token bind:email bind:code bind:name={displayName} askName={chosen === 'token' ? inviteToken : !passkeyLogin}
+	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}
 	hint={view.phase === 'ready' && notice ? notice : hint} hintStatus={view.phase === 'ready'} error={errorText} {busy}
 	submit={view.primary.label} submitTestid={view.primary.action}
