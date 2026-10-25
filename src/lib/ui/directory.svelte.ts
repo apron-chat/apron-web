@@ -1,4 +1,4 @@
-import { serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
+import { bioOf, serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
 import { safeAvatar } from '$lib/protocol/embeds';
 import type { MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
@@ -112,6 +112,15 @@ class Directory {
 		const id = this.person(from)?.user_id;
 		const status = id === undefined ? undefined : this.users.users[id]?.status;
 		return typeof status === 'string' && status !== '' ? status : undefined;
+	}
+
+	/**
+	 * A user's bio (extension `ext:bio`), from the kept current object only,
+	 * as their status is: a recorded one (a `from`) is as of its record.
+	 */
+	bio(from: Identity | undefined): string | undefined {
+		const id = this.person(from)?.user_id;
+		return id === undefined ? undefined : bioOf(this.users.users[id]);
 	}
 
 	/**

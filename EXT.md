@@ -2,7 +2,7 @@
 
 | Protocol Version | 9          |
 |------------------|------------|
-| Last Updated     | 2026-10-24 |
+| Last Updated     | 2026-10-25 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -34,6 +34,7 @@ the fallback of that capability:
 | `ext:limits`   | holds back the requests that a refused request's category of limit covers ([§4](#4-extlimits)) | holds back by method ([§2](#2-the-boundary)) |
 | `ext:media`    | loads embed media from the server's media origins, and fits files to its limits ([§6](#6-extmedia)) | loads embed media from the server's origin; refuses no file |
 | `ext:permissions` | moves other users' messages, and adds their authors, as `you` allows ([§7](#7-extpermissions)) | moves your own messages only       |
+| `ext:bio`      | shows bios on profile cards, and edits your own ([§8](#8-extbio)); also with `ext`              | no bios                            |
 
 Some features have no capability:
 
@@ -42,7 +43,7 @@ Some features have no capability:
 - `server.auth` enables passkeys, and email and external sign-in.
 - After a failed WebSocket handshake, apron-web asks the server why over HTTP
   ([§5](#5-connection-status)).
-- apron-web writes no `ext` of its own.
+- apron-web writes no `ext` of its own, except `ext.bio` ([§8](#8-extbio)).
 
 ## 2. The boundary
 
@@ -50,7 +51,9 @@ Some features have no capability:
   this document defines. Its name starts with `ext:`
   ([§4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#4-capabilities)).
 - apron-web uses an extension only while the latest `server` frame lists that
-  name in `capabilities`.
+  name in `capabilities`. An extension that only keeps data in a user's `ext`,
+  such as `ext:bio`, also works with capability `ext`, which keeps any key
+  ([§4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext)).
 - apron-web reads the data of an extension only from `ext.<name>`, without the
   `ext:` prefix, on the object that the extension defines
   ([§4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext)).
@@ -482,3 +485,62 @@ class Identity {
 - When apron-web moves messages into a thread, it adds their authors with
   `add_members`, or while `ext:settings` allows it.
 - apron-web shows roles as badges only. They grant nothing.
+
+---
+
+## 8. `ext:bio`
+
+PROTOCOL.md has no field for a few words about a user, such as what they work
+on or how to reach them. A client that knows a bio shows it where people look
+up who someone is.
+
+Adds a bio to user objects
+([§3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)):
+
+```ts
+class Identity {
+  // "ext:bio" capability, or "ext"
+  ext?: {
+    bio?: string;  // plain text, at most 250 characters
+  };
+}
+```
+
+```jsonc
+// -> set a bio
+{"method": "me", "id": "c60", "params": {"ext": {"bio": "Counts things.\nMostly engines."}}}
+// <-
+{"id": "c60", "result": {"you": {"user_id": "ada", "name": "Ada", "ext": {"bio": "Counts things.\nMostly engines."}}}}
+// -> clear it
+{"method": "me", "id": "c61", "params": {"ext": {"bio": ""}}}
+```
+
+- A server that keeps `ext`
+  ([§4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext))
+  keeps `bio` like any other key. A server that keeps only bios lists
+  `ext:bio` in `capabilities`.
+- A user sets their own bio with `me`. `""` clears it.
+- `bio` is plain text. A line feed (`\n`) is a line break.
+- `bio` is at most 250 characters, counted as Unicode code points.
+- Clients send a bio without control characters other than the line feed,
+  without bidi embeddings, overrides, or isolates (U+202A to U+202E, and
+  U+2066 to U+2069), and with at most one blank line in a row.
+- Clients ignore a `bio` that is not a string. They remove from a bio what
+  they would not send, and show at most its first 250 characters.
+- Clients show a bio as text, never as Markdown or HTML. They do not turn its
+  URLs or mentions into links.
+- Clients read a bio only from current user objects, never from a recorded
+  `from`.
+- The server's size limits on `ext` apply to the merged object, in bytes. A
+  bio within 250 characters MAY still be `too_large`, such as one in a script
+  that takes more bytes to encode.
+
+### 8.1 apron-web
+
+- The profile card shows the bio under the name, after the warning about a
+  shared name. It keeps the line breaks, and isolates the bio's direction from
+  the text around it.
+- The profile editor has a Bio field while you are signed in. It counts
+  characters, and Save waits while the bio is over 250.
+- Save sends a changed bio first, then the handle. When the server refuses the
+  bio, the editor says why and stays open, and the handle is not sent.

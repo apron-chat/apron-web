@@ -117,14 +117,15 @@ const rows: Row[] = [
 	['ReactorsPopover', ReactorsPopover, { emoji: '👍', reactors: [{ user_id: 'ada' }, { user_id: 'bo' }], rowTestid: 'reactor', testid: 'reactors' }, {
 		reactors: () => dom.byRole('dialog', '2 reactions with 👍'), reactor: () => [...dom.byRole('dialog', '2 reactions with 👍').querySelectorAll('li')]
 	}],
-	['ProfileCard', ProfileCard, { userId: 'ada', status: 'dnd', roles: ['admin'], statusTestid: 'status', rolesTestid: 'roles', testid: 'card' }, {
-		card: () => dom.byRole('dialog', 'Profile of ada'), status: () => byText('Do not disturb'), roles: () => around('admin')
+	['ProfileCard', ProfileCard, { userId: 'ada', status: 'dnd', roles: ['admin'], bio: 'Counts things.', statusTestid: 'status', rolesTestid: 'roles', bioTestid: 'bio', testid: 'card' }, {
+		card: () => dom.byRole('dialog', 'Profile of ada'), status: () => byText('Do not disturb'), roles: () => around('admin'), bio: () => byText('Counts things.')
 	}],
 	['ProfileEditor', ProfileEditor, {
 		userId: 'ada', name: 'Ada', avatar: 'data:image/png;base64,iVBORw0KGgo=', canUpload: true, onavatarfile: vi.fn(), onremoveavatar: vi.fn(), dialog: false,
-		changeAvatarTestid: 'change', removeAvatarTestid: 'remove', avatarFileTestid: 'file', nameTestid: 'name'
+		maxBio: 250, changeAvatarTestid: 'change', removeAvatarTestid: 'remove', avatarFileTestid: 'file', nameTestid: 'name', bioTestid: 'bio'
 	}, {
-		change: () => dom.button('Change avatar'), remove: () => dom.button('Remove'), file: () => document.querySelector('input[type="file"]')!, name: () => byLabel('Handle')
+		change: () => dom.button('Change avatar'), remove: () => dom.button('Remove'), file: () => document.querySelector('input[type="file"]')!, name: () => byLabel('Handle'),
+		bio: () => document.querySelector('textarea[aria-label="Bio"]')!
 	}],
 	['SignInForm, email', SignInForm, {
 		schemes: ['email'], scheme: 'email', submit: 'Connect', askName: true, email: 'ada@example.com', sent: { scheme: 'email', email: 'ada@example.com' },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mediaLimit, serverMedia, yourPermissions } from './client-views';
+import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, serverMedia, yourPermissions } from './client-views';
 import type { ServerParams } from './types';
 
 const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 9, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
@@ -59,5 +59,24 @@ describe('yourPermissions (ext:permissions)', () => {
 		expect(yourPermissions(server([]), you)).toEqual({ move_any: false, add_members: false });
 		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', roles: ['admin'], ext: { permissions: 'move_any' } })).toEqual({ move_any: false, add_members: false });
 		expect(yourPermissions(server(['ext:permissions']), undefined)).toEqual({ move_any: false, add_members: false });
+	});
+});
+
+describe('bios (ext:bio)', () => {
+	it('are kept by a server with ext:bio, or with ext, which keeps any key', () => {
+		expect([keepsBio(server(['ext:bio'])), keepsBio(server(['ext'])), keepsBio(server(['ext:media'])), keepsBio(undefined)]).toEqual([true, true, false, false]);
+	});
+
+	it('are plain strings, trimmed and cut to MAX_BIO_CHARS characters, emoji counting as one', () => {
+		expect(bioOf({ user_id: 'ada', ext: { bio: '  Counts things.\nMostly engines.  ' } })).toBe('Counts things.\nMostly engines.');
+		expect(bioOf({ user_id: 'ada', ext: { bio: '🦆'.repeat(MAX_BIO_CHARS + 10) } })).toBe('🦆'.repeat(MAX_BIO_CHARS));
+		// None, cleared, blank, or not a string: no bio.
+		expect([undefined, '', '   ', 7, { text: 'hi' }].map((bio) => bioOf({ user_id: 'ada', ext: { bio } as never }))).toEqual([undefined, undefined, undefined, undefined, undefined]);
+		expect(bioOf({ user_id: 'ada' })).toBeUndefined();
+	});
+
+	it('are cleaned as plain text before they show or go (cleanPlainText)', () => {
+		expect(cleanBio('evil\u202Egnp.exe\n\n\n\nok\u0000')).toBe('evilgnp.exe\n\nok');
+		expect(bioOf({ user_id: 'ada', ext: { bio: '\u202E\u0000 ' } })).toBeUndefined();
 	});
 });

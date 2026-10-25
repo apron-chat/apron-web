@@ -26,6 +26,15 @@
 		avatarError?: string;
 		/** Not connected: the avatar buttons can't be used. */
 		offline?: boolean;
+		/**
+		 * Your bio (`ext:bio`), plain text, sent as `me` `{ext: {bio}}`, `""` clearing it. `bind:bio` in Svelte.
+		 * Shown only with `maxBio`.
+		 */
+		bio?: string;
+		/** The longest bio, in characters: a Bio field with a count, and Save waits while it's over. Without it, no Bio field. */
+		maxBio?: number;
+		/** Why the server didn't keep the bio. */
+		bioError?: string;
 		/** saving · altered: `you.name` differs from what you asked (`serverName`) · declined (`declinedNote`) */
 		status?: 'idle' | 'saving' | 'altered' | 'declined';
 		serverName?: string;
@@ -48,15 +57,20 @@
 		removeAvatarTestid?: string;
 		avatarFileTestid?: string;
 		nameTestid?: string;
+		/** `data-testid` on the Bio field. */
+		bioTestid?: string;
 		/** Classes for the form, added to its own. */
 		class?: ClassValue;
 	}
 	let {
 		userId, name = $bindable(''), oninput, avatar, face, canUpload, onavatarfile, onremoveavatar, avatarBusy, avatarError, offline,
-		status = 'idle', serverName, declinedNote, onsave, oncancel, signin, dialog = true,
-		changeAvatarTestid, removeAvatarTestid, avatarFileTestid, nameTestid, class: className
+		bio = $bindable(''), maxBio, bioError, status = 'idle', serverName, declinedNote, onsave, oncancel, signin, dialog = true,
+		changeAvatarTestid, removeAvatarTestid, avatarFileTestid, nameTestid, bioTestid, class: className
 	}: Props = $props();
 	const saving = $derived(status === 'saving');
+	/** The bio's length in characters (code points, so an emoji is one). */
+	const bioLength = $derived([...bio.trim()].length);
+	const bioOver = $derived(maxBio !== undefined && bioLength > maxBio);
 	let fileInput = $state<HTMLInputElement | undefined>();
 
 	function save(event: SubmitEvent): void {
@@ -98,6 +112,12 @@
 	<p class="ap-profedit-hint">ID <code>{userId}</code> · set by the server, can’t be changed</p>
 	{#if status === 'altered'}<p class="ap-profedit-note" role="status">The server saved your handle as “{serverName}”.</p>{/if}
 	{#if status === 'declined'}<p class="ap-profedit-note ap-tone-danger" role="alert">{declinedNote ?? 'The server declined this handle. Your old one is still in use.'}</p>{/if}
+	{#if maxBio !== undefined}
+		<label class="ap-fieldlabel"><span class="ap-fieldlabel-row"><span>Bio</span><span class={['ap-fieldlabel-hint', bioOver && 'ap-tone-danger']}>{bioLength}/{maxBio}</span></span>
+			<textarea class="ap-field ap-field-multi" aria-label="Bio" aria-invalid={bioOver} data-testid={bioTestid} rows="4" bind:value={bio} disabled={saving} spellcheck="true" dir="auto" placeholder="A few words about you, in plain text"></textarea>
+		</label>
+		{#if bioError}<p class="ap-profedit-note ap-tone-danger" role="alert">{bioError}</p>{/if}
+	{/if}
 	{#if signin}
 		<div class="ap-profedit-signin" role="group" aria-label="Sign-in">
 			<span class="ap-fieldlabel">Sign-in</span>
@@ -106,6 +126,6 @@
 	{/if}
 	<div class="ap-profedit-actions">
 		<Button variant="ghost" size="sm" onclick={oncancel} disabled={saving} label={status === 'altered' ? 'Close' : 'Cancel'} />
-		<Button type="submit" variant="primary" size="sm" disabled={saving || !name.trim()} label={saving ? 'Saving…' : 'Save'} />
+		<Button type="submit" variant="primary" size="sm" disabled={saving || !name.trim() || bioOver} label={saving ? 'Saving…' : 'Save'} />
 	</div>
 </form>

@@ -233,6 +233,14 @@ describe('saves', () => {
 		expect(socket.request('me').params).toEqual({ name: 'Ada' });
 	});
 
+	it('sends a bio to a server with ext:bio, and no other ext key', async () => {
+		await connect(['ext:bio']);
+		void client.updateProfile({ ext: { bio: 'Counts things.' } }).catch(() => undefined);
+		expect(socket.request('me').params).toEqual({ ext: { bio: 'Counts things.' } });
+		void client.updateProfile({ name: 'Ada', ext: { bio: '', tz: 'Europe/Oslo' } }).catch(() => undefined);
+		expect(socket.request('me').params).toEqual({ name: 'Ada' });
+	});
+
 	it('builds an edit then a move on the submitted state until a matching snapshot arrives', async () => {
 		await connect();
 		socket.receive({ method: 'message', params: message('100') });
