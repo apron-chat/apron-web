@@ -1,4 +1,8 @@
 <script lang="ts">
+	import CornerDownRight from '@lucide/svelte/icons/corner-down-right';
+	import Hash from '@lucide/svelte/icons/hash';
+	import Lock from '@lucide/svelte/icons/lock';
+	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import Avatar from './Avatar.svelte';
 	import Mention from './Mention.svelte';
 	import type { LinkCardPlace, MessageLinkCard } from './types';
@@ -37,16 +41,14 @@
 			<span class="ap-linkcard-step">{card.server}</span><span class="ap-linkcard-sep" aria-hidden="true">›</span>
 			{#if card.in}{@render step(card.in, true)}<span class="ap-linkcard-sep" aria-hidden="true">›</span>{/if}
 			<span class="ap-linkcard-kind">
-				{#if card.kind === 'message'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-				{:else if card.kind === 'thread'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 10 5 5-5 5" /><path d="M4 4v7a4 4 0 0 0 4 4h12" /></svg>
-				{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16" /><path d="M4 15h16" /><path d="M10 3 8 21" /><path d="M16 3l-2 18" /></svg>{/if}
+				{#if card.kind === 'message'}<MessageSquare aria-hidden="true" />{:else if card.kind === 'thread'}<CornerDownRight aria-hidden="true" />{:else}<Hash aria-hidden="true" />{/if}
 				{KIND[card.kind]}{#if members}<span class="ap-linkcard-count">{` · ${members}`}</span>{/if}
 			</span>
 		</span>
 		{#if card.sender}
 			<span class="ap-embed-title ap-linkcard-title"><Avatar name={card.sender.name} src={card.sender.avatar} hue={card.sender.hue} size="sm" /><span class="ap-linkcard-name">{card.sender.name}</span>{#if t.short}<time datetime={t.iso} title={t.exact}>{t.short}</time>{/if}</span>
 		{:else if card.room}
-			<span class="ap-embed-title ap-linkcard-title">{@render step(card.room, card.kind === 'room')}{#if card.private}<span class="ap-linkcard-badge">Private</span>{/if}</span>
+			<span class="ap-embed-title ap-linkcard-title">{@render step(card.room, card.kind === 'room')}{#if card.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
 		{/if}
 		{#if card.deleted}<span class="ap-embed-desc ap-linkcard-text"><em>Message deleted</em></span>
 		{:else if card.snippet?.length}<span class="ap-embed-desc ap-linkcard-text">{#each card.snippet as part, index (index)}{#if typeof part === 'string'}{part}{:else if 'roomId' in part}<Mention roomId={part.roomId} name={part.name} thread={part.thread} hash={part.hash} />{:else}<Mention user_id={part.user_id} name={part.name} me={part.me} />{/if}{/each}</span>

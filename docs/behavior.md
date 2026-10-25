@@ -866,16 +866,19 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   composer as you write, each with an **(x)** that sends the message without
   it. A failed send restores the draft with those previews still removed;
   otherwise the draft forgets them once it is sent or cleared.
-- **Links to this server**: an Apron link in a message's text to a room,
-  thread, message or user on the server the page is on, in any of the three
-  forms of
+- **Links as chips**: an Apron link in a message's text written as its URL,
+  in any of the three forms of
   [PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links)
-  (one without `server` is the sending server's), reads as a mention where it
-  is written as its URL: `#room` for a room or thread, `#room › message` for a
-  message, `@name` for a known user. One written with its own text keeps it.
-  Each is still the link, in its `https` form with the server, so copying it
-  gives a link that opens the same place anywhere, a click opens it here, and
-  a modified click opens link.apron.chat in a new tab.
+  (one without `server` is the sending server's), reads as a mention that says
+  in words what it is, from what this client knows: "Message in #general", a
+  room's name, a thread's name "in #general", a known user as `@name`, and for
+  another server "Message on chat.example" or "Room on chat.example". Each but
+  a user's leads with its kind's icon (a globe for another server), the same
+  icons as the link cards. A room not known here reads as its `room_id`. One
+  written with its own text keeps it, and a token stays a URL. Each is still
+  the link, in its `https` form with the server, so copying it gives a link
+  that opens the same place anywhere, a click opens it here, and a modified
+  click opens link.apron.chat in a new tab.
 - **Link cards**: each link to a message, room or thread, on any server, also
   shows as a card under the text, up to three per message, in the shape of a
   link preview. Its first line is where it is, as a path: the server's host,

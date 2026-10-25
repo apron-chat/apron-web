@@ -145,17 +145,25 @@ describe('directory', () => {
 		expect(directory.status(ada)).toBeUndefined();
 	});
 
-	it('draws Apron links to rooms, messages and known users on its server as chips, and leaves the rest URLs', () => {
+	it('draws Apron links as chips that say what they are, from what it knows, with the link and its server under them', () => {
 		const server = 'wss://chat.example/ws';
-		directory.apply(snapshot([ada, bo], { directory: [listing('lobby', 'Lobby')] }), undefined, server);
-		const https = (keys: string) => `https://link.apron.chat/#server=${server}&${keys}`;
-		// Under each, the link with its server: a relative one gains this one.
-		expect(directory.resolveLink('apron:?room=lobby')).toEqual({ kind: 'room', href: https('room=lobby'), label: '#Lobby', title: 'Open #Lobby' });
-		expect(directory.resolveLink(https('room=lobby&message=12'))).toEqual({ kind: 'message', href: https('room=lobby&message=12'), label: '#Lobby', detail: 'message', title: 'A message in #Lobby' });
-		expect(directory.resolveLink('apron:?room=unknown')?.label).toBe('#unknown');
+		const thread: RoomListing = { ...listing('t1', 'Deploy'), parentRoomId: 'lobby' };
+		directory.apply(snapshot([ada, bo], { directory: [listing('lobby', 'Lobby')], threadDirectory: { lobby: [thread] } }), undefined, server);
+		const https = (keys: string, at = server) => `https://link.apron.chat/#server=${at}&${keys}`;
+		expect(directory.resolveLink('apron:?room=lobby')).toEqual({ kind: 'room', href: https('room=lobby'), label: 'Lobby', title: 'Open #Lobby' });
+		expect(directory.resolveLink('apron:?room=t1')).toEqual({ kind: 'thread', href: https('room=t1'), label: 'Deploy', detail: ' in #Lobby', title: 'Open Deploy, a thread in #Lobby' });
+		expect(directory.resolveLink(https('room=lobby&message=12'))).toEqual({ kind: 'message', href: https('room=lobby&message=12'), label: 'Message', detail: ' in #Lobby', title: 'A message in #Lobby' });
+		// A room not known here is its room_id.
+		expect(directory.resolveLink('apron:?room=r-8f2a&message=3')?.detail).toBe(' in #r-8f2a');
+		expect(directory.resolveLink('apron:?room=r-8f2a')?.label).toBe('r-8f2a');
 		expect(directory.resolveLink('web+apron:?room=lobby&user=bo')).toEqual({ kind: 'user', href: https('room=lobby&user=bo'), label: '@Bo', title: 'Bo in #Lobby' });
-		for (const href of ['apron:?room=lobby&user=zed', 'apron:?server=wss://other.example/&room=lobby', `apron:?server=${server}&token=inv_1&room=lobby`, `apron:?server=${server}`, 'https://example.com/']) {
+		// Another server's: its host, and nothing looked up.
+		const other = 'wss://other.example/';
+		expect(directory.resolveLink(https('room=lobby&message=12', other))).toEqual({ kind: 'message', elsewhere: true, href: https('room=lobby&message=12', other), label: 'Message', detail: ' on other.example', title: 'Message lobby on other.example' });
+		expect(directory.resolveLink(`apron:?server=${other}&room=lobby`)).toMatchObject({ kind: 'room', elsewhere: true, label: 'Room', detail: ' on other.example' });
+		for (const href of ['apron:?room=lobby&user=zed', `apron:?server=${other}&room=lobby&user=bo`, `apron:?server=${server}&token=inv_1&room=lobby`, `apron:?server=${server}`, 'https://example.com/']) {
 			expect(directory.resolveLink(href), href).toBeUndefined();
 		}
 	});
+
 });

@@ -3,6 +3,7 @@ import { safeAvatar } from '$lib/protocol/embeds';
 import type { LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 import { readApronLink, writeApronLink } from './apron-link';
+import { backendHost } from './connection';
 
 type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
 
@@ -27,6 +28,8 @@ class Directory {
 	private rooms = $state.raw<Record<string, string>>({});
 	/** The rooms among them that are threads without a title, which `rooms` calls "Untitled". */
 	private untitled = $state.raw<Record<string, true>>({});
+	/** The threads among them, by the room each is in. */
+	private parents = $state.raw<Record<string, string>>({});
 	/**
 	 * Every known `user_id` by the display name it shows under: its kept name,
 	 * else (only when nothing is kept for it, not when it was cleared) the name
@@ -66,13 +69,16 @@ class Directory {
 		}
 		const rooms: Record<string, string> = {};
 		const untitled: Record<string, true> = {};
+		const parents: Record<string, string> = {};
 		for (const room of [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat(), ...snapshot.rooms]) {
 			rooms[room.id] = room.title;
 			if (room.untitled) untitled[room.id] = true;
 			else delete untitled[room.id];
+			if (room.parentRoomId !== undefined) parents[room.id] = room.parentRoomId;
 		}
 		if (!sameEntries(this.rooms, rooms)) this.rooms = rooms;
 		if (!sameEntries(this.untitled, untitled)) this.untitled = untitled;
+		if (!sameEntries(this.parents, parents)) this.parents = parents;
 	}
 
 	/**
@@ -81,7 +87,7 @@ class Directory {
 	 * pieces is still current (`samePieces`).
 	 */
 	get pieces(): readonly unknown[] {
-		return [this.origin, this.server, this.you, this.users, this.rooms, this.untitled];
+		return [this.origin, this.server, this.you, this.users, this.rooms, this.untitled, this.parents];
 	}
 
 	forget(): void {
@@ -89,6 +95,7 @@ class Directory {
 		this.users = { users: {}, recordedUsers: {}, userAliases: {} };
 		this.rooms = {};
 		this.untitled = {};
+		this.parents = {};
 	}
 
 	/** How to show a user a frame names (a `from`, a member): the kept fields, else the recorded ones. */
@@ -156,25 +163,36 @@ class Directory {
 	};
 
 	/**
-	 * Draws an Apron link written as its own URL as a chip, as a mention reads
-	 * (Appendix A.4): one to a room or thread on this server as `#title`, to a
-	 * message in it with "message" after, and to a known user as `@name`. Any
-	 * other link, a token above all, stays a URL. Under the chip is the link in
-	 * its https form with the server, so a copied one opens the same place (Appendix A.4).
+	 * Draws an Apron link written as its own URL as a chip that says in words
+	 * what it is, from what is known here (Appendix A.4): "Message in #general",
+	 * a room's name, a thread's name "in #general", a known user as `@name`,
+	 * and on another server "Message on chat.example" or "Room on chat.example".
+	 * A room not known here is its `room_id`. A token, or another server's user,
+	 * stays a URL. Under the chip is the link in its https form with the server,
+	 * so a copied one opens the same place (Appendix A.4).
 	 */
 	readonly resolveLink: LinkResolver = (href) => {
 		const link = readApronLink(href);
-		if (!link?.room || link.token !== undefined || (link.server !== undefined && link.server !== this.server)) return undefined;
+		if (!link?.room || link.token !== undefined) return undefined;
 		const server = link.server ?? this.server;
 		if (server === undefined) return undefined;
-		const room = `#${this.resolveRoom(link.room)?.title ?? link.room}`;
 		const shared = writeApronLink({ server, room: link.room, message: link.message, user: link.user });
+		if (server !== this.server) {
+			if (link.user !== undefined) return undefined;
+			const host = backendHost(server) || server;
+			const label = link.message !== undefined ? 'Message' : 'Room';
+			return { kind: link.message !== undefined ? 'message' : 'room', elsewhere: true, href: shared, label, detail: ` on ${host}`, title: `${label} ${link.room} on ${host}` };
+		}
+		const room = this.resolveRoom(link.room)?.title ?? link.room;
+		const parentId = this.parents[link.room];
+		const parent = parentId === undefined ? undefined : this.resolveRoom(parentId)?.title ?? parentId;
 		if (link.user !== undefined) {
 			const user = this.resolve(link.user);
-			return user?.kind === 'user' ? { kind: 'user', href: shared, label: `@${user.name}`, title: `${user.name} in ${room}` } : undefined;
+			return user?.kind === 'user' ? { kind: 'user', href: shared, label: `@${user.name}`, title: `${user.name} in #${room}` } : undefined;
 		}
-		if (link.message !== undefined) return { kind: 'message', href: shared, label: room, detail: 'message', title: `A message in ${room}` };
-		return { kind: 'room', href: shared, label: room, title: `Open ${room}` };
+		if (link.message !== undefined) return { kind: 'message', href: shared, label: 'Message', detail: ` in #${room}`, title: `A message in #${room}` };
+		if (parent !== undefined) return { kind: 'thread', href: shared, label: room, detail: ` in #${parent}`, title: `Open ${room}, a thread in #${parent}` };
+		return { kind: 'room', href: shared, label: room, title: `Open #${room}` };
 	};
 
 	/** Resolves `@user_id` (Appendix A.3): a known user, marked `shared` when another shows under their name; unknown IDs stay text. */

@@ -125,16 +125,19 @@ describe('bare links', () => {
 
 	it('draws an Apron link written as its URL as the chip a resolver gives, still the link, and leaves one with its own text or in code', () => {
 		const resolveLink: LinkResolver = (href) => {
-			if (href === 'apron:?room=ops&message=1') return { kind: 'message', label: '#Ops & Co', detail: 'message', title: 'A message in #Ops & Co' };
+			if (href === 'apron:?room=ops&message=1') return { kind: 'message', label: 'Message', detail: ' in #Ops & Co', title: 'A message in #Ops & Co' };
+			if (href === 'apron:?server=wss://h/&room=ops') return { kind: 'room', elsewhere: true, label: 'Room', detail: ' on h', title: 'Room ops on h' };
 			if (href === 'apron:?room=ops&user=alice') return { kind: 'user', href: 'apron:?server=wss://h/&room=ops&user=alice', label: '@Alice', title: 'Alice in #Ops & Co' };
 			return undefined;
 		};
-		const chip = '<a href="apron:?room=ops&amp;message=1" rel="noreferrer noopener" target="_blank" class="ap-mention ap-linkchip ap-linkchip-message ap-mention-room ap-mention-hash-room" title="A message in #Ops &amp; Co">#Ops &amp; Co<span class="ap-linkchip-detail">message</span></a>';
+		const chip = '<a href="apron:?room=ops&amp;message=1" rel="noreferrer noopener" target="_blank" class="ap-mention ap-mention-room ap-linkchip ap-linkchip-message" title="A message in #Ops &amp; Co">Message<span class="ap-linkchip-detail"> in #Ops &amp; Co</span></a>';
 		expect(renderPlain('see apron:?room=ops&message=1.', undefined, undefined, resolveLink)).toBe(`see ${chip}.`);
 		expect(renderMarkdown('see <apron:?room=ops&message=1>', undefined, undefined, resolveLink)).toBe(`<p>see ${chip}</p>\n`);
 		// The link under it is the one the resolver gives, where it gives one.
 		expect(renderMarkdown('apron:?room=ops&user=alice', undefined, undefined, resolveLink))
-			.toContain('<a href="apron:?server=wss://h/&amp;room=ops&amp;user=alice" rel="noreferrer noopener" target="_blank" class="ap-mention ap-linkchip ap-linkchip-user" title="Alice in #Ops &amp; Co">@Alice</a>');
+			.toContain('<a href="apron:?server=wss://h/&amp;room=ops&amp;user=alice" rel="noreferrer noopener" target="_blank" class="ap-mention ap-linkchip" title="Alice in #Ops &amp; Co">@Alice</a>');
+		// Another server's has a globe in place of its kind's icon.
+		expect(renderPlain('apron:?server=wss://h/&room=ops', undefined, undefined, resolveLink)).toContain('class="ap-mention ap-mention-room ap-linkchip ap-linkchip-elsewhere"');
 		// Its own text stays, as does code, and a link the resolver leaves.
 		expect(renderMarkdown('[that one](apron:?room=ops&message=1)', undefined, undefined, resolveLink)).toContain('>that one</a>');
 		expect(renderMarkdown('`apron:?room=ops&message=1`', undefined, undefined, resolveLink)).not.toContain('<a');

@@ -105,7 +105,9 @@ describe('a message row', () => {
 		// Not loaded here: the path alone, an unknown room as its ID.
 		expect(read(cards[1])).toEqual(['chat.example › r-8f2a › Message']);
 		expect(cards[1].querySelector('.ap-linkcard-id')!.textContent).toBe('r-8f2a');
-		expect(read(cards[2])).toEqual(['chat.example › Room · 1 member', '#OpsPrivate', 'All things ops']);
+		expect(read(cards[2])).toEqual(['chat.example › Room · 1 member', '#Ops', 'All things ops']);
+		// Private as everywhere else a room is named: the lock beside its name.
+		expect(cards[2].querySelector('.ap-linkcard-title .ap-lock')!.getAttribute('aria-label')).toBe('Private');
 		expect(cards[2].getAttribute('aria-label')).toBe('Room #Ops on chat.example. Open it');
 		// An untitled thread is "Untitled", its room_id in the tooltip.
 		expect(read(cards[3])).toEqual(['chat.example › #Ops › Thread · 1,200 members', 'Untitled']);

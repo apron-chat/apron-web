@@ -4,6 +4,7 @@ import { systemScope, type Identity, type MessageBody, type MessageRecord } from
 import type { EmbedProps, MessageCaps, MessageEmbed, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
 import { placeLinksIn, writeApronLink, type ApronLink } from './apron-link';
+import { backendHost } from './connection';
 import { directory, samePieces } from './directory.svelte';
 import { embedsOf, hueOf, isSystem, quoteSnippet, replySnippet, textOf } from './messages';
 import { eventTime, idMillis, idWhen } from './time';
@@ -150,15 +151,6 @@ function placeOf(roomId: string, here: boolean, thread = false): LinkCardPlace {
 	return place;
 }
 
-/** A server's host, as a card's path starts. */
-function hostOf(server: string): string {
-	try {
-		return new URL(server).host || server;
-	} catch {
-		return server;
-	}
-}
-
 /**
  * A link's card: its path and kind always, then what is known here of the
  * message (once loaded) or the room (once joined or listed). Nothing is
@@ -166,7 +158,7 @@ function hostOf(server: string): string {
  */
 function linkCardOf(link: ApronLink & { room: string }, server: string, here: boolean, context: MessageContext): MessageLinkCard {
 	// The https form with its server, so a link without one opens the same place in a new tab too.
-	const base = { href: writeApronLink({ server, room: link.room, message: link.message }), server: hostOf(server) };
+	const base = { href: writeApronLink({ server, room: link.room, message: link.message }), server: backendHost(server) || server };
 	if (link.message !== undefined) {
 		const target = here ? context.linked(link) : undefined;
 		const card: MessageLinkCard = { ...base, kind: 'message', in: placeOf(target?.room_id ?? link.room, here) };
