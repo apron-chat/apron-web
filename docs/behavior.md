@@ -616,7 +616,11 @@ and, under the open room, its threads in two groups. Under a room that isn't
 open, it lists only that room's joined threads with news (unread replies or
 mentions), in the same rows, so activity there isn't missed; picking one opens
 its room with the thread open, and quiet threads wait until the room is opened. First the ones you've joined,
-on a guide line from the room:
+on a guide line from the room, most recently active first (by their newest
+message, else the newest `log_id` the server reported, else their creation).
+While the pointer or keyboard focus is on the list its rows hold still, a
+thread that just got a reply moving up once it leaves, so nothing slides out
+from under a click; a new thread leads at once:
 each title in ink, heavier with unread replies, over up to two lighter lines:
 its Description (its `description` as text, on one line) behind a text icon, then
 its latest loaded message, the sender's name in ink, behind a reply arrow, in

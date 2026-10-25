@@ -163,6 +163,31 @@ describe('ThreadList', () => {
 		expect(onopen).not.toHaveBeenCalled();
 	});
 
+	it('holds the joined threads’ order while the pointer is on the list, and takes the new one once it leaves', () => {
+		const props = $state({
+			roomId: 'general', roomTitle: 'General',
+			threads: [joined('deploy', 'Deploy'), joined('cert', 'Expired cert')],
+			others: [] as RoomListing[], mentions: {}, unread: {}, canJoin: true,
+			onthread: vi.fn(), onopen: vi.fn(), onjoin: vi.fn(), onleave: vi.fn()
+		});
+		dom.render(ThreadList, props);
+		const list = one<HTMLElement>('[data-testid="thread-list"]')!.parentElement!;
+		list.dispatchEvent(new Event('pointerenter'));
+		// A reply in Expired cert moves it up, and a new thread leads, but the rows under the pointer stay put.
+		props.threads = [joined('roadmap', 'Roadmap'), joined('cert', 'Expired cert'), joined('deploy', 'Deploy')];
+		flushSync();
+		expect(titles('button[data-thread]')).toEqual(['Roadmap', 'Deploy', 'Expired cert']);
+		// One left drops out at once.
+		props.threads = [joined('roadmap', 'Roadmap'), joined('cert', 'Expired cert')];
+		flushSync();
+		expect(titles('button[data-thread]')).toEqual(['Roadmap', 'Expired cert']);
+		props.threads = [joined('roadmap', 'Roadmap'), joined('cert', 'Expired cert'), joined('deploy', 'Deploy')];
+		flushSync();
+		list.dispatchEvent(new Event('pointerleave'));
+		flushSync();
+		expect(titles('button[data-thread]')).toEqual(['Roadmap', 'Expired cert', 'Deploy']);
+	});
+
 	it('shows the open one past the first few, while folded, and when the listing left it out', () => {
 		const others = ['a', 'b', 'c', 'd', 'e'].map((id) => listed(id, id.toUpperCase()));
 		render({ others, threads: [{ ...joined('e', 'E'), joined: false }], activeThread: 'e' });
