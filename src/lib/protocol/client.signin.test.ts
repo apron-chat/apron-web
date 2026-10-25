@@ -398,10 +398,35 @@ describe('sign-in', () => {
 		expect(snapshot.signedInWith).toBe('external');
 
 		const refused = client.signInWithLink('Hk41x9', 'ws://third.test/');
-		const none = await linkConnection(['token', 'guest'], 'ws://third.test/');
+		const none = await linkConnection(['guest'], 'ws://third.test/');
 		await expect(refused).rejects.toThrow('does not support sign-in links');
 		expect(none.sent).toEqual([]);
 		expect(none.readyState).toBe(FakeSocket.CLOSED);
+	});
+
+	it('presents a link token as a bearer token to a server with neither email nor external sign-in, and keeps it to resume with', async () => {
+		await latest().greet([], { auth: ['token', 'guest'] });
+		// An invite link (Appendix A.4), opened through link.apron.chat.
+		const signedIn = client.signInWithLink('apron_invite_x', 'ws://other.test/');
+		const link = await linkConnection(['token', 'guest'], 'ws://other.test/');
+		expect(link.request('auth').params).toEqual({ scheme: 'token', token: 'apron_invite_x', agent: 'apron-web/0.4' });
+		link.receive({ id: link.request('auth').id, result: { you: { user_id: 'dana' } } });
+		await signedIn;
+		expect(client.url).toBe('ws://other.test/');
+		expect(snapshot.you?.user_id).toBe('dana');
+		expect(snapshot.signedInWith).toBe('token');
+		expect(storage.get('apron.session:ws://other.test/')).toBe('apron_invite_x');
+
+		// A token the server sends replaces it (§3.2.1); a proposal's own link never falls back to `token`.
+		const rotated = client.signInWithLink('apron_invite_y', 'ws://third.test/');
+		const next = await linkConnection(['token'], 'ws://third.test/');
+		next.receive({ id: next.request('auth').id, result: { you: { user_id: 'erin' }, token: 'st_erin' } });
+		await rotated;
+		expect(storage.get('apron.session:ws://third.test/')).toBe('st_erin');
+		const own = client.signInWithLink('Hk41x9', 'ws://fourth.test/', { scheme: 'email', state: 's' });
+		const fourth = await linkConnection(['token'], 'ws://fourth.test/');
+		await expect(own).rejects.toThrow('does not support sign-in links');
+		expect(fourth.sent).toEqual([]);
 	});
 
 	/** Proposes an external sign-in on a connection of its own; returns that connection with the proposal still unanswered. */
