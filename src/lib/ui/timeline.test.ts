@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ProtocolStore, applyRecords, decodeHistoryRecords, timelineEvents, type MembershipRecord } from '$lib/protocol/reducer';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, newDividerBefore, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadDescriptionText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { byActivity, escapeMarkdown, buildRoomTimeline, inHeldOrder, buildThreadTimeline, newDividerBefore, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadDescriptionText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { messageSnippet, peopleIn, rangeBetween, spanOf } from './messages';
 import { roomSnapshot as room } from '$lib/test/builders';
@@ -60,6 +60,28 @@ describe('thread grouping', () => {
 		expect(threadEntries(rooms, 'general').map((entry) => entry.id)).toEqual(['t1']);
 		expect(threadEntries(rooms, 'ops')).toEqual([]);
 		expect(threadEntries(rooms, undefined)).toEqual([]);
+	});
+
+	it('lists a room’s threads most recently active first: by newest message, else its log’s head, else its creation', () => {
+		const rooms = [
+			general,
+			room('old', [message(1000, 'bob', { room_id: 'old' })], { parentRoomId: 'general' }),
+			room('quiet', [], { parentRoomId: 'general' }),
+			room('head', [], { parentRoomId: 'general', latestLogId: String(base + 3000) }),
+			room('new', [message(5000, 'dana', { room_id: 'new' })], { parentRoomId: 'general', latestLogId: String(base + 2000) }),
+			room(String(base + 4000), [], { parentRoomId: 'general' })
+		];
+		expect(threadEntries(rooms, 'general').map((entry) => entry.id)).toEqual(['new', String(base + 4000), 'head', 'old', 'quiet']);
+		// Ties go by room_id, so the order holds still.
+		const tied = [room('b', [], { parentRoomId: 'general', latestLogId: '7' }), room('a', [], { parentRoomId: 'general', latestLogId: '7' })];
+		expect(threadEntries(tied, 'general').map((entry) => entry.id)).toEqual(['a', 'b']);
+		expect([threadEntry(tied[0]), threadEntry(tied[1])].sort(byActivity).map((entry) => entry.id)).toEqual(['a', 'b']);
+	});
+
+	it('keeps a held order: new entries lead, gone ones drop out', () => {
+		const entries = [{ id: 'c' }, { id: 'd' }, { id: 'a' }];
+		expect(inHeldOrder(entries, ['a', 'b', 'c']).map((entry) => entry.id)).toEqual(['d', 'a', 'c']);
+		expect(inHeldOrder(entries, []).map((entry) => entry.id)).toEqual(['c', 'd', 'a']);
 	});
 
 	it('counts a thread’s messages only once its history has loaded, and shows its newest faces', () => {

@@ -33,6 +33,12 @@ export interface ThreadEntry {
 	participants: Identity[];
 	/** The log ID of its newest message, for when it was last active; absent when nothing is known. */
 	lastReplyId?: string;
+	/**
+	 * The log ID of its latest activity, for the sidebar's order: its newest
+	 * message, else the newest `log_id` the server has said its log holds,
+	 * else its creation (`anchor`).
+	 */
+	activeId?: string;
 	latestMessage?: MessageRecord;
 	/**
 	 * Where the card sits in the parent room's feed: the thread's creation,
@@ -86,6 +92,7 @@ export function threadEntry(room: RoomSnapshot): ThreadEntry {
 	}
 	const latest = messages[messages.length - 1];
 	const anchor = isLogId(room.id) ? room.id : room.firstRecordLogId ?? room.record?.log_id;
+	const activeId = (latest && isLogId(latest.message_id) ? latest.message_id : undefined) ?? room.latestLogId ?? anchor;
 	return {
 		id: room.id,
 		parentRoomId: room.parentRoomId ?? '',
@@ -98,6 +105,7 @@ export function threadEntry(room: RoomSnapshot): ThreadEntry {
 		participants,
 		...(latest ? { lastReplyId: latest.message_id, latestMessage: latest } : {}),
 		...(anchor !== undefined ? { anchor } : {}),
+		...(activeId !== undefined ? { activeId } : {}),
 		joined: room.joined
 	};
 }
@@ -106,6 +114,7 @@ export function threadEntry(room: RoomSnapshot): ThreadEntry {
 function unjoinedThreadEntry(listing: RoomListing): ThreadEntry {
 	const anchor = isLogId(listing.id) ? listing.id : listing.firstRecordLogId ?? listing.record.log_id;
 	const description = listing.record.description;
+	const activeId = listing.latestLogId ?? anchor;
 	return {
 		id: listing.id,
 		parentRoomId: listing.parentRoomId ?? '',
@@ -117,22 +126,50 @@ function unjoinedThreadEntry(listing: RoomListing): ThreadEntry {
 		participants: [],
 		...(listing.latestLogId !== undefined ? { lastReplyId: listing.latestLogId } : {}),
 		...(anchor !== undefined ? { anchor } : {}),
+		...(activeId !== undefined ? { activeId } : {}),
 		joined: false
 	};
 }
 
 /**
+ * Most recently active first (`activeId`), ones with nothing known last;
+ * ties by `room_id`, so the order holds still between renders.
+ */
+export function byActivity(a: ThreadEntry, b: ThreadEntry): number {
+	if (a.activeId !== b.activeId) {
+		if (a.activeId === undefined) return 1;
+		if (b.activeId === undefined) return -1;
+		const order = compareLogIds(b.activeId, a.activeId);
+		if (order) return order;
+	}
+	return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/**
  * The threads of a room: the ones the client has, joined or open without
- * joining, in listing order, then the others listed as not joined
- * (`unjoined`, from `room_list` with `parent_room_id`).
+ * joining, most recently active first (`byActivity`), then the others listed
+ * as not joined (`unjoined`, from `room_list` with `parent_room_id`), in the
+ * server's order, which is most recently active first too (§4.2.1).
  */
 export function threadEntries(
 	rooms: readonly RoomSnapshot[], parentRoomId: string | undefined, unjoined: readonly RoomListing[] = []
 ): ThreadEntry[] {
 	if (parentRoomId === undefined) return [];
-	const joined = childRooms(rooms, parentRoomId).map(threadEntry);
+	const joined = childRooms(rooms, parentRoomId).map(threadEntry).sort(byActivity);
 	const known = new Set(joined.map((entry) => entry.id));
 	return [...joined, ...unjoined.filter((listing) => !known.has(listing.id)).map(unjoinedThreadEntry)];
+}
+
+/**
+ * `entries` in the order `held` lists them, for a list that holds still
+ * while the pointer is on it: any not in `held` (new since) lead, in their
+ * own order, and any gone from `entries` drop out.
+ */
+export function inHeldOrder<T extends { id: string }>(entries: readonly T[], held: readonly string[]): T[] {
+	const byId = new Map(entries.map((entry) => [entry.id, entry]));
+	const kept = held.flatMap((id) => byId.get(id) ?? []);
+	const known = new Set(held);
+	return [...entries.filter((entry) => !known.has(entry.id)), ...kept];
 }
 
 /**
