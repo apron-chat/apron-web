@@ -45,6 +45,8 @@
 		onedit?: () => void;
 		/** Cap `rooms`: Leave room (or thread) in the ⋯ actions menu (`room_leave`, §4.2.2). */
 		onleave?: () => void;
+		/** Copy link to room (or thread) in the ⋯ actions menu: a link that any Apron app opens (Appendix A.4). */
+		oncopylink?: () => void;
 		/** A request in flight: Join and the actions menu can't be used. */
 		busy?: boolean;
 		/** The room's or thread's pinned <ThreadSummary> was put away with its ×: a Summary button brings it back. */
@@ -57,13 +59,14 @@
 		actionsTestid?: string;
 		editTestid?: string;
 		leaveTestid?: string;
+		copyLinkTestid?: string;
 		/** Classes for its `<header>`, added to its own. */
 		class?: ClassValue;
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
-		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, busy = false, onsummary,
-		tagTestid, topicTestid, joinTestid, summaryTestid, actionsTestid, editTestid, leaveTestid, class: className
+		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, busy = false, onsummary,
+		tagTestid, topicTestid, joinTestid, summaryTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, class: className
 	}: Props = $props();
 	const noun = $derived(thread ? 'thread' : 'room');
 	/** What's new elsewhere: a mention may be an edit adding you to a read message, so it counts at least once. */
@@ -73,13 +76,15 @@
 		: 'Back to rooms');
 	/** The occasional actions, in the ⋯ menu: Join stays a button, since it's what a pane read without joining is for. */
 	const actions = $derived([
+		...(oncopylink ? [{ value: 'link', label: `Copy link to ${noun}`, testid: copyLinkTestid }] : []),
 		...(onedit ? [{ value: 'edit', label: `Edit ${noun}`, testid: editTestid }] : []),
 		...(onleave ? [{ value: 'leave', label: `Leave ${noun}`, testid: leaveTestid }] : [])
 	]);
 	const memberLabel = $derived(memberListOpen ? 'Hide member list' : 'Show member list');
 
 	function act(value: string): void {
-		if (value === 'edit') onedit?.();
+		if (value === 'link') oncopylink?.();
+		else if (value === 'edit') onedit?.();
 		else if (value === 'leave') onleave?.();
 	}
 </script>

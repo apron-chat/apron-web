@@ -1459,6 +1459,19 @@
 		}
 	}
 
+	/** Copies a link to the open room, or to the thread open in it by its room_id, that any Apron app opens (Appendix A.4). */
+	async function copyPaneLink(): Promise<boolean> {
+		const roomId = activeThread ?? activeRoom?.id;
+		if (!roomId || !client) return false;
+		try {
+			await navigator.clipboard.writeText(writeApronLink({ server: client.url, room: roomId }));
+			return true;
+		} catch {
+			feedback.error('Unable to copy the link');
+			return false;
+		}
+	}
+
 	/**
 	 * Opens an Apron link from a message here, in place of the link.apron.chat
 	 * page (Appendix A.4). A link to this server, or one without a server, opens
@@ -2585,7 +2598,7 @@
 				memberListToggle={!memberListWide}
 				{unreadElsewhere}
 				{mentionsElsewhere}
-				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
+				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
 			/>
 			{#if roomEditorOpen && editTarget && roomEditor.component}
 				{@const RoomEditor = roomEditor.component}
