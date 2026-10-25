@@ -89,8 +89,8 @@ describe('a message row', () => {
 		const row = render({
 			caps: { ...NONE, select: true },
 			quotes: [
-				{ href, name: 'Bob', room: { id: 'ops', title: 'Ops' }, timestamp: 1710000000000, snippet: ['ship it ', { user_id: 'ada', name: 'Ada', me: true }, '\nnow'] },
-				{ href: `${href}0`, name: 'Bob', room: { id: 't1', thread: true }, deleted: true }
+				{ kind: 'message', href, name: 'Bob', room: { id: 'ops', title: 'Ops' }, timestamp: 1710000000000, snippet: ['ship it ', { user_id: 'ada', name: 'Ada', me: true }, '\nnow'] },
+				{ kind: 'message', href: `${href}0`, name: 'Bob', room: { id: 't1', thread: true }, deleted: true }
 			]
 		}, { beginSelect }, { testids: { quote: 'quote' } });
 		const [first, second] = row.querySelectorAll<HTMLAnchorElement>('[data-testid="quote"]');
@@ -111,7 +111,21 @@ describe('a message row', () => {
 		document.removeEventListener('click', follow);
 		expect(beginSelect).not.toHaveBeenCalled();
 		dom.unmount();
-		expect(render({ deleted: true, quotes: [{ href, name: 'Bob' }] }).querySelector('.ap-quote')).toBeNull();
+		expect(render({ deleted: true, quotes: [{ kind: 'message', href, name: 'Bob' }] }).querySelector('.ap-quote')).toBeNull();
+	});
+
+	it('shows the rooms and threads its links point to as cards: the name, what it is and its size, its description', () => {
+		const row = render({
+			quotes: [
+				{ kind: 'room', href: 'https://link.apron.chat/#server=wss://h/&room=ops', room: { id: 'ops', title: 'Ops' }, members: 1, private: true, description: 'All things ops' },
+				{ kind: 'room', href: 'https://link.apron.chat/#server=wss://h/&room=t1', room: { id: 't1', title: 'Deploy', thread: true }, parent: { id: 'ops', title: 'Ops' }, members: 1200 }
+			]
+		}, {}, { testids: { quote: 'quote' } });
+		const [room, thread] = row.querySelectorAll<HTMLAnchorElement>('[data-testid="quote"]');
+		expect(room.getAttribute('aria-label')).toBe('Room Ops. Open it');
+		expect([...room.children].map((part) => part.textContent)).toEqual(['#', 'OpsPrivate', 'Room · 1 member', 'All things ops']);
+		expect(thread.getAttribute('aria-label')).toBe('Thread Deploy. Open it');
+		expect([...thread.children].map((part) => part.textContent)).toEqual(['↳', 'Deploy', 'Thread in #Ops · 1,200 members']);
 	});
 
 	it('hides the body and reactions of a tombstone', () => {

@@ -21,7 +21,7 @@
 	import Message from '$lib/design/components/Message.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
 	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
-	import { messageView, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
+	import { messageView, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
 	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
@@ -78,7 +78,7 @@
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
 	import { trackKeyboard } from '$lib/ui/viewport';
 	import { linkPreviews } from '$lib/ui/link-previews';
-	import { linkedMessages } from '$lib/ui/linked-messages.svelte';
+	import { linkedMessages, linkedRooms } from '$lib/ui/linked.svelte';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
@@ -231,7 +231,7 @@
 	 * thread, `null` for a room that isn't one, or `undefined` while it is looked up.
 	 */
 	const linkedParents = new Map<string, string | null | undefined>();
-	/** The server and identity `linkedMessages` holds messages for. */
+	/** The server and identity `linkedMessages` and `linkedRooms` hold messages and rooms for. */
 	let linkedMessagesFor: string | undefined;
 	/** The connect screen is up for a link's server: it can be cancelled even before this server is ready. */
 	let offeringLink = $state(false);
@@ -1005,12 +1005,13 @@
 		const unsubscribe = chat.subscribe((next) => {
 			serverUrl = chat.url;
 			session.apply(next, chat);
-			directory.apply(next, serverOrigin(chat.url));
+			directory.apply(next, serverOrigin(chat.url), chat.url);
 			// What links' messages were fetched as is for one server and one identity: another may not read them.
 			const linkedFor = next.you ? `${chat.url} ${next.you.user_id}` : undefined;
 			if (linkedFor !== undefined && linkedFor !== linkedMessagesFor) {
 				linkedMessagesFor = linkedFor;
 				linkedMessages.clear();
+				linkedRooms.clear();
 			}
 		});
 		chat.start();
@@ -1104,6 +1105,7 @@
 		session.forget();
 		directory.forget();
 		linkedMessages.clear();
+		linkedRooms.clear();
 	}
 
 	/**
@@ -2066,12 +2068,37 @@
 	 */
 	function linkedMessage(link: ApronLink): MessageRecord | undefined {
 		const chat = client;
-		if (!chat || !link.room || !link.message || (link.server !== undefined && link.server !== chat.url)) return undefined;
-		const local = resolveMessage(link.message);
+		const room = link.room, id = link.message;
+		if (!chat || !room || !id || (link.server !== undefined && link.server !== chat.url)) return undefined;
+		const local = resolveMessage(id);
 		if (local) return local;
-		const fetched = linkedMessages.get(link.room, link.message);
-		if (!fetched) linkedMessages.load(link.room, link.message, (roomId, messageId) => chat.fetchMessage(roomId, messageId));
+		const key = `${room} ${id}`;
+		const fetched = linkedMessages.get(key);
+		if (!fetched) linkedMessages.load(key, () => chat.fetchMessage(room, id));
 		return fetched;
+	}
+
+	/**
+	 * The room or thread a link names, likewise: one joined or opened here, or
+	 * listed, else looked up once with `room_list` and its `room_id` (§4.2.1,
+	 * `linkedRooms`). One the server won't list shows no card.
+	 */
+	function linkedRoom(link: ApronLink): LinkedRoom | undefined {
+		const chat = client;
+		const id = link.room;
+		if (!chat || !id || (link.server !== undefined && link.server !== chat.url)) return undefined;
+		const room = session.rooms.find((candidate) => candidate.id === id);
+		if (room) {
+			const members = room.memberCount ?? room.members?.length;
+			return { id, parentRoomId: room.parentRoomId, description: room.description, members, private: room.private };
+		}
+		const listing = [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat()].find((candidate) => candidate.id === id) ?? linkedRooms.get(id);
+		if (!listing) {
+			linkedRooms.load(id, () => chat.listMembers(id).then((listings) => listings.find((candidate) => candidate.id === id)));
+			return undefined;
+		}
+		const members = listing.memberCount ?? (listing.members.length || undefined);
+		return { id, parentRoomId: listing.parentRoomId, description: listing.record.description, members, private: listing.record.private === true };
 	}
 
 	function replyPreview(id: string): { name?: string; text: string } {
@@ -2101,6 +2128,7 @@
 	const messageContext: MessageContext = {
 		resolve: resolveMessage,
 		linked: linkedMessage,
+		linkedRoom,
 		get server() {
 			return client?.url;
 		},

@@ -1,7 +1,8 @@
 import { bioOf, serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
 import { safeAvatar } from '$lib/protocol/embeds';
-import type { MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
+import type { LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
+import { readApronLink, writeApronLink } from './apron-link';
 
 type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
 
@@ -17,6 +18,8 @@ type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
  */
 class Directory {
 	origin = $state<string | undefined>();
+	/** The chat server's WebSocket URL: what an Apron link in a message names to be one of its rooms (Appendix A.4). */
+	server = $state<string | undefined>();
 	/** The origins the server names for its media (`ext.media.origins`, EXT.md §6); replaced only when they change. */
 	mediaOrigins = $state.raw<readonly string[]>([]);
 	you = $state.raw<Identity | undefined>();
@@ -50,8 +53,9 @@ class Directory {
 	 * unchanged ones are kept: every message body renders from them, and a
 	 * typing notice or an upload's progress should not render them all again.
 	 */
-	apply(snapshot: ClientSnapshot, origin: string | undefined): void {
+	apply(snapshot: ClientSnapshot, origin: string | undefined, server?: string): void {
 		this.origin = origin;
+		this.server = server;
 		const { origins } = serverMedia(snapshot.server);
 		if (origins.join(' ') !== this.mediaOrigins.join(' ')) this.mediaOrigins = origins;
 		if (!snapshot.authenticated) return;
@@ -77,7 +81,7 @@ class Directory {
 	 * pieces is still current (`samePieces`).
 	 */
 	get pieces(): readonly unknown[] {
-		return [this.origin, this.you, this.users, this.rooms, this.untitled];
+		return [this.origin, this.server, this.you, this.users, this.rooms, this.untitled];
 	}
 
 	forget(): void {
@@ -149,6 +153,28 @@ class Directory {
 		const title = this.rooms[id];
 		if (title === undefined) return undefined;
 		return { kind: 'room', id, title, ...(this.untitled[id] ? { untitled: true as const } : {}) };
+	};
+
+	/**
+	 * Draws an Apron link written as its own URL as a chip, as a mention reads
+	 * (Appendix A.4): one to a room or thread on this server as `#title`, to a
+	 * message in it with "message" after, and to a known user as `@name`. Any
+	 * other link, a token above all, stays a URL. Under the chip is the link in
+	 * its https form with the server, so a copied one opens the same place (Appendix A.4).
+	 */
+	readonly resolveLink: LinkResolver = (href) => {
+		const link = readApronLink(href);
+		if (!link?.room || link.token !== undefined || (link.server !== undefined && link.server !== this.server)) return undefined;
+		const server = link.server ?? this.server;
+		if (server === undefined) return undefined;
+		const room = `#${this.resolveRoom(link.room)?.title ?? link.room}`;
+		const shared = writeApronLink({ server, room: link.room, message: link.message, user: link.user });
+		if (link.user !== undefined) {
+			const user = this.resolve(link.user);
+			return user?.kind === 'user' ? { kind: 'user', href: shared, label: `@${user.name}`, title: `${user.name} in ${room}` } : undefined;
+		}
+		if (link.message !== undefined) return { kind: 'message', href: shared, label: room, detail: 'message', title: `A message in ${room}` };
+		return { kind: 'room', href: shared, label: room, title: `Open ${room}` };
 	};
 
 	/** Resolves `@user_id` (Appendix A.3): a known user, marked `shared` when another shows under their name; unknown IDs stay text. */

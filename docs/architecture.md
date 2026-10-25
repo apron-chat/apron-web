@@ -93,8 +93,10 @@ embeds with their uploads and the reaction chips. It keeps what depends only on 
 record and the directory per record, and hands back the previous view while nothing in
 it changed, so a change elsewhere redraws no row. The row draws its header, body and
 reactions itself and adds the rest only where present: the quote (`ReplyPreview`), the
-messages its links point to (`QuotedMessage`, each an `<a>` the page's Apron link handler
-follows; `MessageContext.linked` finds them, fetched ones kept by `linked-messages.svelte.ts`), the
+messages, rooms and threads its links point to (`QuotedMessage` and `QuotedRoom`, each an `<a>` the
+page's Apron link handler follows, on one grid of named areas so a restyle is CSS alone; `MessageContext.linked`
+and `linkedRoom` find them, fetched ones kept by `linked.svelte.ts`; in the text, `directory.resolveLink` draws
+the links themselves as mention chips), the
 embeds (`MessageEmbeds`, each through the page's `embed` snippet, the app's `Embed`),
 the hover toolbar (`MessageActions`, built once a pointer or focus reaches the row) and
 the editor (the page's `editor` snippet, the lazy `MessageEditor`, for the row being

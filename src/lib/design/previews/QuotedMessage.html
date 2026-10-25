@@ -12,11 +12,11 @@
   var at = Date.parse('2026-10-24T14:05:00');
   // A Message's `view.quotes`: who wrote each linked message, where and when, and up to three lines of it.
   add(A.Message, { view: { sender: bob, time: '14:30', body: { html: 'Same as <a href="' + link + '">' + link + '</a>' }, quotes: [
-    { href: link, name: alice.name, room: { id: 'general', title: 'general' }, timestamp: at, snippet: ['Deploy is green, rolling to prod now.\nAnyone object if I skip the canary wait? ', { user_id: 'bob', name: 'Bob' }, ' had a question about it yesterday.'] }
+    { kind: 'message', href: link, name: alice.name, room: { id: 'general', title: 'general' }, timestamp: at, snippet: ['Deploy is green, rolling to prod now.\nAnyone object if I skip the canary wait? ', { user_id: 'bob', name: 'Bob' }, ' had a question about it yesterday.'] }
   ] } });
   add(A.Message, { view: { sender: alice, time: '14:31', body: { html: 'That one was taken back:' }, quotes: [
-    { href: link + '1', name: bob.name, room: { id: 'general', title: 'general' }, timestamp: at, deleted: true },
-    { href: link + '2', name: alice.name, room: { id: 't-123', thread: true }, timestamp: at, snippet: ['Rollback plan, step one: freeze merges.'] }
+    { kind: 'message', href: link + '1', name: bob.name, room: { id: 'general', title: 'general' }, timestamp: at, deleted: true },
+    { kind: 'message', href: link + '2', name: alice.name, room: { id: 't-123', thread: true }, timestamp: at, snippet: ['Rollback plan, step one: freeze merges.'] }
   ] } });
 </script>
 </body>

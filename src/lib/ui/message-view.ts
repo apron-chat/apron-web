@@ -1,14 +1,25 @@
 import type { Notice, UploadState } from '$lib/protocol/client';
-import { mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
+import { markdownText, mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 import { systemScope, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
-import type { EmbedProps, MessageCaps, MessageEmbed, MessageMention, MessageQuote, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
+import type { EmbedProps, MessageCaps, MessageEmbed, MessageMention, MessageQuote, MessageReply, QuotedPlace, RoomQuote, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
-import { messageLinksIn, writeApronLink, type ApronLink } from './apron-link';
+import { placeLinksIn, writeApronLink, type ApronLink } from './apron-link';
 import { directory, samePieces } from './directory.svelte';
 import { embedsOf, hueOf, isSystem, quoteSnippet, replySnippet, textOf } from './messages';
 import { eventTime, idMillis, idWhen } from './time';
 
 export type { MessageCaps, MessageView };
+
+/** A room or thread a link names, as the page knows it: joined, listed, or looked up for the link. */
+export interface LinkedRoom {
+	id: string;
+	/** Its parent, for a thread. */
+	parentRoomId?: string;
+	/** Its description (§3.4), CommonMark by convention. */
+	description?: string;
+	members?: number;
+	private?: boolean;
+}
 
 /** Where a message sits in the open pane, and what the viewer may do to it: the page knows these, the record doesn't. */
 export interface MessageRow {
@@ -36,6 +47,8 @@ export interface MessageContext {
 	 * server the page is on and has loaded: read only for a message with such links.
 	 */
 	linked(link: ApronLink): MessageRecord | undefined;
+	/** The room or thread a link names, likewise: read only for a message with such links. */
+	linkedRoom(link: ApronLink): LinkedRoom | undefined;
 	/** The WebSocket URL of that server: what a link without `server` refers to. */
 	readonly server: string | undefined;
 	/** Files this client is writing to upload embeds, by `embed_id`: read only for a message with embeds. */
@@ -46,7 +59,7 @@ export interface MessageContext {
 function bodyOf(body: MessageBody | undefined): NonNullable<MessageView['body']> {
 	const text = typeof body?.text === 'string' ? body.text : '';
 	const markdown = body?.format === 'markdown';
-	const html = markdown ? renderMarkdown(text, directory.resolve, directory.resolveRoom) : renderPlain(text, directory.resolve, directory.resolveRoom);
+	const html = markdown ? renderMarkdown(text, directory.resolve, directory.resolveRoom, directory.resolveLink) : renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink);
 	return { html, markdown, code: html.includes('<pre') };
 }
 
@@ -62,7 +75,7 @@ interface Drawn {
 	noticeTitle: string;
 	text: string;
 	body?: MessageView['body'];
-	/** The links to messages in its text (`messageLinksIn`). */
+	/** The links to messages, rooms and threads in its text (`placeLinksIn`). */
 	links: ApronLink[];
 	time: string;
 	timestamp?: number;
@@ -97,7 +110,7 @@ function draw(event: MessageRecord): Drawn {
 		noticeTitle: noticeTitle(event.from),
 		text: textOf(event),
 		body: event.deleted ? undefined : bodyOf(event.body),
-		links: event.deleted ? [] : messageLinksIn(textOf(event), event.body?.format === 'markdown', QUOTES_MAX + 1),
+		links: event.deleted ? [] : placeLinksIn(textOf(event), event.body?.format === 'markdown', QUOTES_MAX + 1),
 		time: eventTime(event),
 		timestamp: idMillis(event.message_id)
 	};
@@ -127,31 +140,62 @@ function replyOf(event: MessageRecord, context: MessageContext): MessageReply | 
 	return reply;
 }
 
+/** A room or thread as a quote names it, by what the directory calls it; `thread` where that's known otherwise. */
+function placeOf(roomId: string, thread = false): QuotedPlace {
+	const known = directory.resolveRoom(roomId);
+	const place: QuotedPlace = { id: roomId };
+	if (known && !known.untitled) place.title = known.title;
+	if (thread || known?.untitled) place.thread = true;
+	return place;
+}
+
+/** The message a link names, as a quote that follows the link. */
+function messageQuote(target: MessageRecord, href: string): MessageQuote {
+	const quote: MessageQuote = {
+		kind: 'message',
+		href,
+		name: directory.name(target.from),
+		avatar: directory.avatar(target.from),
+		hue: hueOf(directory.person(target.from)?.user_id),
+		room: placeOf(target.room_id),
+		timestamp: idMillis(target.message_id),
+		time: idWhen(target.message_id)
+	};
+	if (target.deleted) quote.deleted = true;
+	else quote.snippet = snippetOf(quoteSnippet(target));
+	return quote;
+}
+
+/** The room or thread a link names, as a card that follows the link. */
+function roomQuote(room: LinkedRoom, href: string): RoomQuote {
+	const quote: RoomQuote = { kind: 'room', href, room: placeOf(room.id, room.parentRoomId !== undefined) };
+	if (room.parentRoomId !== undefined) quote.parent = placeOf(room.parentRoomId);
+	const description = room.description ? markdownText(room.description) : '';
+	if (description) quote.description = description;
+	if (room.members !== undefined) quote.members = room.members;
+	if (room.private) quote.private = true;
+	return quote;
+}
+
 /**
- * The messages its links point to that are loaded, each as a quote that
- * follows the link; a link to the message itself quotes nothing.
+ * The messages, rooms and threads its links point to that the page knows,
+ * each as a card that follows the link; a link to the message itself, or to
+ * a user, shows none.
  */
-function quotesOf(event: MessageRecord, seen: Drawn, context: MessageContext): MessageQuote[] | undefined {
-	const quotes: MessageQuote[] = [];
+function quotesOf(event: MessageRecord, seen: Drawn, context: MessageContext): (MessageQuote | RoomQuote)[] | undefined {
+	const quotes: (MessageQuote | RoomQuote)[] = [];
 	for (const link of seen.links) {
-		if (link.message === event.message_id || quotes.length >= QUOTES_MAX) continue;
-		const target = context.linked(link);
 		const server = link.server ?? context.server;
-		if (!target || !server) continue;
-		const room = directory.resolveRoom(target.room_id);
-		const quote: MessageQuote = {
-			// The https form with its server, so a link without one opens the same place in a new tab too.
-			href: writeApronLink({ server, room: link.room, message: link.message }),
-			name: directory.name(target.from),
-			avatar: directory.avatar(target.from),
-			hue: hueOf(directory.person(target.from)?.user_id),
-			room: { id: target.room_id, ...(room ? { title: room.untitled ? undefined : room.title, thread: room.untitled } : {}) },
-			timestamp: idMillis(target.message_id),
-			time: idWhen(target.message_id)
-		};
-		if (target.deleted) quote.deleted = true;
-		else quote.snippet = snippetOf(quoteSnippet(target));
-		quotes.push(quote);
+		if (quotes.length >= QUOTES_MAX || !server || !link.room || link.message === event.message_id) continue;
+		// The https form with its server, so a link without one opens the same place in a new tab too.
+		const href = writeApronLink({ server, room: link.room, message: link.message });
+		if (link.message !== undefined) {
+			const target = context.linked(link);
+			if (target) quotes.push(messageQuote(target, href));
+		} else {
+			const room = context.linkedRoom(link);
+			if (room) quotes.push(roomQuote(room, href));
+		}
 	}
 	return quotes.length ? quotes : undefined;
 }
@@ -253,8 +297,13 @@ const sameSender = (a: MessageSender, b: MessageSender) =>
 	a.user_id === b.user_id && a.name === b.name && a.handle === b.handle && a.avatar === b.avatar && a.hue === b.hue && sameList(a.roles, b.roles, Object.is);
 const sameReply = (a: MessageReply, b: MessageReply) =>
 	a.id === b.id && a.name === b.name && a.avatar === b.avatar && a.hue === b.hue && a.deleted === b.deleted && sameList(a.snippet, b.snippet, samePart);
-const sameQuote = (a: MessageQuote, b: MessageQuote) =>
-	a.href === b.href && a.name === b.name && a.avatar === b.avatar && a.hue === b.hue && sameFields(a.room, b.room) && a.timestamp === b.timestamp && a.time === b.time && a.deleted === b.deleted && sameList(a.snippet, b.snippet, samePart);
+const sameMessageQuote = (a: MessageQuote, b: MessageQuote) =>
+	a.href === b.href && a.name === b.name && a.avatar === b.avatar && a.hue === b.hue && sameFields(a.room, b.room) && a.timestamp === b.timestamp && a.time === b.time
+	&& a.deleted === b.deleted && sameList(a.snippet, b.snippet, samePart);
+const sameRoomQuote = (a: RoomQuote, b: RoomQuote) =>
+	a.href === b.href && a.description === b.description && a.members === b.members && a.private === b.private && sameFields(a.room, b.room) && sameFields(a.parent, b.parent);
+const sameQuote = (a: MessageQuote | RoomQuote, b: MessageQuote | RoomQuote) =>
+	a.kind === 'room' ? b.kind === 'room' && sameRoomQuote(a, b) : b.kind === 'message' && sameMessageQuote(a, b);
 const sameEmbed = (a: MessageEmbed, b: MessageEmbed) => a.key === b.key && a.embed === b.embed && a.detail === b.detail && a.removable === b.removable && sameFields(a.upload, b.upload);
 
 /** Whether two views of one record draw the same row. */

@@ -39,6 +39,7 @@ export { default as ProfileBar } from './ProfileBar.svelte';
 export { default as ProfileEditor } from './ProfileEditor.svelte';
 export { default as ReplyPreview } from './ReplyPreview.svelte';
 export { default as QuotedMessage } from './QuotedMessage.svelte';
+export { default as QuotedRoom } from './QuotedRoom.svelte';
 export { default as ThreadDescription } from './ThreadDescription.svelte';
 export { default as RoomForm } from './RoomForm.svelte';
 export { default as ConnectScreen } from './ConnectScreen.svelte';

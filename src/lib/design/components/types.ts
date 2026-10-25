@@ -266,13 +266,14 @@ export interface MessageReply {
  * the text: who wrote it, where and when, and a few lines of it. Following the link opens it.
  */
 export interface MessageQuote {
-	/** The link as the message has it, also the list's key: the page opens it. */
+	kind: 'message';
+	/** The link, in the https form with its server, also the list's key: the page opens it. */
 	href: string;
 	name: string;
 	avatar?: string;
 	hue?: number;
 	/** The room or thread it's in (`roomName`). */
-	room?: { id: string; title?: string; thread?: boolean };
+	room?: QuotedPlace;
 	/** Epoch ms of its `message_id`: the tooltip, and the time of day unless `time` says otherwise. */
 	timestamp?: number;
 	/** When it was, pre-formatted, such as with its day when that isn't today. */
@@ -280,6 +281,32 @@ export interface MessageQuote {
 	/** Up to three lines of its text (~280 chars, no Markdown), mentions picked out. */
 	snippet?: (string | MessageMention)[];
 	deleted?: boolean;
+}
+
+/**
+ * A room or thread that a link in a message points to (Appendix A.4), on the server you're on, shown under the text:
+ * its name, the room a thread is in, how many members it has and a line or two of its description.
+ */
+export interface RoomQuote {
+	kind: 'room';
+	/** The link, in the https form with its server, also the list's key: the page opens it. */
+	href: string;
+	room: QuotedPlace;
+	/** The room a thread is in (`roomName`). */
+	parent?: QuotedPlace;
+	/** Its description (§3.4) as plain text. */
+	description?: string;
+	/** How many members it has, where that's known. */
+	members?: number;
+	/** Only its members see it (§4.2.4). */
+	private?: boolean;
+}
+
+/** A room or thread a quote names, by the one rule (`roomName`): a thread without a title is "Untitled". */
+export interface QuotedPlace {
+	id: string;
+	title?: string;
+	thread?: boolean;
 }
 
 /** A file being written to an upload embed, sender side (§4.8.3). */
@@ -320,8 +347,8 @@ export interface MessageView {
 	/** ALREADY SANITIZED markup of the text; absent when a message has none. `code` when it holds code blocks to decorate. */
 	body?: { html: string; markdown?: boolean; code?: boolean };
 	reply?: MessageReply;
-	/** The messages its links point to, under its text; none on a tombstone. */
-	quotes?: MessageQuote[];
+	/** The messages, rooms and threads its links point to, under its text; none on a tombstone. */
+	quotes?: (MessageQuote | RoomQuote)[];
 	embeds?: MessageEmbed[];
 	/** Chips under the message; none on a tombstone. */
 	reactions?: ReactionChip[];
@@ -388,7 +415,7 @@ export interface MessageTestids {
 	row?: string;
 	handle?: string;
 	reply?: string;
-	/** Each message its links point to. */
+	/** Each message, room or thread its links point to. */
 	quote?: string;
 	reactions?: string;
 	chip?: string;

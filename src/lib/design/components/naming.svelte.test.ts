@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
 import Mention from './Mention.svelte';
 import QuotedMessage from './QuotedMessage.svelte';
+import QuotedRoom from './QuotedRoom.svelte';
 import RoomHeader from './RoomHeader.svelte';
 import RoomItem from './RoomItem.svelte';
 import SelectionBar from './SelectionBar.svelte';
@@ -40,7 +41,8 @@ const rows: Array<[where: string, component: Component<any>, props: Record<strin
 		const field = dom.byRole<HTMLTextAreaElement>('textbox', 'Message');
 		return [field.placeholder, field.getAttribute('title')];
 	}, ['Reply in Untitled', null]],
-	['QuotedMessage, the thread it is in', QuotedMessage, { quote: { href: 'apron:?room=t1&message=1', name: 'Ada', room: { id: 't1', title: ' ', thread: true } } }, () => shown('#Untitled'), ['#Untitled', 't1']],
+	['QuotedMessage, the thread it is in', QuotedMessage, { quote: { kind: 'message', href: 'apron:?room=t1&message=1', name: 'Ada', room: { id: 't1', title: ' ', thread: true } } }, () => shown('#Untitled'), ['#Untitled', 't1']],
+	['QuotedRoom, a thread', QuotedRoom, { quote: { kind: 'room', href: 'apron:?room=t1', room: { id: 't1', title: ' ', thread: true } } }, () => shown('Untitled'), ['Untitled', 't1']],
 	['RoomItem', RoomItem, { room: 'ops', name: '  ' }, () => shown('ops'), ['ops', null]],
 	['RoomHeader, the room above a thread', RoomHeader, { room: 'ops', name: ' ', thread: 't1', threadName: 'Deploy', onroom: vi.fn() }, () => {
 		const crumb = dom.button('Back to room');

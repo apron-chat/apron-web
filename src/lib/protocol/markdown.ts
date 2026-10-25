@@ -73,6 +73,22 @@ export type MentionResolver = (id: string) => MentionTarget | undefined;
 /** Resolves a `#room_id`. */
 export type RoomMentionResolver = (id: string) => RoomMentionTarget | undefined;
 
+/**
+ * A link drawn as a chip in place of its URL, such as an Apron link to a room,
+ * message or user on the server the page is on (Appendix A.4): its label, a
+ * quieter word after it, and its tooltip.
+ */
+export interface LinkChip {
+	kind: 'room' | 'message' | 'user';
+	/** The link to put under it in place of the one written, such as with the server a relative one is for. */
+	href?: string;
+	label: string;
+	detail?: string;
+	title: string;
+}
+/** Says how to draw a link shown as its own URL, or nothing to leave it a URL. */
+export type LinkResolver = (href: string) => LinkChip | undefined;
+
 /** Someone a composer can mention: a room member or a recent sender. */
 export interface MentionPerson {
 	id: string;
@@ -143,14 +159,14 @@ function markdown(source: string): string {
  * typed line breaks. Without a DOM to sanitize with (tests, prerendering) the
  * body is rendered as plain text instead, which needs no sanitizing.
  */
-export function renderMarkdown(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver): string {
-	if (!DOMPurify.isSupported) return linkifyText(escapeHtml(source), resolve, resolveRoom);
-	return sanitize(linkText(markdown(source), resolve, resolveRoom));
+export function renderMarkdown(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver): string {
+	if (!DOMPurify.isSupported) return linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink);
+	return sanitize(linkText(markdown(source), resolve, resolveRoom, resolveLink));
 }
 
 /** A plain body as HTML: escaped, with bare links and mentions linked. Line breaks are kept by CSS (`pre-wrap`). */
-export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver): string {
-	const html = linkifyText(escapeHtml(source), resolve, resolveRoom);
+export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver): string {
+	const html = linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink);
 	return DOMPurify.isSupported ? sanitize(html) : html;
 }
 
@@ -171,10 +187,9 @@ export function renderBio(source: string): string {
  * breaks) and entities decoded. The result is text, never markup.
  */
 export function markdownText(source: string): string {
-	return markdown(source)
+	return unescapeHtml(markdown(source)
 		.replace(/<br\s*\/?>|<\/(?:p|li|h[1-6]|pre|blockquote|tr)>/gi, '\n')
-		.replace(/<[^>]*>/g, '')
-		.replace(/&(lt|gt|quot|#39|amp);/g, (_, entity: string) => ({ lt: '<', gt: '>', quot: '"', '#39': "'", amp: '&' })[entity] ?? '')
+		.replace(/<[^>]*>/g, ''))
 		.replace(/\n{2,}/g, '\n')
 		.trim();
 }
@@ -223,21 +238,30 @@ function mentionChip(mention: Mention): string {
 /**
  * Links bare URLs, `@user_id`, and `#room_id` in rendered text, leaving tags,
  * attributes, code and existing links alone (which open in a new tab): an ID inside `<code>` is code,
- * not a mention.
+ * not a mention. A link written as its own URL (`<https://…>`) may become a chip (`resolveLink`).
  */
-function linkText(html: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver): string {
+function linkText(html: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver): string {
 	let out = '';
 	let index = 0;
 	let codeDepth = 0;
 	while (index < html.length) {
 		const tagStart = html.indexOf('<', index);
 		const text = html.slice(index, tagStart === -1 ? undefined : tagStart);
-		out += codeDepth > 0 ? text : linkifyText(text, resolve, resolveRoom);
+		out += codeDepth > 0 ? text : linkifyText(text, resolve, resolveRoom, false, resolveLink);
 		if (tagStart === -1) break;
 		const tagEnd = html.indexOf('>', tagStart);
 		if (tagEnd === -1) {
 			out += html.slice(tagStart);
 			break;
+		}
+		const autolink = resolveLink && codeDepth === 0 ? /^<a href="([^"]*)">([^<]*)<\/a>/.exec(html.slice(tagStart)) : null;
+		if (autolink && unescapeHtml(autolink[1]) === unescapeHtml(autolink[2])) {
+			const chip = linkChip(autolink[1], resolveLink!);
+			if (chip) {
+				out += chip;
+				index = tagStart + autolink[0].length;
+				continue;
+			}
 		}
 		let tag = html.slice(tagStart, tagEnd + 1);
 		// A link in chat opens in a new tab, leaving the conversation where it was.
@@ -256,7 +280,7 @@ function linkText(html: string, resolve?: MentionResolver, resolveRoom?: RoomMen
  * Trailing punctuation is left out, as is a closing `)` with no opening one in
  * the link, so "(see https://example.com)." links just the URL.
  */
-function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, webOnly = false): string {
+function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, webOnly = false, resolveLink?: LinkResolver): string {
 	let out = '';
 	let index = 0;
 	for (const match of text.matchAll(BARE_URL)) {
@@ -269,10 +293,27 @@ function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: Room
 		}
 		if (!(webOnly ? /^https?:\/\/[^/?#]/i : /^(?:https?:\/\/[^/?#]|(?:web\+)?apron:\?.)/i).test(url)) continue;
 		out += chipText(emojiText(text.slice(index, match.index)), resolve, resolveRoom);
-		out += `<a href="${url}"${LINK_ATTRS}>${url}</a>`;
+		out += (resolveLink && linkChip(url, resolveLink)) || `<a href="${url}"${LINK_ATTRS}>${url}</a>`;
 		index = match.index + url.length;
 	}
 	return out + chipText(emojiText(text.slice(index)), resolve, resolveRoom);
+}
+
+/**
+ * A link as the chip `resolveLink` draws it, or undefined to leave it a URL. It stays the link, so
+ * the page opens it, and copying it or a modified click works as on any link. `href` is escaped.
+ */
+function linkChip(href: string, resolveLink: LinkResolver): string | undefined {
+	const chip = resolveLink(unescapeHtml(href));
+	if (!chip) return undefined;
+	// A room's or message's chip reads as a `#room_id` mention, its # in the label.
+	const className = `ap-mention ap-linkchip ap-linkchip-${chip.kind}${chip.kind === 'user' ? '' : ' ap-mention-room ap-mention-hash-room'}`;
+	const detail = chip.detail ? `<span class="ap-linkchip-detail">${escapeHtml(chip.detail)}</span>` : '';
+	return `<a href="${chip.href ? escapeHtml(chip.href) : href}"${LINK_ATTRS} class="${className}" title="${escapeHtml(chip.title)}">${escapeHtml(chip.label)}${detail}</a>`;
+}
+
+function unescapeHtml(value: string): string {
+	return value.replace(/&(lt|gt|quot|#39|amp);/g, (_, entity: string) => ({ lt: '<', gt: '>', quot: '"', '#39': "'", amp: '&' })[entity] ?? '');
 }
 
 /**

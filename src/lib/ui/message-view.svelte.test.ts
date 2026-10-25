@@ -5,7 +5,8 @@ import type { ClientSnapshot, Notice, UploadState } from '$lib/protocol/client';
 import type { Identity, MessageRecord } from '$lib/protocol/types';
 import { messageRecord, roomSnapshot } from '$lib/test/builders';
 import { directory } from './directory.svelte';
-import { messageView, noticeView, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
+import type { ApronLink } from './apron-link';
+import { messageView, noticeView, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
 import { avatarHue } from './messages';
 import { idWhen } from './time';
 import { blankSnapshot } from './session.svelte';
@@ -24,10 +25,17 @@ function row(fields: Partial<MessageRow> = {}): MessageRow {
 
 const SERVER = 'wss://chat.example/ws';
 
-/** A page on SERVER that has `records` loaded, and resolves a link only to them, on SERVER. */
-function context(records: MessageRecord[] = [], uploads: Record<string, UploadState> = {}): MessageContext {
+/** A page on SERVER that has `records` and `rooms` loaded, and resolves a link only to them, on SERVER. */
+function context(records: MessageRecord[] = [], uploads: Record<string, UploadState> = {}, rooms: LinkedRoom[] = []): MessageContext {
 	const resolve = (id: string) => records.find((record) => record.message_id === id);
-	return { resolve, linked: (link) => (link.server === undefined || link.server === SERVER ? resolve(link.message!) : undefined), server: SERVER, uploads };
+	const here = (link: ApronLink) => link.server === undefined || link.server === SERVER;
+	return {
+		resolve,
+		linked: (link) => (here(link) ? resolve(link.message!) : undefined),
+		linkedRoom: (link) => (here(link) ? rooms.find((room) => room.id === link.room) : undefined),
+		server: SERVER,
+		uploads
+	};
 }
 
 beforeEach(() => know({ ada }));
@@ -91,10 +99,10 @@ describe('messageView', () => {
 		const view = messageView(messageRecord(7, 'ops', { from: you, body: { text } }), row(), context([linkedOps, linkedThread]));
 		expect(view.quotes).toEqual([
 			{
-				href: 'https://link.apron.chat/#server=wss://chat.example/ws&room=ops&message=1710000000000', name: 'Ada', avatar: ada.avatar, hue: avatarHue('ada'),
-				room: { id: 'ops', title: 'ops', thread: undefined }, timestamp: 1710000000000, time: idWhen('1710000000000'), snippet: ['ship it ', { user_id: 'you', name: 'You', me: true }, '\nnow\nthen']
+				kind: 'message', href: 'https://link.apron.chat/#server=wss://chat.example/ws&room=ops&message=1710000000000', name: 'Ada', avatar: ada.avatar, hue: avatarHue('ada'),
+				room: { id: 'ops', title: 'ops' }, timestamp: 1710000000000, time: idWhen('1710000000000'), snippet: ['ship it ', { user_id: 'you', name: 'You', me: true }, '\nnow\nthen']
 			},
-			{ href: 'https://link.apron.chat/#server=wss://chat.example/ws&room=t1&message=1710000000001', name: 'Ada', avatar: ada.avatar, hue: avatarHue('ada'), room: { id: 't1', title: undefined, thread: true }, timestamp: 1710000000001, time: idWhen('1710000000001'), deleted: true }
+			{ kind: 'message', href: 'https://link.apron.chat/#server=wss://chat.example/ws&room=t1&message=1710000000001', name: 'Ada', avatar: ada.avatar, hue: avatarHue('ada'), room: { id: 't1', thread: true }, timestamp: 1710000000001, time: idWhen('1710000000001'), deleted: true }
 		]);
 		// A link to the message itself, one in code, a tombstone's, and a system line's quote nothing.
 		expect(messageView(messageRecord(8, 'ops', { body: { text: 'apron:?room=ops&message=8' } }), row(), context([messageRecord(8, 'ops')])).quotes).toBeUndefined();
@@ -102,7 +110,22 @@ describe('messageView', () => {
 		expect(messageView(messageRecord(10, 'ops', { deleted: true, body: { text: 'apron:?room=ops&message=1710000000000' } }), row(), context([linkedOps])).quotes).toBeUndefined();
 		expect(messageView(messageRecord(11, 'ops', { from: { user_id: '~server' }, body: { text: 'apron:?room=ops&message=1710000000000' } }), row(), context([linkedOps])).quotes).toBeUndefined();
 		const many = messageRecord(12, 'ops', { body: { text: [1, 2, 3, 4].map((id) => `apron:?room=ops&message=${id}`).join(' ') } });
-		expect(messageView(many, row(), context([1, 2, 3, 4].map((id) => messageRecord(id, 'ops')))).quotes?.map((quote) => quote.timestamp)).toEqual([1, 2, 3]);
+		expect(messageView(many, row(), context([1, 2, 3, 4].map((id) => messageRecord(id, 'ops')))).quotes?.map((quote) => quote.kind === 'message' && quote.timestamp)).toEqual([1, 2, 3]);
+	});
+
+	it('shows the rooms and threads its links point to as cards: the name, the parent of a thread, the size, the description as text', () => {
+		know({ ada }, { rooms: [roomSnapshot('ops', [], { title: 'Ops' }), roomSnapshot('t1', [], { title: 'Deploy', parentRoomId: 'ops' })] });
+		const rooms: LinkedRoom[] = [
+			{ id: 'ops', description: 'All things **ops**.\n\nSee the [runbook](https://example.com).', members: 12, private: true },
+			{ id: 't1', parentRoomId: 'ops' },
+			{ id: 'unlisted' }
+		];
+		const text = 'apron:?room=ops and apron:?room=t1 and apron:?room=unlisted and apron:?room=gone and apron:?room=ops&user=ada';
+		expect(messageView(messageRecord(7, 'ops', { body: { text } }), row(), context([], {}, rooms)).quotes).toEqual([
+			{ kind: 'room', href: 'https://link.apron.chat/#server=wss://chat.example/ws&room=ops', room: { id: 'ops', title: 'Ops' }, description: 'All things ops.\nSee the runbook.', members: 12, private: true },
+			{ kind: 'room', href: 'https://link.apron.chat/#server=wss://chat.example/ws&room=t1', room: { id: 't1', title: 'Deploy', thread: true }, parent: { id: 'ops', title: 'Ops' } },
+			{ kind: 'room', href: 'https://link.apron.chat/#server=wss://chat.example/ws&room=unlisted', room: { id: 'unlisted' } }
+		]);
 	});
 
 	it('quotes a linked message once it comes, and hands back the same view until then', () => {
@@ -112,7 +135,7 @@ describe('messageView', () => {
 		expect(before.quotes).toBeUndefined();
 		expect(messageView(event, row(), context(records))).toBe(before);
 		records.push(messageRecord(5, 'ops', { body: { text: 'here' } }));
-		expect(messageView(event, row(), context(records)).quotes?.[0].snippet).toEqual(['here']);
+		expect(messageView(event, row(), context(records)).quotes?.[0]).toMatchObject({ snippet: ['here'] });
 	});
 
 	it('lists embeds with their uploads, and lets your own go unless it is the last thing in the message or still being written', () => {
@@ -131,7 +154,7 @@ describe('messageView', () => {
 
 	it('reads the uploads only for a message with embeds', () => {
 		const uploads = vi.fn(() => ({}));
-		const reading: MessageContext = { resolve: () => undefined, linked: () => undefined, server: SERVER, get uploads() { return uploads(); } };
+		const reading: MessageContext = { resolve: () => undefined, linked: () => undefined, linkedRoom: () => undefined, server: SERVER, get uploads() { return uploads(); } };
 		messageView(messageRecord(1), row(), reading);
 		expect(uploads).not.toHaveBeenCalled();
 		messageView(messageRecord(2, 'ops', { body: { text: '', embeds: [{ kind: 'link' }] } }), row(), reading);

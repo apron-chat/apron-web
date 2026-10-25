@@ -65,16 +65,17 @@ export function readApronLink(href: string): ApronLink | undefined {
 const LINK_IN_TEXT = /(?:https:\/\/link\.apron\.chat\/#|\b(?:web\+)?apron:\?)[^\s<>"'`()[\]]+/gi;
 
 /**
- * The distinct links to messages in a message's text, in order, up to `max`.
- * In Markdown, code is left out, as it isn't linked either.
+ * The distinct links to messages, rooms and threads in a message's text, in
+ * order, up to `max`: not to users, nor with a token. In Markdown, code is
+ * left out, as it isn't linked either.
  */
-export function messageLinksIn(text: string, markdown: boolean, max: number): ApronLink[] {
+export function placeLinksIn(text: string, markdown: boolean, max: number): ApronLink[] {
 	const prose = markdown ? text.replace(/```[\s\S]*?(?:```|$)/g, ' ').replace(/`[^`\n]*`/g, ' ') : text;
 	const found = new Map<string, ApronLink>();
 	for (const match of prose.matchAll(LINK_IN_TEXT)) {
 		if (found.size >= max) break;
 		const link = readApronLink(match[0].replace(/[.,:;!?*_~]+$/, ''));
-		if (link?.message !== undefined) found.set(`${link.server ?? ''} ${link.room} ${link.message}`, link);
+		if (link?.room !== undefined && link.user === undefined && link.token === undefined) found.set(`${link.server ?? ''} ${link.room} ${link.message ?? ''}`, link);
 	}
 	return [...found.values()];
 }
