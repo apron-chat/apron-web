@@ -1383,12 +1383,12 @@
 		const chat = client;
 		if (!chat) return;
 		const room = session.rooms.find((candidate) => candidate.id === roomId);
-		if (!room?.members?.some((member) => member.user_id === userId)) await chat.findMember(roomId, userId).catch(() => false);
+		const member = room?.members?.some((candidate) => candidate.user_id === userId) || await chat.findMember(roomId, userId).catch(() => false);
 		if (client !== chat || (activeThread ?? activeRoom?.id) !== roomId) return;
 		await tick();
 		const anchor = document.querySelector<HTMLElement>(`button.ap-member-who[data-user-id="${CSS.escape(userId)}"]`)
 			?? document.querySelector<HTMLElement>('.ap-roomhead-name');
-		if (anchor && !profileCard.current) profileCard.toggle({ anchor, userId });
+		if (anchor && !profileCard.current) profileCard.toggle({ anchor, userId, member });
 	}
 
 	/**

@@ -8,6 +8,11 @@ export interface ProfileCardRequest {
 	/** What was clicked: the card sits beside it, and Escape returns focus to it. */
 	anchor: HTMLElement;
 	userId: string;
+	/**
+	 * Whether they are a member of the open room, when that was looked up
+	 * (a link's user, §4.2.1): a large room's members may leave them out.
+	 */
+	member?: boolean;
 }
 
 class ProfileCardState {
