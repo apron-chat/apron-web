@@ -11,7 +11,8 @@
   var link = function (keys, server) { return 'https://link.apron.chat/#server=' + (server || 'wss://server.apron.chat/') + '&' + keys; };
   // An Apron link written as its URL, as the page draws it in a body: a chip that says what it is (`directory.resolveLink`).
   var chip = function (keys, kind, label, detail, server) {
-    return '<a class="ap-mention ap-mention-room ap-linkchip ap-linkchip-' + kind + '" href="' + link(keys, server) + '">' + label + (detail ? '<span class="ap-linkchip-detail">' + detail + '</span>' : '') + '</a>';
+    var classes = kind === 'elsewhere' ? 'ap-linkchip ap-linkchip-elsewhere' : 'ap-mention ap-mention-room ap-linkchip ap-linkchip-' + kind;
+    return '<a class="' + classes + '" href="' + link(keys, server) + '">' + label + (detail ? '<span class="ap-linkchip-detail">' + detail + '</span>' : '') + '</a>';
   };
   var at = Date.parse('2026-10-24T14:05:00');
   // A Message's `view.linkCards`: a loaded message's card. A link to one not loaded here, or on another server, is its chip alone.
@@ -19,7 +20,7 @@
     { kind: 'message', href: link('room=general&message=1'), server: 'server.apron.chat', in: { id: 'general', title: 'general' }, sender: { name: 'Ada Lovelace', hue: 200 }, timestamp: at, time: 'Yesterday 2:05 PM', snippet: ['Deploy is green, rolling to prod now.\nAnyone object if I skip the canary wait?'] }
   ] } });
   // Rooms and threads, joined or listed, with their size and description.
-  add(A.Message, { view: { sender: grace, time: '14:31', body: { html: 'Moving this to ' + chip('room=ops', 'room', 'ops') + ', notes in ' + chip('room=t-123', 'thread', 'Deploy checklist', ' in #general') + ', and ' + chip('room=lobby&message=4', 'elsewhere', 'Message', ' on chat.example', 'wss://chat.example/') }, linkCards: [
+  add(A.Message, { view: { sender: grace, time: '14:31', body: { html: 'Moving this to ' + chip('room=ops', 'room', 'ops') + ', notes in ' + chip('room=t-123', 'thread', 'Deploy checklist', ' in #general') + ', and ' + chip('room=lobby&message=4', 'elsewhere', 'chat.example', ' · Message', 'wss://chat.example/') }, linkCards: [
     { kind: 'room', href: link('room=ops'), server: 'server.apron.chat', room: { id: 'ops', title: 'ops' }, members: 42, private: true, description: 'Deploys, incidents and on-call. Page the on-call before touching prod.' },
     { kind: 'thread', href: link('room=t-123'), server: 'server.apron.chat', in: { id: 'general', title: 'general' }, room: { id: 't-123', title: 'Deploy checklist', thread: true }, members: 3 }
   ] } });

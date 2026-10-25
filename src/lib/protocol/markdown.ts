@@ -80,7 +80,7 @@ export type RoomMentionResolver = (id: string) => RoomMentionTarget | undefined;
  */
 export interface LinkChip {
 	kind: 'room' | 'thread' | 'message' | 'user';
-	/** On another server: a globe in place of the kind's icon. */
+	/** On another server: not a mention but a chip of its own, its host first, that says opening it leaves this one. */
 	elsewhere?: boolean;
 	/** The link to put under it in place of the one written, such as with the server a relative one is for. */
 	href?: string;
@@ -308,8 +308,9 @@ function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: Room
 function linkChip(href: string, resolveLink: LinkResolver): string | undefined {
 	const chip = resolveLink(unescapeHtml(href));
 	if (!chip) return undefined;
-	// A user's reads as a user mention; the rest as a room mention, with their kind's icon in front.
-	const className = chip.kind === 'user' ? 'ap-mention ap-linkchip' : `ap-mention ap-mention-room ap-linkchip ap-linkchip-${chip.elsewhere ? 'elsewhere' : chip.kind}`;
+	// A user's reads as a user mention; the rest on this server as a room mention, with their kind's icon in front; another server's as neither.
+	const className = chip.elsewhere ? 'ap-linkchip ap-linkchip-elsewhere'
+		: chip.kind === 'user' ? 'ap-mention ap-linkchip' : `ap-mention ap-mention-room ap-linkchip ap-linkchip-${chip.kind}`;
 	const detail = chip.detail ? `<span class="ap-linkchip-detail">${escapeHtml(chip.detail)}</span>` : '';
 	return `<a href="${chip.href ? escapeHtml(chip.href) : href}"${LINK_ATTRS} class="${className}" title="${escapeHtml(chip.title)}">${escapeHtml(chip.label)}${detail}</a>`;
 }

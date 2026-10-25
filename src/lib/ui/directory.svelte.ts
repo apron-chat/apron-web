@@ -165,11 +165,12 @@ class Directory {
 	/**
 	 * Draws an Apron link written as its own URL as a chip that says in words
 	 * what it is, from what is known here (Appendix A.4): "Message in #general",
-	 * a room's name, a thread's name "in #general", a known user as `@name`,
-	 * and on another server "Message on chat.example" or "Room on chat.example".
-	 * A room not known here is its `room_id`. A token, or another server's user,
-	 * stays a URL. Under the chip is the link in its https form with the server,
-	 * so a copied one opens the same place (Appendix A.4).
+	 * a room's name, a thread's name "in #general", a known user as `@name`. A
+	 * room not known here is its `room_id`. One to another server is nothing
+	 * here, and opening it switches servers, so it is no mention: its host
+	 * first, then "Message" or "Room", nothing looked up. A token, or another
+	 * server's user, stays a URL. Under the chip is the link in its https form
+	 * with the server, so a copied one opens the same place (Appendix A.4).
 	 */
 	readonly resolveLink: LinkResolver = (href) => {
 		const link = readApronLink(href);
@@ -180,8 +181,8 @@ class Directory {
 		if (server !== this.server) {
 			if (link.user !== undefined) return undefined;
 			const host = backendHost(server) || server;
-			const label = link.message !== undefined ? 'Message' : 'Room';
-			return { kind: link.message !== undefined ? 'message' : 'room', elsewhere: true, href: shared, label, detail: ` on ${host}`, title: `${label} ${link.room} on ${host}` };
+			const kind = link.message !== undefined ? 'message' : 'room';
+			return { kind, elsewhere: true, href: shared, label: host, detail: kind === 'message' ? ' · Message' : ' · Room', title: `A ${kind} on ${host}, another server: opening it asks to switch` };
 		}
 		const room = this.resolveRoom(link.room)?.title ?? link.room;
 		const parentId = this.parents[link.room];

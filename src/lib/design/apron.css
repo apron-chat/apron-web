@@ -1325,15 +1325,21 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 .ap-mention-unknown { color: var(--ink-muted); }
 /* An Apron link written as its URL, drawn as a mention that says what it is (Appendix A.4); it stays the link. A user's
    reads as a user mention. The rest lead with their kind's icon, the same Lucide icons LinkCard's tag draws (a
-   message-square, a hash, a corner-down-right, a globe for another server), as masks, since a body's markup is a
-   sanitized string with no SVG in it; their quieter words after: "in #general", "on chat.example". */
+   message-square, a hash, a corner-down-right), as masks, since a body's markup is a sanitized string with no SVG in
+   it; their quieter words after: "in #general". */
 a.ap-linkchip { text-decoration: none; }
-.ap-linkchip.ap-mention-room::before { content: ''; display: inline-block; width: .85em; height: .85em; margin-right: .3em; vertical-align: -.08em; background: currentColor; -webkit-mask: var(--ap-linkchip-icon) center / contain no-repeat; mask: var(--ap-linkchip-icon) center / contain no-repeat; }
+:is(.ap-linkchip-message, .ap-linkchip-room, .ap-linkchip-thread, .ap-linkchip-elsewhere)::before { content: ''; display: inline-block; width: .85em; height: .85em; margin-right: .3em; vertical-align: -.08em; background: currentColor; -webkit-mask: var(--ap-linkchip-icon) center / contain no-repeat; mask: var(--ap-linkchip-icon) center / contain no-repeat; }
 .ap-linkchip-message { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z'/%3E%3C/svg%3E"); }
 .ap-linkchip-room { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9h16M4 15h16M10 3 8 21M16 3l-2 18'/%3E%3C/svg%3E"); }
 .ap-linkchip-thread { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 10 5 5-5 5M4 4v7a4 4 0 0 0 4 4h12'/%3E%3C/svg%3E"); }
-a.ap-linkchip-elsewhere { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20'/%3E%3C/svg%3E"); background: var(--bg-300); color: var(--ink); }
 .ap-linkchip-detail { font-weight: 400; opacity: var(--opacity-dim); }
+/* One to another server isn't a place here, so it isn't a mention: outlined rather than filled, in the ink of text, a
+   globe (Lucide's) before its host, and an arrow after, since opening it leaves this server (the connect screen asks
+   first). It has the height of a mention, its border in place of a pixel of padding. */
+a.ap-linkchip-elsewhere { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20'/%3E%3C/svg%3E");
+	padding: 0 4px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); font-weight: 600; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+a.ap-linkchip-elsewhere::after { content: " \2197"; font-weight: 400; color: var(--ink-muted); }
+a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-status-retry { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-profedit-avbtns { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
 .ap-profedit-remove { font-size: var(--text-sm); color: var(--ink-muted); }

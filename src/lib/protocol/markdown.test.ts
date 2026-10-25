@@ -126,7 +126,7 @@ describe('bare links', () => {
 	it('draws an Apron link written as its URL as the chip a resolver gives, still the link, and leaves one with its own text or in code', () => {
 		const resolveLink: LinkResolver = (href) => {
 			if (href === 'apron:?room=ops&message=1') return { kind: 'message', label: 'Message', detail: ' in #Ops & Co', title: 'A message in #Ops & Co' };
-			if (href === 'apron:?server=wss://h/&room=ops') return { kind: 'room', elsewhere: true, label: 'Room', detail: ' on h', title: 'Room ops on h' };
+			if (href === 'apron:?server=wss://h/&room=ops') return { kind: 'room', elsewhere: true, label: 'h', detail: ' · Room', title: 'A room on h' };
 			if (href === 'apron:?room=ops&user=alice') return { kind: 'user', href: 'apron:?server=wss://h/&room=ops&user=alice', label: '@Alice', title: 'Alice in #Ops & Co' };
 			return undefined;
 		};
@@ -136,8 +136,8 @@ describe('bare links', () => {
 		// The link under it is the one the resolver gives, where it gives one.
 		expect(renderMarkdown('apron:?room=ops&user=alice', undefined, undefined, resolveLink))
 			.toContain('<a href="apron:?server=wss://h/&amp;room=ops&amp;user=alice" rel="noreferrer noopener" target="_blank" class="ap-mention ap-linkchip" title="Alice in #Ops &amp; Co">@Alice</a>');
-		// Another server's has a globe in place of its kind's icon.
-		expect(renderPlain('apron:?server=wss://h/&room=ops', undefined, undefined, resolveLink)).toContain('class="ap-mention ap-mention-room ap-linkchip ap-linkchip-elsewhere"');
+		// Another server's is no mention.
+		expect(renderPlain('apron:?server=wss://h/&room=ops', undefined, undefined, resolveLink)).toContain('class="ap-linkchip ap-linkchip-elsewhere" title="A room on h">h<span class="ap-linkchip-detail"> · Room</span></a>');
 		// Its own text stays, as does code, and a link the resolver leaves.
 		expect(renderMarkdown('[that one](apron:?room=ops&message=1)', undefined, undefined, resolveLink)).toContain('>that one</a>');
 		expect(renderMarkdown('`apron:?room=ops&message=1`', undefined, undefined, resolveLink)).not.toContain('<a');

@@ -871,11 +871,15 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   [PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links)
   (one without `server` is the sending server's), reads as a mention that says
   in words what it is, from what this client knows: "Message in #general", a
-  room's name, a thread's name "in #general", a known user as `@name`, and for
-  another server "Message on chat.example" or "Room on chat.example". Each but
-  a user's leads with its kind's icon (a globe for another server), the same
-  icons as the link cards. A room not known here reads as its `room_id`. One
-  written with its own text keeps it, and a token stays a URL. Each is still
+  room's name, a thread's name "in #general", a known user as `@name`. Each but
+  a user's leads with its kind's icon, the same icons as the link cards. A room
+  not known here reads as its `room_id`. A link to another server is no place
+  here, so it is no mention: an outlined chip in the ink of the text, a globe
+  and the server's host first, then "Message" or "Room", and an arrow after,
+  since opening it switches servers (the connect screen asks first); nothing
+  is looked up for it, and it has no card. Another endpoint on the same host
+  is another server. One written with its own text keeps it, and a token, or
+  a user on another server, stays a URL. Each is still
   the link, in its `https` form with the server, so copying it gives a link
   that opens the same place anywhere, a click opens it here, and a modified
   click opens link.apron.chat in a new tab.
