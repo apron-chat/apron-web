@@ -224,6 +224,11 @@
 	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
 	/** A room, thread or message the page's URL named when it opened, to open once its server lists its rooms. */
 	let linked = $state<(Destination & { server: string; room: string }) | undefined>();
+	/**
+	 * What a link's `room` was found to be, by server and room: the parent of a
+	 * thread, `null` for a room that isn't one, or `undefined` while it is looked up.
+	 */
+	const linkedParents = new Map<string, string | null | undefined>();
 	/** The connect screen is up for a link's server: it can be cancelled even before this server is ready. */
 	let offeringLink = $state(false);
 	/** How far back a linked message is looked for, in pages of history. */
@@ -1297,9 +1302,18 @@
 	 * history entry rather than adding one; the effect calls it again as each
 	 * step lands.
 	 */
-	function openLinked(target: Destination & { room: string }): void {
+	function openLinked(target: Destination & { server: string; room: string }): void {
 		if (!client) return;
 		const listed = (id: string) => session.rooms.some((room) => room.id === id);
+		// A link names a thread by its room_id alone (Appendix A.4): it opens under the parent its record names.
+		if (!target.thread) {
+			const parent = threadParent(client, target.server, target.room);
+			if (parent === undefined) return;
+			if (parent) {
+				linked = { ...target, room: parent, thread: target.room };
+				return;
+			}
+		}
 		// Until it has all opened, the URL keeps naming the whole link, so a reload tries it again.
 		const keepLink = () => scrubUrl(addressOf(target.room, target.thread, target.message));
 		if (activeRoom?.id !== target.room) {
@@ -1325,6 +1339,26 @@
 		}
 		linked = undefined;
 		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message);
+	}
+
+	/**
+	 * The parent of `roomId` if it is a thread, `null` if it isn't, or
+	 * `undefined` until that is known. A room the user hasn't joined is looked
+	 * up once (`room_list` with `room_id`, §4.2.1), and the link opens again
+	 * when the answer comes; one the server won't list counts as no thread.
+	 */
+	function threadParent(chat: ChatClient, server: string, roomId: string): string | null | undefined {
+		const joined = session.rooms.find((room) => room.id === roomId);
+		if (joined) return joined.parentRoomId ?? null;
+		const key = `${server} ${roomId}`;
+		if (linkedParents.has(key)) return linkedParents.get(key);
+		linkedParents.set(key, undefined);
+		const settle = (parent: string | null) => {
+			linkedParents.set(key, parent);
+			if (linked?.room === roomId && !linked.thread) linked = { ...linked };
+		};
+		chat.listMembers(roomId).then((listings) => settle(listings.find((listing) => listing.id === roomId)?.parentRoomId ?? null), () => settle(null));
+		return undefined;
 	}
 
 	/** Part of a link isn't here: the URL says where the page is instead, and a toast says what wasn't found. */
