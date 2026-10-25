@@ -162,6 +162,57 @@ describe('connection errors', () => {
 	});
 });
 
+describe('a guest sign-in refused with retry_after', () => {
+	let snapshot: ClientSnapshot;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		startClient({ onSnapshot: (next) => (snapshot = next) });
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
+	});
+
+	it('is tried again on a new connection once the wait is over, rather than staying signed in as no one', async () => {
+		const socket = FakeSocket.latest();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		const auth = socket.request('auth');
+		expect(auth.params).toEqual(expect.objectContaining({ scheme: 'guest' }));
+		socket.receive({ id: auth.id, error: { code: -32002, message: 'Authentication attempts limited', data: { retry_after: 5 } } });
+		await settle();
+		expect(snapshot.authenticated).toBe(false);
+		expect(snapshot.error).toBe('Authentication attempts limited. Try again in 5s.');
+		// The client gave the connection up; the browser reports the close.
+		expect(socket.readyState).toBe(FakeSocket.CLOSED);
+		socket.drop();
+		expect(snapshot.status).toBe('reconnecting');
+		await vi.advanceTimersByTimeAsync(4_999);
+		expect(FakeSocket.instances).toHaveLength(1);
+		await vi.advanceTimersByTimeAsync(1);
+		const next = FakeSocket.latest();
+		expect(next).not.toBe(socket);
+		await next.greet();
+		expect(next.request('auth').params).toEqual(expect.objectContaining({ scheme: 'guest' }));
+		expect(snapshot.authenticated).toBe(true);
+		expect(snapshot.error).toBeUndefined();
+	});
+
+	it('leaves any other refusal as it was: no reconnect loop on a server that will not have guests', async () => {
+		const socket = FakeSocket.latest();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Guests are not admitted' } });
+		await settle();
+		expect(socket.readyState).toBe(FakeSocket.OPEN);
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(FakeSocket.instances).toHaveLength(1);
+		expect(snapshot.error).toBe('Guests are not admitted');
+	});
+});
+
 describe('failed handshake diagnostics', () => {
 	let client: ChatClient;
 	let snapshot: ClientSnapshot;

@@ -16,6 +16,11 @@ import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
  * link is a credential someone else may have crafted or forwarded (login
  * CSRF): it is never used silently, and the page asks first, naming the
  * server.
+ *
+ * Opened through link.apron.chat, the link's `server` comes in the query, as
+ * for any link to this app, and the rest in the fragment (Appendix A.4):
+ *
+ *     ?server=wss%3A%2F%2Fchat.example%2Fws#token=apron_invite_…
  */
 export interface SignInLink {
 	token: string;
@@ -38,20 +43,24 @@ export function takeSignInLink(location: Pick<Location, 'hash' | 'pathname' | 's
 	const params = fragmentParams(hash);
 	if (!params?.has('token')) return undefined;
 	// Read before scrubbing: a real `Location` changes under us.
-	const link = parseSignInLink(hash);
+	const link = parseSignInLink(hash, location.search);
 	replace(`${location.pathname}${location.search}`);
 	return link;
 }
 
-/** `#token=…[&state=…][&server=…]` as its parts. `token` is required; other keys are ignored. */
-export function parseSignInLink(hash: string): SignInLink | undefined {
+/**
+ * `#token=…[&state=…][&server=…]` as its parts, with `server` from the query
+ * `search` when the fragment has none. `token` is required; other keys are ignored.
+ */
+export function parseSignInLink(hash: string, search = ''): SignInLink | undefined {
 	const params = fragmentParams(hash);
 	const token = params?.get('token')?.trim();
 	if (!params || !token) return undefined;
 	const state = params.get('state') || undefined;
 	const link: SignInLink = { token, ...(state ? { state } : {}) };
-	if (!params.has('server')) return link;
-	const server = webSocketUrl(params.get('server') ?? '');
+	const named = params.get('server') ?? new URLSearchParams(search).get('server');
+	if (named === null) return link;
+	const server = webSocketUrl(named);
 	return server ? { ...link, server } : { ...link, badServer: true };
 }
 

@@ -18,6 +18,8 @@ export const SERVER_PARAM = 'server';
 export const ROOM_PARAM = 'room';
 export const THREAD_PARAM = 'thread';
 export const MESSAGE_PARAM = 'message';
+/** A user in the room, whose profile card opens: a link's `user` (Appendix A.4), in the fragment as link.apron.chat passes it. */
+export const USER_PARAM = 'user';
 
 /** What a URL names: a thread only under its room, a message anywhere a room is named. */
 export interface Destination {
@@ -25,6 +27,7 @@ export interface Destination {
 	room?: string;
 	thread?: string;
 	message?: string;
+	user?: string;
 }
 
 /** Reads a URL's destination; a server that isn't a `ws:` or `wss:` URL, or that carries credentials, is ignored. */
@@ -35,11 +38,13 @@ export function readDestination(location: Pick<Location, 'search' | 'hash'>): De
 	const thread = room ? query.get(THREAD_PARAM) || undefined : undefined;
 	const fragment = location.hash.startsWith('#') ? new URLSearchParams(location.hash.slice(1)) : undefined;
 	const message = room ? fragment?.get(MESSAGE_PARAM) || undefined : undefined;
+	const user = room ? fragment?.get(USER_PARAM) || undefined : undefined;
 	return {
 		...(server ? { server } : {}),
 		...(room ? { room } : {}),
 		...(thread ? { thread } : {}),
-		...(message ? { message } : {})
+		...(message ? { message } : {}),
+		...(user ? { user } : {})
 	};
 }
 
@@ -58,7 +63,10 @@ export function destinationUrl(current: string, destination: Destination, defaul
 		url.searchParams.set(ROOM_PARAM, destination.room);
 		if (destination.thread) url.searchParams.set(THREAD_PARAM, destination.thread);
 	}
-	url.hash = destination.room && destination.message ? new URLSearchParams({ [MESSAGE_PARAM]: destination.message }).toString() : '';
+	const fragment = new URLSearchParams();
+	if (destination.room && destination.message) fragment.set(MESSAGE_PARAM, destination.message);
+	if (destination.room && destination.user) fragment.set(USER_PARAM, destination.user);
+	url.hash = fragment.toString();
 	return url.toString();
 }
 

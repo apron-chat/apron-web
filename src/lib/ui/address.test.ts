@@ -20,6 +20,9 @@ describe('destination URLs', () => {
 		expect(at('https://app.example/?server=not%20a%20url')).toEqual({});
 		// An emailed sign-in link's fragment is not a message.
 		expect(at('https://app.example/?room=general#token=abc')).toEqual({ room: 'general' });
+		// A link's user (Appendix A.4), in the fragment as link.apron.chat passes it, and only with a room.
+		expect(at('https://app.example/?room=general#user=ada')).toEqual({ room: 'general', user: 'ada' });
+		expect(at('https://app.example/#user=ada')).toEqual({});
 	});
 
 	it('write the destination, leaving out the default server and credentials and keeping other parameters, and read back what they write', () => {

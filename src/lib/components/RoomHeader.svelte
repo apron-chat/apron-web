@@ -43,6 +43,8 @@
 		onroom: () => void;
 		onedit: () => void;
 		onleave: () => void;
+		/** Copies a link to the open room or thread that any Apron app opens (Appendix A.4); resolves with whether it did. */
+		oncopylink?: () => Promise<boolean>;
 		onjoin?: () => void;
 		onmemberlist: () => void;
 		/** The room's or thread's summary was put away with its ×: a Summary button brings it back. */
@@ -50,8 +52,19 @@
 	}
 	let {
 		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, onjoin, onmemberlist, onsummary
+		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmemberlist, onsummary
 	}: Props = $props();
+
+	/** A copied link says so under the title for a moment, as the message's Copy link does on its button. */
+	let copied = $state(false);
+	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+	async function copyLink(): Promise<void> {
+		if (!(await oncopylink?.())) return;
+		copied = true;
+		clearTimeout(copiedTimer);
+		copiedTimer = setTimeout(() => (copied = false), 2000);
+	}
+	$effect(() => () => clearTimeout(copiedTimer));
 
 	/** The room's description (§3.4) as one line of text under its title, once its pinned summary is put away; a thread has only its summary. */
 	let topic = $derived(showTopic && threadTitle === undefined && room.description ? markdownText(room.description).split('\n')[0] : '');
@@ -67,7 +80,7 @@
 	private={pane.private}
 	{typing}
 	replies={replyCount !== undefined ? { count: replyCount, more: moreReplies } : undefined}
-	note={waiting ? 'Waiting' : pane.recoveryError ? 'History unavailable' : undefined}
+	note={copied ? 'Link copied' : waiting ? 'Waiting' : pane.recoveryError ? 'History unavailable' : undefined}
 	{onback}
 	{unreadElsewhere}
 	{mentionsElsewhere}
@@ -80,6 +93,7 @@
 	{memberListOpen}
 	onedit={canEdit ? onedit : undefined}
 	onleave={canLeave ? onleave : undefined}
+	oncopylink={oncopylink ? copyLink : undefined}
 	busy={editDisabled}
 	{onsummary}
 	tagTestid="back-unread"
@@ -89,4 +103,5 @@
 	actionsTestid="room-actions"
 	editTestid="edit-room"
 	leaveTestid="leave-room"
+	copyLinkTestid="copy-room-link"
 />

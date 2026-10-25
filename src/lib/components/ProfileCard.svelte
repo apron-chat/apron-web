@@ -59,11 +59,12 @@
 	/** `roles` (§3.3) from the kept user object, else the recorded one: badges under the name, never part of it. */
 	let roles = $derived(Array.isArray(person?.roles) ? person.roles : undefined);
 	/** Membership of the open room, when its listing is known; a large room may list only its recently active members (§4.2.1). */
-	let listed = $derived(room?.members?.some((member) => directory.person(member)?.user_id === userId));
+	let listed = $derived(request?.member || room?.members?.some((member) => directory.person(member)?.user_id === userId));
 	let partial = $derived(room?.members !== undefined && (room.memberCount ?? 0) > room.members.length);
 	let membership = $derived.by(() => {
-		if (!room || room.members === undefined) return undefined;
+		if (!room) return undefined;
 		if (listed) return `Member of ${room.title}`;
+		if (room.members === undefined) return undefined;
 		return partial ? `Not among the recently active members of ${room.title}` : `Not in ${room.title}`;
 	});
 	let canAdd = $derived(

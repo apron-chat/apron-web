@@ -900,7 +900,9 @@ export class ChatClient {
 	 * proposal's, or else a scheme that server offers: either works
 	 * (§4.11.3). How it signed in is recorded as the proposal's scheme, or
 	 * the only one the server offers; else as `link`, since the link doesn't
-	 * say which it was. A refused link changes nothing here.
+	 * say which it was. On a server with neither, the token is a bearer token
+	 * of its own, such as an invite's (Appendix A.4), and goes as
+	 * `scheme: "token"`, like a pasted one. A refused link changes nothing here.
 	 */
 	async signInWithLink(
 		token: string, url = this.serverUrl, options: { scheme?: ProposalScheme; state?: string; beforeSwitch?: () => void } = {}
@@ -910,14 +912,19 @@ export class ChatClient {
 		// Checked before a connection opens, and again (by approveSignIn) once it is ready.
 		this.checkApproval();
 		const connection = this.openSignInConnection(url);
-		let scheme: ProposalScheme;
-		let method: ProposalScheme | 'link';
+		let scheme: ProposalScheme | 'token';
+		let method: ProposalScheme | 'link' | 'token';
 		try {
 			await connection.ready;
 			const offered = PROPOSAL_SCHEMES.filter((candidate) => connection.offers(candidate));
-			if (!offered.length) throw new Error('This server does not support sign-in links');
-			scheme = options.scheme && offered.includes(options.scheme) ? options.scheme : offered[0];
-			method = options.scheme ?? linkMethod(offered);
+			if (offered.length) {
+				scheme = options.scheme && offered.includes(options.scheme) ? options.scheme : offered[0];
+				method = options.scheme ?? linkMethod(offered);
+			} else if (!options.scheme && connection.offers('token')) {
+				scheme = method = 'token';
+			} else {
+				throw new Error('This server does not support sign-in links');
+			}
 		} catch (cause) {
 			connection.close();
 			throw cause;
@@ -933,8 +940,8 @@ export class ChatClient {
 
 	/** Approves a sign-in on `connection` and carries on with it (see `signInWithCode`). */
 	private async approveSignIn(
-		connection: SignInConnection, scheme: ProposalScheme, token: string,
-		options: { name?: string; beforeSwitch?: () => void; retryable: boolean; state?: string; method?: ProposalScheme | 'link' }
+		connection: SignInConnection, scheme: ProposalScheme | 'token', token: string,
+		options: { name?: string; beforeSwitch?: () => void; retryable: boolean; state?: string; method?: ProposalScheme | 'link' | 'token' }
 	): Promise<OperationHandle | undefined> {
 		try {
 			this.checkApproval();
@@ -967,6 +974,8 @@ export class ChatClient {
 			if (this.signInProposal?.connection === connection) this.signInProposal = undefined;
 			options.beforeSwitch?.();
 			if (options.name?.trim()) this.displayName = options.name.trim();
+			// A bearer token stays the one to resume with, unless the server sends another (§3.2.1).
+			if (scheme === 'token' && typeof result.token !== 'string') result = { ...result, token };
 			this.adoptSignedIn(connection, result, options.method ?? scheme);
 			return this.authNameRequest;
 		} finally {
@@ -982,7 +991,7 @@ export class ChatClient {
 	 * server if another, and the connection's `server` frame, the sign-in's
 	 * result, and the frames since are taken as if they had arrived here.
 	 */
-	private adoptSignedIn(connection: SignInConnection, result: JsonObject, method: ProposalScheme | 'link'): void {
+	private adoptSignedIn(connection: SignInConnection, result: JsonObject, method: ProposalScheme | 'link' | 'token'): void {
 		const { socket, server, frames } = connection.detach();
 		this.signInConnections.delete(connection);
 		if (connection.url !== this.serverUrl) this.switchServer(connection.url);
@@ -1991,6 +2000,22 @@ export class ChatClient {
 	}
 
 	/**
+	 * Looks for one user among a room's members (`room_list` with `room_id`,
+	 * `members` and `user_id`, §4.2.1), for a link to that user. Resolves with
+	 * whether they are a member. Their user object is kept, but the room's
+	 * members are left as they were: a server that takes the filter lists only
+	 * them, and one that ignores it may list a truncated set.
+	 */
+	async findMember(roomId: string, userId: string): Promise<boolean> {
+		const result = await this.enqueueRequest('room_list', { room_id: roomId, members: true, user_id: userId }, { visible: false, allowBeforeAuth: false }).promise;
+		this.noteUsers(result.users);
+		this.emit();
+		const rooms = [...(Array.isArray(result.joined) ? result.joined : []), ...(Array.isArray(result.not_joined) ? result.not_joined : [])];
+		return rooms.some((room) => isJsonObject(room) && room.room_id === roomId && Array.isArray(room.members)
+			&& room.members.some((member) => isJsonObject(member) && member.user_id === userId));
+	}
+
+	/**
 	 * Listing can be costly, any server may rate-limit it, and several
 	 * parts of the UI want it at once: a request in flight, or one answered
 	 * within `maxAgeMs`, serves them all. One refused for a while
@@ -2723,6 +2748,11 @@ export class ChatClient {
 				}
 				// A limit or timeout keeps the token: reconnect, after any retry_after, and resume again.
 				socket?.close(1000, 'resume failed');
+			} else if (cause instanceof RateLimitError) {
+				// A guest sign-in the server put off (`retry_after`, §1.1): left as it is, the connection
+				// would sit signed in as no one until the server drops it. Reconnect once the wait is
+				// over (`scheduleReconnect` honours it) and sign in as a guest again.
+				socket?.close(1000, 'guest sign-in limited');
 			}
 			this.emit();
 		});
@@ -2735,7 +2765,7 @@ export class ChatClient {
 	 * replaces any saved one. `signedIn` names a sign-in ceremony that made
 	 * this a registered session.
 	 */
-	private handleAuth(result: JsonObject, signedIn?: Exclude<SignInMethod, 'token'>, added = false): boolean {
+	private handleAuth(result: JsonObject, signedIn?: SignInMethod, added = false): boolean {
 		const identity = result.you;
 		if (!isJsonObject(identity) || typeof identity.user_id !== 'string') {
 			this.error = 'Server authentication response did not include an identity';
