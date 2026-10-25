@@ -1999,6 +1999,22 @@ export class ChatClient {
 	}
 
 	/**
+	 * Looks for one user among a room's members (`room_list` with `room_id`,
+	 * `members` and `user_id`, §4.2.1), for a link to that user. Resolves with
+	 * whether they are a member. Their user object is kept, but the room's
+	 * members are left as they were: a server that takes the filter lists only
+	 * them, and one that ignores it may list a truncated set.
+	 */
+	async findMember(roomId: string, userId: string): Promise<boolean> {
+		const result = await this.enqueueRequest('room_list', { room_id: roomId, members: true, user_id: userId }, { visible: false, allowBeforeAuth: false }).promise;
+		this.noteUsers(result.users);
+		this.emit();
+		const rooms = [...(Array.isArray(result.joined) ? result.joined : []), ...(Array.isArray(result.not_joined) ? result.not_joined : [])];
+		return rooms.some((room) => isJsonObject(room) && room.room_id === roomId && Array.isArray(room.members)
+			&& room.members.some((member) => isJsonObject(member) && member.user_id === userId));
+	}
+
+	/**
 	 * Listing can be costly, any server may rate-limit it, and several
 	 * parts of the UI want it at once: a request in flight, or one answered
 	 * within `maxAgeMs`, serves them all. One refused for a while

@@ -23,7 +23,7 @@
 	import { messageView, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
-	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
+	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
 	import { showReactors } from '$lib/ui/reactors.svelte';
 	import RoomHeader from '$lib/components/RoomHeader.svelte';
 	import SelectionBar from '$lib/components/SelectionBar.svelte';
@@ -1339,6 +1339,7 @@
 		}
 		linked = undefined;
 		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message);
+		if (target.user) void revealLinkedUser(target.thread ?? target.room, target.user);
 	}
 
 	/**
@@ -1366,6 +1367,25 @@
 		linked = undefined;
 		feedback.error(`The linked ${missing} isn’t available here.`);
 		scrubUrl(addressOf(selectedRoomId, activeThread));
+	}
+
+	/**
+	 * Opens the profile card of a link's user (Appendix A.4) in the open room
+	 * or thread. A member it doesn't list is looked for there first, since a
+	 * large room may list only its recently active members (§4.2.1); the card
+	 * opens either way, and says whether they are in the room. It sits by
+	 * their row in the member list when that shows them, else by the room's name.
+	 */
+	async function revealLinkedUser(roomId: string, userId: string): Promise<void> {
+		const chat = client;
+		if (!chat) return;
+		const room = session.rooms.find((candidate) => candidate.id === roomId);
+		if (!room?.members?.some((member) => member.user_id === userId)) await chat.findMember(roomId, userId).catch(() => false);
+		if (client !== chat || (activeThread ?? activeRoom?.id) !== roomId) return;
+		await tick();
+		const anchor = document.querySelector<HTMLElement>(`button.ap-member-who[data-user-id="${CSS.escape(userId)}"]`)
+			?? document.querySelector<HTMLElement>('.ap-roomhead-name');
+		if (anchor && !profileCard.current) profileCard.toggle({ anchor, userId });
 	}
 
 	/**
