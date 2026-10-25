@@ -63,7 +63,10 @@ export function destinationUrl(current: string, destination: Destination, defaul
 		url.searchParams.set(ROOM_PARAM, destination.room);
 		if (destination.thread) url.searchParams.set(THREAD_PARAM, destination.thread);
 	}
-	url.hash = destination.room && destination.message ? new URLSearchParams({ [MESSAGE_PARAM]: destination.message }).toString() : '';
+	const fragment = new URLSearchParams();
+	if (destination.room && destination.message) fragment.set(MESSAGE_PARAM, destination.message);
+	if (destination.room && destination.user) fragment.set(USER_PARAM, destination.user);
+	url.hash = fragment.toString();
 	return url.toString();
 }
 

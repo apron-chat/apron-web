@@ -31,7 +31,9 @@ md.renderer.rules.table_close = () => '</table></div>\n';
 const ALLOWED = {
 	ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 's', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'a', 'img', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'button'],
 	ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'start', 'class', 'rel', 'target', 'type', 'data-user-id', 'data-room-id'],
-	ALLOW_DATA_ATTR: false
+	ALLOW_DATA_ATTR: false,
+	// DOMPurify's own list of URL schemes, and Apron links' (Appendix A.4), which the page opens itself.
+	ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|apron|web\+apron):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
 };
 
 /** Sanitized markup kept for reuse, by the markup it was made from, least recently used first. */
@@ -97,10 +99,11 @@ export function textId(text: string): string | undefined {
 const MENTION = new RegExp(`(?<![A-Za-z0-9])(?:@(${TEXT_ID.source})|#(${TEXT_ID.source}))`, 'g');
 
 /**
- * A bare `http(s)://` link in escaped text: it runs to whitespace or an escaped
+ * A bare `http(s)://` link, or an Apron link in its `apron:?` or `web+apron:?`
+ * form (Appendix A.4), in escaped text: it runs to whitespace or an escaped
  * `<`, `>` or `"`, which can't appear in a URL as typed.
  */
-const BARE_URL = /\bhttps?:\/\/(?:(?!&(?:lt|gt|quot);)[^\s<])+/gi;
+const BARE_URL = /\b(?:https?:\/\/|(?:web\+)?apron:\?)(?:(?!&(?:lt|gt|quot);)[^\s<])+/gi;
 
 /**
  * An emoji as the picker draws it: a flag (two regional indicators), a keycap,
@@ -253,7 +256,7 @@ function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: Room
 			url = trimmed.endsWith(')') && closes > opens ? trimmed.slice(0, -1) : trimmed;
 			if (url === trimmed) break;
 		}
-		if (!/^https?:\/\/[^/?#]/i.test(url)) continue;
+		if (!/^(?:https?:\/\/[^/?#]|(?:web\+)?apron:\?.)/i.test(url)) continue;
 		out += chipText(emojiText(text.slice(index, match.index)), resolve, resolveRoom);
 		out += `<a href="${url}"${LINK_ATTRS}>${url}</a>`;
 		index = match.index + url.length;

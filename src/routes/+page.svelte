@@ -9,6 +9,7 @@
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
+	import { readApronLink, writeApronLink, type ApronLink } from '$lib/ui/apron-link';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
 	import { isJsonObject } from '$lib/protocol/types';
 	import Composer from '$lib/components/Composer.svelte';
@@ -926,6 +927,7 @@
 			}
 		};
 		window.addEventListener('hashchange', hashChanged);
+		document.addEventListener('click', apronLinkClicked);
 		serverInput = previewMode ? 'ws://apron-preview.invalid' : loadServerUrl() ?? defaultWebSocketUrl(window.location);
 		displayName = previewMode ? 'Preview User' : loadDisplayName();
 		recentServers = previewMode ? [] : loadRecentServers();
@@ -1010,6 +1012,7 @@
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
+			document.removeEventListener('click', apronLinkClicked);
 			window.removeEventListener('storage', storageChanged);
 			for (const type of ['keydown', 'pointerdown'] as const) window.removeEventListener(type, pressed, inputOptions);
 			for (const type of ['pointermove', 'wheel', 'touchmove'] as const) window.removeEventListener(type, moved, inputOptions);
@@ -1440,17 +1443,52 @@
 		return normalizeWebSocketUrl(defaultWebSocketUrl(window.location), window.location);
 	}
 
-	/** Copies a link to a message: its room, the thread it's in, and the message itself. */
+	/**
+	 * Copies a link to a message that any Apron app opens (Appendix A.4): its
+	 * server, the room or thread it's in, and the message itself.
+	 */
 	async function copyMessageLink(event: MessageRecord): Promise<boolean> {
 		const destination = destinationOf(event);
-		if (!destination) return false;
+		if (!destination || !client) return false;
 		try {
-			await navigator.clipboard.writeText(addressOf(destination.room, destination.thread, event.message_id));
+			await navigator.clipboard.writeText(writeApronLink({ server: client.url, room: destination.thread ?? destination.room, message: event.message_id }));
 			return true;
 		} catch {
 			feedback.error('Unable to copy the link');
 			return false;
 		}
+	}
+
+	/**
+	 * Opens an Apron link from a message here, in place of the link.apron.chat
+	 * page (Appendix A.4). A link to this server, or one without a server, opens
+	 * its room, message or user. One to another server loads the page for it,
+	 * which asks before connecting to a server not used before. One with a token
+	 * asks before signing in, as a sign-in link does. Opening never acts.
+	 */
+	function openApronLink(link: ApronLink): void {
+		if (!client || previewMode) return;
+		const server = link.server ?? client.url;
+		if (link.token) {
+			links.follow({ token: link.token, server, ...(link.state ? { state: link.state } : {}) });
+			return;
+		}
+		const place = link.room ? { room: link.room, ...(link.message ? { message: link.message } : {}), ...(link.user ? { user: link.user } : {}) } : {};
+		if (server !== client.url) {
+			window.location.assign(destinationUrl(window.location.href, { server, ...place }, homeServer()));
+			return;
+		}
+		if (link.room) linked = { server, room: link.room, ...place };
+	}
+
+	/** A plain click on an Apron link anywhere on the page opens it here (`openApronLink`); a modified one is left to the browser. */
+	function apronLinkClicked(event: MouseEvent): void {
+		if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+		const anchor = (event.target as Element | null)?.closest?.<HTMLAnchorElement>('a[href]');
+		const link = anchor ? readApronLink(anchor.getAttribute('href') ?? '') : undefined;
+		if (!link) return;
+		event.preventDefault();
+		openApronLink(link);
 	}
 
 	function chooseRoom(room: RoomSnapshot): void {

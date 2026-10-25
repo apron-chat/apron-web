@@ -114,6 +114,15 @@ describe('bare links', () => {
 		expect(renderPlain('go to http://example.com')).toBe(`go to ${link('http://example.com')}`);
 	});
 
+	it('links Apron links in their apron: and web+apron: forms too, bare or in markdown (Appendix A.4)', () => {
+		expect(renderPlain('see apron:?room=ops&message=1 now')).toBe(`see ${link('apron:?room=ops&amp;message=1')} now`);
+		expect(renderPlain('web+apron:?room=ops.')).toBe(`${link('web+apron:?room=ops')}.`);
+		expect(renderMarkdown('[ops](apron:?room=ops)')).toContain('<a href="apron:?room=ops"');
+		// A bare scheme with no keys isn't a link, and other schemes stay unlinked.
+		expect(renderPlain('apron: is a scheme')).toBe('apron: is a scheme');
+		expect(renderMarkdown('[x](javascript:alert(1))')).not.toContain('href');
+	});
+
 	it('leaves trailing punctuation and an unmatched closing paren out', () => {
 		expect(renderPlain('(see https://example.com/x).')).toBe(`(see ${link('https://example.com/x')}).`);
 		expect(renderPlain('https://en.wikipedia.org/wiki/Foo_(bar), ok')).toBe(`${link('https://en.wikipedia.org/wiki/Foo_(bar)')}, ok`);
