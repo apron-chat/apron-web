@@ -19,8 +19,8 @@
 		mentions?: number;
 		/** Visible only to its members (§4.2.4): a plum card, its title led by a lock. */
 		private?: boolean;
-		/** The thread's `description` (§3.4) as text: its summary, or the gist of the message that started it. */
-		summary?: string;
+		/** The thread's `description` (§3.4) as text: what it's about, or the gist of the message that started it. */
+		description?: string;
 		/** The thread's members or recent senders, most recent first; up to 4 are shown. */
 		participants?: Sender[];
 		/** Replaces the participants' faces, such as with your own avatars; leave out when there are none. */
@@ -29,7 +29,7 @@
 		lastReply?: string;
 		/** Epoch ms of the newest message: makes `lastReply` a `<time>`, its exact time on hover. */
 		lastReplyAt?: number;
-		/** The newest message, on the line after the summary (up to three lines). Shorten `text` yourself. `sender` may be the name as you show it. */
+		/** The newest message, on the line after the description (up to three lines). Shorten `text` yourself. `sender` may be the name as you show it. */
 		latest?: { sender: Sender | string; text: string };
 		/** Render the "Moved to …" marker where a moved message used to be. */
 		moved?: boolean;
@@ -39,8 +39,8 @@
 		unreadTestid?: string;
 		/** A `data-testid` for the last reply's time. */
 		lastReplyTestid?: string;
-		/** A `data-testid` for the summary's line. */
-		summaryTestid?: string;
+		/** A `data-testid` for the description's line. */
+		descriptionTestid?: string;
 		/** A `data-testid` for the newest message's line. */
 		latestTestid?: string;
 		onopen?: () => void;
@@ -52,8 +52,8 @@
 		testid?: string;
 	}
 	let {
-		thread, name, unread = 0, mentions = 0, private: isPrivate, summary, participants, faces: facesSnippet, lastReply, lastReplyAt, latest, moved, row,
-		unreadTestid, lastReplyTestid, summaryTestid, latestTestid, onopen, timelineItem = false, class: className, testid
+		thread, name, unread = 0, mentions = 0, private: isPrivate, description, participants, faces: facesSnippet, lastReply, lastReplyAt, latest, moved, row,
+		unreadTestid, lastReplyTestid, descriptionTestid, latestTestid, onopen, timelineItem = false, class: className, testid
 	}: Props = $props();
 	const item = $derived(timelineItem ? '' : undefined);
 	const shown = $derived(roomName(name, thread, { thread: true }));
@@ -67,7 +67,7 @@
 	{#if moved}
 		<div data-timeline-item={item} data-testid={testid} class={['ap-thread', 'ap-thread-moved', className]}><span>{'Moved to '}</span><button type="button" class="ap-link" title={tip} onclick={onopen}>{shown}</button></div>
 	{:else}
-		<button type="button" data-thread={thread} data-timeline-item={item} data-testid={testid} class={['ap-thread', (summary || last) && 'ap-thread-2', isPrivate && 'ap-thread-private', className]} onclick={onopen}>
+		<button type="button" data-thread={thread} data-timeline-item={item} data-testid={testid} class={['ap-thread', (description || last) && 'ap-thread-2', isPrivate && 'ap-thread-private', className]} onclick={onopen}>
 			<span class="ap-thread-head">
 				{#if facesSnippet || faces.length}<span class="ap-thread-faces" aria-hidden="true">{#if facesSnippet}{@render facesSnippet()}{:else}{#each faces as f, i (uid(f) || i)}<Avatar name={f.name || uid(f)} src={f.avatar} size="sm" />{/each}{/if}</span>{/if}
 				<!-- The lock leads the title, so its ellipsis never cuts it off. -->
@@ -76,7 +76,7 @@
 				{#if lastReply && at.iso}<time class="ap-thread-last" data-testid={lastReplyTestid} datetime={at.iso} title={`Last reply ${at.exact}`}>{lastReply}</time>
 				{:else if lastReply}<span class="ap-thread-last" data-testid={lastReplyTestid} title="Last reply">{lastReply}</span>{/if}
 			</span>
-			<ThreadLines {summary} latest={last} summaryLines={3} {summaryTestid} {latestTestid} />
+			<ThreadLines {description} latest={last} descriptionLines={3} {descriptionTestid} {latestTestid} />
 		</button>
 	{/if}
 {/snippet}

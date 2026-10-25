@@ -11,7 +11,7 @@ function field<T extends HTMLElement>(selector: string): T {
 }
 
 describe('RoomEditor', () => {
-	it('edits a thread in the same centered dialog, and calls a room’s summary its Description', async () => {
+	it('edits a thread in the same centered dialog, and calls a room’s description its Description', async () => {
 		const updateRoom = vi.fn(() => ({ promise: Promise.resolve({}) }));
 		const onclose = vi.fn();
 		render(RoomEditor, { client: { updateRoom } as unknown as ChatClient, room: { id: 't1', title: 'Deploy', description: 'Old' }, thread: true, enabled: true, onclose });
@@ -24,7 +24,7 @@ describe('RoomEditor', () => {
 		expect(updateRoom).toHaveBeenCalledWith('t1', { description: 'New' });
 		expect(onclose).toHaveBeenCalled();
 		unmount();
-		// A room's summary is its Description.
+		// A room's description is its Description.
 		render(RoomEditor, { client: {} as unknown as ChatClient, room: { id: 'r1', title: 'Ops' }, thread: false, enabled: true, onclose: vi.fn() });
 		expect(field('dialog').textContent).toContain('Edit room');
 		expect(field('dialog').textContent).toContain('Description');

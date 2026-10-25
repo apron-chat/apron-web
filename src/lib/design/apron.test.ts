@@ -116,7 +116,7 @@ describe('apron.css: a message header is one line', () => {
 });
 
 describe('apron.css: text direction', () => {
-	it('gives each paragraph of a message, summary or welcome its own direction', () => {
+	it('gives each paragraph of a message, description or welcome its own direction', () => {
 		const block = rules.find((rule) => rule.selectors.some((selector) => selector.startsWith(':where(.ap-msg-text')))!;
 		expect(block.declarations.get('unicode-bidi')).toBe('plaintext');
 		expect(block.declarations.get('text-align')).toBe('start');

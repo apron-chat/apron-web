@@ -135,7 +135,7 @@
 
 	/* Control boxes: the height (and width, when square) of buttons, icon buttons, small fields and tiles. */
 	--control-xs: 22px;  /* a close or remove on a corner: an embed's ×, a toast's */
-	--control-sm: 24px;  /* a row's own action: a thread row's Exit or Join, a member's remove, a summary's × */
+	--control-sm: 24px;  /* a row's own action: a thread row's Exit or Join, a member's remove, a description's × */
 	--control-md: 28px;  /* icon buttons, small buttons and fields, the composer's line, toolbar buttons */
 	--control-lg: 32px;  /* buttons and fields, a header's back, the gear */
 	--control-xl: 40px;  /* the floating jump-to-latest button */
@@ -150,7 +150,7 @@
 	--pref-panel-w: 460px;    /* what a Preferences setting opens under it: push setup, scopes, a status's answer or a refusal */
 
 	/* Stacking, lowest first. Each is relative to the nearest stacking context: a dialog, opened in the top layer, has its own. */
-	--z-raised: 1;    /* over its neighbors in the flow: a sticky divider or loading pill, an active row's bar, a summary's × */
+	--z-raised: 1;    /* over its neighbors in the flow: a sticky divider or loading pill, an active row's bar, a description's × */
 	--z-float: 2;     /* over those: a message's hover actions, the floating day and loading pill */
 	--z-handle: 4;    /* a panel's resize handle, on its border */
 	--z-menu: 5;      /* menus and pickers opened in place: the profile popover, a menu, autocomplete, a font field's suggestions */

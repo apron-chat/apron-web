@@ -6,7 +6,7 @@ import * as dom from '$lib/test/dom';
 import { byTestid } from '$lib/test/queries';
 
 /** The header of a joined room, offering the member list's toggle or not. */
-function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: number; mentionsElsewhere?: number; showTopic?: boolean; onsummary?: () => void } = {}) {
+function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: number; mentionsElsewhere?: number; showTopic?: boolean; ondescription?: () => void } = {}) {
 	const room = { id: 'general', title: 'General', description: 'Say **hello**.', joined: true } as unknown as RoomSnapshot;
 	const noop = () => {};
 	dom.render(RoomHeader, {
@@ -34,14 +34,14 @@ describe('RoomHeader', () => {
 		dom.unmount();
 		// Description is offered once the pinned description is put away.
 		render();
-		expect(document.querySelector('[data-testid="show-summary"]')).toBeNull();
+		expect(document.querySelector('[data-testid="show-description"]')).toBeNull();
 		dom.unmount();
-		const onsummary = vi.fn();
-		render(undefined, { onsummary });
-		const button = document.querySelector<HTMLButtonElement>('[data-testid="show-summary"]');
+		const ondescription = vi.fn();
+		render(undefined, { ondescription });
+		const button = document.querySelector<HTMLButtonElement>('[data-testid="show-description"]');
 		expect(button?.getAttribute('aria-label')).toBe('Show the room description');
 		button?.click();
-		expect(onsummary).toHaveBeenCalledOnce();
+		expect(ondescription).toHaveBeenCalledOnce();
 	});
 
 	it('tags the back arrow with what the rooms list counts as new elsewhere', () => {

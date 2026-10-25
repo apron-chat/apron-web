@@ -25,8 +25,8 @@
 		moving?: number;
 		/** Title. `bind:name`. Focused when it opens; selected too when creating, so typing replaces a suggestion. */
 		name?: string;
-		/** The `description`, Markdown: a room's description, a thread's summary. `bind:summary`. */
-		summary?: string;
+		/** The room's or thread's `description` (§3.4), Markdown. `bind:description`. */
+		description?: string;
 		status?: 'idle' | 'saving';
 		/** What went wrong: a missing title, or the server declining. */
 		error?: string;
@@ -38,7 +38,7 @@
 		/** Classes for its Dialog's `<dialog>`, added to its own. */
 		class?: ClassValue;
 	}
-	let { open = $bindable(false), kind = 'thread', mode = 'edit', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), summary = $bindable(''), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
+	let { open = $bindable(false), kind = 'thread', mode = 'edit', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), description = $bindable(''), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
 	const uid = $props.id();
 	const saving = $derived(status === 'saving');
 	const creating = $derived(mode === 'create');
@@ -72,8 +72,8 @@
 		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
 			placeholder={creating ? (thread ? 'What it’s about' : 'What to call it') : ''} />
 	</label>
-	<label class="ap-fieldlabel" for="{uid}-summary"><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown{creating ? ', optional' : ''}</span></span>
-		<textarea id="{uid}-summary" class="ap-field ap-field-multi" aria-label={thread ? 'Thread description' : 'Room description'} rows={creating && !summary ? 4 : 8} bind:value={summary} disabled={saving} spellcheck="true" dir="auto"
+	<label class="ap-fieldlabel" for="{uid}-description"><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown{creating ? ', optional' : ''}</span></span>
+		<textarea id="{uid}-description" class="ap-field ap-field-multi" aria-label={thread ? 'Thread description' : 'Room description'} rows={creating && !description ? 4 : 8} bind:value={description} disabled={saving} spellcheck="true" dir="auto"
 			placeholder={thread ? 'What this thread is about, or what it settled. Shows on its card and at the top of the thread.' : 'What this room is for.'}></textarea>
 	</label>
 	{#if creating && !thread}

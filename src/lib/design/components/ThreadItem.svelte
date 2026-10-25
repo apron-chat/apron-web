@@ -29,9 +29,9 @@
 		unread?: number;
 		/** Unread replies whose `body.mentions` lists the viewer: the count turns orange with an @. */
 		mentions?: number;
-		/** Its summary (its `description`) as one line of text, under its title, marked by a text icon. */
-		summary?: string;
-		/** Its newest message, on the line after its summary, marked by a reply arrow: its sender, then its text. */
+		/** Its `description` as one line of text, under its title, marked by a text icon. */
+		description?: string;
+		/** Its newest message, on the line after its description, marked by a reply arrow: its sender, then its text. */
 		latest?: { sender?: string; text: string };
 		/**
 		 * When it was last active, compactly (`2h`, `Tue`), at the end of its row: for a thread you haven't joined, which
@@ -46,7 +46,7 @@
 		onleave?: (e: MouseEvent) => void;
 		/** Cap `rooms`, for a thread you haven't joined: a door-in button titled "Join thread" on hover/focus. Sends `room_join` (§4.2.2). */
 		onjoin?: (e: MouseEvent) => void;
-		/** Prefix for its preview lines' `data-testid`s: `<linesTestid>-summary` and `<linesTestid>-latest`. */
+		/** Prefix for its preview lines' `data-testid`s: `<linesTestid>-description` and `<linesTestid>-latest`. */
 		linesTestid?: string;
 		/** A `data-testid` for its time, and one for its unread bubble. */
 		agoTestid?: string;
@@ -57,7 +57,7 @@
 		class?: ClassValue;
 	}
 	let {
-		thread, name, private: isPrivate, active, unjoined = false, unread, mentions, summary, latest, ago, count, onselect, onleave, onjoin,
+		thread, name, private: isPrivate, active, unjoined = false, unread, mentions, description, latest, ago, count, onselect, onleave, onjoin,
 		linesTestid, agoTestid, unreadTestid, title, class: className
 	}: Props = $props();
 	const shown = $derived(roomName(name, thread, { thread: true }));
@@ -67,7 +67,7 @@
 	const quiet = $derived(!active && !unjoined && !unread && !mentions);
 </script>
 
-{#snippet lines()}<ThreadLines {summary} {latest} summaryTestid={linesTestid && `${linesTestid}-summary`} latestTestid={linesTestid && `${linesTestid}-latest`} />{/snippet}
+{#snippet lines()}<ThreadLines {description} {latest} descriptionTestid={linesTestid && `${linesTestid}-description`} latestTestid={linesTestid && `${linesTestid}-latest`} />{/snippet}
 
 <RoomRow
 	room={thread} noun="thread" label={shown} {tip} private={isPrivate} {active} nested framed listed={unjoined} {title} {onselect} {onleave} {onjoin} {lines}

@@ -21,14 +21,14 @@ describe('ThreadCard', () => {
 		expect(byText('Untitled').title).toBe('t1');
 	});
 
-	it('shows its summary and its latest reply, each marked by an icon, as the sidebar does', () => {
+	it('shows its description and its latest reply, each marked by an icon, as the sidebar does', () => {
 		const id = String(Date.now() - 9 * hour);
 		const latest = { message_id: id, room_id: 't1', from: { user_id: 'shazow', name: 'shazow' }, body: { text: 'test\ntest' } } as unknown as MessageRecord;
 		render({ description: 'Old threads expired, adding a fresh one.', latestMessage: latest, lastReplyId: id });
-		const lines = ['thread-preview-summary', 'thread-preview-latest'].map((id) => [one(`[data-testid="${id}"] [role="img"]`)?.getAttribute('aria-label'), one(`[data-testid="${id}"]`)?.textContent]);
+		const lines = ['thread-preview-description', 'thread-preview-latest'].map((id) => [one(`[data-testid="${id}"] [role="img"]`)?.getAttribute('aria-label'), one(`[data-testid="${id}"]`)?.textContent]);
 		expect(lines).toEqual([['Description', 'Old threads expired, adding a fresh one.'], ['Latest message', 'shazow test test']]);
-		// The summary may take more than one line on the card.
-		expect(one('[data-testid="thread-preview-summary"]')?.classList.contains('ap-tline-multi')).toBe(true);
+		// The description may take more than one line on the card.
+		expect(one('[data-testid="thread-preview-description"]')?.classList.contains('ap-tline-multi')).toBe(true);
 		expect(one('[data-testid="thread-last-reply"]')?.textContent).toBe('9h');
 		expect(one('[data-testid="thread-last-reply"]')?.getAttribute('datetime')).toBe(new Date(Number(id)).toISOString());
 	});

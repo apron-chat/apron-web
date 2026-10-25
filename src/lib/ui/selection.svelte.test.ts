@@ -104,7 +104,7 @@ describe('MessageSelection.moveToNewThread', () => {
 		expect(moveMessage).not.toHaveBeenCalled();
 	});
 
-	it('creates the thread with the title and summary asked for, then moves the messages in, someone else\'s first, adding their authors', async () => {
+	it('creates the thread with the title and description asked for, then moves the messages in, someone else\'s first, adding their authors', async () => {
 		const { client, moveMessage, createRoom } = fakeClient();
 		const selection = picked(['1', 'b2']);
 		expect(selection.checkMovable(() => true)).toBeUndefined();

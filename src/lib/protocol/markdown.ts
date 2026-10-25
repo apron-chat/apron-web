@@ -167,7 +167,7 @@ export function renderBio(source: string): string {
 
 /**
  * Markdown as plain text, for a one-line or clamped preview such as a thread
- * card's summary: rendered, then its tags dropped (block ends become line
+ * card's description: rendered, then its tags dropped (block ends become line
  * breaks) and entities decoded. The result is text, never markup.
  */
 export function markdownText(source: string): string {

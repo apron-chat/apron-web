@@ -31,7 +31,7 @@ export interface MoveAuthors {
 	skip: (userId: string, room: string) => boolean;
 }
 
-/** What a new thread from a selection is created with: its parent room, and the title and summary asked for. */
+/** What a new thread from a selection is created with: its parent room, and the title and description asked for. */
 export interface NewThreadOptions {
 	parentRoomId: string;
 	title: string;
@@ -163,7 +163,7 @@ export class MessageSelection {
 
 	/**
 	 * "New thread": one fresh thread for the whole selection, with the title
-	 * and summary asked for. The thread is created first; the moves go out
+	 * and description asked for. The thread is created first; the moves go out
 	 * once the server has named it. A failure after it exists names it in
 	 * `room`.
 	 */

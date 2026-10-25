@@ -7,7 +7,7 @@
 		client: ChatClient;
 		/** The room or thread to edit, as it was when the editor opened. */
 		room: { id: string; title: string; description?: string };
-		/** A thread: its description reads as its summary. */
+		/** A thread, not a room: named as one in the form. */
 		thread: boolean;
 		/** False while the session can't take requests; the form stays open but won't save. */
 		enabled: boolean;
@@ -58,4 +58,4 @@
 	}
 </script>
 
-<RoomForm bind:open kind={thread ? 'thread' : 'room'} mode="edit" bind:name={title} bind:summary={description} status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={save} {onclose} />
+<RoomForm bind:open kind={thread ? 'thread' : 'room'} mode="edit" bind:name={title} bind:description status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={save} {onclose} />

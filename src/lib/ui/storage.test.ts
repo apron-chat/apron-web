@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, hideSummary, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadHiddenSummaries, showSummary, summaryHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadHiddenDescriptions, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -95,33 +95,33 @@ describe('preference storage', () => {
 		expect(loadAppearance()).toBeUndefined();
 	});
 
-	it('keeps a summary put away until it is edited, and forgets the oldest past the limit', () => {
-		expect(loadHiddenSummaries()).toEqual({});
-		let hidden = hideSummary({}, 'general', 'Say hello.');
-		expect(summaryHidden(hidden, 'general', 'Say hello.')).toBe(true);
-		expect(summaryHidden(hidden, 'general', 'Say hello, and read the rules.')).toBe(false);
-		expect(summaryHidden(hidden, 'random', 'Say hello.')).toBe(false);
-		expect(summaryHidden(loadHiddenSummaries(), 'general', 'Say hello.')).toBe(true);
-		expect(summaryHidden(showSummary(hidden, 'general'), 'general', 'Say hello.')).toBe(false);
-		expect(summaryHidden(loadHiddenSummaries(), 'general', 'Say hello.')).toBe(false);
-		for (let i = 0; i < 200; i++) hidden = hideSummary(hidden, `room${i}`, 'Summary');
+	it('keeps a description put away until it is edited, and forgets the oldest past the limit', () => {
+		expect(loadHiddenDescriptions()).toEqual({});
+		let hidden = hideDescription({}, 'general', 'Say hello.');
+		expect(descriptionHidden(hidden, 'general', 'Say hello.')).toBe(true);
+		expect(descriptionHidden(hidden, 'general', 'Say hello, and read the rules.')).toBe(false);
+		expect(descriptionHidden(hidden, 'random', 'Say hello.')).toBe(false);
+		expect(descriptionHidden(loadHiddenDescriptions(), 'general', 'Say hello.')).toBe(true);
+		expect(descriptionHidden(showDescription(hidden, 'general'), 'general', 'Say hello.')).toBe(false);
+		expect(descriptionHidden(loadHiddenDescriptions(), 'general', 'Say hello.')).toBe(false);
+		for (let i = 0; i < 200; i++) hidden = hideDescription(hidden, `room${i}`, 'Description');
 		expect(Object.keys(hidden)).toHaveLength(200);
-		expect(summaryHidden(loadHiddenSummaries(), 'general', 'Say hello.')).toBe(false);
-		expect(summaryHidden(loadHiddenSummaries(), 'room199', 'Summary')).toBe(true);
+		expect(descriptionHidden(loadHiddenDescriptions(), 'general', 'Say hello.')).toBe(false);
+		expect(descriptionHidden(loadHiddenDescriptions(), 'room199', 'Description')).toBe(true);
 		values.set('apron.hiddenSummaries', '{broken');
-		expect(loadHiddenSummaries()).toEqual({});
+		expect(loadHiddenDescriptions()).toEqual({});
 	});
 
-	it('keeps the summaries another tab put away, or brought back, since this one loaded them', () => {
-		const here = loadHiddenSummaries();
-		hideSummary(loadHiddenSummaries(), 'general', 'Say hello.');
-		hideSummary(loadHiddenSummaries(), 'design', 'Critiques.');
-		const hidden = hideSummary(here, 'random', 'Anything goes.');
-		expect(summaryHidden(hidden, 'general', 'Say hello.')).toBe(true);
-		expect(summaryHidden(loadHiddenSummaries(), 'general', 'Say hello.')).toBe(true);
-		expect(summaryHidden(loadHiddenSummaries(), 'random', 'Anything goes.')).toBe(true);
-		showSummary(loadHiddenSummaries(), 'design');
-		expect(summaryHidden(showSummary(hidden, 'random'), 'design', 'Critiques.')).toBe(false);
-		expect(Object.keys(loadHiddenSummaries())).toEqual(['general']);
+	it('keeps the descriptions another tab put away, or brought back, since this one loaded them', () => {
+		const here = loadHiddenDescriptions();
+		hideDescription(loadHiddenDescriptions(), 'general', 'Say hello.');
+		hideDescription(loadHiddenDescriptions(), 'design', 'Critiques.');
+		const hidden = hideDescription(here, 'random', 'Anything goes.');
+		expect(descriptionHidden(hidden, 'general', 'Say hello.')).toBe(true);
+		expect(descriptionHidden(loadHiddenDescriptions(), 'general', 'Say hello.')).toBe(true);
+		expect(descriptionHidden(loadHiddenDescriptions(), 'random', 'Anything goes.')).toBe(true);
+		showDescription(loadHiddenDescriptions(), 'design');
+		expect(descriptionHidden(showDescription(hidden, 'random'), 'design', 'Critiques.')).toBe(false);
+		expect(Object.keys(loadHiddenDescriptions())).toEqual(['general']);
 	});
 });

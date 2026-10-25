@@ -8,7 +8,7 @@ import { dayKey, dayKeyOf, dayLabel, dayLabelOf, isGrouped } from './time';
 
 /** Longest title a thread started from a message gets, in characters. */
 const THREAD_TITLE_MAX = 60;
-/** Longest quote of its message a thread started from one begins its summary with, in characters. */
+/** Longest quote of its message a thread started from one begins its description with, in characters. */
 const THREAD_DESCRIPTION_MAX = 500;
 
 /**
@@ -23,7 +23,7 @@ export interface ThreadEntry {
 	title: string;
 	/** It has no title: the design system calls it "Untitled" itself, with its `room_id` on hover (`designTitle`). */
 	untitled?: true;
-	/** The thread's `description` (§3.4): Markdown, its summary or what started it. */
+	/** The thread's `description` (§3.4): Markdown, what it's about or what started it. */
 	description?: string;
 	/** Visible only to its members (§4.2.4). */
 	private?: boolean;
@@ -146,8 +146,8 @@ export function threadsWithNews(
 	return threadEntries(rooms, parentRoomId).filter((entry) => entry.joined && ((unread[entry.id] ?? 0) > 0 || (mentions[entry.id] ?? 0) > 0));
 }
 
-/** A thread's summary (its `description`, §3.4) as text, for a preview; empty without one. */
-export function threadSummaryText(entry: Pick<ThreadEntry, 'description'>): string {
+/** A thread's `description` (§3.4) as text, for a preview; empty without one. */
+export function threadDescriptionText(entry: Pick<ThreadEntry, 'description'>): string {
 	return entry.description ? markdownText(entry.description).trim() : '';
 }
 
@@ -167,7 +167,7 @@ export function threadTitleFor(event: MessageRecord | undefined): string {
 }
 
 /**
- * The summary a thread started from a message begins with (its `description`,
+ * The description a thread started from a message begins with (its `description`,
  * §3.4): the message's text as a Markdown `>` quote, shortened on a line or
  * word boundary with any code fence it leaves open closed. A Markdown message
  * is kept as written; a plain one (§3.5: `format` absent or `plain`) is
@@ -175,7 +175,7 @@ export function threadTitleFor(event: MessageRecord | undefined): string {
  * room; the thread's first reply points back at it with `reply_to`.
  * Undefined when the message has no text.
  */
-export function threadSummaryFor(event: MessageRecord | undefined): string | undefined {
+export function threadDescriptionFor(event: MessageRecord | undefined): string | undefined {
 	const text = event && !event.deleted ? textOf(event).trim() : '';
 	if (!text) return undefined;
 	const markdown = event?.body?.format === 'markdown';

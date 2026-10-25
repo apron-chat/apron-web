@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ProtocolStore, applyRecords, decodeHistoryRecords, timelineEvents, type MembershipRecord } from '$lib/protocol/reducer';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, newDividerBefore, sidebarRooms, threadEntries, threadEntry, threadSummaryFor, threadSummaryText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, newDividerBefore, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadDescriptionText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
 import { roomSnapshot as room } from '$lib/test/builders';
@@ -104,13 +104,13 @@ describe('thread grouping', () => {
 	it('previews the description as text and the latest message on one line, with its sender', () => {
 		const latest = message(1000, 'bob', { room_id: 't1', body: { text: 'latest\n  words' } });
 		const entry = threadEntry(room('t1', [latest], { parentRoomId: 'general', description: 'Line **one**\nLine two\n\n- Line three' }));
-		expect(threadSummaryText(entry)).toBe('Line one\nLine two\nLine three');
+		expect(threadDescriptionText(entry)).toBe('Line one\nLine two\nLine three');
 		expect(threadLatest(entry)).toEqual({ sender: 'Bob', text: 'latest words' });
 		expect(entry.lastReplyId).toBe(latest.message_id);
 		expect(threadLatest({ latestMessage: { ...latest, deleted: true } })).toEqual({ sender: '', text: 'Message deleted' });
 		expect(threadLatest({ latestMessage: message(1, 'bob', { body: { embeds: [{ kind: 'image' }] } }) })).toMatchObject({ text: 'Attachment' });
 		expect(threadLatest({ latestMessage: undefined })).toBeUndefined();
-		expect(threadSummaryText({ description: undefined })).toBe('');
+		expect(threadDescriptionText({ description: undefined })).toBe('');
 	});
 
 	it('titles a new thread after its message’s first line', () => {
@@ -120,19 +120,19 @@ describe('thread grouping', () => {
 		expect(threadTitleFor(undefined)).toBe('Thread');
 	});
 
-	it('begins a thread’s summary with its message quoted, shortened', () => {
+	it('begins a thread’s description with its message quoted, shortened', () => {
 		const unquote = (quoted: string) => quoted.split('\n').map((row) => row.replace(/^> ?/, '')).join('\n');
-		expect(threadSummaryFor(message(0, 'alice', { body: { text: '  Why did the **4pm** deploy fail?\n\nThe runner looked fine.\n', format: 'markdown' } }))).toBe('> Why did the **4pm** deploy fail?\n>\n> The runner looked fine.');
-		expect(threadSummaryFor(message(0, 'alice', { body: { text: 'Deploy?' } }))).toBe('> Deploy?');
-		expect([...unquote(threadSummaryFor(message(0, 'alice', { body: { text: 'x'.repeat(600), format: 'markdown' } }))!)]).toHaveLength(500);
-		expect(threadSummaryFor(message(0, 'alice', { body: { embeds: [{ kind: 'image' }] } }))).toBeUndefined();
-		expect(threadSummaryFor(message(0, 'alice', { deleted: true }))).toBeUndefined();
+		expect(threadDescriptionFor(message(0, 'alice', { body: { text: '  Why did the **4pm** deploy fail?\n\nThe runner looked fine.\n', format: 'markdown' } }))).toBe('> Why did the **4pm** deploy fail?\n>\n> The runner looked fine.');
+		expect(threadDescriptionFor(message(0, 'alice', { body: { text: 'Deploy?' } }))).toBe('> Deploy?');
+		expect([...unquote(threadDescriptionFor(message(0, 'alice', { body: { text: 'x'.repeat(600), format: 'markdown' } }))!)]).toHaveLength(500);
+		expect(threadDescriptionFor(message(0, 'alice', { body: { embeds: [{ kind: 'image' }] } }))).toBeUndefined();
+		expect(threadDescriptionFor(message(0, 'alice', { deleted: true }))).toBeUndefined();
 		// Plain text stays the same text once read as Markdown.
-		expect(threadSummaryFor(message(0, 'alice', { body: { text: '1. not a list\n*not bold* # nor a heading' } }))).toBe('> 1\\. not a list\n> \\*not bold\\* \\# nor a heading');
-		expect(markdownText(threadSummaryFor(message(0, 'alice', { body: { text: '1. not a list\n> nor a quote' } }))!)).toBe('1. not a list\n> nor a quote');
+		expect(threadDescriptionFor(message(0, 'alice', { body: { text: '1. not a list\n*not bold* # nor a heading' } }))).toBe('> 1\\. not a list\n> \\*not bold\\* \\# nor a heading');
+		expect(markdownText(threadDescriptionFor(message(0, 'alice', { body: { text: '1. not a list\n> nor a quote' } }))!)).toBe('1. not a list\n> nor a quote');
 		// A long one is cut on a line boundary, closing the code fence it leaves open, all inside the quote.
 		const fenced = `Look:\n${'word '.repeat(60)}\n\`\`\`\n${'const x = 1;\n'.repeat(40)}\`\`\``;
-		const quoted = threadSummaryFor(message(0, 'alice', { body: { text: fenced, format: 'markdown' } }))!;
+		const quoted = threadDescriptionFor(message(0, 'alice', { body: { text: fenced, format: 'markdown' } }))!;
 		expect(quoted.split('\n').every((row) => row === '>' || row.startsWith('> '))).toBe(true);
 		const cut = unquote(quoted);
 		expect(cut.split('\n').filter((row) => row.startsWith('```'))).toHaveLength(2);
@@ -141,7 +141,7 @@ describe('thread grouping', () => {
 		// Setext underlines, entities, and indents stay text too.
 		expect(markdownText(escapeMarkdown('Title\n===\na &lt; b\n    not code'))).toBe('Title\n===\na &lt; b\n    not code');
 		// A four-backtick fence closes with four.
-		const long = unquote(threadSummaryFor(message(0, 'alice', { body: { text: `Code:\n\`\`\`\`\n${'x = 1\n'.repeat(120)}\`\`\`\``, format: 'markdown' } }))!);
+		const long = unquote(threadDescriptionFor(message(0, 'alice', { body: { text: `Code:\n\`\`\`\`\n${'x = 1\n'.repeat(120)}\`\`\`\``, format: 'markdown' } }))!);
 		expect(long).toMatch(/\n````\n\n…$/);
 	});
 });
@@ -274,7 +274,7 @@ describe('transient notices and threads not joined', () => {
 		const card = entries[1];
 		expect(card).toMatchObject({ title: 'Incident', description: 'Pager went *off*', private: true, anchor: String(base + 1), loaded: false, participants: [] });
 		expect(card.count).toBeUndefined();
-		expect(threadSummaryText(card)).toBe('Pager went off');
+		expect(threadDescriptionText(card)).toBe('Pager went off');
 		expect(card.lastReplyId).toBe(String(base + 60_000));
 		expect(kinds(buildRoomTimeline({ messages: [first], threads: entries }))).toEqual(['date', 'message', 'thread', 'thread']);
 	});

@@ -22,8 +22,8 @@ const KEY = {
 	memberSections: 'apron.memberSections',
 	/** Whether Other threads, the threads you haven't joined under the open room, is folded away. */
 	otherThreads: 'apron.otherThreads',
-	/** The room and thread summaries put away with their ×, each kept as the fingerprint of the text put away. */
-	hiddenSummaries: 'apron.hiddenSummaries',
+	/** The room and thread descriptions put away with their ×, each kept as the fingerprint of the text put away. Still stored under its old name, so what's put away stays put away. */
+	hiddenDescriptions: 'apron.hiddenSummaries',
 	/** How far you have read each room and thread, by `readPositionKey`: the `message_id` read through. */
 	readPositions: 'apron.readPositions',
 	/** app.html reads this one too, to apply the theme before the app loads. */
@@ -34,8 +34,8 @@ export type RecentServer = { url: string; label?: string };
 export type SidebarPrefs = { width: number; collapsed: boolean };
 
 const RECENT_SERVERS_MAX = 5;
-/** The most summaries kept put away; the ones put away longest ago show again first. */
-const HIDDEN_SUMMARIES_MAX = 200;
+/** The most descriptions kept put away; the ones put away longest ago show again first. */
+const HIDDEN_DESCRIPTIONS_MAX = 200;
 /** The most read positions kept; the ones moved longest ago go first. */
 const READ_POSITIONS_MAX = 500;
 
@@ -155,13 +155,13 @@ export function saveOtherThreadsOpen(open: boolean): void {
 	write(KEY.otherThreads, open ? 'open' : 'shut');
 }
 
-/** The storage key of the summaries put away: other tabs follow its `storage` events. */
-export const HIDDEN_SUMMARIES_KEY = KEY.hiddenSummaries;
+/** The storage key of the descriptions put away: other tabs follow its `storage` events. */
+export const HIDDEN_DESCRIPTIONS_KEY = KEY.hiddenDescriptions;
 
-/** The summaries put away, by the page's key for each room or thread: the fingerprint of the text that was put away. */
-export function loadHiddenSummaries(): Record<string, string> {
+/** The descriptions put away, by the page's key for each room or thread: the fingerprint of the text that was put away. */
+export function loadHiddenDescriptions(): Record<string, string> {
 	try {
-		const parsed: unknown = JSON.parse(read(KEY.hiddenSummaries) ?? '{}');
+		const parsed: unknown = JSON.parse(read(KEY.hiddenDescriptions) ?? '{}');
 		if (!isJsonObject(parsed)) return {};
 		return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
 	} catch {
@@ -170,35 +170,35 @@ export function loadHiddenSummaries(): Record<string, string> {
 }
 
 /**
- * The summaries to change: as saved, which another tab may have changed since this one loaded them (its
+ * The descriptions to change: as saved, which another tab may have changed since this one loaded them (its
  * `hidden` would put back what that tab saved), unless nothing is saved for the next visit.
  */
-function savedSummaries(hidden: Record<string, string>): Record<string, string> {
-	return persisting ? loadHiddenSummaries() : hidden;
+function savedDescriptions(hidden: Record<string, string>): Record<string, string> {
+	return persisting ? loadHiddenDescriptions() : hidden;
 }
 
-/** Puts a room's or thread's summary away, until it's edited: returns the summaries put away, this one newest. */
-export function hideSummary(hidden: Record<string, string>, key: string, description: string): Record<string, string> {
-	const others = Object.entries(savedSummaries(hidden)).filter(([entry]) => entry !== key);
-	const next = Object.fromEntries([...others, [key, summaryFingerprint(description)]].slice(-HIDDEN_SUMMARIES_MAX));
-	write(KEY.hiddenSummaries, JSON.stringify(next));
+/** Puts a room's or thread's description away, until it's edited: returns the descriptions put away, this one newest. */
+export function hideDescription(hidden: Record<string, string>, key: string, description: string): Record<string, string> {
+	const others = Object.entries(savedDescriptions(hidden)).filter(([entry]) => entry !== key);
+	const next = Object.fromEntries([...others, [key, descriptionFingerprint(description)]].slice(-HIDDEN_DESCRIPTIONS_MAX));
+	write(KEY.hiddenDescriptions, JSON.stringify(next));
 	return next;
 }
 
-/** Brings a room's or thread's summary back: returns the summaries still put away. */
-export function showSummary(hidden: Record<string, string>, key: string): Record<string, string> {
-	const next = Object.fromEntries(Object.entries(savedSummaries(hidden)).filter(([entry]) => entry !== key));
-	write(KEY.hiddenSummaries, JSON.stringify(next));
+/** Brings a room's or thread's description back: returns the descriptions still put away. */
+export function showDescription(hidden: Record<string, string>, key: string): Record<string, string> {
+	const next = Object.fromEntries(Object.entries(savedDescriptions(hidden)).filter(([entry]) => entry !== key));
+	write(KEY.hiddenDescriptions, JSON.stringify(next));
 	return next;
 }
 
-/** Whether a summary was put away as it now reads: an edit brings it back. */
-export function summaryHidden(hidden: Record<string, string>, key: string, description: string): boolean {
-	return hidden[key] === summaryFingerprint(description);
+/** Whether a description was put away as it now reads: an edit brings it back. */
+export function descriptionHidden(hidden: Record<string, string>, key: string, description: string): boolean {
+	return hidden[key] === descriptionFingerprint(description);
 }
 
-/** A short hash of a summary (FNV-1a), enough to tell an edit, without keeping the text itself. */
-function summaryFingerprint(description: string): string {
+/** A short hash of a description (FNV-1a), enough to tell an edit, without keeping the text itself. */
+function descriptionFingerprint(description: string): string {
 	let hash = 0x811c9dc5;
 	for (let i = 0; i < description.length; i++) hash = Math.imul(hash ^ description.charCodeAt(i), 0x01000193);
 	return (hash >>> 0).toString(36);

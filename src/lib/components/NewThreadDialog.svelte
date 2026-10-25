@@ -7,25 +7,25 @@
 		room: { id: string; title: string; private?: boolean };
 		/** What the form starts with: empty from a room, or suggested from the message(s) it starts from. */
 		title?: string;
-		summary?: string;
+		description?: string;
 		/** Selected messages that move into the thread once it exists. */
 		moving?: number;
 		/** False while the session can't take requests; the form stays open but won't start the thread. */
 		enabled: boolean;
 		/**
-		 * Creates the thread with what was entered (the summary as its `description`, left out when empty). Its
+		 * Creates the thread with what was entered (the description as its `description`, left out when empty). Its
 		 * rejection is shown in the form, which stays open to try again; once it resolves, the form closes.
 		 */
 		oncreate: (thread: { title: string; description?: string }) => Promise<void>;
 		/** It closed: started, or put away. */
 		onclose: () => void;
 	}
-	let { room, title: suggestedTitle = '', summary: suggestedSummary = '', moving = 0, enabled, oncreate, onclose }: Props = $props();
+	let { room, title: suggestedTitle = '', description: suggestedDescription = '', moving = 0, enabled, oncreate, onclose }: Props = $props();
 
 	// The form starts from what it was opened with; the caller remounts it for each new thread.
 	let open = $state(true);
 	let title = $state(untrack(() => suggestedTitle));
-	let summary = $state(untrack(() => suggestedSummary));
+	let description = $state(untrack(() => suggestedDescription));
 	let saving = $state(false);
 	let error = $state<string | undefined>();
 
@@ -36,11 +36,11 @@
 			error = 'Enter a thread title.';
 			return;
 		}
-		const description = summary.trim();
+		const text = description.trim();
 		saving = true;
 		error = undefined;
 		try {
-			await oncreate({ title: name, ...(description ? { description } : {}) });
+			await oncreate({ title: name, ...(text ? { description: text } : {}) });
 			saving = false;
 			open = false;
 		} catch (cause) {
@@ -50,4 +50,4 @@
 	}
 </script>
 
-<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} bind:summary status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={start} {onclose} />
+<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} bind:description status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={start} {onclose} />
