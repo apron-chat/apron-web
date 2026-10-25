@@ -264,7 +264,7 @@ export interface MessageReply {
 /**
  * A link in a message to a message, room or thread (Appendix A.4), as a card under its text in the shape of a link
  * preview (EmbedCard): where it is as a path, server › room › what it is, then what you already know of it. Nothing
- * is fetched to draw it, so a message not loaded here is only its path. Following the link opens it.
+ * is fetched to draw it; one that would be its path alone is left to the link's chip. Following the link opens it.
  */
 export interface MessageLinkCard {
 	/** The link, in the https form with its server, also the list's key. */

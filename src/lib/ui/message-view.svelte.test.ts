@@ -86,7 +86,7 @@ describe('messageView', () => {
 		expect(messageView(messageRecord(9, 'ops', { reply_to: { message_id: '5' }, deleted: true }), row(), context([quoted])).reply).toBeUndefined();
 	});
 
-	it('shows a card for each link to a message, room or thread, in order, at most three: its path and kind always, then what is loaded here', () => {
+	it('shows a card for each link to a loaded message, in order, at most three, and none for one only its path is known of', () => {
 		know({ ada }, { rooms: [roomSnapshot('ops'), roomSnapshot('t1', [], { title: '', untitled: true, parentRoomId: 'ops' })] });
 		const linkedOps = messageRecord(1710000000000, 'ops', { from: { user_id: 'ada' }, body: { text: 'ship it @you\n\n\nnow\nthen\nlater' } });
 		const linkedThread = messageRecord(1710000000001, 't1', { from: { user_id: 'ada' }, deleted: true, body: undefined });
@@ -103,13 +103,15 @@ describe('messageView', () => {
 				kind: 'message', href: https('room=ops&message=1710000000000'), server: 'chat.example', in: { id: 'ops', title: 'ops' }, sender,
 				timestamp: 1710000000000, time: idWhen('1710000000000'), snippet: ['ship it ', { user_id: 'you', name: 'You', me: true }, '\nnow\nthen']
 			},
-			{ kind: 'message', href: https('room=t1&message=1710000000001'), server: 'chat.example', in: { id: 't1', thread: true }, sender, timestamp: 1710000000001, time: idWhen('1710000000001'), deleted: true },
-			// Not loaded: where it is, as far as that's known.
-			{ kind: 'message', href: https('room=ops&message=404'), server: 'chat.example', in: { id: 'ops', title: 'ops' } }
+			{ kind: 'message', href: https('room=t1&message=1710000000001'), server: 'chat.example', in: { id: 't1', thread: true }, sender, timestamp: 1710000000001, time: idWhen('1710000000001'), deleted: true }
 		]);
-		// Another server's: its host and IDs, nothing looked up.
-		const other = messageView(messageRecord(8, 'ops', { body: { text: 'https://link.apron.chat/#server=wss://other.example/&room=ops&message=1710000000000' } }), row(), context([linkedOps])).linkCards;
-		expect(other).toEqual([{ kind: 'message', href: https('room=ops&message=1710000000000', 'wss://other.example/'), server: 'other.example', in: { id: 'ops', unknown: true } }]);
+		// One not loaded, or on another server, would be its path alone, which its chip says already: none.
+		const unknown = 'apron:?room=ops&message=404 https://link.apron.chat/#server=wss://other.example/&room=ops&message=1710000000000';
+		expect(messageView(messageRecord(8, 'ops', { body: { text: unknown } }), row(), context([linkedOps])).linkCards).toBeUndefined();
+		// Three at most, of those with more to show, however many links come before them.
+		const many = [404, 405, 1, 2, 3, 4].map((id) => `apron:?room=ops&message=${id}`).join(' ');
+		const loaded = [1, 2, 3, 4].map((id) => messageRecord(id, 'ops'));
+		expect(messageView(messageRecord(13, 'ops', { body: { text: many } }), row(), context(loaded)).linkCards?.map((card) => card.timestamp)).toEqual([1, 2, 3]);
 		// A link to the message itself, one in code, a tombstone's, and a system line's show none.
 		expect(messageView(messageRecord(9, 'ops', { body: { text: 'apron:?room=ops&message=9' } }), row(), context()).linkCards).toBeUndefined();
 		expect(messageView(messageRecord(10, 'ops', { body: { text: '`apron:?room=ops&message=1`', format: 'markdown' } }), row(), context()).linkCards).toBeUndefined();
@@ -117,23 +119,22 @@ describe('messageView', () => {
 		expect(messageView(messageRecord(12, 'ops', { from: { user_id: '~server' }, body: { text: 'apron:?room=ops&message=1' } }), row(), context()).linkCards).toBeUndefined();
 	});
 
-	it('shows a room or thread that is joined or listed with its name, the room a thread is in, its size and its description as text', () => {
-		know({ ada }, { rooms: [roomSnapshot('ops', [], { title: 'Ops' }), roomSnapshot('t1', [], { title: 'Deploy', parentRoomId: 'ops' })] });
-		const rooms: LinkedRoom[] = [{ id: 'ops', description: 'All things **ops**.\n\nSee the [runbook](https://example.com).', members: 12, private: true }, { id: 't1', parentRoomId: 'ops' }];
+	it('shows a room or thread that is joined or listed with its name, the room a thread is in, its size and its description as text, and none for one with only a name', () => {
+		know({ ada }, { rooms: [roomSnapshot('ops', [], { title: 'Ops' }), roomSnapshot('t1', [], { title: 'Deploy', parentRoomId: 'ops' }), roomSnapshot('bare', [], { title: 'Bare' })] });
+		const rooms: LinkedRoom[] = [{ id: 'ops', description: 'All things **ops**.\n\nSee the [runbook](https://example.com).', members: 12, private: true }, { id: 't1', parentRoomId: 'ops', members: 3 }, { id: 'bare' }];
 		const https = (room: string) => `https://link.apron.chat/#server=wss://chat.example/ws&room=${room}`;
-		const text = 'apron:?room=ops and apron:?room=t1 and apron:?room=gone and apron:?room=ops&user=ada';
+		const text = 'apron:?room=ops and apron:?room=t1 and apron:?room=bare and apron:?room=gone and apron:?room=ops&user=ada';
 		expect(messageView(messageRecord(7, 'ops', { body: { text } }), row(), context([], {}, rooms)).linkCards).toEqual([
 			{ kind: 'room', href: https('ops'), server: 'chat.example', room: { id: 'ops', title: 'Ops' }, description: 'All things ops.\nSee the runbook.', members: 12, private: true },
-			{ kind: 'thread', href: https('t1'), server: 'chat.example', room: { id: 't1', title: 'Deploy', thread: true }, in: { id: 'ops', title: 'Ops' } },
-			{ kind: 'room', href: https('gone'), server: 'chat.example', room: { id: 'gone', unknown: true } }
+			{ kind: 'thread', href: https('t1'), server: 'chat.example', room: { id: 't1', title: 'Deploy', thread: true }, in: { id: 'ops', title: 'Ops' }, members: 3 }
 		]);
 	});
 
-	it('fills a card in once its message is loaded, and hands back the same view until then', () => {
+	it('shows a card once its message is loaded, and hands back the same view until then', () => {
 		const records: MessageRecord[] = [];
 		const event = messageRecord(7, 'ops', { body: { text: 'apron:?room=ops&message=5' } });
 		const before = messageView(event, row(), context(records));
-		expect(before.linkCards?.[0].sender).toBeUndefined();
+		expect(before.linkCards).toBeUndefined();
 		expect(messageView(event, row(), context(records))).toBe(before);
 		records.push(messageRecord(5, 'ops', { body: { text: 'here' } }));
 		expect(messageView(event, row(), context(records)).linkCards?.[0]).toMatchObject({ sender: { name: 'Ada' }, snippet: ['here'] });

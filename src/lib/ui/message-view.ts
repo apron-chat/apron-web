@@ -84,6 +84,8 @@ interface Drawn {
 
 /** At most this many link cards under one message. */
 export const LINK_CARDS_MAX = 3;
+/** Links looked at for those cards: a card shows only for a link something is known of, so more than that many. */
+const LINKS_READ = 10;
 
 const drawn = new WeakMap<MessageRecord, Drawn>();
 /** The last view made for each record, handed out again while nothing in it changed. */
@@ -111,7 +113,7 @@ function draw(event: MessageRecord): Drawn {
 		noticeTitle: noticeTitle(event.from),
 		text: textOf(event),
 		body: event.deleted ? undefined : bodyOf(event.body),
-		links: event.deleted ? [] : placeLinksIn(textOf(event), event.body?.format === 'markdown', LINK_CARDS_MAX + 1),
+		links: event.deleted ? [] : placeLinksIn(textOf(event), event.body?.format === 'markdown', LINKS_READ),
 		time: eventTime(event),
 		timestamp: idMillis(event.message_id)
 	};
@@ -185,14 +187,27 @@ function linkCardOf(link: ApronLink & { room: string }, server: string, here: bo
 	return card;
 }
 
-/** A card for each link in it to a message, room or thread, up to `LINK_CARDS_MAX`; a link to the message itself has none. */
+/**
+ * Whether a card has more to show than its path and name, which the link's
+ * chip says already: a loaded message, or a room's description, size or privacy.
+ */
+function showsMore(card: MessageLinkCard): boolean {
+	return card.sender !== undefined || card.description !== undefined || card.members !== undefined || card.private === true;
+}
+
+/**
+ * A card for each link in it to a message, room or thread that shows more
+ * than where it is (`showsMore`), up to `LINK_CARDS_MAX`; a link to the
+ * message itself has none.
+ */
 function linkCardsOf(event: MessageRecord, seen: Drawn, context: MessageContext): MessageLinkCard[] | undefined {
 	const cards: MessageLinkCard[] = [];
 	for (const link of seen.links) {
 		const server = link.server ?? context.server;
 		const room = link.room;
 		if (cards.length >= LINK_CARDS_MAX || !server || room === undefined || link.message === event.message_id) continue;
-		cards.push(linkCardOf({ ...link, room }, server, server === context.server, context));
+		const card = linkCardOf({ ...link, room }, server, server === context.server, context);
+		if (showsMore(card)) cards.push(card);
 	}
 	return cards.length ? cards : undefined;
 }

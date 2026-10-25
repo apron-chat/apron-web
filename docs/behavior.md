@@ -879,16 +879,17 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   the link, in its `https` form with the server, so copying it gives a link
   that opens the same place anywhere, a click opens it here, and a modified
   click opens link.apron.chat in a new tab.
-- **Link cards**: each link to a message, room or thread, on any server, also
-  shows as a card under the text, up to three per message, in the shape of a
-  link preview. Its first line is where it is, as a path: the server's host,
-  the room a message or thread is in, and a tag that says which it is
-  (Message, Room or Thread, with a room's member count). Under it is only what
-  this client already knows: a loaded message's sender, time and first three
-  lines (or "Message deleted"), a joined or listed room's name and two lines of
-  its description. Nothing is fetched to draw a card, so a message that isn't
-  loaded is its path alone, a room not known here is its `room_id`, and a link
-  to another server is its host and IDs. A card is the link, as a chip is.
+- **Link cards**: a link to a message, room or thread that this client knows
+  more of than where it is also shows as a card under the text, up to three
+  per message, in the shape of a link preview. Its first line is where it is,
+  as a path: the server's host, the room a message or thread is in, and a tag
+  that says which it is (Message, Room or Thread, with a room's member count).
+  Under it is what this client already knows: a loaded message's sender, time
+  and first three lines (or "Message deleted"), a joined or listed room's name,
+  lock if private, and two lines of its description. Nothing is fetched to draw
+  a card, and a link with nothing more to show than its path (a message that
+  isn't loaded, a room known only by name or not at all, any link to another
+  server) has none: its chip says as much. A card is the link, as a chip is.
   A link inside code or to the message itself has none.
 
 With the `edit` capability, **Edit** on your own message opens it in place, in
