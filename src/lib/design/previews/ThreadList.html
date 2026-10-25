@@ -13,13 +13,13 @@
   add(A.ThreadList, {
     room: 'Ops',
     joined: rows([
-      { thread: 'deploy', name: 'Deploy', unread: 2, summary: 'Worker 1.9.0 crash-looped; rolled back to 1.8.3', latest: { sender: 'Dana', text: 'Re-running the migration now' }, onleave: noop },
-      { thread: 'oncall', name: 'On-call rotation', mentions: 1, summary: 'Who carries the pager, week by week', onleave: noop },
+      { thread: 'deploy', name: 'Deploy', unread: 2, description: 'Worker 1.9.0 crash-looped; rolled back to 1.8.3', latest: { sender: 'Dana', text: 'Re-running the migration now' }, onleave: noop },
+      { thread: 'oncall', name: 'On-call rotation', mentions: 1, description: 'Who carries the pager, week by week', onleave: noop },
       { thread: 'cert', name: 'Expired cert', latest: { sender: 'Linus', text: 'Renewed it, CI is green again' }, onleave: noop }
     ]),
     others: 6,
     otherRows: rows([
-      { thread: 'offsite', name: 'Offsite planning', unjoined: true, summary: 'Dates, venue, and who books travel', ago: { text: '2h' }, onjoin: noop },
+      { thread: 'offsite', name: 'Offsite planning', unjoined: true, description: 'Dates, venue, and who books travel', ago: { text: '2h' }, onjoin: noop },
       { thread: 'logo', name: 'Logo feedback', unjoined: true, private: true, active: true, count: 14, onjoin: noop },
       { thread: 'retro', name: 'Q3 retro', unjoined: true, ago: { text: 'Tue' }, onjoin: noop }
     ]),

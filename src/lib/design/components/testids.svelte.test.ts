@@ -84,26 +84,26 @@ const rows: Row[] = [
 		actions: () => dom.button('Room actions'), edit: () => dom.byRole('menuitem', 'Edit room')
 	}, () => open('Room actions')],
 	['RoomHeader', RoomHeader, {
-		room: 'ops', name: 'Ops', topic: 'Deploys', onback: vi.fn(), unreadElsewhere: 12, canJoin: true, onjoin: vi.fn(), onsummary: vi.fn(), onedit: vi.fn(), onleave: vi.fn(),
-		tagTestid: 'tag', topicTestid: 'topic', joinTestid: 'join', summaryTestid: 'summary', actionsTestid: 'actions', editTestid: 'edit', leaveTestid: 'leave'
+		room: 'ops', name: 'Ops', topic: 'Deploys', onback: vi.fn(), unreadElsewhere: 12, canJoin: true, onjoin: vi.fn(), ondescription: vi.fn(), onedit: vi.fn(), onleave: vi.fn(),
+		tagTestid: 'tag', topicTestid: 'topic', joinTestid: 'join', descriptionTestid: 'description', actionsTestid: 'actions', editTestid: 'edit', leaveTestid: 'leave'
 	}, {
-		tag: () => byText('12'), topic: () => byText('Deploys'), join: () => dom.button('Join room'), summary: () => dom.button('Show the room summary'),
+		tag: () => byText('12'), topic: () => byText('Deploys'), join: () => dom.button('Join room'), description: () => dom.button('Show the room description'),
 		actions: () => dom.button('Room actions'), edit: () => dom.byRole('menuitem', 'Edit room'), leave: () => dom.byRole('menuitem', 'Leave room')
 	}, () => open('Room actions')],
 	['RoomItem', RoomItem, { room: 'general', name: 'General', unread: 2, active: true, onnewthread: vi.fn(), unreadTestid: 'unread', newThreadTestid: 'new-thread' }, {
 		unread: () => labelled('2 unread messages'), 'new-thread': () => dom.button('New thread in General')
 	}],
 	['ThreadItem', ThreadItem, {
-		thread: 'deploy', name: 'Deploy', unread: 2, ago: { text: '2h', datetime: '2026-10-22T10:00:00.000Z' }, summary: 'What to check', latest: { sender: 'Dana', text: 'Done' },
+		thread: 'deploy', name: 'Deploy', unread: 2, ago: { text: '2h', datetime: '2026-10-22T10:00:00.000Z' }, description: 'What to check', latest: { sender: 'Dana', text: 'Done' },
 		agoTestid: 'ago', unreadTestid: 'unread', linesTestid: 'lines'
 	}, {
-		ago: () => byText('2h'), unread: () => labelled('2 unread replies'), 'lines-summary': () => around('What to check'), 'lines-latest': () => around('Dana Done')
+		ago: () => byText('2h'), unread: () => labelled('2 unread replies'), 'lines-description': () => around('What to check'), 'lines-latest': () => around('Dana Done')
 	}],
 	['ThreadMarker', ThreadMarker, {
-		thread: 't1', name: 'Deploy', unread: 2, lastReply: '9h', lastReplyAt: Date.UTC(2026, 8, 14, 9, 30), summary: 'Lock held', latest: { sender: 'Ada', text: 'done' },
-		unreadTestid: 'unread', lastReplyTestid: 'last-reply', summaryTestid: 'summary', latestTestid: 'latest', testid: 'card'
+		thread: 't1', name: 'Deploy', unread: 2, lastReply: '9h', lastReplyAt: Date.UTC(2026, 8, 14, 9, 30), description: 'Lock held', latest: { sender: 'Ada', text: 'done' },
+		unreadTestid: 'unread', lastReplyTestid: 'last-reply', descriptionTestid: 'description', latestTestid: 'latest', testid: 'card'
 	}, {
-		card: () => dom.button(/^Deploy/), unread: () => labelled('2 unread replies'), 'last-reply': () => byText('9h'), summary: () => around('Lock held'), latest: () => around('Ada done')
+		card: () => dom.button(/^Deploy/), unread: () => labelled('2 unread replies'), 'last-reply': () => byText('9h'), description: () => around('Lock held'), latest: () => around('Ada done')
 	}],
 	['ThreadList', ThreadList, { room: 'General', others: 4, otherRows: dom.html('<div>Offsite</div>'), more: 3, onmore: vi.fn(), othersToggleTestid: 'others', moreTestid: 'more', testid: 'list' }, {
 		list: () => dom.byRole('group', 'Threads in General'), others: () => dom.button(/Other threads/), more: () => dom.button('3 more…')

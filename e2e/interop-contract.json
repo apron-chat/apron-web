@@ -86,7 +86,7 @@
 			"reference.spec.ts:207",
 			"reference.spec.ts:216"
 		],
-		"pane-summary": [
+		"pane-description": [
 			"chat.spec.ts:45",
 			"chat.spec.ts:116 (absent)",
 			"chat.spec.ts:161",
@@ -210,15 +210,15 @@
 			"test-helpers.ts:159",
 			"test-helpers.ts:164"
 		],
-		"thread-preview-latest": [
-			"chat.spec.ts:52",
-			"chat.spec.ts:72"
-		],
-		"thread-preview-summary": [
+		"thread-preview-description": [
 			"chat.spec.ts:50",
 			"chat.spec.ts:51",
 			"chat.spec.ts:166",
 			"responsive.spec.ts:39"
+		],
+		"thread-preview-latest": [
+			"chat.spec.ts:52",
+			"chat.spec.ts:72"
 		],
 		"thread-renamed": [
 			"chat.spec.ts:95",
@@ -1006,11 +1006,11 @@
 				"test-helpers.ts:4"
 			]
 		},
-		"textbox \"Thread summary\"": {
+		"textbox \"Thread description\"": {
 			"roles": [
 				"textbox"
 			],
-			"name": "Thread summary",
+			"name": "Thread description",
 			"exact": true,
 			"at": [
 				"chat.spec.ts:114",

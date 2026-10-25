@@ -54,4 +54,4 @@
 	}
 </script>
 
-<RoomForm bind:open kind="room" mode="create" bind:name={title} bind:summary={description} bind:private={isPrivate} status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={create} {onclose} />
+<RoomForm bind:open kind="room" mode="create" bind:name={title} bind:description bind:private={isPrivate} status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={create} {onclose} />

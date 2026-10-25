@@ -39,7 +39,7 @@
 	import NoRoom from '$lib/components/NoRoom.svelte';
 	import Toasts from '$lib/components/Toasts.svelte';
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
-	import ThreadSummary from '$lib/components/ThreadSummary.svelte';
+	import ThreadDescription from '$lib/components/ThreadDescription.svelte';
 	import TimelineDivider from '$lib/design/components/TimelineDivider.svelte';
 	import TypingIndicator from '$lib/design/components/TypingIndicator.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
@@ -59,7 +59,7 @@
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { WIDE_MIN } from '$lib/ui/breakpoints';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_SUMMARIES_KEY, loadHiddenSummaries, hideSummary, showSummary, summaryHidden, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -69,7 +69,7 @@
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
-	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadSummaryFor, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
@@ -102,7 +102,7 @@
 	type NewThread = {
 		room: { id: string; title: string; private?: true };
 		title: string;
-		summary: string;
+		description: string;
 		message?: string;
 		moving?: number;
 	};
@@ -319,7 +319,7 @@
 	let newDivider = $state<{ room: string; after?: string; fixed: boolean; landed: boolean }>({ room: '', fixed: false, landed: false });
 	/** The visit to a pane (its `newDivider`) that `landAtDivider` is opening at its divider. */
 	let landing: object | undefined;
-	/** The NewThreadDialog, asking for a new thread's title and summary, until it closes. */
+	/** The NewThreadDialog, asking for a new thread's title and description, until it closes. */
 	let newThread = $state<NewThread | undefined>();
 	/** Threads this page started, by the message they were started from: Start thread again opens the same one. */
 	const startedThreads = new Map<string, string>();
@@ -504,12 +504,12 @@
 	let editTarget = $derived(activeThread
 		? (activeThreadEntry ? { id: activeThreadEntry.id, title: activeThreadEntry.title, description: activeThreadEntry.description } : undefined)
 		: (activeRoom ? { id: activeRoom.id, title: activeRoom.title, description: activeRoom.description } : undefined));
-	/** Room and thread summaries put away with their ×, on this device. */
-	let hiddenSummaries = $state(loadHiddenSummaries());
-	/** Whether the open room's or thread's description is put away: the header's Summary brings it back. */
-	let summaryPutAway = $derived(Boolean(editTarget?.description && summaryHidden(hiddenSummaries, draftKey(editTarget.id), editTarget.description)));
+	/** Room and thread descriptions put away with their ×, on this device. */
+	let hiddenDescriptions = $state(loadHiddenDescriptions());
+	/** Whether the open room's or thread's description is put away: the header's Description brings it back. */
+	let descriptionPutAway = $derived(Boolean(editTarget?.description && descriptionHidden(hiddenDescriptions, draftKey(editTarget.id), editTarget.description)));
 	/** The open room's or thread's description, pinned under the header until its × puts it away (and again once it's edited). */
-	let pinnedSummary = $derived(editTarget?.description && !summaryPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
+	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneReady);
 
@@ -852,7 +852,7 @@
 	});
 
 	// Stay pinned to the latest item while the pane fills in: a room's history, its threads'
-	// cards and summaries land over several updates, not all of which change what the effect
+	// cards and descriptions land over several updates, not all of which change what the effect
 	// above tracks. Follow the rendered content instead.
 	$effect(() => {
 		const scroll = messageScroll;
@@ -942,13 +942,13 @@
 		if (!previewMode) pushSettings.load();
 		webPushAvailable = webPushSupported();
 		runsInstalled = isStandalone();
-		// Push turned on or off, and summaries put away, in another tab apply here too.
+		// Push turned on or off, and descriptions put away, in another tab apply here too.
 		const storageChanged = (event: StorageEvent) => {
 			if (previewMode) return;
 			pushSettings.storageChanged(event.key);
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
-			// A summary put away or brought back in another tab is here too.
-			if (event.key === HIDDEN_SUMMARIES_KEY) hiddenSummaries = loadHiddenSummaries();
+			// A description put away or brought back in another tab is here too.
+			if (event.key === HIDDEN_DESCRIPTIONS_KEY) hiddenDescriptions = loadHiddenDescriptions();
 		};
 		window.addEventListener('storage', storageChanged);
 		// Any input on the page means someone is attending it (§4.5 `idle`). Captured, so a
@@ -2393,12 +2393,12 @@
 
 	/** The + on the active room's row in the sidebar: a thread named from scratch. */
 	function newThreadInRoom(room: RoomSnapshot): void {
-		if (room.id === activeRoom?.id) askNewThread({ title: '', summary: '' });
+		if (room.id === activeRoom?.id) askNewThread({ title: '', description: '' });
 	}
 
 	/**
 	 * Start thread on a message: the dialog suggests the message's first line
-	 * as the title and begins the summary with the message quoted. Threads
+	 * as the title and begins the description with the message quoted. Threads
 	 * don't point at a message, so the link back is the thread's first reply:
 	 * it opens with its composer replying to the message (`reply_to` crosses
 	 * rooms, §3.5), which stays in the room where it was.
@@ -2413,11 +2413,11 @@
 			chooseThread(existing);
 			return;
 		}
-		askNewThread({ title: threadTitleFor(event), summary: threadSummaryFor(event) ?? '', message: id });
+		askNewThread({ title: threadTitleFor(event), description: threadDescriptionFor(event) ?? '', message: id });
 	}
 
 	/**
-	 * Creates the thread the NewThreadDialog asked for (§4.2.4), the summary as
+	 * Creates the thread the NewThreadDialog asked for (§4.2.4), the description as
 	 * its `description`; it opens once its `room_update` has arrived. From
 	 * select mode the selection then moves into it. A rejection is shown in the
 	 * dialog, which stays open, so it only rejects while no thread exists.
@@ -2491,7 +2491,7 @@
 		}
 		selection.menuOpen = false;
 		const first = selection.earliest(messages.map((event) => event.message_id));
-		askNewThread({ title: threadTitleFor(first !== undefined ? resolveMessage(first) : undefined), summary: '', moving: selection.ids.length });
+		askNewThread({ title: threadTitleFor(first !== undefined ? resolveMessage(first) : undefined), description: '', moving: selection.ids.length });
 	}
 
 	/** Escape leaves select mode, as it leaves the thread menu. */
@@ -2612,8 +2612,8 @@
 			<RoomHeader
 				room={activeRoom}
 				pane={paneRoom ?? activeRoom}
-				showTopic={!pinnedSummary}
-				onsummary={summaryPutAway ? () => { if (editTarget) hiddenSummaries = showSummary(hiddenSummaries, draftKey(editTarget.id)); } : undefined}
+				showTopic={!pinnedDescription}
+				ondescription={descriptionPutAway ? () => { if (editTarget) hiddenDescriptions = showDescription(hiddenDescriptions, draftKey(editTarget.id)); } : undefined}
 				threadTitle={activeThread ? threadTitle(activeThread) : undefined}
 				typing={typingNames}
 				replyCount={activeThread ? threadReplyCount : undefined}
@@ -2646,10 +2646,10 @@
 				</div>
 			{/if}
 
-			{#if pinnedSummary}
-				{@const pinned = pinnedSummary}
+			{#if pinnedDescription}
+				{@const pinned = pinnedDescription}
 				{#key pinned.id}
-					<ThreadSummary description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenSummaries = hideSummary(hiddenSummaries, draftKey(pinned.id), pinned.description))} />
+					<ThreadDescription description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(pinned.id), pinned.description))} />
 				{/key}
 			{/if}
 
@@ -2764,7 +2764,7 @@
 		{@const start = newThread}
 		{@const NewThreadDialog = newThreadDialog.component}
 		{#key start}
-			<NewThreadDialog room={start.room} title={start.title} summary={start.summary} moving={start.moving}
+			<NewThreadDialog room={start.room} title={start.title} description={start.description} moving={start.moving}
 				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
 				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
 		{/key}

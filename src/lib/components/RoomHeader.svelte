@@ -8,7 +8,7 @@
 		room: RoomSnapshot;
 		/** The room whose history the header reports on: the open thread, else the room. */
 		pane: RoomSnapshot;
-		/** Show the room's description under its title: off while it's pinned under the header as a summary. */
+		/** Show the room's description under its title: off while it's pinned under the header as a description. */
 		showTopic?: boolean;
 		/** The open thread's title; undefined in the room view. */
 		threadTitle?: string;
@@ -47,12 +47,12 @@
 		oncopylink?: () => Promise<boolean>;
 		onjoin?: () => void;
 		onmemberlist: () => void;
-		/** The room's or thread's summary was put away with its ×: a Summary button brings it back. */
-		onsummary?: () => void;
+		/** The room's or thread's description was put away with its ×: a Description button brings it back. */
+		ondescription?: () => void;
 	}
 	let {
 		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmemberlist, onsummary
+		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmemberlist, ondescription
 	}: Props = $props();
 
 	/** A copied link says so under the title for a moment, as the message's Copy link does on its button. */
@@ -66,7 +66,7 @@
 	}
 	$effect(() => () => clearTimeout(copiedTimer));
 
-	/** The room's description (§3.4) as one line of text under its title, once its pinned summary is put away; a thread has only its summary. */
+	/** The room's description (§3.4) as one line of text under its title, once its pinned description is put away; a thread has only its description. */
 	let topic = $derived(showTopic && threadTitle === undefined && room.description ? markdownText(room.description).split('\n')[0] : '');
 	let thread = $derived(threadTitle !== undefined);
 </script>
@@ -95,11 +95,11 @@
 	onleave={canLeave ? onleave : undefined}
 	oncopylink={oncopylink ? copyLink : undefined}
 	busy={editDisabled}
-	{onsummary}
+	{ondescription}
 	tagTestid="back-unread"
 	topicTestid="room-description"
 	joinTestid="join-room"
-	summaryTestid="show-summary"
+	descriptionTestid="show-description"
 	actionsTestid="room-actions"
 	editTestid="edit-room"
 	leaveTestid="leave-room"

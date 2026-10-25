@@ -30,7 +30,7 @@ const one = <T extends Element = HTMLButtonElement>(selector: string) => documen
 const titles = (selector: string) => [...document.querySelectorAll(selector)].map((row) => row.querySelector('.ap-room-name')?.textContent);
 
 describe('ThreadList', () => {
-	it('shows a thread’s summary and its latest message under its title, each marked by an icon', () => {
+	it('shows a thread’s description and its latest message under its title, each marked by an icon', () => {
 		const latest = { message_id: 'm1', room_id: 'deploy', from: { user_id: 'grace', name: 'Grace' }, body: { text: 'Flags are\nflipped' } } as unknown as MessageRecord;
 		render({ threads: [
 			{ ...joined('deploy', 'Deploy'), description: 'What to check:\n**flags**, rollback', latestMessage: latest },
@@ -39,9 +39,9 @@ describe('ThreadList', () => {
 		] });
 		const lines = (id: string) => [...one(`button[data-thread="${id}"]`)!.querySelectorAll('.ap-tline')]
 			.map((line) => [line.querySelector('svg')?.getAttribute('aria-label'), line.textContent]);
-		expect(lines('deploy')).toEqual([['Summary', 'What to check: flags, rollback'], ['Latest message', 'Grace Flags are flipped']]);
+		expect(lines('deploy')).toEqual([['Description', 'What to check: flags, rollback'], ['Latest message', 'Grace Flags are flipped']]);
 		expect(lines('cert')).toEqual([['Latest message', 'Grace Flags are flipped']]);
-		expect(lines('roadmap')).toEqual([['Summary', 'Ship threads, then search']]);
+		expect(lines('roadmap')).toEqual([['Description', 'Ship threads, then search']]);
 		expect(one('button[data-thread="cert"] .ap-tline-sender')?.textContent).toBe('Grace');
 	});
 
@@ -92,12 +92,12 @@ describe('ThreadList', () => {
 		expect(row('cert').textContent).not.toContain('6');
 	});
 
-	it('shows each other thread’s summary and when it was last active, with Join as a door in', () => {
+	it('shows each other thread’s description and when it was last active, with Join as a door in', () => {
 		const offsite = { ...listed('offsite', 'Offsite'), latestLogId: String(Date.now() - 2 * 60 * 60 * 1000), record: { room_id: 'offsite', title: 'Offsite', parent_room_id: 'general', description: 'Dates, *venue*,\nand travel' } } as RoomListing;
 		render({ others: [offsite, listed('logo', 'Logo')] });
 		const row = (id: string) => one(`button[data-other-thread="${id}"]`)!;
-		expect(row('offsite').querySelector('[data-testid="other-thread-summary"]')?.textContent).toBe('Dates, venue, and travel');
-		expect(row('offsite').querySelector('[data-testid="other-thread-summary"] svg')?.getAttribute('aria-label')).toBe('Summary');
+		expect(row('offsite').querySelector('[data-testid="other-thread-description"]')?.textContent).toBe('Dates, venue, and travel');
+		expect(row('offsite').querySelector('[data-testid="other-thread-description"] svg')?.getAttribute('aria-label')).toBe('Description');
 		expect(row('offsite').querySelector('[data-testid="other-thread-ago"]')?.textContent).toBe('2h');
 		expect(row('offsite').querySelector('time')?.getAttribute('datetime')).toBe(new Date(Number(offsite.latestLogId)).toISOString());
 		// Nothing listed, nothing shown.

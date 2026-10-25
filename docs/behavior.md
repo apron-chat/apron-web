@@ -618,7 +618,7 @@ mentions), in the same rows, so activity there isn't missed; picking one opens
 its room with the thread open, and quiet threads wait until the room is opened. First the ones you've joined,
 on a guide line from the room:
 each title in ink, heavier with unread replies, over up to two lighter lines:
-its Summary (its `description` as text, on one line) behind a text icon, then
+its Description (its `description` as text, on one line) behind a text icon, then
 its latest loaded message, the sender's name in ink, behind a reply arrow, in
 ink too with unread replies. Either line shows alone when the thread has only
 that one, and the icon says which it is. Only what's new is counted, in one
@@ -631,7 +631,7 @@ accent bar at its left (on the guide line, for a thread), so it never looks
 unread. A door on hover leaves the thread. Then **Other threads · N**, a heading
 that folds like Browse rooms (it stays as you left it, on this device): the
 threads you haven't joined, beside the guide line carried on dashed, their
-titles muted, each with its Summary line (from its listed `description`) and,
+titles muted, each with its Description line (from its listed `description`) and,
 at the end of the row, when it was last active (`2h`, `Tue`, from its listed
 head). They deliver nothing live
 ([PROTOCOL.md §3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#34-rooms))
@@ -657,9 +657,9 @@ nothing live. Opening one of those reads it through `history` without joining
 it: its header offers **Join**, which makes it live and lists it under the room,
 and replying joins it first.
 Every new thread is named in the same centered **Start thread** dialog, with the
-`rooms` capability: a title (required) and an optional CommonMark **Summary**
+`rooms` capability: a title (required) and an optional CommonMark **Description**
 (`room_set` with `parent_room_id`, `title` and `description`, which an emptied
-Summary leaves out). The thread opens once its `room_update` arrives, and the
+Description leaves out). The thread opens once its `room_update` arrives, and the
 dialog stays open, with the server's error, if creating fails. There is no
 Private choice, since a thread takes its room's; in a private room the dialog
 says the thread will be private too, and one that comes back without
@@ -684,32 +684,31 @@ composer opens on it nor do selected messages move into it. Private rooms and
 threads show a lock beside their name.
 
 A room's or thread's `description` (CommonMark by convention) shows as a
-**Summary** pinned under the header, above the timeline, so it stays in view
-while the messages scroll: rendered as CommonMark beside the summary icon (its
-title says Summary), the text indented past it on every line, three lines of it, fading
+**Description** pinned under the header, above the timeline, so it stays in view
+while the messages scroll: rendered as CommonMark beside the description icon (its
+title says Description), the text indented past it on every line, three lines of it, fading
 out where a longer one is cut. A click on its text (not on a link or mention)
-opens the rest, scrolling within the summary past a third of the pane, and
+opens the rest, scrolling within the description past a third of the pane, and
 another folds it again; from the keyboard, its toggle is the next stop after
 the text's links. Its × puts it away, on this device, until
 the description is edited; a room's then shows as one line of text under its
-title in the header instead, and the header gains a **Summary** button, just
+title in the header instead, and the header gains a **Description** button, just
 before its ⋯ menu (the icon alone on a phone), that pins it again. With the `rooms` capability the header's ⋯ menu
 holds the occasional actions: **Edit room** (or **Edit thread**) opens
-a centered dialog with the open room's or thread's title and description
-("Summary" for a thread), saved with one `room_set`; the `room_update` that
+a centered dialog with the open room's or thread's title and description, saved with one `room_set`; the `room_update` that
 follows is what shows, since the server may alter or decline it.
 
 With the `rooms` capability, **Start thread** on a message opens the same
 dialog to name the new thread: its title starts as the message's first line,
-selected so typing replaces it, and its Summary as the message's text quoted
+selected so typing replaces it, and its Description as the message's text quoted
 in Markdown (`> `). **Start thread** there creates the thread under the room
-with that title and Summary as its `description` (a title is required; an
-emptied Summary sends none), and opens it with the composer replying to that
+with that title and Description as its `description` (a title is required; an
+emptied Description sends none), and opens it with the composer replying to that
 message. Threads don't point at a message, so
 the thread's first reply carries the link back as its `reply_to` (the
 convention of the protocol's fixtures): its quote shows the message and jumps
 to it. The message stays in the room, with the thread's card after it. A
-thread's description shows as its pinned **Summary** (above). A thread opens
+thread's description shows as its pinned **Description** (above). A thread opens
 at its latest reply, as a room does. Threads load their newest page of
 history when opened (50 records); one with older replies shows "N+ replies",
 and loads the page before whenever the reader nears the top, keeping what is
@@ -751,7 +750,7 @@ yours, that one is sent first, alone, and if the server refuses it nothing else
 is sent, the selection stays, and the error says no messages were moved. Otherwise
 the rest go together. **New thread** opens the Start thread dialog (as **Move to a
 new thread**, saying how many messages move) with the earliest selected
-message's first line as the title and an empty Summary; Escape there closes the
+message's first line as the title and an empty Description; Escape there closes the
 dialog and keeps the selection. The thread is created first and the moves follow
 once the server has named it; the dialog isn't offered when the selection holds
 someone else's message and you lack `move_any`, so a refused move

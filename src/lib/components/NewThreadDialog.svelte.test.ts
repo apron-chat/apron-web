@@ -11,7 +11,7 @@ function field<T extends HTMLElement>(selector: string): T {
 }
 
 describe('NewThreadDialog', () => {
-	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; summary?: string; moving?: number };
+	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; moving?: number };
 	function render(props: Props = {}, oncreate = vi.fn((_thread: { title: string; description?: string }) => Promise.resolve())) {
 		const onclose = vi.fn();
 		dom.render(NewThreadDialog, { room: { id: 'ops', title: 'ops' }, enabled: true, oncreate, onclose, ...props });
@@ -20,8 +20,8 @@ describe('NewThreadDialog', () => {
 	const text = () => field('dialog').textContent ?? '';
 	const submitLabel = () => field('dialog button[type="submit"]').textContent;
 
-	it('starts from a message: its first line as the title, selected, and the message quoted as the summary', async () => {
-		const { oncreate, onclose } = render({ title: 'Deploy failed', summary: '> Deploy failed\n>\n> Runner looked fine.' });
+	it('starts from a message: its first line as the title, selected, and the message quoted as the description', async () => {
+		const { oncreate, onclose } = render({ title: 'Deploy failed', description: '> Deploy failed\n>\n> Runner looked fine.' });
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.open).toBe(true);
 		expect(dialog.classList.contains('ap-dialog-md')).toBe(true);
@@ -47,7 +47,7 @@ describe('NewThreadDialog', () => {
 		expect(document.querySelector('[role="alert"]')?.textContent).toBe('Enter a thread title.');
 		dom.type(field('input.ap-field'), 'Office move');
 		await dom.submit();
-		// An empty summary sends no description.
+		// An empty description sends no description.
 		expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' });
 		dom.unmount();
 		// Creating fails: it stays open with the reason.

@@ -25,7 +25,7 @@ export default {
 		{
 			name: 'long-room',
 			steps: (p) =>
-				createRoom(p, LONG_ROOM, 'A description that runs on for a while to see how the summary row and the header topic handle a lot of text without any breaks in the layout.'),
+				createRoom(p, LONG_ROOM, 'A description that runs on for a while to see how the description row and the header topic handle a lot of text without any breaks in the layout.'),
 			// On one-pane viewports, also shoot the rooms pane, where the long title sits in the sidebar.
 			extra: async (p, t) => {
 				if (!t.narrow) return;

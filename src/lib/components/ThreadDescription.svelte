@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Summary from '$lib/design/components/ThreadSummary.svelte';
+	import Description from '$lib/design/components/ThreadDescription.svelte';
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
@@ -7,7 +7,7 @@
 
 	/**
 	 * A room's or thread's `description` (PROTOCOL.md §3.4), pinned under the
-	 * header as the design system's summary: CommonMark, rendered and sanitized
+	 * header as the design system's ThreadDescription: CommonMark, rendered and sanitized
 	 * as a message body is, with its mentions and room links. It previews three
 	 * lines, and its × puts it away (`ondismiss`).
 	 */
@@ -21,7 +21,7 @@
 	}
 </script>
 
-<Summary label={thread ? 'Thread summary' : 'Room summary'} {ondismiss}>
+<Description label={thread ? 'Thread description' : 'Room description'} {ondismiss}>
 	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-	<div data-testid="pane-summary" onclick={click} use:highlightCode={html}>{@html html}</div>
-</Summary>
+	<div data-testid="pane-description" onclick={click} use:highlightCode={html}>{@html html}</div>
+</Description>

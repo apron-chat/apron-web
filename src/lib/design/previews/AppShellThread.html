@@ -24,8 +24,8 @@
   function side(activeThread) {
     var rooms = [
       { room: 'general', name: 'General' }, { room: 'ops', name: 'Ops', active: !activeThread },
-      { thread: 'deploy', name: 'Deploy', active: activeThread === 'deploy', unread: activeThread ? 0 : 2, summary: 'Worker 1.9.0 crash-looped; rolled back to 1.8.3', latest: { sender: 'Sam', text: 'Re-running the migration now.' } },
-      { thread: 'mig-0042', name: 'Migration 0042', summary: 'Lock held on accounts table by a stale worker', latest: { sender: 'Dana', text: 'Lock cleared' } }, { thread: 'oncall', name: 'On-call rotation' },
+      { thread: 'deploy', name: 'Deploy', active: activeThread === 'deploy', unread: activeThread ? 0 : 2, description: 'Worker 1.9.0 crash-looped; rolled back to 1.8.3', latest: { sender: 'Sam', text: 'Re-running the migration now.' } },
+      { thread: 'mig-0042', name: 'Migration 0042', description: 'Lock held on accounts table by a stale worker', latest: { sender: 'Dana', text: 'Lock cleared' } }, { thread: 'oncall', name: 'On-call rotation' },
       { room: 'design', name: 'Design', unread: 4, mentions: activeThread ? 0 : 1 }, { room: 'random', name: 'Random' }];
     add(A.SidebarSection, { title: 'Rooms', children: A.parts.apply(null, rooms.map(function (r) { r.onleave = noop; return A.part(r.thread ? A.ThreadItem : A.RoomItem, r); })) }, $('sidebody'));
     add(A.ProfileBar, { you: me, backend: 'Work' }, $('side'));
@@ -34,7 +34,7 @@
   side('deploy');
   add(A.RoomHeader, { room: 'ops', name: 'Ops', thread: 'deploy', threadName: 'Deploy', topic: '7 replies', onroom: noop, onedit: noop }, $('head'));
   var tl = $('tl');
-  add(A.ThreadSummary, { ondismiss: noop, children: A.html('<p>Worker <code>1.9.0</code> crash-looped on the new queue client. Resolved:</p><ul><li>Rolled back to <code>1.8.3</code></li><li>Re-ran migration 0042 once the lock cleared</li></ul>') }, $('head'));
+  add(A.ThreadDescription, { ondismiss: noop, children: A.html('<p>Worker <code>1.9.0</code> crash-looped on the new queue client. Resolved:</p><ul><li>Rolled back to <code>1.8.3</code></li><li>Re-ran migration 0042 once the lock cleared</li></ul>') }, $('head'));
   msg({ sender: alice, time: '14:02', body: { html: 'Deploy is green, rolling to prod now.' } }, tl);
   add(A.TimelineDivider, { kind: 'date', label: '7 replies', sticky: false }, tl);
   msg({ sender: bob, time: '14:04', body: { html: 'Worker pods are restarting in a loop.' } }, tl);

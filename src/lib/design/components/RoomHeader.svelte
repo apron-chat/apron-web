@@ -41,7 +41,7 @@
 		/** The member list's toggle, where the list overlays the conversation; pressed while it's open. */
 		onmemberlist?: () => void;
 		memberListOpen?: boolean;
-		/** Cap `rooms`: Edit room (or thread) in the ⋯ actions menu, which opens a <RoomForm> dialog, for a thread's title and summary or a room's title and description. */
+		/** Cap `rooms`: Edit room (or thread) in the ⋯ actions menu, which opens a <RoomForm> dialog, for a room's or thread's title and description. */
 		onedit?: () => void;
 		/** Cap `rooms`: Leave room (or thread) in the ⋯ actions menu (`room_leave`, §4.2.2). */
 		onleave?: () => void;
@@ -49,13 +49,13 @@
 		oncopylink?: () => void;
 		/** A request in flight: Join and the actions menu can't be used. */
 		busy?: boolean;
-		/** The room's or thread's pinned <ThreadSummary> was put away with its ×: a Summary button brings it back. */
-		onsummary?: () => void;
-		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Summary, the ⋯ menu and its Edit and Leave. */
+		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
+		ondescription?: () => void;
+		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the ⋯ menu and its Edit and Leave. */
 		tagTestid?: string;
 		topicTestid?: string;
 		joinTestid?: string;
-		summaryTestid?: string;
+		descriptionTestid?: string;
 		actionsTestid?: string;
 		editTestid?: string;
 		leaveTestid?: string;
@@ -65,8 +65,8 @@
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
-		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, busy = false, onsummary,
-		tagTestid, topicTestid, joinTestid, summaryTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, class: className
+		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, busy = false, ondescription,
+		tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, class: className
 	}: Props = $props();
 	const noun = $derived(thread ? 'thread' : 'room');
 	/** What's new elsewhere: a mention may be an edit adding you to a read message, so it counts at least once. */
@@ -123,9 +123,9 @@
 			<Users size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
 	{/if}
-	{#if onsummary}
-		<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost ap-roomhead-summary" data-testid={summaryTestid} aria-label="Show the {noun} summary" title="Show the {noun} summary" onclick={onsummary}>
-			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-summary-word">Summary</span>
+	{#if ondescription}
+		<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost ap-roomhead-description" data-testid={descriptionTestid} aria-label="Show the {noun} description" title="Show the {noun} description" onclick={ondescription}>
+			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-description-word">Description</span>
 		</button>
 	{/if}
 	{#if actions.length > 0}
