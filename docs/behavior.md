@@ -876,19 +876,17 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   Each is still the link, in its `https` form with the server, so copying it
   gives a link that opens the same place anywhere, a click opens it here, and
   a modified click opens link.apron.chat in a new tab.
-- **Link cards**: the messages, rooms and threads those links point to also
-  show as cards under the text, up to three per message. A message's card
-  shows its sender, its room or thread and time, and its first three lines as
-  written, or "Message deleted"; a room's or thread's shows its name, the room
-  a thread is in, how many members it has and two lines of its description.
-  The viewer builds them, not the sender: from what is loaded or listed, else
-  a message from its creation record, read once with `history` (`after` and
-  `before` at its `message_id`) and kept apart from the room's timeline, so it
-  reads as first written unless the server redacted it, and a room from
-  `room_list` with its `room_id`. A room the viewer can't read, or a server
-  without `history`, shows no card, and the link stays a link, as does one to
-  another server, a link inside code, and one to the message itself. A card
-  is the link, as a chip is.
+- **Link cards**: each link to a message, room or thread, on any server, also
+  shows as a card under the text, up to three per message, in the shape of a
+  link preview. Its first line is where it is, as a path: the server's host,
+  the room a message or thread is in, and a tag that says which it is
+  (Message, Room or Thread, with a room's member count). Under it is only what
+  this client already knows: a loaded message's sender, time and first three
+  lines (or "Message deleted"), a joined or listed room's name and two lines of
+  its description. Nothing is fetched to draw a card, so a message that isn't
+  loaded is its path alone, a room not known here is its `room_id`, and a link
+  to another server is its host and IDs. A card is the link, as a chip is.
+  A link inside code or to the message itself has none.
 
 With the `edit` capability, **Edit** on your own message opens it in place, in
 a box like the composer: its text, with its embeds above it as tiles like a

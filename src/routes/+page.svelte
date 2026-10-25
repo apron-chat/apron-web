@@ -78,7 +78,6 @@
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
 	import { trackKeyboard } from '$lib/ui/viewport';
 	import { linkPreviews } from '$lib/ui/link-previews';
-	import { linkedMessages, linkedRooms } from '$lib/ui/linked.svelte';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
@@ -231,8 +230,6 @@
 	 * thread, `null` for a room that isn't one, or `undefined` while it is looked up.
 	 */
 	const linkedParents = new Map<string, string | null | undefined>();
-	/** The server and identity `linkedMessages` and `linkedRooms` hold messages and rooms for. */
-	let linkedMessagesFor: string | undefined;
 	/** The connect screen is up for a link's server: it can be cancelled even before this server is ready. */
 	let offeringLink = $state(false);
 	/** How far back a linked message is looked for, in pages of history. */
@@ -1006,13 +1003,6 @@
 			serverUrl = chat.url;
 			session.apply(next, chat);
 			directory.apply(next, serverOrigin(chat.url), chat.url);
-			// What links' messages were fetched as is for one server and one identity: another may not read them.
-			const linkedFor = next.you ? `${chat.url} ${next.you.user_id}` : undefined;
-			if (linkedFor !== undefined && linkedFor !== linkedMessagesFor) {
-				linkedMessagesFor = linkedFor;
-				linkedMessages.clear();
-				linkedRooms.clear();
-			}
 		});
 		chat.start();
 		client = chat;
@@ -1104,8 +1094,6 @@
 		pushRoom = undefined;
 		session.forget();
 		directory.forget();
-		linkedMessages.clear();
-		linkedRooms.clear();
 	}
 
 	/**
@@ -2062,43 +2050,23 @@
 	}
 
 	/**
-	 * The message a link in a message names (Appendix A.4), for its quote: one
-	 * on this server, loaded here, else fetched once (`linkedMessages`). A link
-	 * to another server quotes nothing: opening it is the user's to do.
+	 * The message a link in a message names (Appendix A.4), for its card: one
+	 * on this server that is loaded here. Nothing is fetched to draw a card.
 	 */
 	function linkedMessage(link: ApronLink): MessageRecord | undefined {
-		const chat = client;
-		const room = link.room, id = link.message;
-		if (!chat || !room || !id || (link.server !== undefined && link.server !== chat.url)) return undefined;
-		const local = resolveMessage(id);
-		if (local) return local;
-		const key = `${room} ${id}`;
-		const fetched = linkedMessages.get(key);
-		if (!fetched) linkedMessages.load(key, () => chat.fetchMessage(room, id));
-		return fetched;
+		if (!client || !link.message || (link.server !== undefined && link.server !== client.url)) return undefined;
+		return resolveMessage(link.message);
 	}
 
-	/**
-	 * The room or thread a link names, likewise: one joined or opened here, or
-	 * listed, else looked up once with `room_list` and its `room_id` (§4.2.1,
-	 * `linkedRooms`). One the server won't list shows no card.
-	 */
+	/** The room or thread a link names, likewise: one joined, opened or listed here. */
 	function linkedRoom(link: ApronLink): LinkedRoom | undefined {
-		const chat = client;
 		const id = link.room;
-		if (!chat || !id || (link.server !== undefined && link.server !== chat.url)) return undefined;
+		if (!client || !id || (link.server !== undefined && link.server !== client.url)) return undefined;
 		const room = session.rooms.find((candidate) => candidate.id === id);
-		if (room) {
-			const members = room.memberCount ?? room.members?.length;
-			return { id, parentRoomId: room.parentRoomId, description: room.description, members, private: room.private };
-		}
-		const listing = [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat()].find((candidate) => candidate.id === id) ?? linkedRooms.get(id);
-		if (!listing) {
-			linkedRooms.load(id, () => chat.listMembers(id).then((listings) => listings.find((candidate) => candidate.id === id)));
-			return undefined;
-		}
-		const members = listing.memberCount ?? (listing.members.length || undefined);
-		return { id, parentRoomId: listing.parentRoomId, description: listing.record.description, members, private: listing.record.private === true };
+		if (room) return { id, parentRoomId: room.parentRoomId, description: room.description, members: room.memberCount ?? room.members?.length, private: room.private };
+		const listing = [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat()].find((candidate) => candidate.id === id);
+		if (!listing) return undefined;
+		return { id, parentRoomId: listing.parentRoomId, description: listing.record.description, members: listing.memberCount ?? (listing.members.length || undefined), private: listing.record.private === true };
 	}
 
 	function replyPreview(id: string): { name?: string; text: string } {

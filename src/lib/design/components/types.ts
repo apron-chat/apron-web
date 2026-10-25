@@ -262,51 +262,42 @@ export interface MessageReply {
 }
 
 /**
- * A message that a link in this one points to (Appendix A.4), resolved by you on the server you're on, quoted under
- * the text: who wrote it, where and when, and a few lines of it. Following the link opens it.
+ * A link in a message to a message, room or thread (Appendix A.4), as a card under its text in the shape of a link
+ * preview (EmbedCard): where it is as a path, server › room › what it is, then what you already know of it. Nothing
+ * is fetched to draw it, so a message not loaded here is only its path. Following the link opens it.
  */
-export interface MessageQuote {
-	kind: 'message';
-	/** The link, in the https form with its server, also the list's key: the page opens it. */
+export interface MessageLinkCard {
+	/** The link, in the https form with its server, also the list's key. */
 	href: string;
-	name: string;
-	avatar?: string;
-	hue?: number;
-	/** The room or thread it's in (`roomName`). */
-	room?: QuotedPlace;
-	/** Epoch ms of its `message_id`: the tooltip, and the time of day unless `time` says otherwise. */
+	kind: 'message' | 'room' | 'thread';
+	/** The server's host, first on the path. */
+	server: string;
+	/** The room a message, or a thread, is in: next on the path. */
+	in?: LinkCardPlace;
+	/** A room or thread itself: its name is the title. */
+	room?: LinkCardPlace;
+	/** Who sent a message, once it's loaded here: the title. */
+	sender?: { name: string; avatar?: string; hue?: number };
+	/** Epoch ms of a loaded message's `message_id`: the tooltip on `time`. */
 	timestamp?: number;
-	/** When it was, pre-formatted, such as with its day when that isn't today. */
+	/** When a loaded message was, pre-formatted, with its day when that isn't today. */
 	time?: string;
-	/** Up to three lines of its text (~280 chars, no Markdown), mentions picked out. */
+	/** Up to three lines of a loaded message's text (no Markdown), mentions picked out. */
 	snippet?: (string | MessageMention)[];
 	deleted?: boolean;
-}
-
-/**
- * A room or thread that a link in a message points to (Appendix A.4), on the server you're on, shown under the text:
- * its name, the room a thread is in, how many members it has and a line or two of its description.
- */
-export interface RoomQuote {
-	kind: 'room';
-	/** The link, in the https form with its server, also the list's key: the page opens it. */
-	href: string;
-	room: QuotedPlace;
-	/** The room a thread is in (`roomName`). */
-	parent?: QuotedPlace;
-	/** Its description (§3.4) as plain text. */
+	/** A room's or thread's description (§3.4) as plain text. */
 	description?: string;
-	/** How many members it has, where that's known. */
 	members?: number;
 	/** Only its members see it (§4.2.4). */
 	private?: boolean;
 }
 
-/** A room or thread a quote names, by the one rule (`roomName`): a thread without a title is "Untitled". */
-export interface QuotedPlace {
+/** A room or thread on a card's path or as its title, by the one rule (`roomName`); one not known here is its `room_id`. */
+export interface LinkCardPlace {
 	id: string;
 	title?: string;
 	thread?: boolean;
+	unknown?: boolean;
 }
 
 /** A file being written to an upload embed, sender side (§4.8.3). */
@@ -347,8 +338,8 @@ export interface MessageView {
 	/** ALREADY SANITIZED markup of the text; absent when a message has none. `code` when it holds code blocks to decorate. */
 	body?: { html: string; markdown?: boolean; code?: boolean };
 	reply?: MessageReply;
-	/** The messages, rooms and threads its links point to, under its text; none on a tombstone. */
-	quotes?: (MessageQuote | RoomQuote)[];
+	/** The messages, rooms and threads its links point to, as cards under its text; none on a tombstone. */
+	linkCards?: MessageLinkCard[];
 	embeds?: MessageEmbed[];
 	/** Chips under the message; none on a tombstone. */
 	reactions?: ReactionChip[];
@@ -415,8 +406,8 @@ export interface MessageTestids {
 	row?: string;
 	handle?: string;
 	reply?: string;
-	/** Each message, room or thread its links point to. */
-	quote?: string;
+	/** Each card for a message, room or thread its links point to. */
+	linkCard?: string;
 	reactions?: string;
 	chip?: string;
 	select?: string;

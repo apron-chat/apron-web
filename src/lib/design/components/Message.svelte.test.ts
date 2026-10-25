@@ -83,49 +83,45 @@ describe('a message row', () => {
 		expect(dom.button('Replying to Bob. Jump to their message').textContent).toContain('Message deleted');
 	});
 
-	it('quotes the messages its links point to under its text, each the link, and leaves a click on one to the link', () => {
+	it('shows a card for each link to a message, room or thread under its text, each the link, and leaves a click on one to the link', () => {
 		const href = 'https://link.apron.chat/#server=wss://chat.example/ws&room=ops&message=7';
 		const beginSelect = vi.fn();
 		const row = render({
 			caps: { ...NONE, select: true },
-			quotes: [
-				{ kind: 'message', href, name: 'Bob', room: { id: 'ops', title: 'Ops' }, timestamp: 1710000000000, snippet: ['ship it ', { user_id: 'ada', name: 'Ada', me: true }, '\nnow'] },
-				{ kind: 'message', href: `${href}0`, name: 'Bob', room: { id: 't1', thread: true }, deleted: true }
+			linkCards: [
+				{ kind: 'message', href, server: 'chat.example', in: { id: 'ops', title: 'Ops' }, sender: { name: 'Bob' }, timestamp: 1710000000000, time: 'Yesterday 2:05 PM', snippet: ['ship it ', { user_id: 'ada', name: 'Ada', me: true }, '\nnow'] },
+				{ kind: 'message', href: `${href}0`, server: 'chat.example', in: { id: 'r-8f2a', unknown: true } },
+				{ kind: 'room', href: `${href}1`, server: 'chat.example', room: { id: 'ops', title: 'Ops' }, members: 1, private: true, description: 'All things ops' },
+				{ kind: 'thread', href: `${href}2`, server: 'chat.example', in: { id: 'ops', title: 'Ops' }, room: { id: 't1', thread: true }, members: 1200 }
 			]
-		}, { beginSelect }, { testids: { quote: 'quote' } });
-		const [first, second] = row.querySelectorAll<HTMLAnchorElement>('[data-testid="quote"]');
-		expect(first.getAttribute('href')).toBe(href);
-		expect(first.getAttribute('aria-label')).toBe('Message from Bob in Ops. Open it');
-		expect(first.querySelector('.ap-quote-where')!.textContent).toMatch(/^#Ops · /);
-		expect(first.querySelector('.ap-quote-text')!.textContent).toBe('ship it @Ada\nnow');
+		}, { beginSelect }, { testids: { linkCard: 'card' } });
+		const cards = [...row.querySelectorAll<HTMLAnchorElement>('[data-testid="card"]')];
+		const read = (card: Element) => [...card.querySelector('.ap-embed-cardtext')!.children].map((part) => part.textContent!.replace(/\s*›\s*/g, ' › ').replace(/\s+/g, ' ').trim());
+		expect(cards[0].getAttribute('href')).toBe(href);
+		// A link preview's card: its site line the path ending in the kind, the title, the description.
+		expect(cards[0].classList.contains('ap-embed-ogcard')).toBe(true);
+		expect(read(cards[0])).toEqual(['chat.example › #Ops › Message', 'BBobYesterday 2:05 PM', 'ship it @Ada now']);
+		expect(cards[0].getAttribute('aria-label')).toBe('Message from Bob in #Ops on chat.example. Open it');
+		// Not loaded here: the path alone, an unknown room as its ID.
+		expect(read(cards[1])).toEqual(['chat.example › r-8f2a › Message']);
+		expect(cards[1].querySelector('.ap-linkcard-id')!.textContent).toBe('r-8f2a');
+		expect(read(cards[2])).toEqual(['chat.example › Room · 1 member', '#OpsPrivate', 'All things ops']);
+		expect(cards[2].getAttribute('aria-label')).toBe('Room #Ops on chat.example. Open it');
 		// An untitled thread is "Untitled", its room_id in the tooltip.
-		expect(second.querySelector('.ap-quote-where')!.textContent).toBe('#Untitled');
-		expect(second.querySelector('.ap-quote-where')!.getAttribute('title')).toBe('t1');
-		expect(second.textContent).toContain('Message deleted');
+		expect(read(cards[3])).toEqual(['chat.example › #Ops › Thread · 1,200 members', 'Untitled']);
+		expect(cards[3].querySelector('.ap-linkcard-title .ap-linkcard-step')!.getAttribute('title')).toBe('t1');
 		// After the body, before the embeds.
-		expect(row.querySelector('.ap-msg-text + .ap-msg-quotes')).not.toBeNull();
+		expect(row.querySelector('.ap-msg-text + .ap-msg-linkcards')).not.toBeNull();
 		// The page follows the link; here nothing does.
 		const follow = (event: Event) => event.preventDefault();
 		document.addEventListener('click', follow);
-		click(first.querySelector('.ap-quote-text')!, { shiftKey: true });
+		click(cards[0].querySelector('.ap-linkcard-text')!, { shiftKey: true });
 		document.removeEventListener('click', follow);
 		expect(beginSelect).not.toHaveBeenCalled();
 		dom.unmount();
-		expect(render({ deleted: true, quotes: [{ kind: 'message', href, name: 'Bob' }] }).querySelector('.ap-quote')).toBeNull();
-	});
-
-	it('shows the rooms and threads its links point to as cards: the name, what it is and its size, its description', () => {
-		const row = render({
-			quotes: [
-				{ kind: 'room', href: 'https://link.apron.chat/#server=wss://h/&room=ops', room: { id: 'ops', title: 'Ops' }, members: 1, private: true, description: 'All things ops' },
-				{ kind: 'room', href: 'https://link.apron.chat/#server=wss://h/&room=t1', room: { id: 't1', title: 'Deploy', thread: true }, parent: { id: 'ops', title: 'Ops' }, members: 1200 }
-			]
-		}, {}, { testids: { quote: 'quote' } });
-		const [room, thread] = row.querySelectorAll<HTMLAnchorElement>('[data-testid="quote"]');
-		expect(room.getAttribute('aria-label')).toBe('Room Ops. Open it');
-		expect([...room.children].map((part) => part.textContent)).toEqual(['#', 'OpsPrivate', 'Room · 1 member', 'All things ops']);
-		expect(thread.getAttribute('aria-label')).toBe('Thread Deploy. Open it');
-		expect([...thread.children].map((part) => part.textContent)).toEqual(['↳', 'Deploy', 'Thread in #Ops · 1,200 members']);
+		expect(render({ deleted: true, linkCards: [{ kind: 'room', href, server: 'h' }] }).querySelector('.ap-linkcard')).toBeNull();
+		dom.unmount();
+		expect(read(render({ linkCards: [{ kind: 'message', href, server: 'h', in: { id: 'ops' }, sender: { name: 'Bob' }, deleted: true }] }).querySelector('.ap-linkcard')!)).toEqual(['h › #ops › Message', 'BBob', 'Message deleted']);
 	});
 
 	it('hides the body and reactions of a tombstone', () => {

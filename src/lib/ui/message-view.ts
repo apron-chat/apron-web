@@ -1,7 +1,7 @@
 import type { Notice, UploadState } from '$lib/protocol/client';
 import { markdownText, mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 import { systemScope, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
-import type { EmbedProps, MessageCaps, MessageEmbed, MessageMention, MessageQuote, MessageReply, QuotedPlace, RoomQuote, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
+import type { EmbedProps, MessageCaps, MessageEmbed, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
 import { placeLinksIn, writeApronLink, type ApronLink } from './apron-link';
 import { directory, samePieces } from './directory.svelte';
@@ -10,7 +10,7 @@ import { eventTime, idMillis, idWhen } from './time';
 
 export type { MessageCaps, MessageView };
 
-/** A room or thread a link names, as the page knows it: joined, listed, or looked up for the link. */
+/** A room or thread a link names, as the page knows it: joined or listed. */
 export interface LinkedRoom {
 	id: string;
 	/** Its parent, for a thread. */
@@ -43,11 +43,11 @@ export interface MessageContext {
 	/** The quoted message of a reply, in any room (`reply_to` may cross rooms). */
 	resolve(messageId: string): MessageRecord | undefined;
 	/**
-	 * The message a link in a message names (Appendix A.4), where it is on the
-	 * server the page is on and has loaded: read only for a message with such links.
+	 * The message a link in a message names (Appendix A.4) on the server the
+	 * page is on, where it is loaded here: read only for a message with such links.
 	 */
 	linked(link: ApronLink): MessageRecord | undefined;
-	/** The room or thread a link names, likewise: read only for a message with such links. */
+	/** The room or thread a link names, likewise, where it is joined or listed. */
 	linkedRoom(link: ApronLink): LinkedRoom | undefined;
 	/** The WebSocket URL of that server: what a link without `server` refers to. */
 	readonly server: string | undefined;
@@ -81,8 +81,8 @@ interface Drawn {
 	timestamp?: number;
 }
 
-/** At most this many messages quoted under one message. */
-export const QUOTES_MAX = 3;
+/** At most this many link cards under one message. */
+export const LINK_CARDS_MAX = 3;
 
 const drawn = new WeakMap<MessageRecord, Drawn>();
 /** The last view made for each record, handed out again while nothing in it changed. */
@@ -110,7 +110,7 @@ function draw(event: MessageRecord): Drawn {
 		noticeTitle: noticeTitle(event.from),
 		text: textOf(event),
 		body: event.deleted ? undefined : bodyOf(event.body),
-		links: event.deleted ? [] : placeLinksIn(textOf(event), event.body?.format === 'markdown', QUOTES_MAX + 1),
+		links: event.deleted ? [] : placeLinksIn(textOf(event), event.body?.format === 'markdown', LINK_CARDS_MAX + 1),
 		time: eventTime(event),
 		timestamp: idMillis(event.message_id)
 	};
@@ -140,64 +140,69 @@ function replyOf(event: MessageRecord, context: MessageContext): MessageReply | 
 	return reply;
 }
 
-/** A room or thread as a quote names it, by what the directory calls it; `thread` where that's known otherwise. */
-function placeOf(roomId: string, thread = false): QuotedPlace {
-	const known = directory.resolveRoom(roomId);
-	const place: QuotedPlace = { id: roomId };
-	if (known && !known.untitled) place.title = known.title;
+/** A room or thread on a card: named as the directory knows it on this server, else by its `room_id`. */
+function placeOf(roomId: string, here: boolean, thread = false): LinkCardPlace {
+	const known = here ? directory.resolveRoom(roomId) : undefined;
+	const place: LinkCardPlace = { id: roomId };
+	if (!known) place.unknown = true;
+	else if (!known.untitled) place.title = known.title;
 	if (thread || known?.untitled) place.thread = true;
 	return place;
 }
 
-/** The message a link names, as a quote that follows the link. */
-function messageQuote(target: MessageRecord, href: string): MessageQuote {
-	const quote: MessageQuote = {
-		kind: 'message',
-		href,
-		name: directory.name(target.from),
-		avatar: directory.avatar(target.from),
-		hue: hueOf(directory.person(target.from)?.user_id),
-		room: placeOf(target.room_id),
-		timestamp: idMillis(target.message_id),
-		time: idWhen(target.message_id)
-	};
-	if (target.deleted) quote.deleted = true;
-	else quote.snippet = snippetOf(quoteSnippet(target));
-	return quote;
-}
-
-/** The room or thread a link names, as a card that follows the link. */
-function roomQuote(room: LinkedRoom, href: string): RoomQuote {
-	const quote: RoomQuote = { kind: 'room', href, room: placeOf(room.id, room.parentRoomId !== undefined) };
-	if (room.parentRoomId !== undefined) quote.parent = placeOf(room.parentRoomId);
-	const description = room.description ? markdownText(room.description) : '';
-	if (description) quote.description = description;
-	if (room.members !== undefined) quote.members = room.members;
-	if (room.private) quote.private = true;
-	return quote;
+/** A server's host, as a card's path starts. */
+function hostOf(server: string): string {
+	try {
+		return new URL(server).host || server;
+	} catch {
+		return server;
+	}
 }
 
 /**
- * The messages, rooms and threads its links point to that the page knows,
- * each as a card that follows the link; a link to the message itself, or to
- * a user, shows none.
+ * A link's card: its path and kind always, then what is known here of the
+ * message (once loaded) or the room (once joined or listed). Nothing is
+ * known of another server's.
  */
-function quotesOf(event: MessageRecord, seen: Drawn, context: MessageContext): (MessageQuote | RoomQuote)[] | undefined {
-	const quotes: (MessageQuote | RoomQuote)[] = [];
+function linkCardOf(link: ApronLink & { room: string }, server: string, here: boolean, context: MessageContext): MessageLinkCard {
+	// The https form with its server, so a link without one opens the same place in a new tab too.
+	const base = { href: writeApronLink({ server, room: link.room, message: link.message }), server: hostOf(server) };
+	if (link.message !== undefined) {
+		const target = here ? context.linked(link) : undefined;
+		const card: MessageLinkCard = { ...base, kind: 'message', in: placeOf(target?.room_id ?? link.room, here) };
+		if (!target) return card;
+		const sender: MessageLinkCard['sender'] = { name: directory.name(target.from) };
+		const avatar = directory.avatar(target.from);
+		const hue = hueOf(directory.person(target.from)?.user_id);
+		if (avatar) sender.avatar = avatar;
+		if (hue !== undefined) sender.hue = hue;
+		Object.assign(card, { sender, timestamp: idMillis(target.message_id), time: idWhen(target.message_id) });
+		if (target.deleted) card.deleted = true;
+		else card.snippet = snippetOf(quoteSnippet(target));
+		return card;
+	}
+	const room = here ? context.linkedRoom(link) : undefined;
+	if (!room) return { ...base, kind: 'room', room: { id: link.room, unknown: true } };
+	const thread = room.parentRoomId !== undefined;
+	const card: MessageLinkCard = { ...base, kind: thread ? 'thread' : 'room', room: placeOf(room.id, here, thread) };
+	if (room.parentRoomId !== undefined) card.in = placeOf(room.parentRoomId, here);
+	const description = room.description ? markdownText(room.description) : '';
+	if (description) card.description = description;
+	if (room.members !== undefined) card.members = room.members;
+	if (room.private) card.private = true;
+	return card;
+}
+
+/** A card for each link in it to a message, room or thread, up to `LINK_CARDS_MAX`; a link to the message itself has none. */
+function linkCardsOf(event: MessageRecord, seen: Drawn, context: MessageContext): MessageLinkCard[] | undefined {
+	const cards: MessageLinkCard[] = [];
 	for (const link of seen.links) {
 		const server = link.server ?? context.server;
-		if (quotes.length >= QUOTES_MAX || !server || !link.room || link.message === event.message_id) continue;
-		// The https form with its server, so a link without one opens the same place in a new tab too.
-		const href = writeApronLink({ server, room: link.room, message: link.message });
-		if (link.message !== undefined) {
-			const target = context.linked(link);
-			if (target) quotes.push(messageQuote(target, href));
-		} else {
-			const room = context.linkedRoom(link);
-			if (room) quotes.push(roomQuote(room, href));
-		}
+		const room = link.room;
+		if (cards.length >= LINK_CARDS_MAX || !server || room === undefined || link.message === event.message_id) continue;
+		cards.push(linkCardOf({ ...link, room }, server, server === context.server, context));
 	}
-	return quotes.length ? quotes : undefined;
+	return cards.length ? cards : undefined;
 }
 
 /**
@@ -240,8 +245,8 @@ export function messageView(event: MessageRecord, row: MessageRow, context: Mess
 	const reply = replyOf(event, context);
 	if (reply) view.reply = reply;
 	if (!event.deleted && !system) {
-		const quotes = quotesOf(event, seen, context);
-		if (quotes) view.quotes = quotes;
+		const cards = linkCardsOf(event, seen, context);
+		if (cards) view.linkCards = cards;
 	}
 	if (!event.deleted) {
 		const embeds = embedsIn(event, row, context, seen, seen.sender.name);
@@ -297,13 +302,10 @@ const sameSender = (a: MessageSender, b: MessageSender) =>
 	a.user_id === b.user_id && a.name === b.name && a.handle === b.handle && a.avatar === b.avatar && a.hue === b.hue && sameList(a.roles, b.roles, Object.is);
 const sameReply = (a: MessageReply, b: MessageReply) =>
 	a.id === b.id && a.name === b.name && a.avatar === b.avatar && a.hue === b.hue && a.deleted === b.deleted && sameList(a.snippet, b.snippet, samePart);
-const sameMessageQuote = (a: MessageQuote, b: MessageQuote) =>
-	a.href === b.href && a.name === b.name && a.avatar === b.avatar && a.hue === b.hue && sameFields(a.room, b.room) && a.timestamp === b.timestamp && a.time === b.time
-	&& a.deleted === b.deleted && sameList(a.snippet, b.snippet, samePart);
-const sameRoomQuote = (a: RoomQuote, b: RoomQuote) =>
-	a.href === b.href && a.description === b.description && a.members === b.members && a.private === b.private && sameFields(a.room, b.room) && sameFields(a.parent, b.parent);
-const sameQuote = (a: MessageQuote | RoomQuote, b: MessageQuote | RoomQuote) =>
-	a.kind === 'room' ? b.kind === 'room' && sameRoomQuote(a, b) : b.kind === 'message' && sameMessageQuote(a, b);
+const sameCard = (a: MessageLinkCard, b: MessageLinkCard) =>
+	a.href === b.href && a.kind === b.kind && a.server === b.server && sameFields(a.in, b.in) && sameFields(a.room, b.room) && sameFields(a.sender, b.sender)
+	&& a.timestamp === b.timestamp && a.time === b.time && a.deleted === b.deleted && sameList(a.snippet, b.snippet, samePart)
+	&& a.description === b.description && a.members === b.members && a.private === b.private;
 const sameEmbed = (a: MessageEmbed, b: MessageEmbed) => a.key === b.key && a.embed === b.embed && a.detail === b.detail && a.removable === b.removable && sameFields(a.upload, b.upload);
 
 /** Whether two views of one record draw the same row. */
@@ -313,7 +315,7 @@ export function sameView(a: MessageView, b: MessageView): boolean {
 		&& (a.sender === b.sender || sameSender(a.sender, b.sender))
 		&& sameFields(a.caps, b.caps)
 		&& sameList(a.reactions, b.reactions, sameChip)
-		&& sameList(a.quotes, b.quotes, sameQuote)
+		&& sameList(a.linkCards, b.linkCards, sameCard)
 		&& sameList(a.embeds, b.embeds, sameEmbed)
 		&& (a.reply === b.reply || (a.reply !== undefined && b.reply !== undefined && sameReply(a.reply, b.reply)));
 }

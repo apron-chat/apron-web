@@ -1,0 +1,34 @@
+<!-- @dsCard group="Timeline" height=640 subtitle="Links to a message, room or thread as cards under the text, in a link preview's shape: each shows what this client knows, from a loaded message to IDs alone" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>LinkCard</title></head>
+<body>
+<div id="root" style="padding: 12px 0"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var bob = { user_id: 'bob', name: 'Bob' }, grace = { user_id: 'grace', name: 'Grace Hopper' };
+  var link = function (keys, server) { return 'https://link.apron.chat/#server=' + (server || 'wss://server.apron.chat/') + '&' + keys; };
+  var chip = function (keys, label, detail) {
+    return '<a class="ap-mention ap-linkchip ap-mention-room ap-mention-hash-room" href="' + link(keys) + '">' + label + (detail ? '<span class="ap-linkchip-detail">' + detail + '</span>' : '') + '</a>';
+  };
+  var at = Date.parse('2026-10-24T14:05:00');
+  // A Message's `view.linkCards`: a loaded message; one whose room is known but which isn't loaded; one in a room not known here.
+  add(A.Message, { view: { sender: bob, time: '14:30', body: { html: 'Same as ' + chip('room=general&message=1', '#general', 'message') + ', and the two before it.' }, linkCards: [
+    { kind: 'message', href: link('room=general&message=1'), server: 'server.apron.chat', in: { id: 'general', title: 'general' }, sender: { name: 'Ada Lovelace', hue: 200 }, timestamp: at, time: 'Yesterday 2:05 PM', snippet: ['Deploy is green, rolling to prod now.\nAnyone object if I skip the canary wait?'] },
+    { kind: 'message', href: link('room=general&message=2'), server: 'server.apron.chat', in: { id: 'general', title: 'general' } },
+    { kind: 'message', href: link('room=r-8f2a&message=3'), server: 'server.apron.chat', in: { id: 'r-8f2a', unknown: true } }
+  ] } });
+  // Rooms and threads, joined or listed; and a message on another server, its host and IDs alone.
+  add(A.Message, { view: { sender: grace, time: '14:31', body: { html: 'Moving this to ' + chip('room=ops', '#ops') + ', notes in ' + chip('room=t-123', '#Deploy checklist') }, linkCards: [
+    { kind: 'room', href: link('room=ops'), server: 'server.apron.chat', room: { id: 'ops', title: 'ops' }, members: 42, private: true, description: 'Deploys, incidents and on-call. Page the on-call before touching prod.' },
+    { kind: 'thread', href: link('room=t-123'), server: 'server.apron.chat', in: { id: 'general', title: 'general' }, room: { id: 't-123', title: 'Deploy checklist', thread: true }, members: 3 },
+    { kind: 'message', href: link('room=lobby&message=4', 'wss://chat.example/'), server: 'chat.example', in: { id: 'lobby', unknown: true } }
+  ] } });
+  // Beside a link preview (EmbedCard), whose shape the cards share.
+  add(A.Message, { view: { sender: bob, time: '14:32', body: { html: 'And the PR:' }, embeds: [
+    { key: 'pr', embed: { kind: 'link', url: 'https://github.com/apron-chat/apron-web/pull/118', og: { site_name: 'GitHub · apron-chat/apron-web', title: 'Show links to this server as cards', description: 'Pull request #118 · Open by bob' } } }
+  ] } });
+</script>
+</body>
+</html>
