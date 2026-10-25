@@ -11,14 +11,14 @@
 	interface Props {
 		summary?: string;
 		children?: Snippet;
-		/** Names the region: "Thread summary" or "Room summary". */
+		/** Names the region: "Thread description" or "Room description". */
 		label?: string;
 		/** Offer × to put the summary away. */
 		ondismiss?: () => void;
 		/** Classes for its `<section>`, added to its own. */
 		class?: ClassValue;
 	}
-	let { summary, children, label = 'Thread summary', ondismiss, class: className }: Props = $props();
+	let { summary, children, label = 'Thread description', ondismiss, class: className }: Props = $props();
 	let expanded = $state(false);
 	let boxHeight = $state(0);
 	let textHeight = $state(0);
@@ -51,18 +51,18 @@
 </script>
 
 <section aria-label={label} class={['ap-summary', ondismiss && 'ap-summary-closable', className]}>
-	<!-- The region's label already says it's a summary; the icon's title says so to the pointer. -->
-	<span class="ap-summary-icon" title="Summary"><TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /></span>
+	<!-- The region's label already says it's a description; the icon's title says so to the pointer. -->
+	<span class="ap-summary-icon" title="Description"><TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /></span>
 	<!-- The pointer opens it from the text itself; the keyboard has the toggle, which shows only as a focus ring around the summary. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
 	<div class={['ap-summary-text', 'ap-msg-text', expanded ? 'ap-summary-open' : overflows && 'ap-summary-clipped']} {@attach heights} onclick={click}>
 		<div>{#if children}{@render children()}{:else}<p>{summary}</p>{/if}</div>
 	</div>
 	{#if overflows}
-		<button class="ap-summary-toggle" type="button" aria-expanded={expanded} aria-label={expanded ? 'Show less of the summary' : 'Show the whole summary'} onclick={() => (expanded = !expanded)}></button>
+		<button class="ap-summary-toggle" type="button" aria-expanded={expanded} aria-label={expanded ? 'Show less of the description' : 'Show the whole description'} onclick={() => (expanded = !expanded)}></button>
 	{/if}
 	{#if ondismiss}
-		<button class="ap-iconbtn ap-summary-close" type="button" aria-label="Hide summary" title="Hide summary" onclick={ondismiss}>
+		<button class="ap-iconbtn ap-summary-close" type="button" aria-label="Hide description" title="Hide description" onclick={ondismiss}>
 			<X size={14} strokeWidth={2} aria-hidden="true" />
 		</button>
 	{/if}

@@ -21,7 +21,7 @@
 	}
 </script>
 
-<Summary label={thread ? 'Thread summary' : 'Room summary'} {ondismiss}>
+<Summary label={thread ? 'Thread description' : 'Room description'} {ondismiss}>
 	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
 	<div data-testid="pane-summary" onclick={click} use:highlightCode={html}>{@html html}</div>
 </Summary>

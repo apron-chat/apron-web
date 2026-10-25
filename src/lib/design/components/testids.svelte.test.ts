@@ -87,7 +87,7 @@ const rows: Row[] = [
 		room: 'ops', name: 'Ops', topic: 'Deploys', onback: vi.fn(), unreadElsewhere: 12, canJoin: true, onjoin: vi.fn(), onsummary: vi.fn(), onedit: vi.fn(), onleave: vi.fn(),
 		tagTestid: 'tag', topicTestid: 'topic', joinTestid: 'join', summaryTestid: 'summary', actionsTestid: 'actions', editTestid: 'edit', leaveTestid: 'leave'
 	}, {
-		tag: () => byText('12'), topic: () => byText('Deploys'), join: () => dom.button('Join room'), summary: () => dom.button('Show the room summary'),
+		tag: () => byText('12'), topic: () => byText('Deploys'), join: () => dom.button('Join room'), summary: () => dom.button('Show the room description'),
 		actions: () => dom.button('Room actions'), edit: () => dom.byRole('menuitem', 'Edit room'), leave: () => dom.byRole('menuitem', 'Leave room')
 	}, () => open('Room actions')],
 	['RoomItem', RoomItem, { room: 'general', name: 'General', unread: 2, active: true, onnewthread: vi.fn(), unreadTestid: 'unread', newThreadTestid: 'new-thread' }, {

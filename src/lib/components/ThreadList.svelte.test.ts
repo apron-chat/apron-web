@@ -39,9 +39,9 @@ describe('ThreadList', () => {
 		] });
 		const lines = (id: string) => [...one(`button[data-thread="${id}"]`)!.querySelectorAll('.ap-tline')]
 			.map((line) => [line.querySelector('svg')?.getAttribute('aria-label'), line.textContent]);
-		expect(lines('deploy')).toEqual([['Summary', 'What to check: flags, rollback'], ['Latest message', 'Grace Flags are flipped']]);
+		expect(lines('deploy')).toEqual([['Description', 'What to check: flags, rollback'], ['Latest message', 'Grace Flags are flipped']]);
 		expect(lines('cert')).toEqual([['Latest message', 'Grace Flags are flipped']]);
-		expect(lines('roadmap')).toEqual([['Summary', 'Ship threads, then search']]);
+		expect(lines('roadmap')).toEqual([['Description', 'Ship threads, then search']]);
 		expect(one('button[data-thread="cert"] .ap-tline-sender')?.textContent).toBe('Grace');
 	});
 
@@ -97,7 +97,7 @@ describe('ThreadList', () => {
 		render({ others: [offsite, listed('logo', 'Logo')] });
 		const row = (id: string) => one(`button[data-other-thread="${id}"]`)!;
 		expect(row('offsite').querySelector('[data-testid="other-thread-summary"]')?.textContent).toBe('Dates, venue, and travel');
-		expect(row('offsite').querySelector('[data-testid="other-thread-summary"] svg')?.getAttribute('aria-label')).toBe('Summary');
+		expect(row('offsite').querySelector('[data-testid="other-thread-summary"] svg')?.getAttribute('aria-label')).toBe('Description');
 		expect(row('offsite').querySelector('[data-testid="other-thread-ago"]')?.textContent).toBe('2h');
 		expect(row('offsite').querySelector('time')?.getAttribute('datetime')).toBe(new Date(Number(offsite.latestLogId)).toISOString());
 		// Nothing listed, nothing shown.

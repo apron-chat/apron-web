@@ -7,11 +7,11 @@
 	interface Props {
 		/** Shown as a centered modal while true; bindable, and set false however it closes. */
 		open?: boolean;
-		/** A room (title and description), or a thread (title and summary): a room with a `parent_room_id` (§3.4). */
+		/** A room (title and description), or a thread (title and description): a room with a `parent_room_id` (§3.4). */
 		kind?: 'room' | 'thread';
 		/**
 		 * `create` a room or start a thread (`room_set` without a `room_id`, §4.2.4), or `edit` an existing one (`room_set` with it). A thread
-		 * starts from its room, from a message (its text quoted as the summary), or from selected messages.
+		 * starts from its room, from a message (its text quoted as the description), or from selected messages.
 		 */
 		mode?: 'create' | 'edit';
 		/** One line under the heading, such as the room a new thread goes in. */
@@ -72,8 +72,8 @@
 		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
 			placeholder={creating ? (thread ? 'What it’s about' : 'What to call it') : ''} />
 	</label>
-	<label class="ap-fieldlabel" for="{uid}-summary"><span class="ap-fieldlabel-row"><span>{thread ? 'Summary' : 'Description'}</span><span class="ap-fieldlabel-hint">Markdown{creating ? ', optional' : ''}</span></span>
-		<textarea id="{uid}-summary" class="ap-field ap-field-multi" aria-label={thread ? 'Thread summary' : 'Room description'} rows={creating && !summary ? 4 : 8} bind:value={summary} disabled={saving} spellcheck="true" dir="auto"
+	<label class="ap-fieldlabel" for="{uid}-summary"><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown{creating ? ', optional' : ''}</span></span>
+		<textarea id="{uid}-summary" class="ap-field ap-field-multi" aria-label={thread ? 'Thread description' : 'Room description'} rows={creating && !summary ? 4 : 8} bind:value={summary} disabled={saving} spellcheck="true" dir="auto"
 			placeholder={thread ? 'What this thread is about, or what it settled. Shows on its card and at the top of the thread.' : 'What this room is for.'}></textarea>
 	</label>
 	{#if creating && !thread}

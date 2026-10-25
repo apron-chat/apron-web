@@ -1006,11 +1006,11 @@
 				"test-helpers.ts:4"
 			]
 		},
-		"textbox \"Thread summary\"": {
+		"textbox \"Thread description\"": {
 			"roles": [
 				"textbox"
 			],
-			"name": "Thread summary",
+			"name": "Thread description",
 			"exact": true,
 			"at": [
 				"chat.spec.ts:114",

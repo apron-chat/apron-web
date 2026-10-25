@@ -18,7 +18,7 @@ describe('RoomEditor', () => {
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.classList.contains('ap-dialog-md')).toBe(true);
 		expect(dialog.textContent).toContain('Edit thread');
-		expect(dialog.textContent).toContain('Summary');
+		expect(dialog.textContent).toContain('Description');
 		type(field('textarea'), 'New');
 		await submit();
 		expect(updateRoom).toHaveBeenCalledWith('t1', { description: 'New' });

@@ -47,7 +47,7 @@
 		oncopylink?: () => Promise<boolean>;
 		onjoin?: () => void;
 		onmemberlist: () => void;
-		/** The room's or thread's summary was put away with its ×: a Summary button brings it back. */
+		/** The room's or thread's summary was put away with its ×: a Description button brings it back. */
 		onsummary?: () => void;
 	}
 	let {

@@ -506,7 +506,7 @@
 		: (activeRoom ? { id: activeRoom.id, title: activeRoom.title, description: activeRoom.description } : undefined));
 	/** Room and thread summaries put away with their ×, on this device. */
 	let hiddenSummaries = $state(loadHiddenSummaries());
-	/** Whether the open room's or thread's description is put away: the header's Summary brings it back. */
+	/** Whether the open room's or thread's description is put away: the header's Description brings it back. */
 	let summaryPutAway = $derived(Boolean(editTarget?.description && summaryHidden(hiddenSummaries, draftKey(editTarget.id), editTarget.description)));
 	/** The open room's or thread's description, pinned under the header until its × puts it away (and again once it's edited). */
 	let pinnedSummary = $derived(editTarget?.description && !summaryPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);

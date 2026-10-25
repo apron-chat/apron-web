@@ -41,7 +41,7 @@
 		/** The member list's toggle, where the list overlays the conversation; pressed while it's open. */
 		onmemberlist?: () => void;
 		memberListOpen?: boolean;
-		/** Cap `rooms`: Edit room (or thread) in the ⋯ actions menu, which opens a <RoomForm> dialog, for a thread's title and summary or a room's title and description. */
+		/** Cap `rooms`: Edit room (or thread) in the ⋯ actions menu, which opens a <RoomForm> dialog, for a room's or thread's title and description. */
 		onedit?: () => void;
 		/** Cap `rooms`: Leave room (or thread) in the ⋯ actions menu (`room_leave`, §4.2.2). */
 		onleave?: () => void;
@@ -49,9 +49,9 @@
 		oncopylink?: () => void;
 		/** A request in flight: Join and the actions menu can't be used. */
 		busy?: boolean;
-		/** The room's or thread's pinned <ThreadSummary> was put away with its ×: a Summary button brings it back. */
+		/** The room's or thread's pinned <ThreadSummary> was put away with its ×: a Description button brings it back. */
 		onsummary?: () => void;
-		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Summary, the ⋯ menu and its Edit and Leave. */
+		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the ⋯ menu and its Edit and Leave. */
 		tagTestid?: string;
 		topicTestid?: string;
 		joinTestid?: string;
@@ -124,8 +124,8 @@
 		</button>
 	{/if}
 	{#if onsummary}
-		<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost ap-roomhead-summary" data-testid={summaryTestid} aria-label="Show the {noun} summary" title="Show the {noun} summary" onclick={onsummary}>
-			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-summary-word">Summary</span>
+		<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost ap-roomhead-summary" data-testid={summaryTestid} aria-label="Show the {noun} description" title="Show the {noun} description" onclick={onsummary}>
+			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-summary-word">Description</span>
 		</button>
 	{/if}
 	{#if actions.length > 0}
