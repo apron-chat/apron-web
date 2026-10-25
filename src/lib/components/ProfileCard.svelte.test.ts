@@ -74,6 +74,14 @@ describe('ProfileCard bio', () => {
 		expect(render('bob', [ada, { ...bob, ext: { bio: '' } }], ada, undefined, undefined, ['ext:bio']).querySelector('[data-testid="profile-bio"]')).toBeNull();
 	});
 
+	it('links its http(s) URLs to open in a new tab, and nothing else', () => {
+		const linked = { ...bob, ext: { bio: 'Bridges: https://bridges.example/bob\n<b>not bold</b> javascript:alert(1) @ada' } };
+		const bio = render('bob', [ada, linked], ada, undefined, undefined, ['ext']).querySelector('[data-testid="profile-bio"]')!;
+		expect([...bio.querySelectorAll('a')].map((a) => [a.getAttribute('href'), a.target, a.rel])).toEqual([['https://bridges.example/bob', '_blank', 'noreferrer noopener']]);
+		expect(bio.querySelectorAll('b, button').length).toBe(0);
+		expect(bio.textContent).toBe('Bridges: https://bridges.example/bob\n<b>not bold</b> javascript:alert(1) @ada');
+	});
+
 	it('never shows one from a recorded object, which is as of its record', () => {
 		expect(render('bob', [ada], ada, undefined, undefined, ['ext'], [bob]).querySelector('[data-testid="profile-bio"]')).toBeNull();
 	});

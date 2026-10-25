@@ -155,6 +155,17 @@ export function renderPlain(source: string, resolve?: MentionResolver, resolveRo
 }
 
 /**
+ * A bio (`ext:bio`) as HTML: escaped, with bare `http(s)` links linked, each
+ * opening in a new tab. Mentions and Apron links stay text: a bio isn't a
+ * message, and nothing on a profile card opens rooms. Line breaks are kept by
+ * CSS (`pre-line`).
+ */
+export function renderBio(source: string): string {
+	const html = linkifyText(escapeHtml(source), undefined, undefined, true);
+	return DOMPurify.isSupported ? sanitize(html) : html;
+}
+
+/**
  * Markdown as plain text, for a one-line or clamped preview such as a thread
  * card's summary: rendered, then its tags dropped (block ends become line
  * breaks) and entities decoded. The result is text, never markup.
@@ -245,7 +256,7 @@ function linkText(html: string, resolve?: MentionResolver, resolveRoom?: RoomMen
  * Trailing punctuation is left out, as is a closing `)` with no opening one in
  * the link, so "(see https://example.com)." links just the URL.
  */
-function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver): string {
+function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, webOnly = false): string {
 	let out = '';
 	let index = 0;
 	for (const match of text.matchAll(BARE_URL)) {
@@ -256,7 +267,7 @@ function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: Room
 			url = trimmed.endsWith(')') && closes > opens ? trimmed.slice(0, -1) : trimmed;
 			if (url === trimmed) break;
 		}
-		if (!/^(?:https?:\/\/[^/?#]|(?:web\+)?apron:\?.)/i.test(url)) continue;
+		if (!(webOnly ? /^https?:\/\/[^/?#]/i : /^(?:https?:\/\/[^/?#]|(?:web\+)?apron:\?.)/i).test(url)) continue;
 		out += chipText(emojiText(text.slice(index, match.index)), resolve, resolveRoom);
 		out += `<a href="${url}"${LINK_ATTRS}>${url}</a>`;
 		index = match.index + url.length;

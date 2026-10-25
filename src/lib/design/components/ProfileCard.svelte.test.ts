@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { createRawSnippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ProfileCard from './ProfileCard.svelte';
 import * as dom from '$lib/test/dom';
@@ -47,6 +48,14 @@ describe('ProfileCard', () => {
 		expect(box.querySelector('.ap-profcard-warn')!.compareDocumentPosition(bio) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		dom.unmount();
 		expect(render({ userId: 'ada' }).querySelector('.ap-profcard-bio')).toBeNull();
+	});
+
+	it('shows the bio as markup you rendered, in place of its text, only with a bio', () => {
+		const bioBody = createRawSnippet(() => ({ render: () => '<span>See <a href="https://example.com">https://example.com</a></span>' }));
+		const bio = render({ userId: 'ada', bio: 'See https://example.com', bioBody, bioTestid: 'bio' }).querySelector('[data-testid="bio"]')!;
+		expect(bio.querySelector('a')?.getAttribute('href')).toBe('https://example.com');
+		dom.unmount();
+		expect(render({ userId: 'ada', bioBody }).querySelector('.ap-profcard-bio')).toBeNull();
 	});
 
 	it('offers only the actions it is given, and says Add to room is in flight', () => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { renderMarkdown, renderPlain, type MentionResolver, mentionSegments } from './markdown';
+import { renderBio, renderMarkdown, renderPlain, type MentionResolver, mentionSegments } from './markdown';
 
 const resolve: MentionResolver = (id) => {
 	if (id === 'alice') return { kind: 'user', id, name: 'Alice Chen' };
@@ -150,6 +150,42 @@ describe('bare links', () => {
 		const html = renderPlain('@alice https://example.com/@alice', resolve);
 		expect(html).toContain(link('https://example.com/@alice'));
 		expect(html.match(/ap-mention/g)).toHaveLength(1);
+	});
+});
+
+describe('bios (ext:bio)', () => {
+	/** The rendered bio, parsed: what a browser would build from it. */
+	const parse = (source: string) => {
+		const box = document.createElement('div');
+		box.innerHTML = renderBio(source);
+		return box;
+	};
+
+	it('links bare http(s) URLs to open in a new tab, without a referrer', () => {
+		const box = parse('Ada.\nhttps://example.com/me and http://old.example.');
+		const links = [...box.querySelectorAll('a')];
+		expect(links.map((a) => [a.getAttribute('href'), a.textContent, a.target, a.rel])).toEqual([
+			['https://example.com/me', 'https://example.com/me', '_blank', 'noreferrer noopener'],
+			['http://old.example', 'http://old.example', '_blank', 'noreferrer noopener']
+		]);
+		expect(box.textContent).toBe('Ada.\nhttps://example.com/me and http://old.example.');
+	});
+
+	it('leaves everything else text: markup, other schemes, Apron links and mentions', () => {
+		const source = '<img src=x onerror=alert(1)> <a href="https://evil.example">ok</a> [x](https://evil.example) javascript:alert(1) data:text/html,hi apron:?room=ops web+apron:?room=ops www.example.com @ada #general';
+		const box = parse(source);
+		expect(box.querySelectorAll('img, button, script, b').length).toBe(0);
+		// Only the bare https URLs inside the markup are linked, each showing the address it opens.
+		expect([...box.querySelectorAll('a')].map((a) => [a.getAttribute('href'), a.textContent])).toEqual([
+			['https://evil.example', 'https://evil.example'],
+			['https://evil.example', 'https://evil.example']
+		]);
+		expect(box.textContent).toBe(source);
+	});
+
+	it('links only the URL in a quoted or bracketed one', () => {
+		const box = parse('("https://example.com/a?b=1&c=2") <https://example.com/x>');
+		expect([...box.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://example.com/a?b=1&c=2', 'https://example.com/x']);
 	});
 });
 

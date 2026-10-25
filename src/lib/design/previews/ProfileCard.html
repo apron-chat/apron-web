@@ -9,7 +9,8 @@
   A.render(A.ProfileCard, at, {
     mode: 'popover', top: 16, left: 16, width: 288,
     userId: 'ada', name: 'Ada Lovelace', status: 'online', roles: ['admin'], membership: 'Member of general',
-    bio: 'Writes programs for engines that don’t exist yet.\nAsk me about Bernoulli numbers.',
+    bio: 'Writes programs for engines that don’t exist yet.\nNotes: https://example.com/ada',
+    bioBody: A.html('Writes programs for engines that don’t exist yet.\nNotes: <a href="https://example.com/ada" rel="noreferrer noopener" target="_blank">https://example.com/ada</a>'),
     onmention: noop, oncopyid: noop, note: { text: 'Copied @ada' }
   });
   A.render(A.ProfileCard, at, {

@@ -183,8 +183,9 @@ the connection an email or external sign-in proposes and approves on, and
 `plain-text.ts` cleans text that people write and others see as plain text,
 such as a bio (`ext:bio`): `cleanPlainText` drops control characters and the
 bidi overrides and isolates that could make the text around it read
-backwards, and keeps at most one blank line in a row; Svelte renders it as
-text, so nothing in it is ever markup. `reducer.ts` keeps one store
+backwards, and keeps at most one blank line in a row. A bio is then
+escaped, with only its bare `http(s)` links linked (`renderBio` in
+`markdown.ts`), so nothing else in it is ever markup. `reducer.ts` keeps one store
 of room records, message snapshots, per-user reaction sets, and memberships
 for every room, and beside the latest membership per user, each room's
 membership records in `log_id` order for the timeline's join and leave lines;

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { keepsBio, type ChatClient, type RoomSnapshot } from '$lib/protocol/client';
+	import { renderBio } from '$lib/protocol/markdown';
 	import { isSystemId } from '$lib/protocol/types';
 	import { ownStatusLabel } from '$lib/ui/user-status';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -58,8 +59,9 @@
 	let system = $derived(isSystemId(userId));
 	/** `roles` (§3.3) from the kept user object, else the recorded one: badges under the name, never part of it. */
 	let roles = $derived(Array.isArray(person?.roles) ? person.roles : undefined);
-	/** Their bio (`ext:bio`), from a server that keeps one. */
+	/** Their bio (`ext:bio`), from a server that keeps one: its `http(s)` links linked, opening in a new tab. */
 	let bio = $derived(keepsBio(session.server) ? directory.bio(person) : undefined);
+	let bioHtml = $derived(bio ? renderBio(bio) : '');
 	/** Membership of the open room, when its listing is known; a large room may list only its recently active members (§4.2.1). */
 	let listed = $derived(request?.member || room?.members?.some((member) => directory.person(member)?.user_id === userId));
 	let partial = $derived(room?.members !== undefined && (room.memberCount ?? 0) > room.members.length);
@@ -186,6 +188,7 @@
 		onkeydown={keydown}
 		onfocusout={focusout}
 	>
+		{#snippet bioBody()}{@html bioHtml}{/snippet}
 		{#snippet avatar()}<Avatar {name} hue={hueOf(userId)} src={directory.avatar(person)} size="lg" {status} statusLabel={me ? ownStatusLabel(status) : undefined} />{/snippet}
 	</ProfileCard>
 {/if}
