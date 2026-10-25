@@ -2,7 +2,7 @@ import { bioOf, serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/c
 import { safeAvatar } from '$lib/protocol/embeds';
 import type { LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
-import { readApronLink, writeApronLink } from './apron-link';
+import { readPlaceLink, writeApronLink } from './apron-link';
 import { backendHost } from './connection';
 
 type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
@@ -168,13 +168,15 @@ class Directory {
 	 * a room's name, a thread's name "in #general", a known user as `@name`. A
 	 * room not known here is its `room_id`. One to another server is nothing
 	 * here, and opening it switches servers, so it is no mention: its host
-	 * first, then "Message" or "Room", nothing looked up. A token, or another
-	 * server's user, stays a URL. Under the chip is the link in its https form
-	 * with the server, so a copied one opens the same place (Appendix A.4).
+	 * first, then "Message" or "Room", nothing looked up. Another server's
+	 * user stays a URL, as does any link not read strictly as a place
+	 * (`readPlaceLink`): one with a token, a key it doesn't know, or a
+	 * malformed part never looks like one. Under the chip is the link in its
+	 * https form with the server, so a copied one opens the same place (Appendix A.4).
 	 */
 	readonly resolveLink: LinkResolver = (href) => {
-		const link = readApronLink(href);
-		if (!link?.room || link.token !== undefined) return undefined;
+		const link = readPlaceLink(href);
+		if (!link) return undefined;
 		const server = link.server ?? this.server;
 		if (server === undefined) return undefined;
 		const shared = writeApronLink({ server, room: link.room, message: link.message, user: link.user });

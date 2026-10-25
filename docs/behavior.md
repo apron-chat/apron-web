@@ -879,7 +879,14 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   since opening it switches servers (the connect screen asks first); nothing
   is looked up for it, and it has no card. Another endpoint on the same host
   is another server. One written with its own text keeps it, and a token, or
-  a user on another server, stays a URL. Each is still
+  a user on another server, stays a URL. Only a link read strictly as a place
+  is drawn as one, as a chip or a card: the shapes Appendix A.4 lists (`room`;
+  `room` and `message`; `room` and `user`), every key one of those or `server`
+  and given once, every part `key=value` with a value that decodes and is of
+  its type (IDs without whitespace, control or bidi characters, a `message_id`
+  in `log_id` form), and at most one `server`, one this client can reach. A
+  link with a key it doesn't know, or an empty or malformed part, stays a
+  plain link, so nothing that isn't what it seems looks official. Each is still
   the link, in its `https` form with the server, so copying it gives a link
   that opens the same place anywhere, a click opens it here, and a modified
   click opens link.apron.chat in a new tab.

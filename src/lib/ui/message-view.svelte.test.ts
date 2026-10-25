@@ -149,13 +149,27 @@ describe('messageView', () => {
 	it('draws a hostile room title or id in a chip as text, its link to this server under it', () => {
 		const title = '"><img src=x onerror=alert(1)> & co';
 		know({ ada }, { rooms: [roomSnapshot('ops'), roomSnapshot('evil', [], { title })] });
-		const text = 'see apron:?room=evil and apron:?room=%22%3E%3Cimg%20src%3Dx%3E';
+		const text = 'see apron:?room=evil and apron:?room=%22%3E%3Cimg%3E and apron:?room=%22%3E%3Cimg%20src%3Dx%3E';
 		const box = document.createElement('div');
 		box.innerHTML = messageView(messageRecord(7, 'ops', { body: { text, format: 'markdown' } }), row(), context()).body!.html;
 		expect(box.querySelector('img')).toBeNull();
-		const [named, unknown] = box.querySelectorAll('a.ap-linkchip');
+		const [named, unknown, ...more] = box.querySelectorAll('a.ap-linkchip');
 		expect([named.textContent, named.getAttribute('title'), named.getAttribute('href')]).toEqual([title, `Open #${title}`, `https://link.apron.chat/#server=${SERVER}&room=evil`]);
-		expect([unknown.textContent, unknown.getAttribute('href')]).toEqual(['"><img src=x>', `https://link.apron.chat/#server=${SERVER}&room=%22%3E%3Cimg%20src%3Dx%3E`]);
+		expect([unknown.textContent, unknown.getAttribute('href')]).toEqual(['"><img>', `https://link.apron.chat/#server=${SERVER}&room=%22%3E%3Cimg%3E`]);
+		// A room_id with a space is no room_id (§2.4): a plain link, not a chip.
+		expect(more).toEqual([]);
+		expect(box.querySelectorAll('a')).toHaveLength(3);
+	});
+
+	it('draws neither chip nor card for a link with a key it doesn’t know, or malformed, though it links it', () => {
+		know({ ada }, { rooms: [roomSnapshot('ops', [], { title: 'Ops' })] });
+		const loaded = messageRecord(5, 'ops', { body: { text: 'here' } });
+		for (const href of ['apron:?room=ops&message=5&utm_source=x', `https://link.apron.chat/#server=${SERVER}&room=ops&&message=5`, 'apron:?room=ops&message=5&message=5', 'apron:?room=ops&message=05']) {
+			const view = messageView(messageRecord(7, 'ops', { body: { text: `see ${href}` } }), row(), context([loaded]));
+			const box = document.createElement('div');
+			box.innerHTML = view.body!.html;
+			expect([box.querySelectorAll('a').length, box.querySelectorAll('.ap-linkchip').length, view.linkCards], href).toEqual([1, 0, undefined]);
+		}
 	});
 
 	it('shows a card once its message is loaded, and hands back the same view until then', () => {
