@@ -527,8 +527,7 @@ class Identity {
   U+2066 to U+2069), and with at most one blank line in a row.
 - Clients ignore a `bio` that is not a string. They remove from a bio what
   they would not send, and show at most its first 250 characters.
-- Clients show a bio as text, never as Markdown or HTML. They do not turn its
-  URLs or mentions into links.
+- Clients show a bio as text, never as Markdown or HTML.
 - Clients read a bio only from current user objects, never from a recorded
   `from`.
 - The server's size limits on `ext` apply to the merged object, in bytes. A
@@ -540,6 +539,8 @@ class Identity {
 - The profile card shows the bio under the name, after the warning about a
   shared name. It keeps the line breaks, and isolates the bio's direction from
   the text around it.
+- It links bare `http:` and `https:` URLs, as in a plain message. Each link
+  opens in a new tab, without a referrer. Mentions and Apron links stay text.
 - The profile editor has a Bio field while you are signed in. It counts
   characters, and Save waits while the bio is over 250.
 - Save sends a changed bio first, then the handle. When the server refuses the
