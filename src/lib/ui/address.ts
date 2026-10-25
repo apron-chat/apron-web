@@ -73,6 +73,19 @@ export function destinationUrl(current: string, destination: Destination, defaul
 	return url.toString();
 }
 
+/**
+ * An address from before the place moved to the fragment (`/?room=general#message=…`),
+ * with its place keys moved there, or undefined when its query has none.
+ */
+export function movedFromQuery(current: string): string | undefined {
+	const url = new URL(current);
+	const moved = PLACE_PARAMS.flatMap((key) => url.searchParams.getAll(key).map((value): [string, string] => [key, value]));
+	if (!moved.length) return undefined;
+	for (const key of PLACE_PARAMS) url.searchParams.delete(key);
+	url.hash = formKeys([...moved, ...fragmentParams(url.hash)]);
+	return url.toString();
+}
+
 function fragmentParams(hash: string): URLSearchParams {
 	return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
 }

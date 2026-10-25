@@ -8,7 +8,7 @@
 	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
-	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
+	import { destinationUrl, movedFromQuery, readDestination, type Destination } from '$lib/ui/address';
 	import { readApronLink, writeApronLink, type ApronLink } from '$lib/ui/apron-link';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
 	import { isJsonObject } from '$lib/protocol/types';
@@ -916,6 +916,9 @@
 		};
 		memberListMediaChange(memberListMedia);
 		memberListMedia.addEventListener('change', memberListMediaChange);
+		// An address from before the place moved to the fragment is rewritten first, in place.
+		const oldAddress = movedFromQuery(window.location.href);
+		if (oldAddress) scrubUrl(oldAddress);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
 		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.

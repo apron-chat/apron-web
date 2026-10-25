@@ -37,6 +37,11 @@ test.describe('deep links', () => {
 		expect(await page.evaluate(() => (window as unknown as { stayed?: boolean }).stayed)).toBe(true);
 	});
 
+	test('an address from before the place moved to the fragment is rewritten in place', async ({ preview }) => {
+		await preview.open('?room=general&thread=thread_deploy');
+		await at(preview, 'general › Deploy checklist', /__preview#room=general&thread=thread_deploy$/);
+	});
+
 	test('a link to a message that is not there says so', async ({ preview, page }) => {
 		await preview.open('#room=general&message=1710000000099');
 		await expect(page.getByText('The linked message isn’t available here.')).toBeVisible();

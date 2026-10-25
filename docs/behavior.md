@@ -721,7 +721,8 @@ this app never learns which server, room or message anyone opens:
 leaving out `server` when it is the one the page connects to anyway, and
 `thread`, `message` and `user` (whose profile card opens) without a room.
 Opening one, or pasting one into an open tab, goes there; one on another server
-opens the connect screen for it first. Each room or thread opened is a browser
+opens the connect screen for it first. An older address with these keys in its query
+(`?room=general`) is rewritten to the fragment form in place on load. Each room or thread opened is a browser
 history entry, so Back returns to the previous room or thread, and Forward the
 other way, until Back leaves the page from the first room opened. A room left since stays put
 for that step, and a thread left since is read without joining.

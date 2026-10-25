@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { destinationUrl, readDestination } from './address';
+import { destinationUrl, movedFromQuery, readDestination } from './address';
 
 const at = (url: string) => readDestination({ hash: new URL(url).hash });
 
@@ -32,5 +32,13 @@ describe('destination URLs', () => {
 		const written = destinationUrl('https://app.example/', { server: 'wss://ada:secret@chat.example.com/ws', room: 'r 1', thread: 't/2', message: 'm&3', user: 'a#4' }, home);
 		expect(written).not.toContain('secret');
 		expect(at(written)).toEqual({ server: 'wss://chat.example.com/ws', room: 'r 1', thread: 't/2', message: 'm&3', user: 'a#4' });
+	});
+
+	it('move an older address’s place from the query to the fragment, keeping the rest of the URL', () => {
+		expect(movedFromQuery('https://app.example/?room=general&thread=t1#message=m1')).toBe('https://app.example/#room=general&thread=t1&message=m1');
+		expect(movedFromQuery('https://app.example/app/?x=1&server=wss%3A%2F%2Fchat.example%2Fws&room=r%201#user=ada')).toBe('https://app.example/app/?x=1#server=wss://chat.example/ws&room=r%201&user=ada');
+		// Nothing to move.
+		expect(movedFromQuery('https://app.example/?x=1#room=general')).toBeUndefined();
+		expect(movedFromQuery('https://app.example/')).toBeUndefined();
 	});
 });
