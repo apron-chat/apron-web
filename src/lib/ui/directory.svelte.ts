@@ -185,15 +185,20 @@ class Directory {
 			return { kind, elsewhere: true, href: shared, label: host, detail: kind === 'message' ? ' · Message' : ' · Room', title: `A ${kind} on ${host}, another server: opening it asks to switch` };
 		}
 		const room = this.resolveRoom(link.room)?.title ?? link.room;
+		// In a tooltip, as a room mention's: an untitled thread's room_id after its "Untitled".
+		const tip = (id: string) => {
+			const known = this.resolveRoom(id);
+			return known?.untitled ? `${known.title} (#${id})` : known?.title ?? id;
+		};
 		const parentId = this.parents[link.room];
 		const parent = parentId === undefined ? undefined : this.resolveRoom(parentId)?.title ?? parentId;
 		if (link.user !== undefined) {
 			const user = this.resolve(link.user);
-			return user?.kind === 'user' ? { kind: 'user', href: shared, label: `@${user.name}`, title: `${user.name} in #${room}` } : undefined;
+			return user?.kind === 'user' ? { kind: 'user', href: shared, label: `@${user.name}`, title: `${user.name} in #${tip(link.room)}` } : undefined;
 		}
-		if (link.message !== undefined) return { kind: 'message', href: shared, label: 'Message', detail: ` in #${room}`, title: `A message in #${room}` };
-		if (parent !== undefined) return { kind: 'thread', href: shared, label: room, detail: ` in #${parent}`, title: `Open ${room}, a thread in #${parent}` };
-		return { kind: 'room', href: shared, label: room, title: `Open #${room}` };
+		if (link.message !== undefined) return { kind: 'message', href: shared, label: 'Message', detail: ` in #${room}`, title: `A message in #${tip(link.room)}` };
+		if (parentId !== undefined) return { kind: 'thread', href: shared, label: room, detail: ` in #${parent}`, title: `Open ${tip(link.room)}, a thread in #${tip(parentId)}` };
+		return { kind: 'room', href: shared, label: room, title: `Open #${tip(link.room)}` };
 	};
 
 	/** Resolves `@user_id` (Appendix A.3): a known user, marked `shared` when another shows under their name; unknown IDs stay text. */

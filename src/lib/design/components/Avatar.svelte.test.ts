@@ -25,4 +25,10 @@ describe('Avatar', () => {
 		expect([image.getAttribute('src'), image.alt]).toEqual(['https://chat.example/bob.png', '']);
 		expect(document.body.textContent).toBe('');
 	});
+
+	it('draws xs, for a face inside a line of small text, without a status, which it is too small to carry', () => {
+		dom.render(Avatar, { name: 'Ada Lovelace', size: 'xs', status: 'online' });
+		expect(byText('AL').classList.contains('ap-avatar-xs')).toBe(true);
+		expect(document.querySelector('.ap-presence')).toBeNull();
+	});
 });

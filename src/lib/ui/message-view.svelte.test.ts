@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ClientSnapshot, Notice, UploadState } from '$lib/protocol/client';
+import type { ClientSnapshot, Notice, RoomListing, UploadState } from '$lib/protocol/client';
 import type { Identity, MessageRecord } from '$lib/protocol/types';
 import { messageRecord, roomSnapshot } from '$lib/test/builders';
 import { directory } from './directory.svelte';
 import type { ApronLink } from './apron-link';
-import { messageView, noticeView, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
+import { linkedRoomIn, messageView, noticeView, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
 import { avatarHue } from './messages';
 import { idWhen } from './time';
 import { blankSnapshot } from './session.svelte';
@@ -15,15 +15,16 @@ const you: Identity = { user_id: 'you', name: 'You' };
 const ada: Identity = { user_id: 'ada', name: 'Ada', roles: ['admin', '', 'admin', 7 as unknown as string], avatar: 'data:image/png;base64,iVBORw0KGgo=' };
 const NONE: MessageCaps = { reply: false, edit: false, startThread: false, select: false, removeReply: false, react: false, link: false };
 
+const SERVER = 'wss://chat.example/ws';
+
+/** The directory of a page on SERVER that knows `users` and, unless `fields` says otherwise, the room `ops`. */
 function know(users: Record<string, Identity>, fields: Partial<ClientSnapshot> = {}): void {
-	directory.apply({ ...blankSnapshot(), authenticated: true, you, users: { you, ...users }, recordedUsers: {}, userAliases: {}, rooms: [roomSnapshot('ops')], ...fields }, 'https://chat.example');
+	directory.apply({ ...blankSnapshot(), authenticated: true, you, users: { you, ...users }, recordedUsers: {}, userAliases: {}, rooms: [roomSnapshot('ops')], ...fields }, 'https://chat.example', SERVER);
 }
 
 function row(fields: Partial<MessageRow> = {}): MessageRow {
 	return { grouped: false, reactions: [], mention: false, pinged: false, highlighted: false, selecting: false, selected: false, editing: false, caps: NONE, ...fields };
 }
-
-const SERVER = 'wss://chat.example/ws';
 
 /** A page on SERVER that has `records` and `rooms` loaded, and resolves a link only to them, on SERVER. */
 function context(records: MessageRecord[] = [], uploads: Record<string, UploadState> = {}, rooms: LinkedRoom[] = []): MessageContext {
@@ -130,6 +131,33 @@ describe('messageView', () => {
 		]);
 	});
 
+	it('shows one card for one place written twice, with its server and without', () => {
+		know({ ada }, { rooms: [roomSnapshot('ops', [], { title: 'Ops' })] });
+		const text = `apron:?room=ops and https://link.apron.chat/#server=${SERVER}&room=ops`;
+		expect(messageView(messageRecord(7, 'ops', { body: { text } }), row(), context([], {}, [{ id: 'ops', description: 'Ops things' }])).linkCards).toHaveLength(1);
+	});
+
+	it('shows no card for a link in code, which the body doesn’t link, and one for a link Markdown percent-encodes', () => {
+		const loaded = messageRecord(11, 'général', { body: { text: 'bonjour' } });
+		for (const text of ['    apron:?room=ops&message=11', '``apron:?room=ops&message=11``', '```\napron:?room=ops&message=11\n```']) {
+			expect(messageView(messageRecord(7, 'ops', { body: { text, format: 'markdown' } }), row(), context([loaded])).linkCards, text).toBeUndefined();
+		}
+		const encoded = messageView(messageRecord(8, 'ops', { body: { text: `<https://link.apron.chat/#server=${SERVER}&room=général&message=11>`, format: 'markdown' } }), row(), context([loaded]));
+		expect(encoded.linkCards?.map((card) => [card.in, card.snippet])).toEqual([[{ id: 'général', unknown: true }, ['bonjour']]]);
+	});
+
+	it('draws a hostile room title or id in a chip as text, its link to this server under it', () => {
+		const title = '"><img src=x onerror=alert(1)> & co';
+		know({ ada }, { rooms: [roomSnapshot('ops'), roomSnapshot('evil', [], { title })] });
+		const text = 'see apron:?room=evil and apron:?room=%22%3E%3Cimg%20src%3Dx%3E';
+		const box = document.createElement('div');
+		box.innerHTML = messageView(messageRecord(7, 'ops', { body: { text, format: 'markdown' } }), row(), context()).body!.html;
+		expect(box.querySelector('img')).toBeNull();
+		const [named, unknown] = box.querySelectorAll('a.ap-linkchip');
+		expect([named.textContent, named.getAttribute('title'), named.getAttribute('href')]).toEqual([title, `Open #${title}`, `https://link.apron.chat/#server=${SERVER}&room=evil`]);
+		expect([unknown.textContent, unknown.getAttribute('href')]).toEqual(['"><img src=x>', `https://link.apron.chat/#server=${SERVER}&room=%22%3E%3Cimg%20src%3Dx%3E`]);
+	});
+
 	it('shows a card once its message is loaded, and hands back the same view until then', () => {
 		const records: MessageRecord[] = [];
 		const event = messageRecord(7, 'ops', { body: { text: 'apron:?room=ops&message=5' } });
@@ -200,6 +228,25 @@ describe('messageView', () => {
 			expect(seen[1]).toContain('@Ada L');
 		});
 		cleanup();
+	});
+});
+
+describe('linkedRoomIn', () => {
+	const listing = (id: string, fields: Partial<RoomListing> = {}, record: Partial<RoomListing['record']> = {}): RoomListing => ({ id, title: id, record: { room_id: id, ...record }, members: [], joined: false, ...fields });
+
+	it('reads a room joined or opened first, then one listed, and a listing’s size only where it has members or a count', () => {
+		const rooms = [roomSnapshot('ops', [], { description: 'Ops things', members: [ada, you], private: true })];
+		const listed = new Map([
+			['ops', listing('ops', {}, { description: 'stale' })],
+			['t1', listing('t1', { parentRoomId: 'ops' }, { description: 'Deploys', private: true })],
+			['big', listing('big', { members: [ada], memberCount: 40 })],
+			['few', listing('few', { members: [ada] })]
+		]);
+		expect(linkedRoomIn(rooms, listed, 'ops')).toEqual({ id: 'ops', description: 'Ops things', members: 2, private: true });
+		expect(linkedRoomIn(rooms, listed, 't1')).toEqual({ id: 't1', parentRoomId: 'ops', description: 'Deploys', private: true });
+		expect(linkedRoomIn(rooms, listed, 'big')?.members).toBe(40);
+		expect(linkedRoomIn(rooms, listed, 'few')?.members).toBe(1);
+		expect(linkedRoomIn(rooms, listed, 'gone')).toBeUndefined();
 	});
 });
 

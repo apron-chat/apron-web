@@ -13,6 +13,8 @@
  * message it is in.
  */
 
+import { unescapeHtml } from '$lib/protocol/markdown';
+
 export interface ApronLink {
 	/** A `ws:` or `wss:` URL; absent in a relative link. */
 	server?: string;
@@ -58,23 +60,21 @@ export function readApronLink(href: string): ApronLink | undefined {
 	return link;
 }
 
-/**
- * An Apron link as written in a message, in any form: it runs to whitespace, or
- * to a character that ends a link in Markdown or HTML (a written link encodes them).
- */
-const LINK_IN_TEXT = /(?:https:\/\/link\.apron\.chat\/#|\b(?:web\+)?apron:\?)[^\s<>"'`()[\]]+/gi;
+/** An anchor's `href` in rendered markup, which the renderer and DOMPurify write in double quotes, escaped. */
+const ANCHOR_HREF = /<a\s[^>]*?\bhref="([^"]*)"/gi;
 
 /**
- * The distinct links to messages, rooms and threads in a message's text, in
- * order, up to `max`: not to users, nor with a token. In Markdown, code is
- * left out, as it isn't linked either.
+ * The distinct links to messages, rooms and threads in a message's body as
+ * rendered (`renderMarkdown`, `renderPlain`), in order, up to `max`: not to
+ * users, nor with a token. Read from its links, not its source, so it finds
+ * what the renderer linked and no more: nothing in code, and a link the way
+ * it reads, percent-encoding and all.
  */
-export function placeLinksIn(text: string, markdown: boolean, max: number): ApronLink[] {
-	const prose = markdown ? text.replace(/```[\s\S]*?(?:```|$)/g, ' ').replace(/`[^`\n]*`/g, ' ') : text;
+export function placeLinksIn(html: string, max: number): ApronLink[] {
 	const found = new Map<string, ApronLink>();
-	for (const match of prose.matchAll(LINK_IN_TEXT)) {
+	for (const match of html.matchAll(ANCHOR_HREF)) {
 		if (found.size >= max) break;
-		const link = readApronLink(match[0].replace(/[.,:;!?*_~]+$/, ''));
+		const link = readApronLink(unescapeHtml(match[1]));
 		if (link?.room !== undefined && link.user === undefined && link.token === undefined) found.set(`${link.server ?? ''} ${link.room} ${link.message ?? ''}`, link);
 	}
 	return [...found.values()];

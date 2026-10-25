@@ -125,8 +125,9 @@ describe('bare links', () => {
 
 	it('draws an Apron link written as its URL as the chip a resolver gives, still the link, and leaves one with its own text or in code', () => {
 		const resolveLink: LinkResolver = (href) => {
-			if (href === 'apron:?room=ops&message=1') return { kind: 'message', label: 'Message', detail: ' in #Ops & Co', title: 'A message in #Ops & Co' };
-			if (href === 'apron:?server=wss://h/&room=ops') return { kind: 'room', elsewhere: true, label: 'h', detail: ' · Room', title: 'A room on h' };
+			if (href === 'apron:?room=ops&message=1') return { kind: 'message', href, label: 'Message', detail: ' in #Ops & Co', title: 'A message in #Ops & Co' };
+			if (href === 'apron:?server=wss://h/&room=ops') return { kind: 'room', elsewhere: true, href, label: 'h', detail: ' · Room', title: 'A room on h' };
+			if (href.startsWith('https://link.apron.chat/#room=g')) return { kind: 'room', href, label: decodeURI(href).slice(-7), title: 'Open' };
 			if (href === 'apron:?room=ops&user=alice') return { kind: 'user', href: 'apron:?server=wss://h/&room=ops&user=alice', label: '@Alice', title: 'Alice in #Ops & Co' };
 			return undefined;
 		};
@@ -142,6 +143,8 @@ describe('bare links', () => {
 		expect(renderMarkdown('[that one](apron:?room=ops&message=1)', undefined, undefined, resolveLink)).toContain('>that one</a>');
 		expect(renderMarkdown('`apron:?room=ops&message=1`', undefined, undefined, resolveLink)).not.toContain('<a');
 		expect(renderPlain('apron:?room=other', undefined, undefined, resolveLink)).toBe(link('apron:?room=other'));
+		// An autolink whose href Markdown percent-encodes, but not its text, is still its own URL.
+		expect(renderMarkdown('<https://link.apron.chat/#room=général>', undefined, undefined, resolveLink)).toContain('class="ap-mention ap-mention-room ap-linkchip ap-linkchip-room" title="Open">général</a>');
 	});
 
 	it('leaves trailing punctuation and an unmatched closing paren out', () => {

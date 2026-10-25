@@ -7,13 +7,14 @@
 	 * An image where the user object carries one this client will load (§4.8.6: pass it already checked), else
 	 * initials: on a tint of `hue`, such as one made from the `user_id` so people are told apart at a glance, or on the
 	 * denim placeholder without one. With a `status` (§4.5), a StatusDot sits on its corner; it is decorative, with
-	 * `statusLabel` as its tooltip, so whoever shows the name says the status.
+	 * `statusLabel` as its tooltip, so whoever shows the name says the status. `xs` is for a face inside a line of
+	 * small text, such as a reply's quote or a link card's title, and is too small to carry a status.
 	 */
 	interface Props {
 		name?: string;
 		user_id?: string;
 		src?: string;
-		size?: 'lg' | 'md' | 'sm';
+		size?: 'lg' | 'md' | 'sm' | 'xs';
 		/** The initials' tint, 0–360. */
 		hue?: number;
 		/** The user's `status` (§4.5): a StatusDot on the bottom-right corner, cut out of the avatar. Absent shows none. */
@@ -32,7 +33,7 @@
 	{/if}
 {/snippet}
 
-{#if presence(status) !== undefined}
+{#if size !== 'xs' && presence(status) !== undefined}
 	<span class="ap-avatar-status ap-avatar-status-{size}">{@render face()}<StatusDot {status} {size} label={statusLabel} decorative /></span>
 {:else}
 	{@render face()}

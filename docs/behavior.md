@@ -894,7 +894,9 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   a card, and a link with nothing more to show than its path (a message that
   isn't loaded, a room known only by name or not at all, any link to another
   server) has none: its chip says as much. A card is the link, as a chip is.
-  A link inside code or to the message itself has none.
+  The cards follow what the text links, so a link inside code (inline,
+  indented or fenced) has none, nor has one to the message itself, and a
+  place written twice, with its server and without, has one.
 
 With the `edit` capability, **Edit** on your own message opens it in place, in
 a box like the composer: its text, with its embeds above it as tiles like a

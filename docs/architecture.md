@@ -94,9 +94,10 @@ record and the directory per record, and hands back the previous view while noth
 it changed, so a change elsewhere redraws no row. The row draws its header, body and
 reactions itself and adds the rest only where present: the quote (`ReplyPreview`), the
 messages, rooms and threads its links point to (`LinkCard`, an `<a>` the page's Apron link handler follows,
-built on `EmbedCard`'s classes so it reads as a link preview; `MessageContext.linked` and `linkedRoom` give what is
-loaded or listed, and nothing is fetched for one; in the text, `directory.resolveLink` draws the links themselves
-as mention chips), the
+built on `EmbedCard`'s classes so it reads as a link preview; the links are read from the rendered body's anchors
+(`placeLinksIn`), so a card follows exactly what the text links; `MessageContext.linked` and `linkedRoom` give what
+is loaded or listed, and nothing is fetched for one; in the text, `directory.resolveLink` draws the links themselves
+as chips), the
 embeds (`MessageEmbeds`, each through the page's `embed` snippet, the app's `Embed`),
 the hover toolbar (`MessageActions`, built once a pointer or focus reaches the row) and
 the editor (the page's `editor` snippet, the lazy `MessageEditor`, for the row being

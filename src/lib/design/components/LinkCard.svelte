@@ -46,7 +46,7 @@
 			</span>
 		</span>
 		{#if card.sender}
-			<span class="ap-embed-title ap-linkcard-title"><Avatar name={card.sender.name} src={card.sender.avatar} hue={card.sender.hue} size="sm" /><span class="ap-linkcard-name">{card.sender.name}</span>{#if t.short}<time datetime={t.iso} title={t.exact}>{t.short}</time>{/if}</span>
+			<span class="ap-embed-title ap-linkcard-title"><Avatar name={card.sender.name} src={card.sender.avatar} hue={card.sender.hue} size="xs" /><span class="ap-linkcard-name">{card.sender.name}</span>{#if t.short}<time datetime={t.iso} title={t.exact}>{t.short}</time>{/if}</span>
 		{:else if card.room}
 			<span class="ap-embed-title ap-linkcard-title">{@render step(card.room, card.kind === 'room')}{#if card.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
 		{/if}

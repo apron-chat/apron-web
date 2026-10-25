@@ -1,4 +1,6 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
+import { renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 import { placeLinksIn, readApronLink, writeApronLink } from './apron-link';
 
 describe('Apron links (Appendix A.4)', () => {
@@ -30,19 +32,29 @@ describe('Apron links (Appendix A.4)', () => {
 		expect(writeApronLink({ server: 'wss://ada:pw@chat.example/ws', room: 'general' })).toBe('https://link.apron.chat/#server=wss://chat.example/ws&room=general');
 	});
 
-	it('finds the distinct links to messages, rooms and threads in text, in any form, as Markdown or HTML ends them, leaving out code in Markdown', () => {
-		const text = [
+	it('finds the distinct links to messages, rooms and threads a rendered body links, in order, and none it leaves unlinked, as in code', () => {
+		const source = [
 			'See https://link.apron.chat/#server=wss://chat.example/ws&room=general&message=1724803200042.',
 			'[that](apron:?room=ops&message=7) and <web+apron:?room=ops&message=8>, again apron:?room=ops&message=7!',
 			'a room apron:?room=ops, a user apron:?room=ops&user=ada, elsewhere https://example.com/#room=r&message=1',
-			'`apron:?room=ops&message=9`',
-			'```\napron:?room=ops&message=10\n```'
+			'`apron:?room=ops&message=9` and ``apron:?room=ops&message=10``',
+			'',
+			'    apron:?room=ops&message=11',
+			'',
+			'```\napron:?room=ops&message=12\n```',
+			'',
+			'<https://link.apron.chat/#room=général&message=13>'
 		].join('\n');
-		const found = (markdown: boolean, max = 10) => placeLinksIn(text, markdown, max).map((link) => [link.server, link.room, link.message]);
-		const prose = [['wss://chat.example/ws', 'general', '1724803200042'], [undefined, 'ops', '7'], [undefined, 'ops', '8'], [undefined, 'ops', undefined]];
-		expect(found(true)).toEqual(prose);
-		expect(found(false)).toEqual([...prose, [undefined, 'ops', '9'], [undefined, 'ops', '10']]);
-		expect(found(true, 2)).toEqual(prose.slice(0, 2));
-		expect(placeLinksIn('apron:?server=wss://h/&token=t&room=r', false, 3)).toEqual([]);
+		const found = (html: string, max = 10) => placeLinksIn(html, max).map((link) => [link.server, link.room, link.message]);
+		const html = renderMarkdown(source);
+		// Code, inline, double-backticked, indented or fenced, links nothing; a link percent-encoded reads as written.
+		expect(found(html)).toEqual([
+			['wss://chat.example/ws', 'general', '1724803200042'], [undefined, 'ops', '7'], [undefined, 'ops', '8'], [undefined, 'ops', undefined], [undefined, 'général', '13']
+		]);
+		expect(found(html, 2)).toHaveLength(2);
+		// A plain body has no code: an indented link is a link.
+		expect(found(renderPlain('    apron:?room=ops&message=11'))).toEqual([[undefined, 'ops', '11']]);
+		expect(found(renderPlain('apron:?server=wss://h/&token=t&room=r'))).toEqual([]);
 	});
+
 });

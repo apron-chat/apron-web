@@ -82,8 +82,8 @@ export interface LinkChip {
 	kind: 'room' | 'thread' | 'message' | 'user';
 	/** On another server: not a mention but a chip of its own, its host first, that says opening it leaves this one. */
 	elsewhere?: boolean;
-	/** The link to put under it in place of the one written, such as with the server a relative one is for. */
-	href?: string;
+	/** The link under it, in place of the one written: its https form with the server, even for a relative one. */
+	href: string;
 	label: string;
 	detail?: string;
 	title: string;
@@ -257,7 +257,7 @@ function linkText(html: string, resolve?: MentionResolver, resolveRoom?: RoomMen
 			break;
 		}
 		const autolink = resolveLink && codeDepth === 0 ? /^<a href="([^"]*)">([^<]*)<\/a>/.exec(html.slice(tagStart)) : null;
-		if (autolink && unescapeHtml(autolink[1]) === unescapeHtml(autolink[2])) {
+		if (autolink && asWritten(autolink[1]) === asWritten(autolink[2])) {
 			const chip = linkChip(autolink[1], resolveLink!);
 			if (chip) {
 				out += chip;
@@ -302,8 +302,8 @@ function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: Room
 }
 
 /**
- * A link as the chip `resolveLink` draws it, or undefined to leave it a URL. It stays the link, so
- * the page opens it, and copying it or a modified click works as on any link. `href` is escaped.
+ * A link as the chip `resolveLink` draws it, or undefined to leave it a URL. It stays a link, to the
+ * chip's `href`, so the page opens it, and copying it or a modified click works as on any link. `href` is escaped.
  */
 function linkChip(href: string, resolveLink: LinkResolver): string | undefined {
 	const chip = resolveLink(unescapeHtml(href));
@@ -312,10 +312,25 @@ function linkChip(href: string, resolveLink: LinkResolver): string | undefined {
 	const className = chip.elsewhere ? 'ap-linkchip ap-linkchip-elsewhere'
 		: chip.kind === 'user' ? 'ap-mention ap-linkchip' : `ap-mention ap-mention-room ap-linkchip ap-linkchip-${chip.kind}`;
 	const detail = chip.detail ? `<span class="ap-linkchip-detail">${escapeHtml(chip.detail)}</span>` : '';
-	return `<a href="${chip.href ? escapeHtml(chip.href) : href}"${LINK_ATTRS} class="${className}" title="${escapeHtml(chip.title)}">${escapeHtml(chip.label)}${detail}</a>`;
+	return `<a href="${escapeHtml(chip.href)}"${LINK_ATTRS} class="${className}" title="${escapeHtml(chip.title)}">${escapeHtml(chip.label)}${detail}</a>`;
 }
 
-function unescapeHtml(value: string): string {
+/**
+ * A link's `href` or text in rendered markup as it reads: unescaped, and with
+ * the percent-encoding Markdown gives an autolink's `href` (not its text)
+ * decoded, so `<https://link.apron.chat/#room=général>` is its own URL.
+ */
+function asWritten(value: string): string {
+	const text = unescapeHtml(value);
+	try {
+		return decodeURI(text);
+	} catch {
+		return text;
+	}
+}
+
+/** Escaped text, as rendered markup holds it, back to the text: the entities `escapeHtml` and DOMPurify write. */
+export function unescapeHtml(value: string): string {
 	return value.replace(/&(lt|gt|quot|#39|amp);/g, (_, entity: string) => ({ lt: '<', gt: '>', quot: '"', '#39': "'", amp: '&' })[entity] ?? '');
 }
 

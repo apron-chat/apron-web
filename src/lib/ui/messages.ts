@@ -47,17 +47,14 @@ export function hueOf(userId: string | undefined): number | undefined {
 	return userId ? avatarHue(userId) : undefined;
 }
 
-/** One line of a quoted message: the first non-empty line, about 120 characters. */
-export function replySnippet(target: MessageRecord): string {
-	const line = textOf(target).split('\n').find((part) => part.trim())?.trim() ?? '';
-	const short = line.length > 120 ? `${line.slice(0, 119).trimEnd()}…` : line;
-	return short || (embedsOf(target).length ? 'Attachment' : 'Empty message');
-}
-
-/** A few lines of a message a link points to: its first three, about 280 characters, as written. */
-export function quoteSnippet(target: MessageRecord): string {
-	const lines = cleanPlainText(textOf(target)).split('\n').filter((line) => line.trim()).slice(0, 3).join('\n');
-	const short = lines.length > 280 ? `${lines.slice(0, 279).trimEnd()}…` : lines;
+/**
+ * A message's text as a quote shows it: its first `lines` non-empty lines as
+ * written, cut to about `max` characters; one line of about 120 for a reply's
+ * quote or a caption, three of about 280 for a link's card.
+ */
+export function messageSnippet(target: MessageRecord, lines = 1, max = 120): string {
+	const text = cleanPlainText(textOf(target)).split('\n').map((line) => line.trim()).filter(Boolean).slice(0, lines).join('\n');
+	const short = text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 	return short || (embedsOf(target).length ? 'Attachment' : 'Empty message');
 }
 

@@ -123,6 +123,7 @@
 	--avatar-lg: 56px;
 	--avatar-md: 32px;
 	--avatar-sm: 20px;
+	--avatar-xs: 16px; /* a face inside a line of small text: a reply's quote, a link card's title */
 	--sidebar-w: 248px;
 	--timeline-max-w: 760px;
 	--embed-max-w: 480px;
