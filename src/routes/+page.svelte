@@ -804,10 +804,15 @@
 		}
 	});
 
+	// At the latest as soon as the pane's items are in, before the frame paints, and again once it has laid out.
+	// Not only after the frame: the list is the same element from pane to pane, kept where the last pane left it, and the
+	// browser's scroll anchoring can move it on the swap (to a day divider both panes have). That scroll's event
+	// comes before the frame, and against the last pane's position it would read as the reader scrolling up.
 	$effect(() => {
 		messages.length;
 		paneRoom?.id;
 		if (!stickToBottom || !messageScroll) return;
+		scrollToLatest();
 		requestAnimationFrame(() => {
 			if (stickToBottom) scrollToLatest();
 		});
