@@ -715,9 +715,15 @@ and loads the page before whenever the reader nears the top, keeping what is
 on screen in place. Drafts are kept per room, threads
 included.
 
-Each room or thread opened is a browser history entry (the URL stays the same),
-so Back returns to the previous room or thread, and Forward the other way, until
-Back leaves the page from the first room opened. A room left since stays put
+The address names where the page is, all in the fragment, so the host serving
+this app never learns which server, room or message anyone opens:
+`#server=wss://chat.example/ws&room=general&thread=t-1&message=1724803200042`,
+leaving out `server` when it is the one the page connects to anyway, and
+`thread`, `message` and `user` (whose profile card opens) without a room.
+Opening one, or pasting one into an open tab, goes there; one on another server
+opens the connect screen for it first. Each room or thread opened is a browser
+history entry, so Back returns to the previous room or thread, and Forward the
+other way, until Back leaves the page from the first room opened. A room left since stays put
 for that step, and a thread left since is read without joining.
 
 With the `rooms` capability the header's ⋯ menu also offers **Leave**, which leaves the room or
@@ -1106,7 +1112,7 @@ code field has gone. The link, from the email or the page's return, is
 `#token=…&state=…`, with `&server=` naming the server's `ws:`/`wss:` URL
 when it opens a client that isn't tied to one, all
 `application/x-www-form-urlencoded` in the URL fragment; it carries no address.
-The fragment is read and scrubbed from the address bar before anything else,
+The token and state are read and scrubbed from the address bar before anything else,
 and a link pasted into an open tab is taken the same way. A link with the
 `state` of a sign-in this browser proposed (in this tab or another) is used at
 once, on the server it was proposed to, whatever `server` the link names: the

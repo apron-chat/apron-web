@@ -39,10 +39,10 @@ export class Preview {
 	) {}
 
 	/**
-	 * Opens the preview (with `query`, e.g. `?room=engineering`) at the QA suites' fixed clock, with the
+	 * Opens the preview (with `fragment`, e.g. `#room=engineering`) at the QA suites' fixed clock, with the
 	 * knobs set, and waits until a timeline has messages.
 	 */
-	async open(query = ''): Promise<void> {
+	async open(fragment = ''): Promise<void> {
 		const base = process.env.E2E_URL;
 		if (!base) throw new Error('E2E_URL is unset: run through `npm run e2e` (global-setup serves the build).');
 		await this.page.clock.setFixedTime(NOW);
@@ -51,7 +51,7 @@ export class Preview {
 		await this.page.addInitScript((knobs) => {
 			(window as unknown as { __APRON_PREVIEW__: unknown }).__APRON_PREVIEW__ = knobs;
 		}, this.knobs);
-		await this.page.goto(`${base}/__preview${query}`);
+		await this.page.goto(`${base}/__preview${fragment}`);
 		await expect(this.page.getByTestId('message-list').locator('article[data-message-id]').first()).toBeVisible();
 	}
 
@@ -131,14 +131,14 @@ export class Preview {
 	async openRoom(id: string): Promise<void> {
 		await this.roomsPane();
 		await this.press(this.page.locator(`[data-testid="room-list"] button[data-room="${id}"]`));
-		await expect(this.page).toHaveURL(new RegExp(`[?&]room=${id}(&|$)`));
+		await expect(this.page).toHaveURL(new RegExp(`[#&]room=${id}(&|$)`));
 	}
 
 	/** Opens one of a room's threads from the sidebar. */
 	async openThread(id: string): Promise<void> {
 		await this.roomsPane();
 		await this.press(this.page.locator(`[data-testid="thread-list"] button[data-thread="${id}"]`));
-		await expect(this.page).toHaveURL(new RegExp(`[?&]thread=${id}(&|$)`));
+		await expect(this.page).toHaveURL(new RegExp(`[#&]thread=${id}(&|$)`));
 	}
 
 	/** The message with this text in the open timeline. */

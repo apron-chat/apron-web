@@ -17,10 +17,10 @@ import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
  * CSRF): it is never used silently, and the page asks first, naming the
  * server.
  *
- * Opened through link.apron.chat, the link's `server` comes in the query, as
- * for any link to this app, and the rest in the fragment (Appendix A.4):
+ * Opened through link.apron.chat, the link's keys come in the fragment as
+ * they do for any link to this app (Appendix A.4), among the place's keys:
  *
- *     ?server=wss%3A%2F%2Fchat.example%2Fws#token=apron_invite_…
+ *     #server=wss://chat.example/ws&token=apron_invite_…
  */
 export interface SignInLink {
 	token: string;
@@ -32,33 +32,33 @@ export interface SignInLink {
 }
 
 /**
- * Reads a sign-in link from `location`'s fragment and scrubs the fragment
- * from the address bar (and so from history and bookmarks) at once, keeping
- * the rest of the URL. Any fragment carrying `token` is scrubbed, even one
- * that isn't a usable link. Returns undefined, touching nothing else, when
- * the fragment is not such a link.
+ * Reads a sign-in link from `location`'s fragment and scrubs its `token` and
+ * `state` from the address bar (and so from history and bookmarks) at once,
+ * keeping the rest of the URL, the fragment's other keys included. Any
+ * fragment carrying `token` is scrubbed, even one that isn't a usable link.
+ * Returns undefined, touching nothing else, when the fragment is not such a link.
  */
 export function takeSignInLink(location: Pick<Location, 'hash' | 'pathname' | 'search'>, replace: (url: string) => void): SignInLink | undefined {
 	const hash = location.hash;
 	const params = fragmentParams(hash);
 	if (!params?.has('token')) return undefined;
 	// Read before scrubbing: a real `Location` changes under us.
-	const link = parseSignInLink(hash, location.search);
-	replace(`${location.pathname}${location.search}`);
+	const link = parseSignInLink(hash);
+	params.delete('token');
+	params.delete('state');
+	const rest = params.toString();
+	replace(`${location.pathname}${location.search}${rest ? `#${rest}` : ''}`);
 	return link;
 }
 
-/**
- * `#token=…[&state=…][&server=…]` as its parts, with `server` from the query
- * `search` when the fragment has none. `token` is required; other keys are ignored.
- */
-export function parseSignInLink(hash: string, search = ''): SignInLink | undefined {
+/** `#token=…[&state=…][&server=…]` as its parts. `token` is required; other keys are ignored. */
+export function parseSignInLink(hash: string): SignInLink | undefined {
 	const params = fragmentParams(hash);
 	const token = params?.get('token')?.trim();
 	if (!params || !token) return undefined;
 	const state = params.get('state') || undefined;
 	const link: SignInLink = { token, ...(state ? { state } : {}) };
-	const named = params.get('server') ?? new URLSearchParams(search).get('server');
+	const named = params.get('server');
 	if (named === null) return link;
 	const server = webSocketUrl(named);
 	return server ? { ...link, server } : { ...link, badServer: true };

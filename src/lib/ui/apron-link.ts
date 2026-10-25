@@ -61,7 +61,7 @@ export function readApronLink(href: string): ApronLink | undefined {
 /** The link to share for a place on `server`, in the `https` form (Appendix A.4). */
 export function writeApronLink(link: Pick<ApronLink, 'room' | 'message' | 'user'> & { server: string }): string {
 	const entries: [string, string | undefined][] = [['server', withoutCredentials(link.server)], ['room', link.room], ['message', link.room ? link.message : undefined], ['user', link.user]];
-	return `${WEB_ORIGIN}/#${entries.filter((entry): entry is [string, string] => entry[1] !== undefined).map(([key, value]) => `${key}=${encodeKey(value)}`).join('&')}`;
+	return `${WEB_ORIGIN}/#${formKeys(entries.filter((entry): entry is [string, string] => entry[1] !== undefined))}`;
 }
 
 /** The key list of a link in any of its forms. */
@@ -90,6 +90,11 @@ function reachable(value: string): string | undefined {
 
 function loopback(host: string): boolean {
 	return host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(host);
+}
+
+/** Keys and values as a link writes them: `key=value` joined with `&`, readable (`encodeKey`). */
+export function formKeys(entries: Iterable<[string, string]>): string {
+	return [...entries].map(([key, value]) => `${encodeKey(key)}=${encodeKey(value)}`).join('&');
 }
 
 /** Leaves letters, digits and `-._~:/` as they are, so the link reads well, and encodes everything else. */

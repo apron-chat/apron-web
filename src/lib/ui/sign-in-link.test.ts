@@ -16,18 +16,7 @@ describe('sign-in links (§4.11.2)', () => {
 		expect(parseSignInLink('#token=1&state=s&server=')).toEqual({ token: '1', state: 's', badServer: true });
 	});
 
-	it('takes the server from the query when the fragment has none, as link.apron.chat opens this app (Appendix A.4)', () => {
-		const server = '?server=wss%3A%2F%2Fchat.example%2Fws';
-		expect(parseSignInLink('#token=apron_invite_x', server)).toEqual({ token: 'apron_invite_x', server: 'wss://chat.example/ws' });
-		// The fragment's server comes first, and a query server that isn't a WebSocket URL is marked.
-		expect(parseSignInLink('#token=1&server=wss%3A%2F%2Fother.example%2F', server)).toEqual({ token: '1', server: 'wss://other.example/' });
-		expect(parseSignInLink('#token=1', '?server=https%3A%2F%2Fevil.example')).toEqual({ token: '1', badServer: true });
-		const replaced: string[] = [];
-		expect(takeSignInLink({ hash: '#token=1', pathname: '/', search: server }, (url: string) => replaced.push(url))).toEqual({ token: '1', server: 'wss://chat.example/ws' });
-		expect(replaced).toEqual([`/${server}`]);
-	});
-
-	it('scrubs any sign-in fragment from the URL, keeping its path and query, after reading it', () => {
+	it('scrubs the token and state from the URL, keeping its path, query and other keys, after reading it', () => {
 		const replaced: string[] = [];
 		const link = takeSignInLink({ hash: '#token=Hk41x9&state=s', pathname: '/login', search: '?x=1' }, (url: string) => replaced.push(url));
 		expect(link).toEqual({ token: 'Hk41x9', state: 's' });
@@ -36,6 +25,9 @@ describe('sign-in links (§4.11.2)', () => {
 		expect(takeSignInLink({ hash: '#token=', pathname: '/', search: '' }, (url: string) => replaced.push(url))).toBeUndefined();
 		expect(takeSignInLink({ hash: '#section', pathname: '/', search: '' }, (url: string) => replaced.push(url))).toBeUndefined();
 		expect(replaced).toEqual(['/login?x=1', '/']);
+		// A place link.apron.chat passed with the token stays (Appendix A.4).
+		expect(takeSignInLink({ hash: '#server=wss://chat.example/ws&room=general&token=apron_invite_x', pathname: '/', search: '' }, (url: string) => replaced.push(url))).toEqual({ token: 'apron_invite_x', server: 'wss://chat.example/ws' });
+		expect(replaced.at(-1)).toBe('/#server=wss%3A%2F%2Fchat.example%2Fws&room=general');
 		// Read before a live location is scrubbed.
 		const location = { hash: '#token=9', pathname: '/', search: '' };
 		expect(takeSignInLink(location, () => (location.hash = ''))).toEqual({ token: '9' });

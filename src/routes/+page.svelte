@@ -920,11 +920,11 @@
 				links.follow(link);
 				return;
 			}
-			// A message link differing only in its fragment doesn't reload the page: go to it here.
+			// The page's place is all in the fragment, so a destination pasted into this tab doesn't reload it: go there.
+			// Back and Forward between the page's own places fire this too, after the router has restored them.
 			const destination = readDestination(window.location);
-			if (client && destination.room && destination.message) {
-				linked = { ...destination, server: previewMode ? client.url : destination.server ?? homeServer(), room: destination.room };
-			}
+			const here = destination.room === page.state.room && destination.thread === page.state.thread && !destination.message && !destination.user;
+			if (!here || (!previewMode && (destination.server ?? homeServer()) !== client?.url)) followDestination(destination);
 		};
 		window.addEventListener('hashchange', hashChanged);
 		document.addEventListener('click', apronLinkClicked);
@@ -1217,14 +1217,16 @@
 		openPushedRoom(target);
 	}
 
-	/** Takes, and scrubs from the address bar, the room and `push_id` of a push notification this tab was opened for. */
+	/** Takes, and scrubs from the address bar, the room and `push_id` of a push notification this tab was opened for, in its fragment. */
 	function takePushRoom(): Pick<PushTarget, 'roomId' | 'pushId'> | undefined {
 		const url = new URL(window.location.href);
-		const roomId = url.searchParams.get(PUSH_ROOM_PARAM) ?? undefined;
-		const id = url.searchParams.get(PUSH_ID_PARAM) || undefined;
+		const fragment = new URLSearchParams(url.hash.slice(1));
+		const roomId = fragment.get(PUSH_ROOM_PARAM) ?? undefined;
+		const id = fragment.get(PUSH_ID_PARAM) || undefined;
 		if (roomId === undefined) return undefined;
-		url.searchParams.delete(PUSH_ROOM_PARAM);
-		url.searchParams.delete(PUSH_ID_PARAM);
+		fragment.delete(PUSH_ROOM_PARAM);
+		fragment.delete(PUSH_ID_PARAM);
+		url.hash = fragment.toString();
 		scrubUrl(url.toString());
 		return roomId ? { roomId, ...(id ? { pushId: id } : {}) } : undefined;
 	}
@@ -1326,6 +1328,12 @@
 				return;
 			}
 			session.chooseRoom(client, target.room);
+			setDestination(target.room, undefined, 'replace');
+			keepLink();
+			return;
+		}
+		// A link to the room itself closes a thread open under it.
+		if (!target.thread && activeThread) {
 			setDestination(target.room, undefined, 'replace');
 			keepLink();
 			return;
@@ -1486,12 +1494,25 @@
 			links.follow({ token: link.token, server, ...(link.state ? { state: link.state } : {}) });
 			return;
 		}
-		const place = link.room ? { room: link.room, ...(link.message ? { message: link.message } : {}), ...(link.user ? { user: link.user } : {}) } : {};
+		followDestination({ server, ...(link.room ? { room: link.room, ...(link.message ? { message: link.message } : {}), ...(link.user ? { user: link.user } : {}) } : {}) });
+	}
+
+	/**
+	 * Goes to a destination named after the page loaded: a fragment pasted
+	 * into this tab, or an Apron link clicked. Without a server it is the
+	 * page's own, as on load. On this server it opens at once; on another, the
+	 * connect screen asks first, as for a server not used before, and the
+	 * destination opens once connected there (or goes if the viewer stays).
+	 */
+	function followDestination(destination: Destination): void {
+		if (!client || !destination.room) return;
+		const server = previewMode ? client.url : destination.server ?? homeServer();
 		if (server !== client.url) {
-			window.location.assign(destinationUrl(window.location.href, { server, ...place }, homeServer()));
-			return;
+			serverInput = server;
+			offeringLink = true;
+			openConnect();
 		}
-		if (link.room) linked = { server, room: link.room, ...place };
+		linked = { ...destination, server, room: destination.room };
 	}
 
 	/** A plain click on an Apron link anywhere on the page opens it here (`openApronLink`); a modified one is left to the browser. */
