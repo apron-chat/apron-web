@@ -19,15 +19,16 @@
 	import MessageActions from './MessageActions.svelte';
 	import MessageEmbeds from './MessageEmbeds.svelte';
 	import ReactionBar from './ReactionBar.svelte';
+	import QuotedMessage from './QuotedMessage.svelte';
 	import ReplyPreview from './ReplyPreview.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 	import type { MessageAction, MessageEmbed, MessageTestids, MessageView } from './types';
 	import { times } from './util';
 
 	/**
-	 * One message row, drawn from a MessageView. The header, body and reactions are its own; the quote, the embeds, the
-	 * hover toolbar and the editor are parts it adds only to the rows that have them. The toolbar is built the first
-	 * time a pointer or focus reaches the row, since it only shows then.
+	 * One message row, drawn from a MessageView. The header, body and reactions are its own; the quote, the messages
+	 * its links point to, the embeds, the hover toolbar and the editor are parts it adds only to the rows that have
+	 * them. The toolbar is built the first time a pointer or focus reaches the row, since it only shows then.
 	 */
 	interface Props {
 		view: MessageView;
@@ -187,6 +188,7 @@
 			{:else}
 				<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
 				{#if view.body}<div class={['ap-msg-text', view.body.markdown ? 'ap-msg-markdown' : 'ap-msg-plain']} {@attach view.body.code && code}>{@html view.body.html}</div>{/if}
+				{#if view.quotes?.length}<div class="ap-msg-quotes">{#each view.quotes as quote (quote.href)}<QuotedMessage {quote} data-testid={testids?.quote} />{/each}</div>{/if}
 				{#if view.embeds?.length}<MessageEmbeds embeds={view.embeds} {embed} onremove={(item) => on.removeEmbed?.(view, item)} />{/if}
 			{/if}
 			{#if !view.deleted && view.reactions?.length}<ReactionBar reactions={view.reactions} disabled={!caps?.react} add={false} ontoggle={(emoji) => on.react?.(view, emoji)} onreactors={(emoji, chip) => on.reactors?.(view, emoji, chip)} data-testid={testids?.reactions} chipTestid={testids?.chip} />{/if}

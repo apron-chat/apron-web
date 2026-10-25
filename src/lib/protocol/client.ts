@@ -2020,6 +2020,25 @@ export class ChatClient {
 	}
 
 	/**
+	 * A message a link names (Appendix A.4) that nothing here has loaded, for
+	 * its quote: its creation record, `history` with `after` and `before` both
+	 * at its `message_id` (§2.2, §4.3.1). It is read, never installed: out of
+	 * its room's loaded slice it would show in that room's timeline. Snapshots
+	 * after it aren't looked for, so it reads as written, unless the server
+	 * redacted it after a delete (§4.4). Undefined without `history`, or where
+	 * the room holds no such message.
+	 */
+	async fetchMessage(roomId: string, messageId: string): Promise<MessageRecord | undefined> {
+		if (!this.hasCap('history')) return undefined;
+		const result = await this.historyQueue.request(roomId, { room_id: roomId, after: messageId, before: messageId, limit: 1 }).promise;
+		const { messages, embedded } = decodeHistoryRecords(result);
+		// `~private` messages are never shown from history (Appendix A.1).
+		return [...messages, ...embedded]
+			.filter((record) => record.message_id === messageId && record.from.user_id !== '~private')
+			.reduce<MessageRecord | undefined>((latest, record) => (latest && compareLogIds(latest.log_id, record.log_id) >= 0 ? latest : record), undefined);
+	}
+
+	/**
 	 * Listing can be costly, any server may rate-limit it, and several
 	 * parts of the UI want it at once: a request in flight, or one answered
 	 * within `maxAgeMs`, serves them all. One refused for a while

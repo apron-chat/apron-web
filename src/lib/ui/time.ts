@@ -120,6 +120,13 @@ export function dayLabelOf(id: string, now = new Date()): string {
 	return (date.getFullYear() === now.getFullYear() ? dayFormat : dayYearFormat).format(date);
 }
 
+/** When a quoted message was: the time of day today, else with its day before it (`Yesterday 2:05 PM`, `Mon 14 Sep 2:05 PM`). */
+export function idWhen(id: string, now = new Date()): string {
+	const time = idTime(id);
+	if (!time || dayKeyOf(id) === dayKeyOf(String(now.getTime()))) return time;
+	return `${dayLabelOf(id, now)} ${time}`;
+}
+
 function sameDay(a: Date, b: Date): boolean {
 	return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }

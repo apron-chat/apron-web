@@ -83,6 +83,37 @@ describe('a message row', () => {
 		expect(dom.button('Replying to Bob. Jump to their message').textContent).toContain('Message deleted');
 	});
 
+	it('quotes the messages its links point to under its text, each the link, and leaves a click on one to the link', () => {
+		const href = 'https://link.apron.chat/#server=wss://chat.example/ws&room=ops&message=7';
+		const beginSelect = vi.fn();
+		const row = render({
+			caps: { ...NONE, select: true },
+			quotes: [
+				{ href, name: 'Bob', room: { id: 'ops', title: 'Ops' }, timestamp: 1710000000000, snippet: ['ship it ', { user_id: 'ada', name: 'Ada', me: true }, '\nnow'] },
+				{ href: `${href}0`, name: 'Bob', room: { id: 't1', thread: true }, deleted: true }
+			]
+		}, { beginSelect }, { testids: { quote: 'quote' } });
+		const [first, second] = row.querySelectorAll<HTMLAnchorElement>('[data-testid="quote"]');
+		expect(first.getAttribute('href')).toBe(href);
+		expect(first.getAttribute('aria-label')).toBe('Message from Bob in Ops. Open it');
+		expect(first.querySelector('.ap-quote-where')!.textContent).toMatch(/^#Ops · /);
+		expect(first.querySelector('.ap-quote-text')!.textContent).toBe('ship it @Ada\nnow');
+		// An untitled thread is "Untitled", its room_id in the tooltip.
+		expect(second.querySelector('.ap-quote-where')!.textContent).toBe('#Untitled');
+		expect(second.querySelector('.ap-quote-where')!.getAttribute('title')).toBe('t1');
+		expect(second.textContent).toContain('Message deleted');
+		// After the body, before the embeds.
+		expect(row.querySelector('.ap-msg-text + .ap-msg-quotes')).not.toBeNull();
+		// The page follows the link; here nothing does.
+		const follow = (event: Event) => event.preventDefault();
+		document.addEventListener('click', follow);
+		click(first.querySelector('.ap-quote-text')!, { shiftKey: true });
+		document.removeEventListener('click', follow);
+		expect(beginSelect).not.toHaveBeenCalled();
+		dom.unmount();
+		expect(render({ deleted: true, quotes: [{ href, name: 'Bob' }] }).querySelector('.ap-quote')).toBeNull();
+	});
+
 	it('hides the body and reactions of a tombstone', () => {
 		render({ deleted: true, reactions: [{ emoji: '👍', count: 1 }] });
 		expect(byText('Message deleted')).not.toBeNull();

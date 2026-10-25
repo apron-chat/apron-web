@@ -1,11 +1,12 @@
 import type { Notice, UploadState } from '$lib/protocol/client';
 import { mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 import { systemScope, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
-import type { EmbedProps, MessageCaps, MessageEmbed, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
+import type { EmbedProps, MessageCaps, MessageEmbed, MessageMention, MessageQuote, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
+import { messageLinksIn, writeApronLink, type ApronLink } from './apron-link';
 import { directory, samePieces } from './directory.svelte';
-import { embedsOf, hueOf, isSystem, replySnippet, textOf } from './messages';
-import { eventTime, idMillis } from './time';
+import { embedsOf, hueOf, isSystem, quoteSnippet, replySnippet, textOf } from './messages';
+import { eventTime, idMillis, idWhen } from './time';
 
 export type { MessageCaps, MessageView };
 
@@ -30,6 +31,13 @@ export interface MessageRow {
 export interface MessageContext {
 	/** The quoted message of a reply, in any room (`reply_to` may cross rooms). */
 	resolve(messageId: string): MessageRecord | undefined;
+	/**
+	 * The message a link in a message names (Appendix A.4), where it is on the
+	 * server the page is on and has loaded: read only for a message with such links.
+	 */
+	linked(link: ApronLink): MessageRecord | undefined;
+	/** The WebSocket URL of that server: what a link without `server` refers to. */
+	readonly server: string | undefined;
 	/** Files this client is writing to upload embeds, by `embed_id`: read only for a message with embeds. */
 	readonly uploads: Record<string, UploadState>;
 }
@@ -54,9 +62,14 @@ interface Drawn {
 	noticeTitle: string;
 	text: string;
 	body?: MessageView['body'];
+	/** The links to messages in its text (`messageLinksIn`). */
+	links: ApronLink[];
 	time: string;
 	timestamp?: number;
 }
+
+/** At most this many messages quoted under one message. */
+export const QUOTES_MAX = 3;
 
 const drawn = new WeakMap<MessageRecord, Drawn>();
 /** The last view made for each record, handed out again while nothing in it changed. */
@@ -84,6 +97,7 @@ function draw(event: MessageRecord): Drawn {
 		noticeTitle: noticeTitle(event.from),
 		text: textOf(event),
 		body: event.deleted ? undefined : bodyOf(event.body),
+		links: event.deleted ? [] : messageLinksIn(textOf(event), event.body?.format === 'markdown', QUOTES_MAX + 1),
 		time: eventTime(event),
 		timestamp: idMillis(event.message_id)
 	};
@@ -111,6 +125,35 @@ function replyOf(event: MessageRecord, context: MessageContext): MessageReply | 
 	if (target.deleted) reply.deleted = true;
 	else reply.snippet = snippetOf(replySnippet(target));
 	return reply;
+}
+
+/**
+ * The messages its links point to that are loaded, each as a quote that
+ * follows the link; a link to the message itself quotes nothing.
+ */
+function quotesOf(event: MessageRecord, seen: Drawn, context: MessageContext): MessageQuote[] | undefined {
+	const quotes: MessageQuote[] = [];
+	for (const link of seen.links) {
+		if (link.message === event.message_id || quotes.length >= QUOTES_MAX) continue;
+		const target = context.linked(link);
+		const server = link.server ?? context.server;
+		if (!target || !server) continue;
+		const room = directory.resolveRoom(target.room_id);
+		const quote: MessageQuote = {
+			// The https form with its server, so a link without one opens the same place in a new tab too.
+			href: writeApronLink({ server, room: link.room, message: link.message }),
+			name: directory.name(target.from),
+			avatar: directory.avatar(target.from),
+			hue: hueOf(directory.person(target.from)?.user_id),
+			room: { id: target.room_id, ...(room ? { title: room.untitled ? undefined : room.title, thread: room.untitled } : {}) },
+			timestamp: idMillis(target.message_id),
+			time: idWhen(target.message_id)
+		};
+		if (target.deleted) quote.deleted = true;
+		else quote.snippet = snippetOf(quoteSnippet(target));
+		quotes.push(quote);
+	}
+	return quotes.length ? quotes : undefined;
 }
 
 /**
@@ -152,6 +195,10 @@ export function messageView(event: MessageRecord, row: MessageRow, context: Mess
 	if (seen.body && (system || seen.text)) view.body = seen.body;
 	const reply = replyOf(event, context);
 	if (reply) view.reply = reply;
+	if (!event.deleted && !system) {
+		const quotes = quotesOf(event, seen, context);
+		if (quotes) view.quotes = quotes;
+	}
 	if (!event.deleted) {
 		const embeds = embedsIn(event, row, context, seen, seen.sender.name);
 		if (embeds) view.embeds = embeds;
@@ -206,6 +253,8 @@ const sameSender = (a: MessageSender, b: MessageSender) =>
 	a.user_id === b.user_id && a.name === b.name && a.handle === b.handle && a.avatar === b.avatar && a.hue === b.hue && sameList(a.roles, b.roles, Object.is);
 const sameReply = (a: MessageReply, b: MessageReply) =>
 	a.id === b.id && a.name === b.name && a.avatar === b.avatar && a.hue === b.hue && a.deleted === b.deleted && sameList(a.snippet, b.snippet, samePart);
+const sameQuote = (a: MessageQuote, b: MessageQuote) =>
+	a.href === b.href && a.name === b.name && a.avatar === b.avatar && a.hue === b.hue && sameFields(a.room, b.room) && a.timestamp === b.timestamp && a.time === b.time && a.deleted === b.deleted && sameList(a.snippet, b.snippet, samePart);
 const sameEmbed = (a: MessageEmbed, b: MessageEmbed) => a.key === b.key && a.embed === b.embed && a.detail === b.detail && a.removable === b.removable && sameFields(a.upload, b.upload);
 
 /** Whether two views of one record draw the same row. */
@@ -215,6 +264,7 @@ export function sameView(a: MessageView, b: MessageView): boolean {
 		&& (a.sender === b.sender || sameSender(a.sender, b.sender))
 		&& sameFields(a.caps, b.caps)
 		&& sameList(a.reactions, b.reactions, sameChip)
+		&& sameList(a.quotes, b.quotes, sameQuote)
 		&& sameList(a.embeds, b.embeds, sameEmbed)
 		&& (a.reply === b.reply || (a.reply !== undefined && b.reply !== undefined && sameReply(a.reply, b.reply)));
 }

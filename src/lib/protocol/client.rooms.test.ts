@@ -533,3 +533,33 @@ describe('room records and membership', () => {
 		expect(room('opaque')).toMatchObject({ firstRecordLogId: '70', description: 'Now summarized' });
 	});
 });
+
+describe('a message a link names', () => {
+	it('reads its creation record from history for a quote, leaving the room’s timeline as it was', async () => {
+		await authenticate(['rooms', 'history']);
+		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '40', history_log_id: '10' }], users: [] });
+		await socket.reply('history', { messages: [{ message_id: '39', log_id: '39', room_id: 'general', from: { user_id: 'bob' }, body: { text: 'new' } }], first_log_id: '39', last_log_id: '40', more: true, latest_log_id: '40', history_log_id: '10' });
+		const found = client.fetchMessage('general', '12');
+		await settle();
+		expect(socket.request('history').params).toEqual({ room_id: 'general', after: '12', before: '12', limit: 1 });
+		await socket.reply('history', { messages: [{ message_id: '12', log_id: '12', room_id: 'general', from: { user_id: 'ada', name: 'Ada' }, body: { text: 'old' } }], first_log_id: '12', last_log_id: '12', more: false, latest_log_id: '40', history_log_id: '10' });
+		expect((await found)?.body?.text).toBe('old');
+		expect(room('general')?.timeline.order).toEqual(['39']);
+		expect(client.message('12')).toBeUndefined();
+		// Not there, or a `~private` one: nothing to quote.
+		const missing = client.fetchMessage('general', '13');
+		await settle();
+		await socket.reply('history', { more: false, latest_log_id: '40', history_log_id: '10' });
+		expect(await missing).toBeUndefined();
+		const hidden = client.fetchMessage('general', '14');
+		await settle();
+		await socket.reply('history', { messages: [{ message_id: '14', log_id: '14', room_id: 'general', from: { user_id: '~private' }, body: { text: 'psst' } }], first_log_id: '14', last_log_id: '14', more: false, latest_log_id: '40', history_log_id: '10' });
+		expect(await hidden).toBeUndefined();
+	});
+
+	it('asks nothing of a server without history', async () => {
+		await authenticate(['rooms']);
+		expect(await client.fetchMessage('general', '12')).toBeUndefined();
+		expect(socket.sent.some((frame) => frame.method === 'history')).toBe(false);
+	});
+});

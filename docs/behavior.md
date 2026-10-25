@@ -866,6 +866,20 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   composer as you write, each with an **(x)** that sends the message without
   it. A failed send restores the draft with those previews still removed;
   otherwise the draft forgets them once it is sent or cleared.
+- **Quoted messages**: a link in a message's text to a message on the server
+  the page is on, in any of the three forms of
+  [PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links)
+  (one without `server` is the sending server's), shows that message as a card
+  under the text, up to three per message: its sender, its room or thread and
+  time, and its first three lines as written, or "Message deleted". The viewer
+  builds it, not the sender: from a loaded room, else from the message's
+  creation record, read once with `history` (`after` and `before` at its
+  `message_id`) and kept apart from the room's timeline, so it reads as first
+  written unless the server redacted it. A room the viewer can't read, or a
+  server without `history`, quotes nothing, and the link stays a link, as does
+  one to another server, a link inside code, and one to the message itself.
+  The card is the link, so a click opens the message here and a modified click
+  opens link.apron.chat in a new tab.
 
 With the `edit` capability, **Edit** on your own message opens it in place, in
 a box like the composer: its text, with its embeds above it as tiles like a

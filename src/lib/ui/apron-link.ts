@@ -58,6 +58,27 @@ export function readApronLink(href: string): ApronLink | undefined {
 	return link;
 }
 
+/**
+ * An Apron link as written in a message, in any form: it runs to whitespace, or
+ * to a character that ends a link in Markdown or HTML (a written link encodes them).
+ */
+const LINK_IN_TEXT = /(?:https:\/\/link\.apron\.chat\/#|\b(?:web\+)?apron:\?)[^\s<>"'`()[\]]+/gi;
+
+/**
+ * The distinct links to messages in a message's text, in order, up to `max`.
+ * In Markdown, code is left out, as it isn't linked either.
+ */
+export function messageLinksIn(text: string, markdown: boolean, max: number): ApronLink[] {
+	const prose = markdown ? text.replace(/```[\s\S]*?(?:```|$)/g, ' ').replace(/`[^`\n]*`/g, ' ') : text;
+	const found = new Map<string, ApronLink>();
+	for (const match of prose.matchAll(LINK_IN_TEXT)) {
+		if (found.size >= max) break;
+		const link = readApronLink(match[0].replace(/[.,:;!?*_~]+$/, ''));
+		if (link?.message !== undefined) found.set(`${link.server ?? ''} ${link.room} ${link.message}`, link);
+	}
+	return [...found.values()];
+}
+
 /** The link to share for a place on `server`, in the `https` form (Appendix A.4). */
 export function writeApronLink(link: Pick<ApronLink, 'room' | 'message' | 'user'> & { server: string }): string {
 	const entries: [string, string | undefined][] = [['server', withoutCredentials(link.server)], ['room', link.room], ['message', link.room ? link.message : undefined], ['user', link.user]];

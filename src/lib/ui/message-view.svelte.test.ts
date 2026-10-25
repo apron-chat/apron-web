@@ -7,6 +7,7 @@ import { messageRecord, roomSnapshot } from '$lib/test/builders';
 import { directory } from './directory.svelte';
 import { messageView, noticeView, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
 import { avatarHue } from './messages';
+import { idWhen } from './time';
 import { blankSnapshot } from './session.svelte';
 
 const you: Identity = { user_id: 'you', name: 'You' };
@@ -21,8 +22,12 @@ function row(fields: Partial<MessageRow> = {}): MessageRow {
 	return { grouped: false, reactions: [], mention: false, pinged: false, highlighted: false, selecting: false, selected: false, editing: false, caps: NONE, ...fields };
 }
 
+const SERVER = 'wss://chat.example/ws';
+
+/** A page on SERVER that has `records` loaded, and resolves a link only to them, on SERVER. */
 function context(records: MessageRecord[] = [], uploads: Record<string, UploadState> = {}): MessageContext {
-	return { resolve: (id) => records.find((record) => record.message_id === id), uploads };
+	const resolve = (id: string) => records.find((record) => record.message_id === id);
+	return { resolve, linked: (link) => (link.server === undefined || link.server === SERVER ? resolve(link.message!) : undefined), server: SERVER, uploads };
 }
 
 beforeEach(() => know({ ada }));
@@ -73,6 +78,43 @@ describe('messageView', () => {
 		expect(messageView(messageRecord(9, 'ops', { reply_to: { message_id: '5' }, deleted: true }), row(), context([quoted])).reply).toBeUndefined();
 	});
 
+	it('quotes the messages its links on this server point to, in order, the https form with the server for each, at most three', () => {
+		know({ ada }, { rooms: [roomSnapshot('ops'), roomSnapshot('t1', [], { title: '', untitled: true, parentRoomId: 'ops' })] });
+		const linkedOps = messageRecord(1710000000000, 'ops', { from: { user_id: 'ada' }, body: { text: 'ship it @you\n\n\nnow\nthen\nlater' } });
+		const linkedThread = messageRecord(1710000000001, 't1', { from: { user_id: 'ada' }, deleted: true, body: undefined });
+		const text = [
+			`see ${'https://link.apron.chat/#server=wss://chat.example/ws&room=ops&message=1710000000000'}.`,
+			'and apron:?room=t1&message=1710000000001,',
+			'elsewhere https://link.apron.chat/#server=wss://other.example/&room=ops&message=1710000000000',
+			'not loaded apron:?room=ops&message=404'
+		].join('\n');
+		const view = messageView(messageRecord(7, 'ops', { from: you, body: { text } }), row(), context([linkedOps, linkedThread]));
+		expect(view.quotes).toEqual([
+			{
+				href: 'https://link.apron.chat/#server=wss://chat.example/ws&room=ops&message=1710000000000', name: 'Ada', avatar: ada.avatar, hue: avatarHue('ada'),
+				room: { id: 'ops', title: 'ops', thread: undefined }, timestamp: 1710000000000, time: idWhen('1710000000000'), snippet: ['ship it ', { user_id: 'you', name: 'You', me: true }, '\nnow\nthen']
+			},
+			{ href: 'https://link.apron.chat/#server=wss://chat.example/ws&room=t1&message=1710000000001', name: 'Ada', avatar: ada.avatar, hue: avatarHue('ada'), room: { id: 't1', title: undefined, thread: true }, timestamp: 1710000000001, time: idWhen('1710000000001'), deleted: true }
+		]);
+		// A link to the message itself, one in code, a tombstone's, and a system line's quote nothing.
+		expect(messageView(messageRecord(8, 'ops', { body: { text: 'apron:?room=ops&message=8' } }), row(), context([messageRecord(8, 'ops')])).quotes).toBeUndefined();
+		expect(messageView(messageRecord(9, 'ops', { body: { text: '`apron:?room=ops&message=1710000000000`', format: 'markdown' } }), row(), context([linkedOps])).quotes).toBeUndefined();
+		expect(messageView(messageRecord(10, 'ops', { deleted: true, body: { text: 'apron:?room=ops&message=1710000000000' } }), row(), context([linkedOps])).quotes).toBeUndefined();
+		expect(messageView(messageRecord(11, 'ops', { from: { user_id: '~server' }, body: { text: 'apron:?room=ops&message=1710000000000' } }), row(), context([linkedOps])).quotes).toBeUndefined();
+		const many = messageRecord(12, 'ops', { body: { text: [1, 2, 3, 4].map((id) => `apron:?room=ops&message=${id}`).join(' ') } });
+		expect(messageView(many, row(), context([1, 2, 3, 4].map((id) => messageRecord(id, 'ops')))).quotes?.map((quote) => quote.timestamp)).toEqual([1, 2, 3]);
+	});
+
+	it('quotes a linked message once it comes, and hands back the same view until then', () => {
+		const records: MessageRecord[] = [];
+		const event = messageRecord(7, 'ops', { body: { text: 'apron:?room=ops&message=5' } });
+		const before = messageView(event, row(), context(records));
+		expect(before.quotes).toBeUndefined();
+		expect(messageView(event, row(), context(records))).toBe(before);
+		records.push(messageRecord(5, 'ops', { body: { text: 'here' } }));
+		expect(messageView(event, row(), context(records)).quotes?.[0].snippet).toEqual(['here']);
+	});
+
 	it('lists embeds with their uploads, and lets your own go unless it is the last thing in the message or still being written', () => {
 		const embeds = [{ kind: 'upload', embed_id: 'e1', title: 'a' }, { kind: 'upload', embed_id: 'e2', title: 'b' }, { kind: 'link' }];
 		const uploads = { e1: { name: 'a', progress: 0.5 }, e2: { name: 'b', failed: 'no' } };
@@ -89,7 +131,7 @@ describe('messageView', () => {
 
 	it('reads the uploads only for a message with embeds', () => {
 		const uploads = vi.fn(() => ({}));
-		const reading: MessageContext = { resolve: () => undefined, get uploads() { return uploads(); } };
+		const reading: MessageContext = { resolve: () => undefined, linked: () => undefined, server: SERVER, get uploads() { return uploads(); } };
 		messageView(messageRecord(1), row(), reading);
 		expect(uploads).not.toHaveBeenCalled();
 		messageView(messageRecord(2, 'ops', { body: { text: '', embeds: [{ kind: 'link' }] } }), row(), reading);

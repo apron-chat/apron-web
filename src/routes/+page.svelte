@@ -78,6 +78,7 @@
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
 	import { trackKeyboard } from '$lib/ui/viewport';
 	import { linkPreviews } from '$lib/ui/link-previews';
+	import { linkedMessages } from '$lib/ui/linked-messages.svelte';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
@@ -230,6 +231,8 @@
 	 * thread, `null` for a room that isn't one, or `undefined` while it is looked up.
 	 */
 	const linkedParents = new Map<string, string | null | undefined>();
+	/** The server and identity `linkedMessages` holds messages for. */
+	let linkedMessagesFor: string | undefined;
 	/** The connect screen is up for a link's server: it can be cancelled even before this server is ready. */
 	let offeringLink = $state(false);
 	/** How far back a linked message is looked for, in pages of history. */
@@ -1003,6 +1006,12 @@
 			serverUrl = chat.url;
 			session.apply(next, chat);
 			directory.apply(next, serverOrigin(chat.url));
+			// What links' messages were fetched as is for one server and one identity: another may not read them.
+			const linkedFor = next.you ? `${chat.url} ${next.you.user_id}` : undefined;
+			if (linkedFor !== undefined && linkedFor !== linkedMessagesFor) {
+				linkedMessagesFor = linkedFor;
+				linkedMessages.clear();
+			}
 		});
 		chat.start();
 		client = chat;
@@ -1094,6 +1103,7 @@
 		pushRoom = undefined;
 		session.forget();
 		directory.forget();
+		linkedMessages.clear();
 	}
 
 	/**
@@ -2049,6 +2059,21 @@
 		return findMessage(session.rooms, id) ?? client?.message(id);
 	}
 
+	/**
+	 * The message a link in a message names (Appendix A.4), for its quote: one
+	 * on this server, loaded here, else fetched once (`linkedMessages`). A link
+	 * to another server quotes nothing: opening it is the user's to do.
+	 */
+	function linkedMessage(link: ApronLink): MessageRecord | undefined {
+		const chat = client;
+		if (!chat || !link.room || !link.message || (link.server !== undefined && link.server !== chat.url)) return undefined;
+		const local = resolveMessage(link.message);
+		if (local) return local;
+		const fetched = linkedMessages.get(link.room, link.message);
+		if (!fetched) linkedMessages.load(link.room, link.message, (roomId, messageId) => chat.fetchMessage(roomId, messageId));
+		return fetched;
+	}
+
 	function replyPreview(id: string): { name?: string; text: string } {
 		const target = resolveMessage(id);
 		if (!target) return { text: 'Message unavailable' };
@@ -2075,6 +2100,10 @@
 	/** What every row reads from, each field only where a row needs it. */
 	const messageContext: MessageContext = {
 		resolve: resolveMessage,
+		linked: linkedMessage,
+		get server() {
+			return client?.url;
+		},
 		get uploads() {
 			return snapshot.uploads;
 		}

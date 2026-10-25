@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readApronLink, writeApronLink } from './apron-link';
+import { messageLinksIn, readApronLink, writeApronLink } from './apron-link';
 
 describe('Apron links (Appendix A.4)', () => {
 	it('reads all three forms, a relative link, and a user or a token', () => {
@@ -28,5 +28,20 @@ describe('Apron links (Appendix A.4)', () => {
 		expect(written).toBe('https://link.apron.chat/#server=wss://chat.example/ws&room=%23ops/alerts&message=1724803200042');
 		expect(readApronLink(written)).toEqual({ server: 'wss://chat.example/ws', room: '#ops/alerts', message: '1724803200042' });
 		expect(writeApronLink({ server: 'wss://ada:pw@chat.example/ws', room: 'general' })).toBe('https://link.apron.chat/#server=wss://chat.example/ws&room=general');
+	});
+
+	it('finds the distinct links to messages in text, in any form, as Markdown or HTML ends them, leaving out code in Markdown', () => {
+		const text = [
+			'See https://link.apron.chat/#server=wss://chat.example/ws&room=general&message=1724803200042.',
+			'[that](apron:?room=ops&message=7) and <web+apron:?room=ops&message=8>, again apron:?room=ops&message=7!',
+			'a room apron:?room=ops, a user apron:?room=ops&user=ada, elsewhere https://example.com/#room=r&message=1',
+			'`apron:?room=ops&message=9`',
+			'```\napron:?room=ops&message=10\n```'
+		].join('\n');
+		const found = (markdown: boolean, max = 10) => messageLinksIn(text, markdown, max).map((link) => [link.server, link.room, link.message]);
+		const prose = [['wss://chat.example/ws', 'general', '1724803200042'], [undefined, 'ops', '7'], [undefined, 'ops', '8']];
+		expect(found(true)).toEqual(prose);
+		expect(found(false)).toEqual([...prose, [undefined, 'ops', '9'], [undefined, 'ops', '10']]);
+		expect(found(true, 2)).toEqual(prose.slice(0, 2));
 	});
 });

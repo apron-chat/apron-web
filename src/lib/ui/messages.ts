@@ -1,4 +1,5 @@
 import type { MentionPerson } from '$lib/protocol/markdown';
+import { cleanPlainText } from '$lib/protocol/plain-text';
 import { isJsonObject, isSystemId, type Embed, type Identity, type MessageRecord } from '$lib/protocol/types';
 import { directory } from './directory.svelte';
 
@@ -50,6 +51,13 @@ export function hueOf(userId: string | undefined): number | undefined {
 export function replySnippet(target: MessageRecord): string {
 	const line = textOf(target).split('\n').find((part) => part.trim())?.trim() ?? '';
 	const short = line.length > 120 ? `${line.slice(0, 119).trimEnd()}…` : line;
+	return short || (embedsOf(target).length ? 'Attachment' : 'Empty message');
+}
+
+/** A few lines of a message a link points to: its first three, about 280 characters, as written. */
+export function quoteSnippet(target: MessageRecord): string {
+	const lines = cleanPlainText(textOf(target)).split('\n').filter((line) => line.trim()).slice(0, 3).join('\n');
+	const short = lines.length > 280 ? `${lines.slice(0, 279).trimEnd()}…` : lines;
 	return short || (embedsOf(target).length ? 'Attachment' : 'Empty message');
 }
 

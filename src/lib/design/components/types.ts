@@ -261,6 +261,27 @@ export interface MessageReply {
 	deleted?: boolean;
 }
 
+/**
+ * A message that a link in this one points to (Appendix A.4), resolved by you on the server you're on, quoted under
+ * the text: who wrote it, where and when, and a few lines of it. Following the link opens it.
+ */
+export interface MessageQuote {
+	/** The link as the message has it, also the list's key: the page opens it. */
+	href: string;
+	name: string;
+	avatar?: string;
+	hue?: number;
+	/** The room or thread it's in (`roomName`). */
+	room?: { id: string; title?: string; thread?: boolean };
+	/** Epoch ms of its `message_id`: the tooltip, and the time of day unless `time` says otherwise. */
+	timestamp?: number;
+	/** When it was, pre-formatted, such as with its day when that isn't today. */
+	time?: string;
+	/** Up to three lines of its text (~280 chars, no Markdown), mentions picked out. */
+	snippet?: (string | MessageMention)[];
+	deleted?: boolean;
+}
+
 /** A file being written to an upload embed, sender side (§4.8.3). */
 export interface MessageUpload {
 	name: string;
@@ -299,6 +320,8 @@ export interface MessageView {
 	/** ALREADY SANITIZED markup of the text; absent when a message has none. `code` when it holds code blocks to decorate. */
 	body?: { html: string; markdown?: boolean; code?: boolean };
 	reply?: MessageReply;
+	/** The messages its links point to, under its text; none on a tombstone. */
+	quotes?: MessageQuote[];
 	embeds?: MessageEmbed[];
 	/** Chips under the message; none on a tombstone. */
 	reactions?: ReactionChip[];
@@ -365,6 +388,8 @@ export interface MessageTestids {
 	row?: string;
 	handle?: string;
 	reply?: string;
+	/** Each message its links point to. */
+	quote?: string;
 	reactions?: string;
 	chip?: string;
 	select?: string;

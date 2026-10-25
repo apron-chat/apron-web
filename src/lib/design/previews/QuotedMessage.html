@@ -1,0 +1,23 @@
+<!-- @dsCard group="Timeline" height=300 subtitle="A message a link points to, quoted under the text; of a deleted message; in an untitled thread" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>QuotedMessage</title></head>
+<body>
+<div id="root" style="padding: 12px 0"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var alice = { user_id: 'alice', name: 'Alice Chen' }, bob = { user_id: 'bob', name: 'Bob' };
+  var link = 'https://link.apron.chat/#server=wss://chat.example/ws&room=general&message=1724803200042';
+  var at = Date.parse('2026-10-24T14:05:00');
+  // A Message's `view.quotes`: who wrote each linked message, where and when, and up to three lines of it.
+  add(A.Message, { view: { sender: bob, time: '14:30', body: { html: 'Same as <a href="' + link + '">' + link + '</a>' }, quotes: [
+    { href: link, name: alice.name, room: { id: 'general', title: 'general' }, timestamp: at, snippet: ['Deploy is green, rolling to prod now.\nAnyone object if I skip the canary wait? ', { user_id: 'bob', name: 'Bob' }, ' had a question about it yesterday.'] }
+  ] } });
+  add(A.Message, { view: { sender: alice, time: '14:31', body: { html: 'That one was taken back:' }, quotes: [
+    { href: link + '1', name: bob.name, room: { id: 'general', title: 'general' }, timestamp: at, deleted: true },
+    { href: link + '2', name: alice.name, room: { id: 't-123', thread: true }, timestamp: at, snippet: ['Rollback plan, step one: freeze merges.'] }
+  ] } });
+</script>
+</body>
+</html>
