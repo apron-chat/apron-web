@@ -1,11 +1,14 @@
+import { formKeys } from './apron-link';
+
 /**
  * Where the page's URL says it is, so a room, thread or message can be
- * shared, bookmarked and reloaded: the server and the destination in the
- * query, a message as a fragment.
+ * shared, bookmarked and reloaded. All of it is in the fragment, which the
+ * browser never sends, so the host that serves this app doesn't learn which
+ * server or room anyone opens:
  *
  * ```text
- * /?room=general
- * /?server=wss%3A%2F%2Fchat.example.com%2Fws&room=general&thread=thread-123#message=message-456
+ * /#room=general
+ * /#server=wss://chat.example.com/ws&room=general&thread=thread-123&message=message-456
  * ```
  *
  * The server is left out when it is the one the page connects to anyway. A
@@ -18,10 +21,12 @@ export const SERVER_PARAM = 'server';
 export const ROOM_PARAM = 'room';
 export const THREAD_PARAM = 'thread';
 export const MESSAGE_PARAM = 'message';
-/** A user in the room, whose profile card opens: a link's `user` (Appendix A.4), in the fragment as link.apron.chat passes it. */
+/** A user in the room, whose profile card opens: a link's `user` (Appendix A.4). */
 export const USER_PARAM = 'user';
+/** The fragment's keys that say where the page is, written in this order. */
+const PLACE_PARAMS = [SERVER_PARAM, ROOM_PARAM, THREAD_PARAM, MESSAGE_PARAM, USER_PARAM];
 
-/** What a URL names: a thread only under its room, a message anywhere a room is named. */
+/** What a URL names: a thread, a message or a user only with its room. */
 export interface Destination {
 	server?: string;
 	room?: string;
@@ -30,15 +35,13 @@ export interface Destination {
 	user?: string;
 }
 
-/** Reads a URL's destination; a server that isn't a `ws:` or `wss:` URL, or that carries credentials, is ignored. */
-export function readDestination(location: Pick<Location, 'search' | 'hash'>): Destination {
-	const query = new URLSearchParams(location.search);
-	const server = webSocketUrl(query.get(SERVER_PARAM));
-	const room = query.get(ROOM_PARAM) || undefined;
-	const thread = room ? query.get(THREAD_PARAM) || undefined : undefined;
-	const fragment = location.hash.startsWith('#') ? new URLSearchParams(location.hash.slice(1)) : undefined;
-	const message = room ? fragment?.get(MESSAGE_PARAM) || undefined : undefined;
-	const user = room ? fragment?.get(USER_PARAM) || undefined : undefined;
+/** Reads a URL's destination from its fragment; a server that isn't a `ws:` or `wss:` URL, or that carries credentials, is ignored. */
+export function readDestination(location: Pick<Location, 'hash'>): Destination {
+	const fragment = fragmentParams(location.hash);
+	const server = webSocketUrl(fragment.get(SERVER_PARAM));
+	const room = fragment.get(ROOM_PARAM) || undefined;
+	const inRoom = (key: string) => (room ? fragment.get(key) || undefined : undefined);
+	const thread = inRoom(THREAD_PARAM), message = inRoom(MESSAGE_PARAM), user = inRoom(USER_PARAM);
 	return {
 		...(server ? { server } : {}),
 		...(room ? { room } : {}),
@@ -49,25 +52,29 @@ export function readDestination(location: Pick<Location, 'search' | 'hash'>): De
 }
 
 /**
- * The URL for a destination, from the page's current one: its path and any
- * other query parameters are kept, the destination's replace whatever was
- * there, and the fragment is the message's, or none.
- * `defaultServer` is the one the page connects to with no `server` given.
+ * The URL for a destination, from the page's current one: its path and query
+ * are kept, and the fragment names the destination, keeping any other keys
+ * it had. `defaultServer` is the one the page connects to with no `server` given.
  */
 export function destinationUrl(current: string, destination: Destination, defaultServer: string): string {
 	const url = new URL(current);
-	for (const param of [SERVER_PARAM, ROOM_PARAM, THREAD_PARAM]) url.searchParams.delete(param);
+	const fragment = fragmentParams(url.hash);
+	for (const key of PLACE_PARAMS) fragment.delete(key);
 	const server = destination.server ? withoutCredentials(destination.server) : undefined;
-	if (server && server !== withoutCredentials(defaultServer)) url.searchParams.set(SERVER_PARAM, server);
+	const place: [string, string][] = [];
+	if (server && server !== withoutCredentials(defaultServer)) place.push([SERVER_PARAM, server]);
 	if (destination.room) {
-		url.searchParams.set(ROOM_PARAM, destination.room);
-		if (destination.thread) url.searchParams.set(THREAD_PARAM, destination.thread);
+		place.push([ROOM_PARAM, destination.room]);
+		if (destination.thread) place.push([THREAD_PARAM, destination.thread]);
+		if (destination.message) place.push([MESSAGE_PARAM, destination.message]);
+		if (destination.user) place.push([USER_PARAM, destination.user]);
 	}
-	const fragment = new URLSearchParams();
-	if (destination.room && destination.message) fragment.set(MESSAGE_PARAM, destination.message);
-	if (destination.room && destination.user) fragment.set(USER_PARAM, destination.user);
-	url.hash = fragment.toString();
+	url.hash = formKeys([...place, ...fragment]);
 	return url.toString();
+}
+
+function fragmentParams(hash: string): URLSearchParams {
+	return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
 }
 
 function webSocketUrl(value: string | null): string | undefined {

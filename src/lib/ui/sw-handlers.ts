@@ -97,12 +97,12 @@ export async function handleClick<T extends Tab>(data: unknown, context: ClickCo
 			tab.postMessage({ type: PUSH_CLICK, target });
 			await tab.focus();
 		} else {
-			await context.openWindow(`${context.page}?${new URLSearchParams({ [PUSH_ROOM_PARAM]: target.roomId, [PUSH_ID_PARAM]: target.pushId })}`);
+			await context.openWindow(`${context.page}#${new URLSearchParams({ [PUSH_ROOM_PARAM]: target.roomId, [PUSH_ID_PARAM]: target.pushId })}`);
 		}
 		return;
 	}
 	if (!tabs.length) {
-		await context.openWindow(target ? `${context.page}?${new URLSearchParams({ [PUSH_ROOM_PARAM]: target.roomId })}` : context.page);
+		await context.openWindow(target ? `${context.page}#${new URLSearchParams({ [PUSH_ROOM_PARAM]: target.roomId })}` : context.page);
 		return;
 	}
 	const message = pushTarget(data) ? { type: PUSH_CLICK, target: data } : { type: NOTIFICATION_CLICK, target: data };

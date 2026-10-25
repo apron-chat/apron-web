@@ -40,7 +40,7 @@ const SCREENS: Record<string, (preview: Preview) => Promise<void>> = {
 		await preview.press(preview.page.getByRole('button', { name: /^Open preferences/ }));
 		await expect(preview.page.getByRole('dialog', { name: 'Preferences' })).toBeVisible();
 	},
-	thread: (preview) => preview.open('?room=general&thread=thread_deploy')
+	thread: (preview) => preview.open('#room=general&thread=thread_deploy')
 };
 
 /** The gated violations on the page now, by rule. */

@@ -102,7 +102,7 @@ describe('the service worker', () => {
 		tabs = [signedIn('b2')];
 		await dispatch('notificationclick', { notification: { close, data: { push: true, roomId: 'general', pushId: 'a1' } } });
 		expect(close).toHaveBeenCalled();
-		expect(openWindow).toHaveBeenCalledWith('/app/?push_room=general&push_id=a1');
+		expect(openWindow).toHaveBeenCalledWith('/app/#push_room=general&push_id=a1');
 	});
 
 	it('hands a clicked push to the tab signed in to its account, among all the app’s tabs', async () => {
@@ -129,6 +129,6 @@ describe('the service worker', () => {
 		expect(openWindow).not.toHaveBeenCalled();
 		tabs = [];
 		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
-		expect(openWindow).toHaveBeenCalledWith('/app/?push_room=th1');
+		expect(openWindow).toHaveBeenCalledWith('/app/#push_room=th1');
 	});
 });
