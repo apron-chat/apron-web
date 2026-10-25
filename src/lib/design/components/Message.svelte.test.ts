@@ -83,6 +83,49 @@ describe('a message row', () => {
 		expect(dom.button('Replying to Bob. Jump to their message').textContent).toContain('Message deleted');
 	});
 
+	it('shows a card for each link to a message, room or thread under its text, each the link, and leaves a click on one to the link', () => {
+		const href = 'https://link.apron.chat/#server=wss://chat.example/ws&room=ops&message=7';
+		const beginSelect = vi.fn();
+		const row = render({
+			caps: { ...NONE, select: true },
+			linkCards: [
+				{ kind: 'message', href, server: 'chat.example', in: { id: 'ops', title: 'Ops' }, sender: { name: 'Bob' }, timestamp: 1710000000000, time: 'Yesterday 2:05 PM', snippet: ['ship it ', { user_id: 'ada', name: 'Ada', me: true }, '\nnow'] },
+				{ kind: 'message', href: `${href}0`, server: 'chat.example', in: { id: 'r-8f2a', unknown: true } },
+				{ kind: 'room', href: `${href}1`, server: 'chat.example', room: { id: 'ops', title: 'Ops' }, members: 1, private: true, description: 'All things ops' },
+				{ kind: 'thread', href: `${href}2`, server: 'chat.example', in: { id: 'ops', title: 'Ops' }, room: { id: 't1', thread: true }, members: 1200 }
+			]
+		}, { beginSelect }, { testids: { linkCard: 'card' } });
+		const cards = [...row.querySelectorAll<HTMLAnchorElement>('[data-testid="card"]')];
+		const read = (card: Element) => [...card.querySelector('.ap-embed-cardtext')!.children].map((part) => part.textContent!.replace(/\s*›\s*/g, ' › ').replace(/\s+/g, ' ').trim());
+		expect(cards[0].getAttribute('href')).toBe(href);
+		// A link preview's card: its site line the path ending in the kind, the title, the description.
+		expect(cards[0].classList.contains('ap-embed-ogcard')).toBe(true);
+		expect(read(cards[0])).toEqual(['chat.example › #Ops › Message', 'BBobYesterday 2:05 PM', 'ship it @Ada now']);
+		expect(cards[0].getAttribute('aria-label')).toBe('Message from Bob in #Ops on chat.example. Open it');
+		// Not loaded here: the path alone, an unknown room as its ID.
+		expect(read(cards[1])).toEqual(['chat.example › r-8f2a › Message']);
+		expect(cards[1].querySelector('.ap-linkcard-id')!.textContent).toBe('r-8f2a');
+		expect(read(cards[2])).toEqual(['chat.example › Room · 1 member', '#Ops', 'All things ops']);
+		// Private as everywhere else a room is named: the lock beside its name.
+		expect(cards[2].querySelector('.ap-linkcard-title .ap-lock')!.getAttribute('aria-label')).toBe('Private');
+		expect(cards[2].getAttribute('aria-label')).toBe('Room #Ops on chat.example. Open it');
+		// An untitled thread is "Untitled", its room_id in the tooltip.
+		expect(read(cards[3])).toEqual(['chat.example › #Ops › Thread · 1,200 members', 'Untitled']);
+		expect(cards[3].querySelector('.ap-linkcard-title .ap-linkcard-step')!.getAttribute('title')).toBe('t1');
+		// After the body, before the embeds.
+		expect(row.querySelector('.ap-msg-text + .ap-msg-linkcards')).not.toBeNull();
+		// The page follows the link; here nothing does.
+		const follow = (event: Event) => event.preventDefault();
+		document.addEventListener('click', follow);
+		click(cards[0].querySelector('.ap-linkcard-text')!, { shiftKey: true });
+		document.removeEventListener('click', follow);
+		expect(beginSelect).not.toHaveBeenCalled();
+		dom.unmount();
+		expect(render({ deleted: true, linkCards: [{ kind: 'room', href, server: 'h' }] }).querySelector('.ap-linkcard')).toBeNull();
+		dom.unmount();
+		expect(read(render({ linkCards: [{ kind: 'message', href, server: 'h', in: { id: 'ops' }, sender: { name: 'Bob' }, deleted: true }] }).querySelector('.ap-linkcard')!)).toEqual(['h › #ops › Message', 'BBob', 'Message deleted']);
+	});
+
 	it('hides the body and reactions of a tombstone', () => {
 		render({ deleted: true, reactions: [{ emoji: '👍', count: 1 }] });
 		expect(byText('Message deleted')).not.toBeNull();

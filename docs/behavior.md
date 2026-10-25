@@ -866,6 +866,44 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   composer as you write, each with an **(x)** that sends the message without
   it. A failed send restores the draft with those previews still removed;
   otherwise the draft forgets them once it is sent or cleared.
+- **Links as chips**: an Apron link in a message's text written as its URL,
+  in any of the three forms of
+  [PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links)
+  (one without `server` is the sending server's), reads as a mention that says
+  in words what it is, from what this client knows: "Message in #general", a
+  room's name, a thread's name "in #general", a known user as `@name`. Each but
+  a user's leads with its kind's icon, the same icons as the link cards. A room
+  not known here reads as its `room_id`. A link to another server is no place
+  here, so it is no mention: an outlined chip in the ink of the text, a globe
+  and the server's host first, then "Message" or "Room", and an arrow after,
+  since opening it switches servers (the connect screen asks first); nothing
+  is looked up for it, and it has no card. Another endpoint on the same host
+  is another server. One written with its own text keeps it, and a token, or
+  a user on another server, stays a URL. Only a link read strictly as a place
+  is drawn as one, as a chip or a card: the shapes Appendix A.4 lists (`room`;
+  `room` and `message`; `room` and `user`), every key one of those or `server`
+  and given once, every part `key=value` with a value that decodes and is of
+  its type (IDs without whitespace, control or bidi characters, a `message_id`
+  in `log_id` form), and at most one `server`, one this client can reach. A
+  link with a key it doesn't know, or an empty or malformed part, stays a
+  plain link, so nothing that isn't what it seems looks official. Each is still
+  the link, in its `https` form with the server, so copying it gives a link
+  that opens the same place anywhere, a click opens it here, and a modified
+  click opens link.apron.chat in a new tab.
+- **Link cards**: a link to a message, room or thread that this client knows
+  more of than where it is also shows as a card under the text, up to three
+  per message, in the shape of a link preview. Its first line is where it is,
+  as a path: the server's host, the room a message or thread is in, and a tag
+  that says which it is (Message, Room or Thread, with a room's member count).
+  Under it is what this client already knows: a loaded message's sender, time
+  and first three lines (or "Message deleted"), a joined or listed room's name,
+  lock if private, and two lines of its description. Nothing is fetched to draw
+  a card, and a link with nothing more to show than its path (a message that
+  isn't loaded, a room known only by name or not at all, any link to another
+  server) has none: its chip says as much. A card is the link, as a chip is.
+  The cards follow what the text links, so a link inside code (inline,
+  indented or fenced) has none, nor has one to the message itself, and a
+  place written twice, with its server and without, has one.
 
 With the `edit` capability, **Edit** on your own message opens it in place, in
 a box like the composer: its text, with its embeds above it as tiles like a

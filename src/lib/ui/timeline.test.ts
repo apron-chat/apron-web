@@ -4,7 +4,7 @@ import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
 import { escapeMarkdown, buildRoomTimeline, buildThreadTimeline, newDividerBefore, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadDescriptionText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
-import { peopleIn, rangeBetween, replySnippet, spanOf } from './messages';
+import { messageSnippet, peopleIn, rangeBetween, spanOf } from './messages';
 import { roomSnapshot as room } from '$lib/test/builders';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -190,10 +190,13 @@ describe('thread view', () => {
 
 describe('message helpers', () => {
 	it('quotes the first non-empty line, shortened', () => {
-		expect(replySnippet(message(0, 'alice', { body: { text: '\n\n  first line  \nsecond' } }))).toBe('first line');
-		expect(replySnippet(message(0, 'alice', { body: { text: 'x'.repeat(130) } }))).toHaveLength(120);
-		expect(replySnippet(message(0, 'alice', { body: { embeds: [{ kind: 'image' }] } }))).toBe('Attachment');
-		expect(replySnippet(message(0, 'alice', { body: {} }))).toBe('Empty message');
+		expect(messageSnippet(message(0, 'alice', { body: { text: '\n\n  first line  \nsecond' } }))).toBe('first line');
+		expect(messageSnippet(message(0, 'alice', { body: { text: 'x'.repeat(130) } }))).toHaveLength(120);
+		expect(messageSnippet(message(0, 'alice', { body: { embeds: [{ kind: 'image' }] } }))).toBe('Attachment');
+		expect(messageSnippet(message(0, 'alice', { body: {} }))).toBe('Empty message');
+		// A link's card: three lines as written, each trimmed, about 280 characters.
+		expect(messageSnippet(message(0, 'alice', { body: { text: ' one \n\n\ntwo\n three\nfour' } }), 3, 280)).toBe('one\ntwo\nthree');
+		expect(messageSnippet(message(0, 'alice', { body: { text: 'y'.repeat(300) } }), 3, 280)).toHaveLength(280);
 	});
 
 	it('lists the people a room has seen, newest first, with the viewer always present, or only its listed members', () => {

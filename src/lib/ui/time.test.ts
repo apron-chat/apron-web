@@ -37,6 +37,14 @@ describe('timestamps', () => {
 		expect(time.idIso('opaque')).toBeUndefined();
 	});
 
+	it('say when a quoted message was: the time of day today, else with its day', () => {
+		const at = (hours: number) => new Date(Date.UTC(2026, 8, 14, hours));
+		expect(time.idWhen(id, at(20))).toBe('11:04 AM');
+		expect(time.idWhen(id, at(30))).toBe('Yesterday 11:04 AM');
+		expect(time.idWhen(id, at(24 * 7))).toBe('Mon, Sep 14 11:04 AM');
+		expect(time.idWhen('opaque', at(20))).toBe('');
+	});
+
 	it('say how long ago compactly: minutes, hours, days, weeks, then years', () => {
 		const now = Date.UTC(2026, 8, 14, 15, 4);
 		const ago = (ms: number) => time.idAgo(String(now - ms), now);

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { renderBio, renderMarkdown, renderPlain, type MentionResolver, mentionSegments } from './markdown';
+import { renderBio, renderMarkdown, renderPlain, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
 
 const resolve: MentionResolver = (id) => {
 	if (id === 'alice') return { kind: 'user', id, name: 'Alice Chen' };
@@ -121,6 +121,30 @@ describe('bare links', () => {
 		// A bare scheme with no keys isn't a link, and other schemes stay unlinked.
 		expect(renderPlain('apron: is a scheme')).toBe('apron: is a scheme');
 		expect(renderMarkdown('[x](javascript:alert(1))')).not.toContain('href');
+	});
+
+	it('draws an Apron link written as its URL as the chip a resolver gives, still the link, and leaves one with its own text or in code', () => {
+		const resolveLink: LinkResolver = (href) => {
+			if (href === 'apron:?room=ops&message=1') return { kind: 'message', href, label: 'Message', detail: ' in #Ops & Co', title: 'A message in #Ops & Co' };
+			if (href === 'apron:?server=wss://h/&room=ops') return { kind: 'room', elsewhere: true, href, label: 'h', detail: ' · Room', title: 'A room on h' };
+			if (href.startsWith('https://link.apron.chat/#room=g')) return { kind: 'room', href, label: decodeURI(href).slice(-7), title: 'Open' };
+			if (href === 'apron:?room=ops&user=alice') return { kind: 'user', href: 'apron:?server=wss://h/&room=ops&user=alice', label: '@Alice', title: 'Alice in #Ops & Co' };
+			return undefined;
+		};
+		const chip = '<a href="apron:?room=ops&amp;message=1" rel="noreferrer noopener" target="_blank" class="ap-mention ap-mention-room ap-linkchip ap-linkchip-message" title="A message in #Ops &amp; Co">Message<span class="ap-linkchip-detail"> in #Ops &amp; Co</span></a>';
+		expect(renderPlain('see apron:?room=ops&message=1.', undefined, undefined, resolveLink)).toBe(`see ${chip}.`);
+		expect(renderMarkdown('see <apron:?room=ops&message=1>', undefined, undefined, resolveLink)).toBe(`<p>see ${chip}</p>\n`);
+		// The link under it is the one the resolver gives, where it gives one.
+		expect(renderMarkdown('apron:?room=ops&user=alice', undefined, undefined, resolveLink))
+			.toContain('<a href="apron:?server=wss://h/&amp;room=ops&amp;user=alice" rel="noreferrer noopener" target="_blank" class="ap-mention ap-linkchip" title="Alice in #Ops &amp; Co">@Alice</a>');
+		// Another server's is no mention.
+		expect(renderPlain('apron:?server=wss://h/&room=ops', undefined, undefined, resolveLink)).toContain('class="ap-linkchip ap-linkchip-elsewhere" title="A room on h">h<span class="ap-linkchip-detail"> · Room</span></a>');
+		// Its own text stays, as does code, and a link the resolver leaves.
+		expect(renderMarkdown('[that one](apron:?room=ops&message=1)', undefined, undefined, resolveLink)).toContain('>that one</a>');
+		expect(renderMarkdown('`apron:?room=ops&message=1`', undefined, undefined, resolveLink)).not.toContain('<a');
+		expect(renderPlain('apron:?room=other', undefined, undefined, resolveLink)).toBe(link('apron:?room=other'));
+		// An autolink whose href Markdown percent-encodes, but not its text, is still its own URL.
+		expect(renderMarkdown('<https://link.apron.chat/#room=général>', undefined, undefined, resolveLink)).toContain('class="ap-mention ap-mention-room ap-linkchip ap-linkchip-room" title="Open">général</a>');
 	});
 
 	it('leaves trailing punctuation and an unmatched closing paren out', () => {

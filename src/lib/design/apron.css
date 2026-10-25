@@ -7,7 +7,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* Disabled — one fade, whatever the control. */
 :is(.ap-btn, .ap-iconbtn, .ap-link, .ap-rpick, .ap-seg-item, .ap-choice-item, .ap-field, .ap-viewer-btn):disabled, .ap-switch[aria-disabled='true'] { cursor: default; opacity: var(--opacity-disabled); }
@@ -29,8 +29,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
  * The design components carry these classes and elements, so every consumer gets the rule.
  */
 :where(.ap-msg-text, .ap-description-text, .ap-welcome), :where(.ap-msg-text, .ap-description-text, .ap-welcome) :where(p, li, h1, h2, h3, h4, h5, h6, blockquote, th, td) { unicode-bidi: plaintext; text-align: start; }
-:where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name) { unicode-bidi: plaintext; text-align: left; }
-:where([dir='rtl']) :where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name) { text-align: right; }
+:where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name) { unicode-bidi: plaintext; text-align: left; }
+:where([dir='rtl']) :where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name) { text-align: right; }
 
 /* Button */
 .ap-btn { font: inherit; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; height: var(--control-lg); padding: 0 var(--space-4); border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--bg-200); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
@@ -55,6 +55,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-avatar { display: inline-grid; place-items: center; flex: none; border-radius: var(--radius-full); background: var(--denim-soft); color: var(--denim); font-weight: 600; object-fit: cover; overflow: hidden; user-select: none; }
 .ap-avatar-md { width: var(--avatar-md); height: var(--avatar-md); font-size: 12px; }
 .ap-avatar-sm { width: var(--avatar-sm); height: var(--avatar-sm); font-size: 9px; }
+.ap-avatar-xs { width: var(--avatar-xs); height: var(--avatar-xs); font-size: 7px; }
 .ap-avatar-lg { width: var(--avatar-lg); height: var(--avatar-lg); font-size: 18px; }
 /* An avatar's initials tinted by its `hue`: muted, at a fixed lightness per theme, so every hue reads the same and none competes with the accent. */
 .ap-avatar-hued { background: oklch(0.33 0.06 var(--avatar-hue)); color: oklch(0.86 0.08 var(--avatar-hue)); }
@@ -858,8 +859,6 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-reply:hover { background: var(--hover); color: var(--ink); }
 .ap-msg-highlighted .ap-reply:hover { background: var(--hover-inset); }
 .ap-msg-reply .ap-reply:hover::before { border-color: var(--denim); }
-/* A face smaller than --avatar-sm, to sit inside the 18px line. */
-.ap-reply .ap-avatar { width: 16px; height: 16px; font-size: 7px; }
 .ap-reply-who { flex: none; color: var(--ink); font-weight: 500; }
 .ap-reply:hover .ap-reply-who { color: var(--denim); }
 .ap-reply-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -867,6 +866,28 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-reply-static { cursor: default; }
 .ap-reply.ap-reply-static:hover { background: none; color: var(--ink-muted); }
 .ap-msg-reply .ap-reply-static:hover::before { border-color: color-mix(in srgb, var(--line-strong) 60%, transparent); }
+
+/* LinkCard — a link to a message, room or thread under the text, as a link preview's card (.ap-embed-ogcard, its
+   site line, title and description): the site line is the path, server › room, ending in a tag that says what it
+   is; the title who sent the message or the room's name, with a face; the description its first lines. What isn't
+   known here is left out, a room not known by name is its room_id, so the card fits its content up to a preview's width. */
+.ap-msg-linkcards { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-2); }
+.ap-linkcard.ap-embed-ogcard { width: fit-content; min-width: min(100%, 240px); max-width: min(100%, var(--embed-card-w)); }
+.ap-linkcard .ap-embed-cardtext { gap: var(--space-1); padding: var(--space-2) var(--space-3); }
+.ap-linkcard-path { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); min-width: 0; }
+.ap-linkcard-step { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-linkcard-known { color: var(--ink); font-weight: 600; }
+.ap-linkcard-id { font-family: var(--font-mono); }
+.ap-linkcard-sep { color: var(--line-strong); }
+.ap-linkcard-kind { display: inline-flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-1_5); border-radius: var(--radius-sm); background: var(--bg-300); color: var(--ink); font-size: var(--text-xs); white-space: nowrap; }
+.ap-linkcard-kind svg { width: 12px; height: 12px; flex: none; }
+.ap-linkcard-count { color: var(--ink-muted); }
+.ap-linkcard-title { display: flex; align-items: center; gap: var(--space-1_5); min-width: 0; font-size: var(--text-sm); line-height: var(--leading-ui); }
+.ap-linkcard-title .ap-linkcard-step, .ap-linkcard-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-linkcard-title time { flex: none; color: var(--ink-muted); font-size: var(--text-xs); font-weight: 400; }
+a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--denim); }
+.ap-linkcard-text { font-size: var(--text-sm); overflow-wrap: anywhere; white-space: pre-line; }
+.ap-linkcard-message .ap-linkcard-text { -webkit-line-clamp: 3; line-clamp: 3; }
 
 /* ThreadDescription — pinned under the header of a thread view */
 /* The description icon has a column of its own, so every line of the text starts after it, not just the first. */
@@ -1140,7 +1161,7 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
    link you can open) can't break across lines: it moves to the next line whole, and only one wider than its line wraps,
    inside its own box, rather than running out of the message. */
 :where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-profedit-hint) :not(pre) > code, .ap-mention { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-button.ap-mention { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 
 /* Shared autocomplete picker — above the composer while typing @…, #… or :… */
 .ap-mpick { position: absolute; left: var(--space-4); bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); width: min(320px, calc(100% - 2 * var(--space-4))); max-height: 240px; overflow: auto; margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
@@ -1302,6 +1323,25 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 .ap-mention-room::before { content: "\21B3 "; font-weight: 400; }
 .ap-mention-hash-room::before { content: none; }
 .ap-mention-unknown { color: var(--ink-muted); }
+/* An Apron link written as its URL, drawn as a mention that says what it is (Appendix A.4); it stays the link. A user's
+   reads as a user mention. The rest lead with their kind's icon, the same Lucide icons LinkCard's tag draws (a
+   message-square, a hash, a corner-down-right), as masks, since a body's markup is a sanitized string with no SVG in
+   it; their quieter words after: "in #general". */
+a.ap-linkchip { text-decoration: none; }
+/* The icon is an inline no-break space, padded to its width and masked, not an inline block: a chip that wraps never
+   leaves its icon at the end of one line and its first word on the next. */
+:is(.ap-linkchip-message, .ap-linkchip-room, .ap-linkchip-thread, .ap-linkchip-elsewhere)::before { content: '\00a0'; padding-left: .85em; background: currentColor; -webkit-mask: var(--ap-linkchip-icon) left center / .85em .85em no-repeat; mask: var(--ap-linkchip-icon) left center / .85em .85em no-repeat; }
+.ap-linkchip-message { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z'/%3E%3C/svg%3E"); }
+.ap-linkchip-room { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9h16M4 15h16M10 3 8 21M16 3l-2 18'/%3E%3C/svg%3E"); }
+.ap-linkchip-thread { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 10 5 5-5 5M4 4v7a4 4 0 0 0 4 4h12'/%3E%3C/svg%3E"); }
+.ap-linkchip-detail { font-weight: 400; opacity: var(--opacity-dim); }
+/* One to another server isn't a place here, so it isn't a mention: outlined rather than filled, in the ink of text, a
+   globe (Lucide's) before its host, and an arrow after, since opening it leaves this server (the connect screen asks
+   first). It has the height of a mention, its border in place of a pixel of padding. */
+a.ap-linkchip-elsewhere { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20'/%3E%3C/svg%3E");
+	padding: 0 4px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); font-weight: 600; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+a.ap-linkchip-elsewhere::after { content: " \2197"; font-weight: 400; color: var(--ink-muted); }
+a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-status-retry { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-profedit-avbtns { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
 .ap-profedit-remove { font-size: var(--text-sm); color: var(--ink-muted); }

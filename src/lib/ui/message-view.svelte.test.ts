@@ -1,28 +1,42 @@
 // @vitest-environment jsdom
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ClientSnapshot, Notice, UploadState } from '$lib/protocol/client';
+import type { ClientSnapshot, Notice, RoomListing, UploadState } from '$lib/protocol/client';
 import type { Identity, MessageRecord } from '$lib/protocol/types';
 import { messageRecord, roomSnapshot } from '$lib/test/builders';
 import { directory } from './directory.svelte';
-import { messageView, noticeView, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
+import type { ApronLink } from './apron-link';
+import { linkedRoomIn, messageView, noticeView, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
 import { avatarHue } from './messages';
+import { idWhen } from './time';
 import { blankSnapshot } from './session.svelte';
 
 const you: Identity = { user_id: 'you', name: 'You' };
 const ada: Identity = { user_id: 'ada', name: 'Ada', roles: ['admin', '', 'admin', 7 as unknown as string], avatar: 'data:image/png;base64,iVBORw0KGgo=' };
 const NONE: MessageCaps = { reply: false, edit: false, startThread: false, select: false, removeReply: false, react: false, link: false };
 
+const SERVER = 'wss://chat.example/ws';
+
+/** The directory of a page on SERVER that knows `users` and, unless `fields` says otherwise, the room `ops`. */
 function know(users: Record<string, Identity>, fields: Partial<ClientSnapshot> = {}): void {
-	directory.apply({ ...blankSnapshot(), authenticated: true, you, users: { you, ...users }, recordedUsers: {}, userAliases: {}, rooms: [roomSnapshot('ops')], ...fields }, 'https://chat.example');
+	directory.apply({ ...blankSnapshot(), authenticated: true, you, users: { you, ...users }, recordedUsers: {}, userAliases: {}, rooms: [roomSnapshot('ops')], ...fields }, 'https://chat.example', SERVER);
 }
 
 function row(fields: Partial<MessageRow> = {}): MessageRow {
 	return { grouped: false, reactions: [], mention: false, pinged: false, highlighted: false, selecting: false, selected: false, editing: false, caps: NONE, ...fields };
 }
 
-function context(records: MessageRecord[] = [], uploads: Record<string, UploadState> = {}): MessageContext {
-	return { resolve: (id) => records.find((record) => record.message_id === id), uploads };
+/** A page on SERVER that has `records` and `rooms` loaded, and resolves a link only to them, on SERVER. */
+function context(records: MessageRecord[] = [], uploads: Record<string, UploadState> = {}, rooms: LinkedRoom[] = []): MessageContext {
+	const resolve = (id: string) => records.find((record) => record.message_id === id);
+	const here = (link: ApronLink) => link.server === undefined || link.server === SERVER;
+	return {
+		resolve,
+		linked: (link) => (here(link) ? resolve(link.message!) : undefined),
+		linkedRoom: (link) => (here(link) ? rooms.find((room) => room.id === link.room) : undefined),
+		server: SERVER,
+		uploads
+	};
 }
 
 beforeEach(() => know({ ada }));
@@ -73,6 +87,101 @@ describe('messageView', () => {
 		expect(messageView(messageRecord(9, 'ops', { reply_to: { message_id: '5' }, deleted: true }), row(), context([quoted])).reply).toBeUndefined();
 	});
 
+	it('shows a card for each link to a loaded message, in order, at most three, and none for one only its path is known of', () => {
+		know({ ada }, { rooms: [roomSnapshot('ops'), roomSnapshot('t1', [], { title: '', untitled: true, parentRoomId: 'ops' })] });
+		const linkedOps = messageRecord(1710000000000, 'ops', { from: { user_id: 'ada' }, body: { text: 'ship it @you\n\n\nnow\nthen\nlater' } });
+		const linkedThread = messageRecord(1710000000001, 't1', { from: { user_id: 'ada' }, deleted: true, body: undefined });
+		const text = [
+			'see https://link.apron.chat/#server=wss://chat.example/ws&room=ops&message=1710000000000.',
+			'and apron:?room=t1&message=1710000000001,',
+			'not loaded apron:?room=ops&message=404',
+			'elsewhere https://link.apron.chat/#server=wss://other.example/&room=ops&message=1710000000000'
+		].join('\n');
+		const https = (keys: string, server = 'wss://chat.example/ws') => `https://link.apron.chat/#server=${server}&${keys}`;
+		const sender = { name: 'Ada', avatar: ada.avatar, hue: avatarHue('ada') };
+		expect(messageView(messageRecord(7, 'ops', { from: you, body: { text } }), row(), context([linkedOps, linkedThread])).linkCards).toEqual([
+			{
+				kind: 'message', href: https('room=ops&message=1710000000000'), server: 'chat.example', in: { id: 'ops', title: 'ops' }, sender,
+				timestamp: 1710000000000, time: idWhen('1710000000000'), snippet: ['ship it ', { user_id: 'you', name: 'You', me: true }, '\nnow\nthen']
+			},
+			{ kind: 'message', href: https('room=t1&message=1710000000001'), server: 'chat.example', in: { id: 't1', thread: true }, sender, timestamp: 1710000000001, time: idWhen('1710000000001'), deleted: true }
+		]);
+		// One not loaded, or on another server, would be its path alone, which its chip says already: none.
+		const unknown = 'apron:?room=ops&message=404 https://link.apron.chat/#server=wss://other.example/&room=ops&message=1710000000000';
+		expect(messageView(messageRecord(8, 'ops', { body: { text: unknown } }), row(), context([linkedOps])).linkCards).toBeUndefined();
+		// Three at most, of those with more to show, however many links come before them.
+		const many = [404, 405, 1, 2, 3, 4].map((id) => `apron:?room=ops&message=${id}`).join(' ');
+		const loaded = [1, 2, 3, 4].map((id) => messageRecord(id, 'ops'));
+		expect(messageView(messageRecord(13, 'ops', { body: { text: many } }), row(), context(loaded)).linkCards?.map((card) => card.timestamp)).toEqual([1, 2, 3]);
+		// A link to the message itself, one in code, a tombstone's, and a system line's show none.
+		expect(messageView(messageRecord(9, 'ops', { body: { text: 'apron:?room=ops&message=9' } }), row(), context()).linkCards).toBeUndefined();
+		expect(messageView(messageRecord(10, 'ops', { body: { text: '`apron:?room=ops&message=1`', format: 'markdown' } }), row(), context()).linkCards).toBeUndefined();
+		expect(messageView(messageRecord(11, 'ops', { deleted: true, body: { text: 'apron:?room=ops&message=1' } }), row(), context()).linkCards).toBeUndefined();
+		expect(messageView(messageRecord(12, 'ops', { from: { user_id: '~server' }, body: { text: 'apron:?room=ops&message=1' } }), row(), context()).linkCards).toBeUndefined();
+	});
+
+	it('shows a room or thread that is joined or listed with its name, the room a thread is in, its size and its description as text, and none for one with only a name', () => {
+		know({ ada }, { rooms: [roomSnapshot('ops', [], { title: 'Ops' }), roomSnapshot('t1', [], { title: 'Deploy', parentRoomId: 'ops' }), roomSnapshot('bare', [], { title: 'Bare' })] });
+		const rooms: LinkedRoom[] = [{ id: 'ops', description: 'All things **ops**.\n\nSee the [runbook](https://example.com).', members: 12, private: true }, { id: 't1', parentRoomId: 'ops', members: 3 }, { id: 'bare' }];
+		const https = (room: string) => `https://link.apron.chat/#server=wss://chat.example/ws&room=${room}`;
+		const text = 'apron:?room=ops and apron:?room=t1 and apron:?room=bare and apron:?room=gone and apron:?room=ops&user=ada';
+		expect(messageView(messageRecord(7, 'ops', { body: { text } }), row(), context([], {}, rooms)).linkCards).toEqual([
+			{ kind: 'room', href: https('ops'), server: 'chat.example', room: { id: 'ops', title: 'Ops' }, description: 'All things ops.\nSee the runbook.', members: 12, private: true },
+			{ kind: 'thread', href: https('t1'), server: 'chat.example', room: { id: 't1', title: 'Deploy', thread: true }, in: { id: 'ops', title: 'Ops' }, members: 3 }
+		]);
+	});
+
+	it('shows one card for one place written twice, with its server and without', () => {
+		know({ ada }, { rooms: [roomSnapshot('ops', [], { title: 'Ops' })] });
+		const text = `apron:?room=ops and https://link.apron.chat/#server=${SERVER}&room=ops`;
+		expect(messageView(messageRecord(7, 'ops', { body: { text } }), row(), context([], {}, [{ id: 'ops', description: 'Ops things' }])).linkCards).toHaveLength(1);
+	});
+
+	it('shows no card for a link in code, which the body doesn’t link, and one for a link Markdown percent-encodes', () => {
+		const loaded = messageRecord(11, 'général', { body: { text: 'bonjour' } });
+		for (const text of ['    apron:?room=ops&message=11', '``apron:?room=ops&message=11``', '```\napron:?room=ops&message=11\n```']) {
+			expect(messageView(messageRecord(7, 'ops', { body: { text, format: 'markdown' } }), row(), context([loaded])).linkCards, text).toBeUndefined();
+		}
+		const encoded = messageView(messageRecord(8, 'ops', { body: { text: `<https://link.apron.chat/#server=${SERVER}&room=général&message=11>`, format: 'markdown' } }), row(), context([loaded]));
+		expect(encoded.linkCards?.map((card) => [card.in, card.snippet])).toEqual([[{ id: 'général', unknown: true }, ['bonjour']]]);
+	});
+
+	it('draws a hostile room title or id in a chip as text, its link to this server under it', () => {
+		const title = '"><img src=x onerror=alert(1)> & co';
+		know({ ada }, { rooms: [roomSnapshot('ops'), roomSnapshot('evil', [], { title })] });
+		const text = 'see apron:?room=evil and apron:?room=%22%3E%3Cimg%3E and apron:?room=%22%3E%3Cimg%20src%3Dx%3E';
+		const box = document.createElement('div');
+		box.innerHTML = messageView(messageRecord(7, 'ops', { body: { text, format: 'markdown' } }), row(), context()).body!.html;
+		expect(box.querySelector('img')).toBeNull();
+		const [named, unknown, ...more] = box.querySelectorAll('a.ap-linkchip');
+		expect([named.textContent, named.getAttribute('title'), named.getAttribute('href')]).toEqual([title, `Open #${title}`, `https://link.apron.chat/#server=${SERVER}&room=evil`]);
+		expect([unknown.textContent, unknown.getAttribute('href')]).toEqual(['"><img>', `https://link.apron.chat/#server=${SERVER}&room=%22%3E%3Cimg%3E`]);
+		// A room_id with a space is no room_id (§2.4): a plain link, not a chip.
+		expect(more).toEqual([]);
+		expect(box.querySelectorAll('a')).toHaveLength(3);
+	});
+
+	it('draws neither chip nor card for a link with a key it doesn’t know, or malformed, though it links it', () => {
+		know({ ada }, { rooms: [roomSnapshot('ops', [], { title: 'Ops' })] });
+		const loaded = messageRecord(5, 'ops', { body: { text: 'here' } });
+		for (const href of ['apron:?room=ops&message=5&utm_source=x', `https://link.apron.chat/#server=${SERVER}&room=ops&&message=5`, 'apron:?room=ops&message=5&message=5', 'apron:?room=ops&message=05']) {
+			const view = messageView(messageRecord(7, 'ops', { body: { text: `see ${href}` } }), row(), context([loaded]));
+			const box = document.createElement('div');
+			box.innerHTML = view.body!.html;
+			expect([box.querySelectorAll('a').length, box.querySelectorAll('.ap-linkchip').length, view.linkCards], href).toEqual([1, 0, undefined]);
+		}
+	});
+
+	it('shows a card once its message is loaded, and hands back the same view until then', () => {
+		const records: MessageRecord[] = [];
+		const event = messageRecord(7, 'ops', { body: { text: 'apron:?room=ops&message=5' } });
+		const before = messageView(event, row(), context(records));
+		expect(before.linkCards).toBeUndefined();
+		expect(messageView(event, row(), context(records))).toBe(before);
+		records.push(messageRecord(5, 'ops', { body: { text: 'here' } }));
+		expect(messageView(event, row(), context(records)).linkCards?.[0]).toMatchObject({ sender: { name: 'Ada' }, snippet: ['here'] });
+	});
+
 	it('lists embeds with their uploads, and lets your own go unless it is the last thing in the message or still being written', () => {
 		const embeds = [{ kind: 'upload', embed_id: 'e1', title: 'a' }, { kind: 'upload', embed_id: 'e2', title: 'b' }, { kind: 'link' }];
 		const uploads = { e1: { name: 'a', progress: 0.5 }, e2: { name: 'b', failed: 'no' } };
@@ -89,7 +198,7 @@ describe('messageView', () => {
 
 	it('reads the uploads only for a message with embeds', () => {
 		const uploads = vi.fn(() => ({}));
-		const reading: MessageContext = { resolve: () => undefined, get uploads() { return uploads(); } };
+		const reading: MessageContext = { resolve: () => undefined, linked: () => undefined, linkedRoom: () => undefined, server: SERVER, get uploads() { return uploads(); } };
 		messageView(messageRecord(1), row(), reading);
 		expect(uploads).not.toHaveBeenCalled();
 		messageView(messageRecord(2, 'ops', { body: { text: '', embeds: [{ kind: 'link' }] } }), row(), reading);
@@ -133,6 +242,25 @@ describe('messageView', () => {
 			expect(seen[1]).toContain('@Ada L');
 		});
 		cleanup();
+	});
+});
+
+describe('linkedRoomIn', () => {
+	const listing = (id: string, fields: Partial<RoomListing> = {}, record: Partial<RoomListing['record']> = {}): RoomListing => ({ id, title: id, record: { room_id: id, ...record }, members: [], joined: false, ...fields });
+
+	it('reads a room joined or opened first, then one listed, and a listing’s size only where it has members or a count', () => {
+		const rooms = [roomSnapshot('ops', [], { description: 'Ops things', members: [ada, you], private: true })];
+		const listed = new Map([
+			['ops', listing('ops', {}, { description: 'stale' })],
+			['t1', listing('t1', { parentRoomId: 'ops' }, { description: 'Deploys', private: true })],
+			['big', listing('big', { members: [ada], memberCount: 40 })],
+			['few', listing('few', { members: [ada] })]
+		]);
+		expect(linkedRoomIn(rooms, listed, 'ops')).toEqual({ id: 'ops', description: 'Ops things', members: 2, private: true });
+		expect(linkedRoomIn(rooms, listed, 't1')).toEqual({ id: 't1', parentRoomId: 'ops', description: 'Deploys', private: true });
+		expect(linkedRoomIn(rooms, listed, 'big')?.members).toBe(40);
+		expect(linkedRoomIn(rooms, listed, 'few')?.members).toBe(1);
+		expect(linkedRoomIn(rooms, listed, 'gone')).toBeUndefined();
 	});
 });
 

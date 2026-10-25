@@ -13,6 +13,8 @@
  * message it is in.
  */
 
+import { unescapeHtml } from '$lib/protocol/markdown';
+
 export interface ApronLink {
 	/** A `ws:` or `wss:` URL; absent in a relative link. */
 	server?: string;
@@ -56,6 +58,93 @@ export function readApronLink(href: string): ApronLink | undefined {
 	if (link.message !== undefined && (link.room === undefined || !/^[1-9][0-9]*$/.test(link.message))) return undefined;
 	if (link.token !== undefined && link.server === undefined) return undefined;
 	return link;
+}
+
+/** An anchor's `href` in rendered markup, which the renderer and DOMPurify write in double quotes, escaped. */
+const ANCHOR_HREF = /<a\s[^>]*?\bhref="([^"]*)"/gi;
+
+/**
+ * The distinct links to messages, rooms and threads in a message's body as
+ * rendered (`renderMarkdown`, `renderPlain`), in order, up to `max`, read
+ * strictly (`readPlaceLink`): not to users. Read from its links, not its source, so it finds
+ * what the renderer linked and no more: nothing in code, and a link the way
+ * it reads, percent-encoding and all.
+ */
+export function placeLinksIn(html: string, max: number): PlaceLink[] {
+	const found = new Map<string, PlaceLink>();
+	for (const match of html.matchAll(ANCHOR_HREF)) {
+		if (found.size >= max) break;
+		const link = readPlaceLink(unescapeHtml(match[1]));
+		if (link && link.user === undefined) found.set(`${link.server ?? ''} ${link.room} ${link.message ?? ''}`, link);
+	}
+	return [...found.values()];
+}
+
+/** A link to a place: a room or thread, a message in it, or a member of it. */
+export type PlaceLink = ApronLink & { room: string };
+
+/** The keys a link to a place may have; any other (a token, a sign-in's state, one this app doesn't know) makes it none. */
+const PLACE_KEYS = new Set(['server', 'room', 'message', 'user']);
+/**
+ * A `room_id` or `user_id` (§2.4): not empty, no whitespace or control characters, and no bidi formatting
+ * characters either, which could reverse how a chip naming it reads.
+ */
+const ID = /^[^\s\p{Cc}\u200E\u200F\u202A-\u202E\u2066-\u2069]+$/u;
+/** A `message_id`: the `log_id` of its creation (§2.2), digits without a leading zero. */
+const MESSAGE_ID = /^[1-9][0-9]*$/;
+
+/**
+ * A link to a room, thread, message or user, read strictly, for drawing it as
+ * one (a chip in the text, a card under it), which says it is one: every key
+ * known and given once, every pair `key=value` with a value that decodes and
+ * is of its type, in one of the shapes Appendix A.4 lists (`room`; `room` and
+ * `message`; `room` and `user`) with at most one `server`, one this app can
+ * reach. A link with any other key, an empty or malformed part, or anything
+ * after its keys is none, and stays a plain link, though `readApronLink` may
+ * still open it.
+ */
+export function readPlaceLink(href: string): PlaceLink | undefined {
+	const keys = rawKeysOf(href.trim());
+	if (keys === undefined) return undefined;
+	const values = new Map<string, string>();
+	for (const pair of keys.split('&')) {
+		const at = pair.indexOf('=');
+		const key = at > 0 ? formDecode(pair.slice(0, at)) : undefined;
+		const value = at > 0 ? formDecode(pair.slice(at + 1)) : undefined;
+		if (key === undefined || !value || !PLACE_KEYS.has(key) || values.has(key)) return undefined;
+		values.set(key, value);
+	}
+	const room = values.get('room'), message = values.get('message'), user = values.get('user'), written = values.get('server');
+	if (room === undefined || !ID.test(room)) return undefined;
+	if (message !== undefined && (user !== undefined || !MESSAGE_ID.test(message))) return undefined;
+	if (user !== undefined && !ID.test(user)) return undefined;
+	const server = written === undefined ? undefined : reachable(written);
+	if (written !== undefined && server === undefined) return undefined;
+	return { room, ...(server !== undefined ? { server } : {}), ...(message !== undefined ? { message } : {}), ...(user !== undefined ? { user } : {}) };
+}
+
+/** A link's keys as written, for `readPlaceLink`: the https form's fragment, with no query, or what follows `apron:?`, with no fragment. */
+function rawKeysOf(href: string): string | undefined {
+	const prefix = URI_PREFIXES.find((candidate) => href.toLowerCase().startsWith(candidate));
+	if (prefix) {
+		const keys = href.slice(prefix.length);
+		return keys.includes('#') ? undefined : keys;
+	}
+	try {
+		const url = new URL(href);
+		return url.origin === WEB_ORIGIN && url.pathname === '/' && !url.search && url.hash.length > 1 ? url.hash.slice(1) : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** A key or value of `application/x-www-form-urlencoded` (`+` is a space), or undefined where its percent-encoding is malformed. */
+function formDecode(value: string): string | undefined {
+	try {
+		return decodeURIComponent(value.replace(/\+/g, ' '));
+	} catch {
+		return undefined;
+	}
 }
 
 /** The link to share for a place on `server`, in the `https` form (Appendix A.4). */

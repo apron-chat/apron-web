@@ -3,6 +3,7 @@ import type { Component } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
 import Mention from './Mention.svelte';
+import LinkCard from './LinkCard.svelte';
 import RoomHeader from './RoomHeader.svelte';
 import RoomItem from './RoomItem.svelte';
 import SelectionBar from './SelectionBar.svelte';
@@ -39,6 +40,8 @@ const rows: Array<[where: string, component: Component<any>, props: Record<strin
 		const field = dom.byRole<HTMLTextAreaElement>('textbox', 'Message');
 		return [field.placeholder, field.getAttribute('title')];
 	}, ['Reply in Untitled', null]],
+	['LinkCard, the thread a message is in', LinkCard, { card: { kind: 'message', href: 'apron:?room=t1&message=1', server: 'h', in: { id: 't1', title: ' ', thread: true } } }, () => shown('#Untitled'), ['#Untitled', 't1']],
+	['LinkCard, a thread', LinkCard, { card: { kind: 'thread', href: 'apron:?room=t1', server: 'h', room: { id: 't1', title: ' ', thread: true } } }, () => shown('Untitled'), ['Untitled', 't1']],
 	['RoomItem', RoomItem, { room: 'ops', name: '  ' }, () => shown('ops'), ['ops', null]],
 	['RoomHeader, the room above a thread', RoomHeader, { room: 'ops', name: ' ', thread: 't1', threadName: 'Deploy', onroom: vi.fn() }, () => {
 		const crumb = dom.button('Back to room');

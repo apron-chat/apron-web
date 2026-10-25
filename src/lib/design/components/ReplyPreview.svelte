@@ -20,7 +20,7 @@
 <!-- One line; inside a Message it sits on its own row above the sender's name (.ap-msg-reply), where a spine draws it from the avatar. Its mentions only read: the quote is itself a control. -->
 {#if reply.id}
 	<button class="ap-reply" data-testid={testid} type="button" aria-label="Replying to {name}. Jump to their message" onclick={() => onjump?.(reply.id!)}>
-		<Avatar {name} src={reply.avatar} hue={reply.hue} size="sm" />
+		<Avatar {name} src={reply.avatar} hue={reply.hue} size="xs" />
 		<span class="ap-reply-who">{name}</span>
 		<span class="ap-reply-text">{#if reply.deleted}<em>Message deleted</em>{:else}{#each reply.snippet ?? [] as part, index (index)}{#if typeof part === 'string'}{part}{:else if 'roomId' in part}<Mention roomId={part.roomId} name={part.name} thread={part.thread} hash={part.hash} />{:else}<Mention user_id={part.user_id} name={part.name} me={part.me} />{/if}{/each}{/if}</span>
 	</button>

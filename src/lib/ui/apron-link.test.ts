@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { readApronLink, writeApronLink } from './apron-link';
+import { renderMarkdown, renderPlain } from '$lib/protocol/markdown';
+import { placeLinksIn, readApronLink, readPlaceLink, writeApronLink } from './apron-link';
 
 describe('Apron links (Appendix A.4)', () => {
 	it('reads all three forms, a relative link, and a user or a token', () => {
@@ -28,5 +30,61 @@ describe('Apron links (Appendix A.4)', () => {
 		expect(written).toBe('https://link.apron.chat/#server=wss://chat.example/ws&room=%23ops/alerts&message=1724803200042');
 		expect(readApronLink(written)).toEqual({ server: 'wss://chat.example/ws', room: '#ops/alerts', message: '1724803200042' });
 		expect(writeApronLink({ server: 'wss://ada:pw@chat.example/ws', room: 'general' })).toBe('https://link.apron.chat/#server=wss://chat.example/ws&room=general');
+	});
+
+	it('finds the distinct links to messages, rooms and threads a rendered body links, in order, and none it leaves unlinked, as in code', () => {
+		const source = [
+			'See https://link.apron.chat/#server=wss://chat.example/ws&room=general&message=1724803200042.',
+			'[that](apron:?room=ops&message=7) and <web+apron:?room=ops&message=8>, again apron:?room=ops&message=7!',
+			'a room apron:?room=ops, a user apron:?room=ops&user=ada, elsewhere https://example.com/#room=r&message=1',
+			'`apron:?room=ops&message=9` and ``apron:?room=ops&message=10``',
+			'',
+			'    apron:?room=ops&message=11',
+			'',
+			'```\napron:?room=ops&message=12\n```',
+			'',
+			'<https://link.apron.chat/#room=général&message=13>'
+		].join('\n');
+		const found = (html: string, max = 10) => placeLinksIn(html, max).map((link) => [link.server, link.room, link.message]);
+		const html = renderMarkdown(source);
+		// Code, inline, double-backticked, indented or fenced, links nothing; a link percent-encoded reads as written.
+		expect(found(html)).toEqual([
+			['wss://chat.example/ws', 'general', '1724803200042'], [undefined, 'ops', '7'], [undefined, 'ops', '8'], [undefined, 'ops', undefined], [undefined, 'général', '13']
+		]);
+		expect(found(html, 2)).toHaveLength(2);
+		// A plain body has no code: an indented link is a link.
+		expect(found(renderPlain('    apron:?room=ops&message=11'))).toEqual([[undefined, 'ops', '11']]);
+		expect(found(renderPlain('apron:?server=wss://h/&token=t&room=r'))).toEqual([]);
+	});
+
+
+	it('reads a link to a place strictly: the shapes Appendix A.4 lists, every key known and once, every value of its type', () => {
+		expect(readPlaceLink('https://link.apron.chat/#server=wss://chat.example/ws&room=general&message=1724803200042')).toEqual({ server: 'wss://chat.example/ws', room: 'general', message: '1724803200042' });
+		expect(readPlaceLink('apron:?room=ops')).toEqual({ room: 'ops' });
+		expect(readPlaceLink('web+apron:?server=wss%3A%2F%2Fchat.example%2Fws&room=%23ops/alerts&user=ada')).toEqual({ server: 'wss://chat.example/ws', room: '#ops/alerts', user: 'ada' });
+		expect(readPlaceLink('https://link.apron.chat/#room=g%C3%A9n%C3%A9ral')).toEqual({ room: 'général' });
+		expect(readPlaceLink('apron:?server=ws://localhost:8080/ws&room=agent')?.server).toBe('ws://localhost:8080/ws');
+		// What it writes, it reads.
+		expect(readPlaceLink(writeApronLink({ server: 'wss://chat.example/ws', room: 'a&b=c', message: '7' }))).toEqual({ server: 'wss://chat.example/ws', room: 'a&b=c', message: '7' });
+	});
+
+	it('reads no place from a link with a key it doesn’t know, a token, an empty or malformed part, or a value not of its type', () => {
+		const rejected = [
+			// Keys it doesn't know, and a token or a sign-in's state: never a place.
+			'apron:?room=ops&foo=1', 'https://link.apron.chat/#server=wss://h/&room=ops&utm_source=x', 'apron:?server=wss://h/&room=ops&token=t', 'apron:?room=ops&state=s',
+			// Empty or malformed parts, a key twice, anything around the keys.
+			'apron:?room=', 'apron:?room=ops&message=', 'apron:?room=ops&', 'apron:?&room=ops', 'apron:?room', 'apron:?room=ops&&message=1', 'apron:?=ops',
+			'apron:?room=%E0%A4%A', 'apron:?room=ops&room=ops', 'apron:?room=ops#x', 'https://link.apron.chat/?x=1#room=ops', 'https://link.apron.chat/other#room=ops',
+			// IDs (§2.4): no whitespace, control or bidi characters; a message_id is a log_id.
+			'apron:?room=a%20b', 'apron:?room=a+b', 'apron:?room=a%0Ab', 'apron:?room=%E2%80%AEevil', 'apron:?room=ops&user=%09ada',
+			'apron:?room=ops&message=01', 'apron:?room=ops&message=1e3', 'apron:?room=ops&message=-1',
+			// Shapes Appendix A.4 doesn't list: no room, or a message and a user.
+			'apron:?server=wss://h/', 'apron:?message=1', 'apron:?room=ops&message=1&user=ada',
+			// One server, and one it can reach.
+			'apron:?server=webtransport://h/wt&server=wss://h/&room=r', 'apron:?server=ws://chat.example/ws&room=r', 'apron:?server=https://h/&room=r', 'apron:?server=wss://ada:pw@h/&room=r', 'apron:?server=nope&room=r'
+		];
+		for (const href of rejected) expect(readPlaceLink(href), href).toBeUndefined();
+		// The lenient reader, which opens links, still takes some of them: drawing one as a place is what needs all of it right.
+		expect(readApronLink('apron:?room=ops&foo=1')).toEqual({ room: 'ops' });
 	});
 });

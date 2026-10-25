@@ -21,7 +21,7 @@
 	import Message from '$lib/design/components/Message.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
 	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
-	import { messageView, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
+	import { linkedRoomIn, messageView, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
 	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
@@ -53,7 +53,7 @@
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
 	import { ReadPositions } from '$lib/ui/read-positions';
-	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, replySnippet, senderName, textOf } from '$lib/ui/messages';
+	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, senderName, textOf } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
@@ -1002,7 +1002,7 @@
 		const unsubscribe = chat.subscribe((next) => {
 			serverUrl = chat.url;
 			session.apply(next, chat);
-			directory.apply(next, serverOrigin(chat.url));
+			directory.apply(next, serverOrigin(chat.url), chat.url);
 		});
 		chat.start();
 		client = chat;
@@ -2049,11 +2049,24 @@
 		return findMessage(session.rooms, id) ?? client?.message(id);
 	}
 
+	/** The message a link to this server names (Appendix A.4), for its card: where it is loaded here. Nothing is fetched to draw a card. */
+	function linkedMessage(link: ApronLink): MessageRecord | undefined {
+		return link.message ? resolveMessage(link.message) : undefined;
+	}
+
+	/** The rooms and threads listed to join, by `room_id`, for links' cards: made once per snapshot, not per link. */
+	const listedRooms = $derived(new Map([...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat()].map((listing) => [listing.id, listing])));
+
+	/** The room or thread a link to this server names, likewise: one joined, opened or listed here. */
+	function linkedRoom(link: ApronLink): LinkedRoom | undefined {
+		return link.room ? linkedRoomIn(session.rooms, listedRooms, link.room) : undefined;
+	}
+
 	function replyPreview(id: string): { name?: string; text: string } {
 		const target = resolveMessage(id);
 		if (!target) return { text: 'Message unavailable' };
 		if (target.deleted) return { text: 'Message deleted' };
-		return { name: senderName(target), text: replySnippet(target) };
+		return { name: senderName(target), text: messageSnippet(target) };
 	}
 
 	/** A message's reaction chips, from the timeline of the room it lives in. */
@@ -2075,6 +2088,11 @@
 	/** What every row reads from, each field only where a row needs it. */
 	const messageContext: MessageContext = {
 		resolve: resolveMessage,
+		linked: linkedMessage,
+		linkedRoom,
+		get server() {
+			return client?.url;
+		},
 		get uploads() {
 			return snapshot.uploads;
 		}
@@ -2102,7 +2120,7 @@
 		react: (view, emoji) => onRow((event) => react(event, emoji))(view),
 		// React opens the full picker; a pick toggles that reaction, as a chip does.
 		pick: (view, anchor) => onRow((event) => {
-			const request: EmojiPickerRequest = { anchor, onpick: (emoji) => react(event, emoji), caption: { lead: `React to ${view.sender.name}`, text: replySnippet(event) } };
+			const request: EmojiPickerRequest = { anchor, onpick: (emoji) => react(event, emoji), caption: { lead: `React to ${view.sender.name}`, text: messageSnippet(event) } };
 			reactPick = { id: event.message_id, request };
 			emojiPicker.toggle(request);
 		})(view),
