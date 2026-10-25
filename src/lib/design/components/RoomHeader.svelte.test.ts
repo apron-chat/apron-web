@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import RoomHeader from './RoomHeader.svelte';
 import * as dom from '$lib/test/dom';
@@ -44,6 +45,22 @@ describe('RoomHeader', () => {
 		render({ onjoin });
 		// Join shows only where it's offered (`canJoin`), not wherever there's an `onjoin`.
 		expect([...document.querySelectorAll('button')]).toEqual([]);
+	});
+
+	it('offers Copy link first in the ⋯ menu, named for the room or thread', () => {
+		const oncopylink = vi.fn();
+		render({ oncopylink, onleave: () => {} });
+		dom.button('Room actions').click();
+		flushSync();
+		const items = [...document.querySelectorAll<HTMLButtonElement>('.ap-menu-item')];
+		expect(items.map((item) => item.textContent?.trim())).toEqual(['Copy link to room', 'Leave room']);
+		items[0].click();
+		expect(oncopylink).toHaveBeenCalledOnce();
+		dom.unmount();
+		render({ thread: 'deploy', threadName: 'Deploy', oncopylink });
+		dom.button('Thread actions').click();
+		flushSync();
+		expect(document.querySelector('.ap-menu-item')?.textContent?.trim()).toBe('Copy link to thread');
 	});
 
 	it('makes the back arrow a tag with what’s new elsewhere: grey for unread, orange with an @ for mentions, capped at 99+', () => {

@@ -333,6 +333,22 @@ describe('listing rooms to join', () => {
 		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
 	});
 
+	it('finds one member of a room for a user link, keeping their user object but not the room’s members', async () => {
+		const found = client.findMember('general', 'ada');
+		expect(socket.request('room_list').params).toEqual({ room_id: 'general', members: true, user_id: 'ada' });
+		await socket.reply('room_list', {
+			joined: [{ room_id: 'general', log_id: '10', title: 'General', members: [{ user_id: 'ada' }] }],
+			users: [{ user_id: 'ada', name: 'Ada' }]
+		});
+		expect(await found).toBe(true);
+		expect(snapshot.users.ada.name).toBe('Ada');
+		expect(room('general')?.members).toBeUndefined();
+		// Not a member, or a server that ignores the filter and leaves them out.
+		const missing = client.findMember('general', 'zed');
+		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', members: [{ user_id: 'ada' }] }], users: [{ user_id: 'ada', name: 'Ada' }] });
+		expect(await missing).toBe(false);
+	});
+
 	it('lists rooms and threads to join, and one room with its members', async () => {
 		const listing = client.listRooms();
 		expect(socket.request('room_list').params).toEqual({ filter: 'not_joined', members: true });

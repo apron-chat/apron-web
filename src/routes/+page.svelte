@@ -9,6 +9,7 @@
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
+	import { readApronLink, writeApronLink, type ApronLink } from '$lib/ui/apron-link';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
 	import { isJsonObject } from '$lib/protocol/types';
 	import Composer from '$lib/components/Composer.svelte';
@@ -23,7 +24,7 @@
 	import { messageView, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
-	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
+	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
 	import { showReactors } from '$lib/ui/reactors.svelte';
 	import RoomHeader from '$lib/components/RoomHeader.svelte';
 	import SelectionBar from '$lib/components/SelectionBar.svelte';
@@ -224,6 +225,11 @@
 	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
 	/** A room, thread or message the page's URL named when it opened, to open once its server lists its rooms. */
 	let linked = $state<(Destination & { server: string; room: string }) | undefined>();
+	/**
+	 * What a link's `room` was found to be, by server and room: the parent of a
+	 * thread, `null` for a room that isn't one, or `undefined` while it is looked up.
+	 */
+	const linkedParents = new Map<string, string | null | undefined>();
 	/** The connect screen is up for a link's server: it can be cancelled even before this server is ready. */
 	let offeringLink = $state(false);
 	/** How far back a linked message is looked for, in pages of history. */
@@ -921,6 +927,7 @@
 			}
 		};
 		window.addEventListener('hashchange', hashChanged);
+		document.addEventListener('click', apronLinkClicked);
 		serverInput = previewMode ? 'ws://apron-preview.invalid' : loadServerUrl() ?? defaultWebSocketUrl(window.location);
 		displayName = previewMode ? 'Preview User' : loadDisplayName();
 		recentServers = previewMode ? [] : loadRecentServers();
@@ -1005,6 +1012,7 @@
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
+			document.removeEventListener('click', apronLinkClicked);
 			window.removeEventListener('storage', storageChanged);
 			for (const type of ['keydown', 'pointerdown'] as const) window.removeEventListener(type, pressed, inputOptions);
 			for (const type of ['pointermove', 'wheel', 'touchmove'] as const) window.removeEventListener(type, moved, inputOptions);
@@ -1297,9 +1305,18 @@
 	 * history entry rather than adding one; the effect calls it again as each
 	 * step lands.
 	 */
-	function openLinked(target: Destination & { room: string }): void {
+	function openLinked(target: Destination & { server: string; room: string }): void {
 		if (!client) return;
 		const listed = (id: string) => session.rooms.some((room) => room.id === id);
+		// A link names a thread by its room_id alone (Appendix A.4): it opens under the parent its record names.
+		if (!target.thread) {
+			const parent = threadParent(client, target.server, target.room);
+			if (parent === undefined) return;
+			if (parent) {
+				linked = { ...target, room: parent, thread: target.room };
+				return;
+			}
+		}
 		// Until it has all opened, the URL keeps naming the whole link, so a reload tries it again.
 		const keepLink = () => scrubUrl(addressOf(target.room, target.thread, target.message));
 		if (activeRoom?.id !== target.room) {
@@ -1325,6 +1342,27 @@
 		}
 		linked = undefined;
 		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message);
+		if (target.user) void revealLinkedUser(target.thread ?? target.room, target.user);
+	}
+
+	/**
+	 * The parent of `roomId` if it is a thread, `null` if it isn't, or
+	 * `undefined` until that is known. A room the user hasn't joined is looked
+	 * up once (`room_list` with `room_id`, §4.2.1), and the link opens again
+	 * when the answer comes; one the server won't list counts as no thread.
+	 */
+	function threadParent(chat: ChatClient, server: string, roomId: string): string | null | undefined {
+		const joined = session.rooms.find((room) => room.id === roomId);
+		if (joined) return joined.parentRoomId ?? null;
+		const key = `${server} ${roomId}`;
+		if (linkedParents.has(key)) return linkedParents.get(key);
+		linkedParents.set(key, undefined);
+		const settle = (parent: string | null) => {
+			linkedParents.set(key, parent);
+			if (linked?.room === roomId && !linked.thread) linked = { ...linked };
+		};
+		chat.listMembers(roomId).then((listings) => settle(listings.find((listing) => listing.id === roomId)?.parentRoomId ?? null), () => settle(null));
+		return undefined;
 	}
 
 	/** Part of a link isn't here: the URL says where the page is instead, and a toast says what wasn't found. */
@@ -1332,6 +1370,25 @@
 		linked = undefined;
 		feedback.error(`The linked ${missing} isn’t available here.`);
 		scrubUrl(addressOf(selectedRoomId, activeThread));
+	}
+
+	/**
+	 * Opens the profile card of a link's user (Appendix A.4) in the open room
+	 * or thread. A member it doesn't list is looked for there first, since a
+	 * large room may list only its recently active members (§4.2.1); the card
+	 * opens either way, and says whether they are in the room. It sits by
+	 * their row in the member list when that shows them, else by the room's name.
+	 */
+	async function revealLinkedUser(roomId: string, userId: string): Promise<void> {
+		const chat = client;
+		if (!chat) return;
+		const room = session.rooms.find((candidate) => candidate.id === roomId);
+		const member = room?.members?.some((candidate) => candidate.user_id === userId) || await chat.findMember(roomId, userId).catch(() => false);
+		if (client !== chat || (activeThread ?? activeRoom?.id) !== roomId) return;
+		await tick();
+		const anchor = document.querySelector<HTMLElement>(`button.ap-member-who[data-user-id="${CSS.escape(userId)}"]`)
+			?? document.querySelector<HTMLElement>('.ap-roomhead-name');
+		if (anchor && !profileCard.current) profileCard.toggle({ anchor, userId, member });
 	}
 
 	/**
@@ -1386,17 +1443,65 @@
 		return normalizeWebSocketUrl(defaultWebSocketUrl(window.location), window.location);
 	}
 
-	/** Copies a link to a message: its room, the thread it's in, and the message itself. */
+	/**
+	 * Copies a link to a message that any Apron app opens (Appendix A.4): its
+	 * server, the room or thread it's in, and the message itself.
+	 */
 	async function copyMessageLink(event: MessageRecord): Promise<boolean> {
 		const destination = destinationOf(event);
-		if (!destination) return false;
+		if (!destination || !client) return false;
 		try {
-			await navigator.clipboard.writeText(addressOf(destination.room, destination.thread, event.message_id));
+			await navigator.clipboard.writeText(writeApronLink({ server: client.url, room: destination.thread ?? destination.room, message: event.message_id }));
 			return true;
 		} catch {
 			feedback.error('Unable to copy the link');
 			return false;
 		}
+	}
+
+	/** Copies a link to the open room, or to the thread open in it by its room_id, that any Apron app opens (Appendix A.4). */
+	async function copyPaneLink(): Promise<boolean> {
+		const roomId = activeThread ?? activeRoom?.id;
+		if (!roomId || !client) return false;
+		try {
+			await navigator.clipboard.writeText(writeApronLink({ server: client.url, room: roomId }));
+			return true;
+		} catch {
+			feedback.error('Unable to copy the link');
+			return false;
+		}
+	}
+
+	/**
+	 * Opens an Apron link from a message here, in place of the link.apron.chat
+	 * page (Appendix A.4). A link to this server, or one without a server, opens
+	 * its room, message or user. One to another server loads the page for it,
+	 * which asks before connecting to a server not used before. One with a token
+	 * asks before signing in, as a sign-in link does. Opening never acts.
+	 */
+	function openApronLink(link: ApronLink): void {
+		if (!client || previewMode) return;
+		const server = link.server ?? client.url;
+		if (link.token) {
+			links.follow({ token: link.token, server, ...(link.state ? { state: link.state } : {}) });
+			return;
+		}
+		const place = link.room ? { room: link.room, ...(link.message ? { message: link.message } : {}), ...(link.user ? { user: link.user } : {}) } : {};
+		if (server !== client.url) {
+			window.location.assign(destinationUrl(window.location.href, { server, ...place }, homeServer()));
+			return;
+		}
+		if (link.room) linked = { server, room: link.room, ...place };
+	}
+
+	/** A plain click on an Apron link anywhere on the page opens it here (`openApronLink`); a modified one is left to the browser. */
+	function apronLinkClicked(event: MouseEvent): void {
+		if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+		const anchor = (event.target as Element | null)?.closest?.<HTMLAnchorElement>('a[href]');
+		const link = anchor ? readApronLink(anchor.getAttribute('href') ?? '') : undefined;
+		if (!link) return;
+		event.preventDefault();
+		openApronLink(link);
 	}
 
 	function chooseRoom(room: RoomSnapshot): void {
@@ -2496,7 +2601,7 @@
 				memberListToggle={!memberListWide}
 				{unreadElsewhere}
 				{mentionsElsewhere}
-				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} onjoin={joinPane} onmemberlist={toggleMemberList}
+				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
 			/>
 			{#if roomEditorOpen && editTarget && roomEditor.component}
 				{@const RoomEditor = roomEditor.component}
