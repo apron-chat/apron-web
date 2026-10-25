@@ -309,6 +309,36 @@ describe('select gestures', () => {
 		expect(beginSelect).toHaveBeenCalledOnce();
 	});
 
+	it('puts its toolbar away on a second tap, and brings it back on a third or after focus leaves', () => {
+		const row = render({ caps: ALL });
+		engage(row);
+		const text = row.querySelector('.ap-msg-text')!;
+		const tap = () => {
+			dom.touch('pointerdown', text);
+			click(text);
+			flushSync();
+			return row.classList.contains('ap-msg-dismissed');
+		};
+		expect(tap()).toBe(false);
+		expect(tap()).toBe(true);
+		expect(tap()).toBe(false);
+		row.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+		expect(tap()).toBe(false);
+		expect(tap()).toBe(true);
+		// A mouse brings it back, and its clicks never put it away.
+		const mouse = new MouseEvent('pointerenter');
+		Object.defineProperty(mouse, 'pointerType', { value: 'mouse' });
+		row.dispatchEvent(mouse);
+		flushSync();
+		expect(row.classList.contains('ap-msg-dismissed')).toBe(false);
+		for (let i = 0; i < 2; i++) {
+			row.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			click(text);
+		}
+		flushSync();
+		expect(row.classList.contains('ap-msg-dismissed')).toBe(false);
+	});
+
 	it('opens a mentioned room from its link, before anything else', () => {
 		const openRoom = vi.fn();
 		const select = vi.fn();

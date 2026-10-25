@@ -41,6 +41,11 @@
 	let { view, on = NONE, testids, editor, embed }: Props = $props();
 
 	let engaged = $state(false);
+	/** Whether the last press on the row was a touch, which leaves it hovered and focused: the toolbar sticks. */
+	let touched = false;
+	/** A tap showed the toolbar; the next one on the row hides it again, with `dismissed`, until a tap after that. */
+	let tapped = false;
+	let dismissed = $state(false);
 
 	const t = $derived(times(view.timestamp, view.time));
 	const quoted = $derived(Boolean(view.reply) && !view.deleted);
@@ -91,6 +96,20 @@
 			return;
 		}
 		if (event.shiftKey && view.caps?.select) on.beginSelect?.(view);
+		else if (touched) tap(event.currentTarget as HTMLElement);
+	}
+
+	/** A tap on the row, off its controls: it toggles the toolbar, which touch can't hover away from. */
+	function tap(row: HTMLElement): void {
+		tapped = !tapped;
+		dismissed = !tapped;
+		if (dismissed && row.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+	}
+
+	/** Focus leaving the row, for another message or anywhere else, takes the toolbar away; the next tap shows it. */
+	function focusout(event: FocusEvent): void {
+		if (event.relatedTarget instanceof Node && (event.currentTarget as HTMLElement).contains(event.relatedTarget)) return;
+		tapped = false;
 	}
 
 	/** Keyboard: `x` on a focused message picks it, the same as a shift-click. */
@@ -111,6 +130,7 @@
 	/** Touch has no hover or shift: a long press starts select mode instead, unless it's on a chip, which lists who reacted. */
 	function pointerdown(event: PointerEvent): void {
 		cancelPress();
+		touched = event.pointerType === 'touch';
 		if (event.pointerType !== 'touch' || view.selecting || view.editing || !view.caps?.select) return;
 		if ((event.target as HTMLElement | null)?.closest?.('.ap-rchip')) return;
 		const row = event.currentTarget as HTMLElement;
@@ -120,8 +140,9 @@
 		}, LONG_PRESS_MS);
 	}
 
-	function engage(): void {
+	function engage(event: Event): void {
 		engaged = true;
+		if ((event as PointerEvent).pointerType === 'mouse') dismissed = false;
 	}
 
 	/** Its code blocks, decorated by `on.code` (a notice's get Copy buttons), again whenever the body changes. */
@@ -150,7 +171,7 @@
 {:else}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 	<article
-		class={['ap-msg', grouped && 'ap-msg-grouped', view.mention && 'ap-msg-mention', view.pinged && 'ap-msg-pinged', view.highlighted && 'ap-msg-highlighted', checkable && 'ap-msg-selectable', checkable && view.selected && 'ap-msg-selected']}
+		class={['ap-msg', grouped && 'ap-msg-grouped', view.mention && 'ap-msg-mention', view.pinged && 'ap-msg-pinged', view.highlighted && 'ap-msg-highlighted', checkable && 'ap-msg-selectable', checkable && view.selected && 'ap-msg-selected', dismissed && !view.selecting && 'ap-msg-dismissed']}
 		data-message-id={view.id}
 		data-timeline-item=""
 		data-testid={testids?.row}
@@ -159,6 +180,7 @@
 		onkeydown={keydown}
 		onpointerenter={engage}
 		onfocusin={engage}
+		onfocusout={focusout}
 		onpointerdown={pointerdown}
 		onpointerup={cancelPress}
 		onpointermove={cancelPress}
