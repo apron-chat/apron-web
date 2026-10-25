@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import ProfileBar from './ProfileBar.svelte';
 import ProfileEditor from './ProfileEditor.svelte';
@@ -45,5 +46,26 @@ describe('ProfileEditor', () => {
 		input.dispatchEvent(new Event('change', { bubbles: true }));
 		expect(onavatarfile).toHaveBeenCalledExactlyOnceWith(file);
 		expect(dom.byRole('alert').textContent).toBe('The server declined this handle (reserved). Sign in and it’s applied.');
+	});
+
+	it('counts a bio in characters, and holds Save while it is over maxBio', () => {
+		dom.render(ProfileEditor, { userId: 'ada', name: 'Ada', bio: '🦆🦆🦆', maxBio: 3, dialog: false });
+		expect(dom.button('Save').disabled).toBe(false);
+		expect(document.body.textContent).toContain('3/3');
+		const field = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Bio"]')!;
+		field.value = '🦆🦆🦆🦆';
+		field.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		expect(document.body.textContent).toContain('4/3');
+		expect(field.getAttribute('aria-invalid')).toBe('true');
+		expect(dom.button('Save').disabled).toBe(true);
+	});
+
+	it('has no Bio field without maxBio, and says why the server refused one', () => {
+		dom.render(ProfileEditor, { userId: 'ada', name: 'Ada', dialog: false });
+		expect(document.querySelector('textarea')).toBeNull();
+		dom.unmount();
+		dom.render(ProfileEditor, { userId: 'ada', name: 'Ada', maxBio: 250, bioError: 'Your bio is too long for this server. Try a shorter one.', dialog: false });
+		expect(dom.byRole('alert').textContent).toBe('Your bio is too long for this server. Try a shorter one.');
 	});
 });

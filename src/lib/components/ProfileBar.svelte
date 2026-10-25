@@ -2,7 +2,7 @@
 	import { preferencesDialog } from './lazy';
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
-	import { serverMedia, type ChatClient, type OperationHandle } from '$lib/protocol/client';
+	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, type ChatClient, type OperationHandle } from '$lib/protocol/client';
 	import { addError, passkeyMessage, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { returnUrl } from '$lib/ui/sign-in-link';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -66,6 +66,10 @@
 	let openedWith = $state('');
 	let passkeyError = $state('');
 	let passkeyNotice = $state('');
+	let bioDraft = $state('');
+	/** The bio the editor opened with; Save sends the bio only when the draft differs. */
+	let bioOpenedWith = $state('');
+	let bioError = $state('');
 	let avatarStatus = $state<'idle' | 'uploading' | 'removing'>('idle');
 	let avatarError = $state('');
 	let you = $derived(session.you);
@@ -90,6 +94,8 @@
 	function noteUnsupported(status: string): void {
 		unsupportedStatuses = { server: client.url, values: [...unsupported.filter((value) => value !== status), status] };
 	}
+	/** A bio (`ext:bio`) is set with `me`, signed in, on a server that keeps one. */
+	let canSetBio = $derived(keepsBio(session.server) && session.snapshot.authenticated && you !== undefined);
 	/** Avatars are uploaded with a `/avatar` command (§4.8.6), which needs capabilities `command` and `embed:upload`. */
 	let canUploadAvatar = $derived(session.snapshot.capabilities.command && session.snapshot.capabilities['embed:upload']);
 	let snapshot = $derived(session.snapshot);
@@ -123,6 +129,9 @@
 		}
 		draft = you?.name || displayName;
 		openedWith = draft;
+		bioDraft = bioOf(you) ?? '';
+		bioOpenedWith = bioDraft;
+		bioError = '';
 		status = 'idle';
 		serverName = '';
 		declinedReason = '';
@@ -297,10 +306,35 @@
 		}
 	}
 
-	/** Sends the handle with `name`; the editor then shows what the server actually kept. */
-	function save(): void {
+	/**
+	 * Sends a changed bio as `me` `{ext: {bio}}`, `""` clearing it (`ext:bio`).
+	 * Returns whether the handle should follow: not when the server refused
+	 * the bio, which then says why and keeps the editor open.
+	 */
+	async function saveBio(): Promise<boolean> {
+		// Plain text without control or bidi formatting characters, as every client shows it.
+		const bio = cleanBio(bioDraft);
+		if (!canSetBio || bio === bioOpenedWith) return true;
+		status = 'saving';
+		bioError = '';
+		try {
+			const kept = await client.updateProfile({ ext: { bio } });
+			bioDraft = bioOf(kept) ?? '';
+			bioOpenedWith = bioDraft;
+			return true;
+		} catch (cause) {
+			// `too_large` (§1.1): the server's limit on `ext` is in bytes, which non-Latin text and emoji fill sooner.
+			bioError = (cause as { code?: number }).code === -32003 ? 'Your bio is too long for this server. Try a shorter one.' : cause instanceof Error ? cause.message : 'The server didn’t keep your bio';
+			status = 'idle';
+			return false;
+		}
+	}
+
+	/** Sends the bio, if it changed, then the handle with `name`; the editor then shows what the server actually kept. */
+	async function save(): Promise<void> {
 		const requested = draft.trim();
 		if (!requested) return;
+		if (!(await saveBio())) return;
 		displayName = requested;
 		saveDisplayName(requested);
 		const handle = client.setDisplayName(requested);
@@ -393,6 +427,9 @@
 		dialog={false}
 		userId={you?.user_id ?? '—'}
 		bind:name={draft}
+		bind:bio={bioDraft}
+		maxBio={canSetBio ? MAX_BIO_CHARS : undefined}
+		{bioError}
 		avatar={you?.avatar}
 		{face}
 		canUpload={canUploadAvatar}
@@ -407,7 +444,7 @@
 		onsave={save}
 		oncancel={close}
 		signin={canUsePasskey || canUseEmail || canUseExternal ? signin : undefined}
-		changeAvatarTestid="change-avatar" removeAvatarTestid="remove-avatar" avatarFileTestid="avatar-input" nameTestid="display-name-input"
+		changeAvatarTestid="change-avatar" removeAvatarTestid="remove-avatar" avatarFileTestid="avatar-input" nameTestid="display-name-input" bioTestid="bio-input"
 	/>
 {/snippet}
 

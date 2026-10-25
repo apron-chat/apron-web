@@ -339,7 +339,8 @@ Clicking a user's mention chip in a message, a sender's name or avatar, or a
 member in the member list opens their profile card: a popover beside it (a
 bottom sheet on narrow screens) with their avatar, name, `@user_id` (always,
 here), role badges, "(you)", a warning when another known user shows under
-the same name, and whether they're in the open room. **Mention** puts their
+the same name, their bio where the server keeps one (plain text, its line
+breaks kept, never markup or links), and whether they're in the open room. **Mention** puts their
 chip in the composer, **Copy @user_id** copies their handle, and **Add to
 room** appears where the member list would let you add them. Escape, a press
 outside, or tabbing out closes it. Mentions inside a reply's quote only read,

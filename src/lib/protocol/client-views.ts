@@ -1,5 +1,6 @@
 /** Pure helpers over client snapshots, capabilities, and server URLs. */
 import { parseOrigins } from './embeds';
+import { cleanPlainText } from './plain-text';
 import { timelineEvents } from './reducer';
 import { isJsonObject } from './types';
 import type {
@@ -11,7 +12,7 @@ import type {
 } from './types';
 import type { Capabilities, ClientSnapshot, RoomSnapshot } from './client-types';
 
-const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions'];
+const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio'];
 
 /**
  * How to render a user (§3.3): field by field, the kept object for its
@@ -95,6 +96,25 @@ export function yourPermissions(server: ServerParams | undefined, you: Identity 
 	const ext = hasCapability(server, 'ext:permissions') ? you?.ext : undefined;
 	const granted: unknown[] = isJsonObject(ext) && Array.isArray(ext.permissions) ? ext.permissions : [];
 	return { move_any: granted.includes('move_any'), add_members: granted.includes('add_members') };
+}
+
+/** The longest bio (extension `ext:bio`), in characters (code points). */
+export const MAX_BIO_CHARS = 250;
+
+/** Whether the server keeps a bio (extension `ext:bio`): it advertises `ext:bio`, or `ext`, which keeps any key. */
+export const keepsBio = (server: ServerParams | undefined) => hasCapability(server, 'ext:bio') || hasCapability(server, 'ext');
+
+/** A bio (extension `ext:bio`) as clients send and show it: cleaned plain text (cleanPlainText), at most MAX_BIO_CHARS. */
+export const cleanBio = (text: string) => cleanPlainText(text, MAX_BIO_CHARS);
+
+/**
+ * A user's bio (extension `ext:bio`, `ext.bio`), cleaned (cleanBio).
+ * Undefined without one, or for a value that isn't a string, or that is
+ * blank, as a cleared one (`""`) is.
+ */
+export function bioOf(user: Identity | undefined): string | undefined {
+	const bio = isJsonObject(user?.ext) ? user.ext.bio : undefined;
+	return typeof bio === 'string' ? cleanBio(bio) || undefined : undefined;
 }
 
 /** What a server takes of one type of file (`ext:media`): the largest file, and the longest image side it keeps. */

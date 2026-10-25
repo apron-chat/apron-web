@@ -129,14 +129,18 @@ export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
 export { IDLE_RETRY_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
 export type { MediaLimit, MediaTypes, ServerMedia } from './client-views';
 export {
+	bioOf,
 	canEdit,
 	canManageRooms,
 	canReact,
 	capabilitiesOf,
+	cleanBio,
 	childRooms,
 	defaultWebSocketUrl,
 	findMessage,
 	hasHistory,
+	keepsBio,
+	MAX_BIO_CHARS,
 	mediaLimit,
 	normalizeWebSocketUrl,
 	serverMedia,
@@ -2202,13 +2206,15 @@ export class ChatClient {
 	 * ones, `""` clears one, and omitted ones stay. `ext` merges by its keys
 	 * (§4.12): each given key replaces its value, a key with an empty value
 	 * (`""`, `[]`, `{}`) is removed, and keys left out stay; it goes only to
-	 * a server with capability `ext`. Resolves with the `you` the server
-	 * kept, which may differ from what was asked.
+	 * a server with capability `ext`, or, when it carries only `bio`, one with
+	 * `ext:bio`. Resolves with the `you` the server kept, which may differ
+	 * from what was asked.
 	 */
 	updateProfile(patch: { name?: string; avatar?: string; ext?: JsonObject; status?: string }): Promise<Identity> {
 		if (patch.name !== undefined) this.displayName = patch.name.trim();
 		const { ext, ...fields } = patch;
-		const params: JsonObject = { ...fields, ...(ext !== undefined && this.hasCap('ext') ? { ext } : {}) };
+		const sendsExt = ext !== undefined && (this.hasCap('ext') || (this.hasCap('ext:bio') && Object.keys(ext).every((key) => key === 'bio')));
+		const params: JsonObject = { ...fields, ...(sendsExt ? { ext } : {}) };
 		return this.enqueueRequest('me', params, { visible: true, allowBeforeAuth: false }).promise.then((result) => {
 			if (!isIdentity(result.you)) throw new Error('The server did not return your profile');
 			this.setYou(cloneJson(result.you), true);

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
+	import { keepsBio, type ChatClient, type RoomSnapshot } from '$lib/protocol/client';
 	import { isSystemId } from '$lib/protocol/types';
 	import { ownStatusLabel } from '$lib/ui/user-status';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -14,7 +14,7 @@
 	/**
 	 * Who a mention, a sender or a member is: the design system's ProfileCard,
 	 * filled from the directory (their avatar, name, `@user_id`, status, roles,
-	 * and whether they're in the open room), with what you can do about them.
+	 * bio, and whether they're in the open room), with what you can do about them.
 	 * Fixed to the viewport so the timeline never clips it: placed beside what
 	 * opened it on wide screens, a bottom sheet on narrow ones.
 	 */
@@ -58,6 +58,8 @@
 	let system = $derived(isSystemId(userId));
 	/** `roles` (§3.3) from the kept user object, else the recorded one: badges under the name, never part of it. */
 	let roles = $derived(Array.isArray(person?.roles) ? person.roles : undefined);
+	/** Their bio (`ext:bio`), from a server that keeps one. */
+	let bio = $derived(keepsBio(session.server) ? directory.bio(person) : undefined);
 	/** Membership of the open room, when its listing is known; a large room may list only its recently active members (§4.2.1). */
 	let listed = $derived(request?.member || room?.members?.some((member) => directory.person(member)?.user_id === userId));
 	let partial = $derived(room?.members !== undefined && (room.memberCount ?? 0) > room.members.length);
@@ -167,6 +169,7 @@
 		{status}
 		statusLabel={me ? ownStatusLabel(status) : undefined}
 		{roles}
+		{bio}
 		sharesName={shares}
 		{membership}
 		onmention={canMention && !system ? mention : undefined}
@@ -177,6 +180,7 @@
 		testid="profile-card"
 		statusTestid="profile-status"
 		rolesTestid="roles"
+		bioTestid="profile-bio"
 		bind:element={box}
 		bind:offsetHeight={measured}
 		onkeydown={keydown}

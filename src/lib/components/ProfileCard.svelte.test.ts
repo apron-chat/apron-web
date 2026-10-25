@@ -23,10 +23,13 @@ afterEach(() => {
 const ada: Identity = { user_id: 'ada', name: 'Ada', status: 'online' };
 
 /** The card for `userId`, signed in as `you`, with these users known. */
-function render(userId: string, users: Identity[], you: Identity = ada, room?: RoomSnapshot, member?: boolean): HTMLElement {
-	const snapshot: ClientSnapshot = { ...blankSnapshot(), authenticated: true, you, users: Object.fromEntries(users.map((user) => [user.user_id, user])), recordedUsers: {}, userAliases: {} };
+function render(userId: string, users: Identity[], you: Identity = ada, room?: RoomSnapshot, member?: boolean, capabilities: string[] = [], recorded: Identity[] = []): HTMLElement {
+	const snapshot: ClientSnapshot = {
+		...blankSnapshot(), authenticated: true, you, users: Object.fromEntries(users.map((user) => [user.user_id, user])),
+		recordedUsers: Object.fromEntries(recorded.map((user) => [user.user_id, user])), userAliases: {}
+	};
 	directory.apply(snapshot, undefined);
-	const session = { snapshot, canManageRooms: false } as unknown as SessionView;
+	const session = { snapshot, canManageRooms: false, server: { apron: 9, auth: ['guest'], capabilities } } as unknown as SessionView;
 	dom.render(ProfileCard, { client: undefined, session, room, canChange: false, canMention: false, onmention: () => undefined });
 	const anchor = document.createElement('button');
 	document.body.appendChild(anchor);
@@ -55,5 +58,23 @@ describe('ProfileCard membership', () => {
 
 	it('says they are a member when a lookup found them (a link’s user, §4.2.1)', () => {
 		expect(render('bob', [ada, bob], ada, general, true).textContent).toContain('Member of General');
+	});
+});
+
+describe('ProfileCard bio', () => {
+	const bob: Identity = { user_id: 'bob', name: 'Bob', ext: { bio: 'Builds bridges.' } };
+
+	it('shows the kept bio on a server that keeps one (ext:bio)', () => {
+		expect(render('bob', [ada, bob], ada, undefined, undefined, ['ext']).querySelector('[data-testid="profile-bio"]')?.textContent).toBe('Builds bridges.');
+	});
+
+	it('shows none from a server that keeps none, or once it is cleared', () => {
+		expect(render('bob', [ada, bob]).querySelector('[data-testid="profile-bio"]')).toBeNull();
+		dom.unmount();
+		expect(render('bob', [ada, { ...bob, ext: { bio: '' } }], ada, undefined, undefined, ['ext:bio']).querySelector('[data-testid="profile-bio"]')).toBeNull();
+	});
+
+	it('never shows one from a recorded object, which is as of its record', () => {
+		expect(render('bob', [ada], ada, undefined, undefined, ['ext'], [bob]).querySelector('[data-testid="profile-bio"]')).toBeNull();
 	});
 });

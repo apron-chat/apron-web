@@ -38,6 +38,17 @@ describe('ProfileCard', () => {
 		expect(box.querySelector('.ap-profcard-status')).toBeNull();
 	});
 
+	it('shows a bio as plain text, after the warning about a shared name', () => {
+		const box = render({ userId: 'ada', bio: 'Counts <b>things</b>.\nhttps://example.com', sharesName: true, bioTestid: 'bio' });
+		const bio = box.querySelector<HTMLElement>('[data-testid="bio"]')!;
+		expect(bio.textContent).toBe('Counts <b>things</b>.\nhttps://example.com');
+		expect(bio.querySelector('b, a')).toBeNull();
+		expect(bio.getAttribute('dir')).toBe('auto');
+		expect(box.querySelector('.ap-profcard-warn')!.compareDocumentPosition(bio) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		dom.unmount();
+		expect(render({ userId: 'ada' }).querySelector('.ap-profcard-bio')).toBeNull();
+	});
+
 	it('offers only the actions it is given, and says Add to room is in flight', () => {
 		const noop = () => undefined;
 		let box = render({ userId: 'ada', oncopyid: noop });

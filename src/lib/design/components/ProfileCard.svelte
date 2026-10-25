@@ -11,8 +11,8 @@
 	/**
 	 * Who a mention, a sender or a member is, in a Popover: their avatar, name,
 	 * `@user_id` (always, here: this is where people check who someone really
-	 * is, §3.3), status, roles, and whether they're in the open room, with what
-	 * you can do about them.
+	 * is, §3.3), status, roles, bio, and whether they're in the open room, with
+	 * what you can do about them.
 	 */
 	interface Props extends PopoverPlacement {
 		userId: string;
@@ -28,6 +28,8 @@
 		statusLabel?: string;
 		/** Server-assigned roles (§3.3), as badges under the status. */
 		roles?: string[];
+		/** Their bio (`ext:bio`), plain text under the name: its line breaks show, nothing in it is markup or a link. */
+		bio?: string;
 		/** Another user shows the same name: a note says to check the `@user_id`. */
 		sharesName?: boolean;
 		/** Their membership of the open room, in words ("Member of design"). */
@@ -58,10 +60,12 @@
 		statusTestid?: string;
 		/** A `data-testid` for the row of roles. */
 		rolesTestid?: string;
+		/** A `data-testid` for the bio. */
+		bioTestid?: string;
 	}
 	let {
-		userId, name, avatar, you = false, status, statusLabel, roles, sharesName = false, membership, onmention, oncopyid, onaddtoroom, adding = false, note,
-		element = $bindable(), offsetHeight = $bindable(0), statusTestid, rolesTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout
+		userId, name, avatar, you = false, status, statusLabel, roles, bio, sharesName = false, membership, onmention, oncopyid, onaddtoroom, adding = false, note,
+		element = $bindable(), offsetHeight = $bindable(0), statusTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout
 	}: Props = $props();
 	const shownName = $derived(name || userId);
 	const shown = $derived(presence(status));
@@ -87,6 +91,7 @@
 	{#if sharesName}
 		<p class="ap-profcard-warn" role="note">Another user also shows as <strong>{shownName}</strong>. Check the @user_id.</p>
 	{/if}
+	{#if bio}<p class="ap-profcard-bio" dir="auto" data-testid={bioTestid}>{bio}</p>{/if}
 	{#if membership}<p class="ap-profcard-note">{membership}</p>{/if}
 	<div class="ap-profcard-actions">
 		{#if onmention}<Button size="sm" onclick={onmention}>Mention</Button>{/if}
