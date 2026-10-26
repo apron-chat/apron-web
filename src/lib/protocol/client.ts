@@ -3009,15 +3009,14 @@ export class ChatClient {
 	}
 
 	/**
-	 * At each sign-in (§3.2, §4.5) the other users' kept `status` values, and
-	 * the `seen` of each, are dropped: those users show no status (not `offline`) until the server
-	 * sends it again, as it does after the result for each connected user who
-	 * shares a room, and as `room_list` and `room_update` carry it. Your own
-	 * comes from this `auth`'s `you`.
-	 */
-	/**
-	 * At a sign-in, the kept statuses go (§4.5). Resuming as the same user (`hold`), they still show until
-	 * the joined listing arrives (`settleHeldStatuses`), with the fresh ones in place as they come.
+	 * At each sign-in (§3.2, §4.5.4) the other users' kept `status` values, and
+	 * the `seen` of each (§4.5.2), are dropped: those users show no status (not
+	 * `offline`) until the server sends it again, as it does after the result
+	 * for each connected user who shares a room, and as `room_list` and
+	 * `room_update` carry it. Your own comes from this `auth`'s `you`.
+	 * Resuming as the same user (`hold`), they still show until the joined
+	 * listing arrives (`settleHeldStatuses`), with the fresh ones in place as
+	 * they come.
 	 */
 	private dropKeptStatuses(hold = false): void {
 		const held = new Map<string, { status: string; seen?: string }>();
@@ -3034,18 +3033,21 @@ export class ChatClient {
 	/**
 	 * The resume's joined listing has arrived, or won't: the held statuses stop showing. A user the
 	 * server said nothing of since the sign-in keeps an `offline` or `""` it had, which is what that
-	 * silence means (§4.5: the server sends every other status); any other goes, unknown.
+	 * silence means (§4.5.4: the server sends every other status); any other goes, unknown.
+	 *
+	 * Not the held `seen`, though: that silence says they are offline now, not since when. They may
+	 * have come back and gone again while this page was away, which nothing would say: the sign-in
+	 * sends no `offline`, and a resume's listing is only what changed since `latest_log_id` (§4.2.1),
+	 * which a change of status isn't. So, as the sign-in rule has it, it stays dropped until an object
+	 * that arrives sets it again (a listing or a `user` notification).
 	 */
 	private settleHeldStatuses(): void {
 		const held = this.heldStatuses;
 		if (!held) return;
 		this.heldStatuses = undefined;
-		for (const [userId, { status, seen }] of held) {
+		for (const [userId, { status }] of held) {
 			const user = this.users.get(userId);
-			// An `offline` kept this way keeps its `seen`: it changes only with a change to `offline`, which the server would have sent.
-			if (user && !Object.hasOwn(user, 'status') && (status === 'offline' || status === '')) {
-				this.users.set(userId, { ...user, status, ...(status === 'offline' && seen !== undefined && !Object.hasOwn(user, 'seen') ? { seen } : {}) });
-			}
+			if (user && !Object.hasOwn(user, 'status') && (status === 'offline' || status === '')) this.users.set(userId, { ...user, status });
 		}
 	}
 

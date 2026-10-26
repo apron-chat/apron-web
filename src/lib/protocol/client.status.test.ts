@@ -582,7 +582,7 @@ describe('seen', () => {
 		expect(snapshot.you).toEqual({ user_id: 'ada', name: 'Ada', status: 'invisible' });
 	});
 
-	it('drops it with the status at a sign-in; resuming, it still shows with the held offline, and stays with it when the server sends nothing of them', async () => {
+	it('drops it with the status at a sign-in; resuming, it still shows with the held offline until the listing, which says what it is now', async () => {
 		await listed({ user_id: 'ada', status: 'online' }, [
 			{ user_id: 'bo', status: 'offline', seen: '1724803600000' }, { user_id: 'cy', status: 'offline', seen: '1724803700000' }, { user_id: 'di', status: 'online' }
 		]);
@@ -607,14 +607,40 @@ describe('seen', () => {
 		expect(snapshot.heldStatuses).toBeUndefined();
 	});
 
-	it('keeps a held offline\'s seen through a resume whose listing says nothing of them', async () => {
+	it('keeps a held offline through a resume whose listing says nothing of them, but not its seen, which nothing confirmed', async () => {
 		await listed({ user_id: 'ada', status: 'online' }, [{ user_id: 'bo', status: 'offline', seen: '1724803600000' }]);
 		reconnect();
 		hello();
 		await socket.reply('auth', { you: { user_id: 'ada' } });
 		await socket.reply('room_list', { joined: [] });
-		expect(user('bo')).toEqual({ user_id: 'bo', status: 'offline', seen: '1724803600000' });
+		expect(user('bo')).toEqual({ user_id: 'bo', status: 'offline' });
 		expect(snapshot.heldStatuses).toBeUndefined();
+	});
+
+	it('shows no stale seen for someone who came back and went again while this page was away, until an object sets it again', async () => {
+		socket.open();
+		const server = { method: 'server', params: { apron: 9, auth: ['guest', 'token'], capabilities: ['history', 'rooms', 'status'] } };
+		socket.receive(server);
+		await socket.reply('auth', { you: { user_id: 'ada', status: 'online' }, token: 'secret' });
+		const general = { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10', members: [{ user_id: 'ada' }, { user_id: 'bo' }] };
+		await socket.reply('room_list', { joined: [general], users: [{ user_id: 'bo', status: 'offline', seen: '1724803600000' }] });
+		const said = (id: string) => ({ message_id: id, log_id: id, room_id: 'general', from: { user_id: 'ada' }, body: { text: id } });
+		await socket.reply('history', { messages: [said('11'), said('12')], more: false, latest_log_id: '12', history_log_id: '10' });
+		reconnect();
+		socket.open();
+		socket.receive(server);
+		await socket.reply('auth', { you: { user_id: 'ada' } });
+		// A listing of only what changed since general's checkpoint (§4.2.1).
+		expect(socket.request('room_list').params).toMatchObject({ filter: 'joined', latest_log_id: '12' });
+		// Held meanwhile, as it was.
+		expect(user('bo')).toEqual({ user_id: 'bo', status: 'offline', seen: '1724803600000' });
+		// Bo came back and went again meanwhile, with a new seen: the sign-in sends no offline (§4.5.4), and a change
+		// of status isn't logged, so general's log hasn't moved and the listing leaves it (and Bo) out.
+		await socket.reply('room_list', { joined: [], left: [], users: [] });
+		expect(user('bo')).toEqual({ user_id: 'bo', status: 'offline' });
+		// The next object that carries it sets it again.
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', title: 'Ops', members: [{ user_id: 'ada' }, { user_id: 'bo' }] }], users: [{ user_id: 'bo', status: 'offline', seen: '1724900000000' }] } });
+		expect(user('bo')).toEqual({ user_id: 'bo', status: 'offline', seen: '1724900000000' });
 	});
 
 	it('drops it at once at a sign-in as someone else', async () => {
