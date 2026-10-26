@@ -8,7 +8,7 @@
 
 	/**
 	 * The start of a private room's timeline (§4.2.4), once its history reaches back to it: who is in it, and what
-	 * private means: only members see it or its messages, members add people, and anyone can leave.
+	 * private means: only members and the server host can read its messages, and only members can add others.
 	 */
 	interface Props {
 		/** Its name: the room's title, or its other members' names. */
@@ -36,7 +36,7 @@
 			{#if detail}<p class="ap-dmintro-detail">{detail}</p>{/if}
 		</div>
 	</div>
-	<p class="ap-dmintro-text"><span class="ap-dmintro-private"><Lock size={13} aria-hidden="true" />Private room.</span> Only members see it or its messages. Members can add people, and anyone can leave.</p>
+	<p class="ap-dmintro-text"><span class="ap-dmintro-private"><Lock size={13} aria-hidden="true" />Private room.</span> Only members and the server host can read messages here. Only members can add others.</p>
 	{#if onaddpeople}
 		<div class="ap-dmintro-actions"><Button size="sm" data-testid={addTestid} onclick={onaddpeople}><UserPlus size={15} aria-hidden="true" />Add people</Button></div>
 	{/if}

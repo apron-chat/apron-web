@@ -756,8 +756,8 @@ reaches back to its creation (all loaded, and its `history_log_id` at or
 before the room's first record, or none retrievable at all), a private room's
 timeline starts with a card: its faces, its name, the person's `@user_id`
 and the first line of their bio for a conversation with one person (else how
-many members), and "Private room. Only members see it or its messages.
-Members can add people, and anyone can leave.", with **Add people**, which
+many members), and "Private room. Only members and the server host can read
+messages here. Only members can add others.", with **Add people**, which
 opens the member list's add form, where adding is offered. Nothing in it
 says how long messages are kept: that is the server's.
 

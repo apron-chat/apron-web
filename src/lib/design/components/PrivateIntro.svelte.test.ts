@@ -12,7 +12,7 @@ describe('PrivateIntro', () => {
 		const intro = dom.byRole('heading', 'Bob').closest('section')!;
 		expect([intro.dataset.testid, intro.getAttribute('aria-label')]).toEqual(['intro', 'About this private room']);
 		expect(queryByText('@bob · Docs', intro)).not.toBeNull();
-		expect(intro.querySelector('.ap-dmintro-text')?.textContent).toBe('Private room. Only members see it or its messages. Members can add people, and anyone can leave.');
+		expect(intro.querySelector('.ap-dmintro-text')?.textContent).toBe('Private room. Only members and the server host can read messages here. Only members can add others.');
 		dom.button('Add people').click();
 		expect(onaddpeople).toHaveBeenCalledOnce();
 		dom.unmount();
