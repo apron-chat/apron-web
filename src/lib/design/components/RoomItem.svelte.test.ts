@@ -58,9 +58,11 @@ describe('RoomItem', () => {
 		expect(row.querySelector('.ap-faces')).toBeNull();
 	});
 
-	it('marks a muted room with a bell-off after its name, its news quiet: no bold name, and a grey count, mentions too', () => {
+	it('marks a muted room with a bell-off at the end of its row, next to its count, its news quiet: no bold name, and a grey count, mentions too', () => {
 		let row = render({ private: true, muted: true, unread: 3, mentions: 1 });
-		expect([...row.querySelectorAll('.ap-room-name [role="img"]')].map((mark) => mark.getAttribute('aria-label'))).toEqual(['Private', 'Muted']);
+		expect(row.querySelector('.ap-room-name [role="img"]')?.getAttribute('aria-label')).toBe('Private');
+		const bell = row.querySelector('.ap-muted')!;
+		expect([bell.parentElement, bell.getAttribute('aria-label'), bell.nextElementSibling?.classList.contains('ap-count')]).toEqual([row, 'Muted', true]);
 		expect(row.classList.contains('ap-room-unread')).toBe(false);
 		const count = row.querySelector('.ap-count')!;
 		expect([count.classList.contains('ap-count-quiet'), count.getAttribute('aria-label')]).toEqual([true, '3 unread messages, a mention of you']);

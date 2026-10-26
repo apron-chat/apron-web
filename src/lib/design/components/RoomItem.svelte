@@ -22,7 +22,7 @@
 		/** Who a private room is with, before its name: one person's face with their status, or two of a group's (Faces). */
 		faces?: Face[];
 		/**
-		 * Muted (§4.5 `mute` with its `room_id`): a bell-off beside the name, and its news stays quiet: no bold name, and
+		 * Muted (§4.5 `mute` with its `room_id`): a bell-off at the end of the row, before its count, and its news stays quiet: no bold name, and
 		 * a grey count, mentions too.
 		 */
 		muted?: boolean;

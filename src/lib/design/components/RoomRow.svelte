@@ -21,7 +21,7 @@
 		label: string;
 		tip?: string;
 		private?: boolean;
-		/** Muted (§4.5 `mute` with its `room_id`): a bell-off beside the name, after any lock. */
+		/** Muted (§4.5 `mute` with its `room_id`): a bell-off at the end of the row, before its count or time. */
 		muted?: boolean;
 		active?: boolean;
 		/** A thread indented under its parent. */
@@ -60,7 +60,8 @@
 		class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', className]} onclick={onselect}
 	>
 		{@render lead?.()}
-		<span class="ap-room-text"><span class="ap-room-name"><span class="ap-room-label" title={tip}>{label}</span>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}{#if muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}</span>{@render lines?.()}</span>
+		<span class="ap-room-text"><span class="ap-room-name"><span class="ap-room-label" title={tip}>{label}</span>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>{@render lines?.()}</span>
+		{#if muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}
 		{@render children?.()}
 	</button>
 {/snippet}

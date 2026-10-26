@@ -26,7 +26,7 @@
 		 */
 		unjoined?: boolean;
 		/**
-		 * Muted (§4.5 `mute` with its `room_id`, or its parent's): a bell-off beside the name, and its news stays quiet: no
+		 * Muted (§4.5 `mute` with its `room_id`, or its parent's): a bell-off at the end of the row, before its count, and its news stays quiet: no
 		 * bold name, no tint for a mention, and a grey count, mentions too.
 		 */
 		muted?: boolean;

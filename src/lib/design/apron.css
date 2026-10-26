@@ -352,12 +352,12 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-room-active .ap-room-name { font-weight: 600; }
 .ap-room-active::before { content: ''; position: absolute; left: var(--space-1); top: var(--space-1_5); bottom: var(--space-1_5); width: 3px; border-radius: var(--radius-full); background: var(--accent); pointer-events: none; }
 .ap-room-unread { color: var(--ink); }
-/* A muted room (§4.5 `mute` with its `room_id`): a bell-off beside its name, and what's new in it stays quiet. */
-.ap-muted { flex: none; display: inline-block; width: 12px; height: 12px; margin-left: var(--space-1); vertical-align: -1px; color: var(--ink-muted); }
+/* A muted room (§4.5 `mute` with its `room_id`): a bell-off at the end of its row, next to its count, and what's new in it stays quiet. */
+.ap-muted { flex: none; width: 14px; height: 14px; color: var(--ink-muted); }
 .ap-room-unread .ap-room-name { font-weight: 600; }
 .ap-room-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .ap-room-name, .ap-room-topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A name with a lock or a bell-off after it: the name is cut short, never the marks. */
+/* A name with a lock after it: the name is cut short, never the lock. */
 .ap-room-name:has(> svg) { display: flex; align-items: center; }
 .ap-room-name:has(> svg) .ap-room-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ap-room-topic { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
