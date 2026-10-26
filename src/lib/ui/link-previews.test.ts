@@ -1,50 +1,35 @@
 import { describe, expect, it, vi } from 'vitest';
-import { excerpt, findGitHubLinks, LinkPreviews, parseGitHubLink, previewFromApi } from './link-previews';
+import { findLinks, findUrls, LinkPreviews, previewLink, trimUrl } from './link-previews';
+import type { Site } from './link-sites';
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
 	new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } });
 
-describe('GitHub links', () => {
-	it('reads pull requests, issues, commits, and repositories, and ignores other pages and hosts', () => {
-		expect(parseGitHubLink('https://github.com/shazow/apron/pull/60/files#diff')).toEqual({ type: 'issue', owner: 'shazow', repo: 'apron', number: 60, url: 'https://github.com/shazow/apron/pull/60' });
-		expect(parseGitHubLink('https://www.github.com/shazow/apron/issues/7')).toMatchObject({ type: 'issue', number: 7, url: 'https://github.com/shazow/apron/issues/7' });
-		expect(parseGitHubLink('https://github.com/shazow/apron/commit/5B0CC30abc')).toMatchObject({ type: 'commit', sha: '5b0cc30abc' });
-		expect(parseGitHubLink('https://github.com/shazow/apron.git')).toEqual({ type: 'repo', owner: 'shazow', repo: 'apron', url: 'https://github.com/shazow/apron' });
-		// Not other pages and hosts.
-		expect(parseGitHubLink('https://github.com/shazow')).toBeUndefined();
-		expect(parseGitHubLink('https://github.com/features/copilot')).toBeUndefined();
-		expect(parseGitHubLink('https://github.com/shazow/apron/tree/main')).toBeUndefined();
-		expect(parseGitHubLink('https://github.com/shazow/apron/pull/abc')).toBeUndefined();
-		expect(parseGitHubLink('https://gitlab.com/shazow/apron/pull/1')).toBeUndefined();
-		expect(parseGitHubLink('https://github.com.evil.example/a/b')).toBeUndefined();
+describe('finding links', () => {
+	it('finds URLs in text without the punctuation or brackets around them, keeping brackets they open', () => {
+		expect(trimUrl('https://a.example/x).')).toBe('https://a.example/x');
+		expect(trimUrl('https://en.wikipedia.org/wiki/Mercury_(planet)')).toBe('https://en.wikipedia.org/wiki/Mercury_(planet)');
+		expect(trimUrl('https://en.wikipedia.org/wiki/Mercury_(planet)),')).toBe('https://en.wikipedia.org/wiki/Mercury_(planet)');
+		expect(findUrls('see [this](https://a.example/b?c=1), <https://d.example> and **https://e.example/f**! ftp://g.example').map(String)).toEqual([
+			'https://a.example/b?c=1', 'https://d.example/', 'https://e.example/f'
+		]);
 	});
 
-	it('finds distinct links in text, without trailing punctuation, up to three', () => {
-		const text = 'see https://github.com/a/b/pull/1, and (https://github.com/a/b/issues/2). again https://github.com/a/b/pull/1 https://github.com/c/d https://github.com/e/f';
-		expect(findGitHubLinks(text).map((link) => link.url)).toEqual(['https://github.com/a/b/pull/1', 'https://github.com/a/b/issues/2', 'https://github.com/c/d']);
-	});
-});
-
-describe('previews', () => {
-	it('boils markdown down to a short line', () => {
-		expect(excerpt('<!-- template -->\n## Summary\n\n- Moves the **Go** server to [its repo](https://x).\n```sh\nmake\n```')).toBe('Moves the Go server to its repo.');
-		expect(excerpt('x'.repeat(300))).toHaveLength(200);
-		expect(excerpt(null)).toBeUndefined();
+	it('previews only links on a known site that it describes', () => {
+		expect(previewLink('https://github.com/shazow/apron/pull/60/files#diff')).toMatchObject({ url: 'https://github.com/shazow/apron/pull/60', site: { name: 'GitHub' } });
+		expect(previewLink('https://www.youtube.com/watch?v=dQw4w9WgXcQ')?.site.name).toBe('YouTube');
+		expect(previewLink('https://example.com/a/b')).toBeUndefined();
+		expect(previewLink('https://github.com/shazow')).toBeUndefined();
+		expect(previewLink('javascript:alert(1)')).toBeUndefined();
+		expect(previewLink('not a url')).toBeUndefined();
 	});
 
-	it('describes pull requests and issues with their state and author, and commits and repositories', () => {
-		const pull = parseGitHubLink('https://github.com/a/b/pull/60')!;
-		expect(previewFromApi(pull, { title: 'Remove the Go server', state: 'closed', user: { login: 'shazow' }, body: 'Now in its own repo.', pull_request: { merged_at: '2026-09-01T00:00:00Z' } })).toEqual({
-			site_name: 'GitHub · a/b', title: 'Remove the Go server', description: 'Pull request #60 · Merged · by shazow — Now in its own repo.'
-		});
-		const issue = parseGitHubLink('https://github.com/a/b/issues/3')!;
-		expect(previewFromApi(issue, { title: 'Bug', state: 'closed', state_reason: 'not_planned', body: '' })?.description).toBe('Issue #3 · Closed as not planned');
-		expect(previewFromApi(issue, {})).toBeUndefined();
-		const commit = parseGitHubLink('https://github.com/a/b/commit/5b0cc30')!;
-		expect(previewFromApi(commit, { commit: { message: 'Fix it\n\nBecause.', author: { name: 'Ada' } } })).toEqual({ site_name: 'GitHub · a/b', title: 'Fix it', description: 'Commit 5b0cc30 · by Ada — Because.' });
-		const repo = parseGitHubLink('https://github.com/a/b')!;
-		expect(previewFromApi(repo, { full_name: 'a/b', description: 'A chat protocol', language: 'Go', stargazers_count: 1234 })).toEqual({ site_name: 'GitHub', title: 'a/b', description: 'A chat protocol — Go · ★ 1,234' });
-		expect(previewFromApi(repo, { full_name: 'a/b', description: 'New', stargazers_count: 0 })?.description).toBe('New');
+	it('finds distinct previewable links in text, skipping others, up to three', () => {
+		const text = 'see https://github.com/a/b/pull/1, https://example.com/x and (https://github.com/a/b/issues/2). again https://github.com/a/b/pull/1 https://youtu.be/dQw4w9WgXcQ https://github.com/e/f';
+		expect(findLinks(text).map((link) => link.url)).toEqual(['https://github.com/a/b/pull/1', 'https://github.com/a/b/issues/2', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ']);
+		// The same page linked two ways is one link.
+		expect(findLinks('https://youtu.be/dQw4w9WgXcQ https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1')).toHaveLength(1);
+		expect(findLinks(text, ['https://github.com/a/b/issues/2']).map((link) => link.url)).toEqual(['https://github.com/a/b/pull/1', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://github.com/e/f']);
 	});
 });
 
@@ -84,6 +69,29 @@ describe('LinkPreviews', () => {
 		now += 61_000;
 		await previews.prefetch('https://github.com/a/b/pull/1');
 		expect(fetcher).toHaveBeenCalledTimes(2);
+	});
+
+	it('holds a rate-limited site for its Retry-After without holding the others', async () => {
+		let now = 1_000_000;
+		const fetcher = vi.fn(async (url: string) => (url.includes('youtube') ? json({}, 429, { 'retry-after': '120' }) : json({ title: 'T', state: 'open' })));
+		const previews = new LinkPreviews(fetcher as unknown as typeof fetch, () => now);
+		await previews.prefetch('https://youtu.be/dQw4w9WgXcQ');
+		await previews.prefetch('https://youtu.be/aaaaaaaaaaa https://github.com/a/b/pull/1');
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		now += 121_000;
+		await previews.prefetch('https://youtu.be/aaaaaaaaaaa');
+		expect(fetcher).toHaveBeenCalledTimes(3);
+	});
+
+	it('remembers the statuses a site names as missing, and asks again after other failures', async () => {
+		const site: Site = { name: 'Test', missing: [400], match: (url) => ({ url: url.href, api: `https://api.test${url.pathname}`, preview: () => undefined, fallback: { title: 'From the URL' } }) };
+		const statuses: Record<string, number> = { '/gone': 400, '/broken': 500 };
+		const fetcher = vi.fn(async (url: string) => json({}, statuses[new URL(url).pathname]));
+		const previews = new LinkPreviews(fetcher as unknown as typeof fetch, Date.now, { 'test.example': site });
+		await previews.prefetch('https://test.example/gone https://test.example/broken');
+		await previews.prefetch('https://test.example/gone https://test.example/broken');
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['https://api.test/gone', 'https://api.test/broken', 'https://api.test/broken']);
+		expect(previews.embeds('https://test.example/gone')).toEqual([{ kind: 'link', url: 'https://test.example/gone', og: { title: 'From the URL' } }]);
 	});
 
 	it('leaves out dismissed links, letting later ones in under the cap, and tells listeners when details arrive', async () => {

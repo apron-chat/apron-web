@@ -10,7 +10,7 @@
 	import { isCommand } from '$lib/ui/commands';
 	import { mediaLimit, type MediaTypes } from '$lib/protocol/client';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { findGitHubLinks, linkPreviews } from '$lib/ui/link-previews';
+	import { linkPreviews } from '$lib/ui/link-previews';
 	import { pastedFiles } from '$lib/ui/file-transfer';
 	import { clockLabel } from '$lib/ui/time';
 	import { enterAction, handheld } from '$lib/ui/handheld';
@@ -171,7 +171,7 @@
 	// Typed links are looked up once typing pauses, so a half-typed URL isn't.
 	$effect(() => {
 		const text = value;
-		if (command || disabled || findGitHubLinks(text).length === 0) return;
+		if (command || disabled || linkPreviews.links(text).length === 0) return;
 		const timer = setTimeout(() => void linkPreviews.prefetch(text), PREVIEW_TYPING_PAUSE_MS);
 		return () => clearTimeout(timer);
 	});
