@@ -100,7 +100,7 @@
 		form?.focus();
 	}
 
-	/** Opens the add form, from elsewhere, such as a private room's Add people: where adding is offered here. */
+	/** Opens the add form, from elsewhere, such as a private room's Add members: where adding is offered here. */
 	export async function openAdd(): Promise<void> {
 		if (!changing) return;
 		note = undefined;

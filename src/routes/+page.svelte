@@ -2007,7 +2007,7 @@
 		else memberListOverlay = !memberListOverlay;
 	}
 
-	/** A private room's Add people: the member list, open, with its add form (§4.2.2). */
+	/** A private room's Add members: the member list, open, with its add form (§4.2.2). */
 	async function addPeople(): Promise<void> {
 		if (!memberListOpen) toggleMemberList();
 		await tick();

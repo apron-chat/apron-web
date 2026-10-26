@@ -17,11 +17,11 @@
 		faces?: Face[];
 		/** One line under the name, such as a person's `@user_id` and bio. */
 		detail?: string;
-		/** Offers Add people, such as opening the member list's add form (§4.2.2). */
+		/** Offers Add members, such as opening the member list's add form (§4.2.2). */
 		onaddpeople?: () => void;
 		/** Classes for its `<section>`, added to its own. */
 		class?: ClassValue;
-		/** A `data-testid` for its `<section>`, and one for Add people. */
+		/** A `data-testid` for its `<section>`, and one for Add members. */
 		testid?: string;
 		addTestid?: string;
 	}
@@ -38,6 +38,6 @@
 	</div>
 	<p class="ap-dmintro-text"><span class="ap-dmintro-private"><Lock size={13} aria-hidden="true" />Private room.</span> Only members and the server host can read messages here. Only members can add others.</p>
 	{#if onaddpeople}
-		<div class="ap-dmintro-actions"><Button size="sm" data-testid={addTestid} onclick={onaddpeople}><UserPlus size={15} aria-hidden="true" />Add people</Button></div>
+		<div class="ap-dmintro-actions"><Button size="sm" data-testid={addTestid} onclick={onaddpeople}><UserPlus size={15} aria-hidden="true" />Add members</Button></div>
 	{/if}
 </section>

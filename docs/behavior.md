@@ -757,7 +757,7 @@ before the room's first record, or none retrievable at all), a private room's
 timeline starts with a card: its faces, its name, the person's `@user_id`
 and the first line of their bio for a conversation with one person (else how
 many members), and "Private room. Only members and the server host can read
-messages here. Only members can add others.", with **Add people**, which
+messages here. Only members can add others.", with **Add members**, which
 opens the member list's add form, where adding is offered. Nothing in it
 says how long messages are kept: that is the server's.
 

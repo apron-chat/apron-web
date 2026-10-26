@@ -6,18 +6,18 @@ import * as dom from '$lib/test/dom';
 import { queryByText } from '$lib/test/queries';
 
 describe('PrivateIntro', () => {
-	it('says who the room is with and what private means, with Add people where offered', () => {
+	it('says who the room is with and what private means, with Add members where offered', () => {
 		const onaddpeople = vi.fn();
 		dom.render(PrivateIntro, { name: 'Bob', faces: [{ user_id: 'bob', name: 'Bob' }], detail: '@bob · Docs', onaddpeople, testid: 'intro', addTestid: 'add' });
 		const intro = dom.byRole('heading', 'Bob').closest('section')!;
 		expect([intro.dataset.testid, intro.getAttribute('aria-label')]).toEqual(['intro', 'About this private room']);
 		expect(queryByText('@bob · Docs', intro)).not.toBeNull();
 		expect(intro.querySelector('.ap-dmintro-text')?.textContent).toBe('Private room. Only members and the server host can read messages here. Only members can add others.');
-		dom.button('Add people').click();
+		dom.button('Add members').click();
 		expect(onaddpeople).toHaveBeenCalledOnce();
 		dom.unmount();
 		dom.render(PrivateIntro, { name: 'Dev, Mira' });
-		expect(dom.queryByRole('button', 'Add people')).toBeNull();
+		expect(dom.queryByRole('button', 'Add members')).toBeNull();
 	});
 });
 
