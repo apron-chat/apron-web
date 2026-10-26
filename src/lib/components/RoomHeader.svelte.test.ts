@@ -53,4 +53,26 @@ describe('RoomHeader', () => {
 		expect(back().getAttribute('aria-label')).toBe('Back to rooms, 12 unread messages, a mention of you');
 		expect(byTestid('back-unread')?.textContent).toBe('@\u202f12');
 	});
+
+	it('unmutes the pane’s own mute, or in a thread muted only by its room, the room', () => {
+		const onmute = vi.fn();
+		const noop = () => {};
+		const show = (room: Partial<RoomSnapshot>, pane: Partial<RoomSnapshot>) => dom.render(RoomHeader, {
+			room: { id: 'general', title: 'General', joined: true, ...room } as unknown as RoomSnapshot,
+			pane: { id: 'deploy', title: 'Deploy', joined: true, ...pane } as unknown as RoomSnapshot,
+			threadTitle: 'Deploy', typing: [], canEdit: false, editDisabled: false, canLeave: false, memberListOpen: false,
+			onback: noop, onroom: noop, onedit: noop, onleave: noop, onmemberlist: noop, onmute
+		});
+		show({ mutedUntil: true }, {});
+		dom.button('Unmute room').click();
+		expect(onmute).toHaveBeenLastCalledWith(false, 'general');
+		dom.unmount();
+		// Its own mute comes first: unmuting it leaves the room's.
+		show({ mutedUntil: true }, { mutedUntil: true });
+		dom.button('Unmute thread').click();
+		expect(onmute).toHaveBeenLastCalledWith(false, 'deploy');
+		dom.unmount();
+		show({}, {});
+		expect(dom.queryByRole('button', /^Unmute/)).toBeNull();
+	});
 });

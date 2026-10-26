@@ -11,6 +11,17 @@ function render(props: Record<string, unknown>) {
 const states = (row: HTMLElement) => ['ap-room-unread', 'ap-room-mention', 'ap-room-quiet', 'ap-room-unjoined'].filter((name) => row.classList.contains(name));
 
 describe('ThreadItem', () => {
+	it('marks a muted thread with a bell-off at the end of its row, before its count or time, its news quiet: no bold name, no tint for a mention, and a grey count', () => {
+		let row = render({ muted: true, unread: 2, mentions: 1 });
+		const bell = row.querySelector('.ap-muted')!;
+		expect([bell.getAttribute('aria-label'), bell.nextElementSibling?.classList.contains('ap-count')]).toEqual(['Muted', true]);
+		expect(states(row)).toEqual([]);
+		expect(row.querySelector('.ap-count')?.classList.contains('ap-count-quiet')).toBe(true);
+		dom.unmount();
+		row = render({ muted: true, unjoined: true, ago: { text: '2h' } });
+		expect(row.querySelector('.ap-muted')?.nextElementSibling?.tagName).toBe('TIME');
+	});
+
 	it('tints a joined thread with a mention and steps back one with nothing new, never one you haven’t joined', () => {
 		expect(states(render({ mentions: 1 }))).toEqual(['ap-room-unread', 'ap-room-mention']);
 		dom.unmount();

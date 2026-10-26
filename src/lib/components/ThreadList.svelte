@@ -21,6 +21,8 @@
 		activeThread?: string;
 		mentions: Record<string, number>;
 		unread: Record<string, number>;
+		/** The rooms and threads you muted (§4.5 `mute` with its `room_id`), by `room_id`: a thread is muted by its own, or its room's. */
+		muted?: Record<string, number | true>;
 		/** Joining and leaving are offered (capability `rooms`, not read-only). */
 		canJoin: boolean;
 		onthread: (thread: string) => void;
@@ -29,10 +31,13 @@
 		onjoin: (thread: string) => void;
 		onleave: (thread: string) => void;
 	}
-	let { roomId, roomTitle, threads, others, activeThread, mentions, unread, canJoin, onthread, onopen, onjoin, onleave }: Props = $props();
+	let { roomId, roomTitle, threads, others, activeThread, mentions, unread, muted = {}, canJoin, onthread, onopen, onjoin, onleave }: Props = $props();
 
 	/** A thread you haven't joined: what its listing says, its description as text and when it was last active. */
 	type Other = { id: string; title: string; untitled?: true; private: boolean; description: string; latestLogId?: string };
+
+	/** Whether a thread is muted, by its own mute or its room's. */
+	const isMuted = (thread: string) => muted[thread] !== undefined || muted[roomId] !== undefined;
 
 	let othersOpen = $state(loadOtherThreadsOpen());
 	/** The room whose other threads are all showing, past the first few; another room starts short again. */
@@ -91,7 +96,7 @@
 		<!-- Its description, then its latest message: both when it has both, each marked so either reads alone, as on its card. One bubble for what's new: unread replies in grey, orange with an @ when they include a mention. A thread with nothing new shows none, and steps back. -->
 		<!-- Leaving is the archive: the thread stops alerting and moves down to Other threads, on every device. -->
 		<ThreadItem
-			thread={entry.id} name={designTitle(entry)} private={entry.private} active={open}
+			thread={entry.id} name={designTitle(entry)} private={entry.private} muted={isMuted(entry.id)} active={open}
 			unread={open ? 0 : (unread[entry.id] ?? 0)} mentions={open ? 0 : (mentions[entry.id] ?? 0)}
 			description={threadDescriptionText(entry)} latest={threadLatest(entry)} linesTestid="thread-list" unreadTestid="thread-unread"
 			onselect={() => onthread(entry.id)} onleave={canJoin ? () => onleave(entry.id) : undefined}
@@ -104,7 +109,7 @@
 		{@const last = other.latestLogId}
 		<!-- The one being read has its history loaded, so its count is known; the others say when they were last active. Joining is a door in, as leaving is a door out. -->
 		<ThreadItem
-			thread={other.id} name={designTitle(other)} private={other.private} unjoined active={open} description={other.description} linesTestid="other-thread"
+			thread={other.id} name={designTitle(other)} private={other.private} muted={isMuted(other.id)} unjoined active={open} description={other.description} linesTestid="other-thread"
 			count={open ? reading?.count : undefined}
 			ago={last !== undefined ? { text: idAgo(last, minuteNow()), datetime: idIso(last), title: `Last active ${idDateTime(last)}` } : undefined} agoTestid="other-thread-ago"
 			title={open ? undefined : `Read ${other.title} without joining`}

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Navigation" height=420 subtitle="Threads under their room · a thread shows its description and its latest message, each marked by an icon · unread replies in a grey bubble, orange with an @ for a mention, which also tints it · the open one has a neutral fill and an accent bar, and one with nothing new steps back · threads you haven't joined, muted, say when they were last active, or how many messages the one being read has · hover a row for Leave, or Join" -->
+<!-- @dsCard group="Navigation" height=460 subtitle="Threads under their room · a thread shows its description and its latest message, each marked by an icon · unread replies in a grey bubble, orange with an @ for a mention, which also tints it · a muted one has a bell-off next to its count, and its news stays grey, mentions too · the open one has a neutral fill and an accent bar, and one with nothing new steps back · threads you haven't joined, muted, say when they were last active, or how many messages the one being read has · hover a row for Leave, or Join" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ThreadItem</title></head>
@@ -10,6 +10,7 @@
   var noop = function () {};
   add(A.RoomItem, { room: 'ops', name: 'Ops', unread: 12, mentions: 2 });
   add(A.ThreadItem, { thread: 'deploy', name: 'Deploy', unread: 2, description: 'Worker 1.9.0 crash-looped; rolled back to 1.8.3', latest: { sender: 'Dana', text: 'Re-running the migration now' }, onleave: noop });
+  add(A.ThreadItem, { thread: 'alerts', name: 'Pager noise', muted: true, unread: 5, mentions: 1, description: 'Flapping disk alert on db-2', onleave: noop });
   add(A.ThreadItem, { thread: 'mig-0042', name: 'Migration 0042', active: true, latest: { sender: 'Sam', text: 'Lock cleared, applying 0042' }, onleave: noop });
   add(A.ThreadItem, { thread: 'oncall', name: 'On-call rotation', mentions: 1, description: 'Who carries the pager, week by week', onleave: noop });
   add(A.ThreadItem, { thread: 'cert', name: 'Expired cert', latest: { sender: 'Linus', text: 'Renewed it, CI is green again' }, onleave: noop });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPaused, muteFor, pauseChoices, pausedUntilLabel } from './pause';
+import { isPaused, muteFor, pauseChoices, pausedUntilLabel, roomMuteChoices } from './pause';
 
 describe('pausing notifications', () => {
 	const now = new Date(2026, 9, 2, 13, 30);
@@ -18,6 +18,14 @@ describe('pausing notifications', () => {
 		expect(morning).toMatchObject({ label: 'Until this morning', hint: clock(9), until: new Date(2026, 9, 2, 9).getTime() });
 		expect(pausedUntilLabel(morning.until, early)).toBe(`until ${clock(9)}`);
 		expect(pauseChoices(new Date(2026, 9, 2, 9))[2]).toMatchObject({ label: 'Until tomorrow', until: new Date(2026, 9, 3, 9).getTime() });
+	});
+
+	it('mutes a room for an hour, two, eight, or until unmuted, each with when it ends', () => {
+		const choices = roomMuteChoices(now);
+		expect(choices.map((choice) => [choice.value, choice.label])).toEqual([['1h', 'For 1 hour'], ['2h', 'For 2 hours'], ['8h', 'For 8 hours'], ['forever', 'Until I unmute']]);
+		expect(choices[1]).toMatchObject({ hint: `until ${clock(15, 30)}`, until: now.getTime() + 2 * 3_600_000 });
+		expect(choices[2]).toMatchObject({ hint: `until ${clock(21, 30)}`, until: now.getTime() + 8 * 3_600_000 });
+		expect(choices[3]).toEqual({ value: 'forever', label: 'Until I unmute', until: true });
 	});
 
 	it('sends mute as the seconds left, at least one, or true', () => {
