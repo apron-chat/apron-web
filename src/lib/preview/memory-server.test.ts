@@ -248,6 +248,20 @@ describe('knobs for the browser suite', () => {
 		expect(users().preview_guest.seen).toBeUndefined();
 	});
 
+	it('with status, keeps a chosen "" as itself: others see "", not the default online (§4.5.1), and the complete you carries it', async () => {
+		const server = new MemoryProtocolServer({ capabilities: ['status'] });
+		const client = await connect(server);
+		const shown = async () => ((await ask(server, { method: 'room_list', params: { filter: 'joined' } })) as { users: Record<string, unknown>[] }).users.find((user) => user.user_id === 'preview_guest')!;
+		// Never chosen: the default, online.
+		expect((await shown()).status).toBe('online');
+		const you = await client.setStatus('');
+		expect(you.status).toBe('');
+		expect(client.snapshot().you?.status).toBe('');
+		expect((await shown()).status).toBe('');
+		await client.setStatus('dnd');
+		expect((await shown()).status).toBe('dnd');
+	});
+
 	it('leaves the demo as it is without knobs', async () => {
 		const client = await connect(new MemoryProtocolServer());
 		expect(client.snapshot().server?.capabilities).not.toContain('status');

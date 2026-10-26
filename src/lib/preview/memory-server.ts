@@ -275,7 +275,10 @@ export class MemoryProtocolServer {
 		});
 	}
 
-	/** How others see you (§4.5.1): connected, so your chosen status, but `invisible` shows `offline` and `""` shows `""`. */
+	/**
+	 * How others see you (§4.5.1): connected, so your chosen status (never chosen: the default, `online`), but
+	 * `invisible` shows `offline` and `""` shows `""`.
+	 */
 	private yourShown(): { status: string; seen?: string } {
 		const chosen = this.people.preview_guest.status ?? 'online';
 		return chosen === 'invisible' ? { status: 'offline', ...(this.yourSeen !== undefined ? { seen: this.yourSeen } : {}) } : { status: chosen };
@@ -590,8 +593,9 @@ export class MemoryProtocolServer {
 		if (typeof p.status === 'string') {
 			// Choosing invisible changes how others see you to `offline` (§4.5.2): `seen` is now.
 			if (p.status === 'invisible' && me.status !== 'invisible') this.yourSeen = String(Date.now());
-			if (p.status) me.status = p.status;
-			else delete me.status;
+			// A chosen `""` (none, §4.5.1) is kept as itself: unlike never choosing (the default, `online`), others see
+			// `""`, and the complete `you` carries it (§4.5.2).
+			me.status = p.status;
 			changed.status = p.status;
 		}
 		if (isJsonObject(p.ext) && Object.keys(p.ext).length) {
