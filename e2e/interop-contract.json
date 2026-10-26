@@ -101,14 +101,15 @@
 			"seen.spec.ts:54",
 			"seen.spec.ts:84 (absent)",
 			"seen.spec.ts:105 (absent)",
-			"seen.spec.ts:122 (absent)"
+			"seen.spec.ts:139 (absent)"
 		],
 		"profile-status": [
 			"seen.spec.ts:83",
 			"seen.spec.ts:92",
 			"seen.spec.ts:104",
 			"seen.spec.ts:113",
-			"seen.spec.ts:147"
+			"seen.spec.ts:132",
+			"seen.spec.ts:164"
 		],
 		"reaction-chip": [
 			"chat.spec.ts:780 (absent)",
@@ -948,7 +949,7 @@
 			},
 			"exact": false,
 			"at": [
-				"seen.spec.ts:119"
+				"seen.spec.ts:136"
 			]
 		},
 		"option \"Move to room\"": {
