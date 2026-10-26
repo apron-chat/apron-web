@@ -858,15 +858,23 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   480px. **`html`** embeds are sanitized with DOMPurify before insertion.
 - Any other kind renders from its `og` as a link card, else as the fallback card
   with its kind name and its `url` or `text`.
-- **Link previews**: a message with GitHub pull request, issue, commit, or
-  repository links (up to three) carries a `link` embed for each, with an `og`
-  the sender builds. A link is looked up as soon as it is pasted, or once
-  typing pauses for a moment: its title, state, author, and an excerpt come
-  from the GitHub REST API, which allows cross-origin reads; each link
-  is fetched once, and a rate-limited answer pauses fetching until the limit
-  resets. A message sent before the details arrive, or linking a private
-  repository, gets a card built from the URL alone ("Pull request #60"). The
-  server may keep, replace, or drop this `og`. The cards show above the
+- **Link previews**: any link in a message is checked against a map of sites
+  by host (`SITES` in `link-sites.ts`), and up to three links on those sites
+  each get a `link` embed, with an `og` the sender builds from the site's
+  public API, which allows cross-origin reads: GitHub pull requests, issues,
+  commits, and repositories (title, state, author, and an excerpt, from the
+  REST API); YouTube videos (title and channel, from oEmbed); posts on X
+  (author, date, and text, from oEmbed); Bluesky posts and profiles (author
+  and text or bio, from the public AppView); and Wikipedia articles in any
+  language (title and opening sentences, from the REST page summary). A link
+  is looked up as soon as it is pasted, or once typing pauses for a moment;
+  each is fetched once, the same page linked two ways (`youtu.be` and
+  `youtube.com/watch`) is one preview, and a rate-limited answer pauses
+  fetching from that site until the limit resets. A message sent before the
+  details arrive, or for a link the API won't describe (a private repository,
+  a deleted post), gets a card built from the URL alone where it says enough
+  ("Pull request #60", "Post by @jack", an article's title), else none. Images
+  are not included. The server may keep, replace, or drop this `og`. The cards show above the
   composer as you write, each with an **(x)** that sends the message without
   it. A failed send restores the draft with those previews still removed;
   otherwise the draft forgets them once it is sent or cleared.
