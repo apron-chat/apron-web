@@ -358,6 +358,8 @@ describe('after a reconnect', () => {
 		expect(snapshot.showReconnectDivider).toBe(false);
 
 		latest().drop();
+		// Nor while it's away: recovery will fill the gap, so there's none to mark meanwhile.
+		expect(snapshot.showReconnectDivider).toBe(false);
 		vi.advanceTimersByTime(5_000);
 		await latest().greet(['history', 'rooms'], { room: general });
 		// The kept room resumed right behind auth, from its checkpoint; one empty page settles it.

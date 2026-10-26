@@ -3,7 +3,7 @@
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
 	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, type ChatClient, type OperationHandle } from '$lib/protocol/client';
-	import { addError, passkeyMessage, wayBackNudge, wayBackWords } from '$lib/ui/connection';
+	import { addError, passkeyMessage, statusLabel, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { returnUrl } from '$lib/ui/sign-in-link';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { prepareAvatar } from '$lib/ui/images';
@@ -78,8 +78,12 @@
 	let avatar = $derived(directory.avatar(you));
 	/** Your `status` as you chose it (§4.5), from `you`: no dot without one. */
 	let ownStatus = $derived(typeof you?.status === 'string' && you.status !== '' ? you.status : undefined);
-	/** Its tooltip: invisible says how others see you. */
-	let ownLabel = $derived(ownStatusLabel(ownStatus));
+	/** Not connected (connecting, or reconnecting): the dot isn't your status yet, so it says so, quietly. */
+	let away = $derived(session.connection !== 'connected');
+	/** The dot: your status once connected; until then, a placeholder ring, never online's green. */
+	let shownStatus = $derived(ownStatus !== undefined && away ? 'unknown' : ownStatus);
+	/** Its tooltip: invisible says how others see you; while not connected, what's happening. */
+	let ownLabel = $derived(ownStatus !== undefined && away ? statusLabel(session.snapshot, session.stalled) : ownStatusLabel(ownStatus));
 	/** Choosing a status (§4.5): with capability `status`, signed in. */
 	let canSetStatus = $derived(session.snapshot.capabilities.status && session.snapshot.authenticated && you !== undefined);
 	/** Optional statuses this server answered something else for anyway (§4.5), per server: not offered again. */
@@ -113,7 +117,7 @@
 	 * account made with a scheme only in `signup` (§3.1). A gentle nudge to add
 	 * another way in.
 	 */
-	let wayBack = $derived(snapshot.passkeySession ? wayBackNudge(session.server, snapshot.signInMethods) : undefined);
+	let wayBack = $derived(session.passkeySession ? wayBackNudge(session.server, session.signInMethods) : undefined);
 	/**
 	 * Adding an email, or an external identity, to this account (§4.11.3): an
 	 * explicit action, proposed on this signed-in connection, and approved
@@ -348,10 +352,10 @@
 
 <!-- The design system's ProfileBar and ProfileEditor draw it; the app fills in its avatar, and the ways to sign in this server offers. -->
 {#snippet barAvatar()}
-	<Avatar name={you?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={ownStatus} statusLabel={ownLabel} />
+	<Avatar name={you?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={shownStatus} statusLabel={ownLabel} />
 {/snippet}
 {#snippet face()}
-	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" status={ownStatus} statusLabel={ownLabel} />
+	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" status={shownStatus} statusLabel={ownLabel} />
 {/snippet}
 {#snippet signin()}
 	{#if snapshot.authBusy && !addEmail?.busy}
@@ -398,7 +402,7 @@
 			{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
 				<span class="ap-profedit-hint">{passkeyUnavailable}</span>
 			{:else if wayBack}
-				<span class="ap-profedit-hint">{snapshot.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
+				<span class="ap-profedit-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
 			{:else}
 				<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
 			{/if}

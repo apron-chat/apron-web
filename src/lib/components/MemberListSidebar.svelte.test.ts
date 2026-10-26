@@ -30,7 +30,7 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChan
 	};
 	directory.apply(snapshot, undefined);
 	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })) } as unknown as RoomSnapshot;
-	const session = { snapshot, canManageRooms: true } as unknown as SessionView;
+	const session = { snapshot, capabilities: snapshot.capabilities, canManageRooms: true } as unknown as SessionView;
 	dom.render(MemberListSidebar, { client: canChange ? ({} as never) : undefined, session, room, open: true, canChange });
 	return [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
 }

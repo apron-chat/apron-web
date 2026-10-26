@@ -363,6 +363,13 @@ export interface ClientSnapshot {
 	 * holds its own copy of the last authenticated snapshot meanwhile.
 	 */
 	disconnectedAt?: number;
+	/**
+	 * When this reconnect began where someone could see it: a drop while the
+	 * page was shown, the page shown again after one while it was hidden, or a
+	 * manual retry. Absent while the page is hidden, so a UI can keep quiet for
+	 * a moment and count a stall only from when someone could see it.
+	 */
+	retryingSince?: number;
 }
 
 /**

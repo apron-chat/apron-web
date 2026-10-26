@@ -504,7 +504,12 @@ export function limitHolds(scope: LimitScope, method: string, params: JsonObject
 
 /** Whether the page is hidden or the browser reports no network; false outside a browser. */
 export function absent(): boolean {
-	return globalThis.document?.visibilityState === 'hidden' || globalThis.navigator?.onLine === false;
+	return pageHidden() || globalThis.navigator?.onLine === false;
+}
+
+/** The page is hidden: nobody sees it, whatever the network. */
+export function pageHidden(): boolean {
+	return globalThis.document?.visibilityState === 'hidden';
 }
 
 export function reconnectDelay(attempt: number, random = 0.5, retryAfterMs?: number): number {

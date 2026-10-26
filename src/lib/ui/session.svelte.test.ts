@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { createTimeline } from '$lib/protocol/reducer';
-import type { ChatClient, ClientSnapshot, RoomSnapshot } from '$lib/protocol/client';
+import { capabilitiesOf, type ChatClient, type ClientSnapshot, type RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
-import { blankSnapshot, SessionView, type HeldSession } from './session.svelte';
+import { blankSnapshot, RECONNECT_QUIET_MS, SessionView, type HeldSession } from './session.svelte';
 
 const message = (id: string, room = 'general'): MessageRecord => ({ message_id: id, log_id: id, room_id: room, from: { user_id: 'ada' }, body: { text: id } });
 
@@ -145,5 +145,85 @@ describe('SessionView.starting', () => {
 		session.apply(ready(), client());
 		flushSync();
 		expect(session.starting).toBe(false);
+	});
+});
+
+describe('SessionView through a reconnect', () => {
+	const server = { apron: 9, auth: ['token'], capabilities: ['history', 'rooms', 'status', 'embed:upload'] };
+	const live = (fields: Partial<ClientSnapshot> = {}) => ready({ server, capabilities: capabilitiesOf(server), rooms: [room('general', ['1'])], activeRoom: 'general', passkeySession: true, signedInWith: 'token', signInMethods: ['token'], ...fields });
+	const dropped = (at: number, fields: Partial<ClientSnapshot> = {}): ClientSnapshot => ({ ...blankSnapshot(), status: 'reconnecting', disconnectedAt: at, ...fields });
+
+	it('keeps quiet for its first moments, from when it began trying where someone could see it', () => {
+		vi.useFakeTimers();
+		onTestFinished(() => { vi.useRealTimers(); });
+		const session = new SessionView();
+		session.apply(live(), client());
+		session.apply(dropped(Date.now(), { retryingSince: Date.now() }), client());
+		expect(session.reconnectQuiet).toBe(true);
+		vi.advanceTimersByTime(RECONNECT_QUIET_MS - 1);
+		expect(session.reconnectQuiet).toBe(true);
+		// Through catching up after it's back, too: the moment counts from the start of the way back.
+		session.apply(live({ rooms: [room('general', ['1'], { recovering: true })] }), client());
+		expect(session.reconnectQuiet).toBe(true);
+		vi.advanceTimersByTime(1);
+		expect(session.reconnectQuiet).toBe(false);
+		session.dispose();
+	});
+
+	it('counts a stall only while someone could see it: not the time a hidden tab waited', () => {
+		vi.useFakeTimers();
+		onTestFinished(() => { vi.useRealTimers(); });
+		const session = new SessionView();
+		session.apply(live(), client());
+		// Dropped while hidden, and waited there a minute: not trying, so not stalled.
+		const at = Date.now();
+		session.apply(dropped(at), client());
+		vi.advanceTimersByTime(60_000);
+		session.apply(dropped(at), client());
+		expect(session.stalled).toBe(false);
+		expect(session.reconnectQuiet).toBe(false);
+		// Shown again: quiet at first, and stalled only after the full window from there.
+		session.apply(dropped(at, { retryingSince: Date.now() }), client());
+		expect(session.reconnectQuiet).toBe(true);
+		expect(session.stalled).toBe(false);
+		vi.advanceTimersByTime(9_999);
+		expect(session.stalled).toBe(false);
+		vi.advanceTimersByTime(1);
+		expect(session.stalled).toBe(true);
+		session.dispose();
+	});
+
+	it('keeps what it showed of the session while reconnecting quietly, not once it needs someone', () => {
+		vi.useFakeTimers();
+		onTestFinished(() => { vi.useRealTimers(); });
+		const session = new SessionView();
+		session.apply(live(), client());
+		flushSync();
+		session.apply(dropped(Date.now(), { retryingSince: Date.now() }), client());
+		flushSync();
+		expect(session.ready).toBe(false);
+		expect(session.steady).toBe(true);
+		expect(session.capabilities.status).toBe(true);
+		expect(session.capabilities['embed:upload']).toBe(true);
+		expect(session.passkeySession).toBe(true);
+		expect(session.signInMethods).toEqual(['token']);
+		// Stalled: it says so, and stops pretending.
+		vi.advanceTimersByTime(10_000);
+		flushSync();
+		expect(session.stalled).toBe(true);
+		expect(session.steady).toBe(false);
+		expect(session.passkeySession).toBe(false);
+		session.dispose();
+	});
+
+	it('keeps nothing through a reconnect once signed out or offline', () => {
+		const session = new SessionView();
+		session.apply(live(), client());
+		session.apply({ ...blankSnapshot(), status: 'offline' }, client());
+		session.apply(dropped(Date.now(), { retryingSince: Date.now() }), client());
+		flushSync();
+		expect(session.steady).toBe(false);
+		expect(session.passkeySession).toBe(false);
+		session.dispose();
 	});
 });

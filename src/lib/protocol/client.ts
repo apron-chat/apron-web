@@ -87,6 +87,7 @@ import {
 	AGENT,
 	UNSUPPORTED,
 	absent,
+	pageHidden,
 	canonicalJson,
 	decrement,
 	historyParams,
@@ -388,6 +389,12 @@ export class ChatClient {
 	private connectionErrored = false;
 	private connectionProbe?: AbortController;
 	private disconnectedAt?: number;
+	/**
+	 * When this reconnect began where someone could see it: the drop, on a page
+	 * shown, or the page shown again after one while it was hidden. Undefined
+	 * while it's hidden, so time away never counts as a reconnect taking long.
+	 */
+	private retryingSince?: number;
 
 	constructor(
 		private serverUrl: string,
@@ -553,6 +560,7 @@ export class ChatClient {
 		this.discardProtocolView('Reconnecting');
 		if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'reconnecting');
 		this.disconnectedAt = undefined;
+		this.retryingSince = undefined;
 		this.status = 'reconnecting';
 		this.scheduleReconnect(0);
 		this.emit();
@@ -588,6 +596,8 @@ export class ChatClient {
 			if (socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'retrying');
 		}
 		this.disconnectedAt ??= this.now();
+		// Asked for: the quiet window starts over from here.
+		this.retryingSince = this.now();
 		this.error = undefined;
 		this.connectNow();
 	}
@@ -696,7 +706,8 @@ export class ChatClient {
 			...(this.limits.size ? { limits: Object.fromEntries([...this.limits].map(([scope, { until }]) => [scope, { until }])) } : {}),
 			...(this.reconnectHeld ? { held: true } : {}),
 			...(this.reconnectHeld && this.signInNeeded ? { signInNeeded: this.signInNeeded } : {}),
-			...(this.disconnectedAt !== undefined ? { disconnectedAt: this.disconnectedAt } : {})
+			...(this.disconnectedAt !== undefined ? { disconnectedAt: this.disconnectedAt } : {}),
+			...(this.retryingSince !== undefined ? { retryingSince: this.retryingSince } : {})
 		};
 	}
 
@@ -1020,6 +1031,7 @@ export class ChatClient {
 		this.clearStableTimer();
 		if (previous && previous.readyState !== WebSocket.CLOSED) previous.close(1000, 'signed in on another connection');
 		this.disconnectedAt = undefined;
+		this.retryingSince = undefined;
 		this.reconnectAttempt = 0;
 		this.status = 'connected';
 		this.error = undefined;
@@ -2508,7 +2520,8 @@ export class ChatClient {
 			if (!this.isCurrentSocket(id, socket)) return;
 			this.abandonSocket = undefined;
 			this.cancelPasskey();
-			this.showReconnectDivider = this.rooms.size > 0 || this.showReconnectDivider;
+			// Only a session-only scrollback (no capability `history`) has a gap to mark; recovery fills any other.
+			this.showReconnectDivider = (this.rooms.size > 0 || this.showReconnectDivider) && !this.hasCap('history');
 			this.socket = undefined;
 			this.authenticated = false;
 			this.authRequested = false;
@@ -2524,6 +2537,7 @@ export class ChatClient {
 			this.suspendProtocolView('Connection closed');
 			if (this.running) {
 				this.disconnectedAt ??= this.now();
+				this.retryingSince ??= pageHidden() ? undefined : this.now();
 				this.status = 'reconnecting';
 				if (opened) this.scheduleReconnect();
 				else void this.diagnoseConnection(id);
@@ -2844,6 +2858,7 @@ export class ChatClient {
 			if (this.socket === stableSocket && this.authenticated) this.reconnectAttempt = 0;
 		}, STABLE_CONNECTION_MS);
 		this.disconnectedAt = undefined;
+		this.retryingSince = undefined;
 		// A reconnect keeps each room's records, and a server with capability `history`
 		// fills the gap through recovery; only a session-only scrollback (§4
 		// fallback) has a real gap to mark.
@@ -4104,6 +4119,7 @@ export class ChatClient {
 		this.addedMethods = new Set();
 		this.error = undefined;
 		this.disconnectedAt = undefined;
+		this.retryingSince = undefined;
 		this.clearTyping();
 		this.emit();
 	}
@@ -4117,7 +4133,10 @@ export class ChatClient {
 	private handleConnectionFailure(id: number, message: string): void {
 		if (id !== this.connectionId) return;
 		this.error = message;
-		if (this.running) this.disconnectedAt ??= this.now();
+		if (this.running) {
+			this.disconnectedAt ??= this.now();
+			this.retryingSince ??= pageHidden() ? undefined : this.now();
+		}
 		this.status = this.running ? 'reconnecting' : 'offline';
 		if (this.running) this.scheduleReconnect();
 		this.emit();
@@ -4145,8 +4164,17 @@ export class ChatClient {
 	 */
 	private waitForPresence(): boolean {
 		if (!absent()) return false;
+		// Nobody sees a hidden page: a reconnect seen to take long counts from its return. Offline, it still counts.
+		if (pageHidden() && this.retryingSince !== undefined) {
+			this.retryingSince = undefined;
+			this.emit();
+		}
 		if (this.presenceWaiter) return true;
 		const resume = (): void => {
+			if (this.running && this.disconnectedAt !== undefined && this.retryingSince === undefined && !pageHidden()) {
+				this.retryingSince = this.now();
+				if (absent()) this.emit();
+			}
 			if (absent()) return;
 			this.stopWaitingForPresence();
 			if (this.running && !this.socket && !this.reconnectTimer) this.connectNow();

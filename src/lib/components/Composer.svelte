@@ -56,6 +56,11 @@
 		dismissed?: string[];
 		placeholder: string;
 		disabled: boolean;
+		/**
+		 * The field takes typing, but nothing sends yet: Send stays off and Enter keeps the draft, as while a short
+		 * drop of the connection comes back.
+		 */
+		holdSend?: boolean;
 		/** Attachments and voice clips (capability `embed:upload`, §4.8.4): each file goes out as an `upload` embed. */
 		canUpload: boolean;
 		/**
@@ -91,7 +96,7 @@
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, canUpload, files = [], uploadLimits, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
 
 	/** Unique per composer, for the open picker's ID. */
 	const uid = $props.id();
@@ -398,7 +403,7 @@
 
 	function send(): void {
 		// Enter while sending waits: the draft stays as it is.
-		if (waitUntil !== undefined && waitUntil > Date.now()) return;
+		if (holdSend || (waitUntil !== undefined && waitUntil > Date.now())) return;
 		closeCompletions();
 		dismissedAutocomplete = undefined;
 		collapse(true);
@@ -655,6 +660,7 @@
 	{placeholder}
 	{value}
 	{disabled}
+	canSend={holdSend ? false : undefined}
 	{canCommand}
 	{canUpload}
 	{canRecord}

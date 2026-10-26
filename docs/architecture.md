@@ -139,7 +139,11 @@ thread is open, per-room drafts) and composes the components. The
 reactive state behind it lives in `src/lib/ui` as small classes — `SessionView`
 (the last authenticated view, held through a reconnect or primed from this device;
 `starting` while the first rooms aren't listed, `activeRoomHeld` while the open
-room shows its held copy, and the open room's thread cards from the same view), `MentionTracker`,
+room shows its held copy, and the open room's thread cards from the same view;
+through a quiet reconnect, `steady`, `capabilities` and `passkeySession` keep
+what the last ready session had, so controls don't blink out with a short drop,
+and `reconnectQuiet` and `stalled` count from the client's `retryingSince`, when
+it began trying where someone could see it, not from the drop), `MentionTracker`,
 `IncomingMessageTracker` (new messages from others, for notifications),
 `AppearanceSettings` (theme and fonts),
 `UnreadTracker`, `ReadPositions` (how far you have read each room and thread,

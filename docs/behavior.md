@@ -70,7 +70,18 @@ also one that comes in steps, doesn't flicker. A short drop of the connection
 uses the same pill, saying "Reconnecting…" until the connection is back and then
 that it's checking, so the way back reads as one quiet line, with everything
 kept on screen; a longer drop, or one that needs you, gets the status banner
-instead.
+instead. The way back shows no pill at all for its first 1.5 seconds, counted
+from when the client starts trying again where you can see it: the drop, or,
+for a tab hidden meanwhile (which waits to reconnect until it's shown), coming
+back to it. Most reconnects are done by then, so they show nothing. A tab
+waiting while hidden shows nothing either, and the banner's "Still trying to
+reconnect…" also counts only from then, never the time the tab was away.
+Through a quiet reconnect the page stays as it was: the rooms' and member
+list's + buttons, the Online and Offline headings, the Private section and the
+profile bar's note stay up, and the composer still takes typing, while Send
+waits for the connection. Only your own dot in the profile bar says it: a ring
+broken into dashes, its tooltip the connection's state, in place of your status
+until the connection is back.
 A request that takes more than 600ms says so in a toast above the composer
 ("Leaving…"), which goes when it's done; one that fails leaves its error there
 until the next request, or until its × closes it. An error of the connection

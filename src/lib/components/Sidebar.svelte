@@ -75,13 +75,13 @@
 	let rooms = $derived(sections.rooms);
 	let privateRooms = $derived(sections.private);
 
-	let canBrowse = $derived(session.canManageRooms && session.ready);
+	let canBrowse = $derived(session.canManageRooms && session.steady);
 	/** What picking a listed room does: join it, or open it without joining where guests only read. */
 	let action = $derived(session.readOnly ? 'Open' : 'Join');
 	let browseOpen = $state(false);
 	let listError = $state('');
 	let createOpen = $state(false);
-	let canCreateRoom = $derived(session.canManageRooms && session.ready && !session.readOnly);
+	let canCreateRoom = $derived(session.canManageRooms && session.steady && !session.readOnly);
 	/** Visible rooms this user hasn't joined (or has left), from the latest `room_list`. */
 	let unjoined = $derived((session.snapshot.directory ?? []).filter((listing) => !listing.joined));
 	/** Threads of the active room this user hasn't joined, once `room_list` has listed them. */
@@ -127,7 +127,7 @@
 	<!-- What's new in the room itself (its threads show their own): none while you're reading it. The Private list says it's private: no lock there. -->
 	<RoomItem
 		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} active={current}
-		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering}
+		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering && !session.reconnectQuiet}
 		onselect={() => onroom(room)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
 	/>
 	{#if active}

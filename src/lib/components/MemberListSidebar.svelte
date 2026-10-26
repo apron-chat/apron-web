@@ -41,7 +41,7 @@
 		directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)
 	), statusOf));
 	/** Online, then offline, each in the order above; with no `status` capability (§4.5), one list. */
-	let sections = $derived(memberSections(members, statusOf, session.snapshot.capabilities.status));
+	let sections = $derived(memberSections(members, statusOf, session.capabilities.status));
 	/** Sections folded away, as the rooms list folds Other threads: a long Offline needn't push the rest out of view. */
 	let shut = $state(new Set(loadShutMemberSections()));
 
