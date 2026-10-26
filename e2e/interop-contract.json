@@ -9,7 +9,7 @@
 			"reference.spec.ts:180"
 		],
 		"browse-rooms": [
-			"perf.spec.ts:133",
+			"perf.spec.ts:136",
 			"reference.spec.ts:269"
 		],
 		"command-tag": [
@@ -46,7 +46,7 @@
 			"chat.spec.ts:637",
 			"chat.spec.ts:702",
 			"chat.spec.ts:720",
-			"test-helpers.ts:167"
+			"test-helpers.ts:198"
 		],
 		"jump-button": [
 			"chat.spec.ts:861",
@@ -59,7 +59,7 @@
 			"chat.spec.ts:721",
 			"reference.spec.ts:252",
 			"reference.spec.ts:266",
-			"test-helpers.ts:172"
+			"test-helpers.ts:203"
 		],
 		"membership-line": [
 			"chat.spec.ts:429"
@@ -94,13 +94,29 @@
 			"responsive.spec.ts:61",
 			"responsive.spec.ts:80"
 		],
+		"profile-card": [
+			"seen.spec.ts:42"
+		],
+		"profile-seen": [
+			"seen.spec.ts:54",
+			"seen.spec.ts:84 (absent)",
+			"seen.spec.ts:105 (absent)",
+			"seen.spec.ts:122 (absent)"
+		],
+		"profile-status": [
+			"seen.spec.ts:83",
+			"seen.spec.ts:92",
+			"seen.spec.ts:104",
+			"seen.spec.ts:113",
+			"seen.spec.ts:147"
+		],
 		"reaction-chip": [
 			"chat.spec.ts:780 (absent)",
 			"chat.spec.ts:781 (absent)",
 			"chat.spec.ts:782 (absent)",
 			"chat.spec.ts:1145",
 			"responsive.spec.ts:106",
-			"test-helpers.ts:118"
+			"test-helpers.ts:149"
 		],
 		"reactions": [
 			"responsive.spec.ts:107"
@@ -144,23 +160,26 @@
 			"responsive.spec.ts:79"
 		],
 		"room-actions": [
-			"test-helpers.ts:153"
+			"test-helpers.ts:184"
 		],
 		"room-directory": [
-			"perf.spec.ts:134",
+			"perf.spec.ts:137",
 			"reference.spec.ts:270",
 			"reference.spec.ts:271"
 		],
 		"room-list": [
-			"perf.spec.ts:135",
-			"perf.spec.ts:137",
+			"perf.spec.ts:138",
+			"perf.spec.ts:140",
 			"reference.spec.ts:267 (absent)",
 			"reference.spec.ts:268"
+		],
+		"room-member-list": [
+			"seen.spec.ts:31"
 		],
 		"selection-bar": [
 			"chat.spec.ts:1011",
 			"chat.spec.ts:1038 (absent)",
-			"test-helpers.ts:98"
+			"test-helpers.ts:129"
 		],
 		"send-button": [
 			"reference.spec.ts:75",
@@ -172,6 +191,9 @@
 		"staged-files": [
 			"reference.spec.ts:74",
 			"reference.spec.ts:88"
+		],
+		"status-hint": [
+			"seen.spec.ts:70"
 		],
 		"stream-embed": [
 			"reference.spec.ts:116"
@@ -188,7 +210,7 @@
 			"reference.spec.ts:248",
 			"responsive.spec.ts:37",
 			"responsive.spec.ts:73",
-			"test-helpers.ts:160"
+			"test-helpers.ts:191"
 		],
 		"thread-last-reply": [
 			"chat.spec.ts:70"
@@ -206,9 +228,9 @@
 			"responsive.spec.ts:58",
 			"responsive.spec.ts:59",
 			"responsive.spec.ts:77",
-			"test-helpers.ts:133",
-			"test-helpers.ts:159",
-			"test-helpers.ts:164"
+			"test-helpers.ts:164",
+			"test-helpers.ts:190",
+			"test-helpers.ts:195"
 		],
 		"thread-preview-description": [
 			"chat.spec.ts:50",
@@ -236,7 +258,7 @@
 			"name": "Alert when it’s closed, too",
 			"exact": false,
 			"at": [
-				"push.spec.ts:532"
+				"push.spec.ts:524"
 			]
 		},
 		"button \"Back to room\"": {
@@ -268,7 +290,7 @@
 				"reference.spec.ts:295",
 				"responsive.spec.ts:36",
 				"responsive.spec.ts:69",
-				"test-helpers.ts:131"
+				"test-helpers.ts:162"
 			]
 		},
 		"button \"Back to rooms\"": {
@@ -333,7 +355,7 @@
 			"name": "Create account with passkey",
 			"exact": true,
 			"at": [
-				"push.spec.ts:169",
+				"test-helpers.ts:121",
 				"webauthn.spec.ts:34"
 			]
 		},
@@ -408,7 +430,7 @@
 			"name": "Move to thread ▾",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:100"
+				"test-helpers.ts:131"
 			]
 		},
 		"button \"React\"": {
@@ -423,7 +445,7 @@
 				"chat.spec.ts:1137",
 				"chat.spec.ts:1146",
 				"responsive.spec.ts:98",
-				"test-helpers.ts:112"
+				"test-helpers.ts:143"
 			]
 		},
 		"button \"Remove reply reference\"": {
@@ -463,8 +485,8 @@
 			"name": "Resume",
 			"exact": true,
 			"at": [
-				"push.spec.ts:435",
-				"push.spec.ts:661"
+				"push.spec.ts:427",
+				"push.spec.ts:653"
 			]
 		},
 		"button \"Run command\"": {
@@ -524,7 +546,8 @@
 			"name": "Show member list",
 			"exact": false,
 			"at": [
-				"push.spec.ts:597"
+				"push.spec.ts:589",
+				"seen.spec.ts:32"
 			]
 		},
 		"button \"Sign in with a passkey\"": {
@@ -534,8 +557,8 @@
 			"name": "Sign in with a passkey",
 			"exact": true,
 			"at": [
-				"push.spec.ts:166",
-				"push.spec.ts:177",
+				"push.spec.ts:154",
+				"test-helpers.ts:118",
 				"webauthn.spec.ts:22",
 				"webauthn.spec.ts:54",
 				"webauthn.spec.ts:151"
@@ -548,7 +571,7 @@
 			"name": "Sign in with passkey",
 			"exact": true,
 			"at": [
-				"push.spec.ts:179",
+				"push.spec.ts:156",
 				"webauthn.spec.ts:35"
 			]
 		},
@@ -559,7 +582,7 @@
 			"name": "Sign out",
 			"exact": true,
 			"at": [
-				"push.spec.ts:489",
+				"push.spec.ts:481",
 				"webauthn.spec.ts:52"
 			]
 		},
@@ -580,8 +603,8 @@
 			"name": "Start thread",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:127",
-				"test-helpers.ts:129"
+				"test-helpers.ts:158",
+				"test-helpers.ts:160"
 			]
 		},
 		"button \"🎉\"": {
@@ -626,13 +649,14 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:308",
-				"push.spec.ts:419",
-				"push.spec.ts:434",
-				"push.spec.ts:528",
-				"push.spec.ts:549",
-				"push.spec.ts:642",
-				"push.spec.ts:660"
+				"push.spec.ts:285",
+				"push.spec.ts:411",
+				"push.spec.ts:426",
+				"push.spec.ts:520",
+				"push.spec.ts:541",
+				"push.spec.ts:634",
+				"push.spec.ts:652",
+				"seen.spec.ts:66"
 			]
 		},
 		"button /^Open preferences\\. Notifications paused/": {
@@ -645,7 +669,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:659"
+				"push.spec.ts:651"
 			]
 		},
 		"button /^Pause/": {
@@ -658,8 +682,21 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:420",
-				"push.spec.ts:644"
+				"push.spec.ts:412",
+				"push.spec.ts:636"
+			]
+		},
+		"button /^Status: /": {
+			"roles": [
+				"button"
+			],
+			"name": {
+				"regex": "^Status: ",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"seen.spec.ts:68"
 			]
 		},
 		"button /^Your profile on/": {
@@ -672,14 +709,14 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:165",
-				"push.spec.ts:176",
-				"push.spec.ts:488",
-				"push.spec.ts:548",
+				"push.spec.ts:153",
+				"push.spec.ts:480",
+				"push.spec.ts:540",
 				"reference.spec.ts:178",
 				"reference.spec.ts:189",
 				"test-helpers.ts:78",
 				"test-helpers.ts:87",
+				"test-helpers.ts:117",
 				"webauthn.spec.ts:6"
 			]
 		},
@@ -706,7 +743,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:557"
+				"push.spec.ts:549"
 			]
 		},
 		"combobox /status/i": {
@@ -719,7 +756,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:557"
+				"push.spec.ts:549"
 			]
 		},
 		"complementary \"Room member list\"": {
@@ -729,7 +766,7 @@
 			"name": "Room member list",
 			"exact": true,
 			"at": [
-				"push.spec.ts:599"
+				"push.spec.ts:591"
 			]
 		},
 		"dialog \"Edit profile\"": {
@@ -751,11 +788,11 @@
 			"name": "Edit profile",
 			"exact": false,
 			"at": [
-				"push.spec.ts:166",
-				"push.spec.ts:176",
-				"push.spec.ts:177",
-				"push.spec.ts:489",
-				"push.spec.ts:548",
+				"push.spec.ts:153",
+				"push.spec.ts:154",
+				"push.spec.ts:481",
+				"push.spec.ts:540",
+				"test-helpers.ts:118",
 				"webauthn.spec.ts:7"
 			]
 		},
@@ -778,7 +815,7 @@
 			"name": "Emoji picker",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:178"
+				"test-helpers.ts:209"
 			]
 		},
 		"dialog \"Move to a new thread\"": {
@@ -798,10 +835,11 @@
 			"name": "Preferences",
 			"exact": false,
 			"at": [
-				"push.spec.ts:309",
-				"push.spec.ts:529",
-				"push.spec.ts:549",
-				"push.spec.ts:643"
+				"push.spec.ts:286",
+				"push.spec.ts:521",
+				"push.spec.ts:541",
+				"push.spec.ts:635",
+				"seen.spec.ts:67"
 			]
 		},
 		"dialog \"Start thread\"": {
@@ -811,7 +849,7 @@
 			"name": "Start thread",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:128"
+				"test-helpers.ts:159"
 			]
 		},
 		"form \"Sign in\" (substring)": {
@@ -821,8 +859,8 @@
 			"name": "Sign in",
 			"exact": false,
 			"at": [
-				"push.spec.ts:167",
-				"push.spec.ts:178",
+				"push.spec.ts:155",
+				"test-helpers.ts:119",
 				"webauthn.spec.ts:8"
 			]
 		},
@@ -845,7 +883,7 @@
 			"name": "Preferences",
 			"exact": false,
 			"at": [
-				"push.spec.ts:311"
+				"push.spec.ts:288"
 			]
 		},
 		"main \"Conversation\" (substring)": {
@@ -871,7 +909,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:645"
+				"push.spec.ts:637"
 			]
 		},
 		"menuitem /Until I resume/": {
@@ -884,7 +922,33 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:421"
+				"push.spec.ts:413"
+			]
+		},
+		"menuitemradio /^Invisible/": {
+			"roles": [
+				"menuitemradio"
+			],
+			"name": {
+				"regex": "^Invisible",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"seen.spec.ts:109"
+			]
+		},
+		"menuitemradio /^Online/": {
+			"roles": [
+				"menuitemradio"
+			],
+			"name": {
+				"regex": "^Online",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"seen.spec.ts:119"
 			]
 		},
 		"option \"Move to room\"": {
@@ -894,7 +958,7 @@
 			"name": "Move to room",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:101"
+				"test-helpers.ts:132"
 			]
 		},
 		"option /For 1 hour/": {
@@ -907,7 +971,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:645"
+				"push.spec.ts:637"
 			]
 		},
 		"option /Until I resume/": {
@@ -920,7 +984,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:421"
+				"push.spec.ts:413"
 			]
 		},
 		"radio \"Passkey\"": {
@@ -943,7 +1007,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:168",
+				"test-helpers.ts:120",
 				"webauthn.spec.ts:32"
 			]
 		},
@@ -954,7 +1018,7 @@
 			"name": "Passkey",
 			"exact": true,
 			"at": [
-				"push.spec.ts:168",
+				"test-helpers.ts:120",
 				"webauthn.spec.ts:32"
 			]
 		},
@@ -971,7 +1035,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:556"
+				"push.spec.ts:548"
 			]
 		},
 		"switch \"Notifications\"": {
@@ -981,8 +1045,8 @@
 			"name": "Notifications",
 			"exact": true,
 			"at": [
-				"push.spec.ts:310",
-				"push.spec.ts:530"
+				"push.spec.ts:287",
+				"push.spec.ts:522"
 			]
 		},
 		"textbox \"Edit message\"": {
@@ -1032,7 +1096,7 @@
 	},
 	"selectors": {
 		"#ap-pref-notifications-note": [
-			"push.spec.ts:531"
+			"push.spec.ts:523"
 		],
 		".ap-divider-date": [
 			"chat.spec.ts:255"
@@ -1126,20 +1190,20 @@
 			"reference.spec.ts:271"
 		],
 		"[data-join]": [
-			"perf.spec.ts:134",
+			"perf.spec.ts:137",
 			"reference.spec.ts:255"
 		],
 		"[data-other-thread]": [
 			"reference.spec.ts:260"
 		],
 		"[data-testid=\"reaction-chip\"][data-emoji]": [
-			"test-helpers.ts:118"
+			"test-helpers.ts:149"
 		],
 		"[data-testid=\"room-list\"] button[data-room=\"general\"]": [
-			"perf.spec.ts:137"
+			"perf.spec.ts:140"
 		],
 		"[data-testid=\"room-list\"] button[data-room]": [
-			"perf.spec.ts:135"
+			"perf.spec.ts:138"
 		],
 		"[data-testid=\"thread-card\"][data-thread]": [
 			"chat.spec.ts:48",
@@ -1152,7 +1216,7 @@
 			"chat.spec.ts:1044",
 			"reference.spec.ts:248",
 			"responsive.spec.ts:73",
-			"test-helpers.ts:160"
+			"test-helpers.ts:191"
 		],
 		"[data-testid=\"thread-list\"] button[data-thread]": [
 			"chat.spec.ts:357",
@@ -1164,17 +1228,17 @@
 			"responsive.spec.ts:58",
 			"responsive.spec.ts:59",
 			"responsive.spec.ts:77",
-			"test-helpers.ts:159"
+			"test-helpers.ts:190"
 		],
 		"[data-testid=\"thread-list\"] button[data-thread][aria-current=\"page\"]": [
 			"chat.spec.ts:340 (absent)",
 			"chat.spec.ts:1033",
 			"reference.spec.ts:262",
-			"test-helpers.ts:133",
-			"test-helpers.ts:164"
+			"test-helpers.ts:164",
+			"test-helpers.ts:195"
 		],
 		"[data-user]": [
-			"push.spec.ts:599"
+			"push.spec.ts:591"
 		],
 		"a.ap-embed-file": [
 			"reference.spec.ts:90"
@@ -1215,8 +1279,8 @@
 			"chat.spec.ts:1043 (absent)",
 			"chat.spec.ts:1045 (absent)",
 			"chat.spec.ts:1120",
-			"perf.spec.ts:136",
-			"perf.spec.ts:138",
+			"perf.spec.ts:139",
+			"perf.spec.ts:141",
 			"reference.spec.ts:59",
 			"responsive.spec.ts:70",
 			"responsive.spec.ts:74 (absent)",
@@ -1231,13 +1295,17 @@
 			"chat.spec.ts:429"
 		],
 		"body": [
-			"push.spec.ts:572"
+			"push.spec.ts:564"
 		],
 		"button.ap-mention-room[data-room-id=\"general\"]": [
 			"reference.spec.ts:301"
 		],
 		"button[data-room]": [
 			"reference.spec.ts:268"
+		],
+		"button[data-user-id]": [
+			"seen.spec.ts:47",
+			"seen.spec.ts:96"
 		],
 		"code": [
 			"webauthn.spec.ts:14"
@@ -1247,7 +1315,7 @@
 		],
 		"em-emoji-picker input[type=\"search\"]": [
 			"chat.spec.ts:1077",
-			"test-helpers.ts:185"
+			"test-helpers.ts:216"
 		],
 		"figcaption": [
 			"reference.spec.ts:82"
@@ -1258,8 +1326,11 @@
 		"iframe.ap-embed-frame": [
 			"reference.spec.ts:152"
 		],
+		"li[data-user]": [
+			"seen.spec.ts:38"
+		],
 		"option": [
-			"push.spec.ts:566"
+			"push.spec.ts:558"
 		],
 		"pre": [
 			"reference.spec.ts:119",
@@ -1345,14 +1416,14 @@
 			"test-helpers.ts:82"
 		],
 		"choices(…, label)": [
-			"push.spec.ts:563",
-			"push.spec.ts:572"
+			"push.spec.ts:555",
+			"push.spec.ts:564"
 		],
 		"option named new RegExp(handle)": [
 			"chat.spec.ts:807"
 		],
 		"pickFromEmojiPicker(…, emoji)": [
-			"test-helpers.ts:113"
+			"test-helpers.ts:144"
 		]
 	}
 }
