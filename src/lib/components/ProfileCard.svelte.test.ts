@@ -67,16 +67,21 @@ describe('ProfileCard last seen', () => {
 		expect(time.title).toMatch(/^Last seen \d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
 	});
 
-	it('says nothing of a seen kept from before they came back online, an unreadable one, a recorded one, or yours', () => {
-		const cases: [string, Identity[], Identity, Identity[]][] = [
-			['back online', [ada, { user_id: 'bob', status: 'online', seen }], ada, []],
-			['no status', [ada, { user_id: 'bob', seen }], ada, []],
-			['unreadable', [ada, { user_id: 'bob', status: 'offline', seen: 'yesterday' }], ada, []],
-			['recorded only', [ada], ada, [{ user_id: 'bob', status: 'offline', seen }]],
-			['yours', [{ ...ada, status: 'offline', seen }], { ...ada, status: 'offline', seen }, []]
+	it('says nothing of a seen kept from before they came back online, an unreadable one, one past what a Date holds, a recorded one, or yours', () => {
+		// Each with the status the card shows: where it is offline, the seen alone decides.
+		const cases: [string, Identity[], Identity, Identity[], string | undefined][] = [
+			['back online', [ada, { user_id: 'bob', status: 'online', seen }], ada, [], 'Online'],
+			['no status', [ada, { user_id: 'bob', seen }], ada, [], undefined],
+			['unreadable', [ada, { user_id: 'bob', status: 'offline', seen: 'yesterday' }], ada, [], 'Offline'],
+			// The log_id format allows it, but formatting it as a date throws.
+			['past what a Date holds', [ada, { user_id: 'bob', status: 'offline', seen: '9000000000000000' }], ada, [], 'Offline'],
+			// Offline in the kept object, with a seen only in the recorded one.
+			['recorded only', [ada, { user_id: 'bob', status: 'offline' }], ada, [{ user_id: 'bob', status: 'offline', seen }], 'Offline'],
+			['yours', [{ ...ada, status: 'offline', seen }], { ...ada, status: 'offline', seen }, [], 'Offline']
 		];
-		for (const [what, users, you, recorded] of cases) {
+		for (const [what, users, you, recorded, status] of cases) {
 			const card = render(what === 'yours' ? 'ada' : 'bob', users, you, undefined, undefined, [], recorded);
+			expect(card.querySelector('[data-testid="profile-status"]')?.textContent, what).toBe(status);
 			expect(card.querySelector('[data-testid="profile-seen"]'), what).toBeNull();
 			profileCard.close();
 			dom.unmount();

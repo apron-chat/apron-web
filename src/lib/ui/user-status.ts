@@ -1,7 +1,7 @@
 import { PRESENCE_LABELS, presence } from '$lib/design/components/util';
 import type { Presence } from '$lib/design/components/types';
 import { isPaused, type PausedUntil } from './pause';
-import { idDateTime, idIso, idSince } from './time';
+import { idDate, idDateTime, idIso, idMillis, idSince } from './time';
 
 /**
  * The statuses you can choose with `me` (§4.5), as the picker lists them:
@@ -49,17 +49,24 @@ export function ownStatusLabel(status: string | undefined): string | undefined {
  * shown status is `offline` (a kept `seen` outlives their coming back
  * online), and never for you, whose status is the one you chose. Undefined
  * otherwise, or when it isn't in the `log_id` format (§2.1): decimal digits
- * of a positive integer below 2^53.
+ * of a positive integer below 2^53; nor past the last date a `Date` holds
+ * (`idMillis`), which no time can be shown for.
  */
 export function shownSeen(user: { status?: unknown; seen?: unknown } | undefined, you = false): string | undefined {
 	if (you || user?.status !== 'offline') return undefined;
 	const seen = user.seen;
-	return typeof seen === 'string' && /^[1-9][0-9]{0,15}$/.test(seen) && Number.isSafeInteger(Number(seen)) ? seen : undefined;
+	return typeof seen === 'string' && /^[1-9][0-9]{0,15}$/.test(seen) && idMillis(seen) !== undefined ? seen : undefined;
 }
+
+/** How far ahead of `now` a `seen` may be, from a clock that differs a little, and still read as just now. */
+export const SEEN_SKEW_MS = 5 * 60 * 1000;
 
 /** When someone was last seen, for a `<time>`: its words, its `datetime`, and the exact time for its tooltip. */
 export interface LastSeen {
-	/** `Last seen just now`, `Last seen 5m ago` (`3h`, `12d` within two weeks), then `Last seen 14 Sep` (with the year when it isn't this one). */
+	/**
+	 * `Last seen just now`, `Last seen 5m ago` (`3h`, `12d` within two weeks), then the day as the browser's locale
+	 * writes it, such as `Last seen Sep 14` (with the year when it isn't this one).
+	 */
 	text: string;
 	datetime: string;
 	/** `Last seen 2026-10-26 13:20:48`, local time. */
@@ -68,13 +75,18 @@ export interface LastSeen {
 
 /**
  * A shown `seen` (`shownSeen`) in words, as of `now` (it doesn't tick by
- * itself: read `now` from `minuteNow`). A time ahead of `now`, from a clock
- * that differs, is just now. Undefined without one.
+ * itself: read `now` from `minuteNow`). A time a little ahead of `now`
+ * (`SEEN_SKEW_MS`), from a clock that differs, is just now. One further
+ * ahead says its day, as one past two weeks does: "ago" words for it would
+ * be false, and the day is still what the server said, and right if it is
+ * this device's clock that is behind. Undefined without one.
  */
 export function lastSeen(seen: string | undefined, now = Date.now()): LastSeen | undefined {
-	const since = seen === undefined ? '' : idSince(seen, now);
+	const millis = seen === undefined ? undefined : idMillis(seen);
 	const datetime = seen === undefined ? undefined : idIso(seen);
-	if (!since || !datetime) return undefined;
+	if (millis === undefined || !datetime) return undefined;
+	const since = millis - now > SEEN_SKEW_MS ? idDate(seen!, now) : idSince(seen!, now);
+	if (!since) return undefined;
 	const words = since === 'now' ? 'just now' : /^\d+[mhd]$/.test(since) ? `${since} ago` : since;
 	return { text: `Last seen ${words}`, datetime, title: `Last seen ${idDateTime(seen!)}` };
 }

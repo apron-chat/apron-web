@@ -117,6 +117,25 @@ describe('MemberListSidebar', () => {
 		}
 	});
 
+	it('says nothing of a seen past the last date a Date holds, and goes on updating', () => {
+		const now = Date.UTC(2026, 9, 22, 12);
+		vi.useFakeTimers({ now, toFake: ['Date'] });
+		try {
+			const linus = { user_id: 'linus', name: 'Linus', status: 'offline', seen: '9000000000000000' };
+			const rows = render([ada, linus, { user_id: 'bo', name: 'Bo', status: 'online' }]);
+			const title = (id: string) => document.querySelector<HTMLElement>(`li[data-user="${id}"] button`)?.title;
+			expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'bo', 'linus']);
+			expect(title('linus')).toBe('@linus · Offline');
+			// The next change still shows.
+			const snapshot = { ...blankSnapshot(), capabilities: { ...blankSnapshot().capabilities, status: true }, authenticated: true, you: ada, recordedUsers: {}, userAliases: {} };
+			directory.apply({ ...snapshot, users: { ada, linus: { ...linus, seen: String(now - 5 * 60_000) }, bo: { user_id: 'bo', name: 'Bo', status: 'offline', seen: '9007199254740991' } } }, undefined);
+			flushSync();
+			expect([title('linus'), title('bo')]).toEqual(['@linus · Offline · last seen 5m ago', '@bo · Offline']);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('shows no dot for a cleared status, or one dropped at a sign-in, and the dot again once the server sends it', () => {
 		const statuses = (rows: HTMLLIElement[]) => rows.map((row) => [row.dataset.user, row.dataset.status ?? '', row.querySelector('.ap-presence') !== null]);
 		const before = render([ada, { user_id: 'bo', name: 'Bo', status: 'idle' }, { user_id: 'cy', name: 'Cy', status: '' }]);
