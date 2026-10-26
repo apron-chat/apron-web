@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=420 subtitle="The start of a private room's timeline: a conversation with one person (their face, @user_id and bio), with Add members; a group's, without it" -->
+<!-- @dsCard group="Timeline" height=420 subtitle="The start of a private room's timeline: a conversation with one person (their face, @user_id and bio), and a group's" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>PrivateIntro</title></head>
@@ -6,8 +6,7 @@
 <div id="root" class="ap-stack" style="padding:0"></div>
 <script>
   var A = window.Apron, root = document.getElementById('root');
-  var noop = function () {};
-  A.render(A.PrivateIntro, root, { name: 'Bob', faces: [{ user_id: 'bob', name: 'Bob', hue: 200, status: 'online' }], detail: '@bob · Writes the docs nobody reads.', onaddpeople: noop });
+  A.render(A.PrivateIntro, root, { name: 'Bob', faces: [{ user_id: 'bob', name: 'Bob', hue: 200, status: 'online' }], detail: '@bob · Writes the docs nobody reads.' });
   A.render(A.PrivateIntro, root, { name: 'Dev, Mira', faces: [{ user_id: 'dev', name: 'Dev', hue: 140 }, { user_id: 'mira', name: 'Mira', hue: 80 }], detail: '3 members' });
 </script>
 </body>

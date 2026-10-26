@@ -1,8 +1,6 @@
 <script lang="ts">
 	import Lock from '@lucide/svelte/icons/lock';
-	import UserPlus from '@lucide/svelte/icons/user-plus';
 	import type { ClassValue } from 'svelte/elements';
-	import Button from './Button.svelte';
 	import Faces from './Faces.svelte';
 	import type { Face } from './types';
 
@@ -17,15 +15,12 @@
 		faces?: Face[];
 		/** One line under the name, such as a person's `@user_id` and bio. */
 		detail?: string;
-		/** Offers Add members, such as opening the member list's add form (§4.2.2). */
-		onaddpeople?: () => void;
 		/** Classes for its `<section>`, added to its own. */
 		class?: ClassValue;
-		/** A `data-testid` for its `<section>`, and one for Add members. */
+		/** A `data-testid` for its `<section>`. */
 		testid?: string;
-		addTestid?: string;
 	}
-	let { name, faces = [], detail, onaddpeople, class: className, testid, addTestid }: Props = $props();
+	let { name, faces = [], detail, class: className, testid }: Props = $props();
 </script>
 
 <section class={['ap-dmintro', className]} aria-label="About this private room" data-testid={testid}>
@@ -37,7 +32,4 @@
 		</div>
 	</div>
 	<p class="ap-dmintro-text"><span class="ap-dmintro-private"><Lock size={13} aria-hidden="true" />Private room.</span> Only members and the server host can read messages here. Only members can add others.</p>
-	{#if onaddpeople}
-		<div class="ap-dmintro-actions"><Button size="sm" data-testid={addTestid} onclick={onaddpeople}><UserPlus size={15} aria-hidden="true" />Add members</Button></div>
-	{/if}
 </section>

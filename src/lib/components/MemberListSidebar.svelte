@@ -100,15 +100,6 @@
 		form?.focus();
 	}
 
-	/** Opens the add form, from elsewhere, such as a private room's Add members: where adding is offered here. */
-	export async function openAdd(): Promise<void> {
-		if (!changing) return;
-		note = undefined;
-		addOpen = true;
-		await tick();
-		form?.focus();
-	}
-
 	function closeAdd(): void {
 		addOpen = false;
 		adding = '';

@@ -564,7 +564,6 @@
 		const detail = one ? `@${one.user_id}${bio ? ` · ${bio}` : ''}` : count ? `${count} ${count === 1 ? 'member' : 'members'}` : undefined;
 		return { name: room.title, faces: roomFaces(room, session.you), detail };
 	});
-	let memberListSidebar = $state<MemberListSidebar | undefined>();
 
 	$effect(() => {
 		const roomId = activeRoom?.id;
@@ -2007,13 +2006,6 @@
 		else memberListOverlay = !memberListOverlay;
 	}
 
-	/** A private room's Add members: the member list, open, with its add form (§4.2.2). */
-	async function addPeople(): Promise<void> {
-		if (!memberListOpen) toggleMemberList();
-		await tick();
-		await memberListSidebar?.openAdd();
-	}
-
 	/**
 	 * Takes each snapshot as the client emits it, while what's in flight is still pending in it: a private room that
 	 * arrives without this page asking for it (`ArrivalWatch`; nor joining it, as `pendingJoin` says) is one someone
@@ -2805,7 +2797,7 @@
 					<EmptyState title={activeThread ? 'No replies yet' : 'Nothing here yet'} detail={activeThread ? 'Reply below to continue the thread.' : `Start the conversation in ${activeRoom.title}.`} />
 				{:else}
 					{#if privateIntro}
-						<PrivateIntro {...privateIntro} testid="private-intro" addTestid="private-add-people" onaddpeople={canChangeMembers && !snapshot.memberChangesUnsupported && activeRoom.joined ? addPeople : undefined} />
+						<PrivateIntro {...privateIntro} testid="private-intro" />
 					{/if}
 					{#each shownTimeline as item (item.key)}
 						{#if item.kind === 'date'}
@@ -2896,7 +2888,7 @@
 		{/if}
 	{/snippet}
 	{#snippet members()}
-		<MemberListSidebar bind:this={memberListSidebar} {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
+		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
 	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
