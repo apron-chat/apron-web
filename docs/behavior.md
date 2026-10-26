@@ -340,7 +340,10 @@ member in the member list opens their profile card: a popover beside it (a
 bottom sheet on narrow screens) with their avatar, name, `@user_id` (always,
 here), role badges, "(you)", a warning when another known user shows under
 the same name, their bio where the server keeps one (plain text with its
-line breaks, never markup; its `http(s)` links open in a new tab), and whether they're in the open room. **Mention** puts their
+line breaks, never markup; its `http(s)` links open in a new tab), and whether they're in the open room. **Message**, the
+card's primary action, opens a private conversation with them (below), for
+anyone but you and the system identities, while you're signed in to an account
+(not a guest) on a server with the `rooms` capability. **Mention** puts their
 chip in the composer, **Copy @user_id** copies their handle, and **Add to
 room** appears where the member list would let you add them. Escape, a press
 outside, or tabbing out closes it. Mentions inside a reply's quote only read,
@@ -613,7 +616,9 @@ Threads are rooms with a `parent_room_id`. A thread without a title is called
 header, the move menu, the composer's "Reply in Untitled", room chips,
 notifications), with its `room_id` on hover; a top-level room without one is
 still called by its `room_id`, since several untitled rooms side by side would
-be indistinguishable. The sidebar lists top-level rooms
+be indistinguishable, unless it is private (below), when it is named for its
+members. The sidebar lists top-level rooms (ordinary ones under **Rooms**,
+private ones under **Private**, below)
 and, under the open room, its threads in two groups. Under a room that isn't
 open, it lists only that room's joined threads with news (unread replies or
 mentions), in the same rows, so activity there isn't missed; picking one opens
@@ -688,6 +693,88 @@ it, since an omitted `private` is kept: a new thread of a private room that
 comes back without `private: true` gets the same error, and neither the reply
 composer opens on it nor do selected messages move into it. Private rooms and
 threads show a lock beside their name.
+
+The sidebar's **Private** section, right below Rooms and above Browse rooms,
+lists every joined top-level private room (`private: true` and no
+`parent_room_id`, [PROTOCOL.md §4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)):
+conversations started with people and titled private rooms alike. Nothing is
+read from a `room_id`, which is opaque. Its threads stay under it as under any
+room, and its rows count unread messages and mentions, open, and show the open
+one as Rooms' rows do, with no lock, since the section says so: in place of the
+lock, the faces of who it's with, one person's 20px avatar with their status
+dot, or two of a group's stacked, or yours where you're alone in it. A private
+room without a title is named for its other members, by display name, sorted
+and joined with ", " ("Dev, Mira"), or "You" when no one else is left, or
+"Private room" while its members aren't known; the one naming rule is the
+client's, so the sidebar, the header, the composer's "Message Bob", room chips
+and notifications (just "Bob" where the room is named for its sender alone)
+agree. A titled private room keeps its title, with the same faces. The
+section shows whenever you're in a private room; with none, it shows (empty,
+just its heading) only where you could start one, for its **+**, **New private
+conversation**, which is there for an account signed in (not a guest) on a
+server with the `rooms` capability. Guests see the private rooms they were
+added to, and start none.
+
+**Message** on a profile card opens the private room you already have with
+that person: joined, untitled, and with exactly the two of you as members
+(from a complete member list). Otherwise it starts one, saying "Opening…" on
+the button: `room_set` with `private: true` and no title, which joins you;
+once its `room_update` `joined` record arrives and says `private: true`, adds
+them with `room_join` and their `user_id`, then opens it. A server without
+private rooms answers `unsupported`, which the card's note words as "This
+server doesn't have private rooms."; any other refusal, such as a limit
+(`denied`), shows the server's message as it is. A room that comes back
+without `private: true` gets the same error as a room created private from
+Create a room, and no one is added to it. One that started but couldn't add
+them is kept, and the note says who couldn't be added and why.
+
+The **+** beside Private opens **New private conversation**, a centered dialog:
+**To** holds the people picked as chips (each with its ×), over everyone the
+client knows but you and the system identities, sorted by name, each with
+their avatar, status dot, name and `@user_id`, narrowed by a name or
+`@user_id` typed in the field. The field is a combobox and the people a
+listbox: the arrows move through them, Enter picks (or takes back) the one the
+keyboard is on, and Backspace in the empty field takes back the last chip.
+While no one is picked, someone you already have a conversation with says
+"Already talking · Open", and picking them opens it; once someone is picked,
+they join the chips instead, for a group. With two or more picked, an optional
+**Name** sets the room's `title`. The primary button reads "Message Bob" for
+one person, else "Start conversation". It creates the room as Message does,
+then adds each person in turn; an add that fails doesn't stop the rest, the
+room is kept and opens, and a toast says who couldn't be added and why. Where
+the server states a limit (`ext.settings.private_rooms`, [EXT.md §3.4](../EXT.md#34-private_rooms)),
+the dialog's foot says how many private rooms you're in of it ("2 of 5"), and
+at the limit a warning takes the people's place, with your private rooms, the
+quietest first (five, and "and N more"), each with **Leave**, and the primary
+button can't be used.
+
+An untitled private room's header shows its faces before its name, and under
+it who can see it: "Online · only you and Bob can see this room" with one
+other person (their status, where the server sends one), else "Only members
+can see this room". The header keeps its plum wash and lock. Once its history
+reaches back to its creation (all loaded, and its `history_log_id` at or
+before the room's first record, or none retrievable at all), a private room's
+timeline starts with a card: its faces, its name, the person's `@user_id`
+and the first line of their bio for a conversation with one person (else how
+many members), and "Private room. Only members see it or its messages.
+Members can add people, and anyone can leave.", with **Add people**, which
+opens the member list's add form, where adding is offered. Nothing in it
+says how long messages are kept: that is the server's.
+
+A private room that arrives in a `room_update` `joined` without this page
+having asked for it (no room creation or join of it in flight, and not one
+it started) is one someone else added you to: until its × puts it away, it
+shows "You were added to this private room." under its header, with
+**Mute** (the room's own mute, `status` with its `room_id`, where the server
+has the `status` capability and you're signed in to an account; **Unmute**
+once muted), **Leave** and the ×. Which rooms still show it is kept on this
+device, per account, until it's put away or you leave. In a private room the
+member list's **+** and a profile card's **Add to room** are offered as in any
+room, and moving messages into one of its threads adds their authors, whatever
+`ext.settings.add_members` says, since members of a private room add people
+to it. Leaving a private room asks first and says it can't be
+joined again (only someone in it can add you back), or, as its last member,
+that it ends when you leave: the server removes it then.
 
 A room's or thread's `description` (CommonMark by convention) shows as a
 **Description** pinned under the header, above the timeline, so it stays in view
