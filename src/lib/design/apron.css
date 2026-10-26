@@ -675,6 +675,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-room-nested { padding: 3px var(--space-3) 3px calc(var(--space-3) + var(--space-4)); font-size: var(--text-ui); line-height: var(--leading-ui); align-items: flex-start; }
 /* Counts stay beside the title when preview lines follow it. */
 .ap-room-nested .ap-count { margin-top: -1px; }
+/* Top-aligned, as a thread's row is: centred on its first line, with the name, the count and the time. */
+.ap-room-nested .ap-muted { margin-top: calc((var(--leading-ui) - 14px) / 2); }
 .ap-room-nested.ap-room-active::before { left: 20px; top: 4px; bottom: 4px; z-index: var(--z-raised); }
 /* A thread with an unread mention: a light accent tint, set apart from the open thread's neutral fill. */
 .ap-room-nested.ap-room-mention { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); color: var(--ink); }
