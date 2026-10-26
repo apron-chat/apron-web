@@ -271,15 +271,23 @@ keeps them.
 A user object with a shown `offline` may carry `seen` (§4.5.2): when that
 user's shown status last became `offline`, in the `log_id` format. While a
 member shows offline, their profile card says "Last seen 3h ago" under the
-status (as `just now`, `5m`, `3h` or `12d ago` within two weeks, then the day,
-`Last seen 14 Sep`), with the exact local time as its tooltip, and their row's
-tooltip says "Offline · last seen 3h ago"; both move on each minute. It merges
-like any other field, so a `seen` kept from before stays when they come back
-online (`{"status": "online"}` carries none), but it shows only while they
-show offline. One that isn't decimal digits of a positive integer below
-2^53 shows nothing. It is never kept for you: your status is the one you chose,
-and `you` carries no `seen`. A sign-in drops each `seen` with the statuses;
-resuming, a held `offline` keeps its `seen`.
+status (as `just now`, `5m`, `3h` or `12d ago` within two weeks, then the day
+as the browser's locale writes it, such as `Last seen Sep 14` in en-US, with
+the year when it isn't this one), with the exact local time as its tooltip,
+and their row's tooltip says "Offline · last seen 3h ago"; both move on each
+minute. A `seen` up to five minutes ahead of this device's clock is
+`just now`; one further ahead says its day, since "ago" would be false. It
+merges like any other field, so a `seen` kept from before stays when they
+come back online (`{"status": "online"}` carries none), but it shows only
+while they show offline. One that isn't decimal digits of a positive integer
+below 2^53, or is past the last date a JavaScript `Date` holds (8.64e15 ms),
+shows nothing. It is never kept for you: your status is the one you chose,
+and `you` carries no `seen`. A sign-in drops each `seen` with the statuses.
+Resuming, a held `offline` shows with its `seen` until the joined listing
+arrives; an `offline` kept after it because nothing was said of them keeps
+no `seen`, since they may have come back and gone again meanwhile (the
+sign-in sends no `offline`, and a listing of what changed since leaves out
+rooms whose log didn't move), until an object that carries one arrives.
 
 In the composer, Enter sends and Shift+Enter starts a new line. On a phone or
 tablet (a touch screen with no pointer that hovers) Enter starts a new line

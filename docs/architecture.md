@@ -119,6 +119,12 @@ the client keeps `status` only from a `you`. `user-status.ts` lists the
 choices, words your own (`ownStatusLabel`), decides when the page is silent
 (`pageSilenced`: paused, or `dnd`) and sorts the member list (online, idle,
 dnd, unknown, offline, then none), where offline members are dimmed.
+`seen` (§4.5.2), when someone's shown status last became `offline`, merges
+into the kept user object like any field; `directory.seen` reads it from
+there through `shownSeen` (only while they show `offline`, never yours, and
+only a `log_id`-format time a `Date` can hold), and `lastSeen` words it
+("Last seen 5m ago", with its `datetime` and exact time) for `ProfileCard`'s
+`seen` and, through `withLastSeen`, the member row's tooltip.
 `ProfileCard` shows an unknown value literally. Messages show no status: it
 is about now, and they are history. `PreferencesDialog` renders the design
 system's `CheckList` (what to notify about), `Callout` (installing for push,

@@ -85,7 +85,7 @@ export function idSince(id: string, now = Date.now()): string {
 	return idDate(id, now);
 }
 
-/** The local day a log ID falls on, `14 Sep` (with the year when it isn't `now`'s), as `idSince` names it past two weeks; empty when it carries no time. */
+/** The local day a log ID falls on, as the browser's locale writes it (`Sep 14` in en-US, with the year when it isn't `now`'s), as `idSince` names it past two weeks; empty when it carries no time. */
 export function idDate(id: string, now = Date.now()): string {
 	const millis = idMillis(id);
 	if (!millis) return '';
