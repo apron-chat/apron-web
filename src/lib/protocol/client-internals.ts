@@ -284,6 +284,14 @@ export function untitledThread(record: RoomRecord | undefined): boolean {
 }
 
 /**
+ * A top-level private room (§4.2.4) whose record has no title, such as one started to talk to someone: it is named
+ * after its other members (`peopleTitle`), not its `room_id`, which is opaque (§2.4).
+ */
+export function untitledPrivate(record: RoomRecord | undefined): boolean {
+	return record?.private === true && typeof record.parent_room_id !== 'string' && !titled(record.title);
+}
+
+/**
  * A room's or thread's display title by the one naming rule (`roomName`, which the design system applies to names it
  * is given): its record's `title`, else its `room_id` (§3.4), or for a thread "Untitled", whose `room_id` the design
  * system shows on hover (`untitled` on the snapshot says so). A title of only spaces counts as none. The default room,

@@ -355,8 +355,10 @@ notifications and push alike, one line per option: Mentions (messages whose
 message not loaded, no notification), All messages in private rooms (a private
 room or its threads) and All messages in joined rooms (a joined room or its
 threads). Messages of your own never notify. At
-least one stays checked, mentions and replies until you choose; the switches
-below turn notifications off. The choice is kept per account on each server,
+least one stays checked: until you choose, mentions, replies and all messages
+in private rooms, so a conversation started from a profile card alerts from
+its first message, and push sends `private` in its `wake` (§4.9.4) for it to
+push; the switches below turn notifications off. The choice is kept per account on each server,
 and for a server's guests together (their `user_id`s change with each
 connection), and applies in other tabs. The earlier device-wide "Everything"
 carries over as every scope.

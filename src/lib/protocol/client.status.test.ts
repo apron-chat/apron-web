@@ -295,6 +295,9 @@ describe('mutes', () => {
 		expect(snapshot.mutedUntil).toBe(Date.now() + 3_600_000);
 		socket.receive({ method: 'status', params: { mute: false } });
 		expect(snapshot.mutedUntil).toBeUndefined();
+		// One room's mute names it.
+		client.setMute(true, 'ops');
+		expect(statuses().filter((params) => 'mute' in params).at(-1)).toEqual({ room_id: 'ops', mute: true });
 		// Another of your connections paused: the server sends it here too, and this one takes it as its own.
 		socket.receive({ method: 'status', params: { mute: true } });
 		expect(snapshot.mutedUntil).toBe(true);

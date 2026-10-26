@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadHiddenDescriptions, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -72,6 +72,18 @@ describe('preference storage', () => {
 		expect(loadNotifyScopes(notifyAccount('wss://b.example/', 'ada'))).toBeUndefined();
 		values.set('apron.notifyScopes', '{broken');
 		expect(loadNotifyScopes(ada)).toBeUndefined();
+	});
+
+	it('keeps the rooms someone added each account to, until there are none left', () => {
+		const ada = notifyAccount('wss://a.example/', 'ada');
+		const bob = notifyAccount('wss://a.example/', 'bob');
+		expect(loadAddedRooms(ada)).toEqual([]);
+		saveAddedRooms(ada, ['p1', 'p2']);
+		saveAddedRooms(bob, ['p3']);
+		expect([loadAddedRooms(ada), loadAddedRooms(bob)]).toEqual([['p1', 'p2'], ['p3']]);
+		saveAddedRooms(ada, []);
+		expect(loadAddedRooms(ada)).toEqual([]);
+		expect(JSON.parse(values.get('apron.addedRooms')!)).toEqual({ [bob]: ['p3'] });
 	});
 
 	it('makes each account a random push_id once, and keeps it', () => {

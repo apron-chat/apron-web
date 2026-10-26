@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, serverMedia, yourPermissions } from './client-views';
+import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, peopleTitle, serverMedia, serverSettings, yourPermissions } from './client-views';
 import type { ServerParams } from './types';
 
 const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 9, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
@@ -46,6 +46,24 @@ describe('serverMedia (ext:media)', () => {
 		expect(mediaLimit({ 'image/*': {} }, 'audio/ogg')).toBeUndefined();
 		expect(mediaLimit({ 'application/octet-stream': {} }, '')).toEqual({});
 		expect(mediaLimit({ 'audio/*': {} }, 'Audio/MP4')).toEqual({});
+	});
+});
+
+describe('serverSettings (ext:settings)', () => {
+	it('reads private_rooms as a count, and states no limit without one', () => {
+		expect(serverSettings(server(['ext:settings'], { settings: { private_rooms: 5 } })).private_rooms).toBe(5);
+		expect(serverSettings(server(['ext:settings'], { settings: { private_rooms: 0 } })).private_rooms).toBe(0);
+		for (const odd of [undefined, -1, 2.5, '5', true]) expect(serverSettings(server(['ext:settings'], { settings: { private_rooms: odd } }))).not.toHaveProperty('private_rooms');
+		// Only while the server lists the extension.
+		expect(serverSettings(server([], { settings: { private_rooms: 5 } }))).not.toHaveProperty('private_rooms');
+	});
+});
+
+describe('peopleTitle', () => {
+	it('names a private room after the others in it, sorted, or "You" alone', () => {
+		expect(peopleTitle(['Mira', 'dev'])).toBe('dev, Mira');
+		expect(peopleTitle(['Bob'])).toBe('Bob');
+		expect(peopleTitle([])).toBe('You');
 	});
 });
 

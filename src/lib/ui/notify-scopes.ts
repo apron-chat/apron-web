@@ -16,8 +16,11 @@ export const NOTIFY_SCOPES = [
 
 type NotifyScope = (typeof NOTIFY_SCOPES)[number]['value'];
 
-/** Until an account chooses: mentions and replies, the protocol's default wake scopes. */
-const DEFAULT_NOTIFY_SCOPES: readonly NotifyScope[] = ['mentions', 'replies'];
+/**
+ * Until an account chooses: mentions and replies, the protocol's default wake scopes, and every message in a private
+ * room, where a conversation with one person or a few is what everything said is for.
+ */
+const DEFAULT_NOTIFY_SCOPES: readonly NotifyScope[] = ['mentions', 'replies', 'private'];
 
 /** Who the scopes of a guest are kept for: guests' `user_id`s change with each connection. */
 const GUEST_ACCOUNT = '~guest';

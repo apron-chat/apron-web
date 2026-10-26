@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ProtocolStore, applyRecords, decodeHistoryRecords, timelineEvents, type MembershipRecord } from '$lib/protocol/reducer';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { byActivity, escapeMarkdown, buildRoomTimeline, inHeldOrder, buildThreadTimeline, newDividerBefore, sidebarRooms, threadEntries, threadEntry, threadDescriptionFor, threadDescriptionText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { byActivity, escapeMarkdown, buildRoomTimeline, inHeldOrder, buildThreadTimeline, newDividerBefore, sidebarRooms, sidebarSections, threadEntries, threadEntry, threadDescriptionFor, threadDescriptionText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { messageSnippet, peopleIn, rangeBetween, spanOf } from './messages';
 import { roomSnapshot as room } from '$lib/test/builders';
@@ -53,6 +53,19 @@ describe('thread grouping', () => {
 	const ops = room('ops');
 	const deploy = room('t1', [], { parentRoomId: 'general', title: 'Deploy' });
 	const orphan = room('t2', [], { parentRoomId: 'gone', title: 'Orphan' });
+
+	it('lists private rooms apart from the rest, by private and parent_room_id alone, with their threads under them', () => {
+		const dm = room('private_1724803950000', [], { private: true, namedForMembers: true, title: 'Bob' });
+		const launch = room('launch', [], { private: true, title: 'Launch' });
+		const secret = room('t3', [], { parentRoomId: 'launch', private: true, title: 'Secret' });
+		// A room whose id looks private but isn't, and an orphaned private thread, stay with the rooms.
+		const lookalike = room('private_9', []);
+		const lost = room('t4', [], { parentRoomId: 'gone', private: true, title: 'Lost' });
+		const sections = sidebarSections([general, dm, launch, secret, lookalike, lost]);
+		expect(sections.rooms.map((entry) => entry.id)).toEqual(['general', 'private_9', 't4']);
+		expect(sections.private.map((entry) => entry.id)).toEqual(['private_1724803950000', 'launch']);
+		expect(threadEntries([general, launch, secret], 'launch').map((entry) => entry.id)).toEqual(['t3']);
+	});
 
 	it('lists top-level rooms, keeps threads under their parent, and keeps orphaned threads reachable', () => {
 		const rooms = [general, deploy, ops, orphan];

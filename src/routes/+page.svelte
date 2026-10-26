@@ -2349,11 +2349,12 @@
 	 * message's author not in it yet is added to it (§4.2.2), so they still
 	 * see their messages. Only where this viewer may add people: with
 	 * `server.ext.settings.add_members` on, or with `add_members` in
-	 * `you.ext.permissions`.
+	 * `you.ext.permissions`, or in a private room, whose members add people
+	 * to it (§4.2.4) whatever the setting says.
 	 */
 	function moveAuthors(): MoveAuthors | undefined {
 		if (!canChangeMembers || session.snapshot.memberChangesUnsupported) return undefined;
-		if (!serverSettings(session.server).add_members && !yourPermissions(session.server, session.you).add_members) return undefined;
+		if (!activeRoom?.private && !serverSettings(session.server).add_members && !yourPermissions(session.server, session.you).add_members) return undefined;
 		return {
 			of: (id) => resolveMessage(id)?.from?.user_id,
 			skip: (userId, room) => userId === session.you?.user_id || Boolean(session.rooms.find((other) => other.id === room)?.members?.some((member) => member.user_id === userId))

@@ -476,6 +476,28 @@ describe('room records and membership', () => {
 		expect(room('s3')?.private).toBe(true);
 	});
 
+	it('names an untitled private room after its other members, whatever its room_id, and only a top-level one', async () => {
+		socket.receive({ method: 'room_update', params: {
+			joined: [{ room_id: 'private_1724803950000', log_id: '40', private: true, members: [{ user_id: 'guest_1' }] }],
+			users: [{ user_id: 'guest_1', name: 'Guest' }]
+		} });
+		// Alone in it: "You", never the opaque room_id (§2.4).
+		expect(room('private_1724803950000')).toMatchObject({ title: 'You', namedForMembers: true, private: true });
+		// Someone added: named for them, by the name kept for them, and for each person after, sorted.
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '41', room_id: 'private_1724803950000', members: [{ user: { user_id: 'mira', name: 'Mira' }, joined: true }] }] } });
+		expect(room('private_1724803950000')?.title).toBe('Mira');
+		socket.receive({ method: 'user', params: { new: { user_id: 'dev', name: 'Dev' } } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '42', room_id: 'private_1724803950000', members: [{ user: { user_id: 'dev' }, joined: true }] }] } });
+		expect(room('private_1724803950000')?.title).toBe('Dev, Mira');
+		// A titled one keeps its title; an untitled thread of it is "Untitled", as any thread is; an ordinary room its room_id.
+		socket.receive({ method: 'room_update', params: { joined: [
+			{ room_id: 'p2', log_id: '43', private: true, title: 'Launch', members: [{ user_id: 'guest_1' }, { user_id: 'dev' }] },
+			{ room_id: 'p3', log_id: '44', private: true, parent_room_id: 'private_1724803950000', members: [{ user_id: 'guest_1' }] },
+			{ room_id: 'r1', log_id: '45', members: [{ user_id: 'guest_1' }, { user_id: 'dev' }] }
+		] } });
+		expect([room('p2'), room('p3'), room('r1')].map((entry) => [entry?.title, entry?.namedForMembers])).toEqual([['Launch', undefined], ['Untitled', undefined], ['r1', undefined]]);
+	});
+
 	it('keeps member_count for a truncated member list until a complete one replaces it, and through an update without members', async () => {
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'big', log_id: '30', title: 'Big', latest_log_id: '30', members: [{ user_id: 'guest_1' }, { user_id: 'bob' }], member_count: 5000 }] } });
 		expect(room('big')?.memberCount).toBe(5000);
