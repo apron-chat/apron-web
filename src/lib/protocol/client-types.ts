@@ -49,10 +49,15 @@ export interface Notice {
  */
 export interface RoomSnapshot {
 	id: string;
-	/** Display title: the record's `title`, falling back to the `room_id`, or for a thread to "Untitled" (`untitled`). */
+	/** Display title: the record's `title`, falling back to the `room_id`, or for a thread to "Untitled" (`untitled`), or for a private room to its members (`namedForMembers`). */
 	title: string;
 	/** A thread without a title: `title` is "Untitled", and where it's shown its `room_id` goes on hover. */
 	untitled?: true;
+	/**
+	 * A top-level private room without a title (§4.2.4): `title` is its other
+	 * members' names (`peopleTitle`), "You" when no one else is left.
+	 */
+	namedForMembers?: true;
 	/**
 	 * The user has joined it (or, without capability `rooms`, it is a room messages
 	 * arrive in): it delivers live. A room opened with `viewRoom` is not joined

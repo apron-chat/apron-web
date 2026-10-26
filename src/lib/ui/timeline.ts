@@ -75,6 +75,18 @@ export function sidebarRooms(rooms: readonly RoomSnapshot[]): RoomSnapshot[] {
 }
 
 /**
+ * The sidebar's two lists of `sidebarRooms`: Rooms, and Private, the
+ * top-level private rooms (§4.2.4: `private: true` and no `parent_room_id`),
+ * people's conversations and titled private rooms alike. A thread stays
+ * under its parent, in whichever list that is.
+ */
+export function sidebarSections(rooms: readonly RoomSnapshot[]): { rooms: RoomSnapshot[]; private: RoomSnapshot[] } {
+	const listed = sidebarRooms(rooms);
+	const isPrivate = (room: RoomSnapshot) => room.private === true && room.parentRoomId === undefined;
+	return { rooms: listed.filter((room) => !isPrivate(room)), private: listed.filter(isPrivate) };
+}
+
+/**
  * The title to hand a design component that names a thread: none for an untitled one, so the component falls back to
  * "Untitled" itself and puts the `room_id` on hover.
  */

@@ -24,6 +24,8 @@ const KEY = {
 	otherThreads: 'apron.otherThreads',
 	/** The room and thread descriptions put away with their ×, each kept as the fingerprint of the text put away. Still stored under its old name, so what's put away stays put away. */
 	hiddenDescriptions: 'apron.hiddenSummaries',
+	/** Private rooms someone else added you to, per account (`notifyAccount`), until their banner is put away or you leave. */
+	addedRooms: 'apron.addedRooms',
 	/** How far you have read each room and thread, by `readPositionKey`: the `message_id` read through. */
 	readPositions: 'apron.readPositions',
 	/** app.html reads this one too, to apply the theme before the app loads. */
@@ -34,6 +36,8 @@ export type RecentServer = { url: string; label?: string };
 export type SidebarPrefs = { width: number; collapsed: boolean };
 
 const RECENT_SERVERS_MAX = 5;
+/** The most rooms kept as added per account; the ones added longest ago go first. */
+const ADDED_ROOMS_MAX = 50;
 /** The most descriptions kept put away; the ones put away longest ago show again first. */
 const HIDDEN_DESCRIPTIONS_MAX = 200;
 /** The most read positions kept; the ones moved longest ago go first. */
@@ -334,6 +338,18 @@ export function loadNotifyScopes(account: string): string[] | undefined {
 
 export function saveNotifyScopes(account: string, scopes: readonly string[]): void {
 	write(KEY.notifyScopes, JSON.stringify({ ...readScopeChoices(KEY.notifyScopes), [account]: [...scopes] }));
+}
+
+/** The private rooms someone else added this account to whose "You were added" banner still shows, oldest first. */
+export function loadAddedRooms(account: string): string[] {
+	return readScopeChoices(KEY.addedRooms)[account] ?? [];
+}
+
+/** Keeps the account's added rooms: those whose banner still shows. */
+export function saveAddedRooms(account: string, rooms: readonly string[]): void {
+	const kept = rooms.slice(-ADDED_ROOMS_MAX);
+	const { [account]: _previous, ...others } = readScopeChoices(KEY.addedRooms);
+	write(KEY.addedRooms, JSON.stringify(kept.length ? { ...others, [account]: kept } : others));
 }
 
 /**

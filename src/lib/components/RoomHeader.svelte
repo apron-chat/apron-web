@@ -2,6 +2,10 @@
 	import type { RoomSnapshot } from '$lib/protocol/client';
 	import { markdownText } from '$lib/protocol/markdown';
 	import DesignRoomHeader from '$lib/design/components/RoomHeader.svelte';
+	import { presenceLabel } from '$lib/design/components/util';
+	import { directory } from '$lib/ui/directory.svelte';
+	import { roomFaces } from '$lib/ui/faces';
+	import { privateRoomLine } from '$lib/ui/private-rooms';
 
 	interface Props {
 		/** The top-level room. */
@@ -69,15 +73,23 @@
 	/** The room's description (§3.4) as one line of text under its title, once its pinned description is put away; a thread has only its description. */
 	let topic = $derived(showTopic && threadTitle === undefined && room.description ? markdownText(room.description).split('\n')[0] : '');
 	let thread = $derived(threadTitle !== undefined);
+	/**
+	 * An untitled private room, named for its members (not in a thread): who it's with before its name, and who can
+	 * see it under it, with the one other person's status, in place of a description it has none of.
+	 */
+	let people = $derived(room.namedForMembers && !thread ? (room.members ?? []).filter((member) => !directory.isMe(member.user_id)) : undefined);
+	let faces = $derived(people ? roomFaces(room, directory.you) : undefined);
+	let line = $derived(people ? privateRoomLine(people.map((member) => directory.name(member)), people.length === 1 ? presenceLabel(directory.status(people[0])) : undefined) : '');
 </script>
 
 <!-- The design system's RoomHeader draws it; the app says which of its buttons apply. Recovering or loading shows at the foot of the timeline (TimelineLoading), where the new messages will appear. -->
 <DesignRoomHeader
 	room={room.id}
 	name={room.title}
-	{topic}
-	topicTitle={room.description}
+	topic={topic || line}
+	topicTitle={topic ? room.description : undefined}
 	private={pane.private}
+	{faces}
 	{typing}
 	replies={replyCount !== undefined ? { count: replyCount, more: moreReplies } : undefined}
 	note={copied ? 'Link copied' : waiting ? 'Waiting' : pane.recoveryError ? 'History unavailable' : undefined}

@@ -2,7 +2,7 @@
 
 | Protocol Version | 9          |
 |------------------|------------|
-| Last Updated     | 2026-10-25 |
+| Last Updated     | 2026-10-26 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -91,6 +91,7 @@ class Server {
       guest_posting?: boolean = true;  // guests may post
       read_cursors?: boolean = true;   // the server keeps or relays read cursors
       add_members?: boolean = true;    // users may add other users to rooms
+      private_rooms?: number;          // the most private rooms one user may be in at once
     };
   };
 }
@@ -106,7 +107,8 @@ class Server {
 ```
 
 - The server lists `ext:settings` in `capabilities`.
-- Every key is optional. A key that is absent, or not `false`, means `true`.
+- Every key is optional. A boolean key that is absent, or not `false`, means
+  `true`. `private_rooms` is a number ([§3.4](#34-private_rooms)).
 - Each `server` frame replaces the settings.
 - The settings describe server policy. The server still enforces it.
 
@@ -134,7 +136,26 @@ class Server {
   ([§4.2.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#422-membership)).
 - When apron-web moves messages into a thread, it adds their authors to that
   thread only while `add_members` is `true`, or while `ext:permissions` grants
-  `add_members` ([§7](#7-extpermissions)).
+  `add_members` ([§7](#7-extpermissions)), or when the thread is in a private
+  room: members add other users to a private room
+  ([§4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)),
+  whatever `add_members` says.
+
+### 3.4 `private_rooms`
+
+- Unlike the other keys, `private_rooms` is a number: the most private rooms
+  ([§4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing))
+  that one user may be a member of at once.
+- It counts top-level private rooms, those without a `parent_room_id`. A
+  thread of a private room does not count.
+- Absent means that the server states no limit. apron-web ignores a value that
+  is not a non-negative integer.
+- The server still enforces the limit. It refuses a creation or a join over it
+  as `denied`, with a `message` for the user
+  ([§2](#2-the-boundary)).
+- apron-web counts the private rooms that the user joined. When it starts a
+  private room, it shows "N of M", and at the limit it offers the user's
+  private rooms to leave, the quietest first, in place of starting another.
 
 ---
 

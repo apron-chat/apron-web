@@ -11,8 +11,8 @@ import { threadLostPrivacy } from './timeline';
 /** A new thread of a private room that the server made visible to others (§4.2.4). */
 export const PRIVACY_LOST = 'The server made the new thread visible to people outside this private room, so nothing was posted or moved into it. Leave it, or use it knowing that.';
 
-/** A room created as private that the server made an ordinary one. */
-export const notPrivate = (title: string) => `The server made “${title}” an ordinary room that others can see and join, not a private one. Leave it, or use it knowing that.`;
+/** A room created as private that the server made an ordinary one; one started without a title is "the new conversation". */
+export const notPrivate = (title?: string) => `The server made ${title ? `“${title}”` : 'the new conversation'} an ordinary room that others can see and join, not a private one. Leave it, or use it knowing that.`;
 
 /**
  * A thread this viewer created, opened once its `room_update` has arrived;

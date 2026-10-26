@@ -36,6 +36,8 @@
 		onleave?: (e: MouseEvent) => void;
 		/** The door in, on hover or focus. */
 		onjoin?: (e: MouseEvent) => void;
+		/** In the button, before its text: a private room's faces. */
+		lead?: Snippet;
 		/** In its text, after the name: a room's topic, a thread's preview lines. */
 		lines?: Snippet;
 		/** After its text, in the button: counts, the time, the loading …. */
@@ -43,7 +45,7 @@
 		/** After the button, where it has no door: the open room's +. */
 		start?: Snippet;
 	}
-	let { room, noun, label, tip, private: isPrivate, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lines, children, start, class: className }: Props = $props();
+	let { room, noun, label, tip, private: isPrivate, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, class: className }: Props = $props();
 	const thread = $derived(noun === 'thread');
 </script>
 
@@ -54,6 +56,7 @@
 		data-thread={thread && (!listed || active) ? room : undefined} data-other-thread={thread && listed ? room : undefined}
 		class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', className]} onclick={onselect}
 	>
+		{@render lead?.()}
 		<span class="ap-room-text"><span class="ap-room-name" title={tip}>{label}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>{@render lines?.()}</span>
 		{@render children?.()}
 	</button>

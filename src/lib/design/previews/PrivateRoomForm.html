@@ -1,0 +1,25 @@
+<!-- @dsCard group="Input" height=620 subtitle="Starting a private conversation: Bob picked (a chip; Backspace takes it back), the people who match below, one you already talk to offered to open, and how many private rooms you're in of the most the server allows" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>PrivateRoomForm</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  var noop = function () {};
+  var bob = { user_id: 'bob', name: 'Bob', hue: 200, status: 'online' };
+  A.render(A.PrivateRoomForm, root, {
+    open: true,
+    chosen: [bob],
+    people: [
+      bob,
+      { user_id: 'carol', name: 'Carol', hue: 320, status: 'online', existing: true },
+      { user_id: 'dev', name: 'Dev', hue: 140, status: 'idle' },
+      { user_id: 'mira', name: 'Mira', hue: 80, status: 'offline' }
+    ],
+    quota: { used: 2, max: 5 },
+    onpick: noop, onremove: noop, onopen: noop, onsubmit: noop
+  });
+</script>
+</body>
+</html>

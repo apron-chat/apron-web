@@ -70,12 +70,12 @@ list under 960px) and renders `EmptyState`, `RoomLoading` (in `NoRoom`),
 The wrappers: `ConnectScreen` and `SignIn` (the pieces the design system's
 `ConnectScreen` is made of: `ConnectPage`, `ConnectHeader` and `SignInForm`;
 `SignIn` keeps the state machine in `$lib/ui/sign-in`), `Sidebar` (`SidebarHead`, `SidebarSection` and
-`RoomItem`) with `ThreadList` (the design system's `ThreadList`, its rows `ThreadItem`s,
+`RoomItem`, its Private section's rows with the `Faces` of who each private room is with) with `ThreadList` (the design system's `ThreadList`, its rows `ThreadItem`s,
 which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, with its `AddMemberForm`), `ProfileBar` (`ProfileBar` with its
 `ProfileEditor`), `RoomHeader` (`RoomHeader`, with its ⋯ `MenuButton`) with
-`RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
+`RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `NewPrivateDialog` (the design system's `PrivateRoomForm`, a people picker in a `Dialog`, which the page owns: it starts a private room with the people picked, or opens the one you already have with someone, and at the server's limit offers yours to leave), the private room's intro and "You were added" banner (the design system's `PrivateIntro` and `AddedBanner`, which the page renders), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
 `ThreadDescription` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `RoleBadges`, `MentionText` (`Mention`), the embeds (`Embed*`; the trusted-origin gate stays in `embeds/og.ts`), `MessageEditor` (`MessageEditor`), `NoticeLine` (a scoped `Message`, from `noticeView`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: a `ComposerEditable` it fills and edits) with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
-`ProfileCard`, `ReactorsPopover` and `EmojiPopover` (the full emoji picker, which the design system leaves to the client; all three in the design system's `Popover`, a bottom sheet on phones),
+`ProfileCard` (whose Message opens or starts a private conversation), `ReactorsPopover` and `EmojiPopover` (the full emoji picker, which the design system leaves to the client; all three in the design system's `Popover`, a bottom sheet on phones),
 `PreferencesDialog` (`SettingsSections` and `SettingRow`) with its `FontFamilyField` (`FontField`), `StatusPicker`, `PauseNotifications` and `NotifyPrompt` (`Nudge`), `SignInLinkDialog` (both
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
 choice submitted with a form a `CheckList`-style row),
@@ -166,6 +166,15 @@ fed to the unread, mention or notification trackers, and replaced room by room
 as a reconnect's is, and
 `notifications.ts` shows notifications, through `service-worker.ts` where it
 is registered, and words pushed messages for the service worker,
+`private-rooms.ts` holds what private rooms (§4.2.4) as conversations need: which
+joined rooms are private and top-level (the sidebar's Private section and the
+`private_rooms` limit count those), the conversation you already have with
+someone (`directRoomWith`), starting one (`startPrivateRoom`: created private,
+its record checked, then each person added in turn), where its intro goes
+(`reachesStart`), and `ArrivalWatch`, which the page feeds each snapshot as the
+client emits it, while what's in flight is still pending in it, to tell a room
+someone else added you to from one this page asked for; `faces.ts` turns
+people into the design system's `Faces` through `directory`,
 `notify-scopes.ts` decides which arriving messages the page notifies about from
 the checked scopes, and which of them push sends as `wake`, and
 `push-store.ts` keeps in IndexedDB, for the service worker too, the enabled
@@ -198,7 +207,9 @@ each record replaces the stored one only when its `log_id` is greater, so
 overlapping history and live delivery cannot revert newer state, and a move
 snapshot re-homes a message into its new room. Embedded `reply_to`
 snapshots install like any other record. Room records keep `description` and `private`
-(fixed at creation); a room's `members` from a listing come with its
+(fixed at creation); an untitled top-level private room's snapshot `title` is
+its other members' names (`peopleTitle`, `namedForMembers`), so everything
+that names a room names it the same way; a room's `members` from a listing come with its
 `member_count` when the server truncated them, kept until a complete list
 replaces it. `types.ts` also knows the system identities (`~server`, `~room`,
 `~private`). Reactions aggregate

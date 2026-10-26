@@ -438,3 +438,37 @@ export interface MenuChoice {
 
 /** What a wait the server asked for (`retry_after`, §1.1) holds back: pages of history (`history`), sending (`message`), or files (`upload`). */
 export type LimitScope = 'history' | 'message' | 'upload';
+
+/** A person's face, in Faces: their avatar, or initials tinted by `hue`, and their `status` where one face shows alone. */
+export interface Face {
+	user_id: string;
+	/** Falls back to `user_id`. */
+	name?: string;
+	/** An avatar this client will load (§4.8.6). */
+	src?: string;
+	/** The initials' tint, 0–360, such as one made from the `user_id`. */
+	hue?: number;
+	/** Their `status` (§4.5), on a face shown alone. */
+	status?: Presence | (string & {});
+	/** The status's words instead of its own. */
+	statusLabel?: string;
+}
+
+/** Someone in a PrivateRoomForm's list of people to pick. */
+export interface PickPerson extends Face {
+	/** Shown under the name, such as why they can't be picked. Defaults to `@user_id`. */
+	detail?: string;
+	/** You already have a conversation with just them: picking them alone opens it ("Already talking · Open"). */
+	existing?: boolean;
+}
+
+/** One of your private rooms, offered to leave in a PrivateRoomForm at the limit. */
+export interface PickRoom {
+	id: string;
+	name: string;
+	faces: Face[];
+	/** One more line, such as when it was last active. */
+	detail?: string;
+	/** Leaving it is in flight. */
+	leaving?: boolean;
+}

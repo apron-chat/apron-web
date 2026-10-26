@@ -11,6 +11,7 @@
 	import ProfileCard from '$lib/design/components/ProfileCard.svelte';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
+	import { couldNotAdd, directRoomWith, startPrivateRoom } from '$lib/ui/private-rooms';
 
 	/**
 	 * Who a mention, a sender or a member is: the design system's ProfileCard,
@@ -29,9 +30,15 @@
 		canChange: boolean;
 		/** Mention is offered while the composer takes text. */
 		canMention: boolean;
+		/** Message is offered: signed in to an account (not a guest) that may create rooms (capability `rooms`). */
+		canMessage?: boolean;
 		onmention: (userId: string) => void;
+		/** The server named the room Message is starting, before it opens: one you started, not one someone added you to. */
+		onnamed?: (roomId: string) => void;
+		/** Opens a private room: the conversation you already have with them, or the one Message just started. */
+		onopenroom?: (roomId: string) => void;
 	}
-	let { client, session, room, canChange, canMention, onmention }: Props = $props();
+	let { client, session, room, canChange, canMention, canMessage = false, onmention, onnamed, onopenroom }: Props = $props();
 
 	const WIDTH = 288;
 
@@ -40,6 +47,8 @@
 	/** Bumped on scroll and resize, so the popover follows what opened it. */
 	let reflowed = $state(0);
 	let busy = $state(false);
+	/** Message is opening a conversation. */
+	let messaging = $state(false);
 	let note = $state<{ text: string; error: boolean } | undefined>();
 
 	let request = $derived(profileCard.current);
@@ -75,11 +84,15 @@
 		canChange && !session.snapshot.memberChangesUnsupported && Boolean(client) && Boolean(room?.joined) && room?.members !== undefined && !listed && !me && !system
 	);
 
+	/** Message: for someone else, not a system identity, on a session that may start private rooms. */
+	let canMessageThem = $derived(canMessage && Boolean(client) && Boolean(onopenroom) && !me && !system);
+
 	// A new card starts without the last one's note.
 	$effect(() => {
 		void request;
 		note = undefined;
 		busy = false;
+		messaging = false;
 	});
 
 	// Focus moves in when it opens, so Escape and Tab work from the keyboard.
@@ -143,6 +156,39 @@
 		}
 	}
 
+	/**
+	 * Opens the private conversation you already have with them (untitled, just the two of you), else starts one
+	 * (`startPrivateRoom`: created private, its record checked, then them added), and opens it. Progress and errors
+	 * show in the card's note; one that started but couldn't add them is kept, and the note says so.
+	 */
+	async function message(): Promise<void> {
+		if (!client || !onopenroom || messaging) return;
+		const asked = request;
+		const id = userId;
+		const existing = directRoomWith(session.rooms, session.you?.user_id, id);
+		if (existing) {
+			profileCard.close();
+			onopenroom(existing.id);
+			return;
+		}
+		messaging = true;
+		note = undefined;
+		const still = () => profileCard.current === asked;
+		try {
+			const started = await startPrivateRoom(client, [id], { named: onnamed });
+			if (started.failed.length) {
+				if (still()) note = { text: `${couldNotAdd(started.failed, (failed) => directory.name({ user_id: failed }))} The room is kept under Private.`, error: true };
+				return;
+			}
+			if (still()) profileCard.close();
+			onopenroom(started.roomId);
+		} catch (cause) {
+			if (still()) note = { text: cause instanceof Error ? cause.message : 'Unable to start a private room', error: true };
+		} finally {
+			if (still()) messaging = false;
+		}
+	}
+
 	async function add(): Promise<void> {
 		if (!client || !room || busy) return;
 		const target = room;
@@ -174,6 +220,8 @@
 		{bio}
 		sharesName={shares}
 		{membership}
+		onmessage={canMessageThem ? message : undefined}
+		{messaging}
 		onmention={canMention && !system ? mention : undefined}
 		oncopyid={copy}
 		onaddtoroom={canAdd ? add : undefined}

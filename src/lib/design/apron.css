@@ -7,8 +7,10 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
+/* The people picker's field rings itself while its input has the keyboard, as a field does. */
+.ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
 /* Disabled — one fade, whatever the control. */
 :is(.ap-btn, .ap-iconbtn, .ap-link, .ap-rpick, .ap-seg-item, .ap-choice-item, .ap-field, .ap-viewer-btn):disabled, .ap-switch[aria-disabled='true'] { cursor: default; opacity: var(--opacity-disabled); }
 
@@ -29,8 +31,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
  * The design components carry these classes and elements, so every consumer gets the rule.
  */
 :where(.ap-msg-text, .ap-description-text, .ap-welcome), :where(.ap-msg-text, .ap-description-text, .ap-welcome) :where(p, li, h1, h2, h3, h4, h5, h6, blockquote, th, td) { unicode-bidi: plaintext; text-align: start; }
-:where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name) { unicode-bidi: plaintext; text-align: left; }
-:where([dir='rtl']) :where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name) { text-align: right; }
+:where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-dmintro-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name) { unicode-bidi: plaintext; text-align: left; }
+:where([dir='rtl']) :where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-dmintro-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name) { text-align: right; }
 
 /* Button */
 .ap-btn { font: inherit; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; height: var(--control-lg); padding: 0 var(--space-4); border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--bg-200); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
@@ -1351,3 +1353,59 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 @supports (-webkit-touch-callout: none) {
 	:is(input, textarea, select, [contenteditable]:not([contenteditable='false'])) { font-size: var(--text-field-ios) !important; }
 }
+
+/* Private rooms (§4.2.4) as people talk in them. Faces — who one is with: a person's avatar with their status, or the
+   first two of a group, the second stacked behind the first, cut clear of it so it reads on any ground. */
+.ap-faces { flex: none; display: inline-flex; align-items: center; }
+.ap-faces-group { --faces-d: var(--avatar-sm); --faces-overlap: 6px; --faces-gap: 2px; }
+.ap-faces-group.ap-faces-md { --faces-d: var(--avatar-md); --faces-overlap: 10px; }
+.ap-faces-group.ap-faces-lg { --faces-d: var(--avatar-lg); --faces-overlap: 18px; --faces-gap: 3px; }
+.ap-faces-group > .ap-avatar + .ap-avatar { margin-left: calc(-1 * var(--faces-overlap)); }
+.ap-faces-group > .ap-avatar:first-child { --faces-cut: calc(var(--faces-d) / 2 + var(--faces-gap)); -webkit-mask: radial-gradient(circle at calc(100% + var(--faces-d) / 2 - var(--faces-overlap)) 50%, transparent var(--faces-cut), #000 calc(var(--faces-cut) + .5px)); mask: radial-gradient(circle at calc(100% + var(--faces-d) / 2 - var(--faces-overlap)) 50%, transparent var(--faces-cut), #000 calc(var(--faces-cut) + .5px)); }
+/* A private room's row in the rooms list: its faces before its name, which the section heading says is private. */
+.ap-room-faced { padding-top: var(--space-1_5); padding-bottom: var(--space-1_5); }
+.ap-roomhead-faces { margin-right: calc(-1 * var(--space-1)); }
+/* PrivateIntro — the start of a private room's timeline: who is in it, and what private means, on its plum. */
+.ap-dmintro { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-4) var(--space-4) var(--space-2); padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--private) 25%, transparent); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--private-soft) 55%, var(--bg-100)); }
+.ap-dmintro-who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.ap-dmintro-names { display: grid; gap: var(--space-0_5); min-width: 0; }
+.ap-dmintro-name { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; overflow-wrap: anywhere; }
+.ap-dmintro-detail, .ap-dmintro-text { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
+.ap-dmintro-detail { overflow-wrap: anywhere; }
+.ap-dmintro-private { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--private); font-weight: 600; }
+.ap-dmintro-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-1); }
+/* AddedBanner — under a private room's header when someone else added you: what happened, Mute, Leave and its ×. */
+.ap-addedbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); border: 1px solid color-mix(in srgb, var(--private) 30%, transparent); border-radius: var(--radius-md); background: color-mix(in srgb, var(--private-soft) 70%, var(--bg-100)); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-addedbar-text { flex: 1 1 200px; min-width: 0; margin: 0; }
+.ap-addedbar-note { margin: 0; color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-addedbar-error { flex-basis: 100%; }
+.ap-addedbar-close { flex: none; }
+/* PrivateRoomForm — the people picked, as chips in a field, then everyone who matches, as a listbox; at the limit, your
+   private rooms to leave instead. */
+.ap-pick-field { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); height: auto; min-height: var(--control-lg); padding: 2px var(--space-1); cursor: text; }
+.ap-pick-chip { display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; height: var(--control-sm); padding: 0 2px; box-sizing: border-box; border-radius: var(--radius-full); background: var(--private-soft); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 500; cursor: default; }
+.ap-pick-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-pick-chip-remove { display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px; padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; }
+.ap-pick-chip-remove:hover { background: var(--hover); color: var(--ink); }
+.ap-pick-input { flex: 1; min-width: 96px; height: var(--control-md); padding: 0 var(--space-1); border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--text-field); line-height: var(--leading-field); font-weight: 400; outline: none; }
+.ap-pick-list, .ap-pick-rooms { display: flex; flex-direction: column; gap: var(--space-0_5); margin: 0 calc(-1 * var(--space-3)); padding: 0; list-style: none; }
+.ap-pick-list { max-height: 280px; overflow-y: auto; }
+.ap-pick-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-1_5) var(--space-3); border-radius: var(--radius-md); color: var(--ink); font-size: var(--text-field); line-height: var(--leading-field); }
+.ap-pick-list .ap-pick-row { cursor: pointer; }
+.ap-pick-row-active { background: var(--hover); }
+.ap-pick-check { flex: none; color: var(--private); }
+.ap-pick-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ap-pick-who-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-pick-who small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-pick-tag { flex: none; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); white-space: nowrap; }
+.ap-pick-group { margin: 0; padding: 0 var(--space-3); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; }
+.ap-pick-more { font-weight: 400; }
+.ap-pick-empty { padding: var(--space-2) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
+/* How many private rooms you're in, of the most the server allows: a quiet line at the dialog's foot, until it runs out. */
+.ap-quota { display: flex; align-self: center; align-items: center; gap: var(--space-2); margin-right: auto; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; }
+.ap-quota-full { color: var(--ink); }
+.ap-quota-bar { display: inline-flex; gap: 2px; }
+.ap-quota-bar i { width: 10px; height: 6px; border-radius: var(--radius-sm); background: var(--bg-300); }
+.ap-quota-bar .ap-quota-on { background: var(--private); }
+/* A Callout for what stands in the way, such as a limit reached. */
+.ap-callout-warn { border-left-color: var(--warn); background: var(--bg-200); }

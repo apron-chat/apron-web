@@ -86,3 +86,61 @@ describe('ProfileCard bio', () => {
 		expect(render('bob', [ada], ada, undefined, undefined, ['ext'], [bob]).querySelector('[data-testid="profile-bio"]')).toBeNull();
 	});
 });
+
+describe('ProfileCard Message', () => {
+	const bob: Identity = { user_id: 'bob', name: 'Bob' };
+	const members = (...ids: string[]) => ids.map((user_id) => ({ user_id }));
+	const withBob = { id: 'p1', title: 'Bob', joined: true, private: true, namedForMembers: true, members: members('ada', 'bob') } as unknown as RoomSnapshot;
+
+	/** The card for `userId`, with Message offered to the session as `canMessage` says, and the client's requests answered. */
+	function card(userId: string, options: { canMessage?: boolean; rooms?: RoomSnapshot[]; you?: Identity } = {}) {
+		const you = options.you ?? ada;
+		const rooms = options.rooms ?? [];
+		const snapshot: ClientSnapshot = { ...blankSnapshot(), authenticated: true, you, rooms, users: { ada, bob, [you.user_id]: you } };
+		directory.apply(snapshot, undefined);
+		const session = { snapshot, rooms, you, canManageRooms: true, server: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } } as unknown as SessionView;
+		const created = { room_id: 'p2' };
+		const client = {
+			createRoom: vi.fn(() => ({ id: 'c1', promise: Promise.resolve(created) })),
+			joinRoom: vi.fn(() => ({ id: 'c2', promise: Promise.resolve({}) })),
+			subscribe: vi.fn((listener: (next: ClientSnapshot) => void) => {
+				listener({ ...snapshot, rooms: [...rooms, { id: 'p2', title: 'You', joined: true, private: true } as RoomSnapshot] });
+				return () => true;
+			})
+		};
+		const onopenroom = vi.fn();
+		dom.render(ProfileCard, { client: client as never, session, room: undefined, canChange: false, canMention: false, canMessage: options.canMessage ?? true, onmention: () => undefined, onopenroom });
+		const anchor = document.createElement('button');
+		document.body.appendChild(anchor);
+		profileCard.toggle({ anchor, userId });
+		flushSync();
+		return { box: document.querySelector<HTMLElement>('[data-testid="profile-card"]')!, client, onopenroom };
+	}
+
+	it('is offered for someone else, signed in, but not on your own card, a system identity’s, or as a guest', () => {
+		expect(dom.queryByRole('button', 'Message', card('bob').box)).not.toBeNull();
+		dom.unmount();
+		expect(dom.queryByRole('button', 'Message', card('ada').box)).toBeNull();
+		dom.unmount();
+		expect(dom.queryByRole('button', 'Message', card('~server').box)).toBeNull();
+		dom.unmount();
+		expect(dom.queryByRole('button', 'Message', card('bob', { canMessage: false }).box)).toBeNull();
+	});
+
+	it('opens the conversation you already have with them', () => {
+		const { box, client, onopenroom } = card('bob', { rooms: [withBob] });
+		dom.button('Message', box).click();
+		expect(onopenroom).toHaveBeenCalledWith('p1');
+		expect(client.createRoom).not.toHaveBeenCalled();
+	});
+
+	it('starts one otherwise: created private, then them added, then opened', async () => {
+		const { box, client, onopenroom } = card('bob', { rooms: [{ ...withBob, title: 'Team', namedForMembers: undefined } as unknown as RoomSnapshot] });
+		dom.button('Message', box).click();
+		flushSync();
+		expect(dom.button('Opening…', box).disabled).toBe(true);
+		await vi.waitFor(() => expect(onopenroom).toHaveBeenCalledWith('p2'));
+		expect(client.createRoom).toHaveBeenCalledWith({ private: true });
+		expect(client.joinRoom).toHaveBeenCalledWith('p2', 'bob');
+	});
+});

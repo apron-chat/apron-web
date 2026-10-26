@@ -80,10 +80,29 @@ export const hasHistory = (server: ServerParams | undefined) => hasCapability(se
  * The server's settings (extension `ext:settings`, `server.ext.settings`),
  * each `true` unless the server says `false`: also without the extension.
  */
-export function serverSettings(server: ServerParams | undefined): { guest_posting: boolean; read_cursors: boolean; add_members: boolean } {
+export function serverSettings(server: ServerParams | undefined): { guest_posting: boolean; read_cursors: boolean; add_members: boolean; private_rooms?: number } {
 	const ext = hasCapability(server, 'ext:settings') ? server?.ext : undefined;
 	const settings = isJsonObject(ext) && isJsonObject(ext.settings) ? ext.settings : {};
-	return { guest_posting: settings.guest_posting !== false, read_cursors: settings.read_cursors !== false, add_members: settings.add_members !== false };
+	// A number, unlike the rest: the most private rooms one user may be in at once. Absent (or not a count) states no limit.
+	const limit = settings.private_rooms;
+	return {
+		guest_posting: settings.guest_posting !== false, read_cursors: settings.read_cursors !== false, add_members: settings.add_members !== false,
+		...(typeof limit === 'number' && Number.isInteger(limit) && limit >= 0 ? { private_rooms: limit } : {})
+	};
+}
+
+/** What an untitled private room is called while its members aren't known (§4.2.4: its `room_id` is no name, §2.4). */
+export const PRIVATE_ROOM = 'Private room';
+
+/**
+ * The title of an untitled top-level private room (§4.2.4), from its members
+ * other than you: their names, sorted and joined with ", ", or "You" when no
+ * one else is left. The one naming rule for it, so the sidebar, the header,
+ * the page title, notifications and the composer all agree.
+ */
+export function peopleTitle(names: readonly string[]): string {
+	if (!names.length) return 'You';
+	return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) || a.localeCompare(b)).join(', ');
 }
 
 /**

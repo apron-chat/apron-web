@@ -129,6 +129,7 @@ Results, traces and the report go to `.qa/e2e/`. There are no retries: a test th
 | `messages.spec.ts` | A message row's controls as the page wires them: React opens the picker (its `aria-expanded` follows it) and the pick reacts to that message, a chip lists who reacted, Reply fills the composer's reply, a shift-click in select mode picks the range, an image opens full screen; a shared name's handle carries the `sender-handle` test id. |
 | `navigation.spec.ts` | Room, thread and message links; Back and Forward through rooms and threads, also to a thread left since; the phone's rooms list as a history entry. |
 | `privacy.spec.ts` | A server that drops `private` from a new room or thread: the app says so and doesn't open it to post in. |
+| `private-rooms.spec.ts` | Message on a profile card starts a private room (`room_set` with `private: true`, then `room_join` for them) that opens under Private, and opens it again rather than another; the + beside Private picks people (Enter, Backspace), names the room and adds each in turn, counting against `private_rooms`; a room someone else added you to shows its banner until put away; a guest starts none. |
 | `a11y.spec.ts` | axe-core on connect, room, preferences and thread, desktop and phone: no serious or critical violation beyond `e2e/a11y-baseline.json` (per rule, by count). After fixing some, `E2E_UPDATE_A11Y=1 npm run e2e -- a11y` lowers the baseline; commit it. |
 | `contract-scenes.spec.ts`, `contract.spec.ts` | The interop contract, below. |
 
@@ -136,10 +137,12 @@ Tests drive the app as a user does (roles and names, the test ids interop relies
 the frames the memory server recorded (`preview.sent('message')`). The memory server
 (`src/lib/preview/memory-server.ts`) takes knobs from `window.__APRON_PREVIEW__`, which the `preview` fixture
 sets from `test.use({ knobs })`: `seed: 'rich'` (long names with four roles, a name clash, avatars, a reply, a
-mention of you, an embed of each kind, a room to browse), `dropPrivate: 'rooms' | 'threads'`, and
+mention of you, an embed of each kind, a room to browse), `dropPrivate: 'rooms' | 'threads'`, `account`
+(the viewer signs in to an account, not as a guest, as starting a private conversation takes), and
 `capabilities` to add (`embed:upload`, `status`). With knobs set the server is `window.__apronPreview`
-(`frames`, `post(room, from, body)` for a message from someone else); without them the preview is the demo,
-unchanged. `preview.openRoot()` opens `/` instead, against a scripted WebSocket server (`e2e/mock-server.ts`)
+(`frames`, `post(room, from, body)` for a message from someone else, `addYouToPrivate(from, title?)` for a
+private room someone else added you to); without them the preview is the demo, unchanged. Either way it seeds
+a private conversation with Grace and a titled private room, and advertises `ext:settings` `private_rooms: 5`. `preview.openRoot()` opens `/` instead, against a scripted WebSocket server (`e2e/mock-server.ts`)
 for the connect screen and sign-in; every request off the machine is refused, so no test reaches a real server.
 
 ### The interop contract

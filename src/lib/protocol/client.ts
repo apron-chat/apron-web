@@ -110,6 +110,7 @@ import {
 	roomTitle,
 	sameEmojiSet,
 	typingKey,
+	untitledPrivate,
 	untitledThread,
 	userFacingRpcError,
 	validHistoryMetadata,
@@ -121,7 +122,7 @@ import {
 	type TypingState,
 	type ValidHistoryResponse
 } from './client-internals';
-import { capabilitiesOf, serverSettings } from './client-views';
+import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, serverSettings } from './client-views';
 import { HistoryQueue } from './history-queue';
 
 export * from './client-types';
@@ -143,6 +144,8 @@ export {
 	MAX_BIO_CHARS,
 	mediaLimit,
 	normalizeWebSocketUrl,
+	peopleTitle,
+	PRIVATE_ROOM,
 	serverMedia,
 	serverSettings,
 	timelineMessages,
@@ -638,10 +641,12 @@ export class ChatClient {
 				const thread = typeof record?.parent_room_id === 'string';
 				const renames = this.store.roomRenames(room.id);
 				const members = this.currentMembers(this.store.members(room.id));
+				const namedForMembers = untitledPrivate(record);
 				return {
 					id: room.id,
-					title: roomTitle(room.id, record),
+					title: namedForMembers ? this.membersTitle(members) : roomTitle(room.id, record),
 					...(untitledThread(record) ? { untitled: true as const } : {}),
+					...(namedForMembers ? { namedForMembers: true as const } : {}),
 					joined: room.kind === 'joined',
 					...(record ? { record } : {}),
 					...(thread ? { parentRoomId: record!.parent_room_id } : {}),
@@ -1727,12 +1732,13 @@ export class ChatClient {
 	 * this one included, before its `{}` result: the pause is whatever that
 	 * says, so one the server didn't apply never shows. Rejects with the
 	 * server's error, such as `retry_after`, when nothing changed. Needs
-	 * capability `status` and a signed-in account.
+	 * capability `status` and a signed-in account. With `roomId`, the same for
+	 * that room and its threads only.
 	 */
-	setMute(mute: number | boolean): Promise<void> {
+	setMute(mute: number | boolean, roomId?: string): Promise<void> {
 		const promise = !this.authenticated || !this.registeredSession || !this.hasCap('status')
 			? Promise.reject(new Error('Sign in to pause notifications'))
-			: this.enqueueRequest('status', { mute }, { visible: false, allowBeforeAuth: false }).promise.then(() => undefined);
+			: this.enqueueRequest('status', { ...(roomId !== undefined ? { room_id: roomId } : {}), mute }, { visible: false, allowBeforeAuth: false }).promise.then(() => undefined);
 		// A caller that doesn't wait for the answer leaves no unhandled rejection.
 		promise.catch(() => undefined);
 		return promise;
@@ -3104,6 +3110,17 @@ export class ChatClient {
 	 * it shows as the identity that replaced it, once. The same array when no
 	 * member's ID is retired.
 	 */
+	/**
+	 * An untitled private room's title (`peopleTitle`): its members other than
+	 * you, each by the name kept for them, else the one listed, else their
+	 * `user_id`. "Private room" while its members aren't known.
+	 */
+	private membersTitle(members: Identity[] | undefined): string {
+		if (!members) return PRIVATE_ROOM;
+		const you = this.you?.user_id;
+		return peopleTitle(members.filter((member) => member.user_id !== you).map((member) => this.users.get(member.user_id)?.name || member.name || member.user_id));
+	}
+
 	private currentMembers(members: Identity[] | undefined): Identity[] | undefined {
 		if (!members || !members.some((member) => this.userAliases.has(member.user_id))) return members;
 		// The new ID's own membership, where it has one, is the one listed.

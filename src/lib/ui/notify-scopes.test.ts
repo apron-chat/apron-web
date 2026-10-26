@@ -33,10 +33,10 @@ describe('what to notify about', () => {
 	];
 	const judge = (event: MessageRecord, scopes: string[], mentioned = false) => inNotifyScopes(event, scopes, { me: ada, mentioned, rooms });
 
-	it('takes the stored choice in order, else mentions and replies', () => {
+	it('takes the stored choice in order, else mentions, replies and private rooms', () => {
 		expect(notifyScopesOf(['joined', 'mentions', 'ext:x'])).toEqual(['mentions', 'joined']);
-		expect(notifyScopesOf(undefined)).toEqual(['mentions', 'replies']);
-		expect(notifyScopesOf([])).toEqual(['mentions', 'replies']);
+		expect(notifyScopesOf(undefined)).toEqual(['mentions', 'replies', 'private']);
+		expect(notifyScopesOf([])).toEqual(['mentions', 'replies', 'private']);
 	});
 
 	it('notifies about a mention with mentions checked', () => {

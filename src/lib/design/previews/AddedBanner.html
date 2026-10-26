@@ -1,0 +1,15 @@
+<!-- @dsCard group="Feedback" height=200 subtitle="Under a private room's header when someone else added you: Mute, Leave, and its × · once muted, Unmute · a refused mute says why" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>AddedBanner</title></head>
+<body>
+<div id="root" class="ap-stack" style="padding:0"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  var noop = function () {};
+  A.render(A.AddedBanner, root, { onmute: noop, onleave: noop, ondismiss: noop });
+  A.render(A.AddedBanner, root, { muted: true, onunmute: noop, onleave: noop, ondismiss: noop });
+  A.render(A.AddedBanner, root, { onmute: noop, onleave: noop, ondismiss: noop, error: 'Too Many Requests' });
+</script>
+</body>
+</html>

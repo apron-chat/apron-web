@@ -325,6 +325,14 @@ export function planPush(push: PushPayload | undefined, visible: readonly Visibl
 }
 
 /**
+ * A message's notification title: who sent it and where, or who alone in a private conversation named for them
+ * (`namedForMembers`), where "Bob · Bob" would say it twice.
+ */
+export function notificationTitle(sender: string, room: { title: string; namedForMembers?: true }): string {
+	return room.namedForMembers && room.title === sender ? sender : `${sender} · ${room.title}`;
+}
+
+/**
  * The notification for a pushed message (a message object, whose `body` may
  * be truncated or missing, §4.9), for the registration with this `push_id`:
  * the message's own notification, which replaces the page's for the same

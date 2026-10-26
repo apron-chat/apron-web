@@ -1,7 +1,9 @@
 <script lang="ts">
 	import Plus from '@lucide/svelte/icons/plus';
 	import type { ClassValue } from 'svelte/elements';
+	import Faces from './Faces.svelte';
 	import RoomRow from './RoomRow.svelte';
+	import type { Face } from './types';
 	import UnreadCount from './UnreadCount.svelte';
 	import { roomName } from './util';
 
@@ -17,6 +19,8 @@
 		topic?: string;
 		/** `private: true` (§4.2.4): a lock beside the name */
 		private?: boolean;
+		/** Who a private room is with, before its name: one person's face with their status, or two of a group's (Faces). */
+		faces?: Face[];
 		/** Unread messages from others: a bold name and a grey count. */
 		unread?: number;
 		/** Unread messages whose `body.mentions` lists the viewer: the count turns orange with an @. */
@@ -40,18 +44,19 @@
 		/** Classes for the row's button, added to its own. */
 		class?: ClassValue;
 	}
-	let { room, name, topic, private: isPrivate, unread, mentions, active, loading, onselect, onleave, onnewthread, listed, title, unreadTestid, newThreadTestid, class: className }: Props = $props();
+	let { room, name, topic, private: isPrivate, faces, unread, mentions, active, loading, onselect, onleave, onnewthread, listed, title, unreadTestid, newThreadTestid, class: className }: Props = $props();
 	const shown = $derived(roomName(name, room));
 </script>
 
+{#snippet lead()}{#if faces?.length}<Faces people={faces} size="sm" />{/if}{/snippet}
 {#snippet lines()}{#if topic}<span class="ap-room-topic">{topic}</span>{/if}{/snippet}
 {#snippet start()}
 	<button type="button" class="ap-iconbtn ap-room-new" data-testid={newThreadTestid} aria-label="New thread in {shown}" title="New thread" onclick={onnewthread}><Plus size={16} aria-hidden="true" /></button>
 {/snippet}
 
 <RoomRow
-	{room} noun="room" label={shown} private={isPrivate} {active} {listed} {title} {onselect} {onleave} {lines} start={onnewthread ? start : undefined}
-	class={[(unread || mentions) && 'ap-room-unread', className]}
+	{room} noun="room" label={shown} private={isPrivate} {active} {listed} {title} {onselect} {onleave} lead={faces?.length ? lead : undefined} {lines} start={onnewthread ? start : undefined}
+	class={[(unread || mentions) && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
 >
 	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="message" testid={unreadTestid} />
 	{#if loading}<span class="ap-room-loading" aria-label="Loading history">…</span>{/if}
