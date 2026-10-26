@@ -439,6 +439,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* A private room's or thread's header: washed with its cards' plum, its lock in the hue. */
 .ap-roomhead-private { background: color-mix(in srgb, var(--private-soft) 60%, var(--bg-100)); }
 .ap-roomhead-private .ap-lock { color: var(--private); }
+.ap-roomhead-muted { flex: none; display: inline-block; width: 13px; height: 13px; margin-left: var(--space-1_5); vertical-align: -1px; color: var(--ink-muted); }
 .ap-roomhead-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-3); }
 .ap-roomhead-name { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; white-space: nowrap; }
 .ap-roomhead-sub { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1092,6 +1093,11 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-menu-below { top: calc(100% + var(--space-1)); bottom: auto; }
 .ap-menubtn .ap-menu-item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); white-space: nowrap; }
 .ap-menu-hint { color: var(--ink-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+/* A submenu opens beneath its item, its choices set in past the item's lead icon. */
+.ap-menu-sub { margin: 0; padding: 0; list-style: none; }
+.ap-menubtn .ap-menu-sub .ap-menu-item { padding-left: calc(var(--space-3) + var(--space-6)); }
+.ap-menu-opener .ap-menu-hint { display: inline-flex; align-items: center; align-self: center; gap: var(--space-1); }
+.ap-menu-item-open { background: var(--hover); }
 /* As a picker (`selected`): radio items, a check before the current one; `lead` draws before each label, such as a status dot. */
 .ap-menu-label { display: inline-flex; align-items: baseline; gap: var(--space-2); }
 .ap-menu-lead { display: inline-grid; place-items: center; align-self: center; min-width: 10px; }

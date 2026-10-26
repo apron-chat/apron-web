@@ -5,6 +5,7 @@
 	import { presenceLabel } from '$lib/design/components/util';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { roomFaces } from '$lib/ui/faces';
+	import { pausedUntilLabel, roomMuteChoices, type PausedUntil } from '$lib/ui/pause';
 	import { privateRoomLine } from '$lib/ui/private-rooms';
 
 	interface Props {
@@ -50,14 +51,25 @@
 		/** Copies a link to the open room or thread that any Apron app opens (Appendix A.4); resolves with whether it did. */
 		oncopylink?: () => Promise<boolean>;
 		onjoin?: () => void;
+		/**
+		 * Offer Mute for the pane's room or thread (capability `status`, §4.5 `mute` with its `room_id`), for a
+		 * while or until unmuted; while it's muted (`pane.mutedUntil`), Unmute (`onmute(false)`) instead.
+		 */
+		onmute?: (until: PausedUntil | false) => void;
 		onmemberlist: () => void;
 		/** The room's or thread's description was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
 	}
 	let {
 		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmemberlist, ondescription
+		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription
 	}: Props = $props();
+
+	/** Mutes the pane for the chosen while, from when it's chosen. */
+	function mute(value: string): void {
+		const choice = roomMuteChoices().find((entry) => entry.value === value);
+		if (choice) onmute?.(choice.until);
+	}
 
 	/** A copied link says so under the title for a moment, as the message's Copy link does on its button. */
 	let copied = $state(false);
@@ -79,6 +91,7 @@
 	 */
 	let people = $derived(room.namedForMembers && !thread ? (room.members ?? []).filter((member) => !directory.isMe(member.user_id)) : undefined);
 	let faces = $derived(people ? roomFaces(room, directory.you) : undefined);
+	let muted = $derived(pane.mutedUntil === undefined ? undefined : pane.mutedUntil === true ? 'until you unmute' : pausedUntilLabel(pane.mutedUntil));
 	let line = $derived(people ? privateRoomLine(people.map((member) => directory.name(member)), people.length === 1 ? presenceLabel(directory.status(people[0])) : undefined) : '');
 </script>
 
@@ -106,6 +119,10 @@
 	onedit={canEdit ? onedit : undefined}
 	onleave={canLeave ? onleave : undefined}
 	oncopylink={oncopylink ? copyLink : undefined}
+	muteChoices={onmute ? roomMuteChoices : undefined}
+	onmute={onmute ? mute : undefined}
+	{muted}
+	onunmute={onmute ? () => onmute(false) : undefined}
 	busy={editDisabled}
 	{ondescription}
 	tagTestid="back-unread"
@@ -116,4 +133,6 @@
 	editTestid="edit-room"
 	leaveTestid="leave-room"
 	copyLinkTestid="copy-room-link"
+	muteTestid="mute-room"
+	unmuteTestid="unmute-room"
 />

@@ -63,6 +63,42 @@ describe('RoomHeader', () => {
 		expect(document.querySelector('.ap-menu-item')?.textContent?.trim()).toBe('Copy link to thread');
 	});
 
+	it('offers Mute in the ⋯ menu with how long, worked out as it opens, and while muted marks the name and offers Unmute', async () => {
+		const onmute = vi.fn();
+		const onunmute = vi.fn();
+		let opened = 0;
+		const muteChoices = () => {
+			opened += 1;
+			return [{ value: '1h', label: 'For 1 hour', hint: 'until 14:30' }, { value: 'forever', label: 'Until I unmute' }];
+		};
+		const header = render({ onleave: () => {}, muteChoices, onmute, onunmute });
+		expect(header.querySelector('.ap-roomhead-muted')).toBeNull();
+		const before = opened;
+		dom.button('Room actions').click();
+		flushSync();
+		expect(opened).toBeGreaterThan(before);
+		const items = () => [...document.querySelectorAll<HTMLButtonElement>('.ap-menu-item')].map((item) => item.textContent?.trim());
+		const item = (name: string | RegExp) => dom.byRole<HTMLButtonElement>('menuitem', name);
+		expect(items()).toEqual(['Mute room', 'Leave room']);
+		item('Mute room').click();
+		flushSync();
+		await Promise.resolve();
+		expect(items()).toEqual(['Mute room', 'For 1 houruntil 14:30', 'Until I unmute', 'Leave room']);
+		item(/^For 1 hour/).click();
+		flushSync();
+		expect(onmute).toHaveBeenCalledWith('1h');
+		dom.unmount();
+		// Muted: a bell-off by the name says until when, and Unmute takes Mute's place.
+		const muted = render({ thread: 'deploy', threadName: 'Deploy', muteChoices, onmute, muted: 'until 14:30', onunmute });
+		expect(muted.querySelector('h1 .ap-roomhead-muted')?.getAttribute('aria-label')).toBe('Muted until 14:30');
+		dom.button('Thread actions').click();
+		flushSync();
+		expect(items()).toEqual(['Unmute threaduntil 14:30']);
+		item(/^Unmute thread/).click();
+		flushSync();
+		expect([onunmute.mock.calls.length, onmute.mock.calls.length]).toEqual([1, 1]);
+	});
+
 	it('makes the back arrow a tag with what’s new elsewhere: grey for unread, orange with an @ for mentions, capped at 99+', () => {
 		const back = () => dom.button(/^Back to rooms/);
 		/** The tag on the back arrow: what it shows, and whether it's the quiet or the @ kind. */

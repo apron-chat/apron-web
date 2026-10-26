@@ -330,8 +330,12 @@ export class MemoryProtocolServer {
 				case 'me': this.updateMe(socket, params, reply); return;
 				case 'activity': this.activity(socket, params); return;
 				case 'command': this.command(socket, params, reply, fail); return;
-				// `idle` and mutes (§4.5), for a server given the `status` capability: taken, and kept nowhere.
-				case 'status': reply(); return;
+				// `idle` and mutes (§4.5), for a server given the `status` capability: taken, and kept nowhere. A mute
+				// comes back as a `status` before the result, as a server tells each connection of the user.
+				case 'status':
+					if (params.mute !== undefined) socket.deliver({ method: 'status', params: { ...(typeof params.room_id === 'string' ? { room_id: params.room_id } : {}), mute: params.mute } });
+					reply();
+					return;
 				default: fail(`Unsupported preview method: ${String(frame.method)}`, -32601);
 			}
 		} catch (error) { fail(error instanceof Error ? error.message : 'Preview request failed'); }

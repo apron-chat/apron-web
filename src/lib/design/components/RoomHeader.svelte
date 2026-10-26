@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Bell from '@lucide/svelte/icons/bell';
+	import BellOff from '@lucide/svelte/icons/bell-off';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogOut from '@lucide/svelte/icons/log-out';
@@ -8,7 +10,7 @@
 	import type { ClassValue } from 'svelte/elements';
 	import Faces from './Faces.svelte';
 	import MenuButton from './MenuButton.svelte';
-	import type { Face } from './types';
+	import type { Face, MenuChoice } from './types';
 	import { count99, roomName, roomNameTip } from './util';
 
 	interface Props {
@@ -51,11 +53,22 @@
 		onleave?: () => void;
 		/** Copy link to room (or thread) in the ⋯ actions menu: a link that any Apron app opens (Appendix A.4). */
 		oncopylink?: () => void;
+		/**
+		 * Cap `status`: Mute room (or thread) in the ⋯ actions menu (§4.5 `mute` with its `room_id`), a submenu of
+		 * how long, such as "For 1 hour"; `onmute` gets the chosen value. Worked out as the menu opens, so each
+		 * choice's hint can say when it would end.
+		 */
+		muteChoices?: () => MenuChoice[];
+		onmute?: (value: string) => void;
+		/** The room or thread is muted: when that ends, such as "until 14:30". A bell-off by its name says so, and the menu offers Unmute in place of Mute. */
+		muted?: string;
+		/** Unmute room (or thread) in the ⋯ actions menu, while `muted`. */
+		onunmute?: () => void;
 		/** A request in flight: Join and the actions menu can't be used. */
 		busy?: boolean;
 		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
-		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the ⋯ menu and its Edit and Leave. */
+		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the ⋯ menu and its Edit, Leave, Copy link, Mute and Unmute. */
 		tagTestid?: string;
 		topicTestid?: string;
 		joinTestid?: string;
@@ -64,13 +77,16 @@
 		editTestid?: string;
 		leaveTestid?: string;
 		copyLinkTestid?: string;
+		muteTestid?: string;
+		unmuteTestid?: string;
 		/** Classes for its `<header>`, added to its own. */
 		class?: ClassValue;
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
-		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, busy = false, ondescription,
-		tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, class: className
+		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, busy = false,
+		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, muteTestid, unmuteTestid,
+		class: className
 	}: Props = $props();
 	const noun = $derived(thread ? 'thread' : 'room');
 	/** What's new elsewhere: a mention may be an edit adding you to a read message, so it counts at least once. */
@@ -78,9 +94,17 @@
 	const backLabel = $derived(elsewhere
 		? `Back to rooms, ${elsewhere} unread ${elsewhere === 1 ? 'message' : 'messages'}${mentionsElsewhere ? `, ${mentionsElsewhere === 1 ? 'a mention' : `${mentionsElsewhere} mentions`} of you` : ''}`
 		: 'Back to rooms');
+	/** The ⋯ menu is open: Mute's choices are worked out again as it opens, so their hints say when each would end. */
+	let actionsOpen = $state(false);
+	const muteMenu = $derived.by(() => {
+		void actionsOpen;
+		return muteChoices?.().map((choice) => ({ ...choice, value: `mute:${choice.value}` }));
+	});
 	/** The occasional actions, in the ⋯ menu: Join stays a button, since it's what a pane read without joining is for. */
-	const actions = $derived([
+	const actions = $derived<MenuChoice[]>([
 		...(oncopylink ? [{ value: 'link', label: `Copy link to ${noun}`, testid: copyLinkTestid }] : []),
+		...(muted !== undefined && onunmute ? [{ value: 'unmute', label: `Unmute ${noun}`, hint: muted, testid: unmuteTestid }] : []),
+		...(muted === undefined && muteMenu && onmute ? [{ value: 'mute', label: `Mute ${noun}`, testid: muteTestid, choices: muteMenu }] : []),
 		...(onedit ? [{ value: 'edit', label: `Edit ${noun}`, testid: editTestid }] : []),
 		...(onleave ? [{ value: 'leave', label: `Leave ${noun}`, testid: leaveTestid }] : [])
 	]);
@@ -90,8 +114,12 @@
 		if (value === 'link') oncopylink?.();
 		else if (value === 'edit') onedit?.();
 		else if (value === 'leave') onleave?.();
+		else if (value === 'unmute') onunmute?.();
+		else if (value.startsWith('mute:')) onmute?.(value.slice('mute:'.length));
 	}
 </script>
+
+{#snippet mutedMark()}{#if muted !== undefined}<BellOff class="ap-roomhead-muted" role="img" aria-label="Muted {muted}" title="Notifications muted {muted}" />{/if}{/snippet}
 
 <header class={['ap-roomhead', isPrivate && 'ap-roomhead-private', className]}>
 	{#if onback}
@@ -106,10 +134,10 @@
 			<h1 class="ap-roomhead-name">
 				<button type="button" class="ap-roomhead-crumb" aria-label="Back to room" onclick={onroom}>{roomName(name, room)}</button>
 				<span class="ap-roomhead-sep" aria-hidden="true"> › </span>
-				<bdi title={roomNameTip(threadName, thread, { thread: true })}>{roomName(threadName, thread, { thread: true })}</bdi>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}
+				<bdi title={roomNameTip(threadName, thread, { thread: true })}>{roomName(threadName, thread, { thread: true })}</bdi>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}{@render mutedMark()}
 			</h1>
 		{:else}
-			<h1 class="ap-roomhead-name">{roomName(name, room)}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</h1>
+			<h1 class="ap-roomhead-name">{roomName(name, room)}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}{@render mutedMark()}</h1>
 		{/if}
 		{#if typing.length}
 			<p class="ap-roomhead-sub ap-roomhead-typing">{#if typing.length === 1}<bdi>{typing[0]}</bdi> is typing…{:else}{typing.length} people are typing…{/if}</p>
@@ -134,9 +162,9 @@
 		</button>
 	{/if}
 	{#if actions.length > 0}
-		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} buttonTestid={actionsTestid} choices={actions} disabled={busy} onselect={act}>
+		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} buttonTestid={actionsTestid} choices={actions} disabled={busy} onselect={act} bind:open={actionsOpen}>
 			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
-			{#snippet lead(value)}{#if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
+			{#snippet lead(value)}{#if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else if value === 'mute'}<BellOff size={15} aria-hidden="true" />{:else if value === 'unmute'}<Bell size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
 		</MenuButton>
 	{/if}
 </header>

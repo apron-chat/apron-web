@@ -434,6 +434,8 @@ export interface MenuChoice {
 	hint?: string;
 	/** A `data-testid` for its item. */
 	testid?: string;
+	/** A submenu: the item opens these choices beneath it, and is not a choice itself. */
+	choices?: MenuChoice[];
 }
 
 /** What a wait the server asked for (`retry_after`, §1.1) holds back: pages of history (`history`), sending (`message`), or files (`upload`). */
