@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, OperationHandle, RoomSnapshot } from '$lib/protocol/client';
 import { roomSnapshot as room } from '$lib/test/builders';
-import { ArrivalWatch, couldNotAdd, directRoomWith, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
+import { addRoomMembers, ArrivalWatch, couldNotAdd, directRoomWith, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
 
 const members = (...ids: string[]) => ids.map((user_id) => ({ user_id }));
 const dm = (id: string, ...ids: string[]) => room(id, [], { private: true, namedForMembers: true, members: members('ada', ...ids) });
@@ -113,5 +113,29 @@ describe('ArrivalWatch', () => {
 		expect(watch.next(snapshot([dm('p5'), room('general'), dm('p2', 'carol')]))).toEqual(['p2']);
 		// Another account signing in starts over.
 		expect(watch.next({ ...snapshot([dm('p9', 'bob')]), you: { user_id: 'bob' } })).toEqual([]);
+	});
+
+	it('says every room someone added you to in added, threads and public rooms too, and only private ones from next', () => {
+		const watch = new ArrivalWatch();
+		watch.next(snapshot([room('general')]));
+		const thread = room('t1', [], { parentRoomId: 'general' });
+		expect(watch.next(snapshot([room('general'), thread, dm('p1', 'bob')]))).toEqual(['p1']);
+		expect(watch.added).toEqual(['t1', 'p1']);
+		// Nothing new: nothing added.
+		expect(watch.next(snapshot([room('general'), thread, dm('p1', 'bob')]))).toEqual([]);
+		expect(watch.added).toEqual([]);
+		// A room you posted in, which a server may join you to, is yours.
+		watch.next(snapshot([room('general'), thread, dm('p1', 'bob'), room('t2', [], { parentRoomId: 'general' })], [{ id: 'c3', method: 'message', room: 't2', createdAt: 0 }]));
+		expect(watch.added).toEqual([]);
+	});
+});
+
+describe('addRoomMembers', () => {
+	it('adds the private room\'s other members to its new thread, saying who could not be added', async () => {
+		const client = fakeClient({ joins: { carol: new Error('Carol is in too many private rooms') } });
+		const failed = await addRoomMembers(client, 't1', dm('p1', 'bob', 'carol'), 'ada');
+		expect(client.joinRoom.mock.calls).toEqual([['t1', 'bob'], ['t1', 'carol']]);
+		expect(failed).toEqual([{ userId: 'carol', message: 'Carol is in too many private rooms' }]);
+		expect(await addRoomMembers(client, 't2', undefined, 'ada')).toEqual([]);
 	});
 });

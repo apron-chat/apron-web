@@ -46,7 +46,7 @@
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
-	import { ArrivalWatch, othersIn, reachesStart } from '$lib/ui/private-rooms';
+	import { ArrivalWatch, addRoomMembers, couldNotAdd, othersIn, reachesStart } from '$lib/ui/private-rooms';
 	import { roomFaces } from '$lib/ui/faces';
 	import { composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
@@ -91,7 +91,7 @@
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
 	import { PushSettings } from '$lib/ui/push-settings.svelte';
-	import { notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
+	import { inMutedRoom, notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
 	import { arrivalAlerts } from '$lib/ui/alerts';
 	import { readAction } from '$lib/ui/read-action';
 	import { createdRoom, createdThread, moveCheck, type PendingThread } from '$lib/ui/created';
@@ -2014,6 +2014,28 @@
 	function noteArrivals(next: ClientSnapshot): void {
 		const arrived = arrivals.next(next).filter((id) => id !== pendingJoin);
 		if (arrived.length) keepAdded([...addedRooms.filter((id) => !arrived.includes(id)), ...arrived]);
+		for (const id of arrivals.added) if (id !== pendingJoin) noteAdded(id, next.rooms);
+	}
+
+	/**
+	 * Someone added you to a room or thread: it alerts as a mention there would. Its row counts it until you open it,
+	 * it chimes, and while you're away it notifies, if you're notified of mentions. A room you muted, or a thread of
+	 * one, stays quiet.
+	 */
+	function noteAdded(roomId: string, rooms: readonly RoomSnapshot[]): void {
+		const room = rooms.find((candidate) => candidate.id === roomId);
+		if (!room || inMutedRoom({ room_id: roomId }, rooms)) return;
+		mentions.addedTo(roomId, paneRoom?.id);
+		unread.addedTo(roomId);
+		audibleMentions += 1;
+		if (!client || !notificationsActive || !presence.away || silenced || !notifyScopes.includes('mentions')) return;
+		const target: NotificationTarget = { tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}) };
+		const what = room.parentRoomId ? 'thread' : room.private ? 'private conversation' : 'room';
+		void showNotification(room.title, {
+			body: `You were added to this ${what}`,
+			tag: `apron:${client.url}:added:${room.id}`,
+			data: target
+		}, () => openNotificationTarget(target));
 	}
 
 	/** Keeps the private rooms whose "You were added" banner shows, for this account on this device. */
@@ -2563,6 +2585,7 @@
 				movable,
 				authors: moveAuthors()
 			});
+			if (result.room !== undefined) includeMembers(start.room, result.room);
 			if (result.moved) pendingOpen = { room: roomId, thread: result.room, moved: true };
 			else if (result.room === undefined) throw result.error ?? new Error('No messages were moved');
 			// The thread exists, so the dialog closes and says why nothing (or not everything) moved.
@@ -2573,7 +2596,20 @@
 		const result = await client.createRoom({ parentRoomId: roomId, ...thread }).promise;
 		if (typeof result.room_id !== 'string' || !result.room_id) throw new Error('Invalid room response');
 		if (start.message !== undefined) startedThreads.set(start.message, result.room_id);
+		includeMembers(start.room, result.room_id);
 		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined ? { replyTo: start.message } : {}) };
+	}
+
+	/**
+	 * A thread of a private room is private too, seen only by its members (§4.2.4): the room's other members are
+	 * added to one started in it, so they see it and its replies, as they see the room's.
+	 */
+	function includeMembers(room: NewThread['room'], threadId: string): void {
+		if (!client || !room.private) return;
+		const members = session.rooms.find((candidate) => candidate.id === room.id);
+		void addRoomMembers(client, threadId, members, session.you?.user_id).then((failed) => {
+			if (failed.length) feedback.error(couldNotAdd(failed, (userId) => directory.name({ user_id: userId })));
+		});
 	}
 
 	// --- Select mode ---

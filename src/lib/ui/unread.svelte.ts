@@ -10,7 +10,9 @@ import { isOwn } from './messages';
  * watermark, so history never counts. An arrival stops counting once you
  * have had the end of its room on screen (in a visible tab), or once your
  * read cursor moves past it, from this connection or another device (or
- * your own message after it does, sent from another device).
+ * your own message after it does, sent from another device). A room someone
+ * added you to (`addedTo`) counts from your join instead, once its membership
+ * record is loaded, so what was said there while you were away counts too.
  */
 export class UnreadTracker {
 	/** Unread arrivals per room (threads are rooms of their own). */
@@ -19,6 +21,13 @@ export class UnreadTracker {
 	private readonly shown = new Map<string, Set<string>>();
 	private readonly watermarks = new Map<string, string>();
 	private readonly arrivals = new Map<string, string[]>();
+	/** Rooms someone added you to, whose watermark moves back to your join once its membership is loaded. */
+	private readonly added = new Set<string>();
+
+	/** Someone added you to this room: it counts from your join, not from when this page first saw it. */
+	addedTo(roomId: string): void {
+		this.added.add(roomId);
+	}
 
 	/**
 	 * Runs over every room after each snapshot; `pane` is the room (or thread)
@@ -39,11 +48,24 @@ export class UnreadTracker {
 					.pop();
 				if (newest !== undefined) this.watermarks.set(room.id, newest);
 			}
+			if (this.added.has(room.id)) {
+				const joined = joinOf(room, me.user_id);
+				const kept = this.watermarks.get(room.id);
+				if (joined !== undefined) {
+					this.added.delete(room.id);
+					// Counted again from the join, so what came before this page saw the room counts too.
+					if (kept === undefined || compareLogIds(joined, kept) < 0) {
+						this.watermarks.set(room.id, joined);
+						shown.clear();
+					}
+				}
+			}
 			const watermark = this.watermarks.get(room.id);
 			let arrivals = this.arrivals.get(room.id) ?? [];
 			for (const id of room.timeline.order) {
 				if (shown.has(id)) continue;
 				shown.add(id);
+				if (arrivals.includes(id)) continue;
 				if (watermark !== undefined && compareLogIds(id, watermark) <= 0) continue;
 				const event = room.timeline.events[id];
 				if (event && !isOwn(event, me)) arrivals.push(id);
@@ -58,6 +80,16 @@ export class UnreadTracker {
 		}
 		if (!sameCounts(this.byRoom, next)) this.byRoom = next;
 	}
+}
+
+/** The `log_id` of your latest join of the room among its loaded memberships (§4.2.2), if it is your latest membership. */
+function joinOf(room: RoomSnapshot, userId: string): string | undefined {
+	const records = room.timeline.memberships;
+	for (let index = records.length - 1; index >= 0; index--) {
+		const entry = records[index].entries.find((candidate) => candidate.user.user_id === userId);
+		if (entry) return entry.joined ? records[index].log_id : undefined;
+	}
+	return undefined;
 }
 
 /** A per-room count added up over every room but `pane`, the one being read. */

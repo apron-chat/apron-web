@@ -47,6 +47,19 @@ describe('mention tracking', () => {
 		tracker.dispose();
 	});
 
+	it('counts being added to a room you are not reading as a mention there, until you open it', () => {
+		const tracker = new MentionTracker();
+		tracker.addedTo('dm', 'general');
+		tracker.addedTo('general', 'general');
+		expect(tracker.byRoom).toEqual({ dm: 1 });
+		tracker.observe([room('dm', [mention(20, 'dm')], { latestLogId: '10' })], me, 'general', true);
+		tracker.observe([room('dm', [mention(20, 'dm'), mention(21, 'dm')], { latestLogId: '10' })], me, 'general', true);
+		expect(tracker.byRoom).toEqual({ dm: 2 });
+		tracker.clearRoom('dm');
+		expect(tracker.byRoom).toEqual({});
+		tracker.dispose();
+	});
+
 	it('goes by body.mentions alone, and pings an edit that adds you', () => {
 		const tracker = new MentionTracker();
 		tracker.observe([room('general', [], { latestLogId: '10' })], me, 'elsewhere', true);
