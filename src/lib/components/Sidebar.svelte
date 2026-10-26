@@ -6,7 +6,9 @@
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
-	import { sidebarRooms, threadsWithNews, type ThreadEntry } from '$lib/ui/timeline';
+	import { sidebarSections, threadsWithNews, type ThreadEntry } from '$lib/ui/timeline';
+	import { roomFaces } from '$lib/ui/faces';
+	import type { Face } from '$lib/design/components/types';
 	import { listInBackground } from '$lib/ui/background-listing';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
@@ -61,13 +63,18 @@
 		oncreateroom: (roomId: string, options: { private: boolean }) => void;
 		/** The + on the active room's row: start a thread in it, named in the page's NewThreadDialog. */
 		onnewthread: (room: RoomSnapshot) => void;
+		/** The + beside Private, for a signed-in account: start a private conversation, in the page's NewPrivateDialog. */
+		onnewprivate?: () => void;
 		onsignout: SignOutHandler;
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
-	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onsignout, onsignin }: Props = $props();
-	/** Threads are listed under their parent, not as rooms of their own. */
-	let rooms = $derived(sidebarRooms(session.rooms));
+	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
+	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
+	let sections = $derived(sidebarSections(session.rooms));
+	let rooms = $derived(sections.rooms);
+	let privateRooms = $derived(sections.private);
+
 	let canBrowse = $derived(session.canManageRooms && session.ready);
 	/** What picking a listed room does: join it, or open it without joining where guests only read. */
 	let action = $derived(session.readOnly ? 'Open' : 'Join');
@@ -83,7 +90,7 @@
 
 	/** Changes whenever a room or thread is joined or left; `roomsKey` only for a top-level room. */
 	let joinedKey = $derived(session.rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));
-	let roomsKey = $derived(rooms.filter((room) => room.joined).map((room) => room.id).join('\u0000'));
+	let roomsKey = $derived([...rooms, ...privateRooms].filter((room) => room.joined).map((room) => room.id).join('\u0000'));
 	/**
 	 * How long a listing made in the background is reused, a client choice: switching between rooms shouldn't list
 	 * again each time, and any server may rate-limit `room_list`. Joining or leaving lists afresh (the client drops what it changed), and so does opening Browse.
@@ -113,34 +120,43 @@
 
 </script>
 
+<!-- A room's row, with its threads under it while it's open (and those with news while it isn't); a private room's with its faces. -->
+{#snippet roomRow(room: RoomSnapshot, faces?: Face[])}
+	{@const active = room.id === session.activeRoomId}
+	{@const current = active && !activeThread}
+	<!-- What's new in the room itself (its threads show their own): none while you're reading it. The Private list says it's private: no lock there. -->
+	<RoomItem
+		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} active={current}
+		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering}
+		onselect={() => onroom(room)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
+	/>
+	{#if active}
+		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+	{:else}
+		<!-- Under a room that isn't open, only its joined threads with news, so activity there isn't missed. -->
+		{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
+		{#if news.length > 0}
+			<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+		{/if}
+	{/if}
+{/snippet}
+
 <aside class="ap-shell-side" aria-label="Rooms">
 	<SidebarHead name={backendLabel} {onconnect} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
-		<SidebarSection title="Rooms" collapsible={false} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && session.starting} bodyTestid="room-list">
+		<SidebarSection title="Rooms" collapsible={false} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
 			{#if rooms.length === 0}
 				<p class="ap-sect-note">{session.snapshot.status === 'connected' ? 'No rooms yet.' : 'Waiting for rooms…'}</p>
 			{:else}
-				{#each rooms as room (room.id)}
-					{@const active = room.id === session.activeRoomId}
-					{@const current = active && !activeThread}
-					<!-- What's new in the room itself (its threads show their own): none while you're reading it. -->
-					<RoomItem
-						room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={room.private} active={current}
-						unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering}
-						onselect={() => onroom(room)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
-					/>
-					{#if active}
-						<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
-					{:else}
-						<!-- Under a room that isn't open, only its joined threads with news, so activity there isn't missed. -->
-						{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
-						{#if news.length > 0}
-							<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
-						{/if}
-					{/if}
-				{/each}
+				{#each rooms as room (room.id)}{@render roomRow(room)}{/each}
 			{/if}
 		</SidebarSection>
+		<!-- Shown with private rooms in it, or empty, for its +, where you could start one. -->
+		{#if privateRooms.length > 0 || onnewprivate}
+			<SidebarSection title="Private" collapsible={false} onadd={onnewprivate} addLabel="New private conversation" bodyTestid="private-list">
+				{#each privateRooms as room (room.id)}{@render roomRow(room, roomFaces(room, session.you))}{/each}
+			</SidebarSection>
+		{/if}
 		{#if canBrowse && unjoined.length > 0}
 			<SidebarSection title="Browse rooms" bind:open={browseOpen} ontoggle={(open) => { if (open) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
 				<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->

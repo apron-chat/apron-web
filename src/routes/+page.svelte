@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { messageEditor, newThreadDialog, roomEditor, signInLinkDialog } from '$lib/components/lazy';
+	import { messageEditor, newPrivateDialog, newThreadDialog, roomEditor, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, normalizeWebSocketUrl, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, keepsBio, normalizeWebSocketUrl, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
@@ -44,6 +44,10 @@
 	import TypingIndicator from '$lib/design/components/TypingIndicator.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
+	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
+	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
+	import { ArrivalWatch, othersIn, reachesStart } from '$lib/ui/private-rooms';
+	import { roomFaces } from '$lib/ui/faces';
 	import { composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -59,7 +63,7 @@
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { WIDE_MIN } from '$lib/ui/breakpoints';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -82,7 +86,7 @@
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, offersAtSignIn, offersNotifications, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationTitle, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, offersAtSignIn, offersNotifications, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
@@ -512,6 +516,55 @@
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneReady);
+	/**
+	 * Starting a private conversation (§4.2.4): the + beside Private and a profile card's Message, for an account
+	 * signed in (not a guest) on a server that creates rooms (capability `rooms`).
+	 */
+	let canStartPrivate = $derived(session.canManageRooms && session.ready && !session.readOnly && Boolean(snapshot.passkeySession));
+	/** The NewPrivateDialog, from the + beside Private. */
+	let newPrivateOpen = $state(false);
+	/** Notices the private rooms someone else added you to, as they arrive. */
+	const arrivals = new ArrivalWatch();
+	/** Whose added rooms are kept: each account on each server. */
+	let addedAccount = $derived(notifyAccount(serverUrl, session.you?.user_id));
+	/** The private rooms someone else added you to whose "You were added" banner still shows, kept on this device. */
+	let addedRooms = $state<string[]>([]);
+	$effect(() => {
+		addedRooms = loadAddedRooms(addedAccount);
+	});
+	// A room you're no longer in has no banner to show.
+	$effect(() => {
+		if (!snapshot.roomsListed) return;
+		const joined = new Set(snapshot.rooms.filter((room) => room.joined).map((room) => room.id));
+		untrack(() => {
+			if (addedRooms.some((id) => !joined.has(id))) keepAdded(addedRooms.filter((id) => joined.has(id)));
+		});
+	});
+	/** The open room is private, and someone else added you to it: its banner shows under the header. */
+	let addedHere = $derived(Boolean(activeRoom && !activeThread && activeRoom.private && activeRoom.parentRoomId === undefined && addedRooms.includes(activeRoom.id)));
+	/** Muting one room (§4.5 `mute` with its `room_id`) takes capability `status` and an account. */
+	let canMuteRoom = $derived(Boolean(snapshot.capabilities.status && snapshot.passkeySession));
+	let addedBusy = $state(false);
+	let addedError = $state<string | undefined>();
+	$effect(() => {
+		void activeRoom?.id;
+		addedError = undefined;
+	});
+	/**
+	 * The start of the open private room, once its history reaches back to it (`reachesStart`) and all of it is on
+	 * screen: who it's with, and what private means, at the head of the timeline.
+	 */
+	let privateIntro = $derived.by(() => {
+		const room = activeThread ? undefined : activeRoom;
+		if (!room?.private || room.parentRoomId !== undefined || !reachesStart(room) || reveal.hidden > 0) return undefined;
+		const others = othersIn(room, session.you?.user_id);
+		const one = room.namedForMembers && others.length === 1 ? directory.person(others[0]) : undefined;
+		const bio = one && keepsBio(session.server) ? directory.bio(one)?.split('\n')[0] : undefined;
+		const count = Math.max(room.memberCount ?? 0, room.members?.length ?? 0);
+		const detail = one ? `@${one.user_id}${bio ? ` · ${bio}` : ''}` : count ? `${count} ${count === 1 ? 'member' : 'members'}` : undefined;
+		return { name: room.title, faces: roomFaces(room, session.you), detail };
+	});
+	let memberListSidebar = $state<MemberListSidebar | undefined>();
 
 	$effect(() => {
 		const roomId = activeRoom?.id;
@@ -1003,6 +1056,7 @@
 			serverUrl = chat.url;
 			session.apply(next, chat);
 			directory.apply(next, serverOrigin(chat.url), chat.url);
+			noteArrivals(next);
 		});
 		chat.start();
 		client = chat;
@@ -1163,7 +1217,7 @@
 			tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}),
 			...(id ? { pushId: id, messageId: event.message_id, group: notificationGroup(id, room.id) } : {})
 		};
-		const shown = await showNotification(`${senderName(event)} · ${room.title}`, {
+		const shown = await showNotification(notificationTitle(senderName(event), room), {
 			body: body || 'New message',
 			// One per message, shared with the server's push of it (§4.9), which replaces it quietly;
 			// a newer message in the room closes it. Without a `push_id`, one per room.
@@ -1953,6 +2007,59 @@
 		else memberListOverlay = !memberListOverlay;
 	}
 
+	/** A private room's Add people: the member list, open, with its add form (§4.2.2). */
+	async function addPeople(): Promise<void> {
+		if (!memberListOpen) toggleMemberList();
+		await tick();
+		await memberListSidebar?.openAdd();
+	}
+
+	/**
+	 * Takes each snapshot as the client emits it, while what's in flight is still pending in it: a private room that
+	 * arrives without this page asking for it (`ArrivalWatch`; nor joining it, as `pendingJoin` says) is one someone
+	 * else added you to, and gets its banner.
+	 */
+	function noteArrivals(next: ClientSnapshot): void {
+		const arrived = arrivals.next(next).filter((id) => id !== pendingJoin);
+		if (arrived.length) keepAdded([...addedRooms.filter((id) => !arrived.includes(id)), ...arrived]);
+	}
+
+	/** Keeps the private rooms whose "You were added" banner shows, for this account on this device. */
+	function keepAdded(rooms: string[]): void {
+		addedRooms = rooms;
+		saveAddedRooms(addedAccount, rooms);
+	}
+
+	/** Mutes, or unmutes, the room someone added you to (§4.5 `mute` with its `room_id`), from its banner. */
+	async function muteAdded(roomId: string, mute: boolean): Promise<void> {
+		if (!client || addedBusy) return;
+		addedBusy = true;
+		addedError = undefined;
+		try {
+			await client.setMute(mute, roomId);
+		} catch (cause) {
+			addedError = cause instanceof Error ? cause.message : mute ? 'Unable to mute' : 'Unable to unmute';
+		} finally {
+			addedBusy = false;
+		}
+	}
+
+	/**
+	 * Opens a private room this page started or found: at once where it's listed and private, else once its
+	 * `room_update` arrives, checked for `private: true` as a room created private is (§4.2.4). `problem` is what
+	 * couldn't be done in it, such as someone who couldn't be added.
+	 */
+	function openPrivateRoom(roomId: string, problem?: string): void {
+		arrivals.mine(roomId);
+		const room = session.rooms.find((candidate) => candidate.id === roomId);
+		if (room?.private) chooseRoom(room);
+		else {
+			pendingJoin = roomId;
+			pendingPrivate = true;
+		}
+		if (problem) feedback.error(problem);
+	}
+
 	// --- Rooms ---
 
 	function joinRoom(roomId: string): void {
@@ -1981,8 +2088,12 @@
 	function leavePane(): void {
 		if (!client || !paneRoom) return;
 		const leaving = paneRoom;
-		const again = leaving.parentRoomId !== undefined ? 'from Other threads under its room' : 'from Browse rooms';
-		if (!confirm(`Leave ${leaving.title}? You can join it again ${again}.`)) return;
+		// A private room isn't listed to join again: only a member can add you back, and the last to leave ends it.
+		const again = leaving.parentRoomId !== undefined ? 'You can join it again from Other threads under its room.'
+			: !leaving.private ? 'You can join it again from Browse rooms.'
+			: othersIn(leaving, session.you?.user_id).length ? 'It’s private: only someone in it can add you back.'
+			: 'No one else is in it, so it ends when you leave.';
+		if (!confirm(`Leave ${leaving.title}? ${again}`)) return;
 		if (activeThread && activeRoom) backToRoom();
 		feedback.track(client.leaveRoom(leaving.id), 'Leaving…');
 	}
@@ -2617,6 +2728,7 @@
 			onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
 			returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
 			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut}
+			onnewprivate={canStartPrivate ? () => (newPrivateOpen = true) : undefined}
 		/>
 	{/snippet}
 	{#snippet sideHandle()}<SidebarHandle layout={sidebar} />{/snippet}
@@ -2665,6 +2777,15 @@
 				</div>
 			{/if}
 
+			{#if addedHere && activeRoom}
+				{@const added = activeRoom}
+				<AddedBanner
+					testid="added-banner" busy={addedBusy || !paneReady} error={addedError} muted={added.mutedUntil !== undefined}
+					onmute={canMuteRoom ? () => muteAdded(added.id, true) : undefined} onunmute={canMuteRoom ? () => muteAdded(added.id, false) : undefined}
+					onleave={session.canManageRooms && !session.readOnly ? leavePane : undefined} ondismiss={() => keepAdded(addedRooms.filter((id) => id !== added.id))}
+				/>
+			{/if}
+
 			{#if pinnedDescription}
 				{@const pinned = pinnedDescription}
 				{#key pinned.id}
@@ -2680,9 +2801,12 @@
 				<!-- No messages yet: placeholders, not thread cards on their own. -->
 				{#if (messages.length === 0 || paneHeldBack) && paneCatchingUp}
 					<TimelineLoading label={activeThread ? 'Loading replies…' : 'Loading messages…'} rows={activeThread ? 3 : 6} notice={historyWait ? historyNotice : undefined} />
-				{:else if timeline.length === 0}
+				{:else if timeline.length === 0 && !privateIntro}
 					<EmptyState title={activeThread ? 'No replies yet' : 'Nothing here yet'} detail={activeThread ? 'Reply below to continue the thread.' : `Start the conversation in ${activeRoom.title}.`} />
 				{:else}
+					{#if privateIntro}
+						<PrivateIntro {...privateIntro} testid="private-intro" addTestid="private-add-people" onaddpeople={canChangeMembers && !snapshot.memberChangesUnsupported && activeRoom.joined ? addPeople : undefined} />
+					{/if}
 					{#each shownTimeline as item (item.key)}
 						{#if item.kind === 'date'}
 							<TimelineDivider label={item.label} sticky={false} />
@@ -2772,7 +2896,7 @@
 		{/if}
 	{/snippet}
 	{#snippet members()}
-		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
+		<MemberListSidebar bind:this={memberListSidebar} {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
 	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
@@ -2788,8 +2912,12 @@
 				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
 		{/key}
 	{/if}
+	{#if newPrivateOpen && newPrivateDialog.component}
+		{@const NewPrivateDialog = newPrivateDialog.component}
+		<NewPrivateDialog client={client!} {session} enabled={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopen={openPrivateRoom} onclose={() => (newPrivateOpen = false)} />
+	{/if}
 	<!-- Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut. -->
-	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} onmention={(userId) => composer?.mention(userId)} />
+	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	<ReactorsPopover />
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
 	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, offersAtSignIn, offersNotifications, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId, type ShowNotificationOptions } from './notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationTitle, offersAtSignIn, offersNotifications, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId, type ShowNotificationOptions } from './notifications';
 
 /** A service worker registration's notifications: one per tag, a newer one with a tag replacing the older. */
 function fakeRegistration() {
@@ -335,6 +335,14 @@ describe('push notifications', () => {
 		await setAppBadge({}, 2);
 		await setAppBadge(undefined, 2);
 		await setAppBadge({ setAppBadge: async () => { throw new Error('not allowed'); } }, 2);
+	});
+});
+
+describe('notificationTitle', () => {
+	it('names the sender and the room, or the sender alone in a private conversation named for them', () => {
+		expect(notificationTitle('Ada', { title: 'general' })).toBe('Ada · general');
+		expect(notificationTitle('Bob', { title: 'Bob', namedForMembers: true })).toBe('Bob');
+		expect(notificationTitle('Bob', { title: 'Bob, Carol', namedForMembers: true })).toBe('Bob · Bob, Carol');
 	});
 });
 

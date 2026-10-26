@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, OperationHandle, RoomSnapshot } from '$lib/protocol/client';
 import { roomSnapshot as room } from '$lib/test/builders';
-import { ArrivalWatch, directRoomWith, NO_PRIVATE_ROOMS, othersIn, privateRooms, quietestFirst, startPrivateRoom } from './private-rooms';
+import { ArrivalWatch, couldNotAdd, directRoomWith, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
 
 const members = (...ids: string[]) => ids.map((user_id) => ({ user_id }));
 const dm = (id: string, ...ids: string[]) => room(id, [], { private: true, namedForMembers: true, members: members('ada', ...ids) });
@@ -28,6 +28,27 @@ describe('private rooms', () => {
 		expect(directRoomWith(rooms, undefined, 'bob')).toBeUndefined();
 	});
 
+	it('says who can see a room, with the one other person’s status', () => {
+		expect(privateRoomLine(['Bob'], 'Online')).toBe('Online · only you and Bob can see this room');
+		expect(privateRoomLine(['Bob'])).toBe('Only you and Bob can see this room');
+		expect(privateRoomLine(['Bob', 'Carol'], 'Online')).toBe('Only members can see this room');
+		expect(privateRoomLine([])).toBe('Only you can see this room');
+		expect(couldNotAdd([{ userId: 'carol', message: 'In too many private rooms.' }, { userId: 'dev', message: 'Unknown user' }], (id) => id.toUpperCase()))
+			.toBe('Couldn’t add CAROL: In too many private rooms. Couldn’t add DEV: Unknown user.');
+	});
+
+	it('knows when history reaches back to the room’s start: all loaded, from at or before its first record', () => {
+		const record = { room_id: 'p1', log_id: '100' };
+		expect(reachesStart(room('p1', [], { historyLogId: '100', record }))).toBe(true);
+		expect(reachesStart(room('p1', [], { historyLogId: '90', firstRecordLogId: '100', record }))).toBe(true);
+		expect(reachesStart(room('p1', [], { historyLogId: null }))).toBe(true);
+		// Retention took the start, or it isn't all loaded yet, or nothing says where it starts.
+		expect(reachesStart(room('p1', [], { historyLogId: '150', record }))).toBe(false);
+		expect(reachesStart(room('p1', [], { historyLogId: '100', record, recovering: true }))).toBe(false);
+		expect(reachesStart(room('p1', [], { historyLogId: '100', record, loaded: false }))).toBe(false);
+		expect(reachesStart(room('p1', []))).toBe(false);
+	});
+
 	it('puts the quietest first', () => {
 		const rooms = [room('a', [], { latestLogId: '30' }), room('b', [], { latestLogId: '10' }), room('c')];
 		expect(quietestFirst(rooms).map((entry) => entry.id)).toEqual(['c', 'b', 'a']);
@@ -51,8 +72,10 @@ function fakeClient(options: { record?: Partial<RoomSnapshot>; create?: Promise<
 describe('startPrivateRoom', () => {
 	it('creates the room private, checks its record, then adds each person in turn, keeping the room when one fails', async () => {
 		const client = fakeClient({ joins: { carol: new Error('Carol is in too many private rooms') } });
-		const started = await startPrivateRoom(client, ['bob', 'carol', 'dev'], { title: 'Launch' });
+		const named = vi.fn();
+		const started = await startPrivateRoom(client, ['bob', 'carol', 'dev'], { title: 'Launch', named });
 		expect(client.createRoom).toHaveBeenCalledWith({ private: true, title: 'Launch' });
+		expect(named).toHaveBeenCalledWith('p1');
 		expect(client.joinRoom.mock.calls).toEqual([['p1', 'bob'], ['p1', 'carol'], ['p1', 'dev']]);
 		expect(started).toEqual({ roomId: 'p1', failed: [{ userId: 'carol', message: 'Carol is in too many private rooms' }] });
 	});
