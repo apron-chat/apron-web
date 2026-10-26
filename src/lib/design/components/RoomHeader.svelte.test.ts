@@ -63,7 +63,7 @@ describe('RoomHeader', () => {
 		expect(document.querySelector('.ap-menu-item')?.textContent?.trim()).toBe('Copy link to thread');
 	});
 
-	it('offers Mute in the ⋯ menu with how long, worked out as it opens, and while muted marks the name and offers Unmute', async () => {
+	it('offers Mute in the ⋯ menu with how long, worked out as it opens, and while muted offers Unmute, as a bell-off button left of it and in it', async () => {
 		const onmute = vi.fn();
 		const onunmute = vi.fn();
 		let opened = 0;
@@ -72,7 +72,7 @@ describe('RoomHeader', () => {
 			return [{ value: '1h', label: 'For 1 hour', hint: 'until 14:30' }, { value: 'forever', label: 'Until I unmute' }];
 		};
 		const header = render({ onleave: () => {}, muteChoices, onmute, onunmute });
-		expect(header.querySelector('.ap-roomhead-muted')).toBeNull();
+		expect(dom.queryByRole('button', 'Unmute room')).toBeNull();
 		const before = opened;
 		dom.button('Room actions').click();
 		flushSync();
@@ -88,15 +88,19 @@ describe('RoomHeader', () => {
 		flushSync();
 		expect(onmute).toHaveBeenCalledWith('1h');
 		dom.unmount();
-		// Muted: a bell-off by the name says until when, and Unmute takes Mute's place.
+		// Muted: a bell-off button just before the ⋯ menu says until when and unmutes, and Unmute takes Mute's place in the menu.
 		const muted = render({ thread: 'deploy', threadName: 'Deploy', muteChoices, onmute, muted: 'until 14:30', onunmute });
-		expect(muted.querySelector('h1 .ap-roomhead-muted')?.getAttribute('aria-label')).toBe('Muted until 14:30');
+		const unmute = dom.button('Unmute thread');
+		expect([unmute.title, unmute.nextElementSibling?.classList.contains('ap-menubtn')]).toEqual(['Muted until 14:30. Unmute thread', true]);
+		expect(muted.querySelector('h1 svg')).toBeNull();
+		unmute.click();
+		expect(onunmute).toHaveBeenCalledOnce();
 		dom.button('Thread actions').click();
 		flushSync();
 		expect(items()).toEqual(['Unmute threaduntil 14:30']);
 		item(/^Unmute thread/).click();
 		flushSync();
-		expect([onunmute.mock.calls.length, onmute.mock.calls.length]).toEqual([1, 1]);
+		expect([onunmute.mock.calls.length, onmute.mock.calls.length]).toEqual([2, 1]);
 	});
 
 	it('makes the back arrow a tag with what’s new elsewhere: grey for unread, orange with an @ for mentions, capped at 99+', () => {

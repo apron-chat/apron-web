@@ -1,4 +1,5 @@
 <script lang="ts">
+	import BellOff from '@lucide/svelte/icons/bell-off';
 	import DoorOpen from '@lucide/svelte/icons/door-open';
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogIn from '@lucide/svelte/icons/log-in';
@@ -20,6 +21,8 @@
 		label: string;
 		tip?: string;
 		private?: boolean;
+		/** Muted (§4.5 `mute` with its `room_id`): a bell-off beside the name, after any lock. */
+		muted?: boolean;
 		active?: boolean;
 		/** A thread indented under its parent. */
 		nested?: boolean;
@@ -45,7 +48,7 @@
 		/** After the button, where it has no door: the open room's +. */
 		start?: Snippet;
 	}
-	let { room, noun, label, tip, private: isPrivate, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, class: className }: Props = $props();
+	let { room, noun, label, tip, private: isPrivate, muted, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, class: className }: Props = $props();
 	const thread = $derived(noun === 'thread');
 </script>
 
@@ -57,7 +60,7 @@
 		class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', className]} onclick={onselect}
 	>
 		{@render lead?.()}
-		<span class="ap-room-text"><span class="ap-room-name" title={tip}>{label}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>{@render lines?.()}</span>
+		<span class="ap-room-text"><span class="ap-room-name" title={tip}>{label}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}{#if muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}</span>{@render lines?.()}</span>
 		{@render children?.()}
 	</button>
 {/snippet}

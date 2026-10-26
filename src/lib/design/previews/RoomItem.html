@@ -1,4 +1,4 @@
-<!-- @dsCard group="Navigation" height=380 subtitle="Rooms in the rooms list, a private room · unread in a grey bubble, orange with an @ when it includes a mention · the open room has a neutral fill and an accent bar, and a + for a new thread · hover a row for Leave · a room still loading its history ends in … · a listed room under Browse rooms, with its members · under Private, a conversation with one person (their face and status) and with a group (two faces) · a thread's row is a ThreadItem" -->
+<!-- @dsCard group="Navigation" height=420 subtitle="Rooms in the rooms list, a private room · unread in a grey bubble, orange with an @ when it includes a mention · the open room has a neutral fill and an accent bar, and a + for a new thread · hover a row for Leave · a muted room has a bell-off after its name, and its news stays grey, mentions too · a room still loading its history ends in … · a listed room under Browse rooms, with its members · under Private, a conversation with one person (their face and status) and with a group (two faces) · a thread's row is a ThreadItem" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>RoomItem</title></head>
@@ -12,6 +12,7 @@
   add(A.RoomItem, { room: 'ops', name: 'Ops', active: true, onnewthread: leave });
   add(A.RoomItem, { room: 'design', name: 'Design', unread: 12, mentions: 2, onleave: leave });
   add(A.RoomItem, { room: '1724803950000', name: 'Hiring', topic: 'Members only', private: true, onleave: leave });
+  add(A.RoomItem, { room: 'alerts', name: 'Alerts', muted: true, unread: 8, mentions: 1, onleave: leave });
   add(A.RoomItem, { room: 'random', name: 'Random', unread: 3, loading: true });
   add(A.RoomItem, { room: 'books', name: 'Book club', topic: '12 members · Join' });
   add(A.RoomItem, { room: 'p1', name: 'Bob', faces: [{ user_id: 'bob', name: 'Bob', hue: 200, status: 'online' }], mentions: 1, unread: 1 });

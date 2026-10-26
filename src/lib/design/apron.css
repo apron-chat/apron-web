@@ -352,6 +352,8 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-room-active .ap-room-name { font-weight: 600; }
 .ap-room-active::before { content: ''; position: absolute; left: var(--space-1); top: var(--space-1_5); bottom: var(--space-1_5); width: 3px; border-radius: var(--radius-full); background: var(--accent); pointer-events: none; }
 .ap-room-unread { color: var(--ink); }
+/* A muted room (§4.5 `mute` with its `room_id`): a bell-off beside its name, and what's new in it stays quiet. */
+.ap-muted { flex: none; display: inline-block; width: 12px; height: 12px; margin-left: var(--space-1); vertical-align: -1px; color: var(--ink-muted); }
 .ap-room-unread .ap-room-name { font-weight: 600; }
 .ap-room-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .ap-room-name, .ap-room-topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -439,7 +441,6 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* A private room's or thread's header: washed with its cards' plum, its lock in the hue. */
 .ap-roomhead-private { background: color-mix(in srgb, var(--private-soft) 60%, var(--bg-100)); }
 .ap-roomhead-private .ap-lock { color: var(--private); }
-.ap-roomhead-muted { flex: none; display: inline-block; width: 13px; height: 13px; margin-left: var(--space-1_5); vertical-align: -1px; color: var(--ink-muted); }
 .ap-roomhead-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-3); }
 .ap-roomhead-name { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; white-space: nowrap; }
 .ap-roomhead-sub { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

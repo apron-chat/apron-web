@@ -21,6 +21,11 @@
 		private?: boolean;
 		/** Who a private room is with, before its name: one person's face with their status, or two of a group's (Faces). */
 		faces?: Face[];
+		/**
+		 * Muted (§4.5 `mute` with its `room_id`): a bell-off beside the name, and its news stays quiet: no bold name, and
+		 * a grey count, mentions too.
+		 */
+		muted?: boolean;
 		/** Unread messages from others: a bold name and a grey count. */
 		unread?: number;
 		/** Unread messages whose `body.mentions` lists the viewer: the count turns orange with an @. */
@@ -44,7 +49,7 @@
 		/** Classes for the row's button, added to its own. */
 		class?: ClassValue;
 	}
-	let { room, name, topic, private: isPrivate, faces, unread, mentions, active, loading, onselect, onleave, onnewthread, listed, title, unreadTestid, newThreadTestid, class: className }: Props = $props();
+	let { room, name, topic, private: isPrivate, faces, muted = false, unread, mentions, active, loading, onselect, onleave, onnewthread, listed, title, unreadTestid, newThreadTestid, class: className }: Props = $props();
 	const shown = $derived(roomName(name, room));
 </script>
 
@@ -55,9 +60,9 @@
 {/snippet}
 
 <RoomRow
-	{room} noun="room" label={shown} private={isPrivate} {active} {listed} {title} {onselect} {onleave} lead={faces?.length ? lead : undefined} {lines} start={onnewthread ? start : undefined}
-	class={[(unread || mentions) && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
+	{room} noun="room" label={shown} private={isPrivate} {muted} {active} {listed} {title} {onselect} {onleave} lead={faces?.length ? lead : undefined} {lines} start={onnewthread ? start : undefined}
+	class={[(unread || mentions) && !muted && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
 >
-	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="message" testid={unreadTestid} />
+	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} quiet={muted} noun="message" testid={unreadTestid} />
 	{#if loading}<span class="ap-room-loading" aria-label="Loading history">…</span>{/if}
 </RoomRow>

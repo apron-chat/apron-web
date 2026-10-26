@@ -58,6 +58,17 @@ describe('RoomItem', () => {
 		expect(row.querySelector('.ap-faces')).toBeNull();
 	});
 
+	it('marks a muted room with a bell-off after its name, its news quiet: no bold name, and a grey count, mentions too', () => {
+		let row = render({ private: true, muted: true, unread: 3, mentions: 1 });
+		expect([...row.querySelectorAll('.ap-room-name [role="img"]')].map((mark) => mark.getAttribute('aria-label'))).toEqual(['Private', 'Muted']);
+		expect(row.classList.contains('ap-room-unread')).toBe(false);
+		const count = row.querySelector('.ap-count')!;
+		expect([count.classList.contains('ap-count-quiet'), count.getAttribute('aria-label')]).toEqual([true, '3 unread messages, a mention of you']);
+		dom.unmount();
+		row = render({ unread: 3 });
+		expect([row.querySelector('.ap-muted'), row.classList.contains('ap-room-unread')]).toEqual([null, true]);
+	});
+
 	it('names its room in data-room, or in data-join when it is listed to join', () => {
 		let row = render({});
 		expect([row.dataset.room, row.dataset.join]).toEqual(['general', undefined]);

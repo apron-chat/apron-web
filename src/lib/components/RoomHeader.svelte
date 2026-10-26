@@ -135,4 +135,5 @@
 	copyLinkTestid="copy-room-link"
 	muteTestid="mute-room"
 	unmuteTestid="unmute-room"
+	unmuteButtonTestid="unmute-room-button"
 />

@@ -60,15 +60,18 @@
 		 */
 		muteChoices?: () => MenuChoice[];
 		onmute?: (value: string) => void;
-		/** The room or thread is muted: when that ends, such as "until 14:30". A bell-off by its name says so, and the menu offers Unmute in place of Mute. */
+		/**
+		 * The room or thread is muted: when that ends, such as "until 14:30". A bell-off button left of the ⋯ menu
+		 * says so and unmutes it, and the menu offers Unmute in place of Mute.
+		 */
 		muted?: string;
-		/** Unmute room (or thread) in the ⋯ actions menu, while `muted`. */
+		/** Unmute room (or thread), from the bell-off button and the ⋯ actions menu, while `muted`. */
 		onunmute?: () => void;
 		/** A request in flight: Join and the actions menu can't be used. */
 		busy?: boolean;
 		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
-		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the ⋯ menu and its Edit, Leave, Copy link, Mute and Unmute. */
+		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the bell-off Unmute button, the ⋯ menu and its Edit, Leave, Copy link, Mute and Unmute. */
 		tagTestid?: string;
 		topicTestid?: string;
 		joinTestid?: string;
@@ -79,6 +82,7 @@
 		copyLinkTestid?: string;
 		muteTestid?: string;
 		unmuteTestid?: string;
+		unmuteButtonTestid?: string;
 		/** Classes for its `<header>`, added to its own. */
 		class?: ClassValue;
 	}
@@ -86,7 +90,7 @@
 		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
 		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, busy = false,
 		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, muteTestid, unmuteTestid,
-		class: className
+		unmuteButtonTestid, class: className
 	}: Props = $props();
 	const noun = $derived(thread ? 'thread' : 'room');
 	/** What's new elsewhere: a mention may be an edit adding you to a read message, so it counts at least once. */
@@ -119,8 +123,6 @@
 	}
 </script>
 
-{#snippet mutedMark()}{#if muted !== undefined}<BellOff class="ap-roomhead-muted" role="img" aria-label="Muted {muted}" title="Notifications muted {muted}" />{/if}{/snippet}
-
 <header class={['ap-roomhead', isPrivate && 'ap-roomhead-private', className]}>
 	{#if onback}
 		<button type="button" class={['ap-roomhead-back', elsewhere > 0 && 'ap-roomhead-back-tagged']} aria-label={backLabel} onclick={onback}>
@@ -134,10 +136,10 @@
 			<h1 class="ap-roomhead-name">
 				<button type="button" class="ap-roomhead-crumb" aria-label="Back to room" onclick={onroom}>{roomName(name, room)}</button>
 				<span class="ap-roomhead-sep" aria-hidden="true"> › </span>
-				<bdi title={roomNameTip(threadName, thread, { thread: true })}>{roomName(threadName, thread, { thread: true })}</bdi>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}{@render mutedMark()}
+				<bdi title={roomNameTip(threadName, thread, { thread: true })}>{roomName(threadName, thread, { thread: true })}</bdi>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}
 			</h1>
 		{:else}
-			<h1 class="ap-roomhead-name">{roomName(name, room)}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}{@render mutedMark()}</h1>
+			<h1 class="ap-roomhead-name">{roomName(name, room)}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</h1>
 		{/if}
 		{#if typing.length}
 			<p class="ap-roomhead-sub ap-roomhead-typing">{#if typing.length === 1}<bdi>{typing[0]}</bdi> is typing…{:else}{typing.length} people are typing…{/if}</p>
@@ -159,6 +161,11 @@
 	{#if ondescription}
 		<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost ap-roomhead-description" data-testid={descriptionTestid} aria-label="Show the {noun} description" title="Show the {noun} description" onclick={ondescription}>
 			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-description-word">Description</span>
+		</button>
+	{/if}
+	{#if muted !== undefined && onunmute}
+		<button type="button" class="ap-iconbtn ap-roomhead-unmute" data-testid={unmuteButtonTestid} aria-label="Unmute {noun}" title="Muted {muted}. Unmute {noun}" onclick={onunmute}>
+			<BellOff size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
 	{/if}
 	{#if actions.length > 0}

@@ -126,7 +126,7 @@
 	{@const current = active && !activeThread}
 	<!-- What's new in the room itself (its threads show their own): none while you're reading it. The Private list says it's private: no lock there. -->
 	<RoomItem
-		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} active={current}
+		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} muted={room.mutedUntil !== undefined} active={current}
 		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering}
 		onselect={() => onroom(room)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
 	/>
