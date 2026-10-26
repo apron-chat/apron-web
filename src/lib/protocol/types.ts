@@ -38,6 +38,14 @@ export interface Identity extends JsonObject {
 	 * `idle`, `offline`, `dnd`). Other values are unknown.
 	 */
 	status?: string;
+	/**
+	 * Current objects of others only (§4.5.2): when their shown status last
+	 * became `offline`, in the `log_id` format (§2.1). It arrives only with a
+	 * shown `offline` but merges like any field, so a kept one outlives the
+	 * change back online: show it only while the shown status is `offline`
+	 * (`shownSeen`). Never kept for you, never on recorded objects.
+	 */
+	seen?: string;
 	/** Extension data (§4.12). */
 	ext?: JsonObject;
 }

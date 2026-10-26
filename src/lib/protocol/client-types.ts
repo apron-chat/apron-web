@@ -312,7 +312,7 @@ export interface ClientSnapshot {
 	 */
 	users: Record<string, Identity>;
 	/**
-	 * Users whose `status` in `users` is only held from before a resume's
+	 * Users whose `status` (and `seen`) in `users` is only held from before a resume's
 	 * sign-in, which drops the kept statuses (§4.5.4): shown until the joined
 	 * listing arrives or a fresh one comes, so nothing greys out meanwhile, but
 	 * no longer kept. Absent when none is.

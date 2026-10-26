@@ -275,10 +275,11 @@ export class ChatClient {
 	/** Who was signed in on the connection that was lost: signing in as them again is a resume. */
 	private resumingUserId?: string;
 	/**
-	 * Others' statuses from before a resume's sign-in (§4.5), still shown until its joined listing
-	 * arrives, so a reconnect doesn't grey everyone out and reorder the member list in the meantime.
+	 * Others' statuses from before a resume's sign-in (§4.5), each with the `seen` that went with
+	 * it, still shown until its joined listing arrives, so a reconnect doesn't grey everyone out
+	 * and reorder the member list in the meantime.
 	 */
-	private heldStatuses?: Map<string, string>;
+	private heldStatuses?: Map<string, { status: string; seen?: string }>;
 	private directory?: RoomListing[];
 	private readonly threadDirectory = new Map<string, RoomListing[]>();
 	/**
@@ -3008,8 +3009,8 @@ export class ChatClient {
 	}
 
 	/**
-	 * At each sign-in (§3.2, §4.5) the other users' kept `status` values are
-	 * dropped: those users show no status (not `offline`) until the server
+	 * At each sign-in (§3.2, §4.5) the other users' kept `status` values, and
+	 * the `seen` of each, are dropped: those users show no status (not `offline`) until the server
 	 * sends it again, as it does after the result for each connected user who
 	 * shares a room, and as `room_list` and `room_update` carry it. Your own
 	 * comes from this `auth`'s `you`.
@@ -3019,11 +3020,12 @@ export class ChatClient {
 	 * the joined listing arrives (`settleHeldStatuses`), with the fresh ones in place as they come.
 	 */
 	private dropKeptStatuses(hold = false): void {
-		const held = new Map<string, string>();
+		const held = new Map<string, { status: string; seen?: string }>();
 		for (const [userId, user] of this.users) {
-			if (userId === this.you?.user_id || !Object.hasOwn(user, 'status')) continue;
-			const { status, ...rest } = user;
-			if (typeof status === 'string') held.set(userId, status);
+			if (userId === this.you?.user_id || (!Object.hasOwn(user, 'status') && !Object.hasOwn(user, 'seen'))) continue;
+			// `seen` goes with the status it came with (§4.5.2, §4.5.4).
+			const { status, seen, ...rest } = user;
+			if (typeof status === 'string') held.set(userId, { status, ...(status === 'offline' && typeof seen === 'string' ? { seen } : {}) });
 			this.users.set(userId, rest);
 		}
 		this.heldStatuses = hold && held.size ? held : undefined;
@@ -3038,16 +3040,22 @@ export class ChatClient {
 		const held = this.heldStatuses;
 		if (!held) return;
 		this.heldStatuses = undefined;
-		for (const [userId, status] of held) {
+		for (const [userId, { status, seen }] of held) {
 			const user = this.users.get(userId);
-			if (user && !Object.hasOwn(user, 'status') && (status === 'offline' || status === '')) this.users.set(userId, { ...user, status });
+			// An `offline` kept this way keeps its `seen`: it changes only with a change to `offline`, which the server would have sent.
+			if (user && !Object.hasOwn(user, 'status') && (status === 'offline' || status === '')) {
+				this.users.set(userId, { ...user, status, ...(status === 'offline' && seen !== undefined && !Object.hasOwn(user, 'seen') ? { seen } : {}) });
+			}
 		}
 	}
 
-	/** The kept users, with a held status for each of `showing` (those with none of their own yet). */
+	/** The kept users, with a held status (and its `seen`) for each of `showing` (those with none of their own yet). */
 	private usersWithHeldStatuses(showing = this.showingHeldStatuses()): Record<string, Identity> {
 		const users = Object.fromEntries(this.users);
-		for (const userId of showing) users[userId] = { ...users[userId], status: this.heldStatuses!.get(userId)! };
+		for (const userId of showing) {
+			const { status, seen } = this.heldStatuses!.get(userId)!;
+			users[userId] = { ...users[userId], status, ...(seen !== undefined && !Object.hasOwn(users[userId], 'seen') ? { seen } : {}) };
+		}
 		return users;
 	}
 
@@ -3072,12 +3080,18 @@ export class ChatClient {
 	 * `own` is a `you` (§3.2, §3.3): its `status` is the one you chose
 	 * (§4.5). Others' view of you, in a `new`, a room's `members` or a
 	 * listing's `users`, carries the status they see (`offline` while you are
-	 * invisible, `idle`), so its `status` never replaces yours.
+	 * invisible, `idle`), so its `status` never replaces yours, and its
+	 * `seen` (§4.5.2), which goes with that shown `offline`, is never kept for
+	 * you. (`you` itself never carries `seen`.)
 	 */
 	private noteUser(identity: Identity, { own = false, complete = false }: { own?: boolean; complete?: boolean } = {}): Identity {
 		const current = this.users.get(identity.user_id);
+		if (Object.hasOwn(identity, 'seen') && (own || identity.user_id === this.you?.user_id)) {
+			const { seen: _shown, ...rest } = identity;
+			identity = rest as Identity;
+		}
 		if (!own && identity.user_id === this.you?.user_id) {
-			const { status: _seen, ...rest } = identity;
+			const { status: _shown, ...rest } = identity;
 			identity = rest as Identity;
 			// A complete object of yours still keeps the status `you` set, and the
 			// permissions only `you` carries (ext:permissions), so a listing of

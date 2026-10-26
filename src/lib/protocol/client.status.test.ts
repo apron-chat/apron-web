@@ -533,6 +533,100 @@ describe('kept statuses and sign-ins', () => {
 });
 
 /**
+ * `seen` (§4.5.2): when someone's shown status last became `offline`. It
+ * merges like any field, so a kept one stays through their coming back
+ * online (it shows only while they show `offline`: `shownSeen`); a sign-in
+ * drops it with the status; and it is never kept for you.
+ */
+describe('seen', () => {
+	function hello(): void {
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'], status: ['dnd', 'invisible'] } });
+	}
+
+	async function listed(you: Record<string, unknown>, users: Record<string, unknown>[]): Promise<void> {
+		hello();
+		await socket.reply('auth', { you });
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', members: users.map(({ user_id }) => ({ user_id })) }], users });
+	}
+
+	const user = (userId: string) => snapshot.users[userId];
+
+	it('keeps it from a complete listing object, a new one with each change to offline, and the kept one through a change back online', async () => {
+		await listed({ user_id: 'ada', status: 'online' }, [{ user_id: 'bo', name: 'Bo', status: 'offline', seen: '1724803600000' }, { user_id: 'cy', status: 'online' }]);
+		expect(user('bo')).toEqual({ user_id: 'bo', name: 'Bo', status: 'offline', seen: '1724803600000' });
+		socket.receive({ method: 'user', params: { new: { user_id: 'cy', status: 'offline', seen: '1724803700000' } } });
+		expect(user('cy')).toEqual({ user_id: 'cy', status: 'offline', seen: '1724803700000' });
+		// Back online: the notification has no `seen`, so the kept one stays (one-level merge), though it no longer shows.
+		socket.receive({ method: 'user', params: { new: { user_id: 'cy', status: 'online' } } });
+		expect(user('cy')).toEqual({ user_id: 'cy', status: 'online', seen: '1724803700000' });
+		// A rename while offline leaves both.
+		socket.receive({ method: 'user', params: { new: { user_id: 'bo', name: 'Bob' } } });
+		expect(user('bo')).toEqual({ user_id: 'bo', name: 'Bob', status: 'offline', seen: '1724803600000' });
+		// The next change to offline brings a new one.
+		socket.receive({ method: 'user', params: { new: { user_id: 'cy', status: 'offline', seen: '1724803900000' } } });
+		expect(user('cy').seen).toBe('1724803900000');
+		// A complete object without it (a listing of someone now online) replaces the kept object, `seen` and all.
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', title: 'Ops' }], users: [{ user_id: 'cy', status: 'idle' }] } });
+		expect(user('cy')).toEqual({ user_id: 'cy', status: 'idle' });
+	});
+
+	it('never keeps it for you: not from a listing, a notification or a room\'s members that show you offline, nor from you', async () => {
+		await listed({ user_id: 'ada', name: 'Ada', status: 'invisible' }, [{ user_id: 'ada', name: 'Ada', status: 'offline', seen: '1724803600000' }, { user_id: 'bo', status: 'online' }]);
+		expect(user('ada')).toEqual({ user_id: 'ada', name: 'Ada', status: 'invisible' });
+		socket.receive({ method: 'user', params: { new: { user_id: 'ada', status: 'offline', seen: '1724803700000' } } });
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', title: 'Ops', members: [{ user_id: 'ada', status: 'offline', seen: '1724803800000' }] }] } });
+		// `you` never carries it (§4.5.2); one that did is not taken either.
+		socket.receive({ method: 'user', params: { you: { user_id: 'ada', seen: '1724803900000' } } });
+		expect(user('ada')).toEqual({ user_id: 'ada', name: 'Ada', status: 'invisible' });
+		expect(snapshot.you).toEqual({ user_id: 'ada', name: 'Ada', status: 'invisible' });
+	});
+
+	it('drops it with the status at a sign-in; resuming, it still shows with the held offline, and stays with it when the server sends nothing of them', async () => {
+		await listed({ user_id: 'ada', status: 'online' }, [
+			{ user_id: 'bo', status: 'offline', seen: '1724803600000' }, { user_id: 'cy', status: 'offline', seen: '1724803700000' }, { user_id: 'di', status: 'online' }
+		]);
+		socket.receive({ method: 'user', params: { new: { user_id: 'di', status: 'offline', seen: '1724803800000' } } });
+		socket.receive({ method: 'user', params: { new: { user_id: 'di', status: 'online' } } });
+		reconnect();
+		hello();
+		await socket.reply('auth', { you: { user_id: 'ada' } });
+		// Held until the joined listing: each offline with its seen. Di's kept seen, with an online, went with the sign-in.
+		expect([user('bo'), user('cy'), user('di')]).toEqual([
+			{ user_id: 'bo', status: 'offline', seen: '1724803600000' }, { user_id: 'cy', status: 'offline', seen: '1724803700000' }, { user_id: 'di', status: 'online' }
+		]);
+		expect(snapshot.heldStatuses).toEqual(['bo', 'cy', 'di']);
+		// Cy comes back online meanwhile: no seen, since a sign-in dropped the kept one.
+		socket.receive({ method: 'user', params: { new: { user_id: 'cy', status: 'online' } } });
+		expect(user('cy')).toEqual({ user_id: 'cy', status: 'online' });
+		// The listing names Bo with a new seen; Di isn't listed, nor sent again, so Di's status is unknown.
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', members: [{ user_id: 'bo' }] }], users: [{ user_id: 'bo', status: 'offline', seen: '1724803650000' }] });
+		expect([user('bo'), user('cy'), user('di')]).toEqual([
+			{ user_id: 'bo', status: 'offline', seen: '1724803650000' }, { user_id: 'cy', status: 'online' }, { user_id: 'di' }
+		]);
+		expect(snapshot.heldStatuses).toBeUndefined();
+	});
+
+	it('keeps a held offline\'s seen through a resume whose listing says nothing of them', async () => {
+		await listed({ user_id: 'ada', status: 'online' }, [{ user_id: 'bo', status: 'offline', seen: '1724803600000' }]);
+		reconnect();
+		hello();
+		await socket.reply('auth', { you: { user_id: 'ada' } });
+		await socket.reply('room_list', { joined: [] });
+		expect(user('bo')).toEqual({ user_id: 'bo', status: 'offline', seen: '1724803600000' });
+		expect(snapshot.heldStatuses).toBeUndefined();
+	});
+
+	it('drops it at once at a sign-in as someone else', async () => {
+		await listed({ user_id: 'ada', status: 'online' }, [{ user_id: 'bo', status: 'offline', seen: '1724803600000' }]);
+		reconnect();
+		hello();
+		await socket.reply('auth', { you: { user_id: 'eve' } });
+		expect(user('bo')).toEqual({ user_id: 'bo' });
+	});
+});
+
+/**
  * Mutes across `auth` (§3.2, §4.5): a sign-in drops the kept mutes and
  * statuses and applies the ones the server sends after its result; an
  * `auth` that adds a passkey or an address to the signed-in connection is no
