@@ -3073,8 +3073,12 @@ export class ChatClient {
 		if (!own && identity.user_id === this.you?.user_id) {
 			const { status: _seen, ...rest } = identity;
 			identity = rest as Identity;
-			// A complete object of yours still keeps the status `you` set.
+			// A complete object of yours still keeps the status `you` set, and the
+			// permissions only `you` carries (ext:permissions), so a listing of
+			// your rooms doesn't take away what you may do.
 			if (complete && current && Object.hasOwn(current, 'status')) identity.status = current.status;
+			const permissions = complete && isJsonObject(current?.ext) ? current.ext.permissions : undefined;
+			if (permissions !== undefined) identity.ext = { ...(isJsonObject(identity.ext) ? identity.ext : {}), permissions };
 		}
 		const merged = complete ? replaceIdentity(current, identity) : mergeIdentity(current, identity);
 		if (merged !== current) this.users.set(identity.user_id, merged);
