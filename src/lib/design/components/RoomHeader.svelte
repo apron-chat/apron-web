@@ -67,6 +67,8 @@
 		muted?: string;
 		/** Unmute room (or thread), from the bell-off button and the ⋯ actions menu, while `muted`. */
 		onunmute?: () => void;
+		/** In a thread, `muted` only by its room's mute, which covers its threads: Unmute names the room, and unmutes it. */
+		mutedWithRoom?: boolean;
 		/** A request in flight: Join and the actions menu can't be used. */
 		busy?: boolean;
 		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
@@ -88,11 +90,13 @@
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
-		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, busy = false,
+		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false,
 		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, muteTestid, unmuteTestid,
 		unmuteButtonTestid, class: className
 	}: Props = $props();
 	const noun = $derived(thread ? 'thread' : 'room');
+	/** What Unmute unmutes: this room or thread, or the room whose mute silences this thread. */
+	const unmuteNoun = $derived(thread && mutedWithRoom ? 'room' : noun);
 	/** What's new elsewhere: a mention may be an edit adding you to a read message, so it counts at least once. */
 	const elsewhere = $derived(Math.max(unreadElsewhere, mentionsElsewhere));
 	const backLabel = $derived(elsewhere
@@ -107,7 +111,7 @@
 	/** The occasional actions, in the ⋯ menu: Join stays a button, since it's what a pane read without joining is for. */
 	const actions = $derived<MenuChoice[]>([
 		...(oncopylink ? [{ value: 'link', label: `Copy link to ${noun}`, testid: copyLinkTestid }] : []),
-		...(muted !== undefined && onunmute ? [{ value: 'unmute', label: `Unmute ${noun}`, hint: muted, testid: unmuteTestid }] : []),
+		...(muted !== undefined && onunmute ? [{ value: 'unmute', label: `Unmute ${unmuteNoun}`, hint: muted, testid: unmuteTestid }] : []),
 		...(muted === undefined && muteMenu && onmute ? [{ value: 'mute', label: `Mute ${noun}`, testid: muteTestid, choices: muteMenu }] : []),
 		...(onedit ? [{ value: 'edit', label: `Edit ${noun}`, testid: editTestid }] : []),
 		...(onleave ? [{ value: 'leave', label: `Leave ${noun}`, testid: leaveTestid }] : [])
@@ -164,7 +168,7 @@
 		</button>
 	{/if}
 	{#if muted !== undefined && onunmute}
-		<button type="button" class="ap-iconbtn ap-roomhead-unmute" data-testid={unmuteButtonTestid} aria-label="Unmute {noun}" title="Muted {muted}. Unmute {noun}" onclick={onunmute}>
+		<button type="button" class="ap-iconbtn ap-roomhead-unmute" data-testid={unmuteButtonTestid} aria-label="Unmute {unmuteNoun}" title="Muted{unmuteNoun !== noun ? ' with its room' : ''} {muted}. Unmute {unmuteNoun}" onclick={onunmute}>
 			<BellOff size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
 	{/if}

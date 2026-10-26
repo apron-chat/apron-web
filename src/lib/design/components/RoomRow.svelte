@@ -60,7 +60,7 @@
 		class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', className]} onclick={onselect}
 	>
 		{@render lead?.()}
-		<span class="ap-room-text"><span class="ap-room-name" title={tip}>{label}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}{#if muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}</span>{@render lines?.()}</span>
+		<span class="ap-room-text"><span class="ap-room-name"><span class="ap-room-label" title={tip}>{label}</span>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}{#if muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}</span>{@render lines?.()}</span>
 		{@render children?.()}
 	</button>
 {/snippet}

@@ -52,10 +52,10 @@
 		oncopylink?: () => Promise<boolean>;
 		onjoin?: () => void;
 		/**
-		 * Offer Mute for the pane's room or thread (capability `status`, §4.5 `mute` with its `room_id`), for a
-		 * while or until unmuted; while it's muted (`pane.mutedUntil`), Unmute (`onmute(false)`) instead.
+		 * Offer Mute for the pane's room or thread (capability `status`, §4.5 `mute` with `roomId`), for a while or
+		 * until unmuted; while it's muted (`pane.mutedUntil`, or in a thread its room's), Unmute (`false`) instead.
 		 */
-		onmute?: (until: PausedUntil | false) => void;
+		onmute?: (until: PausedUntil | false, roomId: string) => void;
 		onmemberlist: () => void;
 		/** The room's or thread's description was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
@@ -68,7 +68,7 @@
 	/** Mutes the pane for the chosen while, from when it's chosen. */
 	function mute(value: string): void {
 		const choice = roomMuteChoices().find((entry) => entry.value === value);
-		if (choice) onmute?.(choice.until);
+		if (choice) onmute?.(choice.until, pane.id);
 	}
 
 	/** A copied link says so under the title for a moment, as the message's Copy link does on its button. */
@@ -91,7 +91,10 @@
 	 */
 	let people = $derived(room.namedForMembers && !thread ? (room.members ?? []).filter((member) => !directory.isMe(member.user_id)) : undefined);
 	let faces = $derived(people ? roomFaces(room, directory.you) : undefined);
-	let muted = $derived(pane.mutedUntil === undefined ? undefined : pane.mutedUntil === true ? 'until you unmute' : pausedUntilLabel(pane.mutedUntil));
+	/** In a thread, muted only by its room's mute, which covers its threads (§4.5): Unmute unmutes the room. */
+	let mutedWithRoom = $derived(thread && pane.mutedUntil === undefined && room.mutedUntil !== undefined);
+	let mutedUntil = $derived(mutedWithRoom ? room.mutedUntil : pane.mutedUntil);
+	let muted = $derived(mutedUntil === undefined ? undefined : mutedUntil === true ? 'until you unmute' : pausedUntilLabel(mutedUntil));
 	let line = $derived(people ? privateRoomLine(people.map((member) => directory.name(member)), people.length === 1 ? presenceLabel(directory.status(people[0])) : undefined) : '');
 </script>
 
@@ -122,7 +125,8 @@
 	muteChoices={onmute ? roomMuteChoices : undefined}
 	onmute={onmute ? mute : undefined}
 	{muted}
-	onunmute={onmute ? () => onmute(false) : undefined}
+	onunmute={onmute ? () => onmute(false, mutedWithRoom ? room.id : pane.id) : undefined}
+	{mutedWithRoom}
 	busy={editDisabled}
 	{ondescription}
 	tagTestid="back-unread"

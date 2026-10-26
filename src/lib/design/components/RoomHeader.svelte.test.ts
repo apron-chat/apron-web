@@ -103,6 +103,18 @@ describe('RoomHeader', () => {
 		expect([onunmute.mock.calls.length, onmute.mock.calls.length]).toEqual([2, 1]);
 	});
 
+	it('in a thread muted only by its room, says so, and Unmute names the room', () => {
+		const onunmute = vi.fn();
+		render({ thread: 'deploy', threadName: 'Deploy', muted: 'until 14:30', mutedWithRoom: true, onunmute, onleave: () => {} });
+		const unmute = dom.button('Unmute room');
+		expect(unmute.title).toBe('Muted with its room until 14:30. Unmute room');
+		unmute.click();
+		expect(onunmute).toHaveBeenCalledOnce();
+		dom.button('Thread actions').click();
+		flushSync();
+		expect([...document.querySelectorAll('.ap-menu-item')].map((item) => item.textContent?.trim())).toEqual(['Unmute roomuntil 14:30', 'Leave thread']);
+	});
+
 	it('makes the back arrow a tag with what’s new elsewhere: grey for unread, orange with an @ for mentions, capped at 99+', () => {
 		const back = () => dom.button(/^Back to rooms/);
 		/** The tag on the back arrow: what it shows, and whether it's the quiet or the @ kind. */

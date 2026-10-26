@@ -357,6 +357,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-room-unread .ap-room-name { font-weight: 600; }
 .ap-room-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .ap-room-name, .ap-room-topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A name with a lock or a bell-off after it: the name is cut short, never the marks. */
+.ap-room-name:has(> svg) { display: flex; align-items: center; }
+.ap-room-name:has(> svg) .ap-room-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ap-room-topic { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 /* A thread's preview lines under its title: its description, then its latest message, each marked by an icon so either reads alone. */
 .ap-tline { display: flex; align-items: center; gap: var(--space-1); min-width: 0; margin-top: 1px; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }

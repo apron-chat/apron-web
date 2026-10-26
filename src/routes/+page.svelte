@@ -2036,10 +2036,9 @@
 		}
 	}
 
-	/** Mutes the open room or thread (§4.5 `mute` with its `room_id`) for a while or until unmuted, or with `false` unmutes it. */
-	function mutePane(until: PausedUntil | false): void {
-		const roomId = (paneRoom ?? activeRoom)?.id;
-		if (!client || roomId === undefined) return;
+	/** Mutes the open room or thread, or the room of an open thread (§4.5 `mute` with its `room_id`), for a while or until unmuted, or with `false` unmutes it. */
+	function mutePane(until: PausedUntil | false, roomId: string): void {
+		if (!client) return;
 		client.setMute(until === false ? false : muteFor(until), roomId).catch((cause: unknown) => feedback.error(cause, until === false ? 'Unable to unmute' : 'Unable to mute'));
 	}
 
