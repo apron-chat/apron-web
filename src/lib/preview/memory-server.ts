@@ -131,6 +131,13 @@ export class MemoryProtocolServer {
 	private roomSerial = 1;
 	private people: Record<string, Person> = structuredClone(basePeople);
 	private knobs: PreviewKnobs;
+	/**
+	 * With capability `status`, everyone else's shown status (§4.5.1), with `seen` (§4.5.2): when it last became
+	 * `offline`. Kept apart from `people`, so no recorded object (a `from`) carries either.
+	 */
+	private presence = new Map<string, { status: string; seen?: string }>();
+	/** When your shown status last became `offline` (a chosen `invisible`), for listings that describe you to others. */
+	private yourSeen?: string;
 	/** Every frame a client sent, parsed, in the order it arrived: what the browser suite asserts the wire by. */
 	readonly frames: WireFrame[] = [];
 
@@ -210,6 +217,68 @@ export class MemoryProtocolServer {
 			room.log_id = Number(n);
 		}
 		if (knobs.seed === 'rich') this.seedRich(general);
+		if (this.hasStatus) this.seedPresence();
+	}
+
+	private get hasStatus(): boolean {
+		return this.knobs.capabilities?.includes('status') ?? false;
+	}
+
+	/**
+	 * With capability `status`: Ada online, Grace idle, Margaret busy, Linus offline since three hours ago, and of
+	 * the rich seed, Rosalind offline since two days ago, the rest online.
+	 */
+	private seedPresence(): void {
+		const ago = (ms: number) => String(Date.now() - ms);
+		const hour = 60 * 60 * 1000;
+		const statuses: Record<string, { status: string; seen?: string }> = {
+			ada: { status: 'online' }, grace: { status: 'idle' }, margaret: { status: 'dnd' }, linus: { status: 'offline', seen: ago(3 * hour) },
+			rosalind: { status: 'offline', seen: ago(2 * 24 * hour) }
+		};
+		for (const id of Object.keys(this.people)) {
+			if (id !== 'preview_guest') this.presence.set(id, statuses[id] ?? { status: 'online' });
+		}
+	}
+
+	/**
+	 * Someone else's shown status changes (§4.5.2), as if it did now: a `user` notification with it, and with a new
+	 * `seen` when it changes to `offline`. A `seen` kept from before stays, but goes out only with `offline`.
+	 */
+	setPresence(userId: string, status: string): void {
+		if (!this.people[userId] || userId === 'preview_guest') throw new Error(`Unknown user: ${userId}`);
+		const before = this.presence.get(userId);
+		if (before?.status === status) return;
+		const seen = status === 'offline' ? String(Date.now()) : before?.seen;
+		this.presence.set(userId, { status, ...(seen !== undefined ? { seen } : {}) });
+		const update = { user_id: userId, status, ...(status === 'offline' ? { seen } : {}) };
+		for (const peer of this.sockets) peer.deliver({ method: 'user', params: { new: update } });
+	}
+
+	/** A recorded object for a `from` or a membership's `user` (§3.3): as of now, without a status or `seen`. */
+	private recorded(userId: string): JsonObject {
+		const { status: _status, ...person } = this.people[userId];
+		return structuredClone(person) as JsonObject;
+	}
+
+	/**
+	 * Everyone's complete current objects, for a listing's `users` (§3.3). With capability `status`, each carries the
+	 * shown status, and `seen` with a shown `offline` (§4.5.2): yours too, as others see you (`invisible` shows
+	 * `offline`), which the client takes neither of.
+	 */
+	private users(): JsonObject[] {
+		return Object.keys(this.people).map((id) => {
+			const person = this.recorded(id);
+			if (!this.hasStatus) return id === 'preview_guest' && this.people[id].status !== undefined ? { ...person, status: this.people[id].status! } : person;
+			const shown = id === 'preview_guest' ? this.yourShown() : this.presence.get(id);
+			if (!shown) return person;
+			return { ...person, status: shown.status, ...(shown.status === 'offline' && shown.seen !== undefined ? { seen: shown.seen } : {}) };
+		});
+	}
+
+	/** How others see you (§4.5.1): connected, so your chosen status, but `invisible` shows `offline` and `""` shows `""`. */
+	private yourShown(): { status: string; seen?: string } {
+		const chosen = this.people.preview_guest.status ?? 'online';
+		return chosen === 'invisible' ? { status: 'offline', ...(this.yourSeen !== undefined ? { seen: this.yourSeen } : {}) } : { status: chosen };
 	}
 
 	private seedRich(general: PreviewRoom): void {
@@ -239,7 +308,7 @@ export class MemoryProtocolServer {
 		const author = this.people[from];
 		if (!room || !author) throw new Error(`Unknown room or user: ${roomId}, ${from}`);
 		const id = this.nextLog(room);
-		const record: JsonObject = { message_id: id, log_id: id, room_id: room.room_id, from: { ...author },
+		const record: JsonObject = { message_id: id, log_id: id, room_id: room.room_id, from: this.recorded(from),
 			body: typeof body === 'string' ? { text: body, format: 'markdown' } : body, ...fields };
 		room.messages.push(record);
 		this.broadcast({ method: 'message', params: record }, room);
@@ -254,8 +323,8 @@ export class MemoryProtocolServer {
 		if (!this.people[from]) throw new Error(`Unknown user: ${from}`);
 		const room = this.makeRoom(`private_${this.serial++}`, title, [from, ...others, 'preview_guest']);
 		room.private = true;
-		const memberships = [from, ...others, 'preview_guest'].map((id) => ({ log_id: this.nextLog(room), room_id: room.room_id, members: [{ user: { ...this.people[id] }, joined: true }] }));
-		for (const peer of this.sockets) peer.deliver({ method: 'room_update', params: { joined: [this.roomRecord(room, true)], memberships, users: Object.values(this.people) } });
+		const memberships = [from, ...others, 'preview_guest'].map((id) => ({ log_id: this.nextLog(room), room_id: room.room_id, members: [{ user: this.recorded(id), joined: true }] }));
+		for (const peer of this.sockets) peer.deliver({ method: 'room_update', params: { joined: [this.roomRecord(room, true)], memberships, users: this.users() } });
 		return room.room_id;
 	}
 
@@ -358,9 +427,9 @@ export class MemoryProtocolServer {
 		const withMembers = params.members === true;
 		const joined = rooms.filter((room) => room.members.has('preview_guest')).map((room) => this.roomRecord(room, withMembers));
 		const notJoined = rooms.filter((room) => !room.members.has('preview_guest')).map((room) => this.roomRecord(room, withMembers));
-		if (params.filter === 'joined') return { joined, users: Object.values(this.people) };
-		if (params.filter === 'not_joined') return { not_joined: notJoined, users: Object.values(this.people) };
-		return { joined, not_joined: notJoined, users: Object.values(this.people) };
+		if (params.filter === 'joined') return { joined, users: this.users() };
+		if (params.filter === 'not_joined') return { not_joined: notJoined, users: this.users() };
+		return { joined, not_joined: notJoined, users: this.users() };
 	}
 
 	/** A private room, or a thread of one, the viewer isn't in. */
@@ -406,7 +475,7 @@ export class MemoryProtocolServer {
 				}
 			}
 		}
-		const from = previous && isJsonObject(previous.message.from) ? previous.message.from : { ...this.people.preview_guest };
+		const from = previous && isJsonObject(previous.message.from) ? previous.message.from : this.recorded('preview_guest');
 		// A save merges `ext` into the stored one, a creation into nothing (§4.12); a tombstone has neither `body` nor `ext` (§4.4).
 		const kept = previous && isJsonObject(previous.message.ext) ? previous.message.ext : undefined;
 		const ext = p.deleted ? undefined : mergedExt(kept, p.ext);
@@ -431,7 +500,7 @@ export class MemoryProtocolServer {
 		byUser.set('preview_guest', Array.isArray(p.emojis) ? p.emojis.filter((e): e is string => typeof e === 'string') : []);
 		room.reactions.set(target.message.message_id as string, byUser);
 		const log = this.nextLog(room);
-		const record = { room_id: room.room_id, log_id: log, message_id: target.message.message_id, reactions: [...byUser].map(([user, emojis]) => ({ from: { ...this.people[user] }, emojis })) };
+		const record = { room_id: room.room_id, log_id: log, message_id: target.message.message_id, reactions: [...byUser].map(([user, emojis]) => ({ from: this.recorded(user), emojis })) };
 		this.broadcast({ method: 'reactions', params: record }, room);
 		reply();
 	}
@@ -467,7 +536,7 @@ export class MemoryProtocolServer {
 		room.description = typeof p.description === 'string' && p.description ? p.description : undefined;
 		room.ext = mergedExt(room.ext, p.ext);
 		const record = this.roomRecord(room, true);
-		socket.deliver({ method: 'room_update', params: { joined: [record], users: Object.values(this.people) } });
+		socket.deliver({ method: 'room_update', params: { joined: [record], users: this.users() } });
 		this.broadcast({ method: 'room_update', params: { updated: [this.roomRecord(room)] } }, room);
 		reply({ room_id: room.room_id, log_id: String(room.log_id) });
 	}
@@ -477,7 +546,7 @@ export class MemoryProtocolServer {
 		if (!room || this.hidden(room)) return fail('Unknown room');
 		if (typeof p.user_id === 'string' && p.user_id !== 'preview_guest') return this.changeMember(room, p.user_id, true, reply, fail);
 		room.members.add('preview_guest');
-		socket.deliver({ method: 'room_update', params: { joined: [this.roomRecord(room, true)], users: Object.values(this.people) } });
+		socket.deliver({ method: 'room_update', params: { joined: [this.roomRecord(room, true)], users: this.users() } });
 		reply();
 	}
 	private leaveRoom(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
@@ -499,7 +568,7 @@ export class MemoryProtocolServer {
 		const user = this.people[userId];
 		if (!user || !Object.hasOwn(this.people, userId)) return fail('Unknown user');
 		if (joined) room.members.add(userId);
-		const record = { log_id: this.nextLog(room), room_id: room.room_id, members: [{ user: { ...user }, joined }] };
+		const record = { log_id: this.nextLog(room), room_id: room.room_id, members: [{ user: this.recorded(userId), joined }] };
 		this.broadcast({ method: 'room_update', params: { memberships: [record] } }, room);
 		if (!joined) {
 			room.members.delete(userId);
@@ -519,6 +588,8 @@ export class MemoryProtocolServer {
 			changed.avatar = p.avatar;
 		}
 		if (typeof p.status === 'string') {
+			// Choosing invisible changes how others see you to `offline` (§4.5.2): `seen` is now.
+			if (p.status === 'invisible' && me.status !== 'invisible') this.yourSeen = String(Date.now());
 			if (p.status) me.status = p.status;
 			else delete me.status;
 			changed.status = p.status;
@@ -536,7 +607,7 @@ export class MemoryProtocolServer {
 	}
 	private activity(socket: PreviewSocket, p: JsonObject): void {
 		if (typeof p.room_id !== 'string') return;
-		this.broadcast({ method: 'activity', params: { ...p, from: { ...this.people.preview_guest } } }, this.rooms.get(p.room_id));
+		this.broadcast({ method: 'activity', params: { ...p, from: this.recorded('preview_guest') } }, this.rooms.get(p.room_id));
 	}
 	private command(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const text = (p.body as JsonObject | undefined)?.text;

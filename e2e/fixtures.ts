@@ -112,6 +112,20 @@ export class Preview {
 		);
 	}
 
+	/** Someone else's shown status changes, as if now (§4.5.2): with capability `status`, `offline` brings a new `seen`. */
+	setPresence(userId: string, status: string): Promise<void> {
+		return this.page.evaluate(([userId, status]) => (window as any).__apronPreview.setPresence(userId, status), [userId, status] as const);
+	}
+
+	/** Shows the open room's member list, where it is folded away (a narrow screen, or closed). */
+	async showMembers(): Promise<Locator> {
+		const list = this.page.getByTestId('room-member-list');
+		if (!(await list.isVisible())) await this.press(this.page.getByRole('button', { name: /member list/i }).first());
+		await expect(list).toBeVisible();
+		await expect(list.locator('li').first()).toBeVisible();
+		return list;
+	}
+
 	/** Taps on a touch device, clicks otherwise. */
 	async press(locator: Locator): Promise<void> {
 		if (await this.page.evaluate(() => matchMedia('(pointer: coarse)').matches)) await locator.tap();

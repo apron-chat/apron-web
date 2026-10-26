@@ -161,6 +161,22 @@ describe('knobs for the browser suite', () => {
 	}
 	const room = (client: ChatClient, id: string) => client.snapshot().rooms.find((candidate) => candidate.id === id);
 
+	/** One request on a socket of its own, as a client sends it: its result. */
+	async function ask(server: MemoryProtocolServer, frame: Record<string, unknown>): Promise<unknown> {
+		const socket = server.factory('ws://apron-preview.invalid');
+		const result = new Promise<unknown>((resolve) => {
+			socket.onmessage = (event) => {
+				const reply = JSON.parse(String(event.data));
+				if (reply.id === 'ask') resolve(reply.result);
+			};
+		});
+		await waitFor(() => socket.readyState === 1);
+		socket.send(JSON.stringify({ ...frame, id: 'ask' }));
+		const answer = await result;
+		socket.close();
+		return answer;
+	}
+
 	it('records every frame the client sends, in order', async () => {
 		const server = new MemoryProtocolServer({});
 		const client = await connect(server);
@@ -196,10 +212,47 @@ describe('knobs for the browser suite', () => {
 		expect(client.message(id)).toMatchObject({ from: { user_id: 'ada' }, body: { text: 'Live from Ada' } });
 	});
 
+	it('with status, shows others\' statuses, seen with each change to offline, and none of either in recorded objects (§4.5.2)', async () => {
+		const server = new MemoryProtocolServer({ capabilities: ['status'] });
+		const client = await connect(server);
+		const users = () => client.snapshot().users;
+		const linusSeen = users().linus.seen;
+		expect([users().ada.status, users().grace.status, users().margaret.status, users().linus.status]).toEqual(['online', 'idle', 'dnd', 'offline']);
+		expect(Number(linusSeen)).toBeLessThan(Date.now());
+		expect(users().ada.seen).toBeUndefined();
+
+		// Back online: no seen goes out, and the client's kept one stays (hidden while online).
+		server.setPresence('linus', 'online');
+		await waitFor(() => users().linus.status === 'online');
+		expect(users().linus.seen).toBe(linusSeen);
+		const offline = Date.now();
+		server.setPresence('ada', 'offline');
+		await waitFor(() => users().ada.status === 'offline');
+		expect(Number(users().ada.seen)).toBeGreaterThanOrEqual(offline);
+
+		// Recorded objects carry neither.
+		const id = server.post('general', 'ada', 'Gone for the day');
+		await waitFor(() => Boolean(client.message(id)));
+		expect(client.message(id)?.from).toEqual({ user_id: 'ada', name: 'Ada Lovelace', roles: ['admin'] });
+
+		// Choosing invisible: listings show you offline with seen, which the client takes neither of.
+		await client.setStatus('invisible');
+		const listed = await ask(server, { method: 'room_list', params: { filter: 'joined' } }) as { users: Record<string, unknown>[] };
+		const you = listed.users.find((user) => user.user_id === 'preview_guest')!;
+		expect([you.status, typeof you.seen]).toEqual(['offline', 'string']);
+		expect(listed.users.find((user) => user.user_id === 'ada')).toMatchObject({ status: 'offline', seen: users().ada.seen });
+		expect(listed.users.find((user) => user.user_id === 'linus')).toEqual({ user_id: 'linus', name: 'Linus', status: 'online' });
+		await client.listRooms(undefined, 0);
+		expect(client.snapshot().you?.status).toBe('invisible');
+		expect(users().preview_guest.status).toBe('invisible');
+		expect(users().preview_guest.seen).toBeUndefined();
+	});
+
 	it('leaves the demo as it is without knobs', async () => {
 		const client = await connect(new MemoryProtocolServer());
 		expect(client.snapshot().server?.capabilities).not.toContain('status');
 		expect(client.snapshot().users.wilhelmina).toBeUndefined();
+		expect(Object.values(client.snapshot().users).some((user) => 'status' in user || 'seen' in user)).toBe(false);
 		expect(timelineMessages(room(client, 'general')!)).toHaveLength(10);
 	});
 });
