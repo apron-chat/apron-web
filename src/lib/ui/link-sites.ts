@@ -42,7 +42,9 @@ export function clip(text: unknown): string | undefined {
 	if (typeof text !== 'string') return undefined;
 	const line = text.replace(/\s+/g, ' ').trim();
 	if (!line) return undefined;
-	return line.length > DESCRIPTION_MAX ? `${line.slice(0, DESCRIPTION_MAX - 1).trimEnd()}…` : line;
+	// By code point, so an emoji isn't cut in half.
+	const chars = [...line];
+	return chars.length > DESCRIPTION_MAX ? `${chars.slice(0, DESCRIPTION_MAX - 1).join('').trimEnd()}…` : line;
 }
 
 /** Markdown reduced to a line of plain text, cut to fit a card; headings and HTML comments (as in PR templates) are left out. */
@@ -114,7 +116,7 @@ export const github: Site = {
 		}
 		if (section === 'commit' && id && /^[0-9a-f]{7,40}$/i.test(id)) {
 			const sha = id.toLowerCase();
-			return { url: `${base}/commit/${id}`, api: `${api}/commits/${sha}`, headers, preview: (data) => githubCommit(site_name, sha, data), fallback: { site_name, title: `Commit ${sha.slice(0, 7)}` } };
+			return { url: `${base}/commit/${sha}`, api: `${api}/commits/${sha}`, headers, preview: (data) => githubCommit(site_name, sha, data), fallback: { site_name, title: `Commit ${sha.slice(0, 7)}` } };
 		}
 		return undefined;
 	}
@@ -196,7 +198,8 @@ export const x: Site = {
 	match(url) {
 		const [user, section, id] = url.pathname.split('/').filter(Boolean);
 		if (!user || !X_USER.test(user) || section !== 'status' || !id || !/^\d{1,20}$/.test(id)) return undefined;
-		const post = `https://x.com/${user}/status/${id}`;
+		// Handles are case-insensitive, so one post is one preview however it's written.
+		const post = `https://x.com/${user.toLowerCase()}/status/${id}`;
 		// `/i/status/<id>` names no author.
 		const known = user.toLowerCase() !== 'i';
 		return {
@@ -231,8 +234,10 @@ export const bluesky: Site = {
 	name: 'Bluesky',
 	missing: [400, 404],
 	match(url) {
-		const [profile, actor, section, rkey] = url.pathname.split('/').filter(Boolean);
-		if (profile !== 'profile' || !actor || !BLUESKY_ACTOR.test(actor)) return undefined;
+		const [profile, written, section, rkey] = url.pathname.split('/').filter(Boolean);
+		if (profile !== 'profile' || !written || !BLUESKY_ACTOR.test(written)) return undefined;
+		// Handles are case-insensitive; DIDs are not.
+		const actor = written.startsWith('did:') ? written : written.toLowerCase();
 		const base = `https://bsky.app/profile/${actor}`;
 		if (section === undefined) {
 			return { url: base, api: `${BLUESKY_API}/app.bsky.actor.getProfile?actor=${encodeURIComponent(actor)}`, preview: blueskyProfile };

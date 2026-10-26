@@ -19,21 +19,26 @@ const CACHE_MAX = 100;
 /** A link a site can describe. */
 export type PreviewLink = Lookup & { site: Site };
 
-const URL_IN_TEXT = /https?:\/\/[^\s<>"'`]+/gi;
+const URL_IN_TEXT = /https?:\/\/[^\s<>"`]+/gi;
 const CLOSERS: Record<string, string> = { ')': '(', ']': '[', '}': '{' };
 
 /**
  * A URL as written in text, without the punctuation that ends a sentence or
- * closes a bracket around it; a bracket the URL opened itself, as in
- * `/wiki/Mercury_(planet)`, stays.
+ * the text after a bracket that closes around it; a bracket the URL opened
+ * itself, as in `/wiki/Mercury_(planet)`, stays.
  */
 export function trimUrl(url: string): string {
-	for (;;) {
-		const last = url.at(-1) ?? '';
-		const opener = CLOSERS[last];
-		if (/[.,:;!?*_~]/.test(last) || (opener && url.split(last).length > url.split(opener).length)) url = url.slice(0, -1);
-		else return url;
+	const open: Record<string, number> = { '(': 0, '[': 0, '{': 0 };
+	let end = url.length;
+	for (let i = 0; i < url.length; i++) {
+		const char = url[i];
+		if (char in open) open[char]++;
+		else if (CLOSERS[char] && open[CLOSERS[char]]-- === 0) {
+			end = i;
+			break;
+		}
 	}
+	return url.slice(0, end).replace(/[.,:;!?*_~']+$/, '');
 }
 
 /** The http(s) URLs written in `text`, in order. */

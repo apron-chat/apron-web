@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bluesky, excerpt, github, htmlText, siteFor, wikipedia, x, youtube, type Json, type Site } from './link-sites';
+import { bluesky, clip, excerpt, github, htmlText, SITES, siteFor, wikipedia, x, youtube, type Json, type Site } from './link-sites';
 
 /** What `site` makes of `url`: its preview link, API request, and fallback. */
 const lookup = (site: Site, url: string) => site.match(new URL(url));
@@ -19,6 +19,25 @@ describe('sites by host', () => {
 		expect(name('https://github.com.evil.example/a/b')).toBeUndefined();
 		expect(name('https://evilgithub.com/a/b')).toBeUndefined();
 	});
+
+	it('asks only its own API, whatever the path holds', () => {
+		const apis = new Set(['api.github.com', 'www.youtube.com', 'publish.x.com', 'public.api.bsky.app', 'en.wikipedia.org']);
+		const hosts = ['github.com', 'youtu.be', 'www.youtube.com', 'x.com', 'bsky.app', 'en.wikipedia.org'];
+		const paths = ['/a/b', '/a/b/pull/1', '/watch?v=dQw4w9WgXcQ', '/a/status/1', '/profile/a.example/post/x', '/wiki/A'];
+		const hostile = ['/..', '/%2e%2e', '/%2F%2Fevil.example', '/@evil.example', '/%3F', '/%23', '/..%2F..%2Fevil.example%2F'];
+		for (const host of hosts) {
+			for (const path of paths) {
+				for (const bad of hostile) {
+					for (const href of [`https://${host}${path}${bad}`, `https://${host}${bad}${path}`]) {
+						const url = new URL(href);
+						const lookup = siteFor(url)?.match(url);
+						if (lookup) expect(apis, href).toContain(new URL(lookup.api).hostname);
+					}
+				}
+			}
+		}
+		expect(Object.keys(SITES)).toHaveLength(7);
+	});
 });
 
 describe('text', () => {
@@ -26,6 +45,12 @@ describe('text', () => {
 		expect(excerpt('<!-- template -->\n## Summary\n\n- Moves the **Go** server to [its repo](https://x).\n```sh\nmake\n```')).toBe('Moves the Go server to its repo.');
 		expect(excerpt('x'.repeat(300))).toHaveLength(200);
 		expect(excerpt(null)).toBeUndefined();
+	});
+
+	it('cuts text by code point, never inside an emoji', () => {
+		const cut = clip(`${'x'.repeat(198)}😀 tail`)!;
+		expect(cut).toBe(`${'x'.repeat(198)}😀…`);
+		expect(cut.isWellFormed()).toBe(true);
 	});
 
 	it('reads the text of HTML', () => {
@@ -110,6 +135,8 @@ describe('Bluesky', () => {
 			fallback: { site_name: 'Bluesky', title: 'Post by @jay.bsky.team' }
 		});
 		expect(lookup(bluesky, 'https://bsky.app/profile/did:plc:oky5czdrnfjpqslsw2a5iclo/post/3mymxa653fs27')?.fallback).toBeUndefined();
+		expect(lookup(bluesky, 'https://bsky.app/profile/Jay.Bsky.Team')?.url).toBe('https://bsky.app/profile/jay.bsky.team');
+		expect(lookup(bluesky, 'https://bsky.app/profile/did:plc:AbC/post/3mymxa653fs27')?.url).toBe('https://bsky.app/profile/did:plc:AbC/post/3mymxa653fs27');
 		expect(lookup(bluesky, 'https://bsky.app/profile/jay.bsky.team')).toMatchObject({ api: 'https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=jay.bsky.team' });
 		expect(lookup(bluesky, 'https://bsky.app/profile/jay.bsky.team')?.fallback).toBeUndefined();
 		expect(lookup(bluesky, 'https://bsky.app/profile/jay.bsky.team/lists/abc')).toBeUndefined();

@@ -10,6 +10,12 @@ describe('finding links', () => {
 		expect(trimUrl('https://a.example/x).')).toBe('https://a.example/x');
 		expect(trimUrl('https://en.wikipedia.org/wiki/Mercury_(planet)')).toBe('https://en.wikipedia.org/wiki/Mercury_(planet)');
 		expect(trimUrl('https://en.wikipedia.org/wiki/Mercury_(planet)),')).toBe('https://en.wikipedia.org/wiki/Mercury_(planet)');
+		expect(trimUrl("https://en.wikipedia.org/wiki/Hitchhiker's_Guide'")).toBe("https://en.wikipedia.org/wiki/Hitchhiker's_Guide");
+		// A bracket closing around the URL ends it, whatever follows.
+		expect(trimUrl('https://a.example/x)and more')).toBe('https://a.example/x');
+		expect(trimUrl('https://a.example/x](https://a.example/x)')).toBe('https://a.example/x');
+		// In one pass, so a long run of brackets doesn't stall typing.
+		expect(trimUrl(`https://a.example/${')'.repeat(100_000)}`)).toBe('https://a.example/');
 		expect(findUrls('see [this](https://a.example/b?c=1), <https://d.example> and **https://e.example/f**! ftp://g.example').map(String)).toEqual([
 			'https://a.example/b?c=1', 'https://d.example/', 'https://e.example/f'
 		]);
@@ -29,6 +35,8 @@ describe('finding links', () => {
 		expect(findLinks(text).map((link) => link.url)).toEqual(['https://github.com/a/b/pull/1', 'https://github.com/a/b/issues/2', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ']);
 		// The same page linked two ways is one link.
 		expect(findLinks('https://youtu.be/dQw4w9WgXcQ https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1')).toHaveLength(1);
+		expect(findLinks('https://x.com/Jack/status/20 https://x.com/jack/status/20 https://github.com/a/b/commit/ABCDEF1 https://github.com/a/b/commit/abcdef1')).toHaveLength(2);
+		expect(findLinks('[https://github.com/a/b/pull/1](https://github.com/a/b/pull/1) (https://github.com/a/b/pull/2)and').map((link) => link.url)).toEqual(['https://github.com/a/b/pull/1', 'https://github.com/a/b/pull/2']);
 		expect(findLinks(text, ['https://github.com/a/b/issues/2']).map((link) => link.url)).toEqual(['https://github.com/a/b/pull/1', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://github.com/e/f']);
 	});
 });
