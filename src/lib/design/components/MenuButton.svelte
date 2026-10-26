@@ -1,9 +1,14 @@
 <script lang="ts">
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import { tick, type Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import type { MenuChoice } from './types';
 
-	/** A button that opens a menu of choices. Its `onselect` is the choice's, not the DOM event. */
+	/**
+	 * A button that opens a menu of choices. Its `onselect` is the choice's, not the DOM event. A choice with
+	 * `choices` of its own opens them beneath it as a submenu, with → or a click, and closes them with ← or Escape.
+	 */
 	interface Props {
 		/** The button's text; with `icon`, its name for screen readers and its tooltip. */
 		label: string;
@@ -12,7 +17,7 @@
 		/** A `data-testid` for the button. */
 		buttonTestid?: string;
 		choices: MenuChoice[];
-		/** Called with the chosen value; the menu closes. */
+		/** Called with the chosen value, a submenu's too; the menu closes. */
 		onselect: (value: string) => void;
 		disabled?: boolean;
 		/**
@@ -39,6 +44,8 @@
 
 	let root = $state<HTMLElement | undefined>();
 	let trigger = $state<HTMLButtonElement | undefined>();
+	/** The choice whose submenu is open beneath it, by value. */
+	let expanded = $state<string | undefined>();
 
 	function items(): HTMLButtonElement[] {
 		return [...(root?.querySelectorAll<HTMLButtonElement>('.ap-menu-item') ?? [])];
@@ -52,6 +59,7 @@
 
 	/** Opens the menu with this item (`-1`: the last) focused. */
 	async function show(at: number): Promise<void> {
+		expanded = undefined;
 		open = true;
 		await tick();
 		const list = items();
@@ -60,12 +68,26 @@
 
 	function close(refocus: boolean): void {
 		open = false;
+		expanded = undefined;
 		if (refocus) trigger?.focus();
 	}
 
 	function choose(value: string): void {
 		close(true);
 		onselect(value);
+	}
+
+	/** The item that opens the submenu of the choice `value`. */
+	function opener(value: string): HTMLButtonElement | undefined {
+		return items().find((item) => item.dataset.submenu === value);
+	}
+
+	/** Opens the submenu of the choice `value` with its first choice focused, or closes it with focus back on its item. */
+	async function toggleSubmenu(value: string): Promise<void> {
+		expanded = expanded === value ? undefined : value;
+		await tick();
+		if (expanded === undefined) opener(value)?.focus();
+		else items().find((item) => item.dataset.parent === value)?.focus();
 	}
 
 	function keydown(event: KeyboardEvent): void {
@@ -79,9 +101,18 @@
 		}
 		const list = items();
 		const at = list.indexOf(document.activeElement as HTMLButtonElement);
+		const item = list[at] as HTMLButtonElement | undefined;
 		if (event.key === 'Escape') {
 			event.preventDefault();
-			close(true);
+			// In a submenu, Escape closes only it.
+			if (item?.dataset.parent !== undefined) void toggleSubmenu(item.dataset.parent);
+			else close(true);
+		} else if (event.key === 'ArrowRight' && item?.dataset.submenu !== undefined) {
+			event.preventDefault();
+			if (expanded !== item.dataset.submenu) void toggleSubmenu(item.dataset.submenu);
+		} else if (event.key === 'ArrowLeft' && expanded !== undefined && (item?.dataset.parent === expanded || item?.dataset.submenu === expanded)) {
+			event.preventDefault();
+			void toggleSubmenu(expanded);
 		} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 			event.preventDefault();
 			const step = event.key === 'ArrowDown' ? 1 : -1;
@@ -113,9 +144,27 @@
 			{#each choices as choice (choice.value)}
 				{@const on = selected !== undefined && choice.value === selected}
 				<li role="none">
-					<button class={['ap-menu-item', on && 'ap-menu-item-on']} type="button" tabindex="-1" data-testid={choice.testid} role={selected !== undefined ? 'menuitemradio' : 'menuitem'} aria-checked={selected !== undefined ? on : undefined} onclick={() => choose(choice.value)}>
-						<span class="ap-menu-label">{#if lead}<span class="ap-menu-lead">{@render lead(choice.value)}</span>{/if}{choice.label}</span>{#if choice.hint}<span class="ap-menu-hint">{choice.hint}</span>{/if}
-					</button>
+					{#if choice.choices}
+						{@const opened = expanded === choice.value}
+						<button class={['ap-menu-item', 'ap-menu-opener', opened && 'ap-menu-item-open']} type="button" tabindex="-1" data-testid={choice.testid} data-submenu={choice.value} role="menuitem" aria-haspopup="menu" aria-expanded={opened} onclick={() => toggleSubmenu(choice.value)}>
+							<span class="ap-menu-label">{#if lead}<span class="ap-menu-lead">{@render lead(choice.value)}</span>{/if}{choice.label}</span><span class="ap-menu-hint">{#if choice.hint}{choice.hint}{/if}{#if opened}<ChevronDown size={14} aria-hidden="true" />{:else}<ChevronRight size={14} aria-hidden="true" />{/if}</span>
+						</button>
+						{#if opened}
+							<ul class="ap-menu-sub" role="menu" aria-label={choice.label}>
+								{#each choice.choices as sub (sub.value)}
+									<li role="none">
+										<button class="ap-menu-item" type="button" tabindex="-1" data-testid={sub.testid} data-parent={choice.value} role="menuitem" onclick={() => choose(sub.value)}>
+											<span class="ap-menu-label">{sub.label}</span>{#if sub.hint}<span class="ap-menu-hint">{sub.hint}</span>{/if}
+										</button>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					{:else}
+						<button class={['ap-menu-item', on && 'ap-menu-item-on']} type="button" tabindex="-1" data-testid={choice.testid} role={selected !== undefined ? 'menuitemradio' : 'menuitem'} aria-checked={selected !== undefined ? on : undefined} onclick={() => choose(choice.value)}>
+							<span class="ap-menu-label">{#if lead}<span class="ap-menu-lead">{@render lead(choice.value)}</span>{/if}{choice.label}</span>{#if choice.hint}<span class="ap-menu-hint">{choice.hint}</span>{/if}
+						</button>
+					{/if}
 				</li>
 			{/each}
 		</ul>

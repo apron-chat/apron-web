@@ -2036,6 +2036,12 @@
 		}
 	}
 
+	/** Mutes the open room or thread, or the room of an open thread (§4.5 `mute` with its `room_id`), for a while or until unmuted, or with `false` unmutes it. */
+	function mutePane(until: PausedUntil | false, roomId: string): void {
+		if (!client) return;
+		client.setMute(until === false ? false : muteFor(until), roomId).catch((cause: unknown) => feedback.error(cause, until === false ? 'Unable to unmute' : 'Unable to mute'));
+	}
+
 	/**
 	 * Opens a private room this page started or found: at once where it's listed and private, else once its
 	 * `room_update` arrives, checked for `private: true` as a room created private is (§4.2.4). `problem` is what
@@ -2751,6 +2757,7 @@
 				{unreadElsewhere}
 				{mentionsElsewhere}
 				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
+				onmute={canMuteRoom ? mutePane : undefined}
 			/>
 			{#if roomEditorOpen && editTarget && roomEditor.component}
 				{@const RoomEditor = roomEditor.component}

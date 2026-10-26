@@ -128,4 +128,57 @@ describe('MenuButton', () => {
 		await tick();
 		expect(items()).toHaveLength(3);
 	});
+
+	it('opens a submenu beneath its item, by click or →, chooses from it, and closes it with ← or Escape', async () => {
+		const onselect = vi.fn();
+		const actions = [
+			{ value: 'link', label: 'Copy link' },
+			{ value: 'mute', label: 'Mute room', choices: [{ value: 'mute:1h', label: 'For 1 hour', hint: 'until 14:30' }, { value: 'mute:forever', label: 'Until I unmute' }] },
+			{ value: 'leave', label: 'Leave room' }
+		];
+		dom.render(MenuButton, { label: 'Room actions', choices: actions, onselect });
+		const trigger = dom.button('Room actions');
+		trigger.click();
+		flushSync();
+		await tick();
+		const opener = () => document.querySelector<HTMLButtonElement>('[aria-haspopup="menu"].ap-menu-item')!;
+		expect([opener().textContent, opener().getAttribute('aria-expanded')]).toEqual(['Mute room', 'false']);
+		expect(items()).toHaveLength(3);
+		// A click opens it, the item staying in the menu, its choices focused from the first, and is no choice itself.
+		opener().click();
+		flushSync();
+		await tick();
+		expect(opener().getAttribute('aria-expanded')).toBe('true');
+		expect(document.querySelector('.ap-menu-sub')?.getAttribute('aria-label')).toBe('Mute room');
+		expect(items().map((item) => item.textContent)).toEqual(['Copy link', 'Mute room', 'For 1 houruntil 14:30', 'Until I unmute', 'Leave room']);
+		expect(document.activeElement).toBe(items()[2]);
+		expect(onselect).not.toHaveBeenCalled();
+		// ← closes it, back on its item; → opens it again.
+		key(items()[2], 'ArrowLeft');
+		flushSync();
+		await tick();
+		expect([items().length, document.activeElement]).toEqual([3, opener()]);
+		key(opener(), 'ArrowRight');
+		flushSync();
+		await tick();
+		expect(document.activeElement).toBe(items()[2]);
+		// Escape in it closes only it.
+		key(items()[3], 'Escape');
+		flushSync();
+		await tick();
+		expect([items().length, document.activeElement]).toEqual([3, opener()]);
+		key(opener(), 'ArrowRight');
+		flushSync();
+		await tick();
+		items()[3].click();
+		flushSync();
+		expect(onselect).toHaveBeenCalledWith('mute:forever');
+		expect(items()).toEqual([]);
+		expect(document.activeElement).toBe(trigger);
+		// It opens closed again.
+		trigger.click();
+		flushSync();
+		await tick();
+		expect(items()).toHaveLength(3);
+	});
 });

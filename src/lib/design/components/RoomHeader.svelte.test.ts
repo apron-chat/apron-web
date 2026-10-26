@@ -63,6 +63,58 @@ describe('RoomHeader', () => {
 		expect(document.querySelector('.ap-menu-item')?.textContent?.trim()).toBe('Copy link to thread');
 	});
 
+	it('offers Mute in the ⋯ menu with how long, worked out as it opens, and while muted offers Unmute, as a bell-off button left of it and in it', async () => {
+		const onmute = vi.fn();
+		const onunmute = vi.fn();
+		let opened = 0;
+		const muteChoices = () => {
+			opened += 1;
+			return [{ value: '1h', label: 'For 1 hour', hint: 'until 14:30' }, { value: 'forever', label: 'Until I unmute' }];
+		};
+		const header = render({ onleave: () => {}, muteChoices, onmute, onunmute });
+		expect(dom.queryByRole('button', 'Unmute room')).toBeNull();
+		const before = opened;
+		dom.button('Room actions').click();
+		flushSync();
+		expect(opened).toBeGreaterThan(before);
+		const items = () => [...document.querySelectorAll<HTMLButtonElement>('.ap-menu-item')].map((item) => item.textContent?.trim());
+		const item = (name: string | RegExp) => dom.byRole<HTMLButtonElement>('menuitem', name);
+		expect(items()).toEqual(['Mute room', 'Leave room']);
+		item('Mute room').click();
+		flushSync();
+		await Promise.resolve();
+		expect(items()).toEqual(['Mute room', 'For 1 houruntil 14:30', 'Until I unmute', 'Leave room']);
+		item(/^For 1 hour/).click();
+		flushSync();
+		expect(onmute).toHaveBeenCalledWith('1h');
+		dom.unmount();
+		// Muted: a bell-off button just before the ⋯ menu says until when and unmutes, and Unmute takes Mute's place in the menu.
+		const muted = render({ thread: 'deploy', threadName: 'Deploy', muteChoices, onmute, muted: 'until 14:30', onunmute });
+		const unmute = dom.button('Unmute thread');
+		expect([unmute.title, unmute.nextElementSibling?.classList.contains('ap-menubtn')]).toEqual(['Muted until 14:30. Unmute thread', true]);
+		expect(muted.querySelector('h1 svg')).toBeNull();
+		unmute.click();
+		expect(onunmute).toHaveBeenCalledOnce();
+		dom.button('Thread actions').click();
+		flushSync();
+		expect(items()).toEqual(['Unmute threaduntil 14:30']);
+		item(/^Unmute thread/).click();
+		flushSync();
+		expect([onunmute.mock.calls.length, onmute.mock.calls.length]).toEqual([2, 1]);
+	});
+
+	it('in a thread muted only by its room, says so, and Unmute names the room', () => {
+		const onunmute = vi.fn();
+		render({ thread: 'deploy', threadName: 'Deploy', muted: 'until 14:30', mutedWithRoom: true, onunmute, onleave: () => {} });
+		const unmute = dom.button('Unmute room');
+		expect(unmute.title).toBe('Muted with its room until 14:30. Unmute room');
+		unmute.click();
+		expect(onunmute).toHaveBeenCalledOnce();
+		dom.button('Thread actions').click();
+		flushSync();
+		expect([...document.querySelectorAll('.ap-menu-item')].map((item) => item.textContent?.trim())).toEqual(['Unmute roomuntil 14:30', 'Leave thread']);
+	});
+
 	it('makes the back arrow a tag with what’s new elsewhere: grey for unread, orange with an @ for mentions, capped at 99+', () => {
 		const back = () => dom.button(/^Back to rooms/);
 		/** The tag on the back arrow: what it shows, and whether it's the quiet or the @ kind. */

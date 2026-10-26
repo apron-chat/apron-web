@@ -352,9 +352,14 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-room-active .ap-room-name { font-weight: 600; }
 .ap-room-active::before { content: ''; position: absolute; left: var(--space-1); top: var(--space-1_5); bottom: var(--space-1_5); width: 3px; border-radius: var(--radius-full); background: var(--accent); pointer-events: none; }
 .ap-room-unread { color: var(--ink); }
+/* A muted room (§4.5 `mute` with its `room_id`): a bell-off at the end of its row, next to its count, and what's new in it stays quiet. */
+.ap-muted { flex: none; width: 14px; height: 14px; color: var(--ink-muted); }
 .ap-room-unread .ap-room-name { font-weight: 600; }
 .ap-room-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .ap-room-name, .ap-room-topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A name with a lock after it: the name is cut short, never the lock. */
+.ap-room-name:has(> svg) { display: flex; align-items: center; }
+.ap-room-name:has(> svg) .ap-room-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ap-room-topic { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 /* A thread's preview lines under its title: its description, then its latest message, each marked by an icon so either reads alone. */
 .ap-tline { display: flex; align-items: center; gap: var(--space-1); min-width: 0; margin-top: 1px; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
@@ -670,6 +675,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-room-nested { padding: 3px var(--space-3) 3px calc(var(--space-3) + var(--space-4)); font-size: var(--text-ui); line-height: var(--leading-ui); align-items: flex-start; }
 /* Counts stay beside the title when preview lines follow it. */
 .ap-room-nested .ap-count { margin-top: -1px; }
+/* Top-aligned, as a thread's row is: centred on its first line, with the name, the count and the time. */
+.ap-room-nested .ap-muted { margin-top: calc((var(--leading-ui) - 14px) / 2); }
 .ap-room-nested.ap-room-active::before { left: 20px; top: 4px; bottom: 4px; z-index: var(--z-raised); }
 /* A thread with an unread mention: a light accent tint, set apart from the open thread's neutral fill. */
 .ap-room-nested.ap-room-mention { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); color: var(--ink); }
@@ -1092,6 +1099,11 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-menu-below { top: calc(100% + var(--space-1)); bottom: auto; }
 .ap-menubtn .ap-menu-item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); white-space: nowrap; }
 .ap-menu-hint { color: var(--ink-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+/* A submenu opens beneath its item, its choices set in past the item's lead icon. */
+.ap-menu-sub { margin: 0; padding: 0; list-style: none; }
+.ap-menubtn .ap-menu-sub .ap-menu-item { padding-left: calc(var(--space-3) + var(--space-6)); }
+.ap-menu-opener .ap-menu-hint { display: inline-flex; align-items: center; align-self: center; gap: var(--space-1); }
+.ap-menu-item-open { background: var(--hover); }
 /* As a picker (`selected`): radio items, a check before the current one; `lead` draws before each label, such as a status dot. */
 .ap-menu-label { display: inline-flex; align-items: baseline; gap: var(--space-2); }
 .ap-menu-lead { display: inline-grid; place-items: center; align-self: center; min-width: 10px; }

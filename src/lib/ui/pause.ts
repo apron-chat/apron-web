@@ -38,6 +38,18 @@ export function pauseChoices(now = new Date()): PauseChoice[] {
 	];
 }
 
+/**
+ * The Mute menu of a room or thread (§4.5 `mute` with its `room_id`): an
+ * hour, two, eight, or until unmuted.
+ */
+export function roomMuteChoices(now = new Date()): PauseChoice[] {
+	const after = (hours: number) => new Date(now.getTime() + hours * 60 * 60 * 1000);
+	return [
+		...[1, 2, 8].map((hours) => ({ value: `${hours}h`, label: `For ${hours} ${hours === 1 ? 'hour' : 'hours'}`, hint: `until ${clock(after(hours))}`, until: after(hours).getTime() })),
+		{ value: 'forever', label: 'Until I unmute', until: true }
+	];
+}
+
 /** The `mute` to send for a pause: seconds left (at least 1), or `true`. */
 export function muteFor(until: PausedUntil, now = Date.now()): number | true {
 	return until === true ? true : Math.max(1, Math.ceil((until - now) / 1000));

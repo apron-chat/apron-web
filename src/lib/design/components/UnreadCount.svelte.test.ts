@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import UnreadCount from './UnreadCount.svelte';
 import * as dom from '$lib/test/dom';
 
-function render(props: { unread: number; mentions: number; noun?: 'message' | 'reply' }): HTMLElement | null {
+function render(props: { unread: number; mentions: number; quiet?: boolean; noun?: 'message' | 'reply' }): HTMLElement | null {
 	dom.render(UnreadCount, props);
 	return document.querySelector('.ap-count');
 }
@@ -24,5 +24,10 @@ describe('UnreadCount', () => {
 		dom.unmount();
 		const edited = render({ unread: 0, mentions: 1, noun: 'reply' })!;
 		expect([edited.textContent, edited.getAttribute('aria-label')]).toEqual(['@ 1', '1 unread reply, a mention of you']);
+	});
+
+	it('stays grey when quiet, such as in a muted room, its mentions keeping their @ and label', () => {
+		const muted = render({ unread: 4, mentions: 1, quiet: true })!;
+		expect([muted.className, muted.textContent, muted.getAttribute('aria-label')]).toEqual(['ap-count ap-count-quiet', '@\u202f4', '4 unread messages, a mention of you']);
 	});
 });
