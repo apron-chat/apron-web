@@ -268,6 +268,19 @@ sign-in is an `auth` as a user the connection isn't already signed in as: a
 repeat `auth` as the same user, or adding a passkey or an email address,
 keeps them.
 
+A user object with a shown `offline` may carry `seen` (§4.5.2): when that
+user's shown status last became `offline`, in the `log_id` format. While a
+member shows offline, their profile card says "Last seen 3h ago" under the
+status (as `just now`, `5m`, `3h` or `12d ago` within two weeks, then the day,
+`Last seen 14 Sep`), with the exact local time as its tooltip, and their row's
+tooltip says "Offline · last seen 3h ago"; both move on each minute. It merges
+like any other field, so a `seen` kept from before stays when they come back
+online (`{"status": "online"}` carries none), but it shows only while they
+show offline. One that isn't decimal digits of a positive integer below
+2^53 shows nothing. It is never kept for you: your status is the one you chose,
+and `you` carries no `seen`. A sign-in drops each `seen` with the statuses;
+resuming, a held `offline` keeps its `seen`.
+
 In the composer, Enter sends and Shift+Enter starts a new line. On a phone or
 tablet (a touch screen with no pointer that hovers) Enter starts a new line
 instead, as mobile chat apps do, since an on-screen keyboard has no

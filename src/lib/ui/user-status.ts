@@ -1,6 +1,7 @@
 import { PRESENCE_LABELS, presence } from '$lib/design/components/util';
 import type { Presence } from '$lib/design/components/types';
 import { isPaused, type PausedUntil } from './pause';
+import { idDateTime, idIso, idSince } from './time';
 
 /**
  * The statuses you can choose with `me` (§4.5), as the picker lists them:
@@ -41,6 +42,47 @@ export function chosenStatusLabel(status: string | undefined): string {
 /** Your own dot's tooltip: invisible says how others see you. */
 export function ownStatusLabel(status: string | undefined): string | undefined {
 	return status === 'invisible' ? `${PRESENCE_LABELS.invisible} · others see you as offline` : undefined;
+}
+
+/**
+ * The `seen` to show for someone (§4.5.2): their kept one, only while their
+ * shown status is `offline` (a kept `seen` outlives their coming back
+ * online), and never for you, whose status is the one you chose. Undefined
+ * otherwise, or when it isn't in the `log_id` format (§2.1): decimal digits
+ * of a positive integer below 2^53.
+ */
+export function shownSeen(user: { status?: unknown; seen?: unknown } | undefined, you = false): string | undefined {
+	if (you || user?.status !== 'offline') return undefined;
+	const seen = user.seen;
+	return typeof seen === 'string' && /^[1-9][0-9]{0,15}$/.test(seen) && Number.isSafeInteger(Number(seen)) ? seen : undefined;
+}
+
+/** When someone was last seen, for a `<time>`: its words, its `datetime`, and the exact time for its tooltip. */
+export interface LastSeen {
+	/** `Last seen just now`, `Last seen 5m ago` (`3h`, `12d` within two weeks), then `Last seen 14 Sep` (with the year when it isn't this one). */
+	text: string;
+	datetime: string;
+	/** `Last seen 2026-10-26 13:20:48`, local time. */
+	title: string;
+}
+
+/**
+ * A shown `seen` (`shownSeen`) in words, as of `now` (it doesn't tick by
+ * itself: read `now` from `minuteNow`). A time ahead of `now`, from a clock
+ * that differs, is just now. Undefined without one.
+ */
+export function lastSeen(seen: string | undefined, now = Date.now()): LastSeen | undefined {
+	const since = seen === undefined ? '' : idSince(seen, now);
+	const datetime = seen === undefined ? undefined : idIso(seen);
+	if (!since || !datetime) return undefined;
+	const words = since === 'now' ? 'just now' : /^\d+[mhd]$/.test(since) ? `${since} ago` : since;
+	return { text: `Last seen ${words}`, datetime, title: `Last seen ${idDateTime(seen!)}` };
+}
+
+/** A shown status's words with when they were last seen, for a tooltip: `Offline · last seen 5m ago`. */
+export function withLastSeen(label: string | undefined, last: LastSeen | undefined): string | undefined {
+	if (!label || !last) return label;
+	return `${label} · ${last.text.charAt(0).toLowerCase()}${last.text.slice(1)}`;
 }
 
 /**

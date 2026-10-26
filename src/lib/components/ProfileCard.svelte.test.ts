@@ -47,6 +47,43 @@ describe('ProfileCard status', () => {
 	});
 });
 
+describe('ProfileCard last seen', () => {
+	const NOW = Date.UTC(2026, 9, 22, 12);
+	const seen = String(NOW - 3 * 60 * 60 * 1000);
+
+	beforeEach(() => {
+		vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('says when an offline person was last seen (§4.5.2), with the exact time as its tooltip', () => {
+		const card = render('bob', [ada, { user_id: 'bob', name: 'Bob', status: 'offline', seen }]);
+		expect(card.querySelector('[data-testid="profile-status"]')?.textContent).toBe('Offline');
+		const time = card.querySelector<HTMLTimeElement>('[data-testid="profile-seen"]')!;
+		expect(time.textContent).toBe('Last seen 3h ago');
+		expect(time.getAttribute('datetime')).toBe(new Date(Number(seen)).toISOString());
+		expect(time.title).toMatch(/^Last seen \d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
+	});
+
+	it('says nothing of a seen kept from before they came back online, an unreadable one, a recorded one, or yours', () => {
+		const cases: [string, Identity[], Identity, Identity[]][] = [
+			['back online', [ada, { user_id: 'bob', status: 'online', seen }], ada, []],
+			['no status', [ada, { user_id: 'bob', seen }], ada, []],
+			['unreadable', [ada, { user_id: 'bob', status: 'offline', seen: 'yesterday' }], ada, []],
+			['recorded only', [ada], ada, [{ user_id: 'bob', status: 'offline', seen }]],
+			['yours', [{ ...ada, status: 'offline', seen }], { ...ada, status: 'offline', seen }, []]
+		];
+		for (const [what, users, you, recorded] of cases) {
+			const card = render(what === 'yours' ? 'ada' : 'bob', users, you, undefined, undefined, [], recorded);
+			expect(card.querySelector('[data-testid="profile-seen"]'), what).toBeNull();
+			profileCard.close();
+			dom.unmount();
+		}
+	});
+});
+
 describe('ProfileCard membership', () => {
 	const bob: Identity = { user_id: 'bob', name: 'Bob' };
 	// A large room that lists only its recently active members, without Bob.

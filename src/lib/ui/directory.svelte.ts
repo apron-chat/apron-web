@@ -4,6 +4,7 @@ import type { LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver 
 import type { Identity } from '$lib/protocol/types';
 import { readPlaceLink, writeApronLink } from './apron-link';
 import { backendHost } from './connection';
+import { shownSeen } from './user-status';
 
 type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
 
@@ -123,6 +124,16 @@ class Directory {
 		const id = this.person(from)?.user_id;
 		const status = id === undefined ? undefined : this.users.users[id]?.status;
 		return typeof status === 'string' && status !== '' ? status : undefined;
+	}
+
+	/**
+	 * When a user was last seen (§4.5.2), from the kept current object only,
+	 * as their status is: only while that shows `offline`, and never for you
+	 * (`shownSeen`).
+	 */
+	seen(from: Identity | undefined): string | undefined {
+		const id = this.person(from)?.user_id;
+		return id === undefined ? undefined : shownSeen(this.users.users[id], this.you?.user_id === id);
 	}
 
 	/**

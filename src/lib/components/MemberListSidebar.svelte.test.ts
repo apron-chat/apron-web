@@ -100,6 +100,23 @@ describe('MemberListSidebar', () => {
 		expect(rows[1].querySelector('button')?.title).toBe('@ada · Invisible · others see you as offline');
 	});
 
+	it('says when an offline member was last seen in their tooltip (§4.5.2), and nothing of a seen kept once they are back online', () => {
+		const now = Date.UTC(2026, 9, 22, 12);
+		vi.useFakeTimers({ now, toFake: ['Date'] });
+		try {
+			const seen = String(now - 5 * 60_000);
+			const rows = render([ada, { user_id: 'bo', name: 'Bo', status: 'offline', seen }, { user_id: 'cy', name: 'Cy', status: 'online', seen }, { user_id: 'di', name: 'Di', status: 'offline', seen: 'soon' }]);
+			const row = (id: string) => rows.find((candidate) => candidate.dataset.user === id)!;
+			expect(row('bo').querySelector('button')?.title).toBe('@bo · Offline · last seen 5m ago');
+			expect(row('bo').querySelector('.ap-presence-offline')?.getAttribute('title')).toBe('Offline · last seen 5m ago');
+			expect(row('bo').querySelector('.ap-sr')?.textContent).toBe(', offline · last seen 5m ago');
+			expect(row('cy').querySelector('button')?.title).toBe('@cy · Online');
+			expect(row('di').querySelector('button')?.title).toBe('@di · Offline');
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('shows no dot for a cleared status, or one dropped at a sign-in, and the dot again once the server sends it', () => {
 		const statuses = (rows: HTMLLIElement[]) => rows.map((row) => [row.dataset.user, row.dataset.status ?? '', row.querySelector('.ap-presence') !== null]);
 		const before = render([ada, { user_id: 'bo', name: 'Bo', status: 'idle' }, { user_id: 'cy', name: 'Cy', status: '' }]);
