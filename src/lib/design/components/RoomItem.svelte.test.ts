@@ -48,6 +48,16 @@ describe('RoomItem', () => {
 		expect(onselect).toHaveBeenCalledOnce();
 	});
 
+	it('puts who a private room is with before its name', () => {
+		let row = render({ room: 'p1', name: 'Bob', faces: [{ user_id: 'bob', name: 'Bob', status: 'idle' }] });
+		expect(row.classList.contains('ap-room-faced')).toBe(true);
+		expect(row.firstElementChild?.classList.contains('ap-faces')).toBe(true);
+		expect(row.querySelector('.ap-room-name')?.textContent).toBe('Bob');
+		dom.unmount();
+		row = render({});
+		expect(row.querySelector('.ap-faces')).toBeNull();
+	});
+
 	it('names its room in data-room, or in data-join when it is listed to join', () => {
 		let row = render({});
 		expect([row.dataset.room, row.dataset.join]).toEqual(['general', undefined]);

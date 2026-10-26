@@ -6,7 +6,9 @@
 	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import Users from '@lucide/svelte/icons/users';
 	import type { ClassValue } from 'svelte/elements';
+	import Faces from './Faces.svelte';
 	import MenuButton from './MenuButton.svelte';
+	import type { Face } from './types';
 	import { count99, roomName, roomNameTip } from './util';
 
 	interface Props {
@@ -19,6 +21,8 @@
 		topicTitle?: string;
 		/** `private: true` (§4.2.4) on the open room or thread: a lock beside its name, on a plum wash */
 		private?: boolean;
+		/** Who a private room is with, before its name (not in a thread): one person's face with their status, or two of a group's (Faces). */
+		faces?: Face[];
 		/** names from live `activity` typing; replaces the subtitle while present, on phones only (wide layouts show a <TypingIndicator> above the composer) */
 		typing?: string[];
 		/** An open thread's replies, once its history has loaded, in place of the topic; `more`: older ones aren't loaded, so the count is a lower bound ("12+ replies"). */
@@ -64,7 +68,7 @@
 		class?: ClassValue;
 	}
 	let {
-		room, name, topic, topicTitle, private: isPrivate, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
+		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
 		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, busy = false, ondescription,
 		tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, class: className
 	}: Props = $props();
@@ -95,6 +99,7 @@
 			{#if elsewhere > 0}<span class={['ap-roomhead-tag', mentionsElsewhere ? 'ap-roomhead-tag-at' : 'ap-roomhead-tag-quiet']} data-testid={tagTestid} aria-hidden="true">{#if mentionsElsewhere}@&#8239;{/if}{count99(elsewhere)}</span>{:else}‹{/if}
 		</button>
 	{/if}
+	{#if faces?.length && !thread}<Faces people={faces} size="sm" class="ap-roomhead-faces" />{/if}
 	<div class="ap-roomhead-text">
 		{#if thread}
 			<!-- The spaces around the separator are the title's, in its weight, and the separator's own collapse into them. -->

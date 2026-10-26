@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MessageCircle from '@lucide/svelte/icons/message-circle';
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
@@ -36,6 +37,10 @@
 		sharesName?: boolean;
 		/** Their membership of the open room, in words ("Member of design"). */
 		membership?: string;
+		/** Offers Message, the card's primary action: a private conversation with them (§4.2.4). */
+		onmessage?: () => void;
+		/** Opening it is in flight: Message says "Opening…", disabled. */
+		messaging?: boolean;
 		/** Offers Mention, such as while the composer takes text. */
 		onmention?: () => void;
 		/** Offers Copy @user_id. */
@@ -66,7 +71,7 @@
 		bioTestid?: string;
 	}
 	let {
-		userId, name, avatar, you = false, status, statusLabel, roles, bio, bioBody, sharesName = false, membership, onmention, oncopyid, onaddtoroom, adding = false, note,
+		userId, name, avatar, you = false, status, statusLabel, roles, bio, bioBody, sharesName = false, membership, onmessage, messaging = false, onmention, oncopyid, onaddtoroom, adding = false, note,
 		element = $bindable(), offsetHeight = $bindable(0), statusTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout
 	}: Props = $props();
 	const shownName = $derived(name || userId);
@@ -96,6 +101,7 @@
 	{#if bio}<p class="ap-profcard-bio" dir="auto" data-testid={bioTestid}>{#if bioBody}{@render bioBody()}{:else}{bio}{/if}</p>{/if}
 	{#if membership}<p class="ap-profcard-note">{membership}</p>{/if}
 	<div class="ap-profcard-actions">
+		{#if onmessage}<Button variant="primary" size="sm" disabled={messaging} onclick={onmessage}><MessageCircle size={15} aria-hidden="true" />{messaging ? 'Opening…' : 'Message'}</Button>{/if}
 		{#if onmention}<Button size="sm" onclick={onmention}>Mention</Button>{/if}
 		{#if oncopyid}<Button variant="ghost" size="sm" onclick={oncopyid}>Copy @user_id</Button>{/if}
 		{#if onaddtoroom}<Button variant="ghost" size="sm" disabled={adding} onclick={onaddtoroom}>{adding ? 'Adding…' : 'Add to room'}</Button>{/if}

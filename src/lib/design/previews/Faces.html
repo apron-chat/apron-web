@@ -1,0 +1,19 @@
+<!-- @dsCard group="Identity" height=140 subtitle="Who a private room is with: one person, with their status, at each size; a group's first two, the second stacked behind the first" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Faces</title></head>
+<body>
+<div id="root" class="ap-row"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(props) { return A.render(A.Faces, root, props); }
+  var bob = { user_id: 'bob', name: 'Bob', hue: 200, status: 'online' }, dev = { user_id: 'dev', name: 'Dev', hue: 140 }, mira = { user_id: 'mira', name: 'Mira Okafor', hue: 80 };
+  add({ people: [bob], size: 'sm' });
+  add({ people: [bob], size: 'md' });
+  add({ people: [bob], size: 'lg' });
+  add({ people: [dev, mira], size: 'sm' });
+  add({ people: [dev, mira], size: 'md' });
+  add({ people: [dev, mira, bob], size: 'lg' });
+</script>
+</body>
+</html>

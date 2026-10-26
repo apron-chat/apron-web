@@ -84,6 +84,22 @@ describe('RoomHeader', () => {
 		expect([back().getAttribute('aria-label'), tag()]).toEqual(['Back to rooms, 250 unread messages, 2 mentions of you', ['@\u202f99+', 'at']]);
 	});
 
+	it('shows who a private room is with before its name, one face with its status or two of a group, not in a thread', () => {
+		let header = render({ room: 'p1', name: 'Bob', private: true, faces: [{ user_id: 'bob', name: 'Bob', status: 'online' }], topic: 'Online · only you and Bob can see this room' });
+		const faces = header.querySelector('.ap-faces')!;
+		expect(faces.nextElementSibling?.classList.contains('ap-roomhead-text')).toBe(true);
+		expect(faces.getAttribute('aria-hidden')).toBe('true');
+		expect(faces.querySelector('.ap-presence')).not.toBeNull();
+		expect(header.querySelector('h1')?.textContent).toBe('Bob');
+		expect(sub()).toEqual(['Online · only you and Bob can see this room']);
+		dom.unmount();
+		header = render({ room: 'p2', name: 'Dev, Mira', private: true, faces: [{ user_id: 'dev' }, { user_id: 'mira' }, { user_id: 'bob' }] });
+		expect(header.querySelectorAll('.ap-faces-group .ap-avatar')).toHaveLength(2);
+		dom.unmount();
+		header = render({ room: 'p2', name: 'Dev, Mira', private: true, faces: [{ user_id: 'dev' }], thread: 't1', threadName: 'Plans' });
+		expect(header.querySelector('.ap-faces')).toBeNull();
+	});
+
 	it('takes a class on the header beside its own', () => {
 		const header = render({ class: 'mine', private: true });
 		expect([header.classList.contains('ap-roomhead'), header.classList.contains('ap-roomhead-private'), header.classList.contains('mine')]).toEqual([true, true, true]);
