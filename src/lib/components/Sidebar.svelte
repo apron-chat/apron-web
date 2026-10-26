@@ -101,15 +101,17 @@
 	// the rooms whenever the rooms you've joined change, and the active room's threads whenever it or what you've
 	// joined changes. Threads you haven't joined deliver nothing live (§3.4): this listing is also what brings their
 	// cards up to date. One refused for a while lists again once the wait is over.
+	// Listed on each connection (`ready`), not `canBrowse`, which holds through a quiet reconnect: a new connection
+	// has none of the last one's listings.
 	$effect(() => {
 		void roomsKey;
-		if (!canBrowse) return;
+		if (!canBrowse || !session.ready) return;
 		return untrack(() => listInBackground(() => client.listRooms(undefined, BACKGROUND_LISTING_MS)));
 	});
 	$effect(() => {
 		const roomId = session.activeRoomId;
 		void joinedKey;
-		if (!canBrowse || !roomId) return;
+		if (!canBrowse || !session.ready || !roomId) return;
 		return untrack(() => listInBackground(() => client.listRooms(roomId, BACKGROUND_LISTING_MS)));
 	});
 

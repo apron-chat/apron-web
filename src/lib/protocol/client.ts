@@ -395,6 +395,13 @@ export class ChatClient {
 	 * while it's hidden, so time away never counts as a reconnect taking long.
 	 */
 	private retryingSince?: number;
+	/** Keeps `retryingSince` in step with the page being shown or hidden, for as long as the client runs. */
+	private readonly visibilityChanged = (): void => {
+		const since = this.retryingNow();
+		if (since === this.retryingSince) return;
+		this.retryingSince = since;
+		this.emit();
+	};
 
 	constructor(
 		private serverUrl: string,
@@ -506,6 +513,7 @@ export class ChatClient {
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
 		this.showReconnectDivider = this.reconnectAttempt > 0;
+		globalThis.document?.addEventListener('visibilitychange', this.visibilityChanged);
 		if (this.waitForPresence()) return;
 		this.connectNow();
 	}
@@ -517,6 +525,7 @@ export class ChatClient {
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.reconnectTimer = undefined;
 		this.stopWaitingForPresence();
+		globalThis.document?.removeEventListener('visibilitychange', this.visibilityChanged);
 		this.clearStableTimer();
 		this.clearIdleRetry();
 		if (this.muteTimer) clearTimeout(this.muteTimer);
@@ -2537,7 +2546,7 @@ export class ChatClient {
 			this.suspendProtocolView('Connection closed');
 			if (this.running) {
 				this.disconnectedAt ??= this.now();
-				this.retryingSince ??= pageHidden() ? undefined : this.now();
+				this.retryingSince = this.retryingNow();
 				this.status = 'reconnecting';
 				if (opened) this.scheduleReconnect();
 				else void this.diagnoseConnection(id);
@@ -4135,7 +4144,7 @@ export class ChatClient {
 		this.error = message;
 		if (this.running) {
 			this.disconnectedAt ??= this.now();
-			this.retryingSince ??= pageHidden() ? undefined : this.now();
+			this.retryingSince = this.retryingNow();
 		}
 		this.status = this.running ? 'reconnecting' : 'offline';
 		if (this.running) this.scheduleReconnect();
@@ -4157,6 +4166,16 @@ export class ChatClient {
 	}
 
 	/**
+	 * `retryingSince` as it stands now: kept while the page is shown, from now if
+	 * it wasn't counting; none while hidden (nobody sees it, so the time doesn't
+	 * count), or while connected. Offline on a shown page still counts.
+	 */
+	private retryingNow(): number | undefined {
+		if (!this.running || this.disconnectedAt === undefined || pageHidden()) return undefined;
+		return this.retryingSince ?? this.now();
+	}
+
+	/**
 	 * Connecting waits while the page is hidden or the browser is offline: a
 	 * background tab needs no socket until it is looked at, and every new
 	 * connection costs the server a session and its history. An open socket is
@@ -4164,17 +4183,8 @@ export class ChatClient {
 	 */
 	private waitForPresence(): boolean {
 		if (!absent()) return false;
-		// Nobody sees a hidden page: a reconnect seen to take long counts from its return. Offline, it still counts.
-		if (pageHidden() && this.retryingSince !== undefined) {
-			this.retryingSince = undefined;
-			this.emit();
-		}
 		if (this.presenceWaiter) return true;
 		const resume = (): void => {
-			if (this.running && this.disconnectedAt !== undefined && this.retryingSince === undefined && !pageHidden()) {
-				this.retryingSince = this.now();
-				if (absent()) this.emit();
-			}
 			if (absent()) return;
 			this.stopWaitingForPresence();
 			if (this.running && !this.socket && !this.reconnectTimer) this.connectNow();

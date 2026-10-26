@@ -465,7 +465,7 @@
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
 	let canCompose = $derived(paneReady && !session.readOnly);
 	/** Files dropped on the conversation or pasted outside the field attach to the draft while the composer is showing. */
-	let canAttach = $derived(canCompose && session.capabilities['embed:upload'] && !selection.active);
+	let canAttach = $derived(paneSteady && !session.readOnly && session.capabilities['embed:upload'] && !selection.active);
 	/** Files are being dragged over the conversation. */
 	let dropping = $state(false);
 	/** Files dropped on the conversation pane's `<main>`. */

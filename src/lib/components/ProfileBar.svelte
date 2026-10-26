@@ -363,7 +363,7 @@
 	{:else}
 		<span class="ap-profedit-row">
 			<span class="ap-profedit-buttons">
-				{#if snapshot.passkeySession}
+				{#if session.passkeySession}
 					<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
 					{#if canUsePasskey && you}
 						<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
@@ -404,7 +404,7 @@
 			{:else if wayBack}
 				<span class="ap-profedit-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
 			{:else}
-				<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
+				<span class="ap-profedit-hint">{session.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
 			{/if}
 		</span>
 		{#if addEmail}

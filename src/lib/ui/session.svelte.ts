@@ -43,6 +43,8 @@ export class SessionView {
 	private stallTimer: ReturnType<typeof setTimeout> | undefined;
 	private quietTimer: ReturnType<typeof setTimeout> | undefined;
 	private quietSince: number | undefined;
+	/** Try Again was pressed: the attempt it starts shows at once, with no quiet moment first. */
+	private retryAsked = false;
 	/** The last ready snapshot of this session: what a quiet reconnect keeps showing of how you're signed in. */
 	private lastReady = $state.raw<ClientSnapshot | undefined>();
 
@@ -161,7 +163,7 @@ export class SessionView {
 	/** Create and update rooms and threads (capability `rooms`). */
 	readonly canManageRooms = $derived(canManageRooms(this.server));
 	/** A guest on a server whose guests only read: no composer, reactions, or new threads until sign-in. */
-	readonly readOnly = $derived(Boolean(this.snapshot.readOnly));
+	readonly readOnly = $derived(Boolean(this.snapshot.readOnly) || (this.reconnectingQuietly && Boolean(this.lastReady?.readOnly)));
 	/** Reaction chips and the React action (capability `reactions`). */
 	readonly canReact = $derived(canReact(this.server));
 
@@ -189,8 +191,9 @@ export class SessionView {
 		this.snapshot = next;
 		// A view held for someone else (kept on this device for the account that was signed in) isn't this one's.
 		if (this.held?.you && next.you && this.held.you.user_id !== next.you.user_id) this.forget();
+		// Kept only through a drop (`disconnectedAt`): a restart, a sign-out or a sign-in elsewhere starts over.
 		if (isSessionReady(next)) this.lastReady = next;
-		else if (next.status === 'offline' || next.held || (this.lastReady?.you && next.you && this.lastReady.you.user_id !== next.you.user_id)) this.lastReady = undefined;
+		else if (next.disconnectedAt === undefined || next.status === 'offline' || next.held || (this.lastReady?.you && next.you && this.lastReady.you.user_id !== next.you.user_id)) this.lastReady = undefined;
 		if (next.status === 'offline' || (wasReady && isSessionReady(next) && next.rooms.length === 0)) {
 			// Offline, or a ready session that left its last room: nothing is being rebuilt.
 			this.held = undefined;
@@ -224,7 +227,10 @@ export class SessionView {
 
 	retryNow(client: ChatClient): void {
 		this.stalled = false;
+		this.retryAsked = true;
 		client.retryNow();
+		// The client answers at once; one that started nothing (a `retry_after` still running) leaves no flag behind.
+		this.retryAsked = false;
 	}
 
 	dispose(): void {
@@ -238,7 +244,7 @@ export class SessionView {
 		if (since === undefined || since === this.quietSince) return;
 		this.quietSince = since;
 		if (this.quietTimer) clearTimeout(this.quietTimer);
-		const remaining = RECONNECT_QUIET_MS - (Date.now() - since);
+		const remaining = this.retryAsked ? 0 : RECONNECT_QUIET_MS - (Date.now() - since);
 		this.reconnectQuiet = remaining > 0;
 		this.quietTimer = remaining > 0 ? setTimeout(() => {
 			this.quietTimer = undefined;

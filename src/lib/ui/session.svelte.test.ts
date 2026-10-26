@@ -227,3 +227,42 @@ describe('SessionView through a reconnect', () => {
 		session.dispose();
 	});
 });
+
+describe('SessionView after a reconnect', () => {
+	const server = { apron: 9, auth: ['token'], capabilities: ['history', 'rooms'] };
+	const live = (fields: Partial<ClientSnapshot> = {}) => ready({ server, capabilities: capabilitiesOf(server), rooms: [room('general', ['1'])], activeRoom: 'general', ...fields });
+	const dropped = (at: number, fields: Partial<ClientSnapshot> = {}): ClientSnapshot => ({ ...blankSnapshot(), status: 'reconnecting', disconnectedAt: at, retryingSince: at, ...fields });
+
+	it('keeps a guest who only reads reading through a quiet reconnect', () => {
+		const session = new SessionView();
+		session.apply(live({ readOnly: true }), client());
+		session.apply(dropped(Date.now()), client());
+		flushSync();
+		expect(session.steady).toBe(true);
+		expect(session.readOnly).toBe(true);
+		session.dispose();
+	});
+
+	it('keeps nothing of the last account through a restart, such as signing out', () => {
+		const session = new SessionView();
+		session.apply(live({ passkeySession: true }), client());
+		// A restart reconnects with no drop to come back from.
+		session.apply({ ...blankSnapshot(), status: 'reconnecting' }, client());
+		flushSync();
+		expect(session.steady).toBe(false);
+		expect(session.passkeySession).toBe(false);
+		session.dispose();
+	});
+
+	it('shows Try Again under way at once: no quiet moment for the attempt it asked for', () => {
+		const session = new SessionView();
+		const chat = { selectRoom: vi.fn(), retryNow: vi.fn(() => session.apply(dropped(Date.now() - 20_000, { retryingSince: Date.now() }), chat)) } as unknown as ChatClient;
+		session.apply(live(), chat);
+		session.apply(dropped(Date.now() - 20_000), chat);
+		expect(session.reconnectQuiet).toBe(false);
+		session.retryNow(chat);
+		expect(session.reconnectQuiet).toBe(false);
+		expect(session.stalled).toBe(false);
+		session.dispose();
+	});
+});

@@ -427,10 +427,39 @@ describe('reconnect damping', () => {
 		expect(listeners.has('visibilitychange')).toBe(false);
 	});
 
-	it('counts a reconnect as trying only while the page is shown: from the drop, else from its return', async () => {
-		const listeners = new Map<string, () => void>();
-		const page = { visibilityState: 'visible', addEventListener: (type: string, fn: () => void) => listeners.set(type, fn), removeEventListener: (type: string) => listeners.delete(type) };
+	/** A page to show and hide, with every listener of each event called, as a document does. */
+	function fakePage() {
+		const listeners = new Map<string, Set<() => void>>();
+		const page = {
+			visibilityState: 'visible',
+			addEventListener: (type: string, fn: () => void) => void (listeners.get(type) ?? listeners.set(type, new Set()).get(type)!).add(fn),
+			removeEventListener: (type: string, fn: () => void) => void listeners.get(type)?.delete(fn),
+			set(state: 'visible' | 'hidden') {
+				page.visibilityState = state;
+				for (const fn of [...(listeners.get('visibilitychange') ?? [])]) fn();
+			}
+		};
 		vi.stubGlobal('document', page);
+		return page;
+	}
+
+	/** The browser's network, to take offline and back. */
+	function fakeNetwork() {
+		const listeners = new Map<string, Set<() => void>>();
+		const network = { onLine: true };
+		vi.stubGlobal('navigator', network);
+		vi.stubGlobal('addEventListener', (type: string, fn: () => void) => (listeners.get(type) ?? listeners.set(type, new Set()).get(type)!).add(fn));
+		vi.stubGlobal('removeEventListener', (type: string, fn: () => void) => listeners.get(type)?.delete(fn));
+		return {
+			set(onLine: boolean) {
+				network.onLine = onLine;
+				for (const fn of [...(listeners.get(onLine ? 'online' : 'offline') ?? [])]) fn();
+			}
+		};
+	}
+
+	it('counts a reconnect as trying only while the page is shown: from the drop, else from its return', async () => {
+		const page = fakePage();
 		let snapshot!: ClientSnapshot;
 		const { client } = startClient({ onSnapshot: (next) => (snapshot = next) });
 		onTestFinished(() => client.stop());
@@ -447,54 +476,74 @@ describe('reconnect damping', () => {
 		expect(snapshot.retryingSince).toBeUndefined();
 
 		// One while it's hidden waits, and that isn't trying: it starts when the page is shown again.
-		page.visibilityState = 'hidden';
+		page.set('hidden');
 		latest().drop();
 		expect(snapshot.disconnectedAt).toBeDefined();
 		expect(snapshot.retryingSince).toBeUndefined();
 		vi.advanceTimersByTime(120_000);
 		expect(snapshot.retryingSince).toBeUndefined();
-		page.visibilityState = 'visible';
-		listeners.get('visibilitychange')?.();
+		page.set('visible');
 		expect(snapshot.retryingSince).toBe(Date.now());
 		expect(snapshot.disconnectedAt).toBeLessThan(snapshot.retryingSince!);
 
-		// Hidden again mid-reconnect: the next attempt waits, and stops counting.
+		// Hidden again mid-reconnect: it stops counting at once.
 		latest().open();
-		page.visibilityState = 'hidden';
+		page.set('hidden');
+		expect(snapshot.retryingSince).toBeUndefined();
 		latest().drop();
 		vi.advanceTimersByTime(5_000);
 		expect(snapshot.retryingSince).toBeUndefined();
 
 		// Try Again starts the count over.
-		page.visibilityState = 'visible';
+		page.set('visible');
 		vi.advanceTimersByTime(1_000);
 		client.retryNow();
 		expect(snapshot.retryingSince).toBe(Date.now());
 	});
 
-	it('counts a reconnect that waits for the network while the page is shown: someone is watching it', async () => {
-		const listeners = new Map<string, () => void>();
-		const page = { visibilityState: 'visible', addEventListener: (type: string, fn: () => void) => listeners.set(type, fn), removeEventListener: (type: string) => listeners.delete(type) };
-		vi.stubGlobal('document', page);
-		const network = { onLine: true };
-		vi.stubGlobal('navigator', network);
-		const windowListeners = new Map<string, () => void>();
-		vi.stubGlobal('addEventListener', (type: string, fn: () => void) => windowListeners.set(type, fn));
-		vi.stubGlobal('removeEventListener', (type: string) => windowListeners.delete(type));
+	it('starts counting when the page is shown during a backoff, even if the network then keeps it waiting', async () => {
+		const page = fakePage();
+		const network = fakeNetwork();
 		let snapshot!: ClientSnapshot;
 		const { client } = startClient({ onSnapshot: (next) => (snapshot = next) });
 		onTestFinished(() => client.stop());
 		await latest().greet();
-		network.onLine = false;
+		page.set('hidden');
+		latest().drop();
+		expect(snapshot.retryingSince).toBeUndefined();
+		// Shown before the backoff fires, which then finds the browser offline and waits for it.
+		network.set(false);
+		page.set('visible');
+		const shown = Date.now();
+		expect(snapshot.retryingSince).toBe(shown);
+		vi.advanceTimersByTime(600_000);
+		expect(FakeSocket.instances).toHaveLength(1);
+		expect(snapshot.retryingSince).toBe(shown);
+		network.set(true);
+		expect(FakeSocket.instances).toHaveLength(2);
+		expect(snapshot.retryingSince).toBe(shown);
+	});
+
+	it('counts a reconnect that waits for the network while the page is shown, and stops while it is hidden', async () => {
+		const page = fakePage();
+		const network = fakeNetwork();
+		let snapshot!: ClientSnapshot;
+		const { client } = startClient({ onSnapshot: (next) => (snapshot = next) });
+		onTestFinished(() => client.stop());
+		await latest().greet();
+		network.set(false);
 		const dropped = Date.now();
 		latest().drop();
 		vi.advanceTimersByTime(60_000);
 		expect(FakeSocket.instances).toHaveLength(1);
 		expect(snapshot.retryingSince).toBe(dropped);
-		network.onLine = true;
-		windowListeners.get('online')?.();
+		page.set('hidden');
+		expect(snapshot.retryingSince).toBeUndefined();
+		vi.advanceTimersByTime(60_000);
+		page.set('visible');
+		expect(snapshot.retryingSince).toBe(Date.now());
+		network.set(true);
 		expect(FakeSocket.instances).toHaveLength(2);
-		expect(snapshot.retryingSince).toBe(dropped);
 	});
 
 	it('does not open a first connection from a hidden page until it is shown', () => {
