@@ -98,18 +98,18 @@
 			"seen.spec.ts:42"
 		],
 		"profile-seen": [
-			"seen.spec.ts:54",
-			"seen.spec.ts:84 (absent)",
-			"seen.spec.ts:105 (absent)",
-			"seen.spec.ts:139 (absent)"
+			"seen.spec.ts:58",
+			"seen.spec.ts:88 (absent)",
+			"seen.spec.ts:109 (absent)",
+			"seen.spec.ts:143 (absent)"
 		],
 		"profile-status": [
-			"seen.spec.ts:83",
-			"seen.spec.ts:92",
-			"seen.spec.ts:104",
-			"seen.spec.ts:113",
-			"seen.spec.ts:132",
-			"seen.spec.ts:164"
+			"seen.spec.ts:87",
+			"seen.spec.ts:96",
+			"seen.spec.ts:108",
+			"seen.spec.ts:117",
+			"seen.spec.ts:136",
+			"seen.spec.ts:168"
 		],
 		"reaction-chip": [
 			"chat.spec.ts:780 (absent)",
@@ -194,7 +194,7 @@
 			"reference.spec.ts:88"
 		],
 		"status-hint": [
-			"seen.spec.ts:70"
+			"seen.spec.ts:74"
 		],
 		"stream-embed": [
 			"reference.spec.ts:116"
@@ -657,7 +657,7 @@
 				"push.spec.ts:541",
 				"push.spec.ts:634",
 				"push.spec.ts:652",
-				"seen.spec.ts:66"
+				"seen.spec.ts:70"
 			]
 		},
 		"button /^Open preferences\\. Notifications paused/": {
@@ -697,7 +697,7 @@
 			},
 			"exact": false,
 			"at": [
-				"seen.spec.ts:68"
+				"seen.spec.ts:72"
 			]
 		},
 		"button /^Your profile on/": {
@@ -840,7 +840,7 @@
 				"push.spec.ts:521",
 				"push.spec.ts:541",
 				"push.spec.ts:635",
-				"seen.spec.ts:67"
+				"seen.spec.ts:71"
 			]
 		},
 		"dialog \"Start thread\"": {
@@ -936,7 +936,7 @@
 			},
 			"exact": false,
 			"at": [
-				"seen.spec.ts:109"
+				"seen.spec.ts:113"
 			]
 		},
 		"menuitemradio /^Online/": {
@@ -949,7 +949,7 @@
 			},
 			"exact": false,
 			"at": [
-				"seen.spec.ts:136"
+				"seen.spec.ts:140"
 			]
 		},
 		"option \"Move to room\"": {
@@ -1306,7 +1306,7 @@
 		],
 		"button[data-user-id]": [
 			"seen.spec.ts:47",
-			"seen.spec.ts:96"
+			"seen.spec.ts:100"
 		],
 		"code": [
 			"webauthn.spec.ts:14"
