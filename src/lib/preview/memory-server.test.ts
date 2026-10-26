@@ -203,3 +203,37 @@ describe('knobs for the browser suite', () => {
 		expect(timelineMessages(room(client, 'general')!)).toHaveLength(10);
 	});
 });
+
+describe('in-memory private rooms', () => {
+	it('seeds a conversation and a titled private room, starts one untitled, lets a member add people, and ends it with its last member', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		const client = new ChatClient('ws://apron-preview.invalid', 'Preview User', server.factory);
+		clients.push(client);
+		client.start();
+		await waitFor(() => client.snapshot().authenticated && client.snapshot().rooms.some((room) => room.id === 'general' && room.loaded));
+		const room = (id: string) => client.snapshot().rooms.find((candidate) => candidate.id === id);
+		// Signed in to an account, with the private-room limit advertised.
+		expect(client.snapshot().passkeySession).toBe(true);
+		expect(client.snapshot().server?.ext?.settings).toEqual({ private_rooms: 5 });
+		expect(room('private_1710000000050')).toMatchObject({ private: true, namedForMembers: true, title: 'Grace Hopper' });
+		expect(room('private_1710000000060')).toMatchObject({ private: true, title: 'Launch plans' });
+
+		const created = await client.createRoom({ private: true }).promise;
+		await waitFor(() => room(created.room_id) !== undefined);
+		expect(room(created.room_id)).toMatchObject({ private: true, namedForMembers: true, title: 'You' });
+		await client.joinRoom(created.room_id, 'linus').promise;
+		await waitFor(() => room(created.room_id)?.title === 'Linus');
+		// Someone outside it can't see it: listed to its members only.
+		const listed = await client.listRooms(undefined, 0);
+		expect(listed.some((listing) => listing.id === 'private_1710000000060')).toBe(false);
+		// Someone else adds you to one.
+		const added = server.addYouToPrivate('margaret');
+		await waitFor(() => room(added) !== undefined);
+		expect(room(added)?.title).toBe('Margaret Hamilton');
+		// The last to leave ends it.
+		await client.leaveRoom(created.room_id, 'linus').promise;
+		await client.leaveRoom(created.room_id).promise;
+		await waitFor(() => room(created.room_id) === undefined);
+		await expect(client.joinRoom(created.room_id).promise).rejects.toThrow('Unknown room');
+	});
+});

@@ -5,7 +5,8 @@ import { DAWN, DUSK } from './preview-images';
 
 export type PreviewRoom = {
 	room_id: string;
-	title: string;
+	/** Absent for an untitled room, such as a private conversation, which clients name for its members. */
+	title?: string;
 	parent_room_id?: string;
 	private?: boolean;
 	description?: string;
@@ -41,7 +42,10 @@ const basePeople: Record<string, Person> = {
 const roomId = 'general';
 
 /** What the demo server advertises (§3.1). */
-export const PREVIEW_CAPABILITIES = ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'ext'];
+export const PREVIEW_CAPABILITIES = ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'ext', 'ext:settings'];
+
+/** Its settings (EXT.md §3): the most private rooms one user may be in at once, so the new-conversation dialog counts. */
+export const PREVIEW_SETTINGS = { private_rooms: 5 };
 
 /**
  * Knobs for the browser suite (`e2e/`), read from `window.__APRON_PREVIEW__` when the page's first socket
@@ -58,6 +62,11 @@ export interface PreviewKnobs {
 	dropPrivate?: 'rooms' | 'threads';
 	/** `rich` adds `richPeople` and `richMessages`: long names with four roles, a name clash, avatars, a reply, a mention of you, every embed kind, and a room and a thread to browse. */
 	seed?: 'rich';
+	/**
+	 * Signs the viewer in to an account rather than as a guest: the `auth` result carries a token (§3.2.1), which
+	 * makes it a registered session, as starting private conversations needs.
+	 */
+	account?: boolean;
 }
 
 /**
@@ -184,6 +193,22 @@ export class MemoryProtocolServer {
 				room.log_id = Number(n);
 			}
 		}
+		// A private conversation with Grace (untitled: clients name it for her), and a titled private room of three.
+		// Private rooms (§4.2.4) are listed to their members only; ids here start `private_`, which clients never read.
+		const withGrace = this.makeRoom('private_1710000000050', undefined, ['preview_guest', 'grace']);
+		withGrace.private = true;
+		const launch = this.makeRoom('private_1710000000060', 'Launch plans', ['preview_guest', 'ada', 'margaret']);
+		launch.private = true;
+		launch.description = 'Dates and announcements, until they’re public.';
+		for (const [room, n, author, text] of [
+			[withGrace, '1710000000051', 'grace', 'Got a minute? I want your take on the onboarding copy before I post it in general.'],
+			[withGrace, '1710000000052', 'preview_guest', 'Sure, send it over here.'],
+			[launch, '1710000000061', 'ada', 'Announcement goes out Thursday. Keep it here until then.'],
+			[launch, '1710000000062', 'margaret', 'I’ll have the post ready by Wednesday.']
+		] as const) {
+			room.messages.push({ message_id: n, log_id: n, room_id: room.room_id, from: { ...people[author] }, body: { text, format: 'plain' } });
+			room.log_id = Number(n);
+		}
 		if (knobs.seed === 'rich') this.seedRich(general);
 	}
 
@@ -221,10 +246,23 @@ export class MemoryProtocolServer {
 		return id;
 	}
 
+	/**
+	 * Someone else starts a private room (§4.2.4) and adds you, as if they did it now: you get it in a `room_update`
+	 * `joined`, with their membership and yours. Untitled unless `title` is given. Returns its `room_id`.
+	 */
+	addYouToPrivate(from: string, title?: string, others: string[] = []): string {
+		if (!this.people[from]) throw new Error(`Unknown user: ${from}`);
+		const room = this.makeRoom(`private_${this.serial++}`, title, [from, ...others, 'preview_guest']);
+		room.private = true;
+		const memberships = [from, ...others, 'preview_guest'].map((id) => ({ log_id: this.nextLog(room), room_id: room.room_id, members: [{ user: { ...this.people[id] }, joined: true }] }));
+		for (const peer of this.sockets) peer.deliver({ method: 'room_update', params: { joined: [this.roomRecord(room, true)], memberships, users: Object.values(this.people) } });
+		return room.room_id;
+	}
+
 	factory: WebSocketFactory = (url) => this.createSocket(url);
 
-	private makeRoom(id: string, title: string, members: string[], parent?: string): PreviewRoom {
-		const room: PreviewRoom = { room_id: id, title, members: new Set(members), messages: [], reactions: new Map(), log_id: this.serial++, ...(parent ? { parent_room_id: parent } : {}) };
+	private makeRoom(id: string, title: string | undefined, members: string[], parent?: string): PreviewRoom {
+		const room: PreviewRoom = { room_id: id, ...(title !== undefined ? { title } : {}), members: new Set(members), messages: [], reactions: new Map(), log_id: this.serial++, ...(parent ? { parent_room_id: parent } : {}) };
 		this.rooms.set(id, room);
 		return room;
 	}
@@ -262,7 +300,7 @@ export class MemoryProtocolServer {
 			const capabilities = [...PREVIEW_CAPABILITIES, ...(server.knobs.capabilities ?? [])];
 			// With `status`, the optional statuses it takes (§4.5).
 			const statuses = capabilities.includes('status') ? { status: ['dnd', 'invisible'] } : {};
-			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses } });
+			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses, ext: { settings: PREVIEW_SETTINGS } } });
 		});
 		return socket as unknown as WebSocket;
 	}
@@ -279,7 +317,7 @@ export class MemoryProtocolServer {
 				case 'auth': {
 					if (typeof params.name === 'string' && params.name) this.people.preview_guest.name = params.name;
 					// The complete `you` (§3.3); anything the sign-in causes would follow the result (§3.2).
-					reply({ you: structuredClone(this.people.preview_guest) });
+					reply({ you: structuredClone(this.people.preview_guest), ...(this.knobs.account ? { token: 'preview-account' } : {}) });
 					return;
 				}
 				case 'room_list': reply(this.listRooms(params)); return;
@@ -300,7 +338,7 @@ export class MemoryProtocolServer {
 	}
 
 	private roomRecord(room: PreviewRoom, members = false): JsonObject {
-		return { room_id: room.room_id, title: room.title, log_id: String(room.log_id), latest_log_id: String(room.log_id), history_log_id: room.messages.length ? room.messages[0].log_id : null,
+		return { room_id: room.room_id, ...(room.title !== undefined ? { title: room.title } : {}), log_id: String(room.log_id), latest_log_id: String(room.log_id), history_log_id: room.messages.length ? room.messages[0].log_id : null,
 			...(room.parent_room_id ? { parent_room_id: room.parent_room_id } : {}), ...(room.private ? { private: true } : {}), ...(room.description ? { description: room.description } : {}),
 			...(room.ext ? { ext: structuredClone(room.ext) } : {}),
 			...(members ? { members: [...room.members].map((id) => ({ user_id: id })) } : {}) };
@@ -414,15 +452,16 @@ export class MemoryProtocolServer {
 		if (!room) {
 			const parent = typeof p.parent_room_id === 'string' ? p.parent_room_id : undefined;
 			if (parent && !this.rooms.has(parent)) return fail('Unknown parent room');
-			const id = parent ? `thread_preview_${this.roomSerial++}` : `room_preview_${this.roomSerial++}`;
-			room = this.makeRoom(id, typeof p.title === 'string' ? p.title : id, ['preview_guest'], parent);
+			const id = parent ? `thread_preview_${this.roomSerial++}` : p.private === true ? `private_${this.serial++}` : `room_preview_${this.roomSerial++}`;
+			// A private room may go untitled (a conversation, which clients name for its members); others are named by their id.
+			room = this.makeRoom(id, typeof p.title === 'string' && p.title ? p.title : p.private === true && !parent ? undefined : id, ['preview_guest'], parent);
 			// A thread created without `private` takes its parent's (§4.2.4), unless a test knob plays a server that drops it.
 			const dropped = this.knobs.dropPrivate === (parent ? 'threads' : 'rooms');
 			if (!dropped && (p.private === true || (p.private === undefined && parent && this.rooms.get(parent)?.private))) room.private = true;
 		} else {
 			// An update resubmits every client field; one left out is cleared, except `private`, which is kept,
 			// and `ext`, which merges (§4.2.4, §4.12). It is a new room record.
-			room.title = typeof p.title === 'string' ? p.title : room.room_id;
+			room.title = typeof p.title === 'string' && p.title ? p.title : room.private && !room.parent_room_id ? undefined : room.room_id;
 			this.nextLog(room);
 		}
 		room.description = typeof p.description === 'string' && p.description ? p.description : undefined;
@@ -445,8 +484,15 @@ export class MemoryProtocolServer {
 		const room = this.rooms.get(String(p.room_id));
 		if (room && typeof p.user_id === 'string' && p.user_id !== 'preview_guest') return this.changeMember(room, p.user_id, false, reply, fail);
 		room?.members.delete('preview_guest');
+		if (room) this.dropIfEmpty(room);
 		socket.deliver({ method: 'room_update', params: { left: [{ room_id: String(p.room_id) }] } });
 		reply();
+	}
+	/** A private room goes once its last member leaves (§4.2.4 leaves it to the server), its threads with it. */
+	private dropIfEmpty(room: PreviewRoom): void {
+		if (!room.private || room.members.size > 0) return;
+		this.rooms.delete(room.room_id);
+		for (const thread of [...this.rooms.values()]) if (thread.parent_room_id === room.room_id) this.rooms.delete(thread.room_id);
 	}
 	/** Adds or removes another user (§4.2.2): a membership record in `room_update` to the room's members, before and after. */
 	private changeMember(room: PreviewRoom, userId: string, joined: boolean, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
@@ -455,7 +501,10 @@ export class MemoryProtocolServer {
 		if (joined) room.members.add(userId);
 		const record = { log_id: this.nextLog(room), room_id: room.room_id, members: [{ user: { ...user }, joined }] };
 		this.broadcast({ method: 'room_update', params: { memberships: [record] } }, room);
-		if (!joined) room.members.delete(userId);
+		if (!joined) {
+			room.members.delete(userId);
+			this.dropIfEmpty(room);
+		}
 		reply();
 	}
 
