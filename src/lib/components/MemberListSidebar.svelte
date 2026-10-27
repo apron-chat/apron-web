@@ -1,20 +1,20 @@
 <script lang="ts">
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
-	import { isSystemId, type Identity } from '$lib/protocol/types';
+	import type { Identity } from '$lib/protocol/types';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { memberSections, userIdToAdd } from '$lib/ui/members';
+	import { memberSections } from '$lib/ui/members';
+	import { byName } from '$lib/ui/people';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { loadShutMemberSections, saveShutMemberSections } from '$lib/ui/storage';
 	import { presenceLabel } from '$lib/design/components/util';
-	import AddMembersForm from '$lib/design/components/AddMembersForm.svelte';
 	import MemberList from '$lib/design/components/MemberList.svelte';
-	import type { MemberListPerson, MemberListSection, PickPerson } from '$lib/design/components/types';
+	import type { MemberListPerson, MemberListSection } from '$lib/design/components/types';
 	import { byStatus, lastSeen, ownStatusLabel, withLastSeen } from '$lib/ui/user-status';
 	import { minuteNow } from '$lib/ui/clock.svelte';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
-	import { couldNotAdd } from '$lib/ui/private-rooms';
+	import AddMembersDialog from './AddMembersDialog.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 
 	interface Props {
@@ -49,9 +49,7 @@
 	let roomMembers = $derived(room?.members);
 	let hasStatus = $derived(session.capabilities.status);
 	/** By status (online, idle, dnd, unknown, offline, then none), and by name within each. */
-	let members = $derived(byStatus([...(roomMembers ?? [])].sort((a, b) =>
-		directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)
-	), statusOf));
+	let members = $derived(byStatus([...(roomMembers ?? [])].sort(byName), statusOf));
 	/** Online, then offline, each in the order above; with no `status` capability (§4.5), one list. */
 	let sections = $derived(memberSections(members, statusOf, hasStatus));
 	/** Sections folded away, as the rooms list folds Other threads: a long Offline needn't push the rest out of view. */
@@ -66,34 +64,10 @@
 	/** A large room's listing may hold only its most recently active members, with the total (§4.2.1). */
 	let total = $derived(room?.members === undefined ? undefined : Math.max(room.memberCount ?? 0, room.members.length));
 	let changing = $derived(canChange && !session.snapshot.memberChangesUnsupported && Boolean(client) && Boolean(room?.joined));
-	/** The most people listed at once in the add form: typing narrows it. */
-	const PEOPLE_SHOWN = 50;
 	/** The add form is open: it opens from the header's plus, since most visits are to see who is here. */
 	let addOpen = $state(false);
-	let query = $state('');
-	let chosenIds = $state<string[]>([]);
-	let adding = $state(false);
-	let addError = $state<string | undefined>();
 	let busy = $state(false);
 	let note = $state<{ text: string; error: boolean } | undefined>();
-	let memberIds = $derived(new Set((room?.members ?? []).map((member) => member.user_id)));
-	/** People this client knows of who aren't members yet, but the system identities, by name. */
-	let candidates = $derived(Object.values(session.snapshot.users)
-		.filter((user) => !memberIds.has(user.user_id) && !isSystemId(user.user_id) && !directory.isMe(user.user_id))
-		.sort((a, b) => directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)));
-	/**
-	 * Those whose name or `@user_id` holds what's typed; and a `@user_id` typed whole that none of them has, as someone
-	 * to add by it, since the client knows only some of the server's users.
-	 */
-	let people = $derived.by(() => {
-		const wanted = query.trim().replace(/^@/, '').toLowerCase();
-		const matching = wanted ? candidates.filter((user) => directory.name(user).toLowerCase().includes(wanted) || user.user_id.toLowerCase().includes(wanted)) : candidates;
-		const shown = matching.slice(0, PEOPLE_SHOWN).map(pickPerson);
-		const typed = userIdToAdd(query);
-		if (typed && !memberIds.has(typed) && !isSystemId(typed) && !candidates.some((user) => user.user_id === typed)) shown.push({ user_id: typed, name: typed, hue: hueOf(typed), detail: `Add by @user_id: @${typed}` });
-		return shown;
-	});
-	let chosen = $derived(chosenIds.map((id) => pickPerson(directory.person({ user_id: id }) ?? { user_id: id })));
 	/** Each member as the list shows them, with their status in words: yours as you chose it, an offline one's with when they were last seen. */
 	let shown = $derived(sections.map((section): MemberListSection => ({ key: section.key, label: section.label, people: section.people.map(person) })));
 	/** The members by `user_id`, for their role badges. */
@@ -117,11 +91,6 @@
 		};
 	}
 
-	function pickPerson(user: Identity): PickPerson {
-		const status = directory.status(user);
-		return { user_id: user.user_id, name: directory.name(user), src: directory.avatar(user), hue: hueOf(user.user_id), status, statusLabel: presenceLabel(status) };
-	}
-
 	/** The room's id, which changes only with the room: its record changes (a member added) leave the add form open. */
 	let roomId = $derived(room?.id);
 
@@ -133,39 +102,7 @@
 
 	function openAdd(): void {
 		note = undefined;
-		query = '';
-		chosenIds = [];
-		addError = undefined;
 		addOpen = true;
-	}
-
-	function pick(userId: string): void {
-		addError = undefined;
-		chosenIds = chosenIds.includes(userId) ? chosenIds.filter((id) => id !== userId) : [...chosenIds, userId];
-	}
-
-	/** Adds everyone picked, in turn: one the server refuses doesn't stop the rest, and stays picked, with why. */
-	async function add(): Promise<void> {
-		if (!client || !room || adding || !chosenIds.length) return;
-		const roomId = room.id;
-		adding = true;
-		addError = undefined;
-		const added: string[] = [];
-		const failed: { userId: string; message: string }[] = [];
-		for (const userId of chosenIds) {
-			try {
-				await client.joinRoom(roomId, userId).promise;
-				added.push(userId);
-			} catch (cause) {
-				failed.push({ userId, message: cause instanceof Error ? cause.message : 'Unable to add them' });
-			}
-		}
-		adding = false;
-		const name = (userId: string) => directory.name({ user_id: userId });
-		if (added.length) note = { text: `Added ${added.length > 2 ? `${added.length} people` : added.map(name).join(' and ')}.`, error: false };
-		chosenIds = failed.map(({ userId }) => userId);
-		if (failed.length) addError = couldNotAdd(failed, name);
-		else addOpen = false;
 	}
 
 	async function remove(userId: string): Promise<void> {
@@ -206,9 +143,6 @@
 	{#snippet avatar(member)}<Avatar name={member.name ?? member.user_id} hue={hueOf(member.user_id)} src={member.avatar} size="sm" status={member.status} statusLabel={member.statusLabel} />{/snippet}
 	{#snippet roles(member)}<RoleBadges user={byId.get(member.user_id)} />{/snippet}
 </MemberList>
-{#if addOpen}
-	<AddMembersForm
-		bind:open={addOpen} bind:query room={room?.title} {people} {chosen} status={adding ? 'saving' : 'idle'} error={addError} listTestid="add-people"
-		onpick={pick} onremove={pick} onsubmit={add}
-	/>
+{#if addOpen && client && room}
+	<AddMembersDialog {client} {session} {room} onadded={(text) => (note = { text, error: false })} onclose={() => (addOpen = false)} />
 {/if}

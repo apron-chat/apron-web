@@ -51,10 +51,9 @@
 </script>
 
 <!-- Escape, the close button and Cancel do nothing while it adds. -->
-<Dialog class={['ap-pick', className]} bind:open size="md" title={room ? `Add people to ${room}` : 'Add people'} subtitle="Pick people by name, or type their @user_id." locked={saving} {onclose}
+<Dialog class={['ap-pick', className]} bind:open size="md" title={room ? `Add people to ${room}` : 'Add people'} subtitle="Pick people by name, or type their @user_id." locked={saving} {error} {onclose}
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled && chosen.length) onsubmit?.(); }}>
 	<PeoplePicker bind:this={picker} label="Add" {people} {chosen} bind:query empty="No one else to add yet" busy={saving} onchoose={(person) => onpick?.(person.user_id)} {onremove} {listTestid} />
-	{#if error}<p class="ap-profedit-note ap-tone-danger" role="alert">{error}</p>{/if}
 	{#snippet footer()}
 		<Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={saving} label="Cancel" />
 		<Button type="submit" variant="primary" size="sm" disabled={saving || disabled || !chosen.length} label={action} />

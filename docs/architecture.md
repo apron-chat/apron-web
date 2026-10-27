@@ -71,7 +71,7 @@ The wrappers: `ConnectScreen` and `SignIn` (the pieces the design system's
 `ConnectScreen` is made of: `ConnectPage`, `ConnectHeader` and `SignInForm`;
 `SignIn` keeps the state machine in `$lib/ui/sign-in`), `Sidebar` (`SidebarHead`, `SidebarSection` and
 `RoomItem`, its Private section's rows with the `Faces` of who each private room is with) with `ThreadList` (the design system's `ThreadList`, its rows `ThreadItem`s,
-which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, with its `AddMembersForm`, the same `PeoplePicker` in a `Dialog` as `PrivateRoomForm`), `ProfileBar` (`ProfileBar` with its
+which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, whose + mounts `AddMembersDialog`: the design system's `AddMembersForm`, the same `PeoplePicker` in a `Dialog` as `PrivateRoomForm`, adding the people picked), `ProfileBar` (`ProfileBar` with its
 `ProfileEditor`), `RoomHeader` (`RoomHeader`, with its ⋯ `MenuButton`) with
 `RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `NewPrivateDialog` (the design system's `PrivateRoomForm`, a `PeoplePicker` in a `Dialog`, which the page owns: it starts a private room with the people picked, or opens the one you already have with someone, and at the server's limit offers yours to leave), the private room's intro and "You were added" banner (the design system's `PrivateIntro` and `AddedBanner`, which the page renders), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
 `ThreadDescription` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `RoleBadges`, `MentionText` (`Mention`), the embeds (`Embed*`; the trusted-origin gate stays in `embeds/og.ts`), `MessageEditor` (`MessageEditor`), `NoticeLine` (a scoped `Message`, from `noticeView`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: a `ComposerEditable` it fills and edits) with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
@@ -174,7 +174,7 @@ picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previ
 and `time.ts` read messages, `connection.ts` words the connection state, and
 `commands.ts` maps the composer's `/` commands to requests,
 `sign-in-link.ts` reads and scrubs a sign-in link (emailed, or the return from an external sign-in page) from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,
-`members.ts` reads the `user_id` typed to add a member and splits the member list into Online and Offline (`memberSections`), and
+`members.ts` reads the `user_id` typed to add a member, adds people to a room in turn (`addMembers`, whose refusals `couldNotAdd` words) and splits the member list into Online and Offline (`memberSections`), `people.ts` sorts people by name (`byName`) and narrows who could be picked by what's typed (`pickable`, `matching`) for both people pickers, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences and read positions included (on this device only; nothing is synced),
 `session-cache.ts` keeps `SessionView`'s held view in IndexedDB per server, trimmed to
@@ -188,11 +188,11 @@ is registered, and words pushed messages for the service worker,
 joined rooms are private and top-level (the sidebar's Private section and the
 `private_rooms` limit count those), the conversation you already have with
 someone (`directRoomWith`), starting one (`startPrivateRoom`: created private,
-its record checked, then each person added in turn), where its intro goes
+its record checked, then each person added in turn with `addMembers`), where its intro goes
 (`reachesStart`), and `ArrivalWatch`, which the page feeds each snapshot as the
 client emits it, while what's in flight is still pending in it, to tell a room
 someone else added you to from one this page asked for; `faces.ts` turns
-people into the design system's `Faces` through `directory`,
+people into the design system's `Faces` (`faceOf`, `facesOf`) through `directory`,
 `notify-scopes.ts` decides which arriving messages the page notifies about from
 the checked scopes, and which of them push sends as `wake`, and
 `push-store.ts` keeps in IndexedDB, for the service worker too, the enabled

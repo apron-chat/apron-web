@@ -1003,6 +1003,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-dialog-close { flex: none; }
 .ap-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); }
 .ap-dialog-body > p { margin: 0; font-size: var(--text-field); line-height: var(--leading-field); color: var(--ap-tone, var(--ink-muted)); }
+/* Dialog's `error`: under the content, in the danger color. */
+.ap-dialog-note { margin: 0; color: var(--ap-tone, var(--ink-muted)); }
 .ap-dialog-body-flush { padding: 0; gap: 0; overflow: hidden; }
 .ap-dialog-body .ap-fieldlabel { color: var(--ink); }
 .ap-dialog-body .ap-field { width: 100%; }

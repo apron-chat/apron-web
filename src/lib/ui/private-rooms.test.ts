@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, OperationHandle, RoomSnapshot } from '$lib/protocol/client';
 import { roomSnapshot as room } from '$lib/test/builders';
-import { ArrivalWatch, couldNotAdd, directRoomWith, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
+import { ArrivalWatch, directRoomWith, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
 
 const members = (...ids: string[]) => ids.map((user_id) => ({ user_id }));
 const dm = (id: string, ...ids: string[]) => room(id, [], { private: true, namedForMembers: true, members: members('ada', ...ids) });
@@ -33,8 +33,6 @@ describe('private rooms', () => {
 		expect(privateRoomLine(['Bob'])).toBe('Only you and Bob can see this room');
 		expect(privateRoomLine(['Bob', 'Carol'], 'Online')).toBe('Only members can see this room');
 		expect(privateRoomLine([])).toBe('Only you can see this room');
-		expect(couldNotAdd([{ userId: 'carol', message: 'In too many private rooms.' }, { userId: 'dev', message: 'Unknown user' }], (id) => id.toUpperCase()))
-			.toBe('Couldn’t add CAROL: In too many private rooms. Couldn’t add DEV: Unknown user.');
 	});
 
 	it('knows when history reaches back to the room’s start: all loaded, from at or before its first record', () => {

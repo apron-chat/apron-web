@@ -1,3 +1,5 @@
+import type { ChatClient } from '$lib/protocol/client';
+
 /**
  * The `user_id` typed to add someone to a room (§4.2.2): exactly that ID,
  * written bare or as `@user_id`. Display names are never looked up, since
@@ -33,4 +35,31 @@ export function memberSections<T>(people: readonly T[], statusOf: (person: T) =>
 		{ key: 'offline', label: 'Offline', people: people.filter(offline) }
 	];
 	return sections.filter((section) => section.people.length);
+}
+
+/** Someone who couldn't be added to a room, with the server's words why. */
+export interface Refusal {
+	userId: string;
+	message: string;
+}
+
+/**
+ * Adds each of `userIds` to the room in turn (`room_join` with their `user_id`, §4.2.2). Who may add whom is server
+ * policy: one it refuses doesn't stop the rest, and comes back with why.
+ */
+export async function addMembers(client: Pick<ChatClient, 'joinRoom'>, roomId: string, userIds: readonly string[]): Promise<Refusal[]> {
+	const refused: Refusal[] = [];
+	for (const userId of userIds) {
+		try {
+			await client.joinRoom(roomId, userId).promise;
+		} catch (cause) {
+			refused.push({ userId, message: cause instanceof Error ? cause.message : 'Unable to add them' });
+		}
+	}
+	return refused;
+}
+
+/** Who couldn't be added, by name, and the server's words why: "Couldn’t add Carol: …". */
+export function couldNotAdd(refused: readonly Refusal[], nameOf: (userId: string) => string): string {
+	return refused.map(({ userId, message }) => `Couldn’t add ${nameOf(userId)}: ${message.replace(/[.\s]+$/, '')}.`).join(' ');
 }

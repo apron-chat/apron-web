@@ -74,7 +74,7 @@
 </script>
 
 <!-- Escape, the close button and Cancel do nothing while it starts. -->
-<Dialog class={['ap-pick', className]} bind:open size="md" title="New private conversation" subtitle="A private room that only the people you pick can see." locked={saving} {onclose}
+<Dialog class={['ap-pick', className]} bind:open size="md" title="New private conversation" subtitle="A private room that only the people you pick can see." locked={saving} {error} {onclose}
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled && !atLimit && chosen.length) onsubmit?.(); }}>
 	<PeoplePicker bind:this={picker} label="To" people={listed} {chosen} bind:query listed={!atLimit} empty="No one to talk to yet" disabled={atLimit} busy={saving} onchoose={choose} {onremove} {listTestid} />
 	{#if full}
@@ -97,7 +97,6 @@
 			<input id="{uid}-name" class="ap-field" aria-label="Name" bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto" placeholder="Named for its people without one" />
 		</label>
 	{/if}
-	{#if error}<p class="ap-profedit-note ap-tone-danger" role="alert">{error}</p>{/if}
 	{#snippet footer()}
 		{#if quota}
 			<span class={['ap-quota', atLimit && 'ap-quota-full']} title="Private rooms you’re in, of the most this server allows at once">
