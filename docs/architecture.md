@@ -456,3 +456,26 @@ it against `MemoryProtocolServer`: it answers `auth`, `room_list` and `history`
 from the export and refuses everything else. Both make their sockets with
 `memorySocket` (`src/lib/preview/memory-socket.ts`), a `WebSocket` as far as
 the client can tell. Unlike `/__preview`, `/archive` is in every build.
+
+History kept on this device lives in `src/lib/history`. `history-db.ts` is
+its IndexedDB store, shaped like a server's log: `records` keyed by `[server,
+room, log, kind, id]` (`log_id`s as numbers, so a room's records below a bound,
+or a page of them, are one key range), with a `key` index to replace a
+message's or reaction set's row as it is written (compaction on write),
+`rooms` with each room's record and `RoomSync`, and `meta` with whose it is,
+the users, and a `version` each write moves on. `ProtocolStore.observe` reports
+each change it takes (a record that replaced what it had, a bound's eviction, a
+rebuild's clear), and `HistoryKeeper` (`history-keeper.ts`) mirrors those into
+the store in batches, one transaction each, with every settled room's sync
+(`ChatClient.keptState`), so a room's checkpoint is never kept without the
+records it covers. A room joined and settled that isn't kept yet is written
+whole (`storedRecords(roomId)`); one no longer joined goes once the joined set
+is complete. One tab writes per server, under a Web Lock; a tab that takes it
+over writes everything whole unless `version` is still what it read. On load,
+before the client starts, `restore` reads it back (`restoredState` applies the
+retention) and `ChatClient.restore` takes it as a dropped connection's kept
+state: the rooms retained with their records and syncs, so the first sign-in
+resumes each from its checkpoint through `requestRooms`, the path a reconnect
+takes. `settings.svelte.ts` holds the retention (`apron.historyRetention`),
+which Preferences' History section sets. The view `session-cache.ts` keeps
+still paints the page before the session signs in.

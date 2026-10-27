@@ -666,6 +666,25 @@ over the system's, and an installed font for the interface, messages and code
 font choice is marked experimental, to be replaced by a choice of themes. All
 of these stay on this device; settings aren't synced.
 
+**History** keeps what a signed-in session has loaded on this device, for
+**30 days** unless changed (a day, a week, a year, everything loaded, or not at
+all), and with it how far each joined room is caught up. The next visit shows it
+at once and goes on as a reconnect does: each room asks the server only for what
+came after its checkpoint (§4.3.5), and the joined listing only for rooms that
+changed since (`latest_log_id`, §4.2.1); a thread opened again goes on from
+where its last load got to. Older messages than the retention load from the
+server as you scroll back, as before. The retention counts by when a message
+was logged, on servers whose `log_id`s are times (as the reference servers'
+are); elsewhere everything loaded is kept. A room last caught up before the
+cutoff starts over from its newest page rather than paging through everything
+since. It is kept only for a session saved here (an account, or a token the
+server resumes), never for a guest; signing out removes it, as does choosing
+not to keep any. One tab writes at a time; another takes over when it closes.
+Switching to another server, or connecting again from the sign-in screen,
+starts that session over, and what it keeps from then on replaces what was
+kept. Preferences says how much Apron keeps on this device, and why it stopped
+keeping more if the device ran out of space.
+
 **Export** saves what this page has loaded from the server as a `.jsonl` file
 (`apron-<host>-<day>.jsonl`): the rooms and threads the rooms list shows, any
 other room a loaded message is in (such as a quoted message's), the rooms those
@@ -674,7 +693,7 @@ them (§4.3.4): each room's record, each message's latest snapshot, each
 message's reactions, and the join and leave records, with who you are and the
 users as they were, without their statuses. Threads listed but never opened load
 their newest page first; older messages of a room are in the export only once
-scrolled back to. **Open an export** opens `/archive` in a new tab, where a
+scrolled back to, or kept on this device. **Open an export** opens `/archive` in a new tab, where a
 chosen or dropped export opens in this same app, read-only, against a server in
 the page that serves only that file: it signs in as the export's `you`, as a
 guest who may only read (`ext:permissions` `write: false`), lists its

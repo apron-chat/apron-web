@@ -153,6 +153,17 @@ export class ProtocolStore {
 	private readonly memberships = new Map<string, MemberState>();
 	private readonly membershipLogs = new Map<string, MembershipLog>();
 	private touched = new Set<string>();
+	private readonly observers = new Set<(change: StoreChange) => void>();
+
+	/** Calls `listener` with each change to the stored records, as it is made, until the returned function is called. */
+	observe(listener: (change: StoreChange) => void): () => void {
+		this.observers.add(listener);
+		return () => this.observers.delete(listener);
+	}
+
+	private changed(change: StoreChange): void {
+		for (const observer of this.observers) observer(change);
+	}
 
 	room(roomId: string): RoomRecord | undefined {
 		return this.roomRecords.get(roomId);
@@ -235,6 +246,7 @@ export class ProtocolStore {
 		}
 		this.roomRecords.set(record.room_id, record);
 		this.touched.add(record.room_id);
+		this.changed({ kind: 'room', record });
 		return true;
 	}
 
@@ -279,6 +291,7 @@ export class ProtocolStore {
 		}
 		this.messageRecords.set(record.message_id, record);
 		this.home(record.room_id, record.message_id);
+		this.changed({ kind: 'message', record });
 		return true;
 	}
 
@@ -291,6 +304,7 @@ export class ProtocolStore {
 		sets.set(set.from.user_id, set);
 		const home = this.messageRecords.get(set.message_id)?.room_id;
 		if (home !== undefined) this.touched.add(home);
+		this.changed({ kind: 'reaction', set });
 		return true;
 	}
 
@@ -318,7 +332,7 @@ export class ProtocolStore {
 	 * membership log at its `log_id`, superseded or not.
 	 */
 	putMembership(entry: MembershipEntry): boolean {
-		this.logMembership(entry);
+		if (this.logMembership(entry)) this.changed({ kind: 'membership', entry });
 		let state = this.memberships.get(entry.room_id);
 		if (state?.asOf !== undefined && compareLogIds(entry.log_id, state.asOf) <= 0) return false;
 		const current = state?.entries.get(entry.user.user_id);
@@ -353,8 +367,8 @@ export class ProtocolStore {
 		return log.published;
 	}
 
-	/** Keep one entry in its room's log, in place by `log_id`; a repeat of an entry already kept is ignored. */
-	private logMembership(entry: MembershipEntry): void {
+	/** Keep one entry in its room's log, in place by `log_id`; a repeat of an entry already kept is ignored. Returns whether it was new. */
+	private logMembership(entry: MembershipEntry): boolean {
 		let log = this.membershipLogs.get(entry.room_id);
 		if (!log) this.membershipLogs.set(entry.room_id, (log = { records: [] }));
 		const { records } = log;
@@ -364,17 +378,19 @@ export class ProtocolStore {
 		const current = index > 0 && records[index - 1].log_id === entry.log_id ? records[index - 1] : undefined;
 		const added = { user: entry.user, joined: entry.joined };
 		if (current) {
-			if (current.entries.some((kept) => kept.user.user_id === entry.user.user_id)) return;
+			if (current.entries.some((kept) => kept.user.user_id === entry.user.user_id)) return false;
 			records[index - 1] = { log_id: entry.log_id, entries: [...current.entries, added] };
 		} else {
 			records.splice(index, 0, { log_id: entry.log_id, entries: [added] });
 		}
 		log.published = undefined;
 		this.touched.add(entry.room_id);
+		return true;
 	}
 
 	/** Drop the room's messages whose latest snapshot is below `floor` (retention eviction), and memberships logged below it. */
 	evictBefore(roomId: string, floor: string): void {
+		this.changed({ kind: 'evict', room: roomId, floor });
 		const log = this.membershipLogs.get(roomId);
 		if (log?.records.length && compareLogIds(log.records[0].log_id, floor) < 0) {
 			log.records = log.records.filter((record) => compareLogIds(record.log_id, floor) >= 0);
@@ -397,6 +413,7 @@ export class ProtocolStore {
 	 * it are not buffered for a replay.
 	 */
 	clearRoom(roomId: string): void {
+		this.changed({ kind: 'clearRoom', room: roomId });
 		for (const id of [...(this.homes.get(roomId) ?? [])]) {
 			this.messageRecords.delete(id);
 			this.reactionSets.delete(id);
@@ -411,6 +428,7 @@ export class ProtocolStore {
 	}
 
 	clear(): void {
+		this.changed({ kind: 'clear' });
 		for (const roomId of this.roomIds()) this.touched.add(roomId);
 		this.roomRecords.clear();
 		this.roomTitles.clear();
@@ -425,18 +443,24 @@ export class ProtocolStore {
 	 * Everything stored, compacted (§4.3.4) as the store already is: each room's
 	 * record, each message's latest snapshot, each user's latest reaction set
 	 * per message, and every membership logged, ascending by `log_id` within a
-	 * kind. What an export keeps (`$lib/archive`).
+	 * kind. What an export keeps (`$lib/archive`). With `roomId`, only that
+	 * room's: its record, the messages homed in it with their reaction sets,
+	 * and its memberships, which is what a mirror of one room keeps (`$lib/history`).
 	 */
-	records(): StoredRecords {
+	records(roomId?: string): StoredRecords {
 		const byLog = <T extends { log_id?: string }>(a: T, b: T) => compareLogIds(a.log_id ?? '0', b.log_id ?? '0');
 		const memberships: MembershipEntry[] = [];
 		for (const [room_id, log] of this.membershipLogs) {
+			if (roomId !== undefined && room_id !== roomId) continue;
 			for (const record of log.records) for (const entry of record.entries) memberships.push({ log_id: record.log_id, room_id, user: entry.user, joined: entry.joined });
 		}
+		const room = roomId === undefined ? undefined : this.roomRecords.get(roomId);
+		const messages = roomId === undefined ? [...this.messageRecords.values()] : this.messagesIn(roomId);
+		const sets = roomId === undefined ? [...this.reactionSets.values()] : messages.map((message) => this.reactionSets.get(message.message_id)).filter((set) => set !== undefined);
 		return {
-			rooms: [...this.roomRecords.values()].sort(byLog),
-			messages: [...this.messageRecords.values()].sort(byLog),
-			reactions: [...this.reactionSets.values()].flatMap((sets) => [...sets.values()]).sort(byLog),
+			rooms: roomId === undefined ? [...this.roomRecords.values()].sort(byLog) : room ? [room] : [],
+			messages: messages.sort(byLog),
+			reactions: sets.flatMap((byUser) => [...byUser.values()]).sort(byLog),
 			memberships: memberships.sort(byLog)
 		};
 	}
@@ -476,6 +500,21 @@ export class ProtocolStore {
 		this.touched.add(roomId);
 	}
 }
+
+/**
+ * One change to a store's records, as it is made (`ProtocolStore.observe`): a
+ * record it took (only one that replaced what it had), the messages and
+ * memberships a room's bound dropped (`evict`), a room's messages and reactions
+ * cleared for a rebuild (`clearRoom`), or everything (`clear`).
+ */
+export type StoreChange =
+	| { kind: 'room'; record: RoomRecord }
+	| { kind: 'message'; record: MessageRecord }
+	| { kind: 'reaction'; set: ReactionSet }
+	| { kind: 'membership'; entry: MembershipEntry }
+	| { kind: 'evict'; room: string; floor: string }
+	| { kind: 'clearRoom'; room: string }
+	| { kind: 'clear' };
 
 /** A store's records by kind (`ProtocolStore.records`). */
 export interface StoredRecords {

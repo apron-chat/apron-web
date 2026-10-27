@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
+	import { historySettings, RETENTIONS, storageUsed } from '$lib/history/settings.svelte';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import Button from '$lib/design/components/Button.svelte';
@@ -59,7 +60,7 @@
 	const SECTIONS = [
 		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
 		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
-		{ value: 'export', label: 'Export', hint: 'Save the chats this page has loaded, and read saved ones.', id: 'ap-pref-export' }
+		{ value: 'history', label: 'History', hint: 'What this device keeps of your chats, and exports of them.', id: 'ap-pref-history' }
 	];
 	let preferencesSection = $state('notifications');
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
@@ -75,6 +76,18 @@
 	let testNotificationStatus = $state<'idle' | 'sending' | NotificationTestResult>('idle');
 	/** What the last export saved. */
 	let exportNote = $state<string | undefined>();
+	/** How much Apron keeps on this device, read as History opens. */
+	let used = $state<string | undefined>();
+	$effect(() => {
+		if (preferencesSection !== 'history' || !open) return;
+		let current = true;
+		void storageUsed().then((usage) => { if (current) used = usage; });
+		return () => { current = false; };
+	});
+	/** Under the retention: why nothing more is kept, or how much is. */
+	let historyNote = $derived<Note | undefined>(historySettings.failure
+		? { text: historySettings.failure, tone: 'err' }
+		: historySettings.retention !== 'off' && used ? { text: `Apron uses about ${used} on this device.` } : undefined);
 	let exporting = $state(false);
 
 	type Note = { text: string; tone?: 'ok' | 'err' };
@@ -118,7 +131,7 @@
 	let statusAnswer = $state<string | undefined>();
 	let announced: Record<string, string | undefined> | undefined;
 	$effect(() => {
-		const now: Record<string, string | undefined> = { notifications: notificationsNote.text, test: testNote?.text, pause: pauseNote, status: statusAnswer, exported: exportNote };
+		const now: Record<string, string | undefined> = { notifications: notificationsNote.text, test: testNote?.text, pause: pauseNote, status: statusAnswer, exported: exportNote, history: historySettings.failure };
 		const before = announced;
 		announced = now;
 		if (!before) return;
@@ -276,7 +289,15 @@
 					</Callout>
 				</div>
 			{/if}
-		{:else if preferencesSection === 'export'}
+		{:else if preferencesSection === 'history'}
+			<SettingRow title="Keep history on this device" for="ap-history-retention" hint="Signed in to an account, the rooms you’ve joined open from here at once, then catch up with the server. Never as a guest; signing out removes it." class="ap-pref-history-setting">
+				{#if historyNote}<p class={['ap-pref-note', historyNote.tone === 'err' && 'ap-tone-danger']}>{historyNote.text}</p>{/if}
+				{#snippet control()}
+					<select id="ap-history-retention" class="ap-field ap-pref-select" value={historySettings.retention} onchange={(event) => historySettings.update(event.currentTarget.value)} data-testid="history-retention">
+						{#each RETENTIONS as retention (retention.value)}<option value={retention.value}>{retention.label}</option>{/each}
+					</select>
+				{/snippet}
+			</SettingRow>
 			<SettingRow title="Export chats" hint="Saves the rooms, threads and messages this page has loaded as a .jsonl file. Scroll back in a room first to include its older messages.">
 				{#if exportNote}<p class="ap-pref-note">{exportNote}</p>{/if}
 				{#snippet control()}

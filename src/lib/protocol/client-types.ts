@@ -4,8 +4,11 @@ import type {
 	JsonObject,
 	Capability,
 	Identity,
+	MembershipEntry,
 	MessageBody,
+	MessageRecord,
 	Embed,
+	ReactionSet,
 	RoomRecord,
 	ServerParams
 } from './types';
@@ -485,6 +488,48 @@ export interface RoomPatch {
 	 * to a server with capability `ext`.
 	 */
 	ext?: JsonObject;
+}
+
+/**
+ * How far one joined room is synced (§4.3.5): what a reload needs to go on from
+ * where it was rather than start over (`ChatClient.keptState`, `restore`).
+ */
+export interface RoomSync {
+	id: string;
+	latestLogId?: string;
+	historyLogId?: string | null;
+	/** The effective lower bound F: nothing below it is kept. */
+	floor?: string;
+	/** A top-level room's recovery checkpoint C: everything up to it is in. */
+	checkpoint?: string;
+	/** A thread's load checkpoint T. */
+	loadCheckpoint?: string;
+	/** Where the oldest page in starts, and whether older pages may load from the server (`loadOlder`). */
+	olderBefore?: string;
+	hasOlder?: boolean;
+}
+
+/** What a signed-in session keeps of its rooms, to go on from after a reload (`ChatClient.keptState`). */
+export interface KeptState {
+	userId: string;
+	/** The joined listing arrived: `rooms` is the whole joined set, and any other room kept is no longer joined. */
+	complete: boolean;
+	/**
+	 * Each joined room, with its sync while that is settled: none while a
+	 * recovery is under way, when what was kept of it before still holds.
+	 */
+	rooms: Array<{ id: string; sync?: RoomSync }>;
+	/** The kept user objects, without `status` and `seen`, which are about now. */
+	users: Identity[];
+}
+
+/** What `ChatClient.restore` takes: kept rooms with the records they had. */
+export interface RestoredState {
+	userId: string;
+	complete: boolean;
+	rooms: RoomSync[];
+	users: Identity[];
+	records: { rooms: RoomRecord[]; messages: MessageRecord[]; reactions: ReactionSet[]; memberships: MembershipEntry[] };
 }
 
 export type WebSocketFactory = (url: string) => WebSocket;

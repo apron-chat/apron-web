@@ -76,6 +76,8 @@
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
+	import { HistoryKeeper } from '$lib/history/history-keeper';
+	import { historySettings } from '$lib/history/settings.svelte';
 	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
@@ -435,6 +437,19 @@
 
 	/** The view kept on this device for the next visit: only for a session saved here (a passkey or email account). */
 	const viewKeeper = new ViewKeeper({ enabled: !previewMode });
+	/**
+	 * The history kept on this device (`$lib/history`), for a session saved here: restored before the client
+	 * connects, so a reload goes on as a reconnect does. None against an in-memory server.
+	 */
+	let historyKeeper: HistoryKeeper | undefined;
+	/** The retention the keeper was last told: Preferences changes it. */
+	let keptRetention: string | undefined;
+	$effect(() => {
+		const retention = historySettings.retention;
+		if (!historyKeeper || keptRetention === undefined || retention === keptRetention) return;
+		keptRetention = retention;
+		void historyKeeper.setRetention(historySettings.ms);
+	});
 	function keepView(): void {
 		void viewKeeper.keep(client, untrack(() => session.keepable), untrack(() => session.snapshot.you));
 	}
@@ -1127,6 +1142,12 @@
 			displayName,
 			webSocketFactory
 		);
+		if (!previewMode) {
+			historySettings.load();
+			keptRetention = historySettings.retention;
+			historyKeeper = new HistoryKeeper({ retentionMs: historySettings.ms, onfailure: (message) => (historySettings.failure = message) });
+		}
+		const keeper = historyKeeper;
 		// The view from this device's last visit, while this one signs in and catches up: only for the session
 		// saved here, which is the account it was kept for (a sign-in as anyone else drops it).
 		void viewKeeper.restore(chat, (view) => {
@@ -1138,7 +1159,15 @@
 			directory.apply(next, serverOrigin(chat.url), chat.url);
 			noteArrivals(next);
 		});
-		chat.start();
+		let unmounted = false;
+		const begin = () => {
+			if (unmounted) return;
+			keeper?.watch(chat);
+			chat.start();
+		};
+		// What this device kept, before the client connects: it goes on from there. A sign-in link signs in anew.
+		if (keeper && !signInLink) void keeper.restore(chat).then(begin);
+		else begin();
 		client = chat;
 		if (signInLink) links.follow(signInLink);
 		if (pushed) void followPush(chat, pushed);
@@ -1168,6 +1197,8 @@
 			mentions.dispose();
 			session.dispose();
 			unsubscribe();
+			unmounted = true;
+			void keeper?.stop();
 			chat.stop();
 		};
 	});
@@ -1427,6 +1458,7 @@
 		return () => {
 			if (chat && account) void pushSettings.signedOut(chat, account);
 			if (chat) void viewKeeper.forget(chat.url);
+			if (chat) void historyKeeper?.forget(chat.url);
 			session.forget();
 		};
 	}
@@ -2792,7 +2824,7 @@
 </script>
 
 <svelte:window onkeydown={windowKeydown} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
-<svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') keepView(); }} />
+<svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
 
 <svelte:head>
 	<title>{tabTitle(unread.total, presence.titleFlash)}</title>

@@ -12,11 +12,11 @@ test('an export opens on /archive as it was, read-only', async ({ preview, page 
 	await preview.open();
 	await page.getByRole('button', { name: /^Open preferences/ }).click();
 	const preferences = page.getByRole('dialog', { name: 'Preferences' });
-	await preferences.getByRole('navigation').getByRole('button', { name: 'Export' }).click();
+	await preferences.getByRole('navigation').getByRole('button', { name: 'History' }).click();
 	const [download] = await Promise.all([page.waitForEvent('download'), preferences.getByTestId('export-chats').click()]);
 	expect(download.suggestedFilename()).toMatch(/^apron-apron-preview\.invalid-\d{4}-\d{2}-\d{2}\.jsonl$/);
 	// The note under the row (the dialog's live region says it too).
-	await expect(preferences.locator('.ap-pref-note')).toHaveText(/^Saved apron-.*\.jsonl: \d+ messages in \d+ rooms\.$/);
+	await expect(preferences.locator('.ap-pref-note', { hasText: /^Saved / })).toHaveText(/^Saved apron-.*\.jsonl: \d+ messages in \d+ rooms\.$/);
 	const text = await readFile((await download.path())!, 'utf8');
 	// The thread was never opened here, and is exported with its messages all the same.
 	expect(text).toContain('"room_id":"thread_deploy","from"');
