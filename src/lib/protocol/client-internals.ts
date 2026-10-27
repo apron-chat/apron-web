@@ -2,6 +2,7 @@
 import { roomName, titled, UNTITLED } from '../naming';
 import { punctuated, retryAfterLabel } from '../words';
 import { compareLogIds, createTimeline, type TimelineState } from './reducer';
+import { reactionKey } from './custom-emoji';
 import {
 	isJsonObject,
 	isLogId,
@@ -425,8 +426,9 @@ export function replaceIdentity(current: Identity | undefined, incoming: Identit
 	return next as Identity;
 }
 
+/** Whether two emoji sets are the same, entries that differ only in U+FE0F being one (§4.7). */
 export function sameEmojiSet(left: readonly string[], right: readonly string[]): boolean {
-	const a = new Set(left), b = new Set(right);
+	const a = new Set(left.map(reactionKey)), b = new Set(right.map(reactionKey));
 	return a.size === b.size && [...a].every((emoji) => b.has(emoji));
 }
 

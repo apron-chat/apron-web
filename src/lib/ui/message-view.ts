@@ -62,7 +62,7 @@ export interface MessageContext {
 function bodyOf(body: MessageBody | undefined): NonNullable<MessageView['body']> {
 	const text = typeof body?.text === 'string' ? body.text : '';
 	const markdown = body?.format === 'markdown';
-	const html = markdown ? renderMarkdown(text, directory.resolve, directory.resolveRoom, directory.resolveLink) : renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink);
+	const html = markdown ? renderMarkdown(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji) : renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji);
 	return { html, markdown, code: html.includes('<pre') };
 }
 
@@ -329,7 +329,8 @@ function sameList<T>(a: readonly T[] | undefined, b: readonly T[] | undefined, s
 	return a.every((item, index) => same(item, b[index]));
 }
 
-const sameChip = (a: Chip, b: Chip) => a.emoji === b.emoji && a.count === b.count && a.mine === b.mine && a.title === b.title && a.label === b.label;
+const sameChip = (a: Chip, b: Chip) => a.emoji === b.emoji && a.count === b.count && a.mine === b.mine && a.title === b.title && a.label === b.label
+	&& a.placeholder === b.placeholder && a.image?.src === b.image?.src && a.image?.width === b.image?.width && a.image?.height === b.image?.height;
 const samePart = (a: string | MessageMention, b: string | MessageMention) => (typeof a === 'string' || typeof b === 'string' ? a === b : sameFields(a, b));
 
 const sameSender = (a: MessageSender, b: MessageSender) =>

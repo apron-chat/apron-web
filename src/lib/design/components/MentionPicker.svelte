@@ -69,7 +69,7 @@
 					<span class="ap-mpick-name">{@render mark(name)}</span>
 					{#if pid !== name}<span class="ap-mpick-id">{@render mark(pid, '@')}</span>{/if}
 				{:else if 'native' in item}
-					<span class="ap-mpick-emoji-glyph" aria-hidden="true">{item.native}</span>
+					<span class="ap-mpick-emoji-glyph" aria-hidden="true">{#if item.image}<img class="ap-cemoji" src={item.image} alt="" />{:else}{item.native}{/if}</span>
 					<span class="ap-mpick-name">:{item.id}:</span>
 					<span class="ap-mpick-id">{item.name}</span>
 				{:else}

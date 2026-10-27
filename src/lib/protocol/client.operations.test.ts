@@ -284,6 +284,26 @@ describe('moves and reactions', () => {
 		expect(socket.request('message').params).toEqual({ message_id: '200', room_id: 'thread', deleted: true });
 	});
 
+	it('toggles an entry in whichever form differs only in U+FE0F, and a key as it is (§4.7)', async () => {
+		await connect();
+		socket.receive({ method: 'message', params: message('100') });
+		// Your set holds the unqualified heart; a chip shows the qualified one, and tapping it takes yours away.
+		socket.receive({ method: 'reactions', params: { log_id: '101', message_id: '100', room_id: 'general', reactions: [{ from: { user_id: 'guest_1' }, emojis: ['\u2764', ':partyparrot:'] }] } });
+		socket.receive({ method: 'reactions', params: { log_id: '102', message_id: '100', room_id: 'general', reactions: [{ from: { user_id: 'bob' }, emojis: ['\u2764\uFE0F'] }] } });
+		expect(room('general').timeline.reactions['100']?.map((entry) => [entry.emoji, entry.count, entry.mine])).toEqual([[':partyparrot:', 1, true], ['\u2764\uFE0F', 2, true]]);
+		quiet(client.toggleReaction('100', '\u2764\uFE0F'));
+		expect(socket.request('reactions').params).toEqual({ message_id: '100', emojis: [':partyparrot:'] });
+		await socket.reply('reactions', {});
+		// A server that stores the fully-qualified form settles the request all the same.
+		socket.receive({ method: 'reactions', params: { log_id: '103', message_id: '100', room_id: 'general', reactions: [{ from: { user_id: 'guest_1' }, emojis: [':partyparrot:'] }] } });
+		quiet(client.toggleReaction('100', '\u2764'));
+		socket.receive({ method: 'reactions', params: { log_id: '104', message_id: '100', room_id: 'general', reactions: [{ from: { user_id: 'guest_1' }, emojis: [':partyparrot:', '\u2764\uFE0F'] }] } });
+		await socket.reply('reactions', {});
+		expect(client.ownReactions('100')).toEqual([':partyparrot:', '\u2764\uFE0F']);
+		quiet(client.toggleReaction('100', ':partyparrot:'));
+		expect(socket.request('reactions').params).toEqual({ message_id: '100', emojis: ['\u2764\uFE0F'] });
+	});
+
 	it('sets, toggles, and clears your own reactions and hides them on tombstones', async () => {
 		await connect();
 		socket.receive({ method: 'message', params: message('100') });

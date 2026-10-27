@@ -1,3 +1,4 @@
+import { reactionKey } from './custom-emoji';
 import {
 	decodeMembership,
 	decodeMessage,
@@ -77,6 +78,11 @@ export function compareCodePoints(a: string, b: string): number {
 		if (difference !== 0) return difference < 0 ? -1 : 1;
 	}
 	return left.length < right.length ? -1 : left.length > right.length ? 1 : 0;
+}
+
+/** Of two forms of one reaction entry, whether `a` is the one to show: more U+FE0F, else first in code point order. */
+function moreQualified(a: string, b: string): boolean {
+	return a.length !== b.length ? a.length > b.length : compareCodePoints(a, b) < 0;
 }
 
 function compareStrings(a: string, b: string): number {
@@ -181,24 +187,27 @@ export class ProtocolStore {
 	/**
 	 * Aggregated reactions for a message: undefined for tombstones, for
 	 * messages without a non-empty set, and (by default) for messages that are
-	 * not loaded. Emoji sort in code point order; users in string order.
+	 * not loaded. Entries that differ only in U+FE0F are one (§4.7), shown as
+	 * the form with the most U+FE0F, the fully-qualified one. Emoji sort in
+	 * code point order; users in string order.
 	 */
 	reactions(messageId: string, you?: string): ReactionSummary[] | undefined {
 		const message = this.messageRecords.get(messageId);
 		if (!message || message.deleted === true) return undefined;
 		const sets = this.reactionSets.get(messageId);
 		if (!sets) return undefined;
-		const byEmoji = new Map<string, Map<string, Identity>>();
+		const byEntry = new Map<string, { emoji: string; users: Map<string, Identity> }>();
 		for (const set of sets.values()) {
 			for (const emoji of set.emojis) {
-				let users = byEmoji.get(emoji);
-				if (!users) byEmoji.set(emoji, (users = new Map()));
-				users.set(set.from.user_id, set.from);
+				const key = reactionKey(emoji);
+				let entry = byEntry.get(key);
+				if (!entry) byEntry.set(key, (entry = { emoji, users: new Map() }));
+				else if (moreQualified(emoji, entry.emoji)) entry.emoji = emoji;
+				entry.users.set(set.from.user_id, set.from);
 			}
 		}
-		if (!byEmoji.size) return undefined;
-		return [...byEmoji.keys()].sort(compareCodePoints).map((emoji) => {
-			const users = byEmoji.get(emoji)!;
+		if (!byEntry.size) return undefined;
+		return [...byEntry.values()].sort((a, b) => compareCodePoints(a.emoji, b.emoji)).map(({ emoji, users }) => {
 			const userIds = [...users.keys()].sort(compareStrings);
 			return {
 				emoji,

@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
+import { emojiKeySegments } from './custom-emoji';
 
 /**
  * A body's `markdown` format is CommonMark (§3.5). This renders CommonMark
@@ -35,6 +36,16 @@ const ALLOWED = {
 	// DOMPurify's own list of URL schemes, and Apron links' (Appendix A.4), which the page opens itself.
 	ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|apron):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
 };
+
+/** A custom emoji's `style`, as `customEmojiTag` writes it: its aspect ratio, and nothing else. */
+const EMOJI_STYLE = /^aspect-ratio: \d+(?:\.\d+)? \/ \d+(?:\.\d+)?$/;
+
+// The one `style` let through: a custom emoji's aspect ratio (`ext:emoji`), on its own image.
+if (DOMPurify.isSupported) {
+	DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+		if (data.attrName === 'style' && node.nodeName === 'IMG' && (node as Element).classList.contains('ap-cemoji') && EMOJI_STYLE.test(data.attrValue)) data.forceKeepAttr = true;
+	});
+}
 
 /** Sanitized markup kept for reuse, by the markup it was made from, least recently used first. */
 const SANITIZED_SIZE = 1000;
@@ -90,6 +101,17 @@ export interface LinkChip {
 }
 /** Says how to draw a link shown as its own URL, or nothing to leave it a URL. */
 export type LinkResolver = (href: string) => LinkChip | undefined;
+
+/** A custom emoji as text shows it (`ext:emoji`): its image, its hover and screen reader text, and its aspect ratio. */
+export interface CustomEmojiImage {
+	src: string;
+	alt: string;
+	/** Together, the aspect ratio; square without them. */
+	width?: number;
+	height?: number;
+}
+/** Says how to draw a key (`:name:`), or nothing to leave it text. */
+export type EmojiResolver = (key: string) => CustomEmojiImage | undefined;
 
 /** Someone a composer can mention: a room member or a recent sender. */
 export interface MentionPerson {
@@ -162,14 +184,14 @@ function markdown(source: string): string {
  * typed line breaks. Without a DOM to sanitize with (tests, prerendering) the
  * body is rendered as plain text instead, which needs no sanitizing.
  */
-export function renderMarkdown(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver): string {
-	if (!DOMPurify.isSupported) return linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink);
-	return sanitize(linkText(markdown(source), resolve, resolveRoom, resolveLink));
+export function renderMarkdown(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver): string {
+	if (!DOMPurify.isSupported) return linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink, resolveEmoji);
+	return sanitize(linkText(markdown(source), resolve, resolveRoom, resolveLink, resolveEmoji));
 }
 
 /** A plain body as HTML: escaped, with bare links and mentions linked. Line breaks are kept by CSS (`pre-wrap`). */
-export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver): string {
-	const html = linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink);
+export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver): string {
+	const html = linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink, resolveEmoji);
 	return DOMPurify.isSupported ? sanitize(html) : html;
 }
 
@@ -243,14 +265,14 @@ function mentionChip(mention: Mention): string {
  * attributes, code and existing links alone (which open in a new tab): an ID inside `<code>` is code,
  * not a mention. A link written as its own URL (`<https://…>`) may become a chip (`resolveLink`).
  */
-function linkText(html: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver): string {
+function linkText(html: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver): string {
 	let out = '';
 	let index = 0;
 	let codeDepth = 0;
 	while (index < html.length) {
 		const tagStart = html.indexOf('<', index);
 		const text = html.slice(index, tagStart === -1 ? undefined : tagStart);
-		out += codeDepth > 0 ? text : linkifyText(text, resolve, resolveRoom, false, resolveLink);
+		out += codeDepth > 0 ? text : linkifyText(text, resolve, resolveRoom, false, resolveLink, resolveEmoji);
 		if (tagStart === -1) break;
 		const tagEnd = html.indexOf('>', tagStart);
 		if (tagEnd === -1) {
@@ -283,7 +305,7 @@ function linkText(html: string, resolve?: MentionResolver, resolveRoom?: RoomMen
  * Trailing punctuation is left out, as is a closing `)` with no opening one in
  * the link, so "(see https://example.com)." links just the URL.
  */
-function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, webOnly = false, resolveLink?: LinkResolver): string {
+function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, webOnly = false, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver): string {
 	let out = '';
 	let index = 0;
 	for (const match of text.matchAll(BARE_URL)) {
@@ -295,11 +317,11 @@ function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: Room
 			if (url === trimmed) break;
 		}
 		if (!(webOnly ? /^https?:\/\/[^/?#]/i : /^(?:https?:\/\/[^/?#]|apron:\?.)/i).test(url)) continue;
-		out += chipText(emojiText(text.slice(index, match.index)), resolve, resolveRoom);
+		out += chipText(emojiText(text.slice(index, match.index)), resolve, resolveRoom, resolveEmoji);
 		out += (resolveLink && linkChip(url, resolveLink)) || `<a href="${url}"${LINK_ATTRS}>${url}</a>`;
 		index = match.index + url.length;
 	}
-	return out + chipText(emojiText(text.slice(index)), resolve, resolveRoom);
+	return out + chipText(emojiText(text.slice(index)), resolve, resolveRoom, resolveEmoji);
 }
 
 /**
@@ -343,11 +365,38 @@ function emojiText(text: string): string {
 	return text.replace(EMOJI, (emoji) => `<span class="ap-emoji">${emoji}</span>`);
 }
 
-/** Replaces known users and rooms in escaped text; entities never contain ID characters. */
-function chipText(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver): string {
+/**
+ * Replaces known users and rooms in escaped text, then the keys of custom
+ * emoji in the text between them; entities never contain ID or key characters.
+ */
+function chipText(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveEmoji?: EmojiResolver): string {
 	return mentionSegments(text, resolve, resolveRoom)
-		.map((segment) => (typeof segment === 'string' ? segment : mentionChip(segment)))
+		.map((segment) => (typeof segment === 'string' ? customEmojiText(segment, resolveEmoji) : mentionChip(segment)))
 		.join('');
+}
+
+/** The keys of custom emoji (`ext:emoji`) in escaped text as their images, scanned left to right (`emojiKeySegments`); unknown keys stay text. */
+function customEmojiText(text: string, resolveEmoji?: EmojiResolver): string {
+	if (!resolveEmoji || !text.includes(':')) return text;
+	const found = new Map<string, CustomEmojiImage | undefined>();
+	const image = (key: string) => {
+		if (!found.has(key)) found.set(key, resolveEmoji(key));
+		return found.get(key);
+	};
+	return emojiKeySegments(text, (key) => image(key) !== undefined)
+		.map((segment) => (typeof segment === 'string' ? segment : customEmojiTag(image(segment.key)!)))
+		.join('');
+}
+
+/**
+ * A custom emoji's image in text: loaded as an image only (§4.8.6), with its
+ * hover and screen reader text, scaled to the line by CSS, its aspect ratio
+ * from `width` and `height`, else square.
+ */
+export function customEmojiTag(emoji: CustomEmojiImage): string {
+	const ratio = emoji.width && emoji.height ? `${emoji.width} / ${emoji.height}` : '1 / 1';
+	const alt = escapeHtml(emoji.alt);
+	return `<img class="ap-cemoji" src="${escapeHtml(emoji.src)}" alt="${alt}" title="${alt}" style="aspect-ratio: ${ratio}">`;
 }
 
 /**

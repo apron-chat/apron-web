@@ -72,7 +72,7 @@ export interface PreviewKnobs {
 	account?: boolean;
 	/** `you.ext.permissions` (`ext:permissions`) in place of `PREVIEW_PERMISSIONS`, e.g. `{ write: false }` for a guest who only reads. */
 	permissions?: JsonObject;
-	/** Fields of the `server` frame (§3.1) to add or replace, e.g. `title`, `avatar`, or `ext`. */
+	/** Fields of the `server` frame (§3.1) to add or replace, e.g. `title` or `avatar`; `ext` merges by its keys, e.g. `emoji`. */
 	server?: JsonObject;
 }
 
@@ -387,7 +387,10 @@ export class MemoryProtocolServer {
 			const capabilities = [...PREVIEW_CAPABILITIES, ...(server.knobs.capabilities ?? [])];
 			// With `status`, the optional statuses it takes (§4.5).
 			const statuses = capabilities.includes('status') ? { status: ['dnd', 'invisible'] } : {};
-			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses, ext: { settings: PREVIEW_SETTINGS }, ...structuredClone(server.knobs.server ?? {}) } });
+			// A test's fields replace the demo's, `ext` key by key.
+			const extra = structuredClone(server.knobs.server ?? {});
+			const ext = { settings: PREVIEW_SETTINGS, ...(isJsonObject(extra.ext) ? extra.ext : {}) };
+			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses, ...extra, ext } });
 		});
 		return socket as unknown as WebSocket;
 	}

@@ -25,6 +25,20 @@ describe('ReactionBar', () => {
 		expect([chip.title, chip.getAttribute('aria-label')]).toEqual(['Ada reacted', '1 reaction with 🎉']);
 	});
 
+	it('draws a key as its image or, unknown, as a placeholder, and toggles it as written (§4.7)', () => {
+		const { ontoggle } = render({ reactions: [
+			{ emoji: ':partyparrot:', count: 1, image: { src: 'https://e.example/p.gif', alt: 'Parrot', width: 2, height: 1 }, title: 'Ada reacted with Parrot' },
+			{ emoji: ':blob:', count: 1, placeholder: true, title: 'Ada reacted with :blob:' }
+		] });
+		const [parrot, blob] = dom.byRole('group', 'Reactions').querySelectorAll<HTMLButtonElement>('button[data-emoji]');
+		const img = parrot.querySelector<HTMLImageElement>('img.ap-cemoji')!;
+		expect([img.getAttribute('src'), img.alt, img.style.aspectRatio]).toEqual(['https://e.example/p.gif', '', '2 / 1']);
+		expect(blob.querySelector('.ap-rchip-placeholder')).not.toBeNull();
+		expect([blob.textContent, blob.title]).toEqual(['1', 'Ada reacted with :blob:']);
+		blob.click();
+		expect(ontoggle).toHaveBeenLastCalledWith(':blob:');
+	});
+
 	it('shows who reacted on a right-click or a long press, where it can, and the click that ends a long press does not toggle', () => {
 		const { chip, ontoggle, onreactors } = render();
 		const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });

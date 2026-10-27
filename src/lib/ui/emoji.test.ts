@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { NARROW_MAX } from './breakpoints';
-import { currentTheme, PICKER_HEIGHT, PICKER_MIN_HEIGHT, PICKER_WIDTH, pickerColors, placePicker, rgbTriple } from './emoji';
+import { parseCatalog } from '$lib/protocol/custom-emoji';
+import { currentTheme, PICKER_HEIGHT, PICKER_MIN_HEIGHT, PICKER_WIDTH, pickerCategories, pickerColors, placePicker, rgbTriple } from './emoji';
 
 const desktop = { width: 1280, height: 800 };
 /** A 28px trigger with its top-left corner at (left, top). */
@@ -79,3 +80,22 @@ describe('the emoji picker’s theme', () => {
 		expect(pickerColors(() => '')).toEqual({});
 	});
 });
+
+describe('custom emoji in the picker (ext:emoji)', () => {
+	it('groups them by category in the catalog\'s order, leaves out hidden ones, and maps each ID back to its key', () => {
+		const catalog = parseCatalog({
+			':partyparrot:': { url: 'https://e.example/1', category: 'Parrots', tags: ['party'] },
+			':shipit:': { url: 'https://e.example/2', alt: 'Squirrel in a hat' },
+			':old:': { url: 'https://e.example/3', hidden: true },
+			':Parrot2:': { url: 'https://e.example/4', category: 'Parrots' }
+		}, undefined);
+		const { categories, keys } = pickerCategories(catalog, (emoji) => emoji.url);
+		expect(categories.map((category) => [category.name, category.emojis.map((emoji) => emoji.id)])).toEqual([
+			['Parrots', ['apron-partyparrot', 'apron-Parrot2']], ['This server', ['apron-shipit']]
+		]);
+		expect(categories[1].emojis[0]).toEqual({ id: 'apron-shipit', name: 'Squirrel in a hat', keywords: ['shipit', 'Squirrel in a hat'], skins: [{ src: 'https://e.example/2' }] });
+		expect(keys.get('apron-Parrot2')).toBe(':Parrot2:');
+		expect(pickerCategories(undefined, () => '')).toEqual({ categories: [], keys: new Map() });
+	});
+});
+

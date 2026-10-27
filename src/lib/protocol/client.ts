@@ -130,6 +130,7 @@ import {
 } from './client-internals';
 import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, serverAddress, serverSettings, yourPermissions } from './client-views';
 import { parseFrame } from './plain-text';
+import { reactionKey } from './custom-emoji';
 import { HistoryQueue } from './history-queue';
 
 export * from './client-types';
@@ -1643,10 +1644,15 @@ export class ChatClient {
 		return request;
 	}
 
-	/** Adds the emoji to your set on the message, or removes it when present. */
+	/**
+	 * Adds the emoji (or key) to your set on the message, or removes it when
+	 * present: in any form that differs only in U+FE0F, which is the same
+	 * entry (§4.7).
+	 */
 	toggleReaction(messageId: string, emoji: string): OperationHandle {
 		const current = this.ownReactions(messageId);
-		const next = current.includes(emoji) ? current.filter((entry) => entry !== emoji) : [...current, emoji];
+		const key = reactionKey(emoji);
+		const next = current.some((entry) => reactionKey(entry) === key) ? current.filter((entry) => reactionKey(entry) !== key) : [...current, emoji];
 		return this.react(messageId, next);
 	}
 

@@ -67,7 +67,12 @@ export type EmbedComponentProps = EmbedProps & EmbedAttributes;
 
 /** One chip per emoji, aggregated by you from the reaction sets (§4.7). */
 export interface ReactionChip {
+	/** The entry (§4.7): an emoji sequence, or a key such as `:partyparrot:`. Toggling sends it as it is. */
 	emoji: string;
+	/** A key shown as its image, such as a custom emoji's (`ext:emoji`). */
+	image?: { src: string; alt: string; width?: number; height?: number };
+	/** A key the client can't show: a placeholder shape, the key its tooltip. */
+	placeholder?: boolean;
 	count: number;
 	mine?: boolean;
 	/** "You, Ada and Bob" for the tooltip */
@@ -188,9 +193,11 @@ export interface PickerRoom {
 export interface PickerEmoji {
 	/** The shortcode, without its colons. */
 	id: string;
-	/** The emoji itself. */
+	/** The emoji itself, or what picking it inserts. */
 	native: string;
 	name: string;
+	/** A custom emoji's image, shown in place of `native`. */
+	image?: string;
 }
 
 /** Someone in a MemberList (§4.2.1). */

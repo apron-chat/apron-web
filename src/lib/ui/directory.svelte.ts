@@ -1,9 +1,10 @@
 import { bioOf, serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
 import { safeAvatar } from '$lib/protocol/embeds';
-import type { LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
+import type { EmojiResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 import { readPlaceLink, writeApronLink } from './apron-link';
 import { backendHost } from './connection';
+import { customEmoji } from './custom-emoji.svelte';
 import { shownSeen } from './user-status';
 
 type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
@@ -66,6 +67,8 @@ class Directory {
 		this.server = server;
 		const { origins } = serverMedia(snapshot.server);
 		if (origins.join(' ') !== this.mediaOrigins.join(' ')) this.mediaOrigins = origins;
+		// Its custom emoji (`ext:emoji`), kept through a reconnect until the next server frame says otherwise.
+		if (snapshot.server) customEmoji.apply(snapshot.server, server);
 		if (!snapshot.authenticated) return;
 		this.you = snapshot.you;
 		const current = this.users;
@@ -96,8 +99,11 @@ class Directory {
 	 * pieces is still current (`samePieces`).
 	 */
 	get pieces(): readonly unknown[] {
-		return [this.origin, this.server, this.you, this.users, this.rooms, this.untitled, this.parents];
+		return [this.origin, this.server, this.you, this.users, this.rooms, this.untitled, this.parents, customEmoji.catalog, customEmoji.reducedMotion];
 	}
+
+	/** Draws a custom emoji's key (`ext:emoji`) as its image, once the catalog has it; asks for the catalog the first time one is seen. */
+	readonly resolveEmoji: EmojiResolver = (key) => customEmoji.resolve(key);
 
 	forget(): void {
 		this.you = undefined;

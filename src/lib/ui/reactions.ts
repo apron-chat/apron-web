@@ -1,4 +1,6 @@
 import type { ReactionSummary } from '$lib/protocol/client';
+import { isEmojiSequence } from '$lib/protocol/custom-emoji';
+import type { CustomEmojiImage } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 
 /** A reactor's display name; callers pass the directory's, which prefers the kept object (§3.3). */
@@ -9,9 +11,17 @@ const recordedName: NameOf = (user) => user.name || user.user_id;
 /** How many names a chip's tooltip lists before summing up the rest. */
 const NAMES_MAX = 8;
 
+/** How to show a key (§4.7), such as a custom emoji's (`ext:emoji`): its image, or nothing for a placeholder. */
+export type KeyImage = (key: string) => CustomEmojiImage | undefined;
+
 /** One reaction chip under a message: the emoji, how many reacted, and whether you did. */
 export interface ReactionChip {
+	/** The entry, as toggling sends it: an emoji sequence, or a key. */
 	emoji: string;
+	/** A key shown as its image. */
+	image?: CustomEmojiImage;
+	/** A key the client can't show (§4.7): a placeholder, the key its tooltip. */
+	placeholder?: boolean;
 	count: number;
 	mine: boolean;
 	/** Who reacted, for the tooltip: "You, Ada and Bob reacted with 👍". */
@@ -54,9 +64,14 @@ export function whoReacted(summary: ReactionSummary, you: string | undefined, na
 	return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
-/** The chips to show under a message: none for tombstones or messages nobody reacted to. */
+/**
+ * The chips to show under a message: none for tombstones or messages nobody
+ * reacted to. An entry that is an emoji sequence shows as itself; a key as
+ * its image where `keyImage` has one, with its `alt` (or the key) in the
+ * tooltip, and otherwise as a placeholder with the key there (§4.7).
+ */
 export function reactionChips(
-	summaries: readonly ReactionSummary[] | undefined, you: string | undefined, deleted = false, nameOf: NameOf = recordedName
+	summaries: readonly ReactionSummary[] | undefined, you: string | undefined, deleted = false, nameOf: NameOf = recordedName, keyImage?: KeyImage
 ): ReactionChip[] {
 	if (deleted || !summaries) return [];
 	return summaries
@@ -64,12 +79,16 @@ export function reactionChips(
 		.map((summary) => {
 			const who = whoReacted(summary, you, nameOf);
 			const count = `${summary.count} ${summary.count === 1 ? 'reaction' : 'reactions'}`;
+			const key = !isEmojiSequence(summary.emoji);
+			const image = key ? keyImage?.(summary.emoji) : undefined;
+			const shown = image?.alt ?? summary.emoji;
 			return {
 				emoji: summary.emoji,
+				...(image ? { image } : key ? { placeholder: true } : {}),
 				count: summary.count,
 				mine: summary.mine,
-				title: who ? `${who} reacted with ${summary.emoji}` : summary.emoji,
-				label: `${summary.emoji} ${count}${summary.mine ? ', including yours. Remove yours' : '. Add yours'}`,
+				title: who ? `${who} reacted with ${shown}` : shown,
+				label: `${shown} ${count}${summary.mine ? ', including yours. Remove yours' : '. Add yours'}`,
 				reactors: reactorsOf(summary, you)
 			};
 		});

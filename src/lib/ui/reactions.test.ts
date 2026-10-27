@@ -45,3 +45,21 @@ describe('reaction chips', () => {
 		expect(reactorsOf(summary('👍', ['ada']), undefined).map((user) => user.user_id)).toEqual(['ada']);
 	});
 });
+
+describe('reaction keys (§4.7, ext:emoji)', () => {
+	const image = { src: 'https://chat.example/e/parrot.gif', alt: 'Party parrot' };
+	const keyImage = (key: string) => (key === ':partyparrot:' ? image : undefined);
+
+	it('shows a key the catalog has as its image, its alt in the tooltip, and any other key as a placeholder with the key there', () => {
+		const chips = reactionChips([summary(':partyparrot:', ['ada']), summary(':blob:', ['bob']), summary('👍🏽', ['ada'])], 'you', false, undefined, keyImage);
+		expect(chips.map(({ emoji, image, placeholder }) => [emoji, image, placeholder])).toEqual([
+			[':partyparrot:', image, undefined], [':blob:', undefined, true], ['👍🏽', undefined, undefined]
+		]);
+		expect(read(chips[0].title)).toBe('Ada reacted with Party parrot');
+		expect(read(chips[1].title)).toBe('Bob reacted with :blob:');
+		expect(chips[1].label).toBe(':blob: 1 reaction. Add yours');
+		// Without a catalog, every key is a placeholder.
+		expect(reactionChips([summary(':partyparrot:', ['ada'])], 'you')[0].placeholder).toBe(true);
+	});
+});
+
