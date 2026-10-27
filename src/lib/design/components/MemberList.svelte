@@ -28,12 +28,8 @@
 		onprofile?: (userId: string, anchor: HTMLElement) => void;
 		/** Offer removing members (`room_leave` with `user_id`, §4.2.2): a button on every row but yours, on hover. */
 		onremove?: (userId: string) => void;
-		/** Offer adding a member (`room_join` with `user_id`): a + after the count, which opens `addForm` atop the list. */
-		onaddtoggle?: () => void;
-		/** The add form is open: the + is pressed, and `addForm` shows. */
-		addOpen?: boolean;
-		/** The add form, an <AddMemberForm> given the `id` the + controls, while `addOpen` (and there is a listing). */
-		addForm?: Snippet<[string]>;
+		/** Offer adding people (`room_join` with `user_id`): a + after the count, which opens an <AddMembersForm>. */
+		onadd?: () => void;
 		/** A remove is under way: the remove buttons wait. */
 		busy?: boolean;
 		/** How the last change went: an error is announced at once. */
@@ -53,25 +49,18 @@
 	}
 	let {
 		open = true, room, count, sections, empty, placeholder = false, shut = [], ontogglesection, onprofile, onremove,
-		onaddtoggle, addOpen = false, addForm, busy = false, note, remark, avatar, roles, countTestid, bodyTestid, truncatedTestid, class: className
+		onadd, busy = false, note, remark, avatar, roles, countTestid, bodyTestid, truncatedTestid, class: className
 	}: Props = $props();
 
-	const uid = $props.id();
 	const listed = $derived((sections ?? []).reduce((total, section) => total + section.people.length, 0));
-	let addToggle = $state<HTMLButtonElement | undefined>();
-
-	/** Focus the + that opens the add form, such as once it has shut. (The form's field: its <AddMemberForm>'s `focus()`.) */
-	export function focusAddToggle(): void {
-		addToggle?.focus();
-	}
 </script>
 
 <aside aria-label="Room member list" class={['ap-memberlist', open && 'ap-memberlist-open', className]}>
 	<div class="ap-memberlist-head">
 		<span role="heading" aria-level="2">Members</span>
 		{#if count !== undefined}<span class="ap-memberlist-count" data-testid={countTestid}>{count}</span>{/if}
-		{#if onaddtoggle && sections}
-			<button bind:this={addToggle} class={['ap-iconbtn', 'ap-memberlist-addtoggle', addOpen && 'ap-iconbtn-on']} type="button" aria-label="Add member" title="Add member" aria-expanded={addOpen} aria-controls={`${uid}-add`} onclick={onaddtoggle}><Plus size={16} aria-hidden="true" /></button>
+		{#if onadd && sections}
+			<button class="ap-iconbtn ap-memberlist-addtoggle" type="button" aria-label="Add member" title="Add member" aria-haspopup="dialog" onclick={onadd}><Plus size={16} aria-hidden="true" /></button>
 		{/if}
 	</div>
 	<div class="ap-memberlist-body" data-testid={bodyTestid}>
@@ -80,10 +69,6 @@
 		{:else if !sections}
 			{#if empty}<p class="ap-memberlist-note">{empty}</p>{/if}
 		{:else}
-			{#if onaddtoggle && addOpen}
-				<!-- Raised, like a popover in place: the members stay in view below it. -->
-				{@render addForm?.(`${uid}-add`)}
-			{/if}
 			{#if note}<p class={['ap-memberlist-note', note.error && 'ap-tone-danger']} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}
 			{#if remark}<p class="ap-memberlist-note">{remark}</p>{/if}
 			{#if listed === 0}

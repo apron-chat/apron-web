@@ -237,12 +237,15 @@ name. A server may list only the most recently
 active members of a large room, with `member_count`, the number of users who have joined; the list
 then says so, and the count in its header is the total. In a room you have
 joined, with the `rooms` capability, a small **+** after the header's count
-(**Add member**) opens a form atop the list, which adds someone by `user_id` (`room_join` with their `user_id`,
-suggesting people the client knows; the form closes once they are added, or on
-Escape) and each other
+(**Add member**) opens **Add people to …**, a centered dialog with the same
+people picker as New private conversation (below): the people the client knows
+who aren't members yet, but you and the system identities, narrowed by a name
+or `@user_id` typed, and a `@user_id` typed whole that none of them has, offered
+to add by it. **Add** sends `room_join` with each picked `user_id` in turn; one
+the server refuses doesn't stop the rest, stays picked, and the dialog says
+why, while those added are said in the panel. Each other
 member's remove button removes them (`room_leave` with their `user_id`, after
-a confirm): how members bring people into a private room. Only a `user_id` is
-accepted there, since display names aren't unique. Who may is the server's
+a confirm): how members bring people into a private room. Who may is the server's
 policy; its error shows in the panel. A server that answers `unsupported`
 gets no controls until its next `server` frame. A count kept from a truncated listing stays while later records
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:

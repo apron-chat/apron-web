@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import { flushSync } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, RoomSnapshot } from '$lib/protocol/client';
 import type { Identity } from '$lib/protocol/types';
 import { directory } from '$lib/ui/directory.svelte';
 import { blankSnapshot, type SessionView } from '$lib/ui/session.svelte';
 import MemberListSidebar from './MemberListSidebar.svelte';
 import * as dom from '$lib/test/dom';
+import { byLabel, queryByText } from '$lib/test/queries';
+
+beforeAll(dom.stubDialog);
 
 afterEach(() => {
 	localStorage.clear();
@@ -16,7 +19,7 @@ afterEach(() => {
 const ada: Identity = { user_id: 'ada', name: 'Ada', status: 'online' };
 
 /** The member list of a room whose members carry these statuses, signed in as Ada, on a server with `status`. */
-function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChange = false) {
+function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChange = false, client: object = {}) {
 	const blank = blankSnapshot();
 	const snapshot: ClientSnapshot = {
 		...blank,
@@ -31,7 +34,7 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChan
 	directory.apply(snapshot, undefined);
 	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })) } as unknown as RoomSnapshot;
 	const session = { snapshot, capabilities: snapshot.capabilities, canManageRooms: true } as unknown as SessionView;
-	dom.render(MemberListSidebar, { client: canChange ? ({} as never) : undefined, session, room, open: true, canChange });
+	dom.render(MemberListSidebar, { client: canChange ? (client as never) : undefined, session, room, open: true, canChange });
 	return [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
 }
 
@@ -209,25 +212,33 @@ describe('MemberListSidebar', () => {
 		expect(statuses([...document.querySelectorAll<HTMLLIElement>('li.ap-member')])).toEqual([['ada', 'online', true], ['bo', 'online', true], ['cy', '', false]]);
 	});
 
-	it('offers Add member, to someone who can change members, as a plus after the header\'s count: it opens the form atop the list, and Escape shuts it', async () => {
-		render([ada, { user_id: 'bo', name: 'Bo' }], {}, true);
-		const body = document.querySelector('[data-testid="room-member-list"]')!;
+	it('offers Add member, to someone who can change members, as a plus after the header\'s count that opens a people picker', async () => {
+		const joinRoom = vi.fn((_room: string, userId: string) => ({ promise: userId === 'cy' ? Promise.reject(new Error('Denied')) : Promise.resolve({}) }));
+		// Cy and Di aren't members yet; Bo is.
+		render([ada, { user_id: 'bo', name: 'Bo' }], { users: Object.fromEntries([ada, { user_id: 'bo', name: 'Bo' }, { user_id: 'cy', name: 'Cy' }, { user_id: 'di', name: 'Di' }, { user_id: '~server', name: 'Server' }].map((user) => [user.user_id, user])) }, true, { joinRoom });
 		const toggle = document.querySelector<HTMLButtonElement>('.ap-memberlist-head .ap-memberlist-addtoggle')!;
 		expect(toggle.previousElementSibling?.getAttribute('data-testid')).toBe('member-count');
 		expect(toggle.getAttribute('aria-label')).toBe('Add member');
-		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 		toggle.click();
 		flushSync();
-		const form = body.querySelector<HTMLFormElement>('form.ap-memberlist-add')!;
-		expect(toggle.getAttribute('aria-expanded')).toBe('true');
-		expect(body.firstElementChild).toBe(form);
-		expect(toggle.getAttribute('aria-controls')).toBe(form.id);
-		const input = form.querySelector('input')!;
-		await vi.waitFor(() => expect(document.activeElement).toBe(input));
-		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		expect(queryByText('Add people to General')).not.toBeNull();
+		const list = document.querySelector('[data-testid="add-people"]')!;
+		const names = () => [...list.querySelectorAll('.ap-pick-who-name')].map((name) => name.textContent);
+		expect(names()).toEqual(['Cy', 'Di']);
+		// A @user_id typed whole that the client doesn't know is offered to add by it.
+		const field = byLabel('Add');
+		dom.type(field, '@grace');
+		expect(names()).toEqual(['grace']);
+		dom.press(field, 'Enter');
+		dom.type(field, 'cy');
+		dom.press(field, 'Enter');
 		flushSync();
-		expect(body.querySelector('form.ap-memberlist-add')).toBeNull();
-		expect(document.activeElement).toBe(toggle);
+		await dom.submit(document.querySelector<HTMLFormElement>('dialog form')!);
+		await vi.waitFor(() => expect(dom.byRole('alert').textContent).toBe('Couldn’t add Cy: Denied.'));
+		expect(joinRoom.mock.calls).toEqual([['general', 'grace'], ['general', 'cy']]);
+		// Who couldn't be added stays picked, to try again; who was added is said in the list.
+		expect([...document.querySelectorAll('.ap-pick-chip-name')].map((chip) => chip.textContent)).toEqual(['Cy']);
+		expect(dom.byRole('status').textContent).toBe('Added grace.');
 		dom.unmount();
 		render([ada]);
 		expect(dom.queryByRole('button', 'Add member')).toBeNull();

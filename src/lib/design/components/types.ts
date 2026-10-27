@@ -456,10 +456,12 @@ export interface Face {
 	statusLabel?: string;
 }
 
-/** Someone in a PrivateRoomForm's list of people to pick. */
+/** Someone in a PeoplePicker's list of people to pick (PrivateRoomForm, AddMembersForm). */
 export interface PickPerson extends Face {
 	/** Shown under the name, such as why they can't be picked. Defaults to `@user_id`. */
 	detail?: string;
+	/** Words at the row's end while they aren't picked, such as "Already talking · Open". */
+	tag?: string;
 	/** You already have a conversation with just them: picking them alone opens it ("Already talking · Open"). */
 	existing?: boolean;
 }

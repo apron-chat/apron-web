@@ -311,7 +311,9 @@ export const SCENES: Scene[] = [
 			const { page } = preview;
 			await preview.openRoom('engineering');
 			await page.getByRole('button', { name: 'Add member', exact: true }).click();
-			await page.getByRole('combobox', { name: 'User to add' }).fill('grace');
+			await page.getByRole('combobox', { name: 'Add', exact: true }).fill('@grace');
+			// Enter picks the first match, then (the field emptied) adds who's picked.
+			await page.keyboard.press('Enter');
 			await page.keyboard.press('Enter');
 			await expect(page.getByTestId('membership-line')).toBeVisible();
 			await look();
