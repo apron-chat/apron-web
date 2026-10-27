@@ -1159,15 +1159,9 @@
 			directory.apply(next, serverOrigin(chat.url), chat.url);
 			noteArrivals(next);
 		});
-		let unmounted = false;
-		const begin = () => {
-			if (unmounted) return;
-			keeper?.watch(chat);
-			chat.start();
-		};
-		// What this device kept, before the client connects: it goes on from there. A sign-in link signs in anew.
-		if (keeper && !signInLink) void keeper.restore(chat).then(begin);
-		else begin();
+		// Each session the client begins goes on from what this device kept for its server.
+		keeper?.watch(chat);
+		chat.start();
 		client = chat;
 		if (signInLink) links.follow(signInLink);
 		if (pushed) void followPush(chat, pushed);
@@ -1197,7 +1191,6 @@
 			mentions.dispose();
 			session.dispose();
 			unsubscribe();
-			unmounted = true;
 			void keeper?.stop();
 			chat.stop();
 		};

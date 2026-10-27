@@ -679,10 +679,10 @@ are); elsewhere everything loaded is kept. A room last caught up before the
 cutoff starts over from its newest page rather than paging through everything
 since. It is kept only for a session saved here (an account, or a token the
 server resumes), never for a guest; signing out removes it, as does choosing
-not to keep any. One tab writes at a time; another takes over when it closes.
-Switching to another server, or connecting again from the sign-in screen,
-starts that session over, and what it keeps from then on replaces what was
-kept. Preferences says how much Apron keeps on this device, and why it stopped
+not to keep any. Each server's history is kept apart: switching to another
+server, or connecting again from the sign-in screen, goes on from what was kept
+for that server in the same way, and leaves the others' as they are. One tab
+writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped
 keeping more if the device ran out of space.
 
 **Export** saves what this page has loaded from the server as a `.jsonl` file

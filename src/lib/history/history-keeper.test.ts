@@ -31,7 +31,8 @@ function saved(client: ChatClient): HistoryClient {
 		subscribe: (listener) => client.subscribe(listener),
 		message: (id) => client.message(id),
 		roomRecord: (id) => client.roomRecord(id),
-		restore: (state) => client.restore(state)
+		restore: (state) => client.restore(state),
+		beforeFreshSession: (hook) => client.beforeFreshSession(hook)
 	};
 }
 
@@ -67,7 +68,6 @@ describe('HistoryKeeper', () => {
 		const second = new ChatClient(URL, 'Ada', server.factory);
 		clients.push(second);
 		const again = new HistoryKeeper({ indexedDB, locks: null });
-		await again.restore(saved(second));
 		again.watch(saved(second));
 		second.start();
 		await waitFor(() => ids(second.snapshot(), 'general').includes(posted));
@@ -89,7 +89,7 @@ describe('HistoryKeeper', () => {
 		second.stop();
 		const third = new ChatClient(URL, 'Ada', server.factory);
 		clients.push(third);
-		await new HistoryKeeper({ indexedDB, locks: null }).restore(saved(third));
+		new HistoryKeeper({ indexedDB, locks: null }).watch(saved(third));
 		third.start();
 		await waitFor(() => Boolean(room(third.snapshot(), 'general')?.loaded));
 		expect(ids(third.snapshot(), 'general')).toEqual([...had.general, posted, live]);
@@ -123,6 +123,57 @@ describe('HistoryKeeper', () => {
 		expect(kept?.messages.map((message) => message.message_id)).not.toContain(ghost.message_id);
 		expect(kept?.messages.filter((message) => message.room_id === 'general').map((message) => message.message_id)).toEqual(ids(client.snapshot(), 'general'));
 		await keeper.stop();
+	});
+
+	it('keeps each server’s history apart, and a server switched back to goes on from its own', async () => {
+		const servers: Record<string, MemoryProtocolServer> = { [URL]: new MemoryProtocolServer({ account: true }), 'wss://other.example/': new MemoryProtocolServer({ account: true }) };
+		const OTHER = 'wss://other.example/';
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', (url) => servers[url].factory(url));
+		clients.push(client);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		const had = ids(client.snapshot(), 'general');
+
+		client.setUrl(OTHER);
+		await waitFor(() => client.snapshot().authenticated && Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		const db = await openHistory(indexedDB);
+		expect((await readHistory(db, URL))?.messages.filter((message) => message.room_id === 'general').map((message) => message.message_id)).toEqual(had);
+		expect((await readHistory(db, OTHER))?.messages.length).toBeGreaterThan(0);
+
+		const posted = servers[URL].post('general', 'grace', 'While you were on the other server');
+		const from = servers[URL].frames.length;
+		client.setUrl(URL);
+		await waitFor(() => ids(client.snapshot(), 'general').includes(posted));
+		expect(ids(client.snapshot(), 'general')).toEqual([...had, posted]);
+		expect(historyOf(servers[URL], 'general', from).every((params) => params?.after !== undefined)).toBe(true);
+		await keeper.flush();
+		expect((await readHistory(db, OTHER))?.messages.length).toBeGreaterThan(0);
+		await keeper.stop();
+	});
+
+	it('restores before each new session the client begins, but not before a reconnect', async () => {
+		const server = new MemoryProtocolServer();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		let runs = 0;
+		client.beforeFreshSession(async () => { runs++; });
+		client.start();
+		await waitFor(() => client.snapshot().authenticated);
+		expect(runs).toBe(1);
+		// A dropped connection goes on with what it has.
+		for (const socket of (server as unknown as { sockets: Set<{ close(): void }> }).sockets) socket.close();
+		await waitFor(() => client.snapshot().status !== 'connected');
+		client.retryNow();
+		await waitFor(() => client.snapshot().authenticated);
+		expect(runs).toBe(1);
+		client.restart();
+		await waitFor(() => client.snapshot().authenticated);
+		expect(runs).toBe(2);
 	});
 
 	it('writes nothing for a guest', async () => {

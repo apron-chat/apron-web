@@ -181,6 +181,8 @@ export const UNSUPPORTED = -32601;
 const HISTORY_PAGE_SIZE = 200;
 /** A thread, or a room with no checkpoint, opens on its newest page this size; older pages load as the reader scrolls back. */
 export const THREAD_PAGE_SIZE = 50;
+/** The longest a new session's connection waits for what runs before it (`beforeFreshSession`). */
+export const FRESH_HOOK_MS = 5000;
 const MAX_RECONNECT_DELAY_MS = 60_000;
 /** How long a typing indicator this client sends should persist without a refresh, in the `activity` frame's `typing` seconds. */
 export const TYPING_TIMEOUT_S = 15;

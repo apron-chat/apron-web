@@ -471,9 +471,11 @@ the store in batches, one transaction each, with every settled room's sync
 records it covers. A room joined and settled that isn't kept yet is written
 whole (`storedRecords(roomId)`); one no longer joined goes once the joined set
 is complete. One tab writes per server, under a Web Lock; a tab that takes it
-over writes everything whole unless `version` is still what it read. On load,
-before the client starts, `restore` reads it back (`restoredState` applies the
-retention) and `ChatClient.restore` takes it as a dropped connection's kept
+over writes everything whole unless `version` is still what it read. Before
+each new session connects (the first, another server, a `restart`, but not a
+reconnect), the client runs its `beforeFreshSession` hook, for up to
+`FRESH_HOOK_MS`; the keeper's reads back what was kept for that server
+(`restoredState` applies the retention), and `ChatClient.restore` takes it as a dropped connection's kept
 state: the rooms retained with their records and syncs, so the first sign-in
 resumes each from its checkpoint through `requestRooms`, the path a reconnect
 takes. `settings.svelte.ts` holds the retention (`apron.historyRetention`),

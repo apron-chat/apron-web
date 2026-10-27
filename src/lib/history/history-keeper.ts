@@ -27,6 +27,7 @@ export interface HistoryClient {
 	message(messageId: string): MessageRecord | undefined;
 	roomRecord(roomId: string): RoomRecord | undefined;
 	restore(state: RestoredState): boolean;
+	beforeFreshSession(hook: (() => Promise<void>) | undefined): void;
 }
 
 /** The longest a batch of changes waits to be written. */
@@ -132,14 +133,17 @@ export class HistoryKeeper {
 	}
 
 	/**
-	 * Before the client starts: what was kept for its server, for the session saved there, restored into it.
-	 * Never throws: without IndexedDB there is nothing kept.
+	 * Before a new session connects: what was kept for its server, for the session saved there, restored into
+	 * the client. `watch` has the client run it for each new session; never throws, since without IndexedDB
+	 * there is nothing kept.
 	 */
 	async restore(client: HistoryClient): Promise<void> {
-		if (!this.keeping || !client.keptSessionFor(client.url)) return;
+		const server = client.url;
+		if (!this.keeping || !client.keptSessionFor(server)) return;
 		try {
-			const kept = await readHistory(await this.open(), client.url);
-			if (!kept) return;
+			const kept = await readHistory(await this.open(), server);
+			// Moved on to another server meanwhile: that one's session restores its own.
+			if (!kept || client.url !== server) return;
 			const state = restoredState(kept, this.retentionMs ?? undefined, this.now());
 			// Too late, the client started without it: what is kept is no longer what it has.
 			if (!client.restore(state)) return;
@@ -149,10 +153,16 @@ export class HistoryKeeper {
 		}
 	}
 
-	/** Follows `client` from now on: its changes queue at once, and are written once it is signed in to a session saved here. */
+	/**
+	 * Follows `client` from now on, before it starts: each new session it begins (the first, another server,
+	 * connecting anew) first restores what was kept for its server, and its changes are written once it is
+	 * signed in to a session saved here. Each server's history is kept apart.
+	 */
 	watch(client: HistoryClient): void {
 		this.unfollow();
 		this.client = client;
+		client.beforeFreshSession(() => this.restore(client));
+		this.unwatch.push(() => client.beforeFreshSession(undefined));
 		this.unwatch.push(client.observeStore((change) => this.changed(change)));
 		this.unwatch.push(client.subscribe((snapshot) => this.consider(snapshot)));
 		void this.prune();

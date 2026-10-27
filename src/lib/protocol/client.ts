@@ -92,6 +92,7 @@ import {
 	ROOM_LIST_REUSE_MS,
 	STABLE_CONNECTION_MS,
 	THREAD_PAGE_SIZE,
+	FRESH_HOOK_MS,
 	TYPING_REFRESH_MS,
 	TYPING_TIMEOUT_S,
 	AGENT,
@@ -291,6 +292,10 @@ export class ChatClient {
 	 * history (§4.3).
 	 */
 	private readonly retainedRooms = new Map<string, RoomState>();
+	/** What runs before a new session connects (`beforeFreshSession`), whether one is due, and the run under way. */
+	private freshHook: (() => Promise<void>) | undefined;
+	private fresh = true;
+	private preparing: Promise<void> | undefined;
 	/**
 	 * The joined rooms kept from the last connection were its whole joined set
 	 * (its `room_list` arrived): a reconnect as the same identity may then list
@@ -824,6 +829,15 @@ export class ChatClient {
 		return this.store.records(roomId);
 	}
 
+	/**
+	 * Sets what runs before each new session connects: the first, and the one after switching servers or
+	 * connecting anew (`restart`), but not a reconnect, which goes on with what it has. Such as restoring what
+	 * was kept for the server (`restore`). The connection waits for it, `FRESH_HOOK_MS` at most.
+	 */
+	beforeFreshSession(hook: (() => Promise<void>) | undefined): void {
+		this.freshHook = hook;
+	}
+
 	/** Calls `listener` with each change to the stored records until the returned function is called (`ProtocolStore.observe`). */
 	observeStore(listener: (change: StoreChange) => void): () => void {
 		return this.store.observe(listener);
@@ -849,10 +863,10 @@ export class ChatClient {
 	 * Before `start`, takes what a session kept (`keptState`) with its rooms' records, as if a connection had
 	 * dropped: the rooms are kept, hidden, and the next sign-in as `userId` resumes each from its checkpoint
 	 * (`requestRooms`), listing only what changed since where the joined set was complete. Their timelines show
-	 * what was kept meanwhile. Ignored once the client has started or holds rooms: returns whether it was taken.
+	 * what was kept meanwhile. Ignored once a connection is open or rooms are held: returns whether it was taken.
 	 */
 	restore(state: RestoredState): boolean {
-		if (this.running || this.rooms.size || this.retainedRooms.size) return false;
+		if (this.socket || this.rooms.size || this.retainedRooms.size) return false;
 		const { rooms, messages, reactions, memberships } = state.records;
 		for (const record of rooms) this.store.putRoom(record);
 		for (const record of messages) {
@@ -2699,8 +2713,24 @@ export class ChatClient {
 	}
 
 	private connectNow(): void {
-		if (!this.running || this.socket) return;
+		if (!this.running || this.socket || this.preparing) return;
 		this.stopWaitingForPresence();
+		if (this.fresh && this.freshHook && !this.rooms.size && !this.retainedRooms.size) {
+			// A new session: what was kept for this server goes in before it connects (`beforeFreshSession`).
+			this.fresh = false;
+			this.status = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
+			this.emit();
+			const preparing: Promise<void> = Promise.race([
+				this.freshHook().catch(() => undefined),
+				new Promise<void>((resolve) => setTimeout(resolve, FRESH_HOOK_MS))
+			]).then(() => {
+				if (this.preparing !== preparing) return;
+				this.preparing = undefined;
+				this.connectNow();
+			});
+			this.preparing = preparing;
+			return;
+		}
 		this.connectionProbe?.abort();
 		const id = ++this.connectionId;
 		this.status = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
@@ -4150,6 +4180,7 @@ export class ChatClient {
 		this.joinedComplete = false;
 		this.keptUserId = undefined;
 		this.resumingUserId = undefined;
+		this.fresh = true;
 		this.forgetListedRooms();
 		this.resetMutes();
 		this.forgetConnectionState();
