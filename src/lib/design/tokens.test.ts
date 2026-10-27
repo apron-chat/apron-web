@@ -58,6 +58,17 @@ describe('private colors', () => {
 	});
 });
 
+describe('role count', () => {
+	const dark = tokens(':root {');
+	const light = tokens(":root[data-theme='light'] {");
+
+	it('sets its ink at 4.5:1 or more on its chip, dark and light', () => {
+		for (const [theme, values] of [['dark', dark], ['light', light]] as const) {
+			expect(contrast(color('--on-role-count', values, dark), color('--role-count', values, dark)), theme).toBeGreaterThanOrEqual(4.5);
+		}
+	});
+});
+
 // Light is written twice, for the system's preference and for Preferences' choice (pure CSS can't share one block).
 describe('light theme', () => {
 	const dark = tokens(':root {');

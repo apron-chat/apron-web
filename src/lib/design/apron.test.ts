@@ -77,7 +77,6 @@ describe('apron.css: role badges', () => {
 		expect(behind.get('position')).toBe('absolute');
 		expect(behind.get('opacity')).toBe('0');
 		expect(behind.get('display')).toBeUndefined();
-		expect(style('.ap-roles').get('--ap-role-more-fill')).toBeTruthy();
 	});
 
 	it('stacked, end the front badge with a count as wide as RoleBadges counts it, border to border', () => {
@@ -85,6 +84,8 @@ describe('apron.css: role badges', () => {
 		expect(count.get('width')).toBe(`calc(${ROLE_MORE_PAD}px + var(--ap-role-more-chars) * ${String(ROLE_MORE_EM).replace(/^0/, '')}em)`);
 		expect(count.get('border-left')).toBe('1px solid');
 		expect(count.get('border-left-color')).toBe('inherit');
+		// One neutral chip for every role, in its own ink.
+		expect([count.get('background'), count.get('color')]).toEqual(['var(--role-count)', 'var(--on-role-count)']);
 		// Its badge has no padding of its own, so the count runs from its top border to its bottom.
 		const front = style('.ap-roles-stack > .ap-role-stacked');
 		expect([front.get('display'), front.get('padding'), front.get('height')]).toEqual(['inline-flex', '0', 'var(--ap-role-h)']);
