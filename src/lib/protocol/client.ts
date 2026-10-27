@@ -74,6 +74,7 @@ import {
 	MAX_UNANSWERED_PINGS,
 	PROBE_AFTER_HIDDEN_MS,
 	PROBE_MS,
+	READ_CURSOR_SEND_MS,
 	PROBE_PATIENT_FOR_MS,
 	PROBE_PATIENT_MS,
 	NO_NOTICES,
@@ -182,6 +183,9 @@ export class ChatClient {
 	private readonly requests = new Map<string, PendingRequest>();
 	private readonly typing = new Map<string, TypingState>();
 	private readonly sentTypingAt = new Map<string, number>();
+	/** When each room's read cursor last went to the server, and those waiting to (sendReadCursor). */
+	private readonly readSentAt = new Map<string, number>();
+	private readonly readWaiting = new Map<string, { messageId: string; timer?: ReturnType<typeof setTimeout> }>();
 	/** Own reaction sets requested but not yet confirmed, per message. */
 	private readonly reactionIntents = new Map<string, { requestId: string; emojis: string[] }>();
 	/** Latest submitted client fields per message while a save is unconfirmed; later saves build on them. */
@@ -429,8 +433,11 @@ export class ChatClient {
 	 * again checks that its socket still answers.
 	 */
 	private readonly visibilityChanged = (): void => {
-		if (pageHidden()) this.hiddenAt ??= this.now();
-		else {
+		if (pageHidden()) {
+			this.hiddenAt ??= this.now();
+			// The page may be closing: what you read goes now.
+			this.flushReadCursors();
+		} else {
 			if (this.hiddenAt !== undefined && this.now() - this.hiddenAt >= PROBE_AFTER_HIDDEN_MS) this.probe();
 			this.hiddenAt = undefined;
 		}
@@ -2038,10 +2045,52 @@ export class ChatClient {
 		this.setReadCursor(roomId, this.you!.user_id, messageId);
 		// The cursor still moves here (the page reads it, with what it keeps itself); a
 		// server that keeps no read cursors (`ext:settings`) would only be charged a frame for it.
-		if (serverSettings(this.server).read_cursors) {
-			this.sendFrame({ method: 'activity', params: { room_id: roomId, read_message_id: messageId } });
-		}
+		if (serverSettings(this.server).read_cursors) this.sendReadCursor(roomId, messageId);
 		this.emit();
+	}
+
+	/**
+	 * Sends a room's read cursor at most once in `READ_CURSOR_SEND_MS`: the
+	 * first at once, and one that comes sooner waits out the rest of the
+	 * interval, replaced by any later one. Those waiting go at once when the
+	 * page is hidden, as it may be closing, and on the next connection's
+	 * sign-in if this one drops first; signing out drops them.
+	 */
+	private sendReadCursor(roomId: string, messageId: string): void {
+		const waiting = this.readWaiting.get(roomId);
+		const last = this.readSentAt.get(roomId);
+		const wait = last === undefined ? 0 : last + READ_CURSOR_SEND_MS - this.now();
+		if (wait <= 0 && !waiting) {
+			this.readSentAt.set(roomId, this.now());
+			this.sendFrame({ method: 'activity', params: { room_id: roomId, read_message_id: messageId } });
+			return;
+		}
+		this.readWaiting.set(roomId, {
+			messageId,
+			timer: waiting?.timer ?? setTimeout(() => this.flushReadCursors(roomId), Math.max(0, wait))
+		});
+	}
+
+	/** Sends the read cursors waiting, or one room's, on a signed-in connection; otherwise they wait for the next. */
+	private flushReadCursors(roomId?: string): void {
+		for (const [room, waiting] of [...this.readWaiting]) {
+			if (roomId !== undefined && room !== roomId) continue;
+			clearTimeout(waiting.timer);
+			if (!this.authenticated || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
+				this.readWaiting.set(room, { messageId: waiting.messageId });
+				continue;
+			}
+			this.readWaiting.delete(room);
+			this.readSentAt.set(room, this.now());
+			if (serverSettings(this.server).read_cursors) this.sendFrame({ method: 'activity', params: { room_id: room, read_message_id: waiting.messageId } });
+		}
+	}
+
+	/** Forgets the read cursors sent and waiting, as for another account. */
+	private clearReadCursors(): void {
+		for (const waiting of this.readWaiting.values()) clearTimeout(waiting.timer);
+		this.readWaiting.clear();
+		this.readSentAt.clear();
 	}
 
 	/** Visible rooms in the order they were listed, joined, or opened. */
@@ -2940,8 +2989,9 @@ export class ChatClient {
 		// fills the gap through recovery; only a session-only scrollback (§4
 		// fallback) has a real gap to mark.
 		this.showReconnectDivider = (this.showReconnectDivider || this.rooms.size > 0) && !this.hasCap('history');
-		// Requests queued while this connection was authenticating go out now.
+		// Requests queued while this connection was authenticating go out now, and read cursors that waited.
 		for (const request of this.requests.values()) this.sendRequest(request);
+		this.flushReadCursors();
 		// Renaming is a logged mutation on some servers: send the saved name only
 		// when the server doesn't already have it, and not again after it was
 		// denied, unless this sign-in is a registered one that may now be allowed.
@@ -4261,6 +4311,7 @@ export class ChatClient {
 		this.disconnectedAt = undefined;
 		this.retryingSince = undefined;
 		this.clearTyping();
+		this.clearReadCursors();
 		this.emit();
 	}
 

@@ -268,7 +268,10 @@ the usual reconnect. `serverSettings` reads extension `ext:settings`
 (`server.ext.settings`, only where `capabilities` lists it): with
 `guest_posting: false` a guest's snapshot is `readOnly`, and with
 `read_cursors: false` the client moves your read cursor locally without
-sending it. A `retry_after` refusal's `data.ext.limits` counts only where
+sending it; elsewhere `markRead` sends each room's at most every
+`READ_CURSOR_SEND_MS` (10 s), the latest of those that came sooner at the
+end of the interval, and flushes those waiting when the page is hidden and
+after the next sign-in. A `retry_after` refusal's `data.ext.limits` counts only where
 `capabilities` lists `ext:limits`: `limitScope` turns it, with the refused
 request, into the wait's `LimitScope`, and `heldBack` refuses what
 `limitHolds` says that wait covers before it is sent.
