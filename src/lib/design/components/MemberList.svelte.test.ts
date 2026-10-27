@@ -71,6 +71,12 @@ describe('MemberList', () => {
 		expect(rows.map((row) => row.querySelector('button')!.title)).toEqual(['@bo · Online', '@eve · Unknown status: brb', '@cy', '@cy · Offline']);
 		expect(rows.map((row) => row.querySelector('.ap-sr')?.textContent ?? '')).toEqual([', online', ', unknown status: brb', '', ', offline']);
 		expect(rows.map((row) => row.querySelector('.ap-presence') !== null)).toEqual([true, true, false, true]);
+		dom.unmount();
+		// Only the first word is lowered, as it follows a comma: a date, or a value as the server sent it, reads as it is.
+		render({ sections: [{ key: 'offline', label: 'Offline', people: [
+			{ user_id: 'di', name: 'Di', status: 'offline', statusLabel: 'Offline · last seen Dec 1, 2025' }, { user_id: 'fy', name: 'Fy', status: 'BRB' }
+		] }] });
+		expect([...document.querySelectorAll('li.ap-member .ap-sr')].map((sr) => sr.textContent)).toEqual([', offline · last seen Dec 1, 2025', ', unknown status: BRB']);
 	});
 
 	it('offers the add form only with a listing, and sends what was typed', () => {

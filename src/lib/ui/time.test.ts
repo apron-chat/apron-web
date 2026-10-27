@@ -79,4 +79,27 @@ describe('timestamps', () => {
 		expect(since(300 * day)).toBe('Nov 18, 2025');
 		expect(time.idSince('opaque', now)).toBe('');
 	});
+
+	it('carry no time past the last date a Date holds, though the log_id format (below 2^53) allows it, rather than throwing', () => {
+		const now = Date.UTC(2026, 8, 14, 15, 4);
+		const last = '8640000000000000';
+		expect(time.idMillis(last)).toBe(8_640_000_000_000_000);
+		expect(time.idIso(last)).toBe('+275760-09-13T00:00:00.000Z');
+		for (const id of ['8640000000000001', '9000000000000000', '9007199254740991']) {
+			expect(time.idMillis(id), id).toBeUndefined();
+			expect(time.idIso(id), id).toBeUndefined();
+			expect([time.idTime(id), time.idTimeCompact(id), time.idDateTime(id), time.idAgo(id, now), time.idSince(id, now), time.idDate(id, now)], id).toEqual(['', '', '', '', '', '']);
+			expect([time.dayKeyOf(id), time.dayLabelOf(id, new Date(now)), time.idWhen(id, new Date(now))], id).toEqual(['', '', '']);
+			const message = { message_id: id, log_id: id, room_id: 'general', from: { user_id: 'ada' } };
+			expect([time.eventTime(message), time.dayKey(message), time.dayLabel(message, new Date(now))], id).toEqual(['', '', '']);
+			expect(time.isGrouped(message, { ...message, message_id: id }), id).toBe(false);
+		}
+	});
+
+	it('name the day, with the year when it isn\'t this one', () => {
+		const now = Date.UTC(2026, 8, 14, 15, 4);
+		expect(time.idDate(String(Date.UTC(2026, 9, 30, 15)), now)).toBe('Oct 30');
+		expect(time.idDate(String(Date.UTC(2025, 11, 1, 15)), now)).toBe('Dec 1, 2025');
+		expect(time.idDate('opaque', now)).toBe('');
+	});
 });

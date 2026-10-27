@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chain, cssPx, fitRoles, rolePeek, waitLabel, waitWords } from './util';
+import { chain, cssPx, fitRoles, rolePeek, times, waitLabel, waitWords } from './util';
 
 describe('cssPx', () => {
 	it('reads a plain length, and the math a computed min-width leaves unresolved, leaving what it can’t resolve to the caller', () => {
@@ -91,5 +91,18 @@ describe('waitLabel', () => {
 		expect([waitLabel((3 * 60 + 12) * 60_000, true), waitLabel(3_600_000, true), waitLabel(30_001, true)]).toEqual(['3h 12m', '1h 0m', '1m']);
 		expect([waitWords(17_000), waitWords(1_000), waitWords(90_000), waitWords((3 * 60 + 12) * 60_000, true), waitWords(7_200_000, true)])
 			.toEqual(['17 seconds', '1 second', '2 minutes', '3 hours 12 minutes', '2 hours']);
+	});
+});
+
+describe('times', () => {
+	it('gives every form of a time, and none past the last date a Date holds (formatting one throws), keeping a given time', () => {
+		const at = times(Date.UTC(2026, 8, 14, 15, 4));
+		expect(at.iso).toBe('2026-09-14T15:04:00.000Z');
+		expect([at.short, at.compact, at.exact].every((value) => typeof value === 'string' && value !== '')).toBe(true);
+		expect(times(8_640_000_000_000_000).iso).toBe('+275760-09-13T00:00:00.000Z');
+		for (const timestamp of [8_640_000_000_000_001, 9_007_199_254_740_991, undefined, 0, -5, Number.NaN]) {
+			expect(times(timestamp), String(timestamp)).toEqual({ short: undefined, compact: undefined });
+		}
+		expect(times(9_000_000_000_000_000, '2:02 PM')).toEqual({ short: '2:02 PM', compact: '2:02 PM' });
 	});
 });

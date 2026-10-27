@@ -813,7 +813,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profcard-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; }
 .ap-profcard-you { flex: none; color: var(--ink-muted); font-size: var(--text-sm); }
 .ap-profcard-handle { color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; user-select: all; }
-.ap-profcard-status { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
+.ap-profcard-status, .ap-profcard-seen { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 .ap-profcard-literal { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
 /* With room for more than one row, every badge shows, wrapping; one wider than the card ellipsizes. */
 .ap-profcard-names .ap-roles { align-self: flex-start; height: auto; overflow: visible; margin: 2px 0 0; }

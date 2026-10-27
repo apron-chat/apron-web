@@ -1,16 +1,19 @@
 /**
  * Apron links (PROTOCOL.md Appendix A.4): what this app writes when the user
- * shares a room or message, and the three forms it reads in messages, opened
+ * shares a room or message, and the two forms it reads in messages, opened
  * here rather than on link.apron.chat:
  *
  * ```text
  * https://link.apron.chat/#server=wss://chat.example/ws&room=general&message=1724803200042
  * apron:?server=wss://chat.example/ws&room=general
- * web+apron:?room=ops
+ * apron:?room=ops
  * ```
  *
  * A link without `server`, like the last, is for the server that sent the
- * message it is in.
+ * message it is in. Its keys are `application/x-www-form-urlencoded` pairs
+ * after `https://link.apron.chat/#` or `apron:?`, and no other form is read
+ * (not `web+apron:`). Each key reads its first value: a key appended to a
+ * link cannot replace one before it, such as `server` (§5.4).
  */
 
 import { unescapeHtml } from '$lib/protocol/markdown';
@@ -31,27 +34,29 @@ export interface ApronLink {
 }
 
 const WEB_ORIGIN = 'https://link.apron.chat';
-const URI_PREFIXES = ['apron:?', 'web+apron:?'];
-/** Keys a link has at most once: two readers that kept different copies would open different places. */
-const SINGLE_KEYS = ['room', 'message', 'user', 'token', 'state'] as const;
+const URI_PREFIX = 'apron:?';
+/** The keys this app reads besides `server`; any other is ignored (Appendix A.4). */
+const KEYS = ['room', 'message', 'user', 'token', 'state'] as const;
 
 /**
  * Reads an Apron link, or undefined for any other URL, and for a link this
- * app can't use: a repeated key, a message without a room, a token without a
- * server, or no `server` it can reach (`ws:` only on this device).
+ * app can't use: a message without a room, a token without a server, or a
+ * `server` it can't reach (`ws:` only on this device). Each key is its first
+ * value (Appendix A.4), a repeat ignored; so only the first `server` counts,
+ * and a link whose first can't be reached is refused rather than opening a
+ * later one, which may have been appended to it (§5.4).
  */
 export function readApronLink(href: string): ApronLink | undefined {
 	const params = keysOf(href.trim());
 	if (!params) return undefined;
-	if (SINGLE_KEYS.some((key) => params.getAll(key).length > 1)) return undefined;
 	const link: ApronLink = {};
-	const servers = params.getAll('server');
-	if (servers.length) {
-		const server = servers.map(reachable).find((value) => value !== undefined);
+	const written = params.get('server');
+	if (written !== null) {
+		const server = reachable(written);
 		if (!server) return undefined;
 		link.server = server;
 	}
-	for (const key of SINGLE_KEYS) {
+	for (const key of KEYS) {
 		const value = params.get(key);
 		if (value) link[key] = value;
 	}
@@ -125,9 +130,8 @@ export function readPlaceLink(href: string): PlaceLink | undefined {
 
 /** A link's keys as written, for `readPlaceLink`: the https form's fragment, with no query, or what follows `apron:?`, with no fragment. */
 function rawKeysOf(href: string): string | undefined {
-	const prefix = URI_PREFIXES.find((candidate) => href.toLowerCase().startsWith(candidate));
-	if (prefix) {
-		const keys = href.slice(prefix.length);
+	if (href.toLowerCase().startsWith(URI_PREFIX)) {
+		const keys = href.slice(URI_PREFIX.length);
 		return keys.includes('#') ? undefined : keys;
 	}
 	try {
@@ -153,10 +157,9 @@ export function writeApronLink(link: Pick<ApronLink, 'room' | 'message' | 'user'
 	return `${WEB_ORIGIN}/#${formKeys(entries.filter((entry): entry is [string, string] => entry[1] !== undefined))}`;
 }
 
-/** The key list of a link in any of its forms. */
+/** The key list of a link in either of its forms. */
 function keysOf(href: string): URLSearchParams | undefined {
-	const prefix = URI_PREFIXES.find((candidate) => href.toLowerCase().startsWith(candidate));
-	if (prefix) return new URLSearchParams(href.slice(prefix.length));
+	if (href.toLowerCase().startsWith(URI_PREFIX)) return new URLSearchParams(href.slice(URI_PREFIX.length));
 	try {
 		const url = new URL(href);
 		return url.origin === WEB_ORIGIN && url.pathname === '/' && url.hash.length > 1 ? new URLSearchParams(url.hash.slice(1)) : undefined;

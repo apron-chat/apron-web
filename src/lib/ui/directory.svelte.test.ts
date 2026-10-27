@@ -156,7 +156,9 @@ describe('directory', () => {
 		// A room not known here is its room_id.
 		expect(directory.resolveLink('apron:?room=r-8f2a&message=3')?.detail).toBe(' in #r-8f2a');
 		expect(directory.resolveLink('apron:?room=r-8f2a')?.label).toBe('r-8f2a');
-		expect(directory.resolveLink('web+apron:?room=lobby&user=bo')).toEqual({ kind: 'user', href: https('room=lobby&user=bo'), label: '@Bo', title: 'Bo in #Lobby' });
+		expect(directory.resolveLink('apron:?room=lobby&user=bo')).toEqual({ kind: 'user', href: https('room=lobby&user=bo'), label: '@Bo', title: 'Bo in #Lobby' });
+		// No form but those two (Appendix A.4).
+		expect(directory.resolveLink('web+apron:?room=lobby')).toBeUndefined();
 		// Another server's is no mention of a place here: its host and what it is, nothing looked up, whatever this one knows.
 		const other = 'wss://other.example/';
 		expect(directory.resolveLink(https('room=lobby&message=12', other))).toEqual({

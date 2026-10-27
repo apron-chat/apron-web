@@ -3,10 +3,18 @@ import type { MessageRecord } from '$lib/protocol/types';
 /** Consecutive messages from one sender within this window read as one group. */
 export const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
-/** Log IDs (and so message IDs, the creation `log_id`) are epoch milliseconds (§2); anything else has no time. */
+/** The latest time a `Date` holds (ECMAScript's ±8.64e15 ms): a later one is an Invalid Date, which `toISOString` and `Intl` throw on. */
+export const MAX_DATE_MS = 8_640_000_000_000_000;
+
+/**
+ * Log IDs (and so message IDs, the creation `log_id`) are epoch milliseconds
+ * (§2); anything else has no time. Nor does one the `log_id` format allows
+ * (below 2^53) but past the last date a `Date` holds, so every helper here
+ * gives nothing for it rather than throwing.
+ */
 export function idMillis(id: string): number | undefined {
 	const millis = Number(id);
-	return Number.isSafeInteger(millis) && millis > 0 ? millis : undefined;
+	return Number.isSafeInteger(millis) && millis > 0 && millis <= MAX_DATE_MS ? millis : undefined;
 }
 
 function eventMillis(event: MessageRecord): number | undefined {
@@ -74,6 +82,13 @@ export function idSince(id: string, now = Date.now()): string {
 		// Days stay days (`12d`) here, where idAgo turns a week into `1w`.
 		return elapsed < 24 * 60 * 60 * 1000 ? idAgo(id, now) : `${Math.floor(elapsed / (24 * 60 * 60 * 1000))}d`;
 	}
+	return idDate(id, now);
+}
+
+/** The local day a log ID falls on, as the browser's locale writes it (`Sep 14` in en-US, with the year when it isn't `now`'s), as `idSince` names it past two weeks; empty when it carries no time. */
+export function idDate(id: string, now = Date.now()): string {
+	const millis = idMillis(id);
+	if (!millis) return '';
 	return (new Date(millis).getFullYear() === new Date(now).getFullYear() ? dateFormat : dateYearFormat).format(millis);
 }
 

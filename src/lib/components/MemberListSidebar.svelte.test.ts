@@ -69,6 +69,19 @@ describe('MemberListSidebar', () => {
 		], { statusesBeforeResume: { bo: 'online', cy: 'offline' } });
 		expect(sections()).toEqual([['Online· 2', ['ada', 'bo']], ['Offline· 1', ['cy']]]);
 		dom.unmount();
+		// Bo's fresh offline, with when he was last seen, arrives before the listing: he still shows as before, and
+		// his row doesn't say both.
+		render([
+			{ user_id: 'bo', name: 'Bo', status: 'offline', seen: '1793000000000' } as Identity,
+			ada
+		], { statusesBeforeResume: { bo: 'online' } });
+		const title = () => document.querySelector('li.ap-member[data-user="bo"] [title]')?.getAttribute('title') ?? '';
+		expect(title()).not.toMatch(/seen/i);
+		dom.unmount();
+		// Settled, it does.
+		render([{ user_id: 'bo', name: 'Bo', status: 'offline', seen: '1793000000000' } as Identity, ada]);
+		expect(title()).toMatch(/seen/i);
+		dom.unmount();
 		render([
 			{ user_id: 'bo', name: 'Bo', status: 'offline' },
 			{ user_id: 'cy', name: 'Cy', status: 'online' },
@@ -116,6 +129,67 @@ describe('MemberListSidebar', () => {
 		expect(rows.map((row) => row.dataset.user)).toEqual(['bo', 'ada']);
 		expect(rows[1].querySelector('.ap-presence-invisible')?.getAttribute('title')).toBe('Invisible · others see you as offline');
 		expect(rows[1].querySelector('button')?.title).toBe('@ada · Invisible · others see you as offline');
+	});
+
+	it('says when an offline member was last seen in their tooltip (§4.5.2), and nothing of a seen kept once they are back online', () => {
+		const now = Date.UTC(2026, 9, 22, 12);
+		vi.useFakeTimers({ now, toFake: ['Date'] });
+		try {
+			const seen = String(now - 15 * 60_000);
+			const rows = render([
+				ada, { user_id: 'bo', name: 'Bo', status: 'offline', seen }, { user_id: 'cy', name: 'Cy', status: 'online', seen }, { user_id: 'di', name: 'Di', status: 'offline', seen: 'soon' },
+				{ user_id: 'ed', name: 'Ed', status: 'offline', seen: String(now - 5 * 60_000) }
+			]);
+			const row = (id: string) => rows.find((candidate) => candidate.dataset.user === id)!;
+			expect(row('bo').querySelector('button')?.title).toBe('@bo · Offline · last seen 15m ago');
+			expect(row('bo').querySelector('.ap-presence-offline')?.getAttribute('title')).toBe('Offline · last seen 15m ago');
+			expect(row('bo').querySelector('.ap-sr')?.textContent).toBe(', offline · last seen 15m ago');
+			expect(row('cy').querySelector('button')?.title).toBe('@cy · Online');
+			expect(row('di').querySelector('button')?.title).toBe('@di · Offline');
+			// Under ten minutes, recently: a server may record seen coarsely.
+			expect(row('ed').querySelector('button')?.title).toBe('@ed · Offline · last seen recently');
+			expect(row('ed').querySelector('.ap-presence-offline')?.getAttribute('title')).toBe('Offline · last seen recently');
+			expect(row('ed').querySelector('.ap-sr')?.textContent).toBe(', offline · last seen recently');
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('shows when this page saw a member go offline over an older seen, or none, but never for you', () => {
+		const now = Date.UTC(2026, 9, 22, 12);
+		vi.useFakeTimers({ now, toFake: ['Date'] });
+		try {
+			const you = { ...ada, status: 'invisible' };
+			const rows = render(
+				[you, { user_id: 'bo', name: 'Bo', status: 'offline', seen: String(now - 3 * 60 * 60_000) }, { user_id: 'cy', name: 'Cy', status: 'offline' }, { user_id: 'di', name: 'Di', status: 'offline', seen: String(now - 60 * 60_000) }],
+				{ you, sawOffline: { ada: now - 60_000, bo: now - 2 * 60_000, cy: now - 20 * 60_000, di: now - 2 * 60 * 60_000 } }
+			);
+			const title = (id: string) => rows.find((candidate) => candidate.dataset.user === id)!.querySelector('button')?.title;
+			// The floor over an older seen; alone without one; and an older floor leaves a later seen as it is.
+			expect([title('bo'), title('cy'), title('di')]).toEqual(['@bo · Offline · last seen recently', '@cy · Offline · last seen 20m ago', '@di · Offline · last seen 1h ago']);
+			expect(title('ada')).toBe('@ada · Invisible · others see you as offline');
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('says nothing of a seen past the last date a Date holds, and goes on updating', () => {
+		const now = Date.UTC(2026, 9, 22, 12);
+		vi.useFakeTimers({ now, toFake: ['Date'] });
+		try {
+			const linus = { user_id: 'linus', name: 'Linus', status: 'offline', seen: '9000000000000000' };
+			const rows = render([ada, linus, { user_id: 'bo', name: 'Bo', status: 'online' }]);
+			const title = (id: string) => document.querySelector<HTMLElement>(`li[data-user="${id}"] button`)?.title;
+			expect(rows.map((row) => row.dataset.user)).toEqual(['ada', 'bo', 'linus']);
+			expect(title('linus')).toBe('@linus · Offline');
+			// The next change still shows.
+			const snapshot = { ...blankSnapshot(), capabilities: { ...blankSnapshot().capabilities, status: true }, authenticated: true, you: ada, recordedUsers: {}, userAliases: {} };
+			directory.apply({ ...snapshot, users: { ada, linus: { ...linus, seen: String(now - 25 * 60_000) }, bo: { user_id: 'bo', name: 'Bo', status: 'offline', seen: '9007199254740991' } } }, undefined);
+			flushSync();
+			expect([title('linus'), title('bo')]).toEqual(['@linus · Offline · last seen 25m ago', '@bo · Offline']);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('shows no dot for a cleared status, or one dropped at a sign-in, and the dot again once the server sends it', () => {

@@ -143,8 +143,9 @@ export interface Times {
 /** Times from a message_id (epoch ms): short in the viewer's locale and 12/24h preference, compact without AM/PM for the grouped hover gutter, and exact local YYYY-MM-DD HH:MM:SS for the tooltip. */
 export function times(timestamp?: number, time?: string): Times {
 	const ms = Number(timestamp);
-	if (!(ms > 0)) return { short: time, compact: time };
 	const d = new Date(ms);
+	// None, or past the last date a Date holds (an Invalid Date, which formatting throws on): no time of its own.
+	if (!(ms > 0) || Number.isNaN(d.getTime())) return { short: time, compact: time };
 	return {
 		short: time || TIME.format(d),
 		compact: TIME.formatToParts(d)

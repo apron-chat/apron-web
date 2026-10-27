@@ -317,7 +317,7 @@ export interface ClientSnapshot {
 	 */
 	users: Record<string, Identity>;
 	/**
-	 * Users whose `status` in `users` is only held from before a resume's
+	 * Users whose `status` (and `seen`) in `users` is only held from before a resume's
 	 * sign-in, which drops the kept statuses (§4.5.4): shown until the joined
 	 * listing arrives or a fresh one comes, so nothing greys out meanwhile, but
 	 * no longer kept. Absent when none is.
@@ -335,6 +335,14 @@ export interface ClientSnapshot {
 	 * server lists: a link to a room missing from one should wait for the fresh listing. Absent when none is.
 	 */
 	keptListings?: string[];
+	/**
+	 * When this client received the change of each other user's shown status
+	 * from one it showed (not `offline`, not `""`) to `offline`, in epoch
+	 * milliseconds: a floor under their `seen` (§4.5.2), which a server may
+	 * record coarsely, for `shownSeen`. Only what this page saw happen on a
+	 * signed-in connection, never yours, and only in memory. Absent when none is.
+	 */
+	sawOffline?: Record<string, number>;
 	/**
 	 * The latest recorded object seen per `user_id` (a message's or
 	 * reaction's `from`, a membership's `user`), by `log_id`. Never merged into

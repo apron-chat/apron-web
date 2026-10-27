@@ -349,6 +349,18 @@ export const SCENES: Scene[] = [
 		}
 	},
 	{
+		// An offline member's profile card, which says when they were last seen (§4.5.2).
+		name: 'last-seen',
+		knobs: { capabilities: ['status'] },
+		steps: async (preview, look) => {
+			const { page } = preview;
+			const list = await preview.showMembers();
+			await list.locator('button[data-user-id="linus"]').click();
+			await expect(page.getByTestId('profile-card').getByTestId('profile-seen')).toBeVisible();
+			await look();
+		}
+	},
+	{
 		name: 'phone',
 		device: 'phone',
 		steps: async (preview, look) => {
