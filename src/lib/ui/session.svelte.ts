@@ -7,6 +7,11 @@ export type HeldSession = { rooms: RoomSnapshot[]; activeRoom?: string; you?: Id
 
 /** How long a reconnect may run quietly before the UI escalates and offers a manual retry. */
 const RECONNECT_STALL_MS = 10_000;
+/**
+ * How long the way back from a dropped connection shows nothing at all: no "Reconnecting…" or "Checking for new
+ * messages…" pill, no loading marks on the rooms. A reconnect that's done by then (most are) goes unseen.
+ */
+export const RECONNECT_QUIET_MS = 1_500;
 
 export const blankSnapshot = (): ClientSnapshot => ({
 	status: 'idle', authenticated: false, capabilities: capabilitiesOf(undefined), rooms: [], pending: [], typing: [], users: {}, recordedUsers: {}, userAliases: {}, uploads: {}, threadDirectory: {}, showReconnectDivider: false
@@ -22,8 +27,13 @@ export const blankSnapshot = (): ClientSnapshot => ({
 export class SessionView {
 	// Snapshots are immutable values from the client: raw state avoids proxying them and keeps identity comparisons honest.
 	snapshot = $state.raw<ClientSnapshot>(blankSnapshot());
-	/** True once a dropped connection has stayed down for RECONNECT_STALL_MS. */
+	/** True once a dropped connection has stayed down for RECONNECT_STALL_MS while someone could see it. */
 	stalled = $state(false);
+	/**
+	 * The first RECONNECT_QUIET_MS of a reconnect's way back, from when it began trying where someone could see it
+	 * (`retryingSince`): reconnecting, then catching up, show nothing yet.
+	 */
+	reconnectQuiet = $state(false);
 	private held = $state.raw<HeldSession | undefined>();
 	/** The held view came from this device (`prime`), not from this page's own session: it isn't worth keeping again. */
 	private primed = $state(false);
@@ -31,6 +41,12 @@ export class SessionView {
 	private awaitingThreads = $state<string | undefined>();
 	private pendingActiveRoom: string | undefined;
 	private stallTimer: ReturnType<typeof setTimeout> | undefined;
+	private quietTimer: ReturnType<typeof setTimeout> | undefined;
+	private quietSince: number | undefined;
+	/** Try Again was pressed: the attempt it starts shows at once, with no quiet moment first. */
+	private retryAsked = false;
+	/** The last ready snapshot of this session: what a quiet reconnect keeps showing of how you're signed in. */
+	private lastReady = $state.raw<ClientSnapshot | undefined>();
 
 	readonly ready = $derived(isSessionReady(this.snapshot));
 	readonly connection = $derived(connectionStateOf(this.snapshot));
@@ -49,6 +65,27 @@ export class SessionView {
 	readonly server = $derived(this.snapshot.server ?? (this.holding ? this.held!.server : undefined));
 	/** The whole view is the held one: the rooms aren't listed again yet. */
 	readonly showingHeld = $derived(this.holding && this.snapshot.rooms.length === 0);
+	/**
+	 * Disconnected while the page is hidden: the client waits for it to be shown before connecting again, and nobody
+	 * is watching, so nothing says a reconnect is under way.
+	 */
+	readonly waitingToReconnect = $derived(this.snapshot.disconnectedAt !== undefined && this.snapshot.retryingSince === undefined);
+	/** A reconnect from a ready session that needs nobody yet: the page keeps everything as it was meanwhile. */
+	readonly reconnectingQuietly = $derived(this.connection === 'reconnecting' && !this.reconnectNeedsAttention && !this.snapshot.held && this.lastReady !== undefined);
+	/**
+	 * Ready, or reconnecting quietly: controls that come and go with the session (a room's +, the member list's
+	 * sections, the composer's field) stay as they were, rather than blinking out and back with a short drop.
+	 * Anything they ask for waits for the connection, as requests do (`ready` says whether it is there now).
+	 */
+	readonly steady = $derived(this.ready || this.reconnectingQuietly);
+	/** The server's capabilities, kept from before through a reconnect until the new connection says otherwise. */
+	readonly capabilities = $derived(this.snapshot.server || !this.holding ? this.snapshot.capabilities : capabilitiesOf(this.server));
+	/** Signed in to an account (passkey, email, token), kept through a quiet reconnect. */
+	readonly passkeySession = $derived(this.snapshot.passkeySession || (this.reconnectingQuietly && Boolean(this.lastReady?.passkeySession)));
+	/** How this account signs in, as `ClientSnapshot.signInMethods`, kept through a quiet reconnect. */
+	readonly signInMethods = $derived(this.snapshot.signInMethods ?? (this.reconnectingQuietly ? this.lastReady?.signInMethods : undefined));
+	/** How this session signed in, as `ClientSnapshot.signedInWith`, kept through a quiet reconnect. */
+	readonly signedInWith = $derived(this.snapshot.signedInWith ?? (this.reconnectingQuietly ? this.lastReady?.signedInWith : undefined));
 	/**
 	 * A freshly listed room starts empty while history recovers; its held copy
 	 * stays on screen until the recovered timeline replaces it.
@@ -126,7 +163,7 @@ export class SessionView {
 	/** Create and update rooms and threads (capability `rooms`). */
 	readonly canManageRooms = $derived(canManageRooms(this.server));
 	/** A guest on a server whose guests only read: no composer, reactions, or new threads until sign-in. */
-	readonly readOnly = $derived(Boolean(this.snapshot.readOnly));
+	readonly readOnly = $derived(Boolean(this.snapshot.readOnly) || (this.reconnectingQuietly && Boolean(this.lastReady?.readOnly)));
 	/** Reaction chips and the React action (capability `reactions`). */
 	readonly canReact = $derived(canReact(this.server));
 
@@ -154,6 +191,9 @@ export class SessionView {
 		this.snapshot = next;
 		// A view held for someone else (kept on this device for the account that was signed in) isn't this one's.
 		if (this.held?.you && next.you && this.held.you.user_id !== next.you.user_id) this.forget();
+		// Kept only through a drop (`disconnectedAt`): a restart, a sign-out or a sign-in elsewhere starts over.
+		if (isSessionReady(next)) this.lastReady = next;
+		else if (next.disconnectedAt === undefined || next.status === 'offline' || next.held || (this.lastReady?.you && next.you && this.lastReady.you.user_id !== next.you.user_id)) this.lastReady = undefined;
 		if (next.status === 'offline' || (wasReady && isSessionReady(next) && next.rooms.length === 0)) {
 			// Offline, or a ready session that left its last room: nothing is being rebuilt.
 			this.held = undefined;
@@ -167,6 +207,7 @@ export class SessionView {
 			if (next.activeRoom !== target) client.selectRoom(target);
 		}
 		this.trackStall(next);
+		this.trackQuiet(next);
 	}
 
 	/** Selects a room, remembering it for the reconnect if the server is currently away. */
@@ -179,23 +220,48 @@ export class SessionView {
 	/** Drops the held view: the next connection is a different session (a new server, or a sign-out). */
 	forget(): void {
 		this.held = undefined;
+		this.lastReady = undefined;
 		this.primed = false;
 		this.pendingActiveRoom = undefined;
 	}
 
 	retryNow(client: ChatClient): void {
 		this.stalled = false;
+		this.retryAsked = true;
 		client.retryNow();
+		// The client answers at once; one that started nothing (a `retry_after` still running) leaves no flag behind.
+		this.retryAsked = false;
 	}
 
 	dispose(): void {
 		if (this.stallTimer) clearTimeout(this.stallTimer);
+		if (this.quietTimer) clearTimeout(this.quietTimer);
+	}
+
+	/** A new run of reconnecting where someone can see it starts RECONNECT_QUIET_MS of quiet; it runs out on its own. */
+	private trackQuiet(next: ClientSnapshot): void {
+		const since = next.retryingSince;
+		// A run that ended (back, or waiting hidden) is done with: the next starts its own quiet, even at the same time.
+		if (since === undefined) {
+			this.quietSince = undefined;
+			return;
+		}
+		if (since === this.quietSince) return;
+		this.quietSince = since;
+		if (this.quietTimer) clearTimeout(this.quietTimer);
+		const remaining = this.retryAsked ? 0 : RECONNECT_QUIET_MS - (Date.now() - since);
+		this.reconnectQuiet = remaining > 0;
+		this.quietTimer = remaining > 0 ? setTimeout(() => {
+			this.quietTimer = undefined;
+			this.reconnectQuiet = false;
+		}, remaining) : undefined;
 	}
 
 	private trackStall(next: ClientSnapshot): void {
 		if (this.stallTimer) clearTimeout(this.stallTimer);
 		this.stallTimer = undefined;
-		const since = next.disconnectedAt;
+		// Counted from when the reconnect began trying where someone could see it: not the time a hidden tab waited.
+		const since = next.retryingSince;
 		if (since === undefined || isSessionReady(next)) {
 			this.stalled = false;
 			return;

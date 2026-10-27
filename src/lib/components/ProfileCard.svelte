@@ -2,7 +2,8 @@
 	import { keepsBio, type ChatClient, type RoomSnapshot } from '$lib/protocol/client';
 	import { renderBio } from '$lib/protocol/markdown';
 	import { isSystemId } from '$lib/protocol/types';
-	import { ownStatusLabel } from '$lib/ui/user-status';
+	import { lastSeen, ownStatusLabel } from '$lib/ui/user-status';
+	import { minuteNow } from '$lib/ui/clock.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import { placePicker } from '$lib/ui/emoji';
@@ -11,7 +12,8 @@
 	import ProfileCard from '$lib/design/components/ProfileCard.svelte';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
-	import { couldNotAdd, directRoomWith, startPrivateRoom } from '$lib/ui/private-rooms';
+	import { couldNotAdd } from '$lib/ui/members';
+	import { directRoomWith, startPrivateRoom } from '$lib/ui/private-rooms';
 
 	/**
 	 * Who a mention, a sender or a member is: the design system's ProfileCard,
@@ -64,6 +66,11 @@
 	let userId = $derived(person?.user_id ?? request?.userId ?? '');
 	let name = $derived(directory.name(person));
 	let me = $derived(directory.isMe(userId));
+	/** When they were last seen (§4.5.2), while they show offline: never yours. Redone each minute, so `recently` and `15m ago` move on. */
+	let seen = $derived.by(() => {
+		const id = directory.seen(person);
+		return id === undefined ? undefined : lastSeen(id, minuteNow());
+	});
 	let shares = $derived(person ? directory.sharesName(person) : false);
 	let system = $derived(isSystemId(userId));
 	/** `roles` (§3.3) from the kept user object, else the recorded one: badges under the name, never part of it. */
@@ -216,6 +223,7 @@
 		you={me}
 		{status}
 		statusLabel={me ? ownStatusLabel(status) : undefined}
+		{seen}
 		{roles}
 		{bio}
 		sharesName={shares}
@@ -229,6 +237,7 @@
 		{note}
 		testid="profile-card"
 		statusTestid="profile-status"
+		seenTestid="profile-seen"
 		rolesTestid="roles"
 		bioTestid="profile-bio"
 		bind:element={box}

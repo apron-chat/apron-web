@@ -1,13 +1,13 @@
 <script lang="ts">
 	import PrivateRoomForm from '$lib/design/components/PrivateRoomForm.svelte';
 	import type { PickPerson, PickRoom } from '$lib/design/components/types';
-	import { presenceLabel } from '$lib/design/components/util';
 	import { serverSettings, type ChatClient, type RoomSnapshot } from '$lib/protocol/client';
-	import { isSystemId, type Identity } from '$lib/protocol/types';
+	import type { Identity } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { hueOf } from '$lib/ui/messages';
-	import { roomFaces } from '$lib/ui/faces';
-	import { couldNotAdd, directRoomWith, privateRooms, quietestFirst, startPrivateRoom } from '$lib/ui/private-rooms';
+	import { faceOf, roomFaces } from '$lib/ui/faces';
+	import { matching, pickable } from '$lib/ui/people';
+	import { couldNotAdd } from '$lib/ui/members';
+	import { directRoomWith, privateRooms, quietestFirst, startPrivateRoom } from '$lib/ui/private-rooms';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { idSince } from '$lib/ui/time';
 
@@ -46,15 +46,9 @@
 
 	let you = $derived(session.you?.user_id);
 	/** Everyone the session knows but you and the system identities, by name. */
-	let known = $derived(Object.values(session.snapshot.users)
-		.filter((user) => !isSystemId(user.user_id) && !directory.isMe(user.user_id))
-		.sort((a, b) => directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)));
+	let known = $derived(pickable(Object.values(session.snapshot.users)));
 	/** Those whose name or `@user_id` holds what's typed. */
-	let people = $derived.by(() => {
-		const wanted = query.trim().replace(/^@/, '').toLowerCase();
-		const matching = wanted ? known.filter((user) => directory.name(user).toLowerCase().includes(wanted) || user.user_id.toLowerCase().includes(wanted)) : known;
-		return matching.slice(0, PEOPLE_SHOWN).map(pickPerson);
-	});
+	let people = $derived(matching(known, query, PEOPLE_SHOWN).map(pickPerson));
 	let chosen = $derived(chosenIds.map((id) => pickPerson(directory.person({ user_id: id }) ?? { user_id: id })));
 	let mine = $derived(privateRooms(session.rooms));
 	let limit = $derived(serverSettings(session.server).private_rooms);
@@ -63,11 +57,7 @@
 	let full = $derived(atLimit ? quietestFirst(mine).slice(0, FULL_SHOWN).map(pickRoom) : undefined);
 
 	function pickPerson(user: Identity): PickPerson {
-		const status = directory.status(user);
-		return {
-			user_id: user.user_id, name: directory.name(user), src: directory.avatar(user), hue: hueOf(user.user_id), status, statusLabel: presenceLabel(status),
-			...(directRoomWith(session.rooms, you, user.user_id) ? { existing: true } : {})
-		};
+		return { ...faceOf(user), ...(directRoomWith(session.rooms, you, user.user_id) ? { existing: true } : {}) };
 	}
 
 	function pickRoom(room: RoomSnapshot): PickRoom {

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { memberSections, userIdToAdd } from './members';
+import { describe, expect, it, vi } from 'vitest';
+import { addMembers, couldNotAdd, memberSections, userIdToAdd } from './members';
 
 describe('adding a member', () => {
 	it('takes exactly the user_id typed, with or without @, and never a display name, which isn’t unique', () => {
@@ -12,6 +12,15 @@ describe('adding a member', () => {
 		expect(userIdToAdd('@')).toBeUndefined();
 		// Nor anything with a control character, which no ID has (§2.4).
 		expect(userIdToAdd('bob\u0007')).toBeUndefined();
+	});
+
+	it('adds each person in turn, past any the server refuses, and says who and why', async () => {
+		const joinRoom = vi.fn((_room: string, userId: string) => ({ id: userId, promise: userId === 'carol' ? Promise.reject(new Error('In too many private rooms.')) : Promise.resolve({}) }));
+		const refused = await addMembers({ joinRoom }, 'r1', ['bob', 'carol', 'dev']);
+		expect(joinRoom.mock.calls).toEqual([['r1', 'bob'], ['r1', 'carol'], ['r1', 'dev']]);
+		expect(refused).toEqual([{ userId: 'carol', message: 'In too many private rooms.' }]);
+		expect(couldNotAdd([...refused, { userId: 'dev', message: 'Unknown user' }], (id) => id.toUpperCase()))
+			.toBe('Couldn’t add CAROL: In too many private rooms. Couldn’t add DEV: Unknown user.');
 	});
 });
 

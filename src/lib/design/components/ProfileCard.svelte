@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Copy from '@lucide/svelte/icons/copy';
 	import MessageCircle from '@lucide/svelte/icons/message-circle';
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
@@ -12,7 +13,7 @@
 	/**
 	 * Who a mention, a sender or a member is, in a Popover: their avatar, name,
 	 * `@user_id` (always, here: this is where people check who someone really
-	 * is, §3.3), status, roles, bio, and whether they're in the open room, with
+	 * is, §3.3), status (and when they were last seen, while offline), roles, bio, and whether they're in the open room, with
 	 * what you can do about them.
 	 */
 	interface Props extends PopoverPlacement {
@@ -27,6 +28,12 @@
 		status?: Presence | (string & {});
 		/** The status's words instead of its own, on the avatar's dot and under the name, such as your own invisible ("Invisible · others see you as offline"). */
 		statusLabel?: string;
+		/**
+		 * When they were last seen (§4.5.2), under the status while it is `offline` (and only then: a `seen` kept from
+		 * before they came back online says nothing now): its words ("Last seen 5m ago"), the `datetime`, and the exact
+		 * time as its tooltip.
+		 */
+		seen?: { text: string; datetime?: string; title?: string };
 		/** Server-assigned roles (§3.3), as badges under the status. */
 		roles?: string[];
 		/** Their bio (`ext:bio`), plain text under the name: its line breaks show. */
@@ -43,7 +50,7 @@
 		messaging?: boolean;
 		/** Offers Mention, such as while the composer takes text. */
 		onmention?: () => void;
-		/** Offers Copy @user_id. */
+		/** Offers Copy @user_id, as an icon button beside the `@user_id`. */
 		oncopyid?: () => void;
 		/** Offers Add to room (§4.2.2). */
 		onaddtoroom?: () => void;
@@ -65,14 +72,16 @@
 		onfocusout?: (event: FocusEvent) => void;
 		/** A `data-testid` for the status in words. */
 		statusTestid?: string;
+		/** A `data-testid` for when they were last seen. */
+		seenTestid?: string;
 		/** A `data-testid` for the row of roles. */
 		rolesTestid?: string;
 		/** A `data-testid` for the bio. */
 		bioTestid?: string;
 	}
 	let {
-		userId, name, avatar, you = false, status, statusLabel, roles, bio, bioBody, sharesName = false, membership, onmessage, messaging = false, onmention, oncopyid, onaddtoroom, adding = false, note,
-		element = $bindable(), offsetHeight = $bindable(0), statusTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout
+		userId, name, avatar, you = false, status, statusLabel, seen, roles, bio, bioBody, sharesName = false, membership, onmessage, messaging = false, onmention, oncopyid, onaddtoroom, adding = false, note,
+		element = $bindable(), offsetHeight = $bindable(0), statusTestid, seenTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout
 	}: Props = $props();
 	const shownName = $derived(name || userId);
 	const shown = $derived(presence(status));
@@ -86,12 +95,16 @@
 				<span class="ap-profcard-name">{shownName}</span>
 				{#if you}<span class="ap-profcard-you">(you)</span>{/if}
 			</div>
-			<div class="ap-profcard-handle">@{userId}</div>
+			<div class="ap-profcard-handleline">
+				<span class="ap-profcard-handle">@{userId}</span>
+				{#if oncopyid}<button type="button" class="ap-iconbtn ap-profcard-copy" aria-label="Copy @user_id" title="Copy @user_id" onclick={oncopyid}><Copy size={14} aria-hidden="true" /></button>{/if}
+			</div>
 			{#if shown === 'unknown'}
 				<div class="ap-profcard-status" data-testid={statusTestid}>Unknown status: <code class="ap-profcard-literal">{status}</code></div>
 			{:else if shown}
 				<div class="ap-profcard-status" data-testid={statusTestid}>{statusLabel ?? presenceLabel(status)}</div>
 			{/if}
+			{#if shown === 'offline' && !you && seen?.text}<time class="ap-profcard-seen" data-testid={seenTestid} datetime={seen.datetime} title={seen.title}>{seen.text}</time>{/if}
 			<RoleBadges {roles} data-testid={rolesTestid} overflow="drop" />
 		</div>
 	</div>
@@ -100,11 +113,12 @@
 	{/if}
 	{#if bio}<p class="ap-profcard-bio" dir="auto" data-testid={bioTestid}>{#if bioBody}{@render bioBody()}{:else}{bio}{/if}</p>{/if}
 	{#if membership}<p class="ap-profcard-note">{membership}</p>{/if}
-	<div class="ap-profcard-actions">
-		{#if onmessage}<Button variant="primary" size="sm" disabled={messaging} onclick={onmessage}><MessageCircle size={15} aria-hidden="true" />{messaging ? 'Opening…' : 'Message'}</Button>{/if}
-		{#if onmention}<Button size="sm" onclick={onmention}>Mention</Button>{/if}
-		{#if oncopyid}<Button variant="ghost" size="sm" onclick={oncopyid}>Copy @user_id</Button>{/if}
-		{#if onaddtoroom}<Button variant="ghost" size="sm" disabled={adding} onclick={onaddtoroom}>{adding ? 'Adding…' : 'Add to room'}</Button>{/if}
-	</div>
+	{#if onmessage || onmention || onaddtoroom}
+		<div class="ap-profcard-actions">
+			{#if onmessage}<Button variant="primary" size="sm" disabled={messaging} onclick={onmessage}><MessageCircle size={15} aria-hidden="true" />{messaging ? 'Opening…' : 'Message'}</Button>{/if}
+			{#if onmention}<Button size="sm" onclick={onmention}>Mention</Button>{/if}
+			{#if onaddtoroom}<Button variant="ghost" size="sm" disabled={adding} onclick={onaddtoroom}>{adding ? 'Adding…' : 'Add to room'}</Button>{/if}
+		</div>
+	{/if}
 	{#if note}<p class={['ap-profcard-note', note.error && 'ap-tone-danger']} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}
 </Popover>

@@ -53,6 +53,11 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-tone-warn { --ap-tone: var(--warn); color: var(--warn); }
 .ap-tone-danger { --ap-tone: var(--danger); color: var(--danger); }
 
+/* A form's small print, wherever the form is (ProfileEditor, SignInForm, SettingRow, …): a hint beside or under a field
+   or button, and a note on how the form went. */
+.ap-form-hint, .ap-form-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
+.ap-form-hint code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
+
 /* Avatar */
 .ap-avatar { display: inline-grid; place-items: center; flex: none; border-radius: var(--radius-full); background: var(--denim-soft); color: var(--denim); font-weight: 600; object-fit: cover; overflow: hidden; user-select: none; }
 .ap-avatar-md { width: var(--avatar-md); height: var(--avatar-md); font-size: 12px; }
@@ -601,10 +606,6 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 .ap-memberlist-placeholder .ap-skel { height: 12px; }
 .ap-memberlist-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
-/* The add form: raised, like a popover in place, so the members stay in view below it. */
-.ap-memberlist-add { display: grid; gap: var(--space-2); margin: 0 var(--space-1) var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-100); }
-.ap-memberlist-addrow { display: flex; gap: var(--space-2); min-width: 0; }
-.ap-memberlist-add .ap-field { flex: 1; min-width: 0; height: var(--control-md); font-size: var(--text-ui); }
 .ap-memberlist-section + .ap-memberlist-section { margin-top: var(--space-4); }
 /* As the rooms list's section headings; the caret sits out in the gutter, as Other threads' does, so the words line up with the avatars. */
 .ap-memberlist-sectionhead { margin: 0; padding: 0 var(--space-1) var(--space-1); font: inherit; }
@@ -782,9 +783,6 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profedit { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
 .ap-profedit-top { display: flex; align-items: center; gap: var(--space-3); }
 .ap-profedit-av { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); min-width: 0; }
-.ap-profedit-hint { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
-.ap-profedit-hint code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
-.ap-profedit-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
 .ap-profedit-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 .ap-profile-pop .ap-profedit-actions { flex-wrap: wrap; }
 
@@ -812,8 +810,10 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profcard-nameline { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
 .ap-profcard-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; }
 .ap-profcard-you { flex: none; color: var(--ink-muted); font-size: var(--text-sm); }
-.ap-profcard-handle { color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; user-select: all; }
-.ap-profcard-status { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
+.ap-profcard-handleline { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.ap-profcard-handle { min-width: 0; color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; user-select: all; }
+.ap-profcard-copy { flex: none; width: var(--control-xs); height: var(--control-xs); margin: -2px 0; }
+.ap-profcard-status, .ap-profcard-seen { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 .ap-profcard-literal { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
 /* With room for more than one row, every badge shows, wrapping; one wider than the card ellipsizes. */
 .ap-profcard-names .ap-roles { align-self: flex-start; height: auto; overflow: visible; margin: 2px 0 0; }
@@ -1004,7 +1004,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-dialog-sub { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-dialog-close { flex: none; }
 .ap-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); }
-.ap-dialog-body > p { margin: 0; font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink-muted); }
+.ap-dialog-body > p { margin: 0; font-size: var(--text-field); line-height: var(--leading-field); color: var(--ap-tone, var(--ink-muted)); }
+/* Dialog's `error`: under the content, in the danger color. */
+.ap-dialog-note { margin: 0; color: var(--ap-tone, var(--ink-muted)); }
 .ap-dialog-body-flush { padding: 0; gap: 0; overflow: hidden; }
 .ap-dialog-body .ap-fieldlabel { color: var(--ink); }
 .ap-dialog-body .ap-field { width: 100%; }
@@ -1174,7 +1176,7 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
    and corners on every piece, rather than one box cut open at the line ends. A chip that is a button (a mention or room
    link you can open) can't break across lines: it moves to the next line whole, and only one wider than its line wraps,
    inside its own box, rather than running out of the message. */
-:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-profedit-hint) :not(pre) > code, .ap-mention { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-form-hint) :not(pre) > code, .ap-mention { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 
 /* Shared autocomplete picker — above the composer while typing @…, #… or :… */
@@ -1392,7 +1394,7 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-addedbar-note { margin: 0; color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-addedbar-error { flex-basis: 100%; }
 .ap-addedbar-close { flex: none; }
-/* PrivateRoomForm — the people picked, as chips in a field, then everyone who matches, as a listbox; at the limit, your
+/* PeoplePicker (PrivateRoomForm, AddMembersForm) — the people picked, as chips in a field, then everyone who matches, as a listbox; at the limit, your
    private rooms to leave instead. */
 .ap-pick-field { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); height: auto; min-height: var(--control-lg); padding: 2px var(--space-1); cursor: text; }
 .ap-pick-chip { display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; height: var(--control-sm); padding: 0 2px; box-sizing: border-box; border-radius: var(--radius-full); background: var(--private-soft); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 500; cursor: default; }

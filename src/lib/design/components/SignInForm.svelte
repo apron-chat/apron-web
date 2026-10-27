@@ -120,18 +120,18 @@
 		{/if}
 	{/if}
 	{#if sent?.scheme === 'email'}
-		<p class="ap-profedit-hint" role="status">If {sent.email} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
+		<p class="ap-form-hint" role="status">If {sent.email} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
 		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={onrestart}>Use another address, or send a new code</button>
 	{:else if sent?.page}
 		<!-- The server won't send the viewer back here (§4.11.5): its page shows a code to type here instead. -->
-		<p class="ap-profedit-hint" role="status">
+		<p class="ap-form-hint" role="status">
 			<a href={sent.page} target="_blank" rel="noopener noreferrer" data-testid={pageLinkTestid}>Open the sign-in page</a>, sign in there, then enter the code it shows you.
 		</p>
 		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={onrestart}>Start again</button>
 	{:else}
-		<p class="ap-profedit-hint" role={hintStatus ? 'status' : undefined}>{hint}</p>
+		<p class="ap-form-hint" role={hintStatus ? 'status' : undefined}>{hint}</p>
 	{/if}
-	{#if error}<p class="ap-profedit-note ap-tone-danger" role="alert">{error}</p>{/if}
+	{#if error}<p class="ap-form-note ap-tone-danger" role="alert">{error}</p>{/if}
 	<div class="ap-connect-actions">
 		{#if busy}<TypingDots />{/if}
 		{#if secondary}

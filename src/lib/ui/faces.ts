@@ -6,12 +6,15 @@ import { directory } from './directory.svelte';
 import { hueOf } from './messages';
 import { othersIn } from './private-rooms';
 
+/** A person as the design system's Face, as the directory knows them: with their status, unless `status` is false. */
+export function faceOf(person: Identity, status = true): Face {
+	const shown = status ? directory.status(person) : undefined;
+	return { user_id: person.user_id, name: directory.name(person), src: directory.avatar(person), hue: hueOf(person.user_id), status: shown, statusLabel: presenceLabel(shown) };
+}
+
 /** People as the design system's Faces, each as the directory knows them: their status only where one shows alone. */
 export function facesOf(people: readonly Identity[]): Face[] {
-	return people.map((person) => {
-		const status = people.length === 1 ? directory.status(person) : undefined;
-		return { user_id: person.user_id, name: directory.name(person), src: directory.avatar(person), hue: hueOf(person.user_id), status, statusLabel: presenceLabel(status) };
-	});
+	return people.map((person) => faceOf(person, people.length === 1));
 }
 
 /** Who a private room is with: the others in it, or you, alone in it. */

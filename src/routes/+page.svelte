@@ -46,7 +46,8 @@
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
-	import { ArrivalWatch, addRoomMembers, couldNotAdd, othersIn, reachesStart } from '$lib/ui/private-rooms';
+	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
+	import { couldNotAdd } from '$lib/ui/members';
 	import { roomFaces } from '$lib/ui/faces';
 	import { composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
@@ -385,8 +386,18 @@
 	 */
 	let threadsListed = $state<readonly string[]>([]);
 	let awaitingThreads = $derived(Boolean(session.ready && session.canManageRooms && session.activeRoomId && !threadsListed.includes(session.activeRoomId)));
+	/** Who the rooms in `threadsListed` were listed for. */
+	let threadsListedFor: string | undefined;
 	$effect(() => {
-		if (!session.ready) threadsListed = [];
+		// The client keeps its thread listings through a dropped connection (`disconnectedAt`) and refreshes them
+		// behind it, so a reconnect doesn't hold the room back again. A new session (a restart, signing out, another
+		// account) starts over.
+		const userId = session.snapshot.you?.user_id;
+		if (!session.ready && session.snapshot.disconnectedAt === undefined) threadsListed = [];
+		else if (userId !== undefined && userId !== threadsListedFor) {
+			if (threadsListedFor !== undefined) threadsListed = [];
+			threadsListedFor = userId;
+		}
 	});
 	$effect(() => {
 		const roomId = session.ready && session.canManageRooms ? session.activeRoomId : undefined;
@@ -446,8 +457,10 @@
 	const checking = new SettleFlag((on) => (checkingShown = on));
 	/** A short drop of the connection, kept quiet: everything stays on screen while the socket comes back. */
 	let quietReconnect = $derived(session.connection === 'reconnecting' && !session.reconnectNeedsAttention);
-	// One pill for the whole way back: "Reconnecting…", then checking for what came meanwhile.
-	$effect(() => checking.set(paneCatchingUp || quietReconnect));
+	// One pill for the whole way back: "Reconnecting…", then checking for what came meanwhile. None while a hidden
+	// tab waits to reconnect, nor for the first moments once it tries, so a quick way back (as most are, coming back
+	// to the tab) shows nothing.
+	$effect(() => checking.set(!session.reconnectQuiet && !session.waitingToReconnect && (paneCatchingUp || quietReconnect)));
 	$effect(() => () => checking.dispose());
 	/** Nothing held to show while the room's threads are listed: placeholders, so its messages and thread cards appear together. */
 	let paneHeldBack = $derived(awaitingThreads && !activeThread && !session.activeRoomHeld);
@@ -458,10 +471,12 @@
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
+	/** `paneReady`, or a quiet reconnect from it: what shows stays as it was, and what's asked waits for the connection. */
+	let paneSteady = $derived(Boolean(paneRoom && session.steady && !snapshot.authBusy));
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
 	let canCompose = $derived(paneReady && !session.readOnly);
 	/** Files dropped on the conversation or pasted outside the field attach to the draft while the composer is showing. */
-	let canAttach = $derived(canCompose && snapshot.capabilities['embed:upload'] && !selection.active);
+	let canAttach = $derived(paneSteady && !session.readOnly && session.capabilities['embed:upload'] && !selection.active);
 	/** Files are being dragged over the conversation. */
 	let dropping = $state(false);
 	/** Files dropped on the conversation pane's `<main>`. */
@@ -483,7 +498,8 @@
 		: undefined);
 	// `server.agent` names the implementation, for debugging, not the server: the host is the label.
 	let backendLabel = $derived(backendHost(serverInput) || 'Apron');
-	let threadReplyCount = $derived(threadRoom?.loaded ? messages.length : undefined);
+	// A thread kept through a reconnect counts what it had while it catches up, rather than the count going and coming back.
+	let threadReplyCount = $derived(threadRoom?.loaded || threadRoom?.resumed ? messages.length : undefined);
 	/** Messages after the newest you had on screen, by `message_id`, so older ones loading above don't count. */
 	let unseenCount = $derived.by(() => {
 		const seen = seenThrough;
@@ -515,12 +531,12 @@
 	/** The open room's or thread's description, pinned under the header until its × puts it away (and again once it's edited). */
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
-	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneReady);
+	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneSteady);
 	/**
 	 * Starting a private conversation (§4.2.4): the + beside Private and a profile card's Message, for an account
 	 * signed in (not a guest) on a server that creates rooms (capability `rooms`).
 	 */
-	let canStartPrivate = $derived(session.canManageRooms && session.ready && !session.readOnly && Boolean(snapshot.passkeySession));
+	let canStartPrivate = $derived(session.canManageRooms && session.steady && !session.readOnly && session.passkeySession);
 	/** The NewPrivateDialog, from the + beside Private. */
 	let newPrivateOpen = $state(false);
 	/** Notices the private rooms someone else added you to, as they arrive. */
@@ -543,7 +559,7 @@
 	/** The open room is private, and someone else added you to it: its banner shows under the header. */
 	let addedHere = $derived(Boolean(activeRoom && !activeThread && activeRoom.private && activeRoom.parentRoomId === undefined && addedRooms.includes(activeRoom.id)));
 	/** Muting one room (§4.5 `mute` with its `room_id`) takes capability `status` and an account. */
-	let canMuteRoom = $derived(Boolean(snapshot.capabilities.status && snapshot.passkeySession));
+	let canMuteRoom = $derived(Boolean(session.capabilities.status && session.passkeySession));
 	let addedBusy = $state(false);
 	let addedError = $state<string | undefined>();
 	$effect(() => {
@@ -1383,7 +1399,8 @@
 		if (activeRoom?.id !== target.room) {
 			if (!listed(target.room) && !client.viewRoom(target.room)) {
 				// Not among the rooms to join either, once those are listed: this server doesn't show it here.
-				if (session.snapshot.directory !== undefined || !session.canManageRooms) abandonLink('room');
+				// A listing kept from before a drop doesn't count: the room may be newer than it.
+				if ((session.snapshot.directory !== undefined && !session.snapshot.keptListings?.includes('')) || !session.canManageRooms) abandonLink('room');
 				return;
 			}
 			session.chooseRoom(client, target.room);
@@ -1400,7 +1417,7 @@
 		if (target.thread && activeThread !== target.thread) {
 			if (!listed(target.thread) && !client.viewRoom(target.thread)) {
 				// The room's threads are listed without it: the room is as far as the link goes.
-				if (session.snapshot.threadDirectory[target.room] !== undefined || !session.canManageRooms) abandonLink('thread');
+				if ((session.snapshot.threadDirectory[target.room] !== undefined && !session.snapshot.keptListings?.includes(target.room)) || !session.canManageRooms) abandonLink('thread');
 				return;
 			}
 			showThread(target.room, target.thread, 'replace');
@@ -1869,7 +1886,8 @@
 	 * the server said it doesn't take, is taken back off with the reason.
 	 */
 	function stageFiles(picked: File[]): void {
-		if (!canCompose || !session.snapshot.capabilities['embed:upload']) return;
+		// Staging is local: a quiet reconnect takes files as it takes typing, and sending waits for the connection.
+		if (!paneSteady || session.readOnly || !session.capabilities['embed:upload']) return;
 		const limits = serverMedia(session.server).upload;
 		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: prepareUpload(file, { limits }) }));
 		for (const { id, prepared } of staged) {
@@ -2907,10 +2925,11 @@
 					bind:mentions={composerMentions}
 					bind:dismissed={composerDismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
-					disabled={!canCompose}
-					canUpload={snapshot.capabilities['embed:upload']}
+					disabled={!paneSteady || session.readOnly}
+					holdSend={!canCompose}
+					canUpload={session.capabilities['embed:upload']}
 					uploadLimits={serverMedia(session.server).upload}
-					canCommand={snapshot.capabilities.command}
+					canCommand={session.capabilities.command}
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}

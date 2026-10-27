@@ -1,7 +1,5 @@
 // @vitest-environment jsdom
-import { createRawSnippet, mount, unmount } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
-import AddMemberForm from './AddMemberForm.svelte';
 import MemberList from './MemberList.svelte';
 import type { MemberListSection } from './types';
 import * as dom from '$lib/test/dom';
@@ -71,27 +69,23 @@ describe('MemberList', () => {
 		expect(rows.map((row) => row.querySelector('button')!.title)).toEqual(['@bo · Online', '@eve · Unknown status: brb', '@cy', '@cy · Offline']);
 		expect(rows.map((row) => row.querySelector('.ap-sr')?.textContent ?? '')).toEqual([', online', ', unknown status: brb', '', ', offline']);
 		expect(rows.map((row) => row.querySelector('.ap-presence') !== null)).toEqual([true, true, false, true]);
+		dom.unmount();
+		// Only the first word is lowered, as it follows a comma: a date, or a value as the server sent it, reads as it is.
+		render({ sections: [{ key: 'offline', label: 'Offline', people: [
+			{ user_id: 'di', name: 'Di', status: 'offline', statusLabel: 'Offline · last seen Dec 1, 2025' }, { user_id: 'fy', name: 'Fy', status: 'BRB' }
+		] }] });
+		expect([...document.querySelectorAll('li.ap-member .ap-sr')].map((sr) => sr.textContent)).toEqual([', offline · last seen Dec 1, 2025', ', unknown status: BRB']);
 	});
 
-	it('offers the add form only with a listing, and sends what was typed', () => {
+	it('offers Add member only with a listing, as a + that opens a dialog', () => {
 		const onadd = vi.fn();
-		/** The add form as MemberList's `addForm`: an AddMemberForm given the id its + controls. */
-		const addForm = (props: Record<string, unknown>) => createRawSnippet((id: () => string) => ({
-			render: () => '<div></div>',
-			setup(el) {
-				const form = mount(AddMemberForm, { target: el, props: { id: id(), ...props } });
-				return () => unmount(form);
-			}
-		}));
-		render({ sections, onaddtoggle: () => {}, addOpen: true, addForm: addForm({ value: 'cy', onadd }) });
-		const toggle = document.querySelector<HTMLButtonElement>('.ap-memberlist-addtoggle')!;
-		const form = document.querySelector<HTMLFormElement>('form.ap-memberlist-add')!;
-		expect(toggle.getAttribute('aria-controls')).toBe(form.id);
-		form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
-		expect(onadd).toHaveBeenCalledWith('cy');
+		render({ sections, onadd });
+		const add = dom.button('Add member');
+		expect(add.getAttribute('aria-haspopup')).toBe('dialog');
+		add.click();
+		expect(onadd).toHaveBeenCalledOnce();
 		dom.unmount();
-		render({ empty: 'Loading members…', onaddtoggle: () => {}, addOpen: true, addForm: addForm({}) });
-		expect(document.querySelector('.ap-memberlist-addtoggle')).toBeNull();
-		expect(document.querySelector('form')).toBeNull();
+		render({ empty: 'Loading members…', onadd });
+		expect(dom.queryByRole('button', 'Add member')).toBeNull();
 	});
 });

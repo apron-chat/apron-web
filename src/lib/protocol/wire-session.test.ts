@@ -324,10 +324,23 @@ function senderOf(snapshot: ClientSnapshot, from: Identity): Identity {
 		.filter(([key]) => key === 'user_id' || !(Object.hasOwn(kept, key) && cleared(kept[key])))) as Identity;
 }
 
+/** A kept user as the fixtures project it: without `seen`, which has its own key, and without a status only held through a resume. */
 function keptUser(snapshot: ClientSnapshot, id: string): Identity {
-	if (!snapshot.heldStatuses?.includes(id)) return snapshot.users[id];
-	const { status: _held, ...kept } = snapshot.users[id];
-	return kept;
+	const { seen: _seen, ...user } = snapshot.users[id];
+	if (!snapshot.heldStatuses?.includes(id)) return user as Identity;
+	const { status: _held, ...kept } = user;
+	return kept as Identity;
+}
+
+/** The `seen` shown per kept user (README "Session state"): only while their kept status is `offline`. */
+function seenOf(snapshot: ClientSnapshot): Record<string, string> {
+	const seen: Record<string, string> = {};
+	for (const id of Object.keys(snapshot.users).sort(byString)) {
+		if (snapshot.heldStatuses?.includes(id)) continue;
+		const user = snapshot.users[id];
+		if (user.status === 'offline' && typeof user.seen === 'string') seen[id] = user.seen;
+	}
+	return seen;
 }
 
 function logicalState(client: ChatClient, operations: Record<string, string>): ObjectValue {
@@ -344,6 +357,7 @@ function logicalState(client: ChatClient, operations: Record<string, string>): O
 			.sort((left, right) => byString(left.room_id, right.room_id) || byString(left.from.user_id, right.from.user_id)),
 		// The kept users: a status only held on screen through a resume is not kept (README "Session state").
 		users: Object.fromEntries(Object.keys(snapshot.users).sort(byString).map((id) => [id, keptUser(snapshot, id)])),
+		seen: seenOf(snapshot),
 		members: Object.fromEntries(rooms.filter((room) => room.members !== undefined).sort((left, right) => byString(left.id, right.id))
 			.map((room) => [room.id, room.members!.map((member) => member.user_id).sort(byString)])),
 		senders: Object.fromEntries(rooms.flatMap((room) => room.timeline.order.map((id) => [id, senderOf(snapshot, room.timeline.events[id].from)]))),

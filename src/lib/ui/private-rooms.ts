@@ -2,6 +2,7 @@ import { UNSUPPORTED, type ChatClient, type ClientSnapshot, type RoomSnapshot } 
 import { compareLogIds } from '$lib/protocol/reducer';
 import type { Identity } from '$lib/protocol/types';
 import { notPrivate } from './created';
+import { addMembers, type Refusal } from './members';
 
 /**
  * Private rooms (§4.2.4) as people use them to talk: the joined top-level ones the sidebar lists under Private, the
@@ -96,7 +97,7 @@ export function whenJoined(client: Pick<ChatClient, 'subscribe'>, roomId: string
 /** A private room just started, and anyone who couldn't be added to it, with the server's words why. */
 export interface StartedRoom {
 	roomId: string;
-	failed: { userId: string; message: string }[];
+	failed: Refusal[];
 }
 
 /**
@@ -123,15 +124,7 @@ export async function startPrivateRoom(
 	options.named?.(roomId);
 	const room = await whenJoined(client, roomId);
 	if (!room.private) throw new Error(notPrivate(options.title));
-	const failed: StartedRoom['failed'] = [];
-	for (const userId of people) {
-		try {
-			await client.joinRoom(roomId, userId).promise;
-		} catch (cause) {
-			failed.push({ userId, message: cause instanceof Error ? cause.message : 'Unable to add them' });
-		}
-	}
-	return { roomId, failed };
+	return { roomId, failed: await addMembers(client, roomId, people) };
 }
 
 /**
@@ -139,19 +132,10 @@ export async function startPrivateRoom(
  * thread is private too (§4.2.4), so only its members see it: without this, the people you talk to in the room never
  * see the thread, nor hear of its replies. A refusal doesn't stop the rest; the result says who and why.
  */
-export async function addRoomMembers(
+export function addRoomMembers(
 	client: Pick<ChatClient, 'joinRoom'>, threadId: string, room: Pick<RoomSnapshot, 'members'> | undefined, you: string | undefined
-): Promise<StartedRoom['failed']> {
-	const others = othersIn(room, you).map((member) => member.user_id);
-	const settled = await Promise.allSettled(others.map((userId) => client.joinRoom(threadId, userId).promise));
-	return settled.flatMap((result, index) => result.status === 'rejected'
-		? [{ userId: others[index], message: result.reason instanceof Error ? result.reason.message : 'Unable to add them' }]
-		: []);
-}
-
-/** Who couldn't be added, by name, and the server's words why: "Couldn’t add Carol: …". */
-export function couldNotAdd(failed: StartedRoom['failed'], nameOf: (userId: string) => string): string {
-	return failed.map(({ userId, message }) => `Couldn’t add ${nameOf(userId)}: ${message.replace(/[.\s]+$/, '')}.`).join(' ');
+): Promise<Refusal[]> {
+	return addMembers(client, threadId, othersIn(room, you).map((member) => member.user_id));
 }
 
 /**

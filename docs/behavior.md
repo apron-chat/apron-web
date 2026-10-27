@@ -35,8 +35,16 @@ request to the same URL with `?apron_connection_status=1`
 exposed through CORS; the client displays the reason and waits before retrying,
 including manual retries. Any other reply is ignored, and servers without
 this optional endpoint retain ordinary reconnect behavior.
-Repeated connection failures back off from 500 ms to about one attempt per minute
-with jitter. An explicit server retry window takes precedence, including a
+The first reconnect after a connection that stayed up goes within a quarter
+second, spread at random so a server's clients don't all come back at once;
+repeated failures back off from 1 s to about one attempt per minute with jitter.
+Where the server pings (§1), a tab shown again after 10 seconds or more away,
+or a network that comes back, checks at once that its socket still answers:
+one ping, and a socket that hears nothing back (a `pong`, or any other frame)
+within 5 seconds is replaced as if it had closed, rather than looking connected
+for up to a whole ping interval after a laptop slept. For 3 minutes after a
+check replaced a socket, the next waits 30 seconds instead, so a slow network
+that outlasts 5 seconds isn't met with one new connection after another. An explicit server retry window takes precedence, including a
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.
@@ -70,15 +78,35 @@ also one that comes in steps, doesn't flicker. A short drop of the connection
 uses the same pill, saying "Reconnecting…" until the connection is back and then
 that it's checking, so the way back reads as one quiet line, with everything
 kept on screen; a longer drop, or one that needs you, gets the status banner
-instead.
+instead. The way back shows no pill at all for its first 1.5 seconds, counted
+from when the client starts trying again where you can see it: the drop, or,
+for a tab hidden meanwhile (which waits to reconnect until it's shown), coming
+back to it. Most reconnects are done by then, so they show nothing. A tab
+waiting while hidden shows nothing either, and the banner's "Still trying to
+reconnect…" also counts only from then, never the time the tab was away (hiding
+the tab mid-reconnect stops the count; a browser offline while the tab shows
+still counts). Its **Try Again** shows the new attempt at once.
+Through a quiet reconnect the page stays as it was (a guest who only reads
+keeps reading): the rooms' and member list's + buttons, the Online and Offline headings, the Private section and the
+profile bar's note stay up, and the composer still takes typing, while Send
+waits for the connection. Only your own dot in the profile bar says it: a ring
+broken into dashes, its tooltip the connection's state, in place of your status
+until the connection is back. Screen readers hear it as the pill shows it: not
+for those first moments, nor while a hidden tab waits (the status says nothing
+then, rather than "Connected"). A link opened meanwhile waits for the new
+connection's listings before deciding a room or thread isn't there. What was listed before
+the drop stays listed: Browse rooms, Other threads, and the room's thread cards,
+until the new connection's listings replace them, so the open room shows what
+came meanwhile without waiting on its thread listing again, and an open
+thread's reply count stays while it catches up.
 A request that takes more than 600ms says so in a toast above the composer
 ("Leaving…"), which goes when it's done; one that fails leaves its error there
 until the next request, or until its × closes it. An error of the connection
 itself shows in the corner, also with a ×; closed, it stays away until it
-clears, and shows again if it comes back. The first time a room is shown on
-a connection its messages wait for its thread listing, for at most three
+clears, and shows again if it comes back. The first time a room is shown in
+a session its messages wait for its thread listing, for at most three
 seconds, so its thread cards arrive with them instead of shifting the timeline
-afterwards.
+afterwards; a reconnect keeps what was listed, so it doesn't wait again.
 With the `activity` capability, typing is reported as `activity` notifications that ask
 for a 15-second indicator (`typing: 15`) and refresh it at most once every 12
 seconds per room, with one `typing: 0` when typing pauses, to avoid charging a
@@ -209,12 +237,15 @@ name. A server may list only the most recently
 active members of a large room, with `member_count`, the number of users who have joined; the list
 then says so, and the count in its header is the total. In a room you have
 joined, with the `rooms` capability, a small **+** after the header's count
-(**Add member**) opens a form atop the list, which adds someone by `user_id` (`room_join` with their `user_id`,
-suggesting people the client knows; the form closes once they are added, or on
-Escape) and each other
+(**Add member**) opens **Add people to …**, a centered dialog with the same
+people picker as New private conversation (below): the people the client knows
+who aren't members yet, but you and the system identities, narrowed by a name
+or `@user_id` typed; when none of them matches, the `@user_id` typed is offered
+to add by it. **Add** sends `room_join` with each picked `user_id` in turn; one
+the server refuses doesn't stop the rest, stays picked, and the dialog says
+why, while those added are said in the panel. Each other
 member's remove button removes them (`room_leave` with their `user_id`, after
-a confirm): how members bring people into a private room. Only a `user_id` is
-accepted there, since display names aren't unique. Who may is the server's
+a confirm): how members bring people into a private room. Who may is the server's
 policy; its error shows in the panel. A server that answers `unsupported`
 gets no controls until its next `server` frame. A count kept from a truncated listing stays while later records
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
@@ -260,13 +291,59 @@ room `members` and `users` of `room_list` and `room_update`, which carry
 `offline` and `""` too (a ring, and no dot). Signing in again as the same user
 after a lost connection (a resume), the ones from before still show until the
 joined `room_list` arrives, each replaced as a fresh one comes, so the member
-list doesn't grey out and reorder meanwhile. Then any the server didn't send
+list doesn't grey out and reorder meanwhile; the member list itself keeps
+showing them all, in their order, until that listing, then changes over once,
+rather than reordering as each fresh one comes. Then any the server didn't send
 again show no dot, except an `offline` or `""`, which stays: the server sends
 every other status, so its silence means one of those. A sign-in as someone
 else drops them at once. A
 sign-in is an `auth` as a user the connection isn't already signed in as: a
 repeat `auth` as the same user, or adding a passkey or an email address,
 keeps them.
+
+A user object with a shown `offline` may carry `seen` (§4.5.2): when that
+user's shown status last became `offline`, in the `log_id` format. While a
+member shows offline, their profile card says "Last seen 3h ago" under the
+status (as `15m`, `3h` or `12d ago` within two weeks, then the day as the
+browser's locale writes it, such as `Last seen Sep 14` in en-US, with the
+year when it isn't this one), with the exact local time as its tooltip, and
+their row's tooltip (and its screen-reader text) says "Offline · last seen 3h
+ago"; both move on each minute. Under ten minutes ago it says "Last seen
+recently", with no number: a server may record `seen` coarsely (one records
+it to the 10 minutes, and a departure within 10 minutes of the one before
+announces the older time again), so "4m ago" could be off by as much as it
+says. Its tooltip then says "Last seen within the last 10 minutes" rather
+than an exact time the words decline to give, though the `<time>` keeps the
+time in its `datetime`. A `seen` up to five minutes ahead of this device's
+clock is recent too; one further ahead says its day, since "ago" would be
+false. It merges like any other field, so a `seen` kept from before stays
+when they come back online (`{"status": "online"}` carries none), but it
+shows only while they show offline. One that isn't decimal digits of a
+positive integer below 2^53, or is past the last date a JavaScript `Date`
+holds (8.64e15 ms), shows nothing. It is never kept for you: your status is
+the one you chose, and `you` carries no `seen`. A sign-in drops each `seen`
+with the statuses. Resuming, a held `offline` shows with its `seen` until
+the joined listing arrives; an `offline` kept after it because nothing was
+said of them keeps no `seen`, since they may have come back and gone again
+meanwhile (the sign-in sends no `offline`, and a listing of what changed
+since leaves out rooms whose log didn't move), until an object that carries
+one arrives.
+
+The page also notes, in memory, when it received each other user's change
+of shown status to `offline` (from a `user` notification, a room's
+`members`, or a listing's or `room_update`'s `users`) from one it showed
+them with on this signed-in connection: not from `offline`, `""` or none.
+While they show offline, the later of that and their `seen` shows, so
+someone this page watched leave never reads as gone longer than that,
+however coarse the server's `seen`; it shows even where the server sent no
+`seen`, since it is what this page saw, not something the server claims. It
+is only ever the time a change was received: a status learnt after a
+sign-in, or held through a resume, changes from none, so someone who left
+while this page was away isn't given the time it came back. It is never
+yours. It stays through a resume as the same user, except for someone the
+resume's listing says nothing of (dropped with their `seen`, for the same
+reason), and any other sign-in drops it, as it does the statuses. A reload
+loses it, and the server's `seen` alone shows.
 
 In the composer, Enter sends and Shift+Enter starts a new line. On a phone or
 tablet (a touch screen with no pointer that hovers) Enter starts a new line
@@ -338,13 +415,13 @@ Text that merely contains your `@user_id` does none of that.
 Clicking a user's mention chip in a message, a sender's name or avatar, or a
 member in the member list opens their profile card: a popover beside it (a
 bottom sheet on narrow screens) with their avatar, name, `@user_id` (always,
-here), role badges, "(you)", a warning when another known user shows under
+here, with a copy button beside it), role badges, "(you)", a warning when another known user shows under
 the same name, their bio where the server keeps one (plain text with its
 line breaks, never markup; its `http(s)` links open in a new tab), and whether they're in the open room. **Message**, the
 card's primary action, opens a private conversation with them (below), for
 anyone but you and the system identities, while you're signed in to an account
 (not a guest) on a server with the `rooms` capability. **Mention** puts their
-chip in the composer, **Copy @user_id** copies their handle, and **Add to
+chip in the composer, and **Add to
 room** appears where the member list would let you add them. Escape, a press
 outside, or tabbing out closes it. Mentions inside a reply's quote only read,
 since the quote is the button that jumps to its message.
@@ -967,9 +1044,11 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   it. A failed send restores the draft with those previews still removed;
   otherwise the draft forgets them once it is sent or cleared.
 - **Links as chips**: an Apron link in a message's text written as its URL,
-  in any of the three forms of
-  [PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links)
-  (one without `server` is the sending server's), reads as a mention that says
+  in either form of
+  [PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links),
+  `https://link.apron.chat/#…` or `apron:?…` (no other: `web+apron:?…` is
+  neither linked nor read as one; one without `server` is the sending
+  server's), reads as a mention that says
   in words what it is, from what this client knows: "Message in #general", a
   room's name, a thread's name "in #general", a known user as `@name`. Each but
   a user's leads with its kind's icon, the same icons as the link cards. A room
@@ -990,6 +1069,15 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   the link, in its `https` form with the server, so copying it gives a link
   that opens the same place anywhere, a click opens it here, and a modified
   click opens link.apron.chat in a new tab.
+- **Opening a link**: a plain click on any Apron link opens it here, read as
+  Appendix A.4 says: its keys as `application/x-www-form-urlencoded` pairs,
+  each key's first value (a repeat is ignored, so a key appended to a link
+  can't replace one before it, PROTOCOL.md §5.4), and keys it doesn't know
+  ignored. Only the first `server` counts: if this client can't reach it
+  (`wss:`, or `ws:` only to this device), the link isn't opened here at all,
+  rather than opening a later `server` that may have been appended to it; the
+  click is left to the browser. So is a link with a message but no room, or a
+  token but no server.
 - **Link cards**: a link to a message, room or thread that this client knows
   more of than where it is also shows as a card under the text, up to three
   per message, in the shape of a link preview. Its first line is where it is,

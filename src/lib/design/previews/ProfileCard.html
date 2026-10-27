@@ -1,4 +1,4 @@
-<!-- @dsCard group="Identity" height=640 subtitle="A member with a role and a bio: Message (a private conversation, the primary action), Mention, Copy @user_id; someone with an unknown status who shares a name, not in the room, Add to room, after a copy failed; your own card, invisible, as a bottom sheet" -->
+<!-- @dsCard group="Identity" height=700 subtitle="A member with a role and a bio: Copy @user_id beside the @user_id, Message (a private conversation, the primary action), Mention; someone with an unknown status who shares a name, not in the room, Add to room, after a copy failed; someone offline, with when they were last seen; your own card, invisible, as a bottom sheet" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ProfileCard</title></head>
@@ -17,6 +17,12 @@
     mode: 'popover', top: 16, left: 320, width: 288,
     userId: 'grace_2', name: 'Grace', status: 'brb', roles: ['bot'], sharesName: true, membership: 'Not in general',
     oncopyid: noop, onaddtoroom: noop, note: { text: 'Unable to copy', error: true }
+  });
+  A.render(A.ProfileCard, at, {
+    mode: 'popover', top: 320, left: 320, width: 288,
+    userId: 'linus', name: 'Linus', status: 'offline', membership: 'Member of general',
+    seen: { text: 'Last seen 3h ago', datetime: '2026-10-22T09:00:00.000Z', title: 'Last seen 2026-10-22 09:00:00' },
+    onmessage: noop, oncopyid: noop
   });
   A.render(A.ProfileCard, at, {
     mode: 'sheet',

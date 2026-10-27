@@ -131,6 +131,7 @@ Results, traces and the report go to `.qa/e2e/`. There are no retries: a test th
 | `privacy.spec.ts` | A server that drops `private` from a new room or thread: the app says so and doesn't open it to post in. |
 | `private-rooms.spec.ts` | Message on a profile card starts a private room (`room_set` with `private: true`, then `room_join` for them) that opens under Private, and opens it again rather than another; the + beside Private picks people (Enter, Backspace), names the room and adds each in turn, counting against `private_rooms`; a room someone else added you to shows its banner until put away; a guest starts none. |
 | `a11y.spec.ts` | axe-core on connect, room, preferences and thread, desktop and phone: no serious or critical violation beyond `e2e/a11y-baseline.json` (per rule, by count). After fixing some, `E2E_UPDATE_A11Y=1 npm run e2e -- a11y` lowers the baseline; commit it. |
+| `status.spec.ts` | `seen` (§4.5.2): an offline member's profile card says "Last seen 2h ago" (`profile-seen`, a `<time>` with the exact time as its tooltip) and their row's tooltip says so, from the scripted server's listing; nothing for someone online or for you; live, it goes when they come back online and comes back new when they go again. |
 | `contract-scenes.spec.ts`, `contract.spec.ts` | The interop contract, below. |
 
 Tests drive the app as a user does (roles and names, the test ids interop relies on) and assert the wire from
@@ -139,11 +140,14 @@ the frames the memory server recorded (`preview.sent('message')`). The memory se
 sets from `test.use({ knobs })`: `seed: 'rich'` (long names with four roles, a name clash, avatars, a reply, a
 mention of you, an embed of each kind, a room to browse), `dropPrivate: 'rooms' | 'threads'`, `account`
 (the viewer signs in to an account, not as a guest, as starting a private conversation takes), and
-`capabilities` to add (`embed:upload`, `status`). With knobs set the server is `window.__apronPreview`
+`capabilities` to add (`embed:upload`, `status`; with `status`, Ada is online, Grace idle, Margaret do not
+disturb, and Linus offline, last seen three hours ago). With knobs set the server is `window.__apronPreview`
 (`frames`, `post(room, from, body)` for a message from someone else, `addYouToPrivate(from, title?)` for a
-private room someone else added you to); without them the preview is the demo, unchanged. Either way it seeds
+private room someone else added you to, `setPresence(user, status)` for a change of someone's shown status,
+with a new `seen` when it goes `offline`); without them the preview is the demo, unchanged. Either way it seeds
 a private conversation with Grace and a titled private room, and advertises `ext:settings` `private_rooms: 5`. `preview.openRoot()` opens `/` instead, against a scripted WebSocket server (`e2e/mock-server.ts`)
-for the connect screen and sign-in; every request off the machine is refused, so no test reaches a real server.
+for the connect screen and sign-in (with `status`: General's Bob is online, and Ada offline, last seen two hours
+before the fixed clock); every request off the machine is refused, so no test reaches a real server.
 
 ### The interop contract
 

@@ -311,7 +311,9 @@ export const SCENES: Scene[] = [
 			const { page } = preview;
 			await preview.openRoom('engineering');
 			await page.getByRole('button', { name: 'Add member', exact: true }).click();
-			await page.getByRole('combobox', { name: 'User to add' }).fill('grace');
+			await page.getByRole('combobox', { name: 'Add', exact: true }).fill('@grace');
+			// Enter picks the first match, then (the field emptied) adds who's picked.
+			await page.keyboard.press('Enter');
 			await page.keyboard.press('Enter');
 			await expect(page.getByTestId('membership-line')).toBeVisible();
 			await look();
@@ -345,6 +347,18 @@ export const SCENES: Scene[] = [
 			await look();
 			// With `status`, a status to choose, do not disturb among them.
 			await preferences.getByRole('button', { name: /status/i }).click();
+			await look();
+		}
+	},
+	{
+		// An offline member's profile card, which says when they were last seen (§4.5.2).
+		name: 'last-seen',
+		knobs: { capabilities: ['status'] },
+		steps: async (preview, look) => {
+			const { page } = preview;
+			const list = await preview.showMembers();
+			await list.locator('button[data-user-id="linus"]').click();
+			await expect(page.getByTestId('profile-card').getByTestId('profile-seen')).toBeVisible();
 			await look();
 		}
 	},

@@ -3,7 +3,7 @@
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
 	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, type ChatClient, type OperationHandle } from '$lib/protocol/client';
-	import { addError, passkeyMessage, wayBackNudge, wayBackWords } from '$lib/ui/connection';
+	import { addError, passkeyMessage, statusLabel, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { returnUrl } from '$lib/ui/sign-in-link';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { prepareAvatar } from '$lib/ui/images';
@@ -78,8 +78,12 @@
 	let avatar = $derived(directory.avatar(you));
 	/** Your `status` as you chose it (§4.5), from `you`: no dot without one. */
 	let ownStatus = $derived(typeof you?.status === 'string' && you.status !== '' ? you.status : undefined);
-	/** Its tooltip: invisible says how others see you. */
-	let ownLabel = $derived(ownStatusLabel(ownStatus));
+	/** Not connected (connecting, or reconnecting): the dot isn't your status yet, so it says so, quietly. */
+	let away = $derived(session.connection !== 'connected');
+	/** The dot: your status once connected; until then, a placeholder ring, never online's green. */
+	let shownStatus = $derived(ownStatus !== undefined && away ? 'unknown' : ownStatus);
+	/** Its tooltip: invisible says how others see you; while not connected, what's happening. */
+	let ownLabel = $derived(ownStatus !== undefined && away ? statusLabel(session.snapshot, session.stalled) : ownStatusLabel(ownStatus));
 	/** Choosing a status (§4.5): with capability `status`, signed in. */
 	let canSetStatus = $derived(session.snapshot.capabilities.status && session.snapshot.authenticated && you !== undefined);
 	/** Optional statuses this server answered something else for anyway (§4.5), per server: not offered again. */
@@ -113,7 +117,7 @@
 	 * account made with a scheme only in `signup` (§3.1). A gentle nudge to add
 	 * another way in.
 	 */
-	let wayBack = $derived(snapshot.passkeySession ? wayBackNudge(session.server, snapshot.signInMethods) : undefined);
+	let wayBack = $derived(session.passkeySession ? wayBackNudge(session.server, session.signInMethods) : undefined);
 	/**
 	 * Adding an email, or an external identity, to this account (§4.11.3): an
 	 * explicit action, proposed on this signed-in connection, and approved
@@ -348,18 +352,18 @@
 
 <!-- The design system's ProfileBar and ProfileEditor draw it; the app fills in its avatar, and the ways to sign in this server offers. -->
 {#snippet barAvatar()}
-	<Avatar name={you?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={ownStatus} statusLabel={ownLabel} />
+	<Avatar name={you?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={shownStatus} statusLabel={ownLabel} />
 {/snippet}
 {#snippet face()}
-	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" status={ownStatus} statusLabel={ownLabel} />
+	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" status={shownStatus} statusLabel={ownLabel} />
 {/snippet}
 {#snippet signin()}
 	{#if snapshot.authBusy && !addEmail?.busy}
-		<span class="ap-profedit-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
+		<span class="ap-form-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
 	{:else}
 		<span class="ap-profedit-row">
 			<span class="ap-profedit-buttons">
-				{#if snapshot.passkeySession}
+				{#if session.passkeySession}
 					<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
 					{#if canUsePasskey && you}
 						<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
@@ -392,21 +396,21 @@
 				{/if}
 			</span>
 			{#if passkeyError}
-				<span class="ap-profedit-hint ap-tone-danger" role="alert">{passkeyError}</span>
+				<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
 			{:else if passkeyNotice}
-				<span class="ap-profedit-hint ap-tone-ok" role="status">{passkeyNotice}</span>
+				<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
 			{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
-				<span class="ap-profedit-hint">{passkeyUnavailable}</span>
+				<span class="ap-form-hint">{passkeyUnavailable}</span>
 			{:else if wayBack}
-				<span class="ap-profedit-hint">{snapshot.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
+				<span class="ap-form-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
 			{:else}
-				<span class="ap-profedit-hint">{snapshot.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
+				<span class="ap-form-hint">{session.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
 			{/if}
 		</span>
 		{#if addEmail}
 			<span class="ap-profedit-add" role="group" aria-label={addEmail.scheme === 'email' ? 'Add email' : 'Add external sign-in'}>
 				{#if addEmail.scheme === 'external' && !addEmail.page}
-					<span class="ap-profedit-hint" role="status"><TypingDots /> Opening the sign-in page…</span>
+					<span class="ap-form-hint" role="status"><TypingDots /> Opening the sign-in page…</span>
 				{:else if addEmail.step === 'address'}
 					<input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com" autocomplete="email" bind:value={addEmail.email} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
 					<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.email.trim()} onclick={continueAddEmail}>Send code</button>
@@ -416,9 +420,9 @@
 				{/if}
 				<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>
 			</span>
-			{#if addEmail.error}<span class="ap-profedit-hint ap-tone-danger" role="alert">{addEmail.error}</span>
-			{:else if addEmail.scheme === 'external' && addEmail.page}<span class="ap-profedit-hint" role="status"><a href={addEmail.page} target="_blank" rel="noopener noreferrer">Open the sign-in page</a>, sign in there, then enter the code it shows you.</span>
-			{:else if addEmail.step === 'code' && addEmail.scheme === 'email'}<span class="ap-profedit-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
+			{#if addEmail.error}<span class="ap-form-hint ap-tone-danger" role="alert">{addEmail.error}</span>
+			{:else if addEmail.scheme === 'external' && addEmail.page}<span class="ap-form-hint" role="status"><a href={addEmail.page} target="_blank" rel="noopener noreferrer">Open the sign-in page</a>, sign in there, then enter the code it shows you.</span>
+			{:else if addEmail.step === 'code' && addEmail.scheme === 'email'}<span class="ap-form-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
 		{/if}
 	{/if}
 {/snippet}

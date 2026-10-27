@@ -71,9 +71,9 @@ The wrappers: `ConnectScreen` and `SignIn` (the pieces the design system's
 `ConnectScreen` is made of: `ConnectPage`, `ConnectHeader` and `SignInForm`;
 `SignIn` keeps the state machine in `$lib/ui/sign-in`), `Sidebar` (`SidebarHead`, `SidebarSection` and
 `RoomItem`, its Private section's rows with the `Faces` of who each private room is with) with `ThreadList` (the design system's `ThreadList`, its rows `ThreadItem`s,
-which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, with its `AddMemberForm`), `ProfileBar` (`ProfileBar` with its
+which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, whose + mounts `AddMembersDialog`: the design system's `AddMembersForm`, the same `PeoplePicker` in a `Dialog` as `PrivateRoomForm`, adding the people picked), `ProfileBar` (`ProfileBar` with its
 `ProfileEditor`), `RoomHeader` (`RoomHeader`, with its ⋯ `MenuButton`) with
-`RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `NewPrivateDialog` (the design system's `PrivateRoomForm`, a people picker in a `Dialog`, which the page owns: it starts a private room with the people picked, or opens the one you already have with someone, and at the server's limit offers yours to leave), the private room's intro and "You were added" banner (the design system's `PrivateIntro` and `AddedBanner`, which the page renders), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
+`RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `NewPrivateDialog` (the design system's `PrivateRoomForm`, a `PeoplePicker` in a `Dialog`, which the page owns: it starts a private room with the people picked, or opens the one you already have with someone, and at the server's limit offers yours to leave), the private room's intro and "You were added" banner (the design system's `PrivateIntro` and `AddedBanner`, which the page renders), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
 `ThreadDescription` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `RoleBadges`, `MentionText` (`Mention`), the embeds (`Embed*`; the trusted-origin gate stays in `embeds/og.ts`), `MessageEditor` (`MessageEditor`), `NoticeLine` (a scoped `Message`, from `noticeView`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: a `ComposerEditable` it fills and edits) with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
 `ProfileCard` (whose Message opens or starts a private conversation), `ReactorsPopover` and `EmojiPopover` (the full emoji picker, which the design system leaves to the client; all three in the design system's `Popover`, a bottom sheet on phones),
 `PreferencesDialog` (`SettingsSections` and `SettingRow`) with its `FontFamilyField` (`FontField`), `StatusPicker`, `PauseNotifications` and `NotifyPrompt` (`Nudge`), `SignInLinkDialog` (both
@@ -119,6 +119,20 @@ the client keeps `status` only from a `you`. `user-status.ts` lists the
 choices, words your own (`ownStatusLabel`), decides when the page is silent
 (`pageSilenced`: paused, or `dnd`) and sorts the member list (online, idle,
 dnd, unknown, offline, then none), where offline members are dimmed.
+`seen` (§4.5.2), when someone's shown status last became `offline`, merges
+into the kept user object like any field. The client also keeps `sawOffline`
+(in memory, in the snapshot): the receipt time of each change of another
+user's kept status to `offline` from one that showed, recorded in
+`noteUser`, so a status learnt after a sign-in or held through a resume
+(none kept) records nothing; `dropKeptStatuses` clears it except on a
+resume, and `settleHeldStatuses` drops it for whoever it drops the `seen`
+of. `directory.seen` reads both through `shownSeen` (only while they show
+`offline`, never yours, the later of the two, and only a `log_id`-format
+time a `Date` can hold), and `lastSeen` words it ("Last seen recently" under
+`SEEN_RECENT_MS`, ten minutes, since a server may record `seen` coarsely,
+with a tooltip that says only that; else "Last seen 15m ago" and the exact
+time; always the `datetime`) for `ProfileCard`'s `seen` and, through
+`withLastSeen`, the member row's tooltip.
 `ProfileCard` shows an unknown value literally. Messages show no status: it
 is about now, and they are history. `PreferencesDialog` renders the design
 system's `CheckList` (what to notify about), `Callout` (installing for push,
@@ -139,7 +153,11 @@ thread is open, per-room drafts) and composes the components. The
 reactive state behind it lives in `src/lib/ui` as small classes — `SessionView`
 (the last authenticated view, held through a reconnect or primed from this device;
 `starting` while the first rooms aren't listed, `activeRoomHeld` while the open
-room shows its held copy, and the open room's thread cards from the same view), `MentionTracker`,
+room shows its held copy, and the open room's thread cards from the same view;
+through a quiet reconnect, `steady`, `capabilities` and `passkeySession` keep
+what the last ready session had, so controls don't blink out with a short drop,
+and `reconnectQuiet` and `stalled` count from the client's `retryingSince`, when
+it began trying where someone could see it, not from the drop), `MentionTracker`,
 `IncomingMessageTracker` (new messages from others, for notifications),
 `AppearanceSettings` (theme and fonts),
 `UnreadTracker`, `ReadPositions` (how far you have read each room and thread,
@@ -156,7 +174,7 @@ picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previ
 and `time.ts` read messages, `connection.ts` words the connection state, and
 `commands.ts` maps the composer's `/` commands to requests,
 `sign-in-link.ts` reads and scrubs a sign-in link (emailed, or the return from an external sign-in page) from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,
-`members.ts` reads the `user_id` typed to add a member and splits the member list into Online and Offline (`memberSections`), and
+`members.ts` reads the `user_id` typed to add a member, adds people to a room in turn (`addMembers`, whose refusals `couldNotAdd` words) and splits the member list into Online and Offline (`memberSections`), `people.ts` sorts people by name (`byName`) and narrows who could be picked by what's typed (`pickable`, `matching`) for both people pickers, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences and read positions included (on this device only; nothing is synced),
 `session-cache.ts` keeps `SessionView`'s held view in IndexedDB per server, trimmed to
@@ -170,11 +188,11 @@ is registered, and words pushed messages for the service worker,
 joined rooms are private and top-level (the sidebar's Private section and the
 `private_rooms` limit count those), the conversation you already have with
 someone (`directRoomWith`), starting one (`startPrivateRoom`: created private,
-its record checked, then each person added in turn), where its intro goes
+its record checked, then each person added in turn with `addMembers`), where its intro goes
 (`reachesStart`), and `ArrivalWatch`, which the page feeds each snapshot as the
 client emits it, while what's in flight is still pending in it, to tell a room
 someone else added you to from one this page asked for; `faces.ts` turns
-people into the design system's `Faces` through `directory`,
+people into the design system's `Faces` (`faceOf`, `facesOf`) through `directory`,
 `notify-scopes.ts` decides which arriving messages the page notifies about from
 the checked scopes, and which of them push sends as `wake`, and
 `push-store.ts` keeps in IndexedDB, for the service worker too, the enabled
@@ -232,7 +250,12 @@ history with `loadRoom` when opened: the newest page (`before` the head, no
 connection keeps each room's records, members, bound and checkpoint: the next
 connection resumes each kept room's recovery from its checkpoint right behind
 `auth`, before any head is known (the first page reports it), and the room
-stays if that connection's `room_list` lists it as joined. A resumed passkey
+stays if that connection's `room_list` lists it as joined. The listings of rooms
+and threads to join (`directory`, `threadDirectory`) stay too, as they were,
+until the next connection's replace them or it signs in as someone else; a
+thread loaded before the drop shows as `resumed` until its next load catches
+up. Through a resume, `statusesBeforeResume` keeps every status held from
+before until the joined listing, for a list that changes over once. A resumed passkey
 session asks only for the rooms whose `latest_log_id` passed the kept
 checkpoints (`latest_log_id` in `room_list`): rooms in `left` go and the rest
 stay; a result without `left` is a full listing. A thread reopened after a

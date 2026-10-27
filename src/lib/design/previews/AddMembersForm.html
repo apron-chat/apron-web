@@ -1,0 +1,24 @@
+<!-- @dsCard group="Input" height=560 subtitle="Adding people to a room or thread: the same PeoplePicker as PrivateRoomForm, Lee picked (a chip; Backspace takes it back), the people who aren't members yet below, and Add" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>AddMembersForm</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  var noop = function () {};
+  var lee = { user_id: 'lee', name: 'Lee', hue: 30, status: 'online' };
+  A.render(A.AddMembersForm, root, {
+    open: true,
+    room: 'Ops',
+    chosen: [lee],
+    people: [
+      { user_id: 'grace', name: 'Grace', hue: 260, status: 'idle' },
+      lee,
+      { user_id: 'mira', name: 'Mira', hue: 80, status: 'offline' }
+    ],
+    onpick: noop, onremove: noop, onsubmit: noop
+  });
+</script>
+</body>
+</html>
