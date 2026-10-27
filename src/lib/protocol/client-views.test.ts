@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, peopleTitle, serverMedia, serverSettings, yourPermissions } from './client-views';
+import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, peopleTitle, serverLook, serverMedia, serverSettings, yourPermissions } from './client-views';
 import type { ServerParams } from './types';
 
 const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 9, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
@@ -64,6 +64,19 @@ describe('serverSettings (ext:settings)', () => {
 		expect(serverSettings(server([], { settings: { read_cursors: false } })).read_cursors).toBe(true);
 		// Settings that moved to ext:permissions mean nothing here.
 		expect(serverSettings(server(['ext:settings'], { settings: { guest_posting: false, add_members: false } }))).toEqual({ read_cursors: true });
+	});
+});
+
+describe('serverLook (§3.1)', () => {
+	it('reads title, description and avatar as strings, the avatar only from where avatars load (§4.8.6)', () => {
+		const frame = { apron: 9, auth: ['guest'], title: '  Work chat ', description: 'Where **we** talk.', avatar: 'https://cdn.example/icon.png' };
+		expect(serverLook(frame, 'wss://chat.example/ws')).toEqual({ title: 'Work chat', description: 'Where **we** talk.', avatar: 'https://cdn.example/icon.png' });
+		expect(serverLook({ ...frame, avatar: '/icon.png' }, 'wss://chat.example/ws').avatar).toBeUndefined();
+		expect(serverLook({ ...frame, avatar: 'https://chat.example/icon.svg' }, 'wss://chat.example/ws').avatar).toBe('https://chat.example/icon.svg');
+		expect(serverLook({ ...frame, avatar: 'http://chat.example/icon.png' }, 'wss://chat.example/ws').avatar).toBeUndefined();
+		expect(serverLook({ ...frame, avatar: 'javascript:alert(1)' }, 'wss://chat.example/ws').avatar).toBeUndefined();
+		expect(serverLook({ apron: 9, auth: [], title: ' ', description: 7 } as never, 'wss://chat.example/')).toEqual({});
+		expect(serverLook(undefined, undefined)).toEqual({});
 	});
 });
 

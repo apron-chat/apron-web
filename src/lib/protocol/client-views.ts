@@ -1,5 +1,5 @@
 /** Pure helpers over client snapshots, capabilities, and server URLs. */
-import { parseOrigins } from './embeds';
+import { parseOrigins, safeAvatar, serverOrigin } from './embeds';
 import { cleanPlainText } from './plain-text';
 import { timelineEvents } from './reducer';
 import { isJsonObject } from './types';
@@ -152,6 +152,29 @@ export function bioOf(user: Identity | undefined): string | undefined {
 	return typeof bio === 'string' ? cleanBio(bio) || undefined : undefined;
 }
 
+/** How a server shows itself (§3.1), where people pick it or sign in to it, always beside its address. */
+export interface ServerLook {
+	/** Its `title`, plain text; absent without one, when clients show its address. */
+	title?: string;
+	/** Its `description`, CommonMark. */
+	description?: string;
+	/** Its `avatar`, where the client loads it as a user's (§4.8.6): `https:`, a small image data URL, or its own origin. */
+	avatar?: string;
+}
+
+/**
+ * How the server at `url` shows itself, from its `server` frame (§3.1): each
+ * field only as a non-blank string, and the avatar only from a source that
+ * avatars load from. A server is never known by these (§1).
+ */
+export function serverLook(server: ServerParams | undefined, url: string | undefined): ServerLook {
+	const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+	const title = text(server?.title);
+	const description = text(server?.description);
+	const avatar = safeAvatar(server?.avatar, url ? serverOrigin(url) : undefined);
+	return { ...(title ? { title } : {}), ...(description ? { description } : {}), ...(avatar ? { avatar } : {}) };
+}
+
 /** What a server takes of one type of file (`ext:media`): the largest file, and the longest image side it keeps. */
 export interface MediaLimit {
 	max_bytes?: number;
@@ -233,16 +256,46 @@ export function defaultWebSocketUrl(locationLike?: Location): string {
 	return `${protocol}//${locationLike.host}/ws`;
 }
 
+/**
+ * A server's address as clients compare it (§1): the URI normalized by RFC
+ * 3986 §6.2.2 and §6.2.3. The scheme and host are lowercased, a default port
+ * dropped (`80` for `ws:`, `443` for `wss:`), an empty path is `/`, dot
+ * segments go, percent-encoded unreserved characters are decoded and the
+ * rest's hex digits uppercased. `ws:` and `wss:` stay apart. Throws on a
+ * value that isn't a URL.
+ */
+export function serverAddress(value: string): string {
+	// WHATWG URL does the case, the port, the empty path and the dot segments for `ws:` and `wss:`.
+	const url = new URL(value);
+	const percent = (part: string) => part.replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => {
+		const char = String.fromCharCode(parseInt(hex, 16));
+		return /^[A-Za-z0-9._~-]$/.test(char) ? char : `%${hex.toUpperCase()}`;
+	});
+	url.pathname = percent(url.pathname);
+	if (url.search) url.search = percent(url.search);
+	return url.toString();
+}
+
+/** Whether two addresses are the same server (§1), compared normalized (`serverAddress`); never by title or avatar. */
+export function sameServer(a: string | undefined, b: string | undefined): boolean {
+	if (a === undefined || b === undefined) return false;
+	try {
+		return serverAddress(a) === serverAddress(b);
+	} catch {
+		return a === b;
+	}
+}
+
+/** What the user typed for a server, as its address (`serverAddress`): a WebSocket URL, an HTTP(S) base URL, a path on this host, or a bare host. */
 export function normalizeWebSocketUrl(input: string, locationLike?: Location): string {
 	const value = input.trim();
-	if (!value) return defaultWebSocketUrl(locationLike);
-	if (value.startsWith('ws://') || value.startsWith('wss://')) return new URL(value).toString();
-	if (value.startsWith('http://') || value.startsWith('https://')) {
-		return new URL(value.replace(/^http/, 'ws')).toString();
-	}
+	if (!value) return serverAddress(defaultWebSocketUrl(locationLike));
+	// Schemes are case-insensitive (RFC 3986 §3.1).
+	if (/^wss?:\/\//i.test(value)) return serverAddress(value);
+	if (/^https?:\/\//i.test(value)) return serverAddress(value.replace(/^http/i, 'ws'));
 	if (value.startsWith('/')) {
 		const base = locationLike ? `${locationLike.protocol === 'https:' ? 'wss:' : 'ws:'}//${locationLike.host}` : 'ws://localhost:5173';
-		return `${base}${value}`;
+		return serverAddress(`${base}${value}`);
 	}
-	return new URL(`ws://${value}`).toString();
+	return serverAddress(`ws://${value}`);
 }

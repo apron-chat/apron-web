@@ -61,6 +61,21 @@ describe('persisted session tokens', () => {
 		expect(storage.has('apron.session:ws://fake.test/')).toBe(false);
 	});
 
+	it('finds a session kept under an address written before addresses were normalized (§1), and keeps it under the address', async () => {
+		storage.set('apron.session:WS://Fake.Test:80', 'session-old');
+		storage.set('apron.signin:WS://Fake.Test:80', 'email');
+		storage.set('apron.session:wss://fake.test/', 'session-tls');
+		startClient({ storage, onSnapshot: (next) => (snapshot = next) });
+		latest().open();
+		latest().receive({ method: 'server', params: { apron: 9, auth: ['token', 'guest'], capabilities: [] } });
+		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'session-old' }));
+		expect(storage.get(TOKEN_KEY)).toBe('session-old');
+		expect(storage.get('apron.signin:ws://fake.test/')).toBe('email');
+		expect(storage.has('apron.session:WS://Fake.Test:80')).toBe(false);
+		// `wss:` is another server.
+		expect(storage.get('apron.session:wss://fake.test/')).toBe('session-tls');
+	});
+
 	it('names the account a sign-up invite creates, with that token only', async () => {
 		const { client } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
 		await latest().greet([], { auth: ['token', 'guest'] });

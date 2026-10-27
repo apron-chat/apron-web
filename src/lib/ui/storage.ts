@@ -1,3 +1,4 @@
+import { serverAddress, type ServerLook } from '$lib/protocol/client-views';
 import { compareLogIds } from '$lib/protocol/reducer';
 import { isJsonObject, isLogId, type JsonObject } from '$lib/protocol/types';
 import { base64url } from '$lib/protocol/webauthn';
@@ -32,7 +33,11 @@ const KEY = {
 	appearance: 'apron.appearance'
 } as const;
 
-export type RecentServer = { url: string; label?: string };
+/**
+ * A server signed in to before: its address (§1), the key it is known by, and the `title` and `avatar` of its last
+ * `server` frame (§3.1), for showing it while it isn't connected. Never found by its title or avatar.
+ */
+export type RecentServer = { url: string; title?: string; avatar?: string };
 export type SidebarPrefs = { width: number; collapsed: boolean };
 
 const RECENT_SERVERS_MAX = 5;
@@ -84,24 +89,57 @@ export function saveDisplayName(name: string): void {
 	write(KEY.displayName, name);
 }
 
+/** An address as recent servers key it (`serverAddress`), or undefined for one that isn't a URL. */
+function addressOf(url: string): string | undefined {
+	try {
+		return serverAddress(url);
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * The servers signed in to before, newest first, each once by its address: entries saved before addresses were
+ * normalized, or with a host `label` in place of a title, are folded into the newest entry for their address.
+ */
 export function loadRecentServers(): RecentServer[] {
 	try {
 		const parsed: unknown = JSON.parse(read(KEY.recentServers) ?? '[]');
 		if (!Array.isArray(parsed)) return [];
-		return parsed
-			.filter(isJsonObject)
-			.filter((entry): entry is RecentServer & JsonObject => typeof entry.url === 'string')
-			.map((entry) => ({ url: entry.url, ...(typeof entry.label === 'string' ? { label: entry.label } : {}) }))
-			.slice(0, RECENT_SERVERS_MAX);
+		const recent: RecentServer[] = [];
+		for (const entry of parsed) {
+			if (!isJsonObject(entry) || typeof entry.url !== 'string') continue;
+			const url = addressOf(entry.url);
+			if (!url || recent.some((kept) => kept.url === url)) continue;
+			recent.push({ url, ...(typeof entry.title === 'string' && entry.title ? { title: entry.title } : {}), ...(typeof entry.avatar === 'string' && entry.avatar ? { avatar: entry.avatar } : {}) });
+		}
+		return recent.slice(0, RECENT_SERVERS_MAX);
 	} catch {
 		return [];
 	}
 }
 
-/** Puts a backend at the head of the recent list, dropping its older entry and the tail. */
-export function rememberServer(recent: RecentServer[], url: string, label: string | undefined): RecentServer[] {
-	const entry: RecentServer = { url, ...(label ? { label } : {}) };
-	const next = [entry, ...recent.filter((server) => server.url !== url)].slice(0, RECENT_SERVERS_MAX);
+/** Puts a server at the head of the recent list, with how it last looked, dropping its older entry and the tail. */
+export function rememberServer(recent: RecentServer[], url: string, look: Pick<ServerLook, 'title' | 'avatar'> = {}): RecentServer[] {
+	const address = addressOf(url) ?? url;
+	const entry: RecentServer = { url: address, ...(look.title ? { title: look.title } : {}), ...(look.avatar ? { avatar: look.avatar } : {}) };
+	const next = [entry, ...recent.filter((server) => server.url !== address)].slice(0, RECENT_SERVERS_MAX);
+	write(KEY.recentServers, JSON.stringify(next));
+	return next;
+}
+
+/**
+ * Keeps how a recent server looks now (its latest `server` frame's `title` and `avatar`), where it is listed, without
+ * moving it: returns the list as it was when nothing changed, or the server isn't listed.
+ */
+export function refreshRecentServer(recent: RecentServer[], url: string, look: Pick<ServerLook, 'title' | 'avatar'>): RecentServer[] {
+	const address = addressOf(url) ?? url;
+	const index = recent.findIndex((server) => server.url === address);
+	if (index < 0) return recent;
+	const kept = recent[index];
+	if (kept.title === look.title && kept.avatar === look.avatar) return recent;
+	const entry: RecentServer = { url: address, ...(look.title ? { title: look.title } : {}), ...(look.avatar ? { avatar: look.avatar } : {}) };
+	const next = recent.map((server, at) => (at === index ? entry : server));
 	write(KEY.recentServers, JSON.stringify(next));
 	return next;
 }

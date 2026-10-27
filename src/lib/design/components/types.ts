@@ -476,3 +476,22 @@ export interface PickRoom {
 	/** Leaving it is in flight. */
 	leaving?: boolean;
 }
+
+/** A backend signed in to before, as the connect screen offers it again (ConnectPage `recent`). */
+export interface RecentBackend {
+	/** Its address (§1): what it is known by, always shown. */
+	url: string;
+	/** What to call it: its `title` (§3.1), else its host. */
+	label?: string;
+	/** Its `avatar` (§3.1), loaded as a user's is (§4.8.6); initials without one. */
+	avatar?: string;
+}
+
+/** The server in the connect screen's Server field, once it has answered: how it shows itself (§3.1), beside its address. */
+export interface ConnectServer {
+	/** Its `title`, else its host. */
+	name: string;
+	/** Its address (§1), always shown with the name, since a title and an avatar can be copied (§5.3). */
+	address: string;
+	avatar?: string;
+}

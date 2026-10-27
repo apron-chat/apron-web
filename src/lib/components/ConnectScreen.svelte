@@ -1,6 +1,7 @@
 <script lang="ts">
 	/** The connect screen: which backend, its welcome, and the sign-in panel for it. */
-	import { normalizeWebSocketUrl, type ChatClient } from '$lib/protocol/client';
+	import { normalizeWebSocketUrl, serverLook, type ChatClient } from '$lib/protocol/client';
+	import { backendHost } from '$lib/ui/connection';
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -46,19 +47,28 @@
 			return serverInput.trim();
 		}
 	});
+	/** The server in the field has answered: what it says about itself is for it. */
+	let answered = $derived(normalizedInput === client.url && session.server !== undefined);
 	/** `server.welcome` (§3.2), for the server in the field once it has answered: CommonMark, sanitized as a message is. */
 	let welcome = $derived.by(() => {
-		const text = normalizedInput === client.url ? session.server?.welcome : undefined;
+		const text = answered ? session.server?.welcome : undefined;
 		return text ? renderMarkdown(text, directory.resolve, directory.resolveRoom) : '';
 	});
+	/** How it shows itself (§3.1): its title, else its host, always with its address beside it (§5.3). */
+	let look = $derived(answered ? serverLook(session.server, client.url) : undefined);
+	let server = $derived(look ? { name: look.title ?? (backendHost(client.url) || client.url), address: client.url, ...(look.avatar ? { avatar: look.avatar } : {}) } : undefined);
+	let description = $derived(look?.description ? renderMarkdown(look.description, directory.resolve, directory.resolveRoom) : '');
+	/** Each recent server by its title, else its host, with its address. */
+	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (backendHost(entry.url) || entry.url), ...(entry.avatar ? { avatar: entry.avatar } : {}) })));
 </script>
 
 <!-- The design system's ConnectPage draws the page; the app's SignIn runs the form, with a ConnectHeader at its top. -->
 {#snippet welcomeHtml()}{@html welcome}{/snippet}
+{#snippet descriptionHtml()}{@html description}{/snippet}
 {#snippet header()}
-	<ConnectHeader bind:url={serverInput} {busy} welcome={welcome ? welcomeHtml : undefined} urlTestid="server-url-input" />
+	<ConnectHeader bind:url={serverInput} {busy} welcome={welcome ? welcomeHtml : undefined} urlTestid="server-url-input" {server} description={description ? descriptionHtml : undefined} serverTestid="connect-server" />
 {/snippet}
-<ConnectPage page {busy} recent={recentServers} onpickrecent={(recent) => (serverInput = recent.url)}>
+<ConnectPage page {busy} {recent} onpickrecent={(picked) => (serverInput = picked.url)}>
 	<SignIn
 		{client} {session} bind:serverInput bind:displayName bind:busy {passkeyUnavailable} {canCancel}
 		{initialScheme} {initialEmail} {initialError} {header} {onconnect} {onconnected} {oncancel} {onsignout}
