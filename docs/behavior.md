@@ -660,8 +660,13 @@ Without the capability, `/` text is an ordinary message.
 
 With the `activity` capability, reading the latest message of a room advances your
 read cursor (`read_message_id`), which the server syncs across your
-connections. A server whose settings say `read_cursors: false` (below) keeps
-no cursors: the cursor still moves here, but isn't sent.
+connections. Each room's goes to the server at most every 10 seconds: the
+first at once, and the latest of those that came sooner at the end of the
+interval, or at once when the page is hidden (it may be closing), or once
+signed in again if the connection drops first (not if another account signs
+in: they were the previous account's). A server whose settings say
+`read_cursors: false` (below) keeps no cursors: the cursor still moves here,
+but isn't sent.
 
 Whatever the server offers, this device keeps how far you have read each room
 and thread (a thread's own) for the next visit, in `localStorage`, per account

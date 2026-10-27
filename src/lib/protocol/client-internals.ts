@@ -206,6 +206,11 @@ export const PROBE_MS = 5_000;
 export const PROBE_PATIENT_MS = 30_000;
 /** How long after a probe last replaced a socket the next waits `PROBE_PATIENT_MS`; then `PROBE_MS` again. */
 export const PROBE_PATIENT_FOR_MS = 180_000;
+/**
+ * How often one room's read cursor goes to the server at most (`markRead`):
+ * reading down a busy room sends a frame every ten seconds, not one a message.
+ */
+export const READ_CURSOR_SEND_MS = 10_000;
 /** How long the page must have been hidden for its return to probe the socket: a glance at another tab doesn't. */
 export const PROBE_AFTER_HIDDEN_MS = 10_000;
 /**

@@ -132,6 +132,79 @@ describe('read cursors', () => {
 		expect(general().readMessageId).toBe('31');
 	});
 
+	it('sends a room\'s read cursor at most every ten seconds, the latest at the end, and what waits when the page is hidden', async () => {
+		await socket.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
+		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
+		const reads = () => socket.sent.filter((frame) => frame.method === 'activity').map((frame) => frame.params);
+		socket.sent = [];
+		// Reading down a busy room: the first goes at once, the rest wait for the interval.
+		client.markRead('general', '31');
+		client.markRead('general', '32');
+		vi.advanceTimersByTime(4_000);
+		client.markRead('general', '33');
+		expect(reads()).toEqual([{ room_id: 'general', read_message_id: '31' }]);
+		// Another room has its own interval.
+		client.markRead('lobby', '40');
+		expect(reads().at(-1)).toEqual({ room_id: 'lobby', read_message_id: '40' });
+		vi.advanceTimersByTime(6_000);
+		// The latest, once, at the end of the interval.
+		expect(reads()).toEqual([
+			{ room_id: 'general', read_message_id: '31' },
+			{ room_id: 'lobby', read_message_id: '40' },
+			{ room_id: 'general', read_message_id: '33' }
+		]);
+		vi.advanceTimersByTime(20_000);
+		expect(reads()).toHaveLength(3);
+	});
+
+	it('sends the read cursors waiting when the page is hidden, and those that waited out a drop once signed in again', async () => {
+		const listeners = new Map<string, () => void>();
+		const page = { visibilityState: 'visible', addEventListener: (type: string, fn: () => void) => listeners.set(type, fn), removeEventListener: (type: string) => listeners.delete(type) };
+		vi.stubGlobal('document', page);
+		const started = startClient({ url: 'ws://fake.test/ws' });
+		const first = latest();
+		await first.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
+		await first.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
+		const reads = (peer: FakeSocket) => peer.sent.filter((frame) => frame.method === 'activity').map((frame) => (frame.params as { read_message_id?: string }).read_message_id);
+		started.client.markRead('general', '31');
+		started.client.markRead('general', '32');
+		expect(reads(first)).toEqual(['31']);
+		// Hidden, perhaps closing: it goes now, not at the end of the interval.
+		page.visibilityState = 'hidden';
+		listeners.get('visibilitychange')?.();
+		expect(reads(first)).toEqual(['31', '32']);
+		page.visibilityState = 'visible';
+		listeners.get('visibilitychange')?.();
+		// One waiting when the connection drops goes on the next one, once signed in.
+		started.client.markRead('general', '33');
+		first.drop();
+		vi.advanceTimersByTime(10_000);
+		expect(reads(first)).toEqual(['31', '32']);
+		vi.advanceTimersByTime(60_000);
+		const second = latest();
+		expect(second).not.toBe(first);
+		await second.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
+		expect(reads(second)).toEqual(['33']);
+		started.client.stop();
+	});
+
+	it('drops the read cursors waiting when another identity signs in', async () => {
+		const first = latest();
+		await first.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' }, you: { user_id: 'alice' } });
+		await first.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
+		const reads = (peer: FakeSocket) => peer.sent.filter((frame) => frame.method === 'activity').map((frame) => (frame.params as { read_message_id?: string }).read_message_id);
+		client.markRead('general', '31');
+		client.markRead('general', '32');
+		first.drop();
+		vi.advanceTimersByTime(70_000);
+		const second = latest();
+		expect(second).not.toBe(first);
+		await second.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' }, you: { user_id: 'bob' } });
+		// Alice's waiting cursor is not sent as Bob's.
+		expect(reads(first)).toEqual(['31']);
+		expect(reads(second)).toEqual([]);
+	});
+
 	it('takes your kept read cursor as the server sends it after listing the room (§4.6)', async () => {
 		const room = { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '1724803312060', history_log_id: '10' };
 		await socket.greet(['history', 'rooms', 'activity'], { room, you: { user_id: 'alice' } });
