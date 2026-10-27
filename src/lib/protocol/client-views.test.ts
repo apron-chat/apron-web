@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, peopleTitle, serverMedia, serverSettings, yourPermissions } from './client-views';
+import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, peopleTitle, pushesJoined, serverMedia, serverSettings, yourPermissions } from './client-views';
 import type { ServerParams } from './types';
 
 const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 9, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
@@ -71,12 +71,21 @@ describe('yourPermissions (ext:permissions)', () => {
 	const you = { user_id: 'ada', roles: ['admin'], ext: { permissions: ['move_any', 7, 'delete_any', 'add_members'] } };
 
 	it('reads known permissions from you, only while the server advertises the extension', () => {
-		expect(yourPermissions(server(['ext:permissions']), you)).toEqual({ move_any: true, add_members: true });
-		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: ['move_any'] } })).toEqual({ move_any: true, add_members: false });
+		expect(yourPermissions(server(['ext:permissions']), you)).toEqual({ move_any: true, add_members: true, push_joined: false });
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: ['move_any', 'push_joined'] } })).toEqual({ move_any: true, add_members: false, push_joined: true });
 		// Without the extension, or without the list, roles grant nothing.
-		expect(yourPermissions(server([]), you)).toEqual({ move_any: false, add_members: false });
-		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', roles: ['admin'], ext: { permissions: 'move_any' } })).toEqual({ move_any: false, add_members: false });
-		expect(yourPermissions(server(['ext:permissions']), undefined)).toEqual({ move_any: false, add_members: false });
+		expect(yourPermissions(server([]), you)).toEqual({ move_any: false, add_members: false, push_joined: false });
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', roles: ['admin'], ext: { permissions: 'move_any' } })).toEqual({ move_any: false, add_members: false, push_joined: false });
+		expect(yourPermissions(server(['ext:permissions']), undefined)).toEqual({ move_any: false, add_members: false, push_joined: false });
+	});
+
+	it('takes joined as pushed only with push_joined where the server has the extension, and as listed elsewhere', () => {
+		const granted = { user_id: 'ada', ext: { permissions: ['push_joined'] } };
+		expect(pushesJoined(server(['ext:permissions']), granted)).toBe(true);
+		// Roles grant nothing: an admin without the permission is not pushed for it.
+		expect(pushesJoined(server(['ext:permissions']), you)).toBe(false);
+		expect(pushesJoined(server(['ext:permissions']), undefined)).toBe(false);
+		expect(pushesJoined(server([]), undefined)).toBe(true);
 	});
 });
 

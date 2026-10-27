@@ -5,7 +5,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, keepsBio, normalizeWebSocketUrl, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, keepsBio, normalizeWebSocketUrl, pushesJoined, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
@@ -211,8 +211,12 @@
 		void notifyScopesSaved;
 		return notifyScopesOf(loadNotifyScopes(notifyKey));
 	});
-	/** The wake scopes the server pushes (§4.9), and the `wake` push sends: the checked ones of them. */
-	let webPushOffered = $derived(offeredWake(session.server?.push));
+	/**
+	 * The wake scopes the server pushes for you (§4.9; `joined` only where your
+	 * permissions say so, EXT.md §7), and the `wake` push sends: the checked
+	 * ones of them. A change of permissions registers again at once.
+	 */
+	let webPushOffered = $derived(offeredWake(session.server?.push, pushesJoined(session.server, session.you)));
 	let webPushWake = $derived(pushWake(notifyScopes, webPushOffered));
 	/** Why push doesn't work: the browser couldn't subscribe, or the server refused the registration. */
 	let webPushError = $derived(pushSettings.error ?? session.snapshot.pushError);
