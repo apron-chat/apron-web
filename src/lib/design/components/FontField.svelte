@@ -132,4 +132,4 @@
 		</div>
 	{/if}
 </div>
-<p class="ap-profedit-hint ap-font-hint" id="{id}-hint">{hint}</p>
+<p class="ap-form-hint ap-font-hint" id="{id}-hint">{hint}</p>

@@ -53,6 +53,11 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-tone-warn { --ap-tone: var(--warn); color: var(--warn); }
 .ap-tone-danger { --ap-tone: var(--danger); color: var(--danger); }
 
+/* A form's small print, wherever the form is (ProfileEditor, SignInForm, SettingRow, …): a hint beside or under a field
+   or button, and a note on how the form went. */
+.ap-form-hint, .ap-form-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
+.ap-form-hint code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
+
 /* Avatar */
 .ap-avatar { display: inline-grid; place-items: center; flex: none; border-radius: var(--radius-full); background: var(--denim-soft); color: var(--denim); font-weight: 600; object-fit: cover; overflow: hidden; user-select: none; }
 .ap-avatar-md { width: var(--avatar-md); height: var(--avatar-md); font-size: 12px; }
@@ -778,9 +783,6 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profedit { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
 .ap-profedit-top { display: flex; align-items: center; gap: var(--space-3); }
 .ap-profedit-av { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); min-width: 0; }
-.ap-profedit-hint { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
-.ap-profedit-hint code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
-.ap-profedit-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
 .ap-profedit-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 .ap-profile-pop .ap-profedit-actions { flex-wrap: wrap; }
 
@@ -1174,7 +1176,7 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
    and corners on every piece, rather than one box cut open at the line ends. A chip that is a button (a mention or room
    link you can open) can't break across lines: it moves to the next line whole, and only one wider than its line wraps,
    inside its own box, rather than running out of the message. */
-:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-profedit-hint) :not(pre) > code, .ap-mention { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-form-hint) :not(pre) > code, .ap-mention { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 
 /* Shared autocomplete picker — above the composer while typing @…, #… or :… */

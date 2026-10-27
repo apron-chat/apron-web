@@ -14,7 +14,7 @@ describe('SettingRow', () => {
 		const label = document.querySelector('label.ap-pref-setting-title')!;
 		expect(label.getAttribute('for')).toBe('theme');
 		expect(label.parentElement!.textContent?.trim()).toBe('Theme Experimental');
-		expect(document.querySelector('.ap-profedit-hint')).toBeNull();
+		expect(document.querySelector('.ap-form-hint')).toBeNull();
 		unmount();
 		// `below` goes under the whole row, the title and control in a row of their own.
 		render(SettingRow, { title: 'Status', hint: 'Online.', class: 'ap-status-pick', control: html('<span>Menu</span>'), below: html('<div class="answer">Answered</div>') });

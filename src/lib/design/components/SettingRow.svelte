@@ -31,7 +31,7 @@
 {#snippet row()}
 	<div class="ap-pref-setting-text">
 		{#if forId}<label class="ap-pref-setting-title" for={forId}>{title}</label>{:else}<strong class="ap-pref-setting-title">{title}</strong>{/if}{#if badge}{' '}<span class="ap-pref-experimental">{badge}</span>{/if}
-		{#if hint}<p class="ap-profedit-hint" data-testid={hintTestid}>{hint}</p>{/if}
+		{#if hint}<p class="ap-form-hint" data-testid={hintTestid}>{hint}</p>{/if}
 		{@render children?.()}
 	</div>
 	{@render control?.()}
