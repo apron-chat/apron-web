@@ -79,16 +79,19 @@ describe('apron.css: role badges', () => {
 		expect(behind.get('display')).toBeUndefined();
 	});
 
-	it('stacked, end the front badge with a count as wide as RoleBadges counts it, border to border', () => {
+	it('stacked, end the front badge with a count as wide as RoleBadges counts it: its filled end, the outline around the role alone', () => {
 		const count = style('.ap-role-more');
 		expect(count.get('width')).toBe(`calc(${ROLE_MORE_PAD}px + var(--ap-role-more-chars) * ${String(ROLE_MORE_EM).replace(/^0/, '')}em)`);
-		expect(count.get('border-left')).toBe('1px solid');
-		expect(count.get('border-left-color')).toBe('inherit');
-		// One neutral chip for every role, in its own ink.
-		expect([count.get('background'), count.get('color')]).toEqual(['var(--role-count)', 'var(--on-role-count)']);
-		// Its badge has no padding of its own, so the count runs from its top border to its bottom.
+		expect([count.get('background'), count.get('color'), count.get('border')]).toEqual(['var(--ap-role-more)', 'var(--ap-role-more-ink)', undefined]);
+		// In the role's own color: admin's and bot's, else the muted ink.
+		expect(style('.ap-role-stacked.ap-role-admin').get('--ap-role-more')).toBe('var(--accent)');
+		expect(style('.ap-role-stacked.ap-role-bot').get('--ap-role-more')).toBe('var(--denim)');
+		expect(style('.ap-role-stacked').get('--ap-role-more')).toBe('var(--ink-muted)');
+		// The badge draws no border and has no padding: the role's outline is its label's, open where the count begins.
 		const front = style('.ap-roles-stack > .ap-role-stacked');
-		expect([front.get('display'), front.get('padding'), front.get('height')]).toEqual(['inline-flex', '0', 'var(--ap-role-h)']);
+		expect([front.get('display'), front.get('padding'), front.get('border-width'), front.get('height')]).toEqual(['inline-flex', '0', '0', 'var(--ap-role-h)']);
+		const label = style('.ap-role-stacked > .ap-role-label');
+		expect([label.get('border'), label.get('border-color'), label.get('border-right')]).toEqual(['1px solid', 'inherit', '0']);
 	});
 
 	it('stack by default, everywhere but the profile card, which has the room to show them all', () => {

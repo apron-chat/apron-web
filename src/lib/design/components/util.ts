@@ -25,7 +25,7 @@ export { LONG_WAIT_MS, punctuated, waitLabel, waitWords } from '../../words';
  * agree on its width without measuring it.
  */
 export const ROLE_MORE_EM = 0.65;
-/** The count's width besides its characters, in px: its 1px divider and 4px either side. */
+/** The count's width besides its characters, in px: 4px before them and 5px after, where its corners round. */
 export const ROLE_MORE_PAD = 9;
 
 /** The characters in the count for `hidden` roles behind a badge: "+" and the number; none for none. */

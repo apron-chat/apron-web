@@ -62,9 +62,10 @@ describe('role count', () => {
 	const dark = tokens(':root {');
 	const light = tokens(":root[data-theme='light'] {");
 
-	it('sets its ink at 4.5:1 or more on its chip, dark and light', () => {
+	it('sets its ink at 4.5:1 or more on its fill, for admin, bot and every other role, dark and light (apron.css: .ap-role-stacked)', () => {
+		const pairs = [['--accent', '--on-accent'], ['--denim', '--on-accent'], ['--ink-muted', '--bg-100']];
 		for (const [theme, values] of [['dark', dark], ['light', light]] as const) {
-			expect(contrast(color('--on-role-count', values, dark), color('--role-count', values, dark)), theme).toBeGreaterThanOrEqual(4.5);
+			for (const [fill, ink] of pairs) expect(contrast(color(ink, values, dark), color(fill, values, dark)), `${ink} on ${fill} ${theme}`).toBeGreaterThanOrEqual(4.5);
 		}
 	});
 });

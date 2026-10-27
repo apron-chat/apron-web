@@ -21,9 +21,6 @@
 	--accent-soft: #3a2820;
 	--denim: #8fb0f5;
 	--denim-soft: #1e2b48;
-	/* The count a stacked role badge ends with ("+2"): one neutral chip, whatever the role, dark with light ink. */
-	--role-count: #4b4b5d;
-	--on-role-count: #ece9e4;
 	--focus: var(--accent);
 	--danger: #ff6f86;
 	--warn: #d6b24c;
@@ -204,8 +201,6 @@
 		--accent-soft: #f6e1d0;
 		--denim: #2c56b6;
 		--denim-soft: #e0e8f8;
-		--role-count: #5b5d6c;
-		--on-role-count: #ffffff;
 		--danger: #b0173f;
 		--warn: #7a5a00;
 		--ok: #1c6c3d;
@@ -242,8 +237,6 @@
 	--accent-soft: #f6e1d0;
 	--denim: #2c56b6;
 	--denim-soft: #e0e8f8;
-	--role-count: #5b5d6c;
-	--on-role-count: #ffffff;
 	--danger: #b0173f;
 	--warn: #7a5a00;
 	--ok: #1c6c3d;

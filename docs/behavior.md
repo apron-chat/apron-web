@@ -183,7 +183,7 @@ such as "admin" or "bot", show as small outlined badges beside the name in
 message headers and the member list, never as part of it, so no name can pass
 as a role; they grant nothing here. Short of room, the badges come first: the
 name truncates, down to 6em (or all of a shorter name), before the badges that
-don't fit go behind the last one that does, which ends with how many ("BOT │ +2",
+don't fit go behind the last one that does, which ends with how many, its count in the role’s color ("BOT +2",
 its tooltip naming every role),
 then the first narrows, then they go; the time never wraps or shrinks. Senders whose `user_id` starts with `~`
 (system identities, Appendix A.1) render as quiet centered system lines, except

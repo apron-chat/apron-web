@@ -191,5 +191,5 @@
 	<span class={['ap-roles', stack && 'ap-roles-stack', stack && fit.shown === 0 && 'ap-roles-gone']} data-testid={testid} bind:this={row}>{#each shown as role, i (role)}{@const front = stack && i === last && behind.length > 0}<span
 			class={['ap-role', role === 'admin' && 'ap-role-admin', role === 'bot' && 'ap-role-bot', front && 'ap-role-stacked', stack && i > last && 'ap-role-behind']}
 			style:max-width={stack && i === last && fit.room !== undefined ? `${fit.room + roleMore(behind.length, em)}px` : undefined}
-			title={front ? `Roles: ${shown.join(', ')}` : `Role: ${role}`}>{#if front}<span class="ap-role-label">{role}</span><span class="ap-role-more" style:--ap-role-more-chars={roleMoreChars(behind.length)} aria-hidden="true">+{behind.length}</span>{:else}{role}{/if}</span>{/each}</span>
+			title={front ? `Roles: ${shown.join(', ')}` : `Role: ${role}`}>{#if front}<span class="ap-role-label">{role}</span><span class="ap-role-more" style:--ap-role-more-chars={roleMoreChars(behind.length)} aria-hidden="true"><span class="ap-role-plus">+</span>{behind.length}</span>{:else}{role}{/if}</span>{/each}</span>
 {/if}
