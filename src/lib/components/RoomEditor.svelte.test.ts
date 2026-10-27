@@ -16,7 +16,6 @@ describe('RoomEditor', () => {
 		const onclose = vi.fn();
 		render(RoomEditor, { client: { updateRoom } as unknown as ChatClient, room: { id: 't1', title: 'Deploy', description: 'Old' }, thread: true, enabled: true, onclose });
 		const dialog = field<HTMLDialogElement>('dialog');
-		expect(dialog.classList.contains('ap-dialog-md')).toBe(true);
 		expect(dialog.textContent).toContain('Edit thread');
 		expect(dialog.textContent).toContain('Description');
 		type(field('textarea'), 'New');

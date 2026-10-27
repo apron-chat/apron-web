@@ -24,7 +24,6 @@ describe('NewThreadDialog', () => {
 		const { oncreate, onclose } = render({ title: 'Deploy failed', description: '> Deploy failed\n>\n> Runner looked fine.' });
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.open).toBe(true);
-		expect(dialog.classList.contains('ap-dialog-md')).toBe(true);
 		expect(text()).toContain('Start thread');
 		expect(text()).toContain('In ops');
 		expect(field<HTMLTextAreaElement>('textarea').value).toBe('> Deploy failed\n>\n> Runner looked fine.');

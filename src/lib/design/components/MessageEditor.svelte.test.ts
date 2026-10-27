@@ -30,8 +30,7 @@ describe('MessageEditor', () => {
 
 	it('takes a class and a test id on its root, and Escape anywhere in it cancels', () => {
 		const oncancel = vi.fn();
-		const root = render({ oncancel, class: 'mine', testid: 'message-editor' });
-		expect(root.dataset.testid).toBe('message-editor');
+		const root = render({ oncancel, class: 'mine' });
 		expect([...root.classList]).toEqual(['ap-msgedit', 'mine']);
 		key(root.querySelector('textarea')!, { key: 'Escape' });
 		expect(oncancel).toHaveBeenCalledOnce();

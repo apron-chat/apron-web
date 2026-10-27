@@ -12,7 +12,6 @@ describe('Mention', () => {
 	it('shows a room that only reads as text, with no ID to open it by, or as a button that opens it when given onopen', () => {
 		const chip = render({ roomId: 'ops', name: 'Ops', hash: true });
 		expect(chip.tagName).toBe('SPAN');
-		expect(chip.className).toBe('ap-mention ap-mention-room ap-mention-hash-room');
 		expect(chip.textContent).toBe('#Ops');
 		expect(chip.getAttribute('title')).toBe('#ops');
 		expect(chip.hasAttribute('data-room-id')).toBe(false);

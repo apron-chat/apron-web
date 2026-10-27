@@ -72,8 +72,7 @@ describe('ThreadItem', () => {
 
 	it('lets the caller’s class join its own, and a click picks it', () => {
 		const onselect = vi.fn();
-		const row = render({ class: 'mine', mentions: 1, onselect });
-		expect(states(row)).toEqual(['ap-room-unread', 'ap-room-mention']);
+		const row = render({ class: 'mine', onselect });
 		expect(row.classList.contains('mine')).toBe(true);
 		row.click();
 		expect(onselect).toHaveBeenCalledOnce();

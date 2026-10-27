@@ -63,7 +63,6 @@ test.describe('mentions in the composer', () => {
 		await expect(picker(preview)).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(picker(preview)).toBeHidden();
-		// Typing on in the same word doesn't bring it back.
 		await page.keyboard.press('Enter');
 
 		const sent = await preview.waitForSent('message', (p) => p.body?.text === '@ad');

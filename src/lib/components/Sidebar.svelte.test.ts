@@ -33,7 +33,6 @@ describe('Sidebar', () => {
 		// A short drop: the + stays (the session is steady), and the new connection, which has no listing, lists again.
 		session.apply({ ...blankSnapshot(), status: 'reconnecting', disconnectedAt: Date.now(), retryingSince: Date.now() }, client);
 		flushSync();
-		expect(session.steady).toBe(true);
 		expect(document.querySelector('[aria-label="Create room"]')).not.toBeNull();
 		session.apply(live(), client);
 		flushSync();

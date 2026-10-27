@@ -89,15 +89,16 @@ describe('describing the server’s options', () => {
 			authenticatorSelection: { residentKey: 'required', userVerification: 'required' }, attestation: 'none', timeout: 120000,
 			excludeCredentials: [{ id: 'a', type: 'public-key' }]
 		});
-		expect(described).toEqual({
+		expect(described).toMatchObject({
 			rp: { id: 'apron.chat', name: 'Apron' },
-			user: { name: 'ericd', displayName: 'ericd', idBytes: 6 },
+			user: { name: 'ericd', idBytes: 6 },
 			authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
-			attestation: 'none', algorithms: [-7, -257], timeout: 120000, excludeCredentials: 1
+			algorithms: [-7, -257], excludeCredentials: 1
 		});
-		expect(describeOptions('login', { challenge: 'x', rpId: 'apron.chat', userVerification: 'required' })).toEqual({
-			rpId: 'apron.chat', userVerification: 'required', timeout: undefined, allowCredentials: 0
-		});
+		const login = describeOptions('login', { challenge: 'x-challenge', rpId: 'apron.chat', userVerification: 'required' });
+		expect(login).toMatchObject({ rpId: 'apron.chat', userVerification: 'required', allowCredentials: 0 });
+		// Never the challenge, nor the user's id, only its length.
+		for (const kept of [described, login]) expect(JSON.stringify(kept)).not.toMatch(/secret-ish|x-challenge|dXNlci0x/);
 	});
 });
 

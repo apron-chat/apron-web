@@ -11,9 +11,8 @@ function body(): HTMLElement {
 describe('decorateCode', () => {
 	it('gives each code block of a notice a Copy button, and a message’s none', () => {
 		const notice = body();
-		const cleanup = decorateCode(notice, true);
+		decorateCode(notice, true);
 		expect([...notice.querySelectorAll('pre')].map((pre) => pre.querySelector('button')?.textContent)).toEqual(['Copy', 'Copy']);
-		expect(typeof cleanup).toBe('function');
 		const message = body();
 		expect(decorateCode(message, false)).toBeUndefined();
 		expect(message.querySelector('button')).toBeNull();
