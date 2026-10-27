@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cssPx } from './components/util';
+import { cssPx, roleMore, roleMoreChars } from './components/util';
 
 // Read from disk: Vitest hands CSS imports, `?raw` ones included, over empty. (The app has no Node types: hence the indirection.)
 const fsModule = 'node:fs';
@@ -77,7 +77,14 @@ describe('apron.css: role badges', () => {
 		expect(behind.get('position')).toBe('absolute');
 		expect(behind.get('opacity')).toBe('0');
 		expect(behind.get('display')).toBeUndefined();
-		for (const kind of ['admin', 'bot', 'other']) for (const part of ['fill', 'line']) expect(style('.ap-roles').get(`--ap-role-${kind}-${part}`)).toBeTruthy();
+	});
+
+	it('stacked, size the count as roleMore counts it, which the fit trusts without measuring', () => {
+		const width = style('.ap-role-more').get('width')!;
+		for (const hidden of [1, 12]) for (const em of [10, 16]) {
+			const css = cssPx(width.replace('var(--ap-role-more-chars)', String(roleMoreChars(hidden))), { em });
+			expect(css, `${hidden} behind at ${em}px`).toBeCloseTo(roleMore(hidden, em));
+		}
 	});
 
 	it('stack by default, everywhere but the profile card, which has the room to show them all', () => {

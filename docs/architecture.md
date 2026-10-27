@@ -54,7 +54,8 @@ handler and the component's own share an event, `chain()` from `util.ts`
 runs the caller's first, and its `preventDefault()` skips the component's
 own. Role badges beside a name stack when they don't fit (`--ap-role-overflow:
 stack`): after an unneeded handle, the name gives way first, down to
-`--ap-name-min`, then the badges stack behind the last that fits; a handle
+`--ap-name-min`, then the badges stack behind the last that fits, which ends
+with their count; a handle
 shows only where two people share a name, and gives way last. An untitled
 thread is called "Untitled", its room_id in the tooltip.
 
