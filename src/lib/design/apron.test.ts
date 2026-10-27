@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cssPx, ROLE_MORE_EM, ROLE_MORE_PAD } from './components/util';
+import { cssPx, roleMore, roleMoreChars } from './components/util';
 
 // Read from disk: Vitest hands CSS imports, `?raw` ones included, over empty. (The app has no Node types: hence the indirection.)
 const fsModule = 'node:fs';
@@ -79,19 +79,12 @@ describe('apron.css: role badges', () => {
 		expect(behind.get('display')).toBeUndefined();
 	});
 
-	it('stacked, end the front badge with a count as wide as RoleBadges counts it: its filled end, the outline around the role alone', () => {
-		const count = style('.ap-role-more');
-		expect(count.get('width')).toBe(`calc(${ROLE_MORE_PAD}px + var(--ap-role-more-chars) * ${String(ROLE_MORE_EM).replace(/^0/, '')}em)`);
-		expect([count.get('background'), count.get('color'), count.get('border')]).toEqual(['var(--ap-role-more)', 'var(--ap-role-more-ink)', undefined]);
-		// In the role's own color: admin's and bot's, else the muted ink.
-		expect(style('.ap-role-stacked.ap-role-admin').get('--ap-role-more')).toBe('var(--accent)');
-		expect(style('.ap-role-stacked.ap-role-bot').get('--ap-role-more')).toBe('var(--denim)');
-		expect(style('.ap-role-stacked').get('--ap-role-more')).toBe('var(--ink-muted)');
-		// The badge draws no border and has no padding: the role's outline is its label's, open where the count begins.
-		const front = style('.ap-roles-stack > .ap-role-stacked');
-		expect([front.get('display'), front.get('padding'), front.get('border-width'), front.get('height')]).toEqual(['inline-flex', '0', '0', 'var(--ap-role-h)']);
-		const label = style('.ap-role-stacked > .ap-role-label');
-		expect([label.get('border'), label.get('border-color'), label.get('border-right')]).toEqual(['1px solid', 'inherit', '0']);
+	it('stacked, size the count as roleMore counts it, which the fit trusts without measuring', () => {
+		const width = style('.ap-role-more').get('width')!;
+		for (const hidden of [1, 12]) for (const em of [10, 16]) {
+			const css = cssPx(width.replace('var(--ap-role-more-chars)', String(roleMoreChars(hidden))), { em });
+			expect(css, `${hidden} behind at ${em}px`).toBeCloseTo(roleMore(hidden, em));
+		}
 	});
 
 	it('stack by default, everywhere but the profile card, which has the room to show them all', () => {

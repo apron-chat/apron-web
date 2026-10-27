@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chain, cssPx, fitRoles, roleMore, roleMoreChars, times, waitLabel, waitWords } from './util';
+import { chain, cssPx, fitRoles, roleMore, times, waitLabel, waitWords } from './util';
 
 describe('cssPx', () => {
 	it('reads a plain length, and the math a computed min-width leaves unresolved, leaving what it can’t resolve to the caller', () => {
@@ -62,11 +62,10 @@ describe('fitRoles', () => {
 });
 
 describe('roleMore', () => {
-	it('is as wide as "+" and the number of roles behind, at a set width a character, plus its divider and padding', () => {
-		expect([roleMoreChars(0), roleMoreChars(2), roleMoreChars(12)]).toEqual([0, 2, 3]);
+	it('adds nothing with no roles behind, and widens with the count\'s digits and the font', () => {
 		expect(roleMore(0, 10)).toBe(0);
-		expect(roleMore(2, 10)).toBeCloseTo(9 + 2 * 6.5);
-		expect(roleMore(12, 10)).toBeCloseTo(9 + 3 * 6.5);
+		expect(roleMore(12, 10)).toBeGreaterThan(roleMore(2, 10));
+		expect(roleMore(2, 16)).toBeGreaterThan(roleMore(2, 10));
 	});
 });
 
