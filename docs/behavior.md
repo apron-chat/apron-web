@@ -837,7 +837,7 @@ they join the chips instead, for a group. With two or more picked, an optional
 one person, else "Start conversation". It creates the room as Message does,
 then adds each person in turn; an add that fails doesn't stop the rest, the
 room is kept and opens, and a toast says who couldn't be added and why. Where
-the server states a limit (`ext.settings.private_rooms`, [EXT.md §3.4](../EXT.md#34-private_rooms)),
+the server states a limit (`ext.settings.private_rooms`, [EXT.md §3.1](../EXT.md#31-apron-web)),
 the dialog's foot says how many private rooms you're in of it ("2 of 5"), and
 at the limit a warning takes the people's place, with your private rooms, the
 quietest first (five, and "and N more"), each with **Leave**, and the primary
@@ -863,10 +863,11 @@ shows "You were added to this private room." under its header, with
 has the `status` capability and you're signed in to an account; **Unmute**
 once muted), **Leave** and the ×. Which rooms still show it is kept on this
 device, per account, until it's put away or you leave. In a private room the
-member list's **+** and a profile card's **Add to room** are offered as in any
-room, and moving messages into one of its threads adds their authors, whatever
-`ext.settings.add_members` says, since members of a private room add people
-to it. Leaving a private room asks first and says it can't be
+member list's **+** and a profile card's **Add to room** are offered even
+without `add_members` ([EXT.md §7](../EXT.md#7-extpermissions)), and moving
+messages into one of its threads adds their authors, since members of a
+private room add people to it. Elsewhere they are offered only where the
+server grants you `add_members`. Leaving a private room asks first and says it can't be
 joined again (only someone in it can add you back), or, as its last member,
 that it ends when you leave: the server removes it then.
 
@@ -946,9 +947,8 @@ dialog closes and the error says so, as for any move. Messages refused after the
 stay selected and the bar says how many didn't move. A thread delivers to its
 members only, so once messages move into one (new or existing, but not back to
 the room), each of their authors who isn't in it yet is added to it (`room_join`
-with their `user_id`, §4.2.2), where you may add people: while
-`server.ext.settings.add_members` isn't `false`, or where the server grants
-`add_members`. The server
+with their `user_id`, §4.2.2), where you may add people: in a private room's
+thread, or where the server grants you `add_members`. The server
 decides each (it adds no guests); the moves stand either way, and the toast says
 how many authors weren't added and why. Escape leaves select mode.
 
@@ -1270,22 +1270,24 @@ verification failure alike (§4.10 `denied`), so this is where the reason
 shows. The connection's own sign-in, as a guest or by a saved session,
 warns too when refused, without the token.
 
-A server may keep guests read-only, and says so with `guest_posting: false`
-in its settings (below). Signed in as a guest there, the composer gives
-way to a bar saying so with a **Sign in** button (it opens the sign-in panel
-on Passkey). Replying, reacting, starting threads, editing rooms and threads,
-adding or removing members, and Join and Leave are hidden; Browse rooms offers **Open** instead of
+A server may let someone only read, such as its guests, and says so in their
+`you` with `write: false` ([EXT.md §7](../EXT.md#7-extpermissions)). Signed in
+as a guest there, the composer gives way to a bar saying so with a **Sign in**
+button (it opens the sign-in panel on Passkey); signed in to an account, the
+bar only says so. Replying, reacting, editing, moving and deleting messages,
+starting threads, editing rooms and threads, adding or removing members, and
+Join and Leave are hidden; Browse rooms offers **Open** instead of
 **Join**, which reads the room through its history without joining it, and Other threads
 offers no Join, since picking one already reads it. Other
 servers' denials show as errors as usual.
 
-The client understands `ext:settings`, an extension that the Cloudflare demo
-server defines: a server that advertises it in `capabilities` describes how it runs in its `server`
-frame's `ext.settings`, `{guest_posting?, read_cursors?}`. Both are booleans,
-and a setting left out is `true`; without the capability the client reads
-none of them. `guest_posting: false` keeps guests read-only, as above, and
-the connect screen's Guest hint says so. `read_cursors: false` says the server
-keeps no read cursors, so the client doesn't send `read_message_id`. Other
+The client understands `ext:settings` ([EXT.md §3](../EXT.md#3-extsettings)):
+a server that advertises it in `capabilities` describes how it runs in its
+`server` frame's `ext.settings`, `{read_cursors?, private_rooms?}`; without
+the capability the client reads none of them. `read_cursors: false` says the
+server keeps no read cursors, so the client doesn't send `read_message_id`.
+A guest who only reads (`write: false`, above) sees it in the connect screen's
+Guest hint too. Other
 extension data (`ext`, [PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext))
 on users, messages and rooms is kept as the server sends it, and the client
 writes `ext` (with `me`, a message, or `room_set`) only to a server with the

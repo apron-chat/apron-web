@@ -77,16 +77,18 @@ export const canReact = (server: ServerParams | undefined) => hasCapability(serv
 export const hasHistory = (server: ServerParams | undefined) => hasCapability(server, 'history');
 
 /**
- * The server's settings (extension `ext:settings`, `server.ext.settings`),
- * each `true` unless the server says `false`: also without the extension.
+ * The server's settings (extension `ext:settings`, `server.ext.settings`):
+ * `read_cursors` is `true` unless the server says `false`, also without the
+ * extension; `private_rooms` only as a count. A value of the wrong type takes
+ * its default.
  */
-export function serverSettings(server: ServerParams | undefined): { guest_posting: boolean; read_cursors: boolean; add_members: boolean; private_rooms?: number } {
+export function serverSettings(server: ServerParams | undefined): { read_cursors: boolean; private_rooms?: number } {
 	const ext = hasCapability(server, 'ext:settings') ? server?.ext : undefined;
 	const settings = isJsonObject(ext) && isJsonObject(ext.settings) ? ext.settings : {};
-	// A number, unlike the rest: the most private rooms one user may be in at once. Absent (or not a count) states no limit.
+	// The most private rooms one user may be a member of. Absent (or not a count) states no limit.
 	const limit = settings.private_rooms;
 	return {
-		guest_posting: settings.guest_posting !== false, read_cursors: settings.read_cursors !== false, add_members: settings.add_members !== false,
+		read_cursors: settings.read_cursors !== false,
 		...(typeof limit === 'number' && Number.isInteger(limit) && limit >= 0 ? { private_rooms: limit } : {})
 	};
 }
@@ -105,25 +107,30 @@ export function peopleTitle(names: readonly string[]): string {
 	return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) || a.localeCompare(b)).join(', ');
 }
 
-/**
- * What the signed-in user may do that the core leaves to the server
- * (extension `ext:permissions`, `you.ext.permissions`): move other users'
- * messages, add other users to rooms, and be pushed for wake scope
- * `joined`. Read from `you` only; each is `false` without the extension.
- */
-export function yourPermissions(server: ServerParams | undefined, you: Identity | undefined): { move_any: boolean; add_members: boolean; push_joined: boolean } {
-	const ext = hasCapability(server, 'ext:permissions') ? you?.ext : undefined;
-	const granted: unknown[] = isJsonObject(ext) && Array.isArray(ext.permissions) ? ext.permissions : [];
-	return { move_any: granted.includes('move_any'), add_members: granted.includes('add_members'), push_joined: granted.includes('push_joined') };
+/** What the signed-in user may do (`ext:permissions`, `you.ext.permissions`). */
+export interface Permissions {
+	/** May send the requests of `ext:limits`' `write` row: post, react, join, leave, and change rooms. */
+	write: boolean;
+	/** May add other users to any room (`room_join` with a `user_id`); without it, only to the private rooms they are a member of. */
+	add_members: boolean;
+	/** May move other users' messages; without it, only their own. */
+	move_any: boolean;
 }
 
+const DEFAULT_PERMISSIONS: Permissions = { write: true, add_members: false, move_any: false };
+
 /**
- * Whether push wakes you for `joined` where `server.push.wake` lists it: on a
- * server with `ext:permissions`, only with `push_joined` (EXT.md §7); on any
- * other, as listed.
+ * What the signed-in user may do that the core leaves to the server
+ * (extension `ext:permissions`, `you.ext.permissions`), read from `you`
+ * only. Each key that is absent or not a boolean takes its default (`write`
+ * on, the rest off); so does every key without the extension, or when
+ * `permissions` isn't an object.
  */
-export function pushesJoined(server: ServerParams | undefined, you: Identity | undefined): boolean {
-	return !hasCapability(server, 'ext:permissions') || yourPermissions(server, you).push_joined;
+export function yourPermissions(server: ServerParams | undefined, you: Identity | undefined): Permissions {
+	const ext = hasCapability(server, 'ext:permissions') ? you?.ext : undefined;
+	const granted = isJsonObject(ext) && isJsonObject(ext.permissions) ? ext.permissions : {};
+	const flag = (key: keyof Permissions) => (typeof granted[key] === 'boolean' ? (granted[key] as boolean) : DEFAULT_PERMISSIONS[key]);
+	return { write: flag('write'), add_members: flag('add_members'), move_any: flag('move_any') };
 }
 
 /** The longest bio (extension `ext:bio`), in characters (code points). */

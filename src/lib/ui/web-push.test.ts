@@ -45,7 +45,7 @@ describe('web push', () => {
 		// And the wake scopes it pushes.
 		expect(offeredWake({ webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'ext:x', 3] })).toEqual(['mentions', 'replies', 'ext:x']);
 		expect(offeredWake({ webpush: { key: 'BNcR' } })).toEqual([]);
-		// Where push doesn't wake you for `joined` (pushesJoined), it isn't offered to you.
+		// Where push doesn't wake you for `joined`, it isn't offered to you.
 		expect(offeredWake({ webpush: { key: 'BNcR' }, wake: ['mentions', 'joined'] }, false)).toEqual(['mentions']);
 		expect(offeredWake({ webpush: { key: 'BNcR' }, wake: ['mentions', 'joined'] }, true)).toEqual(['mentions', 'joined']);
 		expect(offeredWake(undefined)).toEqual([]);

@@ -128,7 +128,7 @@ import {
 	type TypingState,
 	type ValidHistoryResponse
 } from './client-internals';
-import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, serverSettings } from './client-views';
+import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, serverSettings, yourPermissions } from './client-views';
 import { HistoryQueue } from './history-queue';
 
 export * from './client-types';
@@ -152,7 +152,6 @@ export {
 	normalizeWebSocketUrl,
 	peopleTitle,
 	PRIVATE_ROOM,
-	pushesJoined,
 	serverMedia,
 	serverSettings,
 	timelineMessages,
@@ -695,7 +694,7 @@ export class ChatClient {
 			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith, signInMethods: [this.signedInWith, ...[...this.addedMethods].filter((method) => method !== this.signedInWith)] } : {}),
 			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
 			...(this.passkeyAbort ? { passkeyBusy: !this.adding } : {}),
-			readOnly: this.authenticated && !this.registeredSession && !serverSettings(this.server).guest_posting,
+			readOnly: this.authenticated && !yourPermissions(this.server, this.you).write,
 			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
 			...(this.mutedUntil !== undefined ? { mutedUntil: this.mutedUntil } : {}),
 			...(roomMutes.length ? { roomMutes: Object.fromEntries(roomMutes) } : {}),

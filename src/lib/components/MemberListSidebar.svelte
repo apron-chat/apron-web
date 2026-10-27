@@ -30,8 +30,10 @@
 		 * it at all answers `unsupported`, and the offer goes.
 		 */
 		canChange: boolean;
+		/** Offer adding others too: with `add_members` (`ext:permissions`), or in a private room you are a member of. */
+		canAdd: boolean;
 	}
-	let { client, session, room, open, canChange }: Props = $props();
+	let { client, session, room, open, canChange, canAdd }: Props = $props();
 
 	/**
 	 * Each member's `status` (§4.5) as kept: yours is the one you chose, as the profile bar shows it. Resuming after a
@@ -135,7 +137,7 @@
 	ontogglesection={toggleSection}
 	onprofile={(_, anchor) => openProfileFrom(anchor)}
 	onremove={changing ? remove : undefined}
-	onadd={changing ? openAdd : undefined}
+	onadd={changing && canAdd ? openAdd : undefined}
 	{busy}
 	{note}
 	remark={session.snapshot.memberChangesUnsupported && canChange ? 'This server doesn’t let members add or remove others.' : undefined}

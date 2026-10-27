@@ -42,10 +42,13 @@ const basePeople: Record<string, Person> = {
 const roomId = 'general';
 
 /** What the demo server advertises (§3.1). */
-export const PREVIEW_CAPABILITIES = ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'ext', 'ext:settings'];
+export const PREVIEW_CAPABILITIES = ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'ext', 'ext:settings', 'ext:permissions'];
 
-/** Its settings (EXT.md §3): the most private rooms one user may be in at once, so the new-conversation dialog counts. */
+/** Its settings (`ext:settings`): the most private rooms one user may be a member of, so the new-conversation dialog counts. */
 export const PREVIEW_SETTINGS = { private_rooms: 5 };
+
+/** What it lets you do (`ext:permissions`): add people to any room, as the demo's member list shows. */
+export const PREVIEW_PERMISSIONS = { add_members: true };
 
 /**
  * Knobs for the browser suite (`e2e/`), read from `window.__APRON_PREVIEW__` when the page's first socket
@@ -67,6 +70,10 @@ export interface PreviewKnobs {
 	 * makes it a registered session, as starting private conversations needs.
 	 */
 	account?: boolean;
+	/** `you.ext.permissions` (`ext:permissions`) in place of `PREVIEW_PERMISSIONS`, e.g. `{ write: false }` for a guest who only reads. */
+	permissions?: JsonObject;
+	/** Fields of the `server` frame (§3.1) to add or replace, e.g. `title`, `avatar`, or `ext`. */
+	server?: JsonObject;
 }
 
 /**
@@ -255,6 +262,13 @@ export class MemoryProtocolServer {
 		for (const peer of this.sockets) peer.deliver({ method: 'user', params: { new: update } });
 	}
 
+	/** Your complete object, as `you` carries it (§3.3): with your permissions (`ext:permissions`), which only `you` carries. */
+	private you(): JsonObject {
+		const me = structuredClone(this.people.preview_guest) as JsonObject;
+		const permissions = this.knobs.permissions ?? PREVIEW_PERMISSIONS;
+		return { ...me, ext: { ...(isJsonObject(me.ext) ? me.ext : {}), permissions: structuredClone(permissions) } };
+	}
+
 	/** A recorded object for a `from` or a membership's `user` (§3.3): as of now, without a status or `seen`. */
 	private recorded(userId: string): JsonObject {
 		const { status: _status, ...person } = this.people[userId];
@@ -373,7 +387,7 @@ export class MemoryProtocolServer {
 			const capabilities = [...PREVIEW_CAPABILITIES, ...(server.knobs.capabilities ?? [])];
 			// With `status`, the optional statuses it takes (§4.5).
 			const statuses = capabilities.includes('status') ? { status: ['dnd', 'invisible'] } : {};
-			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses, ext: { settings: PREVIEW_SETTINGS } } });
+			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses, ext: { settings: PREVIEW_SETTINGS }, ...structuredClone(server.knobs.server ?? {}) } });
 		});
 		return socket as unknown as WebSocket;
 	}
@@ -390,7 +404,7 @@ export class MemoryProtocolServer {
 				case 'auth': {
 					if (typeof params.name === 'string' && params.name) this.people.preview_guest.name = params.name;
 					// The complete `you` (§3.3); anything the sign-in causes would follow the result (§3.2).
-					reply({ you: structuredClone(this.people.preview_guest), ...(this.knobs.account ? { token: 'preview-account' } : {}) });
+					reply({ you: this.you(), ...(this.knobs.account ? { token: 'preview-account' } : {}) });
 					return;
 				}
 				case 'room_list': reply(this.listRooms(params)); return;
@@ -612,7 +626,7 @@ export class MemoryProtocolServer {
 		}
 		for (const peer of this.sockets) peer.deliver({ method: 'user', params: { you: changed } });
 		// The result's `you` is complete.
-		reply({ you: structuredClone(me) });
+		reply({ you: this.you() });
 	}
 	private activity(socket: PreviewSocket, p: JsonObject): void {
 		if (typeof p.room_id !== 'string') return;

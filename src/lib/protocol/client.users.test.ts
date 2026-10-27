@@ -128,7 +128,7 @@ describe('your own user', () => {
 	});
 
 	it('takes your permissions only from you, so a listing that names you keeps them (ext:permissions)', async () => {
-		const you = { user_id: 'ada', name: 'Ada', roles: ['admin'], ext: { bio: 'hi', permissions: ['move_any', 'add_members'] } };
+		const you = { user_id: 'ada', name: 'Ada', roles: ['admin'], ext: { bio: 'hi', permissions: { move_any: true, add_members: true } } };
 		await socket.greet(['rooms', 'ext', 'ext:permissions'], { you });
 		expect(snapshot.you).toEqual(you);
 		// Your rooms' listing and a joined room carry you as others see you: without permissions.
@@ -136,10 +136,10 @@ describe('your own user', () => {
 		await socket.reply('room_list', { joined: [], not_joined: [], users: [{ user_id: 'ada', name: 'Ada', roles: ['admin'], ext: { bio: 'hello' } }] });
 		await listing;
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '20', title: 'Ops', members: [{ user_id: 'ada' }] }], users: [{ user_id: 'ada', name: 'Ada', roles: ['admin'] }] } });
-		expect(snapshot.you).toEqual({ user_id: 'ada', name: 'Ada', roles: ['admin'], ext: { permissions: ['move_any', 'add_members'] } });
+		expect(snapshot.you).toEqual({ user_id: 'ada', name: 'Ada', roles: ['admin'], ext: { permissions: { move_any: true, add_members: true } } });
 		// A you that changes them still does: a role taken away clears move_any.
-		socket.receive({ method: 'user', params: { you: { user_id: 'ada', ext: { permissions: ['add_members'] } } } });
-		expect(snapshot.you?.ext).toEqual({ permissions: ['add_members'] });
+		socket.receive({ method: 'user', params: { you: { user_id: 'ada', ext: { permissions: { add_members: true } } } } });
+		expect(snapshot.you?.ext).toEqual({ permissions: { add_members: true } });
 	});
 
 	it('merges roles like any profile field, and an empty list clears them', async () => {

@@ -108,26 +108,30 @@ describe('persisted session tokens', () => {
 		expect(storage.has('apron.session:ws://fake.test/')).toBe(false);
 	});
 
-	it('reads only as a guest where the server says guests only read (ext:settings), until a sign-in', async () => {
-		const readOnly = { settings: { guest_posting: false } };
+	it('reads only where you may not write (ext:permissions), whoever you are', async () => {
+		const readOnly = { permissions: { write: false } };
 		const { client: guest } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
-		await latest().greet(['ext:settings'], { auth: ['webauthn', 'token', 'guest'], ext: readOnly });
+		await latest().greet(['ext:permissions'], { auth: ['webauthn', 'token', 'guest'], you: { user_id: 'guest_1', name: 'Guest', ext: readOnly } });
 		expect(snapshot.readOnly).toBe(true);
 		guest.stop();
 
-		// A signed-in session writes; so does a guest where guests may post, where nothing is said,
-		// or where the server sends settings without advertising `ext:settings`.
-		const { client: signedIn } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
-		await latest().greet(['ext:settings'], { auth: ['webauthn', 'token', 'guest'], ext: readOnly, token: 'session-3' });
-		expect(snapshot.readOnly).toBe(false);
-		signedIn.stop();
-		for (const [caps, ext] of [[['ext:settings'], { settings: { guest_posting: true } }], [['ext:settings'], { settings: {} }], [['ext:settings'], undefined], [[], readOnly]] as const) {
+		// You write where nothing is said, where the server says so, where `permissions` has the wrong type, or where
+		// the server sends permissions without advertising `ext:permissions`. The old `guest_posting` means nothing.
+		for (const [caps, ext] of [
+			[['ext:permissions'], { permissions: { write: true } }], [['ext:permissions'], { permissions: {} }], [['ext:permissions'], undefined],
+			[['ext:permissions'], { permissions: ['write'] }], [[], readOnly]
+		] as const) {
 			storage.clear();
 			const { client: open } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
-			await latest().greet([...caps], { ...(ext ? { ext } : {}) });
+			await latest().greet([...caps], { you: { user_id: 'guest_1', name: 'Guest', ...(ext ? { ext } : {}) } });
 			expect(snapshot.readOnly).toBe(false);
 			open.stop();
 		}
+		storage.clear();
+		const { client: settings } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
+		await latest().greet(['ext:settings'], { ext: { settings: { guest_posting: false } } });
+		expect(snapshot.readOnly).toBe(false);
+		settings.stop();
 	});
 
 	it('drops a welcome sent before auth once a stored session signs in', async () => {

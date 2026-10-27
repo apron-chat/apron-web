@@ -5,7 +5,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, keepsBio, normalizeWebSocketUrl, pushesJoined, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, keepsBio, normalizeWebSocketUrl, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
@@ -211,12 +211,8 @@
 		void notifyScopesSaved;
 		return notifyScopesOf(loadNotifyScopes(notifyKey));
 	});
-	/**
-	 * The wake scopes the server pushes for you (§4.9; `joined` only where your
-	 * permissions say so, EXT.md §7), and the `wake` push sends: the checked
-	 * ones of them. A change of permissions registers again at once.
-	 */
-	let webPushOffered = $derived(offeredWake(session.server?.push, pushesJoined(session.server, session.you)));
+	/** The wake scopes the server pushes (§4.9), and the `wake` push sends: the checked ones of them. */
+	let webPushOffered = $derived(offeredWake(session.server?.push));
 	let webPushWake = $derived(pushWake(notifyScopes, webPushOffered));
 	/** Why push doesn't work: the browser couldn't subscribe, or the server refused the registration. */
 	let webPushError = $derived(pushSettings.error ?? session.snapshot.pushError);
@@ -542,6 +538,11 @@
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneSteady);
+	/**
+	 * Adding others to the open pane's room: anywhere with `add_members` (`ext:permissions`), else only to a private
+	 * room you are a member of (§4.2.4), whose members add people to it.
+	 */
+	let canAddMembers = $derived(canChangeMembers && (yourPermissions(session.server, session.you).add_members || Boolean(paneRoom?.private && paneRoom.joined)));
 	/**
 	 * Starting a private conversation (§4.2.4): the + beside Private and a profile card's Message, for an account
 	 * signed in (not a guest) on a server that creates rooms (capability `rooms`).
@@ -2471,7 +2472,7 @@
 	 * the server decides whose it lets you move, and a refusal moves none (MessageSelection.move).
 	 */
 	function canSelect(event: MessageRecord): boolean {
-		return session.canEdit && !event.deleted && event.room_id === paneRoom?.id;
+		return session.canEdit && !session.readOnly && !event.deleted && event.room_id === paneRoom?.id;
 	}
 
 	/** Whether a picked message is yours, which the server always lets you move. */
@@ -2490,13 +2491,12 @@
 	 * Who comes along when picked messages move into a thread: each moved
 	 * message's author not in it yet is added to it (§4.2.2), so they still
 	 * see their messages. Only where this viewer may add people: with
-	 * `server.ext.settings.add_members` on, or with `add_members` in
-	 * `you.ext.permissions`, or in a private room, whose members add people
-	 * to it (§4.2.4) whatever the setting says.
+	 * `add_members` in `you.ext.permissions`, or in a private room, whose
+	 * members add people to it (§4.2.4).
 	 */
 	function moveAuthors(): MoveAuthors | undefined {
 		if (!canChangeMembers || session.snapshot.memberChangesUnsupported) return undefined;
-		if (!activeRoom?.private && !serverSettings(session.server).add_members && !yourPermissions(session.server, session.you).add_members) return undefined;
+		if (!activeRoom?.private && !yourPermissions(session.server, session.you).add_members) return undefined;
 		return {
 			of: (id) => resolveMessage(id)?.from?.user_id,
 			skip: (userId, room) => userId === session.you?.user_id || Boolean(session.rooms.find((other) => other.id === room)?.members?.some((member) => member.user_id === userId))
@@ -2505,7 +2505,8 @@
 
 	/** What the toolbar offers: only what the server can do, and only on messages this viewer may change. */
 	function capsFor(event: MessageRecord): MessageCaps {
-		const own = session.canEdit && isOwn(event, session.you);
+		// Edits, moves and deletes are `message` requests: a reader who may not write makes none (`ext:permissions`).
+		const own = session.canEdit && !session.readOnly && isOwn(event, session.you);
 		return {
 			reply: canCompose && !event.deleted,
 			edit: own && !event.deleted,
@@ -2927,7 +2928,7 @@
 					oncancel={() => { selection.cancel(); composer?.focus(); }}
 				/>
 			{:else if session.readOnly}
-				<ReadOnlyBar {passkeyUnavailable} onsignin={() => openConnect({ signIn: true })} />
+				<ReadOnlyBar guest={!session.passkeySession} {passkeyUnavailable} onsignin={() => openConnect({ signIn: true })} />
 			{:else}
 				<Composer
 					bind:this={composer}
@@ -2953,7 +2954,7 @@
 		{/if}
 	{/snippet}
 	{#snippet members()}
-		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
+		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} canAdd={canAddMembers} />
 	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
@@ -2974,7 +2975,7 @@
 		<NewPrivateDialog client={client!} {session} enabled={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopen={openPrivateRoom} onclose={() => (newPrivateOpen = false)} />
 	{/if}
 	<!-- Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut. -->
-	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
+	<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	<ReactorsPopover />
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
 	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
