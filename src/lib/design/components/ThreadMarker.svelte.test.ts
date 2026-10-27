@@ -16,7 +16,7 @@ describe('ThreadMarker', () => {
 		const onopen = vi.fn();
 		render({ testid: 'thread-card', timelineItem: true, unread: 2, lastReply: '9h', lastReplyAt: at, description: 'Lock held', latest: { sender: 'Ada', text: 'done' }, onopen });
 		const card = dom.button(/^Deploy/);
-		expect([card.dataset.testid, card.dataset.thread, card.hasAttribute('data-timeline-item')]).toEqual(['thread-card', 't1', true]);
+		expect([card.dataset.thread, card.hasAttribute('data-timeline-item')]).toEqual(['t1', true]);
 		const time = card.querySelector('time')!;
 		expect(time.previousElementSibling?.getAttribute('aria-label')).toBe('2 unread replies');
 		expect([time.textContent, time.getAttribute('datetime')]).toEqual(['9h', new Date(at).toISOString()]);

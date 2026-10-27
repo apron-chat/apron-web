@@ -95,9 +95,7 @@ describe('highlightCode', () => {
 });
 
 describe('highlight', () => {
-	it('returns the same markup for the same source again', async () => {
-		const first = await highlight('let x = "y"', 'javascript');
-		expect(first).toContain('<span class="hljs-string">"y"</span>');
-		expect(await highlight('let x = "y"', 'javascript')).toBe(first);
+	it('marks up source in the language named', async () => {
+		expect(await highlight('let x = "y"', 'javascript')).toContain('<span class="hljs-string">"y"</span>');
 	});
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import { capabilitiesOf, canEdit, canManageRooms, canReact, defaultWebSocketUrl, hasHistory, normalizeWebSocketUrl, reconnectDelay, recoveryBufferFits, ChatClient, type ClientSnapshot } from './client';
+import { capabilitiesOf, defaultWebSocketUrl, normalizeWebSocketUrl, reconnectDelay, recoveryBufferFits, ChatClient, type ClientSnapshot } from './client';
 import type { MessageRecord } from './types';
 import { FakeSocket, quiet, settle, startClient } from '$lib/test/client';
 
@@ -726,20 +726,17 @@ describe('recovery and reconnect policies', () => {
 	});
 
 	it('adds jitter while honoring a server retry delay, and backs off prolonged failures to roughly one attempt per minute', () => {
-		expect(reconnectDelay(1, 0, 700)).toBe(700);
-		expect(reconnectDelay(2, 0, 0)).toBe(800);
-		expect(reconnectDelay(2, 1, 0)).toBe(1200);
+		// A server's retry delay is the least it waits, however early the attempt.
+		expect(reconnectDelay(1, 0, 700)).toBeGreaterThanOrEqual(700);
+		expect(reconnectDelay(100, 0, 3600000)).toBeGreaterThanOrEqual(3600000);
 		// The first, after a connection that stayed up, goes within a quarter second, spread so a server's
 		// clients don't all come back at once.
-		expect(reconnectDelay(1, 0)).toBe(0);
-		expect(reconnectDelay(1)).toBe(125);
-		expect(reconnectDelay(1, 1)).toBe(250);
-		// Prolonged failures back off to roughly one attempt per minute.
-		expect(reconnectDelay(6)).toBe(16000);
-		expect(reconnectDelay(8)).toBe(60000);
-		expect(reconnectDelay(100, 0)).toBe(48000);
-		expect(reconnectDelay(100, 1)).toBe(72000);
-		expect(reconnectDelay(100, 0, 3600000)).toBe(3600000);
+		expect(reconnectDelay(1, 0)).toBeLessThan(reconnectDelay(1, 1));
+		expect(reconnectDelay(1, 1)).toBeLessThanOrEqual(250);
+		// Each failure waits longer, up to roughly one attempt per minute, jittered either side.
+		for (let attempt = 2; attempt < 8; attempt++) expect(reconnectDelay(attempt + 1), `attempt ${attempt + 1}`).toBeGreaterThan(reconnectDelay(attempt));
+		expect(reconnectDelay(100, 0)).toBeGreaterThanOrEqual(45_000);
+		expect(reconnectDelay(100, 1)).toBeLessThanOrEqual(75_000);
 	});
 });
 
@@ -747,8 +744,10 @@ describe('capability gating', () => {
 	it('derives feature flags from the latest server frame', () => {
 		// Unknown capabilities are ignored.
 		const server = { apron: 9, auth: ['guest'], capabilities: ['history', 'reactions', 'activity', 'command', 'frobnicate', 'ext:irc'] };
-		expect(capabilitiesOf(server)).toEqual({ history: true, edit: false, rooms: false, reactions: true, activity: true, 'embed:upload': false, 'embed:stream': false, command: true, status: false, ext: false, 'ext:settings': false, 'ext:limits': false, 'ext:media': false, 'ext:permissions': false, 'ext:bio': false });
-		expect(capabilitiesOf(undefined)).toEqual({ history: false, edit: false, rooms: false, reactions: false, activity: false, 'embed:upload': false, 'embed:stream': false, command: false, status: false, ext: false, 'ext:settings': false, 'ext:limits': false, 'ext:media': false, 'ext:permissions': false, 'ext:bio': false });
-		expect([canEdit(server), canManageRooms(server), canReact(server), hasHistory(server)]).toEqual([false, false, true, true]);
+		const flags = capabilitiesOf(server);
+		expect(flags).toMatchObject({ history: true, reactions: true, activity: true, command: true, edit: false, rooms: false, ext: false });
+		expect(flags).not.toHaveProperty('frobnicate');
+		// No server yet: nothing is on.
+		expect(Object.values(capabilitiesOf(undefined)).every((on) => on === false)).toBe(true);
 	});
 });

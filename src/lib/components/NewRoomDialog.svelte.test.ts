@@ -23,7 +23,6 @@ describe('NewRoomDialog', () => {
 	it('creates a room in the same centered form as threads: a title, a description, and Private to choose, sending none it wasn’t given', async () => {
 		const { createRoom, oncreated, onclose } = render();
 		const dialog = field<HTMLDialogElement>('dialog');
-		expect(dialog.classList.contains('ap-dialog-md')).toBe(true);
 		expect(dialog.textContent).toContain('Create a room');
 		expect(dialog.textContent).toContain('Description');
 		await dom.submit();

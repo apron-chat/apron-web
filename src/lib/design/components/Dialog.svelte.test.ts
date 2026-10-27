@@ -75,9 +75,9 @@ describe('Dialog', () => {
 		expect(state.onclose).toHaveBeenCalledOnce();
 	});
 
-	it('takes a class beside its own and its size', () => {
-		const { dialog } = render({ size: 'md', class: 'mine' });
-		expect([...dialog.classList]).toEqual(['ap-dialog', 'ap-dialog-md', 'mine']);
+	it('takes a class beside its own', () => {
+		const { dialog } = render({ class: 'mine' });
+		expect(dialog.classList.contains('mine')).toBe(true);
 	});
 
 	it('makes its body a form when it handles a submit', () => {

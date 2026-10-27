@@ -108,13 +108,22 @@ export function peopleTitle(names: readonly string[]): string {
 /**
  * What the signed-in user may do that the core leaves to the server
  * (extension `ext:permissions`, `you.ext.permissions`): move other users'
- * messages, and add other users to rooms. Read from `you` only; each is
- * `false` without the extension.
+ * messages, add other users to rooms, and be pushed for wake scope
+ * `joined`. Read from `you` only; each is `false` without the extension.
  */
-export function yourPermissions(server: ServerParams | undefined, you: Identity | undefined): { move_any: boolean; add_members: boolean } {
+export function yourPermissions(server: ServerParams | undefined, you: Identity | undefined): { move_any: boolean; add_members: boolean; push_joined: boolean } {
 	const ext = hasCapability(server, 'ext:permissions') ? you?.ext : undefined;
 	const granted: unknown[] = isJsonObject(ext) && Array.isArray(ext.permissions) ? ext.permissions : [];
-	return { move_any: granted.includes('move_any'), add_members: granted.includes('add_members') };
+	return { move_any: granted.includes('move_any'), add_members: granted.includes('add_members'), push_joined: granted.includes('push_joined') };
+}
+
+/**
+ * Whether push wakes you for `joined` where `server.push.wake` lists it: on a
+ * server with `ext:permissions`, only with `push_joined` (EXT.md §7); on any
+ * other, as listed.
+ */
+export function pushesJoined(server: ServerParams | undefined, you: Identity | undefined): boolean {
+	return !hasCapability(server, 'ext:permissions') || yourPermissions(server, you).push_joined;
 }
 
 /** The longest bio (extension `ext:bio`), in characters (code points). */

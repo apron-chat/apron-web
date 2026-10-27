@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chain, cssPx, fitRoles, rolePeek, times, waitLabel, waitWords } from './util';
+import { chain, cssPx, fitRoles, roleMore, times, waitLabel, waitWords } from './util';
 
 describe('cssPx', () => {
 	it('reads a plain length, and the math a computed min-width leaves unresolved, leaving what it can’t resolve to the caller', () => {
@@ -31,37 +31,41 @@ describe('cssPx', () => {
 describe('fitRoles', () => {
 	// Three badges of 40, 70 and 50px with 4px between them: 40 · 114 · 168 to their ends.
 	const widths = [40, 70, 50];
+	// The count for the roles behind: 4px each, to keep the sums plain.
+	const more = (hidden: number) => hidden * 4;
 
 	it('shows every badge where the whole row fits', () => {
-		expect(fitRoles(widths, 168, 4, 30)).toEqual({ shown: 3 });
-		expect(fitRoles(widths, 500, 4, 30)).toEqual({ shown: 3 });
+		expect(fitRoles(widths, 168, 4, 30, more)).toEqual({ shown: 3 });
+		expect(fitRoles(widths, 500, 4, 30, more)).toEqual({ shown: 3 });
 	});
 
-	it('stacks what does not fit behind the last badge that does, leaving room for the stack, at most three roles deep', () => {
-		// Two whole badges end at 114, plus one stacked role (4px): 118.
-		expect(rolePeek(1)).toBe(4);
-		expect(fitRoles(widths, 118, 4, 30)).toEqual({ shown: 2 });
-		expect(fitRoles(widths, 117, 4, 30)).toEqual({ shown: 1 });
-		// One badge (40) and two stacked behind it (8px).
-		expect(rolePeek(2)).toBe(8);
-		expect(fitRoles(widths, 48, 4, 30)).toEqual({ shown: 1 });
-		// The stack is at most three roles deep, however many are behind.
-		expect(rolePeek(3)).toBe(12);
-		expect(rolePeek(9)).toBe(12);
-		expect(rolePeek(0)).toBe(0);
+	it('stacks what does not fit behind the last badge that does, leaving room for its count', () => {
+		// Two whole badges end at 114, plus the count for one behind (4px): 118.
+		expect(fitRoles(widths, 118, 4, 30, more)).toEqual({ shown: 2 });
+		expect(fitRoles(widths, 117, 4, 30, more)).toEqual({ shown: 1 });
+		// One badge (40) and the count for two behind it (8px).
+		expect(fitRoles(widths, 48, 4, 30, more)).toEqual({ shown: 1 });
 	});
 
 	it('narrows the first badge, down to its minimum, before showing none', () => {
-		expect(fitRoles(widths, 47, 4, 30)).toEqual({ shown: 1, room: 39 });
-		expect(fitRoles(widths, 38, 4, 30)).toEqual({ shown: 1, room: 30 });
-		expect(fitRoles(widths, 37, 4, 30)).toEqual({ shown: 0 });
+		expect(fitRoles(widths, 47, 4, 30, more)).toEqual({ shown: 1, room: 39 });
+		expect(fitRoles(widths, 38, 4, 30, more)).toEqual({ shown: 1, room: 30 });
+		expect(fitRoles(widths, 37, 4, 30, more)).toEqual({ shown: 0 });
 	});
 
 	it('treats a single badge like a row of one: whole, narrowed or gone', () => {
-		expect(fitRoles([60], 60, 4, 30)).toEqual({ shown: 1 });
-		expect(fitRoles([60], 45, 4, 30)).toEqual({ shown: 1, room: 45 });
-		expect(fitRoles([60], 29, 4, 30)).toEqual({ shown: 0 });
-		expect(fitRoles([], 100, 4, 30)).toEqual({ shown: 0 });
+		expect(fitRoles([60], 60, 4, 30, more)).toEqual({ shown: 1 });
+		expect(fitRoles([60], 45, 4, 30, more)).toEqual({ shown: 1, room: 45 });
+		expect(fitRoles([60], 29, 4, 30, more)).toEqual({ shown: 0 });
+		expect(fitRoles([], 100, 4, 30, more)).toEqual({ shown: 0 });
+	});
+});
+
+describe('roleMore', () => {
+	it('adds nothing with no roles behind, and widens with the count\'s digits and the font', () => {
+		expect(roleMore(0, 10)).toBe(0);
+		expect(roleMore(12, 10)).toBeGreaterThan(roleMore(2, 10));
+		expect(roleMore(2, 16)).toBeGreaterThan(roleMore(2, 10));
 	});
 });
 

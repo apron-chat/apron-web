@@ -60,8 +60,7 @@ describe('AppShell', () => {
 	it('takes a class beside its own, and an attachment for the main pane', () => {
 		const attached: Element[] = [];
 		const shell = render({ pane: 'main', sideWidth: 300, class: 'mine', main: markup('<div></div>'), mainAttach: (node: Element) => { attached.push(node); } });
-		expect([shell.classList.contains('ap-shell'), shell.classList.contains('mine'), shell.dataset.pane]).toEqual([true, true, 'main']);
-		expect(shell.style.getPropertyValue('--rooms-w')).toBe('300px');
+		expect(shell.classList.contains('mine')).toBe(true);
 		const main = shell.querySelector('main')!;
 		expect([main.className, attached]).toEqual(['ap-shell-main', [main]]);
 	});

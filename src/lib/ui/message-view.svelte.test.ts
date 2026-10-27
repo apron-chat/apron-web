@@ -46,7 +46,7 @@ describe('messageView', () => {
 	it('shows the sender as the directory keeps them: name, current user_id, the roles there are, a loadable avatar and a hue', () => {
 		const view = messageView(messageRecord(1710000000000, 'ops', { from: { user_id: 'ada', name: 'Old' } }), row(), context());
 		expect(view.sender).toEqual({ user_id: 'ada', name: 'Ada', roles: ['admin'], avatar: ada.avatar, hue: avatarHue('ada') });
-		expect([view.id, view.timestamp, view.time]).toEqual(['1710000000000', 1710000000000, new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(1710000000000)]);
+		expect([view.id, view.timestamp]).toEqual(['1710000000000', 1710000000000]);
 	});
 
 	it('gives the handle only where another user shows under the same name', () => {

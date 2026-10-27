@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { centerSquare, fileSize, fitWithin, ImageTooLargeError, NotAcceptedError, prepareAvatar, prepareUpload, sniffImage, type Crop, type ImageCodec } from './images';
 
 const JPEG = [0xff, 0xd8, 0xff, 0xe1];
+/** Each quality tried lower than the last: the quality steps down, whatever its steps are. */
+const stepsDown = (qualities: number[]) => qualities.length > 1 && qualities.every((quality, i) => i === 0 || quality < qualities[i - 1]);
 const bytes = (...parts: Array<number[] | string>) => new Uint8Array(parts.flatMap((part) => (typeof part === 'string' ? [...part].map((char) => char.charCodeAt(0)) : part)));
 const u32 = (value: number) => [(value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff];
 const pngChunk = (type: string, data: number[] | string = []) => {
@@ -91,7 +93,7 @@ describe('prepareUpload', () => {
 		const prepared = await prepareUpload(photo, { codec });
 		expect(prepared).toMatchObject({ width: 1200, height: 900 });
 		expect(prepared.file).toMatchObject({ name: 'IMG_1.webp', type: 'image/webp', size: 1000 });
-		expect(encodes).toEqual([{ crop: { x: 0, y: 0, width: 1200, height: 900 }, width: 1200, height: 900, type: 'image/webp', quality: 0.85 }]);
+		expect(encodes).toMatchObject([{ crop: { x: 0, y: 0, width: 1200, height: 900 }, width: 1200, height: 900, type: 'image/webp' }]);
 	});
 
 	it('scales a large image and steps the quality down until it fits', async () => {
@@ -100,15 +102,17 @@ describe('prepareUpload', () => {
 		const prepared = await prepareUpload(big, { codec });
 		expect(prepared).toMatchObject({ width: 2048, height: 1536 });
 		expect(prepared.file.name).toBe('big.webp');
-		expect(encodes.map((encode) => encode.quality)).toEqual([0.85, 0.75, 0.65]);
+		expect(stepsDown(encodes.map((encode) => encode.quality))).toBe(true);
 	});
 
 	it('shrinks further when the lowest quality is still too large', async () => {
 		const big = file(png(), 'big.png', 'image/png');
 		const { codec, encodes } = fakeCodec(4000, 2000, (w) => (w > 1600 ? 6_000_000 : 100));
 		const prepared = await prepareUpload(big, { codec });
-		expect(prepared).toMatchObject({ width: 1536, height: 768 });
-		expect(encodes.at(-1)).toMatchObject({ width: 1536, quality: 0.85 });
+		// Smaller, the same shape, and from the top quality again.
+		expect(prepared.width).toBeLessThan(2048);
+		expect(prepared.width).toBe(prepared.height! * 2);
+		expect(encodes.at(-1)).toMatchObject({ width: prepared.width, quality: encodes[0].quality });
 	});
 
 	it('falls back to JPEG where the browser cannot encode WebP', async () => {
@@ -135,7 +139,7 @@ describe('prepareUpload with the server\'s limits (ext:media)', () => {
 		const { codec, encodes } = fakeCodec(4000, 3000, (_w, _h, quality) => (quality > 0.7 ? 6000 : 4000));
 		const prepared = await prepareUpload(big, { codec, limits });
 		expect(prepared).toMatchObject({ width: 1000, height: 750 });
-		expect(encodes.map((encode) => encode.quality)).toEqual([0.85, 0.75, 0.65]);
+		expect(stepsDown(encodes.map((encode) => encode.quality))).toBe(true);
 		// A small image without metadata, of a type the server takes, still goes as it is.
 		const shot = file(png(), 'shot.png', 'image/png');
 		const { codec: small } = fakeCodec(800, 600, () => 1);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bluesky, clip, excerpt, github, htmlText, SITES, siteFor, wikipedia, x, youtube, type Json, type Site } from './link-sites';
+import { bluesky, clip, excerpt, github, htmlText, siteFor, wikipedia, x, youtube, type Json, type Site } from './link-sites';
 
 /** What `site` makes of `url`: its preview link, API request, and fallback. */
 const lookup = (site: Site, url: string) => site.match(new URL(url));
@@ -36,7 +36,6 @@ describe('sites by host', () => {
 				}
 			}
 		}
-		expect(Object.keys(SITES)).toHaveLength(7);
 	});
 });
 

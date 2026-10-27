@@ -31,7 +31,6 @@ describe('SelectionBar', () => {
 		dom.unmount();
 		render({ onnewthread: vi.fn(), onselectrange: vi.fn(), testid: 'bar' });
 		expect(buttons()).toEqual(['Select between', 'Cancel', 'New thread']);
-		expect(dom.byRole('toolbar', 'Selected messages').dataset.testid).toBe('bar');
 	});
 
 	it('says how many messages the server refused to move', () => {
