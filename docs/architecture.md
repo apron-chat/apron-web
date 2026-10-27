@@ -169,7 +169,11 @@ kept on this device: where the New divider goes and the pane opens), `MessageSel
 beside pure, unit-tested
 helpers: `timeline.ts` groups threads under their rooms and builds the room and
 thread views, `membership.ts` nets runs of joins and leaves and words their
-lines, `reactions.ts` turns reaction summaries into chips, `emoji.ts`
+lines, `reactions.ts` turns reaction summaries into chips (a key as its custom emoji's
+image, or a placeholder), `custom-emoji.svelte.ts` keeps the server's custom
+emoji catalog (`ext:emoji`), fetched the first time a key shows or a picker
+opens, which `directory.resolveEmoji` draws keys in text with
+(`renderMarkdown`'s scan in `protocol/custom-emoji.ts`), `emoji.ts`
 places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
 picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previews.ts` finds a draft's links and fetches previews for those on a site `link-sites.ts` maps (GitHub, YouTube, X, Bluesky, Wikipedia), `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
@@ -232,8 +236,9 @@ that names a room names it the same way; a room's `members` from a listing come 
 `member_count` when the server truncated them, kept until a complete list
 replaces it. `types.ts` also knows the system identities (`~server`, `~room`,
 `~private`). Reactions aggregate
-per message (counts per emoji, who reacted, whether you did) and are hidden on
-tombstones.
+per message (counts per emoji, who reacted, whether you did), entries that
+differ only in U+FE0F as one, shown in their fully-qualified form, and are
+hidden on tombstones.
 
 Recovery is per room and uses `latest_log_id` and `history_log_id`. For each
 top-level room the client tracks the monotonic effective lower bound and a
@@ -419,6 +424,13 @@ as `signedInWith`, and ways added to the account since beside it
 passkey accept a scheme listed in `auth` or `signup`, and adding an email or an external sign-in needs it in `auth`; a passkey login and a
 token resume need it in `auth`. The `server` frame ([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame))
 is kept on the snapshot's `server` as sent: `apron` (the version), `capabilities`,
-`agent` (the implementation, for debugging; the UI labels a server by its host,
-never by `agent`), `welcome`, `signup`, `ping`, `push`, `status` and `ext`. Every `auth` the client sends carries `agent: "apron-web/0.4"`
+`agent` (the implementation, for debugging; the UI labels a server by its
+`title` or else its host, never by `agent`), `welcome`, `title`,
+`description`, `avatar` (which `serverLook` reads, the avatar only where a
+user's would load), `signup`, `ping`, `push`, `status` and `ext`. A server is
+known by its address, `serverAddress` (RFC 3986 §6.2.2–6.2.3), which the
+client's URL, its kept session's keys, link servers and Recent all use.
+Every frame is parsed by `parseFrame` (`plain-text.ts`), which takes the bidi
+embeddings and overrides U+202A to U+202E out of every string in it (§3.5.2),
+so no name, title or message shows its characters out of order. Every `auth` the client sends carries `agent: "apron-web/0.4"`
 (§3.2).

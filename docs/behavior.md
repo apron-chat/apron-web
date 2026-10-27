@@ -974,11 +974,23 @@ popover beside the chip (a bottom sheet on narrow screens) that follows
 reactions as they change, and closes with Escape, a press outside, tabbing out,
 or once nobody is left on it. The list opens even where you can't react. A long
 press on a chip doesn't toggle it or enter select mode. Tombstones show no reactions.
+Entries that differ only in U+FE0F, such as ❤ and ❤️, are one chip, shown in
+the fully-qualified form; the picker sends that form, and a toggle takes away
+whichever form your set has ([PROTOCOL.md §4.7](https://github.com/shazow/apron/blob/main/PROTOCOL.md#47-reactions)).
+An entry that isn't an emoji sequence is a key, such as `:partyparrot:`: a
+chip shows its custom emoji's image where the server's catalog has it
+([EXT.md §9](../EXT.md#9-extemoji)), with its `alt` in the tooltip, and
+otherwise a dashed placeholder with the key in the tooltip. Clicking either
+toggles your reaction with that key.
 
 Typing `:shortcode` in the composer opens an emoji autocomplete; arrows move,
 Tab or Enter inserts the highlighted native emoji in place of the shortcode,
 and Escape dismisses it. Suggestions search emoji shortcodes, names, aliases and
-keywords. The composer's emoji button (always there: emoji are text) opens the
+keywords, and with `ext:emoji` the server's custom emoji first, by key, `alt`
+and tags, which insert their key. A key in a message, a description, a
+welcome or the server's description shows as its image, at the height of the
+line, once the catalog has arrived (it is fetched the first time a key shows
+or a picker opens); keys in code stay text. The composer's emoji button (always there: emoji are text) opens the
 same full picker and inserts the emoji at the caret, over any selection,
 leaving mention chips and command mode as they were. The picker is
 [emoji-mart](https://github.com/missive/emoji-mart), drawn by `EmojiPopover`
@@ -988,7 +1000,9 @@ or a press outside closes it. The emoji data loads with a dynamic `import()`
 when shortcode autocomplete is first used; emoji-mart itself loads dynamically
 the first time the full picker opens. Both stay out of the main bundle, and the
 picker gets its data, English strings and native glyphs passed in, so it never
-fetches from a CDN.
+fetches from a CDN. With `ext:emoji` it lists the server's custom emoji too,
+without hidden ones, each under its category after the standard emoji; a
+pick reacts with or inserts its key.
 
 Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](https://github.com/shazow/apron/blob/main/PROTOCOL.md#48-embeds-and-avatars)):
 
@@ -1149,14 +1163,24 @@ point anywhere `http(s)`.
 sidebar header opens the connect screen: a WebSocket URL or an HTTP(S) server
 base URL, a display name, and a sign-in choice among the schemes the server
 advertises (Guest by default; Passkey, below; Email, External and Token, further down). Once the server in the field
-has answered, its `server.welcome`
-([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication))
-shows at the top of the form, rendered as CommonMark and sanitized like a message.
+has answered, the top of the form shows it as it shows itself
+([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame)):
+its `avatar` (or its initials) and its `title` (or its host), always above
+its address, which a server can't copy as it can a title and an avatar, then
+its `description`, and its `server.welcome`
+([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)),
+both rendered as CommonMark and sanitized like a message.
 A server without the `guest` scheme opens this screen by itself once, since
 nothing works before signing in, and so does a session held for a sign-in
 (below) with nothing on screen yet. The server and name
 are stored in local storage, and the last few backends are listed under the
-form. The profile bar at the foot of the sidebar edits your handle, which is
+form, each once by its address normalized by RFC 3986 (lowercase scheme and
+host, no default port, `/` for an empty path, percent-encoding normalized;
+`ws:` and `wss:` are two servers), with the title and avatar its last
+`server` frame sent, and always its address. A server is never found by its
+title or avatar, and a session token kept under an address written another
+way moves to its normalized one. The sidebar's head shows the connected
+server's title (or host) and avatar, its address the tooltip. The profile bar at the foot of the sidebar edits your handle, which is
 sent with the protocol `me` request after authentication; the editor shows
 what the server actually kept. The kept name is the one asked for from then
 on, and the one remembered for the next visit, so a server that normalizes

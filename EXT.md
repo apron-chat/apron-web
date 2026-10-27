@@ -2,14 +2,17 @@
 
 | Protocol Version | 9          |
 |------------------|------------|
-| Last Updated     | 2026-10-26 |
+| Last Updated     | 2026-10-27 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
 It works with any server that implements the
 [core](https://github.com/shazow/apron/blob/main/PROTOCOL.md#3-core). This
-document lists the extensions that apron-web also understands, and what a
-server implements to use each one.
+document lists the extensions that apron-web also understands, and what it
+does with each one. [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md) defines them on the wire: what a
+server sends, and what any client does with it. This document keeps only
+what apron-web does beyond that, and defines the one convention that
+EXTENSIONS.md doesn't have yet: [connection status](#5-connection-status).
 
 ---
 
@@ -30,17 +33,22 @@ the fallback of that capability:
 | `activity`     | sends and shows typing and read cursors                                                         | no typing or read indicators       |
 | `reactions`    | sets and shows reactions                                                                        | no reaction controls               |
 | `embed:upload` | attaches files, and sets an avatar with `/avatar` when `command` is also advertised             | no attachments                     |
-| `ext:settings` | follows the server's settings ([§3](#3-extsettings))                                            | every setting is `true`            |
+| `ext:settings` | follows the server's settings ([§3](#3-extsettings))                                            | keeps read cursors on the server; states no limit of private rooms |
 | `ext:limits`   | holds back the requests that a refused request's category of limit covers ([§4](#4-extlimits)) | holds back by method ([§2](#2-the-boundary)) |
 | `ext:media`    | loads embed media from the server's media origins, and fits files to its limits ([§6](#6-extmedia)) | loads embed media from the server's origin; refuses no file |
-| `ext:permissions` | moves other users' messages, and adds their authors, as `you` allows ([§7](#7-extpermissions)) | moves your own messages only       |
+| `ext:permissions` | offers writing, adding members, and moving others' messages as `you` allows ([§7](#7-extpermissions)) | writes; adds members only to private rooms you're in; moves your own messages only |
 | `ext:bio`      | shows bios on profile cards, and edits your own ([§8](#8-extbio)); also with `ext`              | no bios                            |
+| `ext:emoji`    | shows the server's custom emoji in reactions and text, and offers them to pick ([§9](#9-extemoji)) | shows keys as text, and in reactions as a placeholder |
 
 Some features have no capability:
 
 - apron-web renders `stream` embeds that it receives. It never creates them.
 - `server.push` enables Web Push, for accounts that are not guests.
 - `server.auth` enables passkeys, and email and external sign-in.
+- `server.title`, `description` and `avatar`
+  ([§3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame))
+  show the server on the connect screen and under Recent, always with its
+  address, and its title and avatar in the sidebar.
 - After a failed WebSocket handshake, apron-web asks the server why over HTTP
   ([§5](#5-connection-status)).
 - apron-web writes no `ext` of its own, except `ext.bio` ([§8](#8-extbio)).
@@ -48,7 +56,7 @@ Some features have no capability:
 ## 2. The boundary
 
 - apron-web uses a feature outside PROTOCOL.md only through an extension that
-  this document defines. Its name starts with `ext:`
+  EXTENSIONS.md or this document defines. Its name starts with `ext:`
   ([§4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#4-capabilities)).
 - apron-web uses an extension only while the latest `server` frame lists that
   name in `capabilities`. An extension that only keeps data in a user's `ext`,
@@ -57,6 +65,8 @@ Some features have no capability:
 - apron-web reads the data of an extension only from `ext.<name>`, without the
   `ext:` prefix, on the object that the extension defines
   ([§4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext)).
+- apron-web ignores a field of an extension whose value has the wrong type,
+  and uses its default.
 - Without the extension, apron-web behaves as PROTOCOL.md specifies.
 - apron-web identifies errors by `code` only. It shows `message` as text, and
   never parses it
@@ -77,203 +87,26 @@ Some features have no capability:
 
 ## 3. `ext:settings`
 
-A server can let users do less than its capabilities allow, such as a server
-whose guests only read. A client that knows this shows the controls that work.
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extsettings):
+`server.ext.settings`, `{read_cursors?, private_rooms?}`.
 
-Adds server settings to the `server` frame
-([§3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame)):
+### 3.1 apron-web
 
-```ts
-class Server {
-  // "ext:settings" capability
-  ext?: {
-    settings?: {
-      guest_posting?: boolean = true;  // guests may post
-      read_cursors?: boolean = true;   // the server keeps or relays read cursors
-      add_members?: boolean = true;    // users may add other users to rooms
-      private_rooms?: number;          // the most private rooms one user may be in at once
-    };
-  };
-}
-```
-
-```json
-{
-  "method": "server", "params": {
-    "apron": 9, "capabilities": ["rooms", "activity", "ext:settings"], "auth": ["guest", "webauthn"],
-    "ext": {"settings": {"guest_posting": false, "read_cursors": false}}
-  }
-}
-```
-
-- The server lists `ext:settings` in `capabilities`.
-- Every key is optional. A boolean key that is absent, or not `false`, means
-  `true`. `private_rooms` is a number ([§3.4](#34-private_rooms)).
-- Each `server` frame replaces the settings.
-- The settings describe server policy. The server still enforces it.
-
-### 3.1 `guest_posting`
-
-- `false` means that guests only read.
-- apron-web treats a session as a guest's when it starts with scheme `guest`
-  ([§3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)),
-  until the user signs in or adds another scheme.
-- While a guest only reads, apron-web replaces the composer with a prompt to
-  sign in. It offers no reactions, joins, leaves, room or thread changes, or
-  member changes.
-
-### 3.2 `read_cursors`
-
-- `false` means that the server neither keeps nor relays `read_message_id`
-  ([§4.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#46-activity)).
-- apron-web then keeps read cursors in the browser only, and sends no
-  `read_message_id`. It still sends `typing`.
-
-### 3.3 `add_members`
-
-- `false` means that users may not add other users with `room_join` and
-  `user_id`
-  ([§4.2.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#422-membership)).
-- When apron-web moves messages into a thread, it adds their authors to that
-  thread only while `add_members` is `true`, or while `ext:permissions` grants
-  `add_members` ([§7](#7-extpermissions)), or when the thread is in a private
-  room: members add other users to a private room
-  ([§4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)),
-  whatever `add_members` says.
-
-### 3.4 `private_rooms`
-
-- Unlike the other keys, `private_rooms` is a number: the most private rooms
-  ([§4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing))
-  that one user may be a member of at once.
-- It counts top-level private rooms, those without a `parent_room_id`. A
-  thread of a private room does not count.
-- Absent means that the server states no limit. apron-web ignores a value that
-  is not a non-negative integer.
-- The server still enforces the limit. It refuses a creation or a join over it
-  as `denied`, with a `message` for the user
-  ([§2](#2-the-boundary)).
-- apron-web counts the private rooms that the user joined. When it starts a
-  private room, it shows "N of M", and at the limit it offers the user's
-  private rooms to leave, the quietest first, in place of starting another.
+- With `read_cursors: false`, apron-web keeps read cursors in the browser
+  only, and sends no `read_message_id`. It still sends `typing`.
+- It ignores a `private_rooms` that is not a non-negative integer.
+- It counts the private rooms that the user joined, without the threads of
+  private rooms. When it starts a private room, it shows "N of M", and at the
+  limit it offers the user's private rooms to leave, the quietest first, in
+  place of starting another. The server's refusal over the limit shows as
+  the error.
 
 ---
 
 ## 4. `ext:limits`
 
-`retry_after` says that a request waits, but not which limit it hit, or what
-else that limit counts. A client that knows can hold back every request that
-the limit counts, rather than send each one to be refused, and show the user
-what waits.
-
-Adds a category of limit to `retry_after` errors
-([§1.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#11-envelope-and-replies)):
-
-```ts
-class Server {
-  capabilities: string[];  // lists "ext:limits"
-}
-
-class RetryAfterError {  // code -32002
-  message: string;         // which limit the request hit
-  data: {
-    retry_after: number;
-    // "ext:limits" capability
-    ext?: {
-      limits?: "read" | "write" | "upload";
-    };
-  };
-}
-```
-
-Each category covers a set of requests. Until the delay ends, clients hold
-back these requests:
-
-| category | requests it covers                                                     | what clients hold back             |
-|----------|------------------------------------------------------------------------|------------------------------------|
-| `read`   | `history`, `room_list`                                                 | requests of the refused method     |
-| `write`  | `message`, `reactions`, `room_join`, `room_leave`, `room_set`          | every request that `write` covers  |
-| `upload` | `message` and `command` requests that add an upload: an `upload` embed without an `embed_id` ([§4.8.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#482-embed-identity)) | every request that `upload` covers |
-
-A command can do anything, so `write` does not cover `command`. A save that
-keeps an upload sends it back with its `embed_id`, so `upload` does not cover
-the save.
-
-The server advertises the extension:
-
-```json
-{
-  "method": "server", "params": {
-    "apron": 9, "capabilities": ["rooms", "history", "reactions", "embed:upload", "ext:limits"], "auth": ["guest", "webauthn"]
-  }
-}
-```
-
-A refused page of history, from a limit on reading:
-
-```jsonc
-// ->
-{"method": "history", "id": "c9", "params": {"room_id": "general", "before": "1724806800000"}}
-// <-
-{"id": "c9", "error": {"code": -32002, "message": "History request limit reached", "data": {"retry_after": 20, "ext": {"limits": "read"}}}}
-```
-
-A refused post, from a limit that counts every request that `write` covers:
-
-```jsonc
-// ->
-{"method": "message", "id": "c42", "params": {"room_id": "general", "body": {"text": "hello", "format": "plain"}}}
-// <-
-{"id": "c42", "error": {"code": -32002, "message": "Posting limit reached", "data": {"retry_after": 40, "ext": {"limits": "write"}}}}
-```
-
-A refused upload, from a limit on files. Messages without files still go:
-
-```jsonc
-// ->
-{
-  "method": "message", "id": "c43", "params": {
-    "room_id": "general",
-    "body": {"text": "Before the fix:", "embeds": [{"kind": "upload", "title": "before.png"}]}
-  }
-}
-// <-
-{"id": "c43", "error": {"code": -32002, "message": "Daily upload limit reached", "data": {"retry_after": 19800, "ext": {"limits": "upload"}}}}
-```
-
-A refusal from a limit that fits no category:
-
-```jsonc
-// ->
-{"method": "auth", "id": "c1", "params": {"scheme": "guest", "name": "Ada"}}
-// <-
-{"id": "c1", "error": {"code": -32002, "message": "Sign-in attempts limited for this network", "data": {"retry_after": 600}}}
-```
-
-- The server lists `ext:limits` in `capabilities`.
-- A `retry_after` error that replies to a request MAY carry `data.ext.limits`.
-- The server MUST send a category only on a request that the category covers.
-- The server MUST send `write` only for a limit that counts every request that
-  `write` covers and that changes something.
-- The server MUST send `upload` only for a limit that counts every request
-  that adds an upload.
-- A limit MAY leave out a request that changes nothing, such as a
-  deduplicated retry
-  ([§1.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#12-retries-and-deduplication))
-  or a `room_join` of a room that the user has already joined.
-- The server SHOULD send no category for a limit that fits none, or when it is
-  not sure that a limit fits one.
-- The category describes server policy. The server still refuses each request
-  over a limit.
-- `message` SHOULD say which limit the request hit. It SHOULD NOT state
-  amounts, rates, thresholds, or the delay. `retry_after` carries the delay.
-- Clients MUST ignore `data.ext.limits` unless the latest `server` frame lists
-  `ext:limits`.
-- Until the delay ends, clients SHOULD hold back the requests that the table
-  lists for the category. They MUST NOT hold back other requests for it.
-- Without a category, with a category that clients do not know, or with one
-  that does not cover the refused request, clients handle the error as without
-  `ext:limits`.
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extlimits):
+a category of limit, `data.ext.limits`, on `retry_after` errors.
 
 ### 4.1 apron-web
 
@@ -347,85 +180,8 @@ Access-Control-Expose-Headers: Apron-Connection-Status, Retry-After
 
 ## 6. `ext:media`
 
-A server can serve its files from another origin, such as a storage bucket,
-and take only some types and sizes of file. A client that knows can load those
-files, and fit a file to the server, or refuse it, before it uploads the file.
-
-Adds media to the `server` frame
-([§3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame)):
-
-```ts
-class Server {
-  // "ext:media" capability
-  ext?: {
-    media?: {
-      origins?: string[];
-      upload?: {[pattern: string]: Limits};
-      avatar?: {[pattern: string]: Limits};
-    };
-  };
-}
-
-class Limits {
-  max_bytes?: number;
-  max_side?: number;
-}
-```
-
-| field       | meaning                                                                                   |
-|-------------|-------------------------------------------------------------------------------------------|
-| `origins`   | origins besides the server's own that serve its media                                     |
-| `upload`    | the types of file that the server takes as attachments ([§4.8.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#484-embedupload)), with their limits |
-| `avatar`    | the types of image that the server takes with `/avatar` ([§4.8.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#486-avatars)), with their limits |
-| `max_bytes` | the largest file, in bytes                                                                |
-| `max_side`  | the longest side, in pixels, of an image as the server keeps it; clients need not send larger |
-
-```json
-{
-  "method": "server", "params": {
-    "apron": 9, "capabilities": ["command", "embed:upload", "ext:media"], "auth": ["guest", "webauthn"],
-    "ext": {"media": {
-      "origins": ["https://media.chat.example"],
-      "upload": {
-        "image/*": {"max_bytes": 5242880, "max_side": 2048},
-        "image/gif": {"max_bytes": 5242880},
-        "audio/*": {"max_bytes": 10485760}
-      },
-      "avatar": {"image/*": {"max_bytes": 262144, "max_side": 512}}
-    }}
-  }
-}
-```
-
-- The server lists `ext:media` in `capabilities`.
-- Every field is optional. Clients ignore unknown keys, and each field of the
-  wrong type or range on its own, such as a limit that is not a positive
-  integer, or a category or limits that are not an object.
-- Each `server` frame replaces the media.
-- `origins` lists exact origins, `scheme://host[:port]` without a path or a
-  query. Each is `https:`, or `http:` on `localhost`, `127.0.0.1`, or `[::1]`.
-  Clients ignore other entries.
-- Clients MAY load `og` media
-  ([§4.8.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#481-opengraph-metadata-og))
-  from `origins` as well as from the server's own origin, only for content
-  from a connection to that server.
-- `upload` and `avatar` are categories. Each maps MIME patterns to limits. A
-  pattern is an exact `type/subtype`, a group `type/*`, or `*/*`, in any
-  case.
-- A file takes the limits of its most specific pattern: its exact type, then
-  its group, then `*/*`. The order of keys does not matter.
-- The server does not take a file whose type matches no pattern of the
-  category. `{}` takes the type without a stated limit. Clients ignore unknown
-  limits.
-- Without a category, nothing is known about it. Clients then behave as
-  without `ext:media`.
-- A file's type is the type that the client declares for it: the
-  `Content-Type` of its write
-  ([§4.8.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#483-writes)),
-  or `application/octet-stream` without one. A client that re-encodes a file
-  declares the new type.
-- The media describe server policy. The server still decides by content, and
-  MAY refuse a write with 413 or 415.
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extmedia):
+`server.ext.media`, the server's media origins and its file limits.
 
 ### 6.1 apron-web
 
@@ -457,113 +213,34 @@ class Limits {
 
 ## 7. `ext:permissions`
 
-Roles are for display only
-([§3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)),
-so a client cannot tell from them what a user may do. A server can tell each
-user what it lets them do beyond their own messages, so that the client offers
-those controls.
-
-Adds permissions to the user object of the signed-in user, `you`
-([§3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)):
-
-```ts
-class Identity {
-  // "ext:permissions" capability, in `you` only
-  ext?: {
-    permissions?: string[];
-  };
-}
-```
-
-| permission    | the user may                                                                            |
-|---------------|-----------------------------------------------------------------------------------------|
-| `move_any`    | move the messages of other users to another room: into a thread, or back out of one     |
-| `add_members` | add other users to rooms, with `room_join` and `user_id` ([§4.2.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#422-membership)), also while `ext:settings` says `add_members: false` |
-| `push_joined` | be woken by push for wake scope `joined`, every message in the rooms they joined ([§4.9](https://github.com/shazow/apron/blob/main/PROTOCOL.md#49-push)), where `server.push.wake` lists it |
-
-```jsonc
-// <-
-{"id": "c1", "result": {"you": {"user_id": "ada", "name": "Ada", "roles": ["admin"], "ext": {"permissions": ["move_any", "add_members"]}}}}
-```
-
-- The server lists `ext:permissions` in `capabilities`.
-- The server sends `permissions` in `you`: in an `auth` or `me` result, and in
-  a `user` notification. A change of permissions is a `user` notification
-  with `you`
-  ([§3.3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#333-changes)).
-- Clients read `permissions` only from `you`, never from the object of
-  another user.
-- Clients ignore unknown permissions, and entries that are not strings.
-- Without `move_any`, clients offer to move only the user's own messages.
-  Without `add_members`, `ext:settings` decides ([§3.3](#33-add_members)).
-- `server.push.wake` is the same for everyone, and is sent before sign-in. A
-  server with `ext:permissions` that lists `joined` there pushes it only to
-  the users it grants `push_joined`; it grants it to everyone it pushes
-  `joined` to. Without `push_joined`, clients take `joined` as not pushed:
-  they leave it out of `push_register` `wake`, and show it as alerting only
-  while the client is open. A change of `push_joined` comes as a `user`
-  notification with `you`, so a client registers again with the new `wake`.
-- The server owns `ext.permissions`. A `me` request MUST NOT change it.
-- The permissions describe server policy. The server still checks each
-  request.
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extpermissions):
+`you.ext.permissions`, an object `{write?, add_members?, move_any?}`.
 
 ### 7.1 apron-web
 
+- apron-web reads permissions only from `you`. A key that is absent or not a
+  boolean takes its default: `write` on, the others off. So does every key
+  when `permissions` isn't an object, such as an older server's list of names.
+- With `write: false`, apron-web only reads: it replaces the composer with a
+  note, and offers no reactions, edits, moves, deletions, joins, leaves, room
+  or thread changes, or member changes. Browse rooms offers Open in place of
+  Join, which reads a room through its history. For a guest, the note offers
+  to sign in.
+- With `add_members`, the member list's + and a profile card's Add to room
+  are offered in any room. Without it, they are offered only in a private
+  room that the user is a member of.
+- When apron-web moves messages into a thread, it adds their authors with
+  `add_members`, or when the thread is in a private room.
 - apron-web offers to move the messages of other users only with `move_any`.
   Without it, it offers to move only your own messages.
-- When apron-web moves messages into a thread, it adds their authors with
-  `add_members`, or while `ext:settings` allows it.
-- Without `push_joined`, apron-web marks "All messages in joined rooms"
-  "Only while open" while push is on, and registers push without `joined`.
 - apron-web shows roles as badges only. They grant nothing.
 
 ---
 
 ## 8. `ext:bio`
 
-PROTOCOL.md has no field for a few words about a user, such as what they work
-on or how to reach them. A client that knows a bio shows it where people look
-up who someone is.
-
-Adds a bio to user objects
-([§3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)):
-
-```ts
-class Identity {
-  // "ext:bio" capability, or "ext"
-  ext?: {
-    bio?: string;  // plain text, at most 250 characters
-  };
-}
-```
-
-```jsonc
-// -> set a bio
-{"method": "me", "id": "c60", "params": {"ext": {"bio": "Counts things.\nMostly engines."}}}
-// <-
-{"id": "c60", "result": {"you": {"user_id": "ada", "name": "Ada", "ext": {"bio": "Counts things.\nMostly engines."}}}}
-// -> clear it
-{"method": "me", "id": "c61", "params": {"ext": {"bio": ""}}}
-```
-
-- A server that keeps `ext`
-  ([§4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext))
-  keeps `bio` like any other key. A server that keeps only bios lists
-  `ext:bio` in `capabilities`.
-- A user sets their own bio with `me`. `""` clears it.
-- `bio` is plain text. A line feed (`\n`) is a line break.
-- `bio` is at most 250 characters, counted as Unicode code points.
-- Clients send a bio without control characters other than the line feed,
-  without bidi embeddings, overrides, or isolates (U+202A to U+202E, and
-  U+2066 to U+2069), and with at most one blank line in a row.
-- Clients ignore a `bio` that is not a string. They remove from a bio what
-  they would not send, and show at most its first 250 characters.
-- Clients show a bio as text, never as Markdown or HTML.
-- Clients read a bio only from current user objects, never from a recorded
-  `from`.
-- The server's size limits on `ext` apply to the merged object, in bytes. A
-  bio within 250 characters MAY still be `too_large`, such as one in a script
-  that takes more bytes to encode.
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extbio):
+`ext.bio` on user objects, set with `me`.
 
 ### 8.1 apron-web
 
@@ -576,3 +253,34 @@ class Identity {
   characters, and Save waits while the bio is over 250.
 - Save sends a changed bio first, then the handle. When the server refuses the
   bio, the editor says why and stays open, and the handle is not sent.
+
+---
+
+## 9. `ext:emoji`
+
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extemoji):
+`server.ext.emoji.catalog_url`, a catalog of custom emoji keyed by `:name:`.
+
+### 9.1 apron-web
+
+- apron-web fetches the catalog the first time it needs it: when the emoji
+  picker or the composer's `:shortcode` list opens, or when it shows a key in
+  a reaction or in text. It fetches without credentials or a referrer, and
+  keeps each catalog for as long as the page, by its `catalog_url`. A fetch
+  that fails isn't tried again until the server sends another `catalog_url`.
+- Until the catalog arrives, apron-web shows keys as without the extension,
+  and then shows them again with their images.
+- It shows a key in `body.text`, and in a room's or thread's description,
+  the welcome, and the server's description, as its image, at the height of
+  the line. Keys in code stay text.
+- A reaction chip with a key shows its image, with its `alt` (or the key) in
+  the tooltip. A key that the catalog doesn't have, or any key without the
+  extension, shows as a dashed placeholder with the key in the tooltip.
+  Tapping either toggles the user's reaction with that key.
+- The full emoji picker lists the catalog's emoji, without `hidden` ones,
+  each in its `category`, after the standard emoji. Its search finds them by
+  key, `alt` and tags. Picking one reacts with its key, or inserts the key at
+  the composer's caret.
+- The composer's `:shortcode` list offers matching custom emoji first.
+- Where the user prefers reduced motion, apron-web shows `static_url` in
+  place of `url`.
