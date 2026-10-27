@@ -41,8 +41,10 @@ repeated failures back off from 1 s to about one attempt per minute with jitter.
 Where the server pings (§1), a tab shown again after 10 seconds or more away,
 or a network that comes back, checks at once that its socket still answers:
 one ping, and a socket that hears nothing back (a `pong`, or any other frame)
-within 4 seconds is replaced as if it had closed, rather than looking connected
-for up to a whole ping interval after a laptop slept. An explicit server retry window takes precedence, including a
+within 5 seconds is replaced as if it had closed, rather than looking connected
+for up to a whole ping interval after a laptop slept. For 3 minutes after a
+check replaced a socket, the next waits 30 seconds instead, so a slow network
+that outlasts 5 seconds isn't met with one new connection after another. An explicit server retry window takes precedence, including a
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.

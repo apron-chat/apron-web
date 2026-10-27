@@ -74,6 +74,8 @@ import {
 	MAX_UNANSWERED_PINGS,
 	PROBE_AFTER_HIDDEN_MS,
 	PROBE_MS,
+	PROBE_PATIENT_FOR_MS,
+	PROBE_PATIENT_MS,
 	NO_NOTICES,
 	PASSKEY_IDLE_POLL_MS,
 	PASSKEY_IDLE_WAIT_MS,
@@ -320,8 +322,10 @@ export class ChatClient {
 	private presenceWaiter?: () => void;
 	/** Pings sent on the current socket since its last `pong`. */
 	private unansweredPings = 0;
-	/** A probe's ping waits for an answer (`PROBE_MS`): without one, the socket is dropped. */
+	/** A probe's ping waits for an answer (`probeWait`): without one, the socket is dropped. */
 	private probeTimer?: ReturnType<typeof setTimeout>;
+	/** When a probe last replaced a socket that didn't answer it. */
+	private probeDroppedAt?: number;
 	/** When the page was last hidden, while it still is. */
 	private hiddenAt?: number;
 	/**
@@ -3046,7 +3050,7 @@ export class ChatClient {
 
 	/**
 	 * Checks at once that an open socket still answers, on a page someone can see: one ping, and the socket is
-	 * replaced through the usual reconnect if nothing comes back within `PROBE_MS`. Only where the server
+	 * replaced through the usual reconnect if nothing comes back within `probeWait`. Only where the server
 	 * pings (§1); the regular pings carry on as they were.
 	 */
 	private probe(): void {
@@ -3055,8 +3059,19 @@ export class ChatClient {
 		socket.send(PING_FRAME);
 		this.probeTimer = setTimeout(() => {
 			this.probeTimer = undefined;
-			if (socket === this.socket) this.abandonSocket?.();
-		}, PROBE_MS);
+			if (socket !== this.socket) return;
+			this.probeDroppedAt = this.now();
+			this.abandonSocket?.();
+		}, this.probeWait());
+	}
+
+	/**
+	 * How long a probe waits for an answer: `PROBE_MS`, or `PROBE_PATIENT_MS` while a probe replaced a socket
+	 * within `PROBE_PATIENT_FOR_MS`, so a slow network isn't met with one new socket after another.
+	 */
+	private probeWait(): number {
+		const dropped = this.probeDroppedAt;
+		return dropped !== undefined && this.now() - dropped < PROBE_PATIENT_FOR_MS ? PROBE_PATIENT_MS : PROBE_MS;
 	}
 
 	/**

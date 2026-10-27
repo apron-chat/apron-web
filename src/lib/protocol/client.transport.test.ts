@@ -421,13 +421,60 @@ describe('liveness pings', () => {
 		const before = pings(first);
 		show('visible');
 		expect(pings(first)).toBe(before + 1);
-		vi.advanceTimersByTime(3_999);
+		vi.advanceTimersByTime(4_999);
 		expect(snapshot?.status).toBe('connected');
 		vi.advanceTimersByTime(1);
 		expect(snapshot?.status).toBe('reconnecting');
 		expect(first.readyState).toBe(FakeSocket.CLOSED);
 		vi.advanceTimersByTime(1_000);
 		expect(FakeSocket.instances).toHaveLength(2);
+	});
+
+	it('waits longer on the next probe for a while after one replaced a socket, so a slow network isn\u2019t met with socket after socket', async () => {
+		const listeners = new Set<() => void>();
+		const page = { visibilityState: 'visible', addEventListener: (_: string, fn: () => void) => listeners.add(fn), removeEventListener: (_: string, fn: () => void) => listeners.delete(fn) };
+		vi.stubGlobal('document', page);
+		const show = (state: 'visible' | 'hidden') => { page.visibilityState = state; for (const fn of [...listeners]) fn(); };
+		const away = () => { show('hidden'); vi.advanceTimersByTime(10_000); show('visible'); };
+		let snapshot: ClientSnapshot | undefined;
+		const { client } = startClient({ onSnapshot: (next) => (snapshot = next) });
+		onTestFinished(() => client.stop());
+		await latest().greet([], { ping: 30 });
+
+		// The first probe without an answer waits 5 s, and replaces the socket.
+		away();
+		vi.advanceTimersByTime(5_000);
+		expect(snapshot?.status).toBe('reconnecting');
+		vi.advanceTimersByTime(1_000);
+		await latest().greet([], { ping: 30 });
+
+		// Soon after, the next waits 30 s: a slow answer that comes in time keeps the socket.
+		away();
+		vi.advanceTimersByTime(29_000);
+		expect(snapshot?.status).toBe('connected');
+		latest().receive({ method: 'pong' });
+		vi.advanceTimersByTime(5_000);
+		expect(snapshot?.status).toBe('connected');
+		// Still within 180 s of that replacement: no answer at all goes after the 30 s.
+		away();
+		vi.advanceTimersByTime(29_999);
+		expect(snapshot?.status).toBe('connected');
+		vi.advanceTimersByTime(1);
+		expect(snapshot?.status).toBe('reconnecting');
+		vi.advanceTimersByTime(1_000);
+		const third = latest();
+		await third.greet([], { ping: 30 });
+
+		// 180 s on from the last replacement (a healthy connection meanwhile), a probe waits 5 s again.
+		for (let elapsed = 0; elapsed < 180_000; elapsed += 30_000) {
+			vi.advanceTimersByTime(30_000);
+			third.receive({ method: 'pong' });
+		}
+		away();
+		vi.advanceTimersByTime(4_999);
+		expect(snapshot?.status).toBe('connected');
+		vi.advanceTimersByTime(1);
+		expect(snapshot?.status).toBe('reconnecting');
 	});
 
 	it('checks the socket when the network comes back, only where the server pings', async () => {

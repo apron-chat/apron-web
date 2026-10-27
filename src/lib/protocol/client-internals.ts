@@ -196,7 +196,16 @@ export const MAX_UNANSWERED_PINGS = 1;
  * while the tab was away (a laptop asleep, timers frozen) can look open for a
  * whole ping interval otherwise.
  */
-export const PROBE_MS = 4_000;
+export const PROBE_MS = 5_000;
+/**
+ * How long a probe waits instead while a probe replaced a socket within
+ * `PROBE_PATIENT_FOR_MS`: a slow network (a laptop's Wi-Fi coming back) can
+ * outlast `PROBE_MS` on a socket that was alive, and replacing healthy sockets
+ * one after another would cost more than it saves.
+ */
+export const PROBE_PATIENT_MS = 30_000;
+/** How long after a probe last replaced a socket the next waits `PROBE_PATIENT_MS`; then `PROBE_MS` again. */
+export const PROBE_PATIENT_FOR_MS = 180_000;
 /** How long the page must have been hidden for its return to probe the socket: a glance at another tab doesn't. */
 export const PROBE_AFTER_HIDDEN_MS = 10_000;
 /**
