@@ -1,12 +1,13 @@
 import type { Notice, RoomListing, RoomSnapshot, UploadState } from '$lib/protocol/client';
 import { markdownText, mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
-import { systemScope, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
+import { systemScope, type Embed, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
 import type { EmbedProps, MessageCaps, MessageEmbed, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
 import { placeLinksIn, writeApronLink, type ApronLink } from './apron-link';
 import { backendHost } from './connection';
 import { directory, samePieces } from './directory.svelte';
 import { embedsOf, hueOf, isSystem, messageSnippet, textOf } from './messages';
+import { minuteNow } from './clock.svelte';
 import { eventTime, idMillis, idWhen } from './time';
 
 export type { MessageCaps, MessageView };
@@ -222,9 +223,16 @@ export function linkedRoomIn(rooms: readonly RoomSnapshot[], listed: ReadonlyMap
 }
 
 /**
- * Its embeds with what each upload is doing. Your own can be removed, but not
- * the last thing in a message (§3.5: a message has text or embeds; delete it
- * instead), nor an upload still being written.
+ * How long a message's upload may pend before it shows as failed. Its write URL expires if it isn't used, and the
+ * server drops a write that fails or doesn't start in time (§4.8.3); one still pending this long after its message
+ * was sent won't finish (its sender left, or the server never dropped it), so it stops saying it's uploading.
+ */
+export const UPLOAD_STALE_MS = 10 * 60_000;
+
+/**
+ * Its embeds with what each upload is doing: this client's own writes as they go, and one pending past
+ * UPLOAD_STALE_MS as failed. Your own can be removed, but not the last thing in a message (§3.5: a message has text
+ * or embeds; delete it instead), nor an upload still being written.
  */
 function embedsIn(event: MessageRecord, row: MessageRow, context: MessageContext, seen: Drawn, name: string): MessageEmbed[] | undefined {
 	const embeds = embedsOf(event);
@@ -233,12 +241,21 @@ function embedsIn(event: MessageRecord, row: MessageRow, context: MessageContext
 	const removable = row.caps.edit && !row.selecting && (Boolean(seen.text.trim()) || embeds.length > 1);
 	const detail = seen.time ? `${name} · ${seen.time}` : name;
 	return embeds.map((embed, index) => {
-		const upload = embed.embed_id ? uploads[embed.embed_id] : undefined;
+		const upload = (embed.embed_id ? uploads[embed.embed_id] : undefined) ?? stalled(embed, seen.timestamp);
 		const item: MessageEmbed = { key: embed.embed_id ?? String(index), embed: embed as unknown as EmbedProps, detail };
 		if (upload) item.upload = upload;
 		if (removable && !(upload && !upload.failed)) item.removable = true;
 		return item;
 	});
+}
+
+/**
+ * An upload no one here is writing that is still pending UPLOAD_STALE_MS after its message was sent, as a failed
+ * one. Only such a row reads the clock, so it alone is redone each minute.
+ */
+function stalled(embed: Embed, sent: number | undefined): UploadState | undefined {
+	if (embed.kind !== 'upload' || embed.url || sent === undefined) return undefined;
+	return minuteNow() - sent >= UPLOAD_STALE_MS ? { name: embed.title || 'File', failed: 'it never finished' } : undefined;
 }
 
 /**

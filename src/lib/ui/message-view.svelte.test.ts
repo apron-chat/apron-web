@@ -6,7 +6,7 @@ import type { Identity, MessageRecord } from '$lib/protocol/types';
 import { messageRecord, roomSnapshot } from '$lib/test/builders';
 import { directory } from './directory.svelte';
 import type { ApronLink } from './apron-link';
-import { linkedRoomIn, messageView, noticeView, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
+import { linkedRoomIn, messageView, noticeView, UPLOAD_STALE_MS, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
 import { avatarHue } from './messages';
 import { idWhen } from './time';
 import { blankSnapshot } from './session.svelte';
@@ -194,6 +194,19 @@ describe('messageView', () => {
 		expect(messageView(messageRecord(2, 'ops', { body: { text: '', embeds: [embeds[2]] } }), own, context()).embeds?.[0].removable).toBeUndefined();
 		expect(messageView(messageRecord(3, 'ops', { body: { text: 'x', embeds } }), row(), context([], uploads)).embeds?.[2].removable).toBeUndefined();
 		expect(messageView(messageRecord(4, 'ops', { body: { text: 'x', embeds } }), row({ selecting: true, caps: { ...NONE, edit: true } }), context([], uploads)).embeds?.[2].removable).toBeUndefined();
+	});
+
+	it('shows an upload no one here is writing as failed once it has pended UPLOAD_STALE_MS, and not before', () => {
+		const pending = { body: { text: '', embeds: [{ embed_id: 'p1', kind: 'upload', title: 'iss.png' }] } };
+		const at = (ago: number) => messageView(messageRecord(Date.now() - ago, 'ops', pending), row(), context()).embeds?.[0].upload;
+		expect(at(UPLOAD_STALE_MS - 60_000)).toBeUndefined();
+		expect(at(UPLOAD_STALE_MS + 60_000)).toMatchObject({ name: 'iss.png', failed: expect.any(String) });
+		// This client's own write says how it's going, however long it takes.
+		const writing = messageView(messageRecord(Date.now() - 2 * UPLOAD_STALE_MS, 'ops', pending), row(), context([], { p1: { name: 'iss.png', progress: 0.4 } }));
+		expect(writing.embeds?.[0].upload).toEqual({ name: 'iss.png', progress: 0.4 });
+		// A finished upload is never stale.
+		const done = { body: { text: '', embeds: [{ embed_id: 'p2', kind: 'upload', title: 'ok.png', url: 'https://chat.example/f/ok' }] } };
+		expect(messageView(messageRecord(Date.now() - 2 * UPLOAD_STALE_MS, 'ops', done), row(), context()).embeds?.[0].upload).toBeUndefined();
 	});
 
 	it('reads the uploads only for a message with embeds', () => {

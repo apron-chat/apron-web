@@ -1023,7 +1023,14 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   then writes each file to the `write_url` in the result. A failed send gives
   the draft back with its files. The message shows a pending
   card with progress until the server publishes the finished file: an image, a
-  video or audio player from its `og`, or else a file card. A plain click (or
+  video or audio player from its `og`, or else a file card. A write the server
+  refuses (a file larger than it takes, say) shows as failed with the reason,
+  and, on a server with `edit`, the sender's client saves the message without
+  the failed files in one save (or deletes it, if nothing else was in it), so
+  no one else is left looking at a file that will never arrive. Anyone's card
+  for an upload still pending ten minutes after its message was sent (its
+  sender left mid-write, or the server never dropped the failed write) shows
+  "Upload failed · it never finished" instead of uploading. A plain click (or
   Enter) on an image opens it full screen in the image viewer: its name, who
   sent it and when, **Open original** (the file, in a new tab) and **Close**,
   with ← and → (and the arrow buttons) paging through every image in the open
