@@ -129,6 +129,7 @@ import {
 	type ValidHistoryResponse
 } from './client-internals';
 import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, serverAddress, serverSettings, yourPermissions } from './client-views';
+import { parseFrame } from './plain-text';
 import { HistoryQueue } from './history-queue';
 
 export * from './client-types';
@@ -2739,7 +2740,7 @@ export class ChatClient {
 	private handleMessage(raw: unknown): void {
 		let value: unknown;
 		try {
-			value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+			value = typeof raw === 'string' ? parseFrame(raw) : raw;
 		} catch {
 			this.error = 'The server sent invalid JSON';
 			this.emit();

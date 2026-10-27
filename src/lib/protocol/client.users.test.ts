@@ -142,6 +142,12 @@ describe('your own user', () => {
 		expect(snapshot.you?.ext).toEqual({ permissions: { add_members: true } });
 	});
 
+	it('takes the bidi embeddings and overrides out of what users write (§3.5.2)', async () => {
+		await socket.greet(['rooms'], { you: { user_id: 'guest_1', name: 'Guest' } });
+		socket.receive({ method: 'user', params: { new: { user_id: 'mallory', name: 'Mal\u202Elory\u202C', ext: { bio: 'evil\u202Egnp.exe' } } } });
+		expect(snapshot.users.mallory).toEqual({ user_id: 'mallory', name: 'Mallory', ext: { bio: 'evilgnp.exe' } });
+	});
+
 	it('merges roles like any profile field, and an empty list clears them', async () => {
 		await socket.greet(['rooms'], { you: { user_id: 'guest_1', roles: ['admin'] } });
 		expect(snapshot.you?.roles).toEqual(['admin']);

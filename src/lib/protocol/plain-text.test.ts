@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanPlainText } from './plain-text';
+import { cleanPlainText, parseFrame, withoutBidiOverrides } from './plain-text';
 
 describe('cleanPlainText', () => {
 	it('drops bidi embeddings, overrides and isolates, which could make the text around it read backwards', () => {
@@ -23,5 +23,19 @@ describe('cleanPlainText', () => {
 	it('leaves markup, links and every script as written: they are only ever shown as text', () => {
 		const text = '<img src=x onerror=alert(1)> [link](javascript:alert(1)) @everyone مرحبا 你好 👋🏽 👩‍💻 נ\u200Fx';
 		expect(cleanPlainText(text)).toBe(text);
+	});
+});
+
+describe('bidi embeddings and overrides (§3.5.2)', () => {
+	it('are taken out of what users write, isolates kept', () => {
+		expect(withoutBidiOverrides('evil\u202Egnp.exe\u202A\u202B\u202C\u202D \u2068x\u2069')).toBe('evilgnp.exe \u2068x\u2069');
+	});
+
+	it('are taken out of every string of a frame, written or escaped, keys and other values left alone', () => {
+		const raw = '{"method":"message","params":{"from":{"user_id":"ada","name":"Ada\\u202e"},"body":{"text":"evil\u202Egnp.exe","n":1}}}';
+		expect(parseFrame(raw)).toEqual({ method: 'message', params: { from: { user_id: 'ada', name: 'Ada' }, body: { text: 'evilgnp.exe', n: 1 } } });
+		// A backslash written before `u202e` is text, not an escape.
+		expect(parseFrame('{"a":"plain","b":[1,"\\\\u202e"]}')).toEqual({ a: 'plain', b: [1, '\\u202e'] });
+		expect(() => parseFrame('{')).toThrow();
 	});
 });

@@ -1,6 +1,7 @@
 import { AGENT, PING_FRAME, REQUEST_TIMEOUT_MS, makeRequestId, userFacingRpcError } from './client-internals';
 import type { WebSocketFactory } from './client-types';
 import { isJsonObject, type JsonObject, type RpcError, type WireFrame } from './types';
+import { parseFrame } from './plain-text';
 
 /**
  * The longest a proposal's connection stays open waiting for its code. A
@@ -128,7 +129,7 @@ export class SignInConnection {
 		}
 		let frame: WireFrame;
 		try {
-			frame = JSON.parse(String(data)) as WireFrame;
+			frame = parseFrame(String(data)) as WireFrame;
 		} catch {
 			return;
 		}

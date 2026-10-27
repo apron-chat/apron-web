@@ -9,7 +9,7 @@
 		class?: ClassValue;
 	}
 	let { names = [], class: className }: Props = $props();
-	const who = $derived(names.length === 1 ? `${names[0]} is typing` : names.length === 2 ? `${names[0]} and ${names[1]} are typing` : 'Several people are typing');
 </script>
 
-<div aria-live="polite" class={['ap-typing', className]}>{#if names.length}<TypingDots />{who}…{/if}</div>
+<!-- Each name is isolated in a <bdi>, so one written right to left can't reorder the words around it. -->
+<div aria-live="polite" class={['ap-typing', className]}>{#if names.length}<TypingDots />{#if names.length === 1}<bdi>{names[0]}</bdi> is typing{:else if names.length === 2}<bdi>{names[0]}</bdi> and <bdi>{names[1]}</bdi> are typing{:else}Several people are typing{/if}…{/if}</div>

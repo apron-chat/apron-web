@@ -30,13 +30,20 @@ export function reactorsOf(summary: ReactionSummary, you: string | undefined): I
 	return summary.mine && you !== undefined ? [{ user_id: you }, ...others] : others;
 }
 
-/** "You, Ada and 3 others": you first, then others in the summary's order. */
+/**
+ * A name among words of the app's own, isolated between U+2068 and U+2069
+ * (§3.5.2): one written right to left can't reorder the words around it,
+ * where a <bdi> can't go, such as a tooltip.
+ */
+export const isolated = (name: string) => `\u2068${name}\u2069`;
+
+/** "You, Ada and 3 others": you first, then others in the summary's order, each name isolated (`isolated`). */
 export function whoReacted(summary: ReactionSummary, you: string | undefined, nameOf: NameOf = recordedName): string {
 	const names: string[] = [];
 	if (summary.mine || (you !== undefined && summary.user_ids.includes(you))) names.push('You');
 	for (const user of summary.users) {
 		if (user.user_id === you) continue;
-		names.push(nameOf(user));
+		names.push(isolated(nameOf(user)));
 	}
 	if (names.length === 0) return '';
 	if (names.length === 1) return names[0];

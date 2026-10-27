@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { ReactionSummary } from '$lib/protocol/client';
 import { reactionChips, reactorsOf, whoReacted } from './reactions';
 
+/** The words as read, without the isolates around each name. */
+const read = (text: string) => text.replace(/[\u2068\u2069]/g, '');
+
 const summary = (emoji: string, users: string[], mine = false): ReactionSummary => ({
 	emoji,
 	count: users.length,
@@ -14,9 +17,9 @@ describe('reaction chips', () => {
 	it('shows one chip per emoji with its count and whether you reacted, and none on tombstones or messages nobody reacted to', () => {
 		const chips = reactionChips([summary('👍', ['ada', 'bob', 'you'], true), summary('🎉', ['bob'])], 'you');
 		expect(chips.map(({ emoji, count, mine }) => [emoji, count, mine])).toEqual([['👍', 3, true], ['🎉', 1, false]]);
-		expect(chips[0].title).toBe('You, Ada and Bob reacted with 👍');
+		expect(read(chips[0].title)).toBe('You, Ada and Bob reacted with 👍');
 		expect(chips[0].label).toBe('👍 3 reactions, including yours. Remove yours');
-		expect(chips[1].title).toBe('Bob reacted with 🎉');
+		expect(read(chips[1].title)).toBe('Bob reacted with 🎉');
 		expect(chips[1].label).toBe('🎉 1 reaction. Add yours');
 		// None on tombstones, or for messages nobody reacted to.
 		expect(reactionChips([summary('👍', ['ada'])], 'you', true)).toEqual([]);
@@ -25,15 +28,15 @@ describe('reaction chips', () => {
 	});
 
 	it('names who reacted, you first, summing up a long list, and lists them all', () => {
-		expect(whoReacted(summary('👍', ['you'], true), 'you')).toBe('You');
-		expect(whoReacted(summary('👍', ['ada', 'bob']), 'you')).toBe('Ada and Bob');
+		expect(read(whoReacted(summary('👍', ['you'], true), 'you'))).toBe('You');
+		expect(read(whoReacted(summary('👍', ['ada', 'bob']), 'you'))).toBe('Ada and Bob');
 		const crowd = summary('👍', ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'you'], true);
-		expect(whoReacted(crowd, 'you')).toBe('You, A1, A2, A3, A4, A5, A6 and 3 others');
+		expect(read(whoReacted(crowd, 'you'))).toBe('You, A1, A2, A3, A4, A5, A6 and 3 others');
 		const unnamed: ReactionSummary = { emoji: '👀', count: 1, user_ids: ['guest_1'], users: [{ user_id: 'guest_1' }], mine: false };
-		expect(whoReacted(unnamed, undefined)).toBe('guest_1');
+		expect(read(whoReacted(unnamed, undefined))).toBe('guest_1');
 		// Callers render reactors through the kept user objects (§3.3).
-		expect(whoReacted(summary('👍', ['ada', 'bob']), 'you', (user) => `${user.user_id}!`)).toBe('ada! and bob!');
-		expect(reactionChips([summary('👍', ['ada'])], 'you', false, () => 'Kept')[0].title).toBe('Kept reacted with 👍');
+		expect(read(whoReacted(summary('👍', ['ada', 'bob']), 'you', (user) => `${user.user_id}!`))).toBe('ada! and bob!');
+		expect(reactionChips([summary('👍', ['ada'])], 'you', false, () => 'Kept')[0].title).toBe('\u2068Kept\u2069 reacted with 👍');
 		// And lists them all, you first.
 		expect(reactionChips([summary('👍', ['ada', 'bob', 'you'], true)], 'you')[0].reactors.map((user) => user.user_id)).toEqual(['you', 'ada', 'bob']);
 		expect(reactorsOf(summary('👍', ['bob', 'ada']), 'you').map((user) => user.name)).toEqual(['Ada', 'Bob']);
