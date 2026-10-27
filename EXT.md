@@ -479,6 +479,7 @@ class Identity {
 |---------------|-----------------------------------------------------------------------------------------|
 | `move_any`    | move the messages of other users to another room: into a thread, or back out of one     |
 | `add_members` | add other users to rooms, with `room_join` and `user_id` ([§4.2.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#422-membership)), also while `ext:settings` says `add_members: false` |
+| `push_joined` | be woken by push for wake scope `joined`, every message in the rooms they joined ([§4.9](https://github.com/shazow/apron/blob/main/PROTOCOL.md#49-push)), where `server.push.wake` lists it |
 
 ```jsonc
 // <-
@@ -495,6 +496,13 @@ class Identity {
 - Clients ignore unknown permissions, and entries that are not strings.
 - Without `move_any`, clients offer to move only the user's own messages.
   Without `add_members`, `ext:settings` decides ([§3.3](#33-add_members)).
+- `server.push.wake` is the same for everyone, and is sent before sign-in. A
+  server with `ext:permissions` that lists `joined` there pushes it only to
+  the users it grants `push_joined`; it grants it to everyone it pushes
+  `joined` to. Without `push_joined`, clients take `joined` as not pushed:
+  they leave it out of `push_register` `wake`, and show it as alerting only
+  while the client is open. A change of `push_joined` comes as a `user`
+  notification with `you`, so a client registers again with the new `wake`.
 - The server owns `ext.permissions`. A `me` request MUST NOT change it.
 - The permissions describe server policy. The server still checks each
   request.
@@ -505,6 +513,8 @@ class Identity {
   Without it, it offers to move only your own messages.
 - When apron-web moves messages into a thread, it adds their authors with
   `add_members`, or while `ext:settings` allows it.
+- Without `push_joined`, apron-web marks "All messages in joined rooms"
+  "Only while open" while push is on, and registers push without `joined`.
 - apron-web shows roles as badges only. They grant nothing.
 
 ---
