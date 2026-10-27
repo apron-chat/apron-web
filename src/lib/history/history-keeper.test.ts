@@ -171,6 +171,28 @@ describe('HistoryKeeper', () => {
 		expect(historyOf(server, 'general', from).every((params) => params?.after !== undefined)).toBe(true);
 	});
 
+	it('flushes what changed while a write was under way, not only that write', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		const first = server.post('general', 'grace', 'Written');
+		await waitFor(() => ids(client.snapshot(), 'general').includes(first));
+		// A write under way, and a message arriving while it is: a flush waits for that one to be written too.
+		const writing = keeper.flush();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const posted = server.post('general', 'grace', 'Mid-write');
+		await keeper.flush();
+		await writing;
+		expect((await readKept(await openHistory(indexedDB), URL))?.messages.map((message) => message.message_id)).toEqual(expect.arrayContaining([first, posted]));
+		await keeper.stop();
+	});
+
 	it('keeps each server’s history apart, and a server switched back to goes on from its own', async () => {
 		const servers: Record<string, MemoryProtocolServer> = { [URL]: new MemoryProtocolServer({ account: true }), 'wss://other.example/': new MemoryProtocolServer({ account: true }) };
 		const OTHER = 'wss://other.example/';

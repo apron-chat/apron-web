@@ -136,6 +136,8 @@ export class HistoryKeeper {
 	private again = false;
 	/** The last write left rooms to write whole in the next. */
 	private leftover = false;
+	/** A write took what was waiting, since `flush` last looked. */
+	private progressed = false;
 	/** Why keeping stopped, such as a full disk, until the page reloads. */
 	failure: string | undefined;
 
@@ -246,11 +248,21 @@ export class HistoryKeeper {
 
 	/** Writes what is waiting now, as the page goes: once a writer this tab holds the lock for is ready. */
 	async flush(): Promise<void> {
-		if (this.timer) clearTimeout(this.timer);
-		this.timer = undefined;
 		await this.writer?.taking;
-		do await this.write();
-		while (this.leftover && this.writer?.granted);
+		// Until nothing waits: a write under way when this began, what changed meanwhile, rooms left for the next.
+		for (;;) {
+			if (this.timer) clearTimeout(this.timer);
+			this.timer = undefined;
+			// A write under way took what waited before it: what came after goes in one of this flush's own.
+			if (this.writing) {
+				await this.writing.catch(() => undefined);
+				continue;
+			}
+			this.progressed = false;
+			await this.write();
+			// A write that couldn't go (signed out meanwhile, another server) leaves the rest for when one can.
+			if (!this.progressed || !this.writer?.granted || (!this.leftover && !this.queue.length)) return;
+		}
 	}
 
 	/** Stops following the client, writing what is waiting first. */
@@ -429,6 +441,7 @@ export class HistoryKeeper {
 		const state = client.keptState();
 		if (!state || state.userId !== writer.userId || client.url !== writer.server) return;
 		const changes = this.queue.splice(0);
+		this.progressed = true;
 		const kept = new Set(writer.synced);
 		const synced = new Set(writer.synced);
 		const joined = new Set(state.rooms.map((room) => room.id));
