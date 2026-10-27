@@ -39,8 +39,7 @@
 	 * come one by one meanwhile, and the list would reorder with each.
 	 */
 	function statusOf(person: Identity): string | undefined {
-		const before = directory.isMe(person.user_id) ? undefined : session.snapshot.statusesBeforeResume?.[person.user_id];
-		return before ?? directory.status(person);
+		return directory.statusBeforeResume(person) ?? directory.status(person);
 	}
 	/** By status (online, idle, dnd, unknown, offline, then none), and by name within each. */
 	let members = $derived(byStatus([...(room?.members ?? [])].sort((a, b) =>
