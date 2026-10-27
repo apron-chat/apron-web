@@ -20,7 +20,10 @@ export interface AlertView {
 	/** The room or thread being read, and whether its latest message is on screen. */
 	pane: string | undefined;
 	latestVisible: boolean;
-	/** How far you have read a room (`ReadPositions.through`): mentions after it in its history still count on its row. */
+	/**
+	 * How far you have read a room (`ReadPositions.through`): mentions after it in its history still count on its row.
+	 * Undefined for every room where the server keeps no read cursors, so nothing read on another device counts again.
+	 */
 	readThrough?: (room: RoomSnapshot) => string | undefined;
 }
 

@@ -187,6 +187,12 @@
 	 */
 	let notificationsActive = $derived((notificationsEnabled || webPushActive) && notificationState === 'granted');
 	/**
+	 * The server keeps your read cursors (capability `activity`, §4.6, and no `read_cursors: false`), which carry what
+	 * you read on other devices: only then do unread counts and mentions from before this page saw a room count, as
+	 * otherwise what you read elsewhere would count again here.
+	 */
+	let syncsReads = $derived(Boolean(session.snapshot.capabilities.activity) && serverSettings(session.server).read_cursors);
+	/**
 	 * Push is on for this account, but the subscription is another account's, on
 	 * a server with another key, that still has push on: that server's host. It
 	 * moves here only when push is turned on here again, so two tabs don't take
@@ -599,7 +605,7 @@
 	// they're chosen on this device), and while you're away they notify. Never from a held view (`arrivalAlerts`).
 	$effect(() => {
 		const alerts = arrivalAlerts(
-			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible, readThrough: (room) => readPositions.through(room, session.you) },
+			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible, readThrough: syncsReads ? (room) => readPositions.through(room, session.you) : () => undefined },
 			{ mentions, messages: incomingMessages },
 			{
 				offerable: untrack(() => !notifyOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
@@ -622,7 +628,7 @@
 	$effect(() => {
 		if (session.showingHeld) return;
 		const me = session.you;
-		unread.observe(session.rooms, me, paneRoom?.id, readingLatest && presence.visible, (room) => readPositions.through(room, me));
+		unread.observe(session.rooms, me, paneRoom?.id, readingLatest && presence.visible, (room) => readPositions.through(room, me), syncsReads);
 	});
 
 	// Signed in to an installed app where push works: offer notifications now, not at the first mention.

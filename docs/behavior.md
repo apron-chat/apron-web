@@ -682,9 +682,11 @@ go by the read position too, so a reload, or coming back the next day, keeps
 what you hadn't read: a joined room counts the messages from others after your
 read position among those loaded (its newest page, or since it was last kept
 here), and the mentions of you among them, which turn its bubble orange but
-never pulse or notify. Without a read position for a room, as on a new device
-of a server that keeps no read cursors, only what arrives while the page is
-open counts. A thread counts once it is opened, as its replies load only then.
+never pulse or notify. That takes a server that keeps your read cursors
+(capability `activity`, without `read_cursors: false`), which carry what you
+read on your other devices; elsewhere, as without a read position for a room,
+only what arrives while the page is open counts, so nothing you read on
+another device counts again here. A thread counts once it is opened, as its replies load only then.
 A room someone else added you to counts from your join.
 
 With the `rooms` capability, rooms come by request ([PROTOCOL.md §4.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#42-rooms)): right behind
