@@ -142,6 +142,15 @@ describe('your own user', () => {
 		expect(snapshot.you?.ext).toEqual({ permissions: { add_members: true } });
 	});
 
+	it('keeps the server frame\'s title, description and avatar as strings (§3.1)', async () => {
+		await socket.greet(['rooms'], { you: { user_id: 'guest_1' } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [], title: 'Work', description: 'The **team**', avatar: 'https://chat.example/icon.png' } });
+		expect(snapshot.server).toMatchObject({ title: 'Work', description: 'The **team**', avatar: 'https://chat.example/icon.png' });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [], title: 7 } });
+		expect(snapshot.server).not.toHaveProperty('title');
+		expect(snapshot.server).not.toHaveProperty('avatar');
+	});
+
 	it('takes the bidi embeddings and overrides out of what users write (§3.5.2)', async () => {
 		await socket.greet(['rooms'], { you: { user_id: 'guest_1', name: 'Guest' } });
 		socket.receive({ method: 'user', params: { new: { user_id: 'mallory', name: 'Mal\u202Elory\u202C', ext: { bio: 'evil\u202Egnp.exe' } } } });

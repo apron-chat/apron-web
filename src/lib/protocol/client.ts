@@ -2819,6 +2819,10 @@ export class ChatClient {
 			auth,
 			...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
 			...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
+			// How it shows itself (§3.1): never what it is known by, its address (§1).
+			...(typeof params.title === 'string' ? { title: params.title } : {}),
+			...(typeof params.description === 'string' ? { description: params.description } : {}),
+			...(typeof params.avatar === 'string' ? { avatar: params.avatar } : {}),
 			...(isJsonObject(params.ext) ? { ext: params.ext } : {}),
 			...(isJsonObject(params.push) ? { push: params.push } : {}),
 			...(Array.isArray(params.status) ? { status: params.status.filter(isString) } : {}),
