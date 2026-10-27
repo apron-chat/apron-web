@@ -832,9 +832,10 @@ export class ChatClient {
 	}
 
 	/**
-	 * Sets what runs before each new session connects: the first, and the one after switching servers or
+	 * Sets what runs before each new session signs in: the first, and the one after switching servers or
 	 * connecting anew (`restart`), but not a reconnect, which goes on with what it has. Such as restoring what
-	 * was kept for the server (`restore`). The connection waits for it, `FRESH_HOOK_MS` at most.
+	 * was kept for the server (`restore`). It runs while the connection opens, and signing in waits for it,
+	 * `FRESH_HOOK_MS` at most.
 	 */
 	beforeFreshSession(hook: (() => Promise<void>) | undefined): void {
 		this.freshHook = hook;
@@ -873,10 +874,10 @@ export class ChatClient {
 	 * Before `start`, takes what a session kept (`keptState`) with its rooms' records, as if a connection had
 	 * dropped: the rooms are kept, hidden, and the next sign-in as `userId` resumes each from its checkpoint
 	 * (`requestRooms`), listing only what changed since where the joined set was complete. Their timelines show
-	 * what was kept meanwhile. Ignored once a connection is open or rooms are held: returns whether it was taken.
+	 * what was kept meanwhile. Ignored once signing in has begun or rooms are held: returns whether it was taken.
 	 */
 	restore(state: RestoredState): boolean {
-		if (this.socket || this.rooms.size || this.retainedRooms.size) return false;
+		if (this.authRequested || this.authenticated || this.rooms.size || this.retainedRooms.size) return false;
 		const { rooms, messages, reactions, memberships } = state.records;
 		for (const record of rooms) this.store.putRoom(record);
 		for (const record of messages) {
@@ -2731,23 +2732,19 @@ export class ChatClient {
 	}
 
 	private connectNow(): void {
-		if (!this.running || this.socket || this.preparing) return;
+		if (!this.running || this.socket) return;
 		this.stopWaitingForPresence();
 		if (this.fresh && this.freshHook && !this.rooms.size && !this.retainedRooms.size) {
-			// A new session: what was kept for this server goes in before it connects (`beforeFreshSession`).
+			// A new session: what was kept for this server goes in before it signs in (`beforeFreshSession`),
+			// while the connection opens.
 			this.fresh = false;
-			this.status = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
-			this.emit();
 			const preparing: Promise<void> = Promise.race([
 				this.freshHook().catch(() => undefined),
 				new Promise<void>((resolve) => setTimeout(resolve, FRESH_HOOK_MS))
 			]).then(() => {
-				if (this.preparing !== preparing) return;
-				this.preparing = undefined;
-				this.connectNow();
+				if (this.preparing === preparing) this.preparing = undefined;
 			});
 			this.preparing = preparing;
-			return;
 		}
 		this.connectionProbe?.abort();
 		const id = ++this.connectionId;
@@ -2964,6 +2961,15 @@ export class ChatClient {
 			this.syncIdle();
 			this.syncPush();
 			this.emit();
+			return;
+		}
+		// What runs before a new session (`beforeFreshSession`) goes first: signing in lists and resumes rooms.
+		const preparing = this.preparing;
+		if (preparing) {
+			const socket = this.socket;
+			void preparing.then(() => {
+				if (this.socket === socket && !this.authenticated && !this.authRequested) this.authenticate(auth);
+			});
 			return;
 		}
 		this.authenticate(auth);

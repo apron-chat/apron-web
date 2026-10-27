@@ -672,8 +672,9 @@ all), and with it how far each joined room is caught up. The next visit shows it
 at once and goes on as a reconnect does: each room asks the server only for what
 came after its checkpoint (§4.3.5), and the joined listing only for rooms that
 changed since (`latest_log_id`, §4.2.1); a thread opened again goes on from
-where its last load got to. Older messages than the retention load from the
-server as you scroll back, as before. The retention counts by when a message
+where its last load got to. Each room opens with its newest hundred records; as
+you scroll back, older pages come from this device first, then from the server
+once what is kept runs out, as messages older than the retention do. The retention counts by when a message
 was logged, on servers whose `log_id`s are times (as the reference servers'
 are); elsewhere everything loaded is kept. A room last caught up before the
 cutoff starts over from its newest page rather than paging through everything

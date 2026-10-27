@@ -457,27 +457,46 @@ from the export and refuses everything else. Both make their sockets with
 `memorySocket` (`src/lib/preview/memory-socket.ts`), a `WebSocket` as far as
 the client can tell. Unlike `/__preview`, `/archive` is in every build.
 
-History kept on this device lives in `src/lib/history`. `history-db.ts` is
-its IndexedDB store, shaped like a server's log: `records` keyed by `[server,
-room, log, kind, id]` (`log_id`s as numbers, so a room's records below a bound,
-or a page of them, are one key range), with a `key` index to replace a
-message's or reaction set's row as it is written (compaction on write),
-`rooms` with each room's record and `RoomSync`, and `meta` with whose it is,
-the users, and a `version` each write moves on. `ProtocolStore.observe` reports
-each change it takes (a record that replaced what it had, a bound's eviction, a
-rebuild's clear), and `HistoryKeeper` (`history-keeper.ts`) mirrors those into
-the store in batches, one transaction each, with every settled room's sync
-(`ChatClient.keptState`), so a room's checkpoint is never kept without the
-records it covers. A room joined and settled that isn't kept yet is written
-whole (`storedRecords(roomId)`); one no longer joined goes once the joined set
-is complete. One tab writes per server, under a Web Lock; a tab that takes it
-over writes everything whole unless `version` is still what it read. Before
-each new session connects (the first, another server, a `restart`, but not a
-reconnect), the client runs its `beforeFreshSession` hook, for up to
-`FRESH_HOOK_MS`; the keeper's reads back what was kept for that server
-(`restoredState` applies the retention), and `ChatClient.restore` takes it as a dropped connection's kept
-state: the rooms retained with their records and syncs, so the first sign-in
-resumes each from its checkpoint through `requestRooms`, the path a reconnect
-takes. `settings.svelte.ts` holds the retention (`apron.historyRetention`),
-which Preferences' History section sets. The view `session-cache.ts` keeps
-still paints the page before the session signs in.
+History kept on this device lives in `src/lib/history`. `log.ts` pages a
+room's log as `history` does (§4.3.2), for everything that answers it from what
+is kept rather than from a server: `sliceLog` takes the oldest `limit` entries
+from `after`, else the newest up to `before`, never splitting the entries at one
+`log_id` (a reaction or membership record's sets and entries, kept one per
+user), and `historyResult` folds them back into the records a server sends.
+`ArchiveServer` pages an export with it, from memory. `history-db.ts` is the
+IndexedDB store, shaped like a server's log: `records` keyed by `[server, room,
+log, kind, id]` (`log_id`s as numbers, so a page or everything below a bound is
+one key range), with a `key` index to replace a message's or reaction set's row
+as it is written (compaction on write; a creation, `log_id == message_id`,
+needs none), `rooms` with each room's record and `RoomSync`, and `meta` with
+whose it is, the users, and a `version` each write moves on. It pages with the
+same rules in a few requests whatever the page's size (a key cursor jumps to
+the page's edge, one `getAll` reads it, one `count` says whether more lie past
+it); `log.test.ts` holds the two pagers to the same pages.
+
+`ProtocolStore.observe` reports each change it takes (a record that replaced
+what it had, a bound's eviction, a rebuild's clear), and `HistoryKeeper`
+(`history-keeper.ts`) mirrors those into the store in batches, one transaction
+each, with every settled room's sync (`ChatClient.keptState`), so a room's
+checkpoint is never kept without the records it covers. A room joined and
+settled that isn't kept yet is written whole (`storedRecords(roomId)`), a few
+rooms a write (`WHOLE_BUDGET`) so writing many isn't one long task; one no
+longer joined goes once the joined set is complete. One tab writes per server,
+under a Web Lock; a tab that takes it over writes everything whole unless
+`version` is still what it read.
+
+Before each new session signs in (the first, another server, a `restart`, but
+not a reconnect), the client runs its `beforeFreshSession` hook while the
+connection opens, and signing in waits for it, for up to `FRESH_HOOK_MS`. The
+keeper's reads back each room's newest `RESTORE_WINDOW` entries (`plannedRoom`
+applies the retention), and `ChatClient.restore` takes them as a dropped
+connection's kept state: the rooms retained with their records and syncs, so
+the first sign-in resumes each from its checkpoint through `requestRooms`, the
+path a reconnect takes. A room held only to its newest shows as loaded newest
+first, and the keeper remembers how far down the rest reaches (`Coverage`):
+`loadOlder` asks it first (`olderPagesFrom`), and it answers from IndexedDB
+while what is kept is still what it restored from, the server paging beyond.
+The sync it writes keeps that deeper reach, and records it served aren't
+written back. `settings.svelte.ts` holds the retention
+(`apron.historyRetention`), which Preferences' History section sets. The view
+`session-cache.ts` keeps still paints the page before the session signs in.

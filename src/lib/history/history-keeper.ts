@@ -14,7 +14,7 @@
 import type { ClientSnapshot, KeptState, RestoredState, RoomSync } from '$lib/protocol/client-types';
 import { compareLogIds, type StoreChange, type StoredRecords } from '$lib/protocol/reducer';
 import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types';
-import { forgetHistory, historyVersion, openHistory, pageHistory, pruneHistory, readHistory, timeLike, writeHistory, type Databases, type KeptHistory, type RoomRow } from './history-db';
+import { forgetHistory, historyVersion, openHistory, pageHistory, pruneHistory, readHistory, timeLike, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -35,10 +35,13 @@ export interface HistoryClient {
 /** The longest a batch of changes waits to be written. */
 export const FLUSH_MS = 2000;
 
+/** About how many records one write puts down for rooms written whole. */
+export const WHOLE_BUDGET = 1000;
+
 type Locks = Pick<LockManager, 'request'>;
 
 /** How many of a room's newest entries a restore reads back: what opens it; older ones page in as it scrolls back. */
-export const RESTORE_WINDOW = 300;
+export const RESTORE_WINDOW = 100;
 
 /**
  * Where a room's kept log reaches down to (`from`, its start when undefined), and whether the server has older
@@ -131,6 +134,8 @@ export class HistoryKeeper {
 	private timer: ReturnType<typeof setTimeout> | undefined;
 	private writing: Promise<void> | undefined;
 	private again = false;
+	/** The last write left rooms to write whole in the next. */
+	private leftover = false;
 	/** Why keeping stopped, such as a full disk, until the page reloads. */
 	failure: string | undefined;
 
@@ -244,7 +249,8 @@ export class HistoryKeeper {
 		if (this.timer) clearTimeout(this.timer);
 		this.timer = undefined;
 		await this.writer?.taking;
-		return this.write();
+		do await this.write();
+		while (this.leftover && this.writer?.granted);
 	}
 
 	/** Stops following the client, writing what is waiting first. */
@@ -332,15 +338,15 @@ export class HistoryKeeper {
 		return Boolean(record && ranges?.some(([first, last]) => compareLogIds(record.log_id, first) >= 0 && compareLogIds(record.log_id, last) <= 0));
 	}
 
-	/** Each snapshot: a session saved here starts a writer for its account; a writer running goes on. */
+	/** Each snapshot: a session saved here starts a writer for its account. */
 	private consider(snapshot: ClientSnapshot): void {
 		const client = this.client;
 		const you = snapshot.you?.user_id;
-		if (!client || !this.keeping || !snapshot.authenticated || !snapshot.passkeySession || you === undefined || !client.keptSessionFor(client.url)) return;
-		if (this.writer && this.writer.server === client.url && this.writer.userId === you) {
-			this.schedule();
-			return;
-		}
+		if (!client || !this.keeping || !snapshot.authenticated || !snapshot.passkeySession || you === undefined) return;
+		// A writer running writes as the store changes (and as the page hides), not on every snapshot.
+		if (this.writer && this.writer.server === client.url && this.writer.userId === you) return;
+		// Read from storage, so only when a writer may start, not on every snapshot.
+		if (!client.keptSessionFor(client.url)) return;
 		this.endWriter();
 		this.startWriter(client.url, you);
 	}
@@ -407,7 +413,7 @@ export class HistoryKeeper {
 		}
 		this.writing = this.writeOnce().finally(() => {
 			this.writing = undefined;
-			if (this.again) {
+			if (this.again || this.leftover) {
 				this.again = false;
 				this.schedule(0);
 			}
@@ -416,6 +422,7 @@ export class HistoryKeeper {
 	}
 
 	private async writeOnce(): Promise<void> {
+		this.leftover = false;
 		const writer = this.writer;
 		const client = this.client;
 		if (!writer?.granted || !client || !this.keeping) return;
@@ -426,11 +433,20 @@ export class HistoryKeeper {
 		const synced = new Set(writer.synced);
 		const joined = new Set(state.rooms.map((room) => room.id));
 		// A room joined and settled that isn't kept yet goes in whole: everything the client has of it.
-		const whole = state.rooms.filter((room) => room.sync && !synced.has(room.id)).map((room) => {
+		// A few rooms a write, so writing many isn't one long task: the rest go in the next, at once.
+		const whole: HistoryWrite['whole'] = [];
+		let budget = WHOLE_BUDGET;
+		for (const room of state.rooms) {
+			if (!room.sync || synced.has(room.id)) continue;
+			if (budget <= 0) {
+				this.leftover = true;
+				break;
+			}
 			synced.add(room.id);
 			const { messages, reactions, memberships } = client.storedRecords(room.id);
-			return { room: room.id, messages, reactions, memberships };
-		});
+			whole.push({ room: room.id, messages, reactions, memberships });
+			budget -= messages.length + reactions.length + memberships.length;
+		}
 		const rows: RoomRow[] = [];
 		const written = new Map<string, string>();
 		for (const room of state.rooms) {

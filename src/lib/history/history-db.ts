@@ -149,26 +149,34 @@ function entryOf(row: RecordRow): LogEntry {
 }
 
 /**
- * A page of one room's kept log, as `sliceLog` pages one in memory, with a cursor: within the query's bounds and
- * not below `from`, the oldest `limit` rows with `after`, else the newest, never splitting the rows at one `log_id`.
+ * A page of one room's kept log, as `sliceLog` pages one in memory: within the query's bounds and not below
+ * `from`, the oldest `limit` rows with `after`, else the newest, never splitting the rows at one `log_id`. In a
+ * few requests whatever the page's size: a key cursor jumps to the `limit`-th row, whose `log_id` bounds the
+ * page, which one `getAll` reads, and one `count` says whether more lie past it.
  */
-function pageRows(records: IDBObjectStore, server: string, room: string, query: PageQuery, from?: number): Promise<{ page: LogEntry[]; more: boolean }> {
+async function pageRows(records: IDBObjectStore, server: string, room: string, query: PageQuery, from?: number): Promise<{ page: LogEntry[]; more: boolean }> {
 	const forward = query.after !== undefined;
 	const lower = Math.max(from ?? 0, query.after !== undefined ? Number(query.after) : 0);
-	const range = IDBKeyRange.bound([server, room, lower], query.before !== undefined ? [server, room, Number(query.before), []] : [server, room, []]);
-	return new Promise((resolve, reject) => {
-		const rows: RecordRow[] = [];
-		const request = records.openCursor(range, forward ? 'next' : 'prev');
+	const upper: IDBValidKey = query.before !== undefined ? [server, room, Number(query.before), []] : [server, room, []];
+	const range = IDBKeyRange.bound([server, room, lower], upper);
+	const edge = await new Promise<number | undefined>((resolve, reject) => {
+		const request = records.openKeyCursor(range, forward ? 'next' : 'prev');
+		let advanced = query.limit <= 1;
 		request.onsuccess = () => {
 			const cursor = request.result;
-			const row = cursor?.value as RecordRow | undefined;
-			if (!cursor || !row) return resolve({ page: (forward ? rows : rows.reverse()).map(entryOf), more: false });
-			if (rows.length >= query.limit && row.log !== rows.at(-1)!.log) return resolve({ page: (forward ? rows : rows.reverse()).map(entryOf), more: true });
-			rows.push(row);
-			cursor.continue();
+			if (!cursor) return resolve(undefined);
+			if (advanced) return resolve((cursor.key as [string, string, number])[2]);
+			advanced = true;
+			cursor.advance(query.limit - 1);
 		};
 		request.onerror = () => reject(request.error);
 	});
+	// Fewer than `limit` rows: all of them.
+	if (edge === undefined) return { page: (await done(records.getAll(range)) as RecordRow[]).map(entryOf), more: false };
+	const pageRange = forward ? IDBKeyRange.bound([server, room, lower], [server, room, edge, []]) : IDBKeyRange.bound([server, room, edge], upper);
+	const restRange = forward ? IDBKeyRange.bound([server, room, edge, []], upper, true, false) : IDBKeyRange.bound([server, room, lower], [server, room, edge], false, true);
+	const [rows, rest] = await Promise.all([done(records.getAll(pageRange)) as Promise<RecordRow[]>, done(records.count(restRange))]);
+	return { page: rows.map(entryOf), more: rest > 0 };
 }
 
 /**
@@ -255,12 +263,20 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
 	}
 	for (const change of write.changes) {
 		switch (change.kind) {
-			case 'message':
-				await replace(messageRow(server, change.record));
+			case 'message': {
+				const record = change.record;
+				// A creation (`log_id == message_id`, §2.2) replaces no earlier snapshot: it needs no looking up, and is
+				// kept only in a room that is. Any later one may have moved out of a kept room.
+				if (record.log_id === record.message_id) {
+					if (kept.has(record.room_id)) records.put(messageRow(server, record));
+				} else {
+					await replace(messageRow(server, record));
+				}
 				break;
+			}
 			case 'reaction':
-				// Kept with its message, in the room it is in (the writer names it).
-				if (change.set.room_id !== undefined) await replace(reactionRow(server, change.set, change.set.room_id));
+				// Kept with its message, in the room it is in (the writer names it): nothing of a room not kept is.
+				if (change.set.room_id !== undefined && kept.has(change.set.room_id)) await replace(reactionRow(server, change.set, change.set.room_id));
 				break;
 			case 'membership':
 				if (kept.has(change.entry.room_id)) records.put(membershipRow(server, change.entry));
