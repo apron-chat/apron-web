@@ -1,7 +1,7 @@
 import type { Notice, RoomListing, RoomSnapshot, UploadState } from '$lib/protocol/client';
 import { markdownText, mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 import { systemScope, type Embed, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
-import type { EmbedProps, MessageCaps, MessageEmbed, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
+import type { EmbedProps, MessageCaps, MessageEmbed, MessageUpload, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
 import { placeLinksIn, writeApronLink, type ApronLink } from './apron-link';
 import { backendHost } from './connection';
@@ -251,11 +251,12 @@ function embedsIn(event: MessageRecord, row: MessageRow, context: MessageContext
 
 /**
  * An upload no one here is writing that is still pending UPLOAD_STALE_MS after its message was sent, as a failed
- * one. Only such a row reads the clock, so it alone is redone each minute.
+ * one: just that it failed, since why is only its sender's to know. Only such a row reads the clock, so it alone is
+ * redone each minute.
  */
-function stalled(embed: Embed, sent: number | undefined): UploadState | undefined {
+function stalled(embed: Embed, sent: number | undefined): MessageUpload | undefined {
 	if (embed.kind !== 'upload' || embed.url || sent === undefined) return undefined;
-	return minuteNow() - sent >= UPLOAD_STALE_MS ? { name: embed.title || 'File', failed: 'it never finished' } : undefined;
+	return minuteNow() - sent >= UPLOAD_STALE_MS ? { name: embed.title || 'File', failed: true } : undefined;
 }
 
 /**

@@ -213,7 +213,7 @@ export interface UploadState {
 	height?: number;
 	/** Fraction written, 0–1, once the write started. */
 	progress?: number;
-	/** Why the write failed; the server then publishes the message without the embed, as the sender does with `edit`. */
+	/** Why the write failed; the server then publishes the message without the embed. */
 	failed?: string;
 }
 

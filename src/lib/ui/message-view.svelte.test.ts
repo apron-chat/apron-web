@@ -200,7 +200,7 @@ describe('messageView', () => {
 		const pending = { body: { text: '', embeds: [{ embed_id: 'p1', kind: 'upload', title: 'iss.png' }] } };
 		const at = (ago: number) => messageView(messageRecord(Date.now() - ago, 'ops', pending), row(), context()).embeds?.[0].upload;
 		expect(at(UPLOAD_STALE_MS - 60_000)).toBeUndefined();
-		expect(at(UPLOAD_STALE_MS + 60_000)).toMatchObject({ name: 'iss.png', failed: expect.any(String) });
+		expect(at(UPLOAD_STALE_MS + 60_000)).toEqual({ name: 'iss.png', failed: true });
 		// This client's own write says how it's going, however long it takes.
 		const writing = messageView(messageRecord(Date.now() - 2 * UPLOAD_STALE_MS, 'ops', pending), row(), context([], { p1: { name: 'iss.png', progress: 0.4 } }));
 		expect(writing.embeds?.[0].upload).toEqual({ name: 'iss.png', progress: 0.4 });

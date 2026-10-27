@@ -2368,9 +2368,7 @@ export class ChatClient {
 	 * `embed:upload`, §4.8.4): the message goes out with one pending embed
 	 * per file, then each file is written to the `write_url` the result lists.
 	 * `sent` settles with the message result; `uploaded` when every write has
-	 * finished. Progress and failures appear in the snapshot's `uploads`. A
-	 * write that fails is taken off the message (`dropUploads`), so no one is
-	 * left watching it pend.
+	 * finished. Progress and failures appear in the snapshot's `uploads`.
 	 */
 	sendFiles(
 		room: string, text: string, attached: Array<File | UploadFile>, format: MessageFormat = 'plain', options: SendOptions = {}, command = false
@@ -2380,7 +2378,7 @@ export class ChatClient {
 		const embeds = [...(options.embeds ?? []), ...uploads];
 		// A command takes embeds as arguments, and its result lists their write URLs too (§4.8.3, §4.1).
 		const handle: OperationHandle = command ? this.command(room, text, { ...options, embeds }) : this.send(room, text, format, { ...options, embeds });
-		const uploaded = handle.promise.then((result) => this.writeUploads(result, files, command ? undefined : result.message_id));
+		const uploaded = handle.promise.then((result) => this.writeUploads(result, files));
 		return { sent: handle.promise, uploaded };
 	}
 
@@ -2397,13 +2395,12 @@ export class ChatClient {
 		return request.promise.then((result) => this.writeUploads(result, [{ file }]));
 	}
 
-	/** Writes each file to the upload embed the result lists for it, in order; the failed ones come off `messageId`'s message. */
-	private async writeUploads(result: JsonObject, files: UploadFile[], messageId?: unknown): Promise<void> {
+	/** Writes each file to the upload embed the result lists for it, in order. */
+	private async writeUploads(result: JsonObject, files: UploadFile[]): Promise<void> {
 		const written = (Array.isArray(result.embeds) ? result.embeds : [])
 			.filter((embed): embed is JsonObject => isJsonObject(embed) && embed.kind === 'upload' && typeof embed.write_url === 'string' && typeof embed.embed_id === 'string');
 		if (written.length < files.length) throw new Error('The server did not accept the attachment');
 		const failures: string[] = [];
-		const failed: string[] = [];
 		await Promise.all(files.map(async ({ file, title, width, height }, index) => {
 			const embedId = written[index].embed_id as string;
 			const state: UploadState = { name: title || file.name || 'File', progress: 0, ...(width && height ? { width, height } : {}) };
@@ -2418,34 +2415,10 @@ export class ChatClient {
 			} catch (cause) {
 				state.failed = cause instanceof Error ? cause.message : 'Upload failed';
 				failures.push(state.failed);
-				failed.push(embedId);
 			}
 			this.emit();
 		}));
-		if (failed.length && typeof messageId === 'string') this.dropUploads(messageId, failed);
 		if (failures.length) throw new Error(failures[0]);
-	}
-
-	/**
-	 * Takes uploads whose writes failed off a message you sent (capability `edit`, §4.8.2), in one save so that
-	 * no two race, or deletes the message where nothing else is left in it. The server SHOULD drop a failed write
-	 * itself (§4.8.3), but one that doesn't leaves everyone else watching it pend; one that did leaves nothing to
-	 * take off. Once saved, the failed uploads' states go: there is nothing left to show them on.
-	 */
-	private dropUploads(messageId: string, embedIds: string[]): void {
-		if (!this.hasCap('edit')) return;
-		const current = this.messageBase(messageId);
-		const body = isJsonObject(current?.body) ? current.body : undefined;
-		const embeds = body && Array.isArray(body.embeds) ? body.embeds : [];
-		const rest = embeds.filter((embed) => !(isJsonObject(embed) && typeof embed.embed_id === 'string' && embedIds.includes(embed.embed_id)));
-		if (!body || rest.length === embeds.length) return;
-		const { embeds: _embeds, ...others } = body;
-		const empty = !rest.length && !(typeof body.text === 'string' && body.text.trim());
-		const handle = empty ? this.deleteMessage(messageId) : this.saveMessage(messageId, { body: rest.length ? { ...others, embeds: rest } : others });
-		handle.promise.then(() => {
-			for (const id of embedIds) this.uploads.delete(id);
-			this.emit();
-		}, () => undefined);
 	}
 
 	/** Forget a failed upload's state once the UI has shown it. */
