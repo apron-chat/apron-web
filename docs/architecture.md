@@ -153,7 +153,11 @@ thread is open, per-room drafts) and composes the components. The
 reactive state behind it lives in `src/lib/ui` as small classes — `SessionView`
 (the last authenticated view, held through a reconnect or primed from this device;
 `starting` while the first rooms aren't listed, `activeRoomHeld` while the open
-room shows its held copy, and the open room's thread cards from the same view), `MentionTracker`,
+room shows its held copy, and the open room's thread cards from the same view;
+through a quiet reconnect, `steady`, `capabilities` and `passkeySession` keep
+what the last ready session had, so controls don't blink out with a short drop,
+and `reconnectQuiet` and `stalled` count from the client's `retryingSince`, when
+it began trying where someone could see it, not from the drop), `MentionTracker`,
 `IncomingMessageTracker` (new messages from others, for notifications),
 `AppearanceSettings` (theme and fonts),
 `UnreadTracker`, `ReadPositions` (how far you have read each room and thread,
@@ -246,7 +250,12 @@ history with `loadRoom` when opened: the newest page (`before` the head, no
 connection keeps each room's records, members, bound and checkpoint: the next
 connection resumes each kept room's recovery from its checkpoint right behind
 `auth`, before any head is known (the first page reports it), and the room
-stays if that connection's `room_list` lists it as joined. A resumed passkey
+stays if that connection's `room_list` lists it as joined. The listings of rooms
+and threads to join (`directory`, `threadDirectory`) stay too, as they were,
+until the next connection's replace them or it signs in as someone else; a
+thread loaded before the drop shows as `resumed` until its next load catches
+up. Through a resume, `statusesBeforeResume` keeps every status held from
+before until the joined listing, for a list that changes over once. A resumed passkey
 session asks only for the rooms whose `latest_log_id` passed the kept
 checkpoints (`latest_log_id` in `room_list`): rooms in `left` go and the rest
 stay; a result without `left` is a full listing. A thread reopened after a

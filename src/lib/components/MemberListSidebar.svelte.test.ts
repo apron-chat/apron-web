@@ -30,7 +30,7 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChan
 	};
 	directory.apply(snapshot, undefined);
 	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })) } as unknown as RoomSnapshot;
-	const session = { snapshot, canManageRooms: true } as unknown as SessionView;
+	const session = { snapshot, capabilities: snapshot.capabilities, canManageRooms: true } as unknown as SessionView;
 	dom.render(MemberListSidebar, { client: canChange ? ({} as never) : undefined, session, room, open: true, canChange });
 	return [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
 }
@@ -57,6 +57,37 @@ describe('MemberListSidebar', () => {
 		]);
 		expect(sections()).toEqual([['Online· 7', ['ada', 'fay', 'di', 'cy', 'eve', 'al', 'zed']], ['Offline· 1', ['bo']]]);
 		expect(rows.map((row) => row.querySelector('[data-testid="roles"]')?.textContent ?? '')).toEqual(['', '', '', 'bot', '', '', '', 'admin']);
+	});
+
+	it('keeps the order from before a resume until its listing, then changes over at once', () => {
+		// Bo went offline and Cy came online while away; Cy's fresh status came right after the sign-in, Bo's will
+		// with the listing. Meanwhile both show as they were, so the list doesn't reorder twice.
+		render([
+			{ user_id: 'bo', name: 'Bo' },
+			{ user_id: 'cy', name: 'Cy', status: 'online' },
+			ada
+		], { statusesBeforeResume: { bo: 'online', cy: 'offline' } });
+		expect(sections()).toEqual([['Online· 2', ['ada', 'bo']], ['Offline· 1', ['cy']]]);
+		dom.unmount();
+		// Bo's fresh offline, with when he was last seen, arrives before the listing: he still shows as before, and
+		// his row doesn't say both.
+		render([
+			{ user_id: 'bo', name: 'Bo', status: 'offline', seen: '1793000000000' } as Identity,
+			ada
+		], { statusesBeforeResume: { bo: 'online' } });
+		const title = () => document.querySelector('li.ap-member[data-user="bo"] [title]')?.getAttribute('title') ?? '';
+		expect(title()).not.toMatch(/seen/i);
+		dom.unmount();
+		// Settled, it does.
+		render([{ user_id: 'bo', name: 'Bo', status: 'offline', seen: '1793000000000' } as Identity, ada]);
+		expect(title()).toMatch(/seen/i);
+		dom.unmount();
+		render([
+			{ user_id: 'bo', name: 'Bo', status: 'offline' },
+			{ user_id: 'cy', name: 'Cy', status: 'online' },
+			ada
+		]);
+		expect(sections()).toEqual([['Online· 2', ['ada', 'cy']], ['Offline· 1', ['bo']]]);
 	});
 
 	it('skips online and offline on a server without status (§4.5): one list, unheaded, none dimmed', () => {

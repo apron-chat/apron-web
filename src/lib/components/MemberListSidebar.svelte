@@ -33,16 +33,27 @@
 	}
 	let { client, session, room, open, canChange }: Props = $props();
 
-	/** Each member's `status` (§4.5) as kept: yours is the one you chose, as the profile bar shows it. */
+	/**
+	 * Each member's `status` (§4.5) as kept: yours is the one you chose, as the profile bar shows it. Resuming after a
+	 * lost connection, the ones from before stay until its listing arrives, then all change over at once: fresh ones
+	 * come one by one meanwhile, and the list would reorder with each.
+	 */
 	function statusOf(person: Identity): string | undefined {
-		return directory.status(person);
+		return directory.statusBeforeResume(person) ?? directory.status(person);
 	}
+	/**
+	 * The room's members, and whether the server has statuses: each the same value across snapshots until it
+	 * changes (the client keeps the members' array), unlike `room` and the capabilities, which are new with every
+	 * snapshot. Sorting and listing from these, a message or a typing notice doesn't sort a large room again.
+	 */
+	let roomMembers = $derived(room?.members);
+	let hasStatus = $derived(session.capabilities.status);
 	/** By status (online, idle, dnd, unknown, offline, then none), and by name within each. */
-	let members = $derived(byStatus([...(room?.members ?? [])].sort((a, b) =>
+	let members = $derived(byStatus([...(roomMembers ?? [])].sort((a, b) =>
 		directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)
 	), statusOf));
 	/** Online, then offline, each in the order above; with no `status` capability (§4.5), one list. */
-	let sections = $derived(memberSections(members, statusOf, session.snapshot.capabilities.status));
+	let sections = $derived(memberSections(members, statusOf, hasStatus));
 	/** Sections folded away, as the rooms list folds Other threads: a long Offline needn't push the rest out of view. */
 	let shut = $state(new Set(loadShutMemberSections()));
 
@@ -76,7 +87,8 @@
 		const me = directory.isMe(member.user_id);
 		const status = statusOf(member);
 		// `seen` (§4.5.2) only while they show offline, never yours: in the row's tooltip, after "Offline". Redone each minute.
-		const seen = directory.seen(member);
+		// Only as the row shows them: one still shown as before a resume (`statusOf`) isn't offline yet here.
+		const seen = status === 'offline' ? directory.seen(member) : undefined;
 		const last = seen === undefined ? undefined : lastSeen(seen, minuteNow());
 		return {
 			user_id: member.user_id,

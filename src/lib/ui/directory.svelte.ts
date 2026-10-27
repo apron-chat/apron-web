@@ -28,6 +28,8 @@ class Directory {
 	private users = $state.raw<Users>({ users: {}, recordedUsers: {}, userAliases: {} });
 	/** When this client saw each user go offline (`ClientSnapshot.sawOffline`): a floor under their `seen`. */
 	private sawOffline = $state.raw<Record<string, number>>({});
+	/** The statuses held through a resume until its listing (`ClientSnapshot.statusesBeforeResume`). */
+	private beforeResume = $state.raw<Record<string, string>>({});
 	private rooms = $state.raw<Record<string, string>>({});
 	/** The rooms among them that are threads without a title, which `rooms` calls "Untitled". */
 	private untitled = $state.raw<Record<string, true>>({});
@@ -72,6 +74,8 @@ class Directory {
 		}
 		const sawOffline = snapshot.sawOffline ?? {};
 		if (!sameEntries(this.sawOffline, sawOffline)) this.sawOffline = sawOffline;
+		const beforeResume = snapshot.statusesBeforeResume ?? {};
+		if (!sameEntries(this.beforeResume, beforeResume)) this.beforeResume = beforeResume;
 		const rooms: Record<string, string> = {};
 		const untitled: Record<string, true> = {};
 		const parents: Record<string, string> = {};
@@ -99,6 +103,7 @@ class Directory {
 		this.you = undefined;
 		this.users = { users: {}, recordedUsers: {}, userAliases: {} };
 		this.sawOffline = {};
+		this.beforeResume = {};
 		this.rooms = {};
 		this.untitled = {};
 		this.parents = {};
@@ -129,6 +134,16 @@ class Directory {
 		const id = this.person(from)?.user_id;
 		const status = id === undefined ? undefined : this.users.users[id]?.status;
 		return typeof status === 'string' && status !== '' ? status : undefined;
+	}
+
+	/**
+	 * A user's status as the member list showed it before a resume, until its joined listing arrives
+	 * (`ClientSnapshot.statusesBeforeResume`); never yours. Kept here, replaced only when it changes, as the users are,
+	 * so a list that reads it doesn't render again with every snapshot.
+	 */
+	statusBeforeResume(from: Identity | undefined): string | undefined {
+		const id = this.person(from)?.user_id;
+		return id === undefined || this.you?.user_id === id ? undefined : this.beforeResume[id];
 	}
 
 	/**

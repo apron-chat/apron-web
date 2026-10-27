@@ -474,15 +474,32 @@ describe('kept statuses and sign-ins', () => {
 		expect(statusOf('ada')).toBe('dnd');
 		expect([statusOf('bo'), statusOf('cy')]).toEqual(['idle', 'dnd']);
 		expect(snapshot.heldStatuses).toEqual(['bo', 'cy']);
+		// Every one from before stays on hand until the listing, for a list that changes over once.
+		expect(snapshot.statusesBeforeResume).toEqual({ bo: 'idle', cy: 'dnd' });
 		// After the result the server sends connected users' statuses again (§4.5), which show at once.
 		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'online' } } });
 		expect([statusOf('bo'), statusOf('cy')]).toEqual(['online', 'dnd']);
 		expect(snapshot.heldStatuses).toEqual(['cy']);
+		expect(snapshot.statusesBeforeResume).toEqual({ bo: 'idle', cy: 'dnd' });
 		// Once the listing is in, a status the server didn't send again is no longer known: not offline.
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', members: [{ user_id: 'ada' }, { user_id: 'bo' }, { user_id: 'cy' }] }] });
 		expect(statusOf('bo')).toBe('online');
 		expect(snapshot.users.cy).toEqual({ user_id: 'cy' });
 		expect(snapshot.heldStatuses).toBeUndefined();
+		expect(snapshot.statusesBeforeResume).toBeUndefined();
+	});
+
+	it('settles them at the resume\u2019s sign-in where no joined listing will come (no capability rooms)', async () => {
+		await listed({ user_id: 'ada', status: 'online' }, seen);
+		reconnect();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'] } });
+		await socket.reply('auth', { you: { user_id: 'ada' } });
+		expect(snapshot.statusesBeforeResume).toBeUndefined();
+		expect(snapshot.heldStatuses).toBeUndefined();
+		// What arrives now stands, for the member list too.
+		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'offline' } } });
+		expect(statusOf('bo')).toBe('offline');
 	});
 
 	it('drops them at once at a sign-in as someone else after a lost connection', async () => {

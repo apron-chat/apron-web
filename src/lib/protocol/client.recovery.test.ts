@@ -358,6 +358,8 @@ describe('after a reconnect', () => {
 		expect(snapshot.showReconnectDivider).toBe(false);
 
 		latest().drop();
+		// Nor while it's away: recovery will fill the gap, so there's none to mark meanwhile.
+		expect(snapshot.showReconnectDivider).toBe(false);
 		vi.advanceTimersByTime(5_000);
 		await latest().greet(['history', 'rooms'], { room: general });
 		// The kept room resumed right behind auth, from its checkpoint; one empty page settles it.
@@ -367,6 +369,90 @@ describe('after a reconnect', () => {
 		expect(snapshot.rooms.find((candidate) => candidate.id === 'general')?.recovering).toBe(false);
 		expect(snapshot.authenticated).toBe(true);
 		expect(snapshot.showReconnectDivider).toBe(false);
+	});
+
+	it('keeps a loaded thread\u2019s records through a reconnect, marked resumed until its next load catches up', async () => {
+		const side = { room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '22', history_log_id: '20' };
+		await latest().greet(['history', 'rooms'], { room: general });
+		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
+		latest().receive({ method: 'room_update', params: { joined: [side] } });
+		const load = client.loadRoom('20');
+		await latest().reply('history', { messages: [{ ...entry('21'), room_id: '20' }, { ...entry('22'), room_id: '20' }], more: false, latest_log_id: '22', history_log_id: '20' });
+		await load;
+		expect(room('20')).toMatchObject({ loaded: true });
+		expect(room('20').resumed).toBeUndefined();
+
+		latest().drop();
+		vi.advanceTimersByTime(5_000);
+		const next = latest();
+		next.open();
+		next.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		await next.reply('auth', { you: { user_id: 'guest_1' } });
+		await next.reply('room_list', { joined: [general, { ...side, latest_log_id: '23' }] });
+		// The room resumes first (history goes one request at a time): nothing new there.
+		await next.reply('history', { more: false, latest_log_id: '12', history_log_id: '10' });
+		// What it had stands while it isn't loaded on this connection.
+		expect(room('20')).toMatchObject({ loaded: false, resumed: true });
+		expect(room('20').timeline.order).toEqual(['21', '22']);
+		const again = client.loadRoom('20');
+		await next.reply('history', { messages: [{ ...entry('23'), room_id: '20' }], more: false, latest_log_id: '23', history_log_id: '20' });
+		await again;
+		expect(room('20')).toMatchObject({ loaded: true });
+		expect(room('20').resumed).toBeUndefined();
+		expect(room('20').timeline.order).toEqual(['21', '22', '23']);
+	});
+
+	it('keeps the listings of rooms and threads to join through a drop, and drops them at a sign-in as someone else', async () => {
+		await latest().greet(['history', 'rooms'], { room: general });
+		const rooms = client.listRooms();
+		await latest().reply('room_list', { joined: [], not_joined: [{ room_id: 'ops', log_id: '30', title: 'Ops' }] });
+		await rooms;
+		const threads = client.listRooms('general');
+		await latest().reply('room_list', { joined: [], not_joined: [{ room_id: '40', log_id: '40', parent_room_id: 'general', title: 'Offsite' }] });
+		await threads;
+		expect(snapshot.directory?.map((listing) => listing.id)).toEqual(['ops']);
+
+		// Away: they stay, as they were, for the page to keep showing.
+		latest().drop();
+		expect(snapshot.directory?.map((listing) => [listing.id, listing.joined])).toEqual([['ops', false]]);
+		expect(snapshot.threadDirectory.general?.map((listing) => listing.id)).toEqual(['40']);
+		// Kept, and said to be: a link to a room missing from them waits for a fresh listing.
+		expect(snapshot.keptListings?.sort()).toEqual(['', 'general']);
+		// Back as the same user: still there until fresh ones replace them.
+		vi.advanceTimersByTime(5_000);
+		await latest().greet(['history', 'rooms'], { room: general });
+		expect(snapshot.directory?.map((listing) => listing.id)).toEqual(['ops']);
+		const fresh = client.listRooms();
+		await latest().reply('room_list', { joined: [], not_joined: [{ room_id: 'ops', log_id: '30', title: 'Ops' }, { room_id: 'new', log_id: '31', title: 'New' }] });
+		await fresh;
+		expect(snapshot.keptListings).toEqual(['general']);
+		expect(snapshot.directory?.map((listing) => listing.id)).toEqual(['ops', 'new']);
+
+		// Back as someone else: what they could join is their own.
+		latest().drop();
+		vi.advanceTimersByTime(5_000);
+		await latest().greet(['history', 'rooms'], { room: general, you: { user_id: 'guest_2', name: 'Guest' } });
+		expect(snapshot.directory).toBeUndefined();
+		expect(snapshot.threadDirectory).toEqual({});
+	});
+
+	it('counts a room kept through a drop as joined while the next connection waits for its listing', async () => {
+		await latest().greet(['history', 'rooms'], { room: general });
+		await latest().reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
+		const threads = client.listRooms('general');
+		await latest().reply('room_list', { joined: [], not_joined: [{ room_id: '40', log_id: '40', parent_room_id: 'general', title: 'Offsite' }] });
+		await threads;
+		// Joined just before the drop: the listing from before still names it.
+		latest().receive({ method: 'room_update', params: { joined: [{ room_id: '40', log_id: '41', parent_room_id: 'general', title: 'Offsite' }] } });
+		latest().drop();
+		expect(snapshot.threadDirectory.general?.map((listing) => [listing.id, listing.joined])).toEqual([['40', true]]);
+		vi.advanceTimersByTime(5_000);
+		const next = latest();
+		next.open();
+		next.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		await next.reply('auth', { you: { user_id: 'guest_1' } });
+		// Behind auth, before the joined listing: still joined, not offered to join again.
+		expect(snapshot.threadDirectory.general?.map((listing) => [listing.id, listing.joined])).toEqual([['40', true]]);
 	});
 
 	it('resumes a room from its checkpoint after a reconnect instead of paging all history', async () => {

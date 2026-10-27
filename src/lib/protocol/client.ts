@@ -72,6 +72,10 @@ import {
 	pushKey,
 	MAX_TYPING_S,
 	MAX_UNANSWERED_PINGS,
+	PROBE_AFTER_HIDDEN_MS,
+	PROBE_MS,
+	PROBE_PATIENT_FOR_MS,
+	PROBE_PATIENT_MS,
 	NO_NOTICES,
 	PASSKEY_IDLE_POLL_MS,
 	PASSKEY_IDLE_WAIT_MS,
@@ -87,6 +91,7 @@ import {
 	AGENT,
 	UNSUPPORTED,
 	absent,
+	pageHidden,
 	canonicalJson,
 	decrement,
 	historyParams,
@@ -317,6 +322,17 @@ export class ChatClient {
 	private presenceWaiter?: () => void;
 	/** Pings sent on the current socket since its last `pong`. */
 	private unansweredPings = 0;
+	/** A probe's ping waits for an answer (`probeWait`): without one, the socket is dropped. */
+	private probeTimer?: ReturnType<typeof setTimeout>;
+	/** When a probe last replaced a socket that didn't answer it. */
+	private probeDroppedAt?: number;
+	/** When the page was last hidden, while it still is. */
+	private hiddenAt?: number;
+	/**
+	 * Listings of rooms and threads to join kept from the last connection, not listed again on this one: `''` for
+	 * rooms, a parent's `room_id` for its threads. They show as they were, but don't yet say what this server lists.
+	 */
+	private readonly keptListings = new Set<string>();
 	/** Drops the current socket as if it had closed: for one that stopped answering. */
 	private abandonSocket?: () => void;
 	private connectionId = 0;
@@ -402,6 +418,29 @@ export class ChatClient {
 	private connectionErrored = false;
 	private connectionProbe?: AbortController;
 	private disconnectedAt?: number;
+	/**
+	 * When this reconnect began where someone could see it: the drop, on a page
+	 * shown, or the page shown again after one while it was hidden. Undefined
+	 * while it's hidden, so time away never counts as a reconnect taking long.
+	 */
+	private retryingSince?: number;
+	/**
+	 * The page shown or hidden, for as long as the client runs: keeps `retryingSince` in step, and a page shown
+	 * again checks that its socket still answers.
+	 */
+	private readonly visibilityChanged = (): void => {
+		if (pageHidden()) this.hiddenAt ??= this.now();
+		else {
+			if (this.hiddenAt !== undefined && this.now() - this.hiddenAt >= PROBE_AFTER_HIDDEN_MS) this.probe();
+			this.hiddenAt = undefined;
+		}
+		const since = this.retryingNow();
+		if (since === this.retryingSince) return;
+		this.retryingSince = since;
+		this.emit();
+	};
+	/** The network back: the socket may not have survived it. */
+	private readonly networkReturned = (): void => this.probe();
 
 	constructor(
 		private serverUrl: string,
@@ -513,6 +552,9 @@ export class ChatClient {
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
 		this.showReconnectDivider = this.reconnectAttempt > 0;
+		globalThis.document?.addEventListener('visibilitychange', this.visibilityChanged);
+		globalThis.addEventListener?.('online', this.networkReturned);
+		this.hiddenAt = pageHidden() ? this.now() : undefined;
 		if (this.waitForPresence()) return;
 		this.connectNow();
 	}
@@ -524,6 +566,8 @@ export class ChatClient {
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.reconnectTimer = undefined;
 		this.stopWaitingForPresence();
+		globalThis.document?.removeEventListener('visibilitychange', this.visibilityChanged);
+		globalThis.removeEventListener?.('online', this.networkReturned);
 		this.clearStableTimer();
 		this.clearIdleRetry();
 		if (this.muteTimer) clearTimeout(this.muteTimer);
@@ -567,6 +611,7 @@ export class ChatClient {
 		this.discardProtocolView('Reconnecting');
 		if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'reconnecting');
 		this.disconnectedAt = undefined;
+		this.retryingSince = undefined;
 		this.status = 'reconnecting';
 		this.scheduleReconnect(0);
 		this.emit();
@@ -599,9 +644,13 @@ export class ChatClient {
 			this.authenticated = false;
 			this.authRequested = false;
 			this.clearTransientRequests();
+			// Its pings go with it: the next socket's server frame starts its own.
+			this.stopPing();
 			if (socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'retrying');
 		}
 		this.disconnectedAt ??= this.now();
+		// Asked for: the quiet window starts over from here.
+		this.retryingSince = this.now();
 		this.error = undefined;
 		this.connectNow();
 	}
@@ -678,6 +727,7 @@ export class ChatClient {
 					...(this.historyLimited(room) ? { limited: true as const } : {}),
 					loaded: !history || (this.loadsOnOpen(room) ? this.threadLoaded(room) : room.checkpoint !== undefined),
 					loading: room.loading,
+					...(this.loadsOnOpen(room) && room.resumed ? { resumed: true as const } : {}),
 					...(this.hasOlderRecords(room) ? { olderAvailable: true } : {}),
 					...(room.loadingOlder ? { loadingOlder: true } : {}),
 					...(this.readCursor(room.id) !== undefined ? { readMessageId: this.readCursor(room.id) } : {}),
@@ -699,19 +749,22 @@ export class ChatClient {
 			typing: [...this.typing.values()].map(({ room, from }) => ({ room, from })),
 			users: this.usersWithHeldStatuses(heldStatuses),
 			...(heldStatuses.length ? { heldStatuses } : {}),
+			...(this.heldStatuses?.size ? { statusesBeforeResume: Object.fromEntries([...this.heldStatuses].map(([userId, held]) => [userId, held.status])) } : {}),
 			...(this.sawOffline.size ? { sawOffline: Object.fromEntries(this.sawOffline) } : {}),
 			recordedUsers: Object.fromEntries([...this.recordedUsers].map(([id, entry]) => [id, entry.identity])),
 			userAliases: Object.fromEntries(this.userAliases),
 			uploads: Object.fromEntries(this.uploads),
 			...(this.memberChangesUnsupported ? { memberChangesUnsupported: true } : {}),
 			...(this.directory ? { directory: this.directory.map((listing) => this.withJoined(listing)) } : {}),
+			...(this.keptListings.size ? { keptListings: [...this.keptListings] } : {}),
 			threadDirectory: Object.fromEntries([...this.threadDirectory].map(([parent, listings]) => [parent, listings.map((listing) => this.withJoined(listing))])),
 			showReconnectDivider: this.showReconnectDivider,
 			retryAfterMs: this.retryAfterRemaining(),
 			...(this.limits.size ? { limits: Object.fromEntries([...this.limits].map(([scope, { until }]) => [scope, { until }])) } : {}),
 			...(this.reconnectHeld ? { held: true } : {}),
 			...(this.reconnectHeld && this.signInNeeded ? { signInNeeded: this.signInNeeded } : {}),
-			...(this.disconnectedAt !== undefined ? { disconnectedAt: this.disconnectedAt } : {})
+			...(this.disconnectedAt !== undefined ? { disconnectedAt: this.disconnectedAt } : {}),
+			...(this.retryingSince !== undefined ? { retryingSince: this.retryingSince } : {})
 		};
 	}
 
@@ -1035,6 +1088,7 @@ export class ChatClient {
 		this.clearStableTimer();
 		if (previous && previous.readyState !== WebSocket.CLOSED) previous.close(1000, 'signed in on another connection');
 		this.disconnectedAt = undefined;
+		this.retryingSince = undefined;
 		this.reconnectAttempt = 0;
 		this.status = 'connected';
 		this.error = undefined;
@@ -2008,6 +2062,7 @@ export class ChatClient {
 			? { parent_room_id: parentRoomId, filter: 'not_joined' }
 			: { filter: 'not_joined', members: true };
 		return this.cachedListing(parentRoomId ?? '', params, maxAgeMs, (listed) => {
+			this.keptListings.delete(parentRoomId ?? '');
 			if (parentRoomId === undefined) this.directory = listed.not_joined;
 			else this.threadDirectory.set(parentRoomId, listed.not_joined);
 			return listed.not_joined;
@@ -2218,8 +2273,19 @@ export class ChatClient {
 		this.listings.delete(parentRoomId ?? '');
 	}
 
+	/** Drops the listings of rooms and threads to join, and any reused: they were made for another session. */
+	private forgetListedRooms(): void {
+		this.directory = undefined;
+		this.threadDirectory.clear();
+		this.keptListings.clear();
+		for (const key of [...this.listings.keys()]) if (!key.startsWith('#')) this.listings.delete(key);
+	}
+
 	private withJoined(listing: RoomListing): RoomListing {
-		return { ...listing, joined: this.rooms.get(listing.id)?.kind === 'joined' };
+		// Through a drop, the rooms kept from it say what was joined until the next connection lists them, as do those
+		// waiting for that listing (`pending`).
+		const kind = (this.rooms.get(listing.id) ?? this.retainedRooms.get(listing.id))?.kind;
+		return { ...listing, joined: kind === 'joined' || kind === 'pending' };
 	}
 
 	/**
@@ -2513,6 +2579,9 @@ export class ChatClient {
 		};
 		socket.onmessage = (event) => {
 			if (!this.isCurrentSocket(id, socket)) return;
+			// Anything heard answers a probe: the socket is alive.
+			if (this.probeTimer) clearTimeout(this.probeTimer);
+			this.probeTimer = undefined;
 			this.handleMessage(event.data);
 		};
 		socket.onerror = () => {
@@ -2523,7 +2592,8 @@ export class ChatClient {
 			if (!this.isCurrentSocket(id, socket)) return;
 			this.abandonSocket = undefined;
 			this.cancelPasskey();
-			this.showReconnectDivider = this.rooms.size > 0 || this.showReconnectDivider;
+			// Only a session-only scrollback (no capability `history`) has a gap to mark; recovery fills any other.
+			this.showReconnectDivider = (this.rooms.size > 0 || this.showReconnectDivider) && !this.hasCap('history');
 			this.socket = undefined;
 			this.authenticated = false;
 			this.authRequested = false;
@@ -2539,6 +2609,7 @@ export class ChatClient {
 			this.suspendProtocolView('Connection closed');
 			if (this.running) {
 				this.disconnectedAt ??= this.now();
+				this.retryingSince = this.retryingNow();
 				this.status = 'reconnecting';
 				if (opened) this.scheduleReconnect();
 				else void this.diagnoseConnection(id);
@@ -2632,6 +2703,8 @@ export class ChatClient {
 				return;
 			case 'pong':
 				this.unansweredPings = 0;
+				if (this.probeTimer) clearTimeout(this.probeTimer);
+				this.probeTimer = undefined;
 				return;
 			case 'status':
 				this.handleStatus(frame.params);
@@ -2812,8 +2885,11 @@ export class ChatClient {
 		// `user` notifications that follow bring back those in effect, applied
 		// as they arrive like any other (§4.5).
 		if (signIn) this.resetMutes();
+		const previousUserId = this.you?.user_id ?? this.resumingUserId;
 		this.setYou(cloneJson(identity as Identity), true);
 		if (signIn) this.dropKeptStatuses(identity.user_id === this.resumingUserId);
+		// The listings made for who was signed in, on this connection or before a drop: another identity lists its own.
+		if (signIn && previousUserId !== undefined && identity.user_id !== previousUserId) this.forgetListedRooms();
 		this.resumingUserId = undefined;
 		if (signedIn && added && this.registeredSession) {
 			// Added to the account (§4.10, §4.11): another way back in, not how this session signed in,
@@ -2859,6 +2935,7 @@ export class ChatClient {
 			if (this.socket === stableSocket && this.authenticated) this.reconnectAttempt = 0;
 		}, STABLE_CONNECTION_MS);
 		this.disconnectedAt = undefined;
+		this.retryingSince = undefined;
 		// A reconnect keeps each room's records, and a server with capability `history`
 		// fills the gap through recovery; only a session-only scrollback (§4
 		// fallback) has a real gap to mark.
@@ -2879,8 +2956,10 @@ export class ChatClient {
 		// without capability `rooms` there is the default room.
 		if (this.hasCap('rooms')) {
 			if (!this.joinedListing) this.requestRooms(false);
-		} else if (!this.rooms.size) {
-			this.showDefaultRoom();
+		} else {
+			// No joined listing will come to settle the statuses held through a resume: what arrives stands now.
+			this.settleHeldStatuses();
+			if (!this.rooms.size) this.showDefaultRoom();
 		}
 		this.syncIdle();
 		this.pushSent = false;
@@ -2965,6 +3044,34 @@ export class ChatClient {
 	private stopPing(): void {
 		if (this.pingTimer) clearInterval(this.pingTimer);
 		this.pingTimer = undefined;
+		if (this.probeTimer) clearTimeout(this.probeTimer);
+		this.probeTimer = undefined;
+	}
+
+	/**
+	 * Checks at once that an open socket still answers, on a page someone can see: one ping, and the socket is
+	 * replaced through the usual reconnect if nothing comes back within `probeWait`. Only where the server
+	 * pings (§1); the regular pings carry on as they were.
+	 */
+	private probe(): void {
+		const socket = this.socket;
+		if (!this.running || !socket || socket.readyState !== WebSocket.OPEN || this.server?.ping === undefined || this.probeTimer || absent()) return;
+		socket.send(PING_FRAME);
+		this.probeTimer = setTimeout(() => {
+			this.probeTimer = undefined;
+			if (socket !== this.socket) return;
+			this.probeDroppedAt = this.now();
+			this.abandonSocket?.();
+		}, this.probeWait());
+	}
+
+	/**
+	 * How long a probe waits for an answer: `PROBE_MS`, or `PROBE_PATIENT_MS` while a probe replaced a socket
+	 * within `PROBE_PATIENT_FOR_MS`, so a slow network isn't met with one new socket after another.
+	 */
+	private probeWait(): number {
+		const dropped = this.probeDroppedAt;
+		return dropped !== undefined && this.now() - dropped < PROBE_PATIENT_FOR_MS ? PROBE_PATIENT_MS : PROBE_MS;
 	}
 
 	/**
@@ -3835,6 +3942,9 @@ export class ChatClient {
 			this.retainedRooms.set(room.id, room);
 		}
 		this.rooms.clear();
+		// The listings of rooms to join stay to show, but as the last connection's.
+		if (this.directory) this.keptListings.add('');
+		for (const parent of this.threadDirectory.keys()) this.keptListings.add(parent);
 		// The kept joined rooms stand for this identity's whole set only if its listing arrived.
 		this.keptUserId = this.joinedComplete ? this.you?.user_id : undefined;
 		this.resumingUserId = this.you?.user_id ?? this.resumingUserId;
@@ -3880,6 +3990,7 @@ export class ChatClient {
 		this.joinedComplete = false;
 		this.keptUserId = undefined;
 		this.resumingUserId = undefined;
+		this.forgetListedRooms();
 		this.resetMutes();
 		this.forgetConnectionState();
 	}
@@ -3899,8 +4010,6 @@ export class ChatClient {
 		this.reads.clear();
 		this.listings.clear();
 		this.joinedListing = undefined;
-		this.directory = undefined;
-		this.threadDirectory.clear();
 		this.clearIdleRetry();
 		this.heldStatuses = undefined;
 		this.pushError = undefined;
@@ -4150,6 +4259,7 @@ export class ChatClient {
 		this.addedMethods = new Set();
 		this.error = undefined;
 		this.disconnectedAt = undefined;
+		this.retryingSince = undefined;
 		this.clearTyping();
 		this.emit();
 	}
@@ -4163,7 +4273,10 @@ export class ChatClient {
 	private handleConnectionFailure(id: number, message: string): void {
 		if (id !== this.connectionId) return;
 		this.error = message;
-		if (this.running) this.disconnectedAt ??= this.now();
+		if (this.running) {
+			this.disconnectedAt ??= this.now();
+			this.retryingSince = this.retryingNow();
+		}
 		this.status = this.running ? 'reconnecting' : 'offline';
 		if (this.running) this.scheduleReconnect();
 		this.emit();
@@ -4181,6 +4294,16 @@ export class ChatClient {
 			if (this.waitForPresence()) return;
 			this.connectNow();
 		}, delay);
+	}
+
+	/**
+	 * `retryingSince` as it stands now: kept while the page is shown, from now if
+	 * it wasn't counting; none while hidden (nobody sees it, so the time doesn't
+	 * count), or while connected. Offline on a shown page still counts.
+	 */
+	private retryingNow(): number | undefined {
+		if (!this.running || this.disconnectedAt === undefined || pageHidden()) return undefined;
+		return this.retryingSince ?? this.now();
 	}
 
 	/**

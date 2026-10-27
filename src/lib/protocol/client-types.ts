@@ -112,6 +112,11 @@ export interface RoomSnapshot {
 	 * threads after `loadRoom` completed.
 	 */
 	loaded: boolean;
+	/**
+	 * A thread loaded on an earlier connection, kept through the drop: its records are those it had, and its next
+	 * load catches up from where it was. Not `loaded` until then, but what it has stands meanwhile.
+	 */
+	resumed?: true;
 	/** A `loadRoom` request is in flight. */
 	loading: boolean;
 	/**
@@ -319,6 +324,18 @@ export interface ClientSnapshot {
 	 */
 	heldStatuses?: string[];
 	/**
+	 * Every status held from before a resume's sign-in, until its joined listing arrives (or won't): what the
+	 * member list showed then, by `user_id`. A list that sorts by status can keep this order meanwhile and change
+	 * over once, rather than as each fresh status arrives.
+	 */
+	statusesBeforeResume?: Record<string, string>;
+	/**
+	 * Listings of rooms and threads to join kept from the last connection and not listed again on this one: `''` for
+	 * `directory`, a parent's `room_id` for its `threadDirectory`. They show as they were, but don't yet say what this
+	 * server lists: a link to a room missing from one should wait for the fresh listing. Absent when none is.
+	 */
+	keptListings?: string[];
+	/**
 	 * When this client received the change of each other user's shown status
 	 * from one it showed (not `offline`, not `""`) to `offline`, in epoch
 	 * milliseconds: a floor under their `seen` (§4.5.2), which a server may
@@ -371,6 +388,13 @@ export interface ClientSnapshot {
 	 * holds its own copy of the last authenticated snapshot meanwhile.
 	 */
 	disconnectedAt?: number;
+	/**
+	 * When this reconnect began where someone could see it: a drop while the
+	 * page was shown, the page shown again after one while it was hidden, or a
+	 * manual retry. Absent while the page is hidden, so a UI can keep quiet for
+	 * a moment and count a stall only from when someone could see it.
+	 */
+	retryingSince?: number;
 }
 
 /**
