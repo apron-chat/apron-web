@@ -12,7 +12,7 @@ import { NARROW_MAX } from './breakpoints';
 export interface PickerCategory {
 	id: string;
 	name: string;
-	emojis: { id: string; name: string; keywords: string[]; skins: { src: string }[] }[];
+	emojis: { id: string; name: string; keywords: string[]; skins: { src: string; native: string }[] }[];
 }
 
 /**
@@ -32,7 +32,8 @@ export function pickerCategories(catalog: EmojiCatalog | undefined, src: (emoji:
 		// Stable, so emoji-mart's frequently used row finds it again; keys are case-sensitive, and so are its IDs.
 		const id = `apron-${emoji.key.slice(1, -1)}`;
 		keys.set(id, emoji.key);
-		category.emojis.push({ id, name: emoji.alt ?? emoji.key, keywords: [emoji.key.slice(1, -1), ...(emoji.alt ? [emoji.alt] : []), ...emoji.tags], skins: [{ src: src(emoji) }] });
+		// `native` is what emoji-mart names its button and image by: the key, which a screen reader then reads.
+		category.emojis.push({ id, name: emoji.alt ?? emoji.key, keywords: [emoji.key.slice(1, -1), ...(emoji.alt ? [emoji.alt] : []), ...emoji.tags], skins: [{ src: src(emoji), native: emoji.key }] });
 	}
 	return { categories: [...categories.values()], keys };
 }

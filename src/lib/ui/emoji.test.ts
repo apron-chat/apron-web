@@ -93,7 +93,7 @@ describe('custom emoji in the picker (ext:emoji)', () => {
 		expect(categories.map((category) => [category.name, category.emojis.map((emoji) => emoji.id)])).toEqual([
 			['Parrots', ['apron-partyparrot', 'apron-Parrot2']], ['This server', ['apron-shipit']]
 		]);
-		expect(categories[1].emojis[0]).toEqual({ id: 'apron-shipit', name: 'Squirrel in a hat', keywords: ['shipit', 'Squirrel in a hat'], skins: [{ src: 'https://e.example/2' }] });
+		expect(categories[1].emojis[0]).toEqual({ id: 'apron-shipit', name: 'Squirrel in a hat', keywords: ['shipit', 'Squirrel in a hat'], skins: [{ src: 'https://e.example/2', native: ':shipit:' }] });
 		expect(keys.get('apron-Parrot2')).toBe(':Parrot2:');
 		expect(pickerCategories(undefined, () => '')).toEqual({ categories: [], keys: new Map() });
 	});
