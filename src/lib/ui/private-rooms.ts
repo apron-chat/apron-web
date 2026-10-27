@@ -176,6 +176,14 @@ export class ArrivalWatch {
 		this.started.add(roomId);
 	}
 
+	/** Starts over, as for another account: on another server, the next listing is the one known at sign-in. */
+	reset(): void {
+		this.user = undefined;
+		this.known = new Set();
+		this.started.clear();
+		this.added = [];
+	}
+
 	/** The rooms that just arrived without this page asking, given the latest snapshot. */
 	next(snapshot: Pick<ClientSnapshot, 'you' | 'rooms' | 'roomsListed' | 'pending'>): string[] {
 		this.added = [];

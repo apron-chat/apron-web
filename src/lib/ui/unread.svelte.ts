@@ -53,10 +53,12 @@ export class UnreadTracker {
 				const kept = this.watermarks.get(room.id);
 				if (joined !== undefined) {
 					this.added.delete(room.id);
-					// Counted again from the join, so what came before this page saw the room counts too.
-					if (kept === undefined || compareLogIds(joined, kept) < 0) {
+					// Counted again from the join: what came before this page saw the room counts too, and
+					// what came before the join doesn't, as when you were in the room before, then added again.
+					if (kept === undefined || compareLogIds(joined, kept) !== 0) {
 						this.watermarks.set(room.id, joined);
 						shown.clear();
+						this.arrivals.set(room.id, (this.arrivals.get(room.id) ?? []).filter((id) => compareLogIds(id, joined) > 0));
 					}
 				}
 			}

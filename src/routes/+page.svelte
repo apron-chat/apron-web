@@ -1143,6 +1143,7 @@
 		roomEditorOpen = false;
 		selection.cancel();
 		mentions.reset();
+		arrivals.reset();
 		incomingMessages.reset();
 		pushRoom = undefined;
 		session.forget();
@@ -1585,7 +1586,7 @@
 
 	function chooseRoom(room: RoomSnapshot): void {
 		if (!client) return;
-		mentions.clearRoom(room.id);
+		clearAlerts(room.id);
 		session.chooseRoom(client, room.id);
 		setDestination(room.id, undefined);
 		closeRooms();
@@ -1635,8 +1636,8 @@
 		selection.cancel();
 		composer?.reset();
 		mentions.clearUnseen();
-		mentions.clearRoom(roomId);
-		if (thread) mentions.clearRoom(thread);
+		clearAlerts(roomId);
+		if (thread) clearAlerts(thread);
 		stickToBottom = true;
 		reveal.from(timeline.length - FIRST_PAINT_ITEMS);
 		// A thread's failed load is about that thread: leaving it takes the toast too.
@@ -2014,7 +2015,8 @@
 	function noteArrivals(next: ClientSnapshot): void {
 		const arrived = arrivals.next(next).filter((id) => id !== pendingJoin);
 		if (arrived.length) keepAdded([...addedRooms.filter((id) => !arrived.includes(id)), ...arrived]);
-		for (const id of arrivals.added) if (id !== pendingJoin) noteAdded(id, next.rooms);
+		// Without capability `rooms`, a room appears joined when its first message arrives: nobody added you.
+		if (next.capabilities.rooms) for (const id of arrivals.added) if (id !== pendingJoin) noteAdded(id, next.rooms);
 	}
 
 	/**
@@ -2033,9 +2035,20 @@
 		const what = room.parentRoomId ? 'thread' : room.private ? 'private conversation' : 'room';
 		void showNotification(room.title, {
 			body: `You were added to this ${what}`,
-			tag: `apron:${client.url}:added:${room.id}`,
+			tag: addedTag(client.url, room.id),
 			data: target
 		}, () => openNotificationTarget(target));
+	}
+
+	/** The tag of a room's "You were added" notification (`noteAdded`), one per room. */
+	function addedTag(server: string, roomId: string): string {
+		return `apron:${server}:added:${roomId}`;
+	}
+
+	/** Opening a room or thread clears what it alerted with: its mentions mark, and its "You were added" notification. */
+	function clearAlerts(roomId: string): void {
+		mentions.clearRoom(roomId);
+		if (client) void closeReadNotifications({ tag: addedTag(client.url, roomId) }, roomId);
 	}
 
 	/** Keeps the private rooms whose "You were added" banner shows, for this account on this device. */
@@ -2585,7 +2598,11 @@
 				movable,
 				authors: moveAuthors()
 			});
-			if (result.room !== undefined) includeMembers(start.room, result.room);
+			if (result.room !== undefined) {
+				// Yours, though its record may come after the server named it.
+				arrivals.mine(result.room);
+				includeMembers(start.room, result.room);
+			}
 			if (result.moved) pendingOpen = { room: roomId, thread: result.room, moved: true };
 			else if (result.room === undefined) throw result.error ?? new Error('No messages were moved');
 			// The thread exists, so the dialog closes and says why nothing (or not everything) moved.
@@ -2596,6 +2613,7 @@
 		const result = await client.createRoom({ parentRoomId: roomId, ...thread }).promise;
 		if (typeof result.room_id !== 'string' || !result.room_id) throw new Error('Invalid room response');
 		if (start.message !== undefined) startedThreads.set(start.message, result.room_id);
+		arrivals.mine(result.room_id);
 		includeMembers(start.room, result.room_id);
 		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined ? { replyTo: start.message } : {}) };
 	}
@@ -2607,8 +2625,13 @@
 	function includeMembers(room: NewThread['room'], threadId: string): void {
 		if (!client || !room.private) return;
 		const members = session.rooms.find((candidate) => candidate.id === room.id);
+		// A server may list only some of a large room's members (§4.2.1): only those are added.
+		const listed = members?.members?.length ?? 0;
+		const unlisted = members?.memberCount !== undefined && members.memberCount > listed;
 		void addRoomMembers(client, threadId, members, session.you?.user_id).then((failed) => {
-			if (failed.length) feedback.error(couldNotAdd(failed, (userId) => directory.name({ user_id: userId })));
+			const notes = [...(failed.length ? [couldNotAdd(failed, (userId) => directory.name({ user_id: userId }))] : []),
+				...(unlisted ? [`Only the ${listed} members the server listed were added to the thread, of ${members!.memberCount}.`] : [])];
+			if (notes.length) feedback.error(notes.join(' '));
 		});
 	}
 

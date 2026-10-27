@@ -127,6 +127,10 @@ describe('ArrivalWatch', () => {
 		// A room you posted in, which a server may join you to, is yours.
 		watch.next(snapshot([room('general'), thread, dm('p1', 'bob'), room('t2', [], { parentRoomId: 'general' })], [{ id: 'c3', method: 'message', room: 't2', createdAt: 0 }]));
 		expect(watch.added).toEqual([]);
+		// Another server, where you have the same user_id: its rooms are the ones you had at sign-in there.
+		watch.reset();
+		expect(watch.next(snapshot([room('lobby'), dm('p7', 'carol')]))).toEqual([]);
+		expect(watch.added).toEqual([]);
 	});
 });
 
