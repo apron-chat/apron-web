@@ -225,8 +225,11 @@ describe('MemberListSidebar', () => {
 		const list = document.querySelector('[data-testid="add-people"]')!;
 		const names = () => [...list.querySelectorAll('.ap-pick-who-name')].map((name) => name.textContent);
 		expect(names()).toEqual(['Cy', 'Di']);
-		// A @user_id typed whole that the client doesn't know is offered to add by it.
 		const field = byLabel('Add');
+		// Part of a name the client knows lists them, and no one else.
+		dom.type(field, 'c');
+		expect(names()).toEqual(['Cy']);
+		// A @user_id that no one the client knows matches is offered to add by it.
 		dom.type(field, '@grace');
 		expect(names()).toEqual(['grace']);
 		dom.press(field, 'Enter');

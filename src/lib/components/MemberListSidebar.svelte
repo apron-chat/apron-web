@@ -143,6 +143,8 @@
 	{#snippet avatar(member)}<Avatar name={member.name ?? member.user_id} hue={hueOf(member.user_id)} src={member.avatar} size="sm" status={member.status} statusLabel={member.statusLabel} />{/snippet}
 	{#snippet roles(member)}<RoleBadges user={byId.get(member.user_id)} />{/snippet}
 </MemberList>
-{#if addOpen && client && room}
-	<AddMembersDialog {client} {session} {room} onadded={(text) => (note = { text, error: false })} onclose={() => (addOpen = false)} />
+<!-- Gone as soon as adding is: the room left, or the server refusing member changes. -->
+{#if addOpen && changing && client && room}
+	<!-- An add that settles after the room changed says nothing under the next room's members. -->
+	<AddMembersDialog {client} {session} {room} onadded={(roomId, text) => { if (roomId === room?.id) note = { text, error: false }; }} onclose={() => (addOpen = false)} />
 {/if}

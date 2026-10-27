@@ -240,7 +240,7 @@ joined, with the `rooms` capability, a small **+** after the header's count
 (**Add member**) opens **Add people to …**, a centered dialog with the same
 people picker as New private conversation (below): the people the client knows
 who aren't members yet, but you and the system identities, narrowed by a name
-or `@user_id` typed, and a `@user_id` typed whole that none of them has, offered
+or `@user_id` typed; when none of them matches, the `@user_id` typed is offered
 to add by it. **Add** sends `room_join` with each picked `user_id` in turn; one
 the server refuses doesn't stop the rest, stays picked, and the dialog says
 why, while those added are said in the panel. Each other

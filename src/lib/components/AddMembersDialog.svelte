@@ -19,8 +19,8 @@
 		client: ChatClient;
 		session: SessionView;
 		room: RoomSnapshot;
-		/** Some were added: "Added Bo and Cy.", for the member list to say. */
-		onadded: (text: string) => void;
+		/** Some were added to the room with this id: "Added Bo and Cy.", for the member list to say. */
+		onadded: (roomId: string, text: string) => void;
 		/** It closed: done, or put away. */
 		onclose: () => void;
 	}
@@ -40,13 +40,13 @@
 	/** People the session knows who aren't members yet, but you and the system identities, by name. */
 	let candidates = $derived(pickable(Object.values(session.snapshot.users).filter((user) => !memberIds.has(user.user_id))));
 	/**
-	 * Those whose name or `@user_id` holds what's typed; and a `@user_id` typed whole that none of them has, as someone
-	 * to add by it, since the client knows only some of the server's users.
+	 * Those whose name or `@user_id` holds what's typed; with none, the `@user_id` typed, as someone to add by it, since
+	 * the client knows only some of the server's users.
 	 */
 	let people = $derived.by(() => {
 		const shown: PickPerson[] = matching(candidates, query, PEOPLE_SHOWN).map((user) => faceOf(user));
 		const typed = userIdToAdd(query);
-		if (typed && !memberIds.has(typed) && !isSystemId(typed) && !candidates.some((user) => user.user_id === typed)) shown.push({ user_id: typed, name: typed, hue: hueOf(typed), detail: `Add by @user_id: @${typed}` });
+		if (!shown.length && typed && !memberIds.has(typed) && !isSystemId(typed)) shown.push({ user_id: typed, name: typed, hue: hueOf(typed), detail: `Add by @user_id: @${typed}` });
 		return shown;
 	});
 	let chosen = $derived(chosenIds.map((id) => faceOf(directory.person({ user_id: id }) ?? { user_id: id })));
@@ -59,13 +59,14 @@
 	async function add(): Promise<void> {
 		if (saving || !chosenIds.length) return;
 		const ids = [...chosenIds];
+		const roomId = room.id;
 		saving = true;
 		error = undefined;
-		const refused = await addMembers(client, room.id, ids);
+		const refused = await addMembers(client, roomId, ids);
 		saving = false;
 		const name = (userId: string) => directory.name({ user_id: userId });
 		const added = ids.filter((id) => !refused.some((refusal) => refusal.userId === id));
-		if (added.length) onadded(`Added ${added.length > 2 ? `${added.length} people` : added.map(name).join(' and ')}.`);
+		if (added.length) onadded(roomId, `Added ${added.length > 2 ? `${added.length} people` : added.map(name).join(' and ')}.`);
 		chosenIds = refused.map(({ userId }) => userId);
 		if (refused.length) error = couldNotAdd(refused, name);
 		else open = false;
