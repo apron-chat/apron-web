@@ -677,6 +677,16 @@ thread that opens on its newest replies first loads its older ones back to the
 divider. Only once you reach the latest message does your read position, and
 your read cursor, move past what was new, or the pane's unread count clear.
 
+The unread counts (each row's bubble, its `@` for mentions, and the tab title)
+go by the read position too, so a reload, or coming back the next day, keeps
+what you hadn't read: a joined room counts the messages from others after your
+read position among those loaded (its newest page, or since it was last kept
+here), and the mentions of you among them, which turn its bubble orange but
+never pulse or notify. Without a read position for a room, as on a new device
+of a server that keeps no read cursors, only what arrives while the page is
+open counts. A thread counts once it is opened, as its replies load only then.
+A room someone else added you to counts from your join.
+
 With the `rooms` capability, rooms come by request ([PROTOCOL.md §4.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#42-rooms)): right behind
 `auth`, without waiting for its result ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), the client lists
 the rooms you have joined with `room_list` (`filter: "joined"`, `members:

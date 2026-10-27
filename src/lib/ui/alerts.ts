@@ -20,11 +20,13 @@ export interface AlertView {
 	/** The room or thread being read, and whether its latest message is on screen. */
 	pane: string | undefined;
 	latestVisible: boolean;
+	/** How far you have read a room (`ReadPositions.through`): mentions after it in its history still count on its row. */
+	readThrough?: (room: RoomSnapshot) => string | undefined;
 }
 
 /** What tells new arrivals from history: `MentionTracker` and `IncomingMessageTracker`. */
 export interface ArrivalTrackers {
-	mentions: { observe(rooms: RoomSnapshot[], me: Identity | undefined, pane: string | undefined, latestVisible: boolean): MessageRecord[] };
+	mentions: { observe(rooms: RoomSnapshot[], me: Identity | undefined, pane: string | undefined, latestVisible: boolean, readThrough?: (room: RoomSnapshot) => string | undefined): MessageRecord[] };
 	messages: { observe(rooms: RoomSnapshot[], me: Identity | undefined): MessageRecord[] };
 }
 
@@ -64,7 +66,7 @@ const NOTHING: Alerts = { audible: 0, notify: [] };
  */
 export function arrivalAlerts(view: AlertView, trackers: ArrivalTrackers, settings: AlertSettings): Alerts {
 	if (view.held) return NOTHING;
-	const mentions = trackers.mentions.observe(view.rooms, view.you, view.pane, view.latestVisible);
+	const mentions = trackers.mentions.observe(view.rooms, view.you, view.pane, view.latestVisible, view.readThrough);
 	const messages = trackers.messages.observe(view.rooms, view.you);
 	const heard = mentions.filter((event) => !inMutedRoom(event, view.rooms));
 	const first = heard[0];

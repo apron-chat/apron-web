@@ -599,7 +599,7 @@
 	// they're chosen on this device), and while you're away they notify. Never from a held view (`arrivalAlerts`).
 	$effect(() => {
 		const alerts = arrivalAlerts(
-			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible },
+			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible, readThrough: (room) => readPositions.through(room, session.you) },
 			{ mentions, messages: incomingMessages },
 			{
 				offerable: untrack(() => !notifyOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
