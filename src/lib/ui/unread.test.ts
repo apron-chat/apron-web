@@ -42,6 +42,60 @@ describe('unread tracking', () => {
 		expect(tracker.byRoom).toEqual({ random: 1 });
 	});
 
+	it('keeps what came while the page was closed through a reload: loaded history after your read position, in joined rooms', () => {
+		const tracker = new UnreadTracker();
+		const general = room('general', [message(10, 'general'), message(20, 'general'), message(25, 'general', me.user_id), message(30, 'general'), message(35, 'general', 'ada', { deleted: true })], { latestLogId: '35' });
+		const viewed = room('lobby', [message(10, 'lobby'), message(20, 'lobby')], { latestLogId: '20', joined: false });
+		// Read through 15 here before the reload: 20 and 30 are from others and not deleted; 25 is yours.
+		tracker.observe([general, viewed, room('random', [message(10, 'random')], { latestLogId: '10' })], me, 'dm', true, (entry) => (entry.id === 'random' ? undefined : '15'));
+		expect(tracker.byRoom).toEqual({ general: 2 });
+		// Reading the room's end, or a read position past them, clears them.
+		tracker.observe([general], me, 'general', true, () => '15');
+		expect(tracker.byRoom).toEqual({});
+		tracker.observe([general], me, 'dm', true, () => '30');
+		expect(tracker.byRoom).toEqual({});
+	});
+
+	it('counts history once a read cursor arrives after the listing, as from a server that keeps them', () => {
+		const tracker = new UnreadTracker();
+		tracker.observe([room('general', [], { latestLogId: '30' })], me, 'dm', true);
+		expect(tracker.total).toBe(0);
+		// Its newest page loads, then the server's cursor for it (§4.6).
+		const loaded = room('general', [message(10, 'general'), message(20, 'general'), message(30, 'general')], { latestLogId: '30' });
+		tracker.observe([loaded], me, 'dm', true);
+		expect(tracker.total).toBe(0);
+		tracker.observe([{ ...loaded, readMessageId: '10' }], me, 'dm', true);
+		expect(tracker.byRoom).toEqual({ general: 2 });
+	});
+
+	it('counts a room someone added you to from your join, also what was said there before this page saw it', () => {
+		const tracker = new UnreadTracker();
+		tracker.observe([room('general', [], { latestLogId: '10' })], me, 'general', true);
+		// Added while away: the room arrives with its head past the join and the messages since.
+		tracker.addedTo('dm');
+		const joined = (dm: ReturnType<typeof room>) => ({ ...dm, timeline: { ...dm.timeline, memberships: [{ log_id: '15', entries: [{ user: me, joined: true }] }] } });
+		tracker.observe([room('general'), room('dm', [], { latestLogId: '22' })], me, 'general', true);
+		expect(tracker.total).toBe(0);
+		// Its history loads: the join, one message before it, and two since.
+		const loaded = joined(room('dm', [message(12, 'dm'), message(20, 'dm'), message(22, 'dm')], { latestLogId: '22' }));
+		tracker.observe([room('general'), loaded], me, 'general', true);
+		expect(tracker.byRoom).toEqual({ dm: 2 });
+		// A later message adds to them, once.
+		tracker.observe([room('general'), joined(room('dm', [message(12, 'dm'), message(20, 'dm'), message(22, 'dm'), message(30, 'dm')]))], me, 'general', true);
+		expect(tracker.byRoom).toEqual({ dm: 3 });
+		// Left, then added again later: what was said before this join doesn't count, though the room was seen before.
+		tracker.addedTo('dm');
+		const readded = { ...room('dm', [message(12, 'dm'), message(20, 'dm'), message(22, 'dm'), message(30, 'dm'), message(40, 'dm'), message(50, 'dm')]), timeline: { ...room('dm', [message(12, 'dm'), message(20, 'dm'), message(22, 'dm'), message(30, 'dm'), message(40, 'dm'), message(50, 'dm')]).timeline, memberships: [{ log_id: '15', entries: [{ user: me, joined: true }] }, { log_id: '35', entries: [{ user: me, joined: false }] }, { log_id: '45', entries: [{ user: me, joined: true }] }] } };
+		tracker.observe([room('general'), readded], me, 'general', true);
+		expect(tracker.byRoom).toEqual({ dm: 1 });
+		// An older read position from before you left counts nothing before the join.
+		tracker.observe([room('general'), readded], me, 'general', true, (entry) => (entry.id === 'dm' ? '12' : undefined));
+		expect(tracker.byRoom).toEqual({ dm: 1 });
+		// A room you joined yourself still counts only what arrives after this page saw it.
+		tracker.observe([room('general'), readded, joined(room('mine', [message(20, 'mine')], { latestLogId: '20' }))], me, 'general', true);
+		expect(tracker.byRoom).toEqual({ dm: 1 });
+	});
+
 	it('counts replies in a thread you are not reading, until you open it', () => {
 		const tracker = new UnreadTracker();
 		const thread = (messages: MessageRecord[]) => room('plans', messages, { parentRoomId: 'general', latestLogId: '10' });

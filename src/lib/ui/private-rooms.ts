@@ -128,11 +128,29 @@ export async function startPrivateRoom(
 }
 
 /**
- * Watches the joined rooms for private ones someone else added you to: a top-level private room that arrives once
- * your rooms are listed, which this page didn't ask for (no room creation or join of it in flight, and not one it
- * started). Rooms listed when you sign in are known already; one you left and are added to again counts again.
+ * Adds a private room's other members to a thread just started in it (`room_join` with each `user_id`, §4.2.2). The
+ * thread is private too (§4.2.4), so only its members see it: without this, the people you talk to in the room never
+ * see the thread, nor hear of its replies. A refusal doesn't stop the rest; the result says who and why.
+ */
+export function addRoomMembers(
+	client: Pick<ChatClient, 'joinRoom'>, threadId: string, room: Pick<RoomSnapshot, 'members'> | undefined, you: string | undefined
+): Promise<Refusal[]> {
+	return addMembers(client, threadId, othersIn(room, you).map((member) => member.user_id));
+}
+
+/**
+ * Watches the joined rooms for ones someone else added you to: a room that arrives once your rooms are listed, which
+ * this page didn't ask for (no room creation, nor a request about it, in flight, and not one it started). `next` says
+ * the top-level private ones, `added` all of them. Rooms listed when you sign in are known already; one you left and
+ * are added to again counts again.
  */
 export class ArrivalWatch {
+	/**
+	 * Every joined room, a thread or a public room too, that arrived at the latest `next` without this page asking (no
+	 * request about it in flight): someone else added you to it, perhaps while you were away. A room joined on another
+	 * device of yours arrives the same way, as membership records don't say who made a change (§4.2.2).
+	 */
+	added: string[] = [];
 	private user: string | undefined;
 	private known = new Set<string>();
 	private started = new Set<string>();
@@ -142,8 +160,17 @@ export class ArrivalWatch {
 		this.started.add(roomId);
 	}
 
+	/** Starts over, as for another account: on another server, the next listing is the one known at sign-in. */
+	reset(): void {
+		this.user = undefined;
+		this.known = new Set();
+		this.started.clear();
+		this.added = [];
+	}
+
 	/** The rooms that just arrived without this page asking, given the latest snapshot. */
 	next(snapshot: Pick<ClientSnapshot, 'you' | 'rooms' | 'roomsListed' | 'pending'>): string[] {
+		this.added = [];
 		const you = snapshot.you?.user_id;
 		if (!snapshot.roomsListed || you === undefined) return [];
 		const ids = new Set(snapshot.rooms.filter((room) => room.joined).map((room) => room.id));
@@ -152,10 +179,12 @@ export class ArrivalWatch {
 			this.known = ids;
 			return [];
 		}
+		// Creating a room, or anything sent to this one, such as a join, or a post a server may join you for (§4.2.2).
 		const asked = (roomId: string) => this.started.has(roomId)
-			|| snapshot.pending.some((request) => (request.method === 'room_set' && request.room === undefined) || (request.method === 'room_join' && request.room === roomId));
-		const arrived = snapshot.rooms.filter((room) => isPrivateRoom(room) && !this.known.has(room.id) && !asked(room.id)).map((room) => room.id);
+			|| snapshot.pending.some((request) => (request.method === 'room_set' && request.room === undefined) || request.room === roomId);
+		const arrived = snapshot.rooms.filter((room) => room.joined && !this.known.has(room.id) && !asked(room.id));
 		this.known = ids;
-		return arrived;
+		this.added = arrived.map((room) => room.id);
+		return arrived.filter(isPrivateRoom).map((room) => room.id);
 	}
 }

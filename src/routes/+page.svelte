@@ -46,7 +46,8 @@
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
-	import { ArrivalWatch, othersIn, reachesStart } from '$lib/ui/private-rooms';
+	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
+	import { couldNotAdd } from '$lib/ui/members';
 	import { roomFaces } from '$lib/ui/faces';
 	import { composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
@@ -598,7 +599,7 @@
 	// they're chosen on this device), and while you're away they notify. Never from a held view (`arrivalAlerts`).
 	$effect(() => {
 		const alerts = arrivalAlerts(
-			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible },
+			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible, readThrough: (room) => readPositions.through(room, session.you) },
 			{ mentions, messages: incomingMessages },
 			{
 				offerable: untrack(() => !notifyOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
@@ -1158,6 +1159,7 @@
 		roomEditorOpen = false;
 		selection.cancel();
 		mentions.reset();
+		arrivals.reset();
 		incomingMessages.reset();
 		pushRoom = undefined;
 		session.forget();
@@ -2031,6 +2033,10 @@
 	function noteArrivals(next: ClientSnapshot): void {
 		const arrived = arrivals.next(next).filter((id) => id !== pendingJoin);
 		if (arrived.length) keepAdded([...addedRooms.filter((id) => !arrived.includes(id)), ...arrived]);
+		// A room someone added you to counts its messages unread from your join, also those said while you were away;
+		// being added alerts nothing by itself. Without capability `rooms`, a room appears joined when its first
+		// message arrives: nobody added you.
+		if (next.capabilities.rooms) for (const id of arrivals.added) if (id !== pendingJoin) unread.addedTo(id);
 	}
 
 	/** Keeps the private rooms whose "You were added" banner shows, for this account on this device. */
@@ -2580,6 +2586,11 @@
 				movable,
 				authors: moveAuthors()
 			});
+			if (result.room !== undefined) {
+				// Yours, though its record may come after the server named it.
+				arrivals.mine(result.room);
+				includeMembers(start.room, result.room);
+			}
 			if (result.moved) pendingOpen = { room: roomId, thread: result.room, moved: true };
 			else if (result.room === undefined) throw result.error ?? new Error('No messages were moved');
 			// The thread exists, so the dialog closes and says why nothing (or not everything) moved.
@@ -2590,7 +2601,26 @@
 		const result = await client.createRoom({ parentRoomId: roomId, ...thread }).promise;
 		if (typeof result.room_id !== 'string' || !result.room_id) throw new Error('Invalid room response');
 		if (start.message !== undefined) startedThreads.set(start.message, result.room_id);
+		arrivals.mine(result.room_id);
+		includeMembers(start.room, result.room_id);
 		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined ? { replyTo: start.message } : {}) };
+	}
+
+	/**
+	 * A thread of a private room is private too, seen only by its members (§4.2.4): the room's other members are
+	 * added to one started in it, so they see it and its replies, as they see the room's.
+	 */
+	function includeMembers(room: NewThread['room'], threadId: string): void {
+		if (!client || !room.private) return;
+		const members = session.rooms.find((candidate) => candidate.id === room.id);
+		// A server may list only some of a large room's members (§4.2.1): only those are added.
+		const listed = members?.members?.length ?? 0;
+		const unlisted = members?.memberCount !== undefined && members.memberCount > listed;
+		void addRoomMembers(client, threadId, members, session.you?.user_id).then((failed) => {
+			const notes = [...(failed.length ? [couldNotAdd(failed, (userId) => directory.name({ user_id: userId }))] : []),
+				...(unlisted ? [`Only the ${listed} members the server listed were added to the thread, of ${members!.memberCount}.`] : [])];
+			if (notes.length) feedback.error(notes.join(' '));
+		});
 	}
 
 	// --- Select mode ---

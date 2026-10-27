@@ -47,6 +47,25 @@ describe('mention tracking', () => {
 		tracker.dispose();
 	});
 
+	it('counts mentions in history after your read position on their row, without a ping, until read past', () => {
+		const tracker = new MentionTracker();
+		const dm = room('dm', [mention(10, 'dm'), mention(20, 'dm'), plain(25, 'dm', 'no mention'), mention(30, 'dm')], { latestLogId: '30' });
+		const arrived = tracker.observe([dm, room('lobby', [mention(20, 'lobby')], { latestLogId: '20', joined: false })], me, 'general', true, () => '15');
+		expect(arrived).toEqual([]);
+		expect(tracker.pinged).toEqual([]);
+		expect(tracker.byRoom).toEqual({ dm: 2 });
+		// Opening it clears only what arrived while the page was open; reading past them clears these.
+		tracker.clearRoom('dm');
+		tracker.observe([dm], me, 'general', true, () => '15');
+		expect(tracker.byRoom).toEqual({ dm: 2 });
+		tracker.observe([dm], me, 'general', true, () => '30');
+		expect(tracker.byRoom).toEqual({});
+		// A live mention adds to it.
+		tracker.observe([room('dm', [mention(10, 'dm'), mention(20, 'dm'), plain(25, 'dm', 'no mention'), mention(30, 'dm'), mention(40, 'dm')])], me, 'general', true, () => '15');
+		expect(tracker.byRoom).toEqual({ dm: 3 });
+		tracker.dispose();
+	});
+
 	it('goes by body.mentions alone, and pings an edit that adds you', () => {
 		const tracker = new MentionTracker();
 		tracker.observe([room('general', [], { latestLogId: '10' })], me, 'elsewhere', true);
