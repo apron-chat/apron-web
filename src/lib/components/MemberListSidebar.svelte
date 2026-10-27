@@ -41,12 +41,19 @@
 	function statusOf(person: Identity): string | undefined {
 		return directory.statusBeforeResume(person) ?? directory.status(person);
 	}
+	/**
+	 * The room's members, and whether the server has statuses: each the same value across snapshots until it
+	 * changes (the client keeps the members' array), unlike `room` and the capabilities, which are new with every
+	 * snapshot. Sorting and listing from these, a message or a typing notice doesn't sort a large room again.
+	 */
+	let roomMembers = $derived(room?.members);
+	let hasStatus = $derived(session.capabilities.status);
 	/** By status (online, idle, dnd, unknown, offline, then none), and by name within each. */
-	let members = $derived(byStatus([...(room?.members ?? [])].sort((a, b) =>
+	let members = $derived(byStatus([...(roomMembers ?? [])].sort((a, b) =>
 		directory.name(a).localeCompare(directory.name(b), undefined, { sensitivity: 'base' }) || a.user_id.localeCompare(b.user_id)
 	), statusOf));
 	/** Online, then offline, each in the order above; with no `status` capability (§4.5), one list. */
-	let sections = $derived(memberSections(members, statusOf, session.capabilities.status));
+	let sections = $derived(memberSections(members, statusOf, hasStatus));
 	/** Sections folded away, as the rooms list folds Other threads: a long Offline needn't push the rest out of view. */
 	let shut = $state(new Set(loadShutMemberSections()));
 
