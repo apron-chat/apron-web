@@ -11,20 +11,24 @@
 		guest: boolean;
 		/** Why passkeys can't be used in this browser, when they can't. */
 		passkeyUnavailable?: string;
+		/** Reading an export (`/archive`): what it is, said in place of the guest's line, with no sign-in to offer. */
+		archive?: string;
 		onsignin: () => void;
 	}
-	let { guest, passkeyUnavailable, onsignin }: Props = $props();
+	let { guest, passkeyUnavailable, archive, onsignin }: Props = $props();
 </script>
 
 <div class="ap-composer ap-composer-readonly" role="note">
 	<p class="ap-composer-readonly-text">
-		{#if guest}
+		{#if archive}
+			{archive}
+		{:else if guest}
 			You’re reading as a guest. {passkeyUnavailable ? `Posting needs a passkey sign-in. ${passkeyUnavailable}` : 'Sign in to post, react, join rooms, and start threads.'}
 		{:else}
 			You can read here, but this server doesn’t let you post, react, or join rooms.
 		{/if}
 	</p>
-	{#if guest && !passkeyUnavailable}
+	{#if guest && !passkeyUnavailable && !archive}
 		<Button variant="primary" size="sm" onclick={onsignin} label="Sign in" />
 	{/if}
 </div>
