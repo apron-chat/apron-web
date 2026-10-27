@@ -101,22 +101,23 @@
 			{:else if avatar && onremoveavatar}
 				<button type="button" class="ap-link ap-profedit-remove" disabled={Boolean(avatarBusy) || offline} onclick={onremoveavatar}>Remove avatar</button>
 			{:else}
-				<span class="ap-profedit-hint">This backend doesn’t take uploads, so your avatar can’t be set here.</span>
+				<span class="ap-form-hint">This backend doesn’t take uploads, so your avatar can’t be set here.</span>
 			{/if}
-			{#if avatarError}<span class="ap-profedit-hint ap-tone-danger" role="alert">{avatarError}</span>{/if}
+			{#if avatarError}<span class="ap-form-hint ap-tone-danger" role="alert">{avatarError}</span>{/if}
 		</div>
 	</div>
 	<label class="ap-fieldlabel">Handle
 		<input class="ap-field" data-testid={nameTestid} bind:value={() => name, (v) => { name = v; oninput?.(v); }} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" dir="auto" />
 	</label>
-	<p class="ap-profedit-hint">ID <code>{userId}</code> · set by the server, can’t be changed</p>
-	{#if status === 'altered'}<p class="ap-profedit-note" role="status">The server saved your handle as “{serverName}”.</p>{/if}
-	{#if status === 'declined'}<p class="ap-profedit-note ap-tone-danger" role="alert">{declinedNote ?? 'The server declined this handle. Your old one is still in use.'}</p>{/if}
+	<!-- ap-profedit-hint: apron-server-go's interop suite reads your ID by `.ap-profedit-hint code` (e2e/interop-contract.json). -->
+	<p class="ap-form-hint ap-profedit-hint">ID <code>{userId}</code> · set by the server, can’t be changed</p>
+	{#if status === 'altered'}<p class="ap-form-note" role="status">The server saved your handle as “{serverName}”.</p>{/if}
+	{#if status === 'declined'}<p class="ap-form-note ap-tone-danger" role="alert">{declinedNote ?? 'The server declined this handle. Your old one is still in use.'}</p>{/if}
 	{#if maxBio !== undefined}
 		<label class="ap-fieldlabel"><span class="ap-fieldlabel-row"><span>Bio</span><span class={['ap-fieldlabel-hint', bioOver && 'ap-tone-danger']}>{bioLength}/{maxBio}</span></span>
 			<textarea class="ap-field ap-field-multi" aria-label="Bio" aria-invalid={bioOver} data-testid={bioTestid} rows="4" bind:value={bio} disabled={saving} spellcheck="true" dir="auto" placeholder="A few words about you, in plain text"></textarea>
 		</label>
-		{#if bioError}<p class="ap-profedit-note ap-tone-danger" role="alert">{bioError}</p>{/if}
+		{#if bioError}<p class="ap-form-note ap-tone-danger" role="alert">{bioError}</p>{/if}
 	{/if}
 	{#if signin}
 		<div class="ap-profedit-signin" role="group" aria-label="Sign-in">

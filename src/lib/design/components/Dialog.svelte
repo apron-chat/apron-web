@@ -17,6 +17,8 @@
 		locked?: boolean;
 		/** A click on the backdrop closes it, as the close button does. */
 		backdropCloses?: boolean;
+		/** What went wrong, such as the server refusing: at the end of the body, in the danger color, as an alert. */
+		error?: string;
 		/** The body and footer are a form, and this handles its submit. */
 		onsubmit?: (event: SubmitEvent) => void;
 		/** It closed, whichever way. */
@@ -31,7 +33,7 @@
 		class?: ClassValue;
 	}
 	let {
-		open = $bindable(false), title, subtitle, size = 'sm', closeLabel = 'Close', locked = false, backdropCloses = false, onsubmit, onclose, children, footer, flush = false,
+		open = $bindable(false), title, subtitle, size = 'sm', closeLabel = 'Close', locked = false, backdropCloses = false, error, onsubmit, onclose, children, footer, flush = false,
 		class: className
 	}: Props = $props();
 
@@ -80,7 +82,10 @@
 				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
 			</button>
 		</header>
-		<div class={['ap-dialog-body', flush && 'ap-dialog-body-flush']}>{@render children()}</div>
+		<div class={['ap-dialog-body', flush && 'ap-dialog-body-flush']}>
+			{@render children()}
+			{#if error}<p class="ap-dialog-note ap-tone-danger" role="alert">{error}</p>{/if}
+		</div>
 		{#if footer}<div class="ap-dialog-foot">{@render footer()}</div>{/if}
 	</svelte:element>
 </dialog>

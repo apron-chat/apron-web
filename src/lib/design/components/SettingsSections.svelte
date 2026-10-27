@@ -26,7 +26,7 @@
 		{#if section.value === current}
 			<section class="ap-preferences-content" aria-labelledby={section.id}>
 				<h3 id={section.id}>{section.label}</h3>
-				{#if section.hint}<p class="ap-profedit-hint">{section.hint}</p>{/if}
+				{#if section.hint}<p class="ap-form-hint">{section.hint}</p>{/if}
 				{@render children?.()}
 			</section>
 		{/if}

@@ -12,7 +12,8 @@
 	import ProfileCard from '$lib/design/components/ProfileCard.svelte';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
-	import { couldNotAdd, directRoomWith, startPrivateRoom } from '$lib/ui/private-rooms';
+	import { couldNotAdd } from '$lib/ui/members';
+	import { directRoomWith, startPrivateRoom } from '$lib/ui/private-rooms';
 
 	/**
 	 * Who a mention, a sender or a member is: the design system's ProfileCard,

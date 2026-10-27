@@ -72,13 +72,25 @@ describe('ProfileCard', () => {
 		expect(render({ userId: 'ada', bioBody }).querySelector('.ap-profcard-bio')).toBeNull();
 	});
 
+	it('offers Copy @user_id as an icon button beside the @user_id, only when given', () => {
+		const oncopyid = vi.fn();
+		let box = render({ userId: 'ada', oncopyid });
+		const copy = dom.button('Copy @user_id', box);
+		expect(copy.closest('.ap-profcard-handleline')?.querySelector('.ap-profcard-handle')?.textContent).toBe('@ada');
+		expect(copy.textContent).toBe('');
+		expect(box.querySelector('.ap-profcard-actions')).toBeNull();
+		copy.click();
+		expect(oncopyid).toHaveBeenCalledOnce();
+		dom.unmount();
+		box = render({ userId: 'ada' });
+		expect(box.querySelector('.ap-profcard-handle')?.textContent).toBe('@ada');
+		expect(box.querySelector('button')).toBeNull();
+	});
+
 	it('offers only the actions it is given, and says Add to room is in flight', () => {
 		const noop = () => undefined;
-		let box = render({ userId: 'ada', oncopyid: noop });
-		expect([...box.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Copy @user_id']);
-		dom.unmount();
-		box = render({ userId: 'ada', onmention: noop, oncopyid: noop, onaddtoroom: noop, adding: true, note: { text: 'Nope', error: true } });
-		expect([...box.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Mention', 'Copy @user_id', 'Adding…']);
+		const box = render({ userId: 'ada', onmention: noop, oncopyid: noop, onaddtoroom: noop, adding: true, note: { text: 'Nope', error: true } });
+		expect([...box.querySelectorAll('.ap-profcard-actions button')].map((b) => b.textContent)).toEqual(['Mention', 'Adding…']);
 		expect(dom.button('Adding…', box).disabled).toBe(true);
 		expect(dom.byRole('alert', undefined, box).textContent).toBe('Nope');
 	});
@@ -86,7 +98,7 @@ describe('ProfileCard', () => {
 	it('leads with Message, the primary action, which says when it is opening', () => {
 		const noop = () => undefined;
 		let box = render({ userId: 'bob', onmessage: noop, onmention: noop, oncopyid: noop });
-		expect([...box.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Message', 'Mention', 'Copy @user_id']);
+		expect([...box.querySelectorAll('.ap-profcard-actions button')].map((b) => b.textContent)).toEqual(['Message', 'Mention']);
 		expect(dom.button('Message', box).classList.contains('ap-btn-primary')).toBe(true);
 		expect(dom.button('Mention', box).classList.contains('ap-btn-primary')).toBe(false);
 		dom.unmount();

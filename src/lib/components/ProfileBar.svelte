@@ -359,7 +359,7 @@
 {/snippet}
 {#snippet signin()}
 	{#if snapshot.authBusy && !addEmail?.busy}
-		<span class="ap-profedit-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
+		<span class="ap-form-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
 	{:else}
 		<span class="ap-profedit-row">
 			<span class="ap-profedit-buttons">
@@ -396,21 +396,21 @@
 				{/if}
 			</span>
 			{#if passkeyError}
-				<span class="ap-profedit-hint ap-tone-danger" role="alert">{passkeyError}</span>
+				<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
 			{:else if passkeyNotice}
-				<span class="ap-profedit-hint ap-tone-ok" role="status">{passkeyNotice}</span>
+				<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
 			{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
-				<span class="ap-profedit-hint">{passkeyUnavailable}</span>
+				<span class="ap-form-hint">{passkeyUnavailable}</span>
 			{:else if wayBack}
-				<span class="ap-profedit-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
+				<span class="ap-form-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
 			{:else}
-				<span class="ap-profedit-hint">{session.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
+				<span class="ap-form-hint">{session.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
 			{/if}
 		</span>
 		{#if addEmail}
 			<span class="ap-profedit-add" role="group" aria-label={addEmail.scheme === 'email' ? 'Add email' : 'Add external sign-in'}>
 				{#if addEmail.scheme === 'external' && !addEmail.page}
-					<span class="ap-profedit-hint" role="status"><TypingDots /> Opening the sign-in page…</span>
+					<span class="ap-form-hint" role="status"><TypingDots /> Opening the sign-in page…</span>
 				{:else if addEmail.step === 'address'}
 					<input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com" autocomplete="email" bind:value={addEmail.email} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
 					<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.email.trim()} onclick={continueAddEmail}>Send code</button>
@@ -420,9 +420,9 @@
 				{/if}
 				<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>
 			</span>
-			{#if addEmail.error}<span class="ap-profedit-hint ap-tone-danger" role="alert">{addEmail.error}</span>
-			{:else if addEmail.scheme === 'external' && addEmail.page}<span class="ap-profedit-hint" role="status"><a href={addEmail.page} target="_blank" rel="noopener noreferrer">Open the sign-in page</a>, sign in there, then enter the code it shows you.</span>
-			{:else if addEmail.step === 'code' && addEmail.scheme === 'email'}<span class="ap-profedit-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
+			{#if addEmail.error}<span class="ap-form-hint ap-tone-danger" role="alert">{addEmail.error}</span>
+			{:else if addEmail.scheme === 'external' && addEmail.page}<span class="ap-form-hint" role="status"><a href={addEmail.page} target="_blank" rel="noopener noreferrer">Open the sign-in page</a>, sign in there, then enter the code it shows you.</span>
+			{:else if addEmail.step === 'code' && addEmail.scheme === 'email'}<span class="ap-form-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
 		{/if}
 	{/if}
 {/snippet}

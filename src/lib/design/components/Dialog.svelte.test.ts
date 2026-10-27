@@ -87,4 +87,10 @@ describe('Dialog', () => {
 		expect(onsubmit).toHaveBeenCalledOnce();
 		expect(dialog.open).toBe(true);
 	});
+
+	it('says what went wrong at the end of its body, as an alert', () => {
+		const { dialog } = render({ error: 'The server refused.' });
+		const alert = dom.byRole('alert', undefined, dialog);
+		expect([alert.textContent, alert.parentElement?.classList.contains('ap-dialog-body'), alert === alert.parentElement?.lastElementChild]).toEqual(['The server refused.', true, true]);
+	});
 });

@@ -66,7 +66,7 @@
 </script>
 
 <!-- Escape, the close button and Cancel do nothing while it saves. -->
-<Dialog class={className} bind:open size="md" title={heading} {subtitle} locked={saving} {onclose}
+<Dialog class={className} bind:open size="md" title={heading} {subtitle} locked={saving} {error} {onclose}
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled) onsubmit?.(); }}>
 	<label class="ap-fieldlabel" for="{uid}-name">Title
 		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
@@ -83,7 +83,6 @@
 		</label>
 	{/if}
 	{#if note}<p class="ap-roomform-note">{note}</p>{/if}
-	{#if error}<p class="ap-profedit-note ap-tone-danger" role="alert">{error}</p>{/if}
 	{#snippet footer()}
 		<Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={saving} label="Cancel" />
 		<Button type="submit" variant="primary" size="sm" disabled={saving || disabled} label={action} />

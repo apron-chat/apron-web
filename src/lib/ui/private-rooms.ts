@@ -2,6 +2,7 @@ import { UNSUPPORTED, type ChatClient, type ClientSnapshot, type RoomSnapshot } 
 import { compareLogIds } from '$lib/protocol/reducer';
 import type { Identity } from '$lib/protocol/types';
 import { notPrivate } from './created';
+import { addMembers, type Refusal } from './members';
 
 /**
  * Private rooms (§4.2.4) as people use them to talk: the joined top-level ones the sidebar lists under Private, the
@@ -96,7 +97,7 @@ export function whenJoined(client: Pick<ChatClient, 'subscribe'>, roomId: string
 /** A private room just started, and anyone who couldn't be added to it, with the server's words why. */
 export interface StartedRoom {
 	roomId: string;
-	failed: { userId: string; message: string }[];
+	failed: Refusal[];
 }
 
 /**
@@ -123,20 +124,7 @@ export async function startPrivateRoom(
 	options.named?.(roomId);
 	const room = await whenJoined(client, roomId);
 	if (!room.private) throw new Error(notPrivate(options.title));
-	const failed: StartedRoom['failed'] = [];
-	for (const userId of people) {
-		try {
-			await client.joinRoom(roomId, userId).promise;
-		} catch (cause) {
-			failed.push({ userId, message: cause instanceof Error ? cause.message : 'Unable to add them' });
-		}
-	}
-	return { roomId, failed };
-}
-
-/** Who couldn't be added, by name, and the server's words why: "Couldn’t add Carol: …". */
-export function couldNotAdd(failed: StartedRoom['failed'], nameOf: (userId: string) => string): string {
-	return failed.map(({ userId, message }) => `Couldn’t add ${nameOf(userId)}: ${message.replace(/[.\s]+$/, '')}.`).join(' ');
+	return { roomId, failed: await addMembers(client, roomId, people) };
 }
 
 /**
