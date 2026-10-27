@@ -19,7 +19,9 @@ const PING_MS = 1200;
  * never ping, nor do edits logged at or below it; anything after it arrives.
  * A mention in that history after your read position in a joined room still
  * counts on its row, without a ping (`mentionsBefore`), so a reload keeps
- * the mentions you hadn't read; it stops counting once you read past it.
+ * the mentions you hadn't read; it stops counting once you read past it. The
+ * page counts these only where the server keeps read cursors (`readThrough`
+ * says nothing elsewhere), as `UnreadTracker` does.
  */
 export class MentionTracker {
 	/** Message IDs pulsing because a mention of you just arrived. */

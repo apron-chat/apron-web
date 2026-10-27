@@ -9,8 +9,9 @@ import { isOwn } from './messages';
  * position when it is first seen is its watermark: what comes after it
  * arrived while the page was open. What came before it counts too, once
  * loaded, if it is after your read position in a joined room (`unreadBefore`),
- * so a reload keeps what you hadn't read; without a read position, as on a new
- * device of a server that keeps no read cursors, it doesn't. A message stops
+ * so a reload keeps what you hadn't read, where the server keeps your read
+ * cursors (`history`): without them, what you read on another device would
+ * count again here, so only what arrives while the page is open counts. A message stops
  * counting once you have had the end of its room on screen (in a visible tab),
  * or once your read position moves past it, from this connection or another
  * device (or your own message after it does, sent from another device). A room
@@ -40,9 +41,11 @@ export class UnreadTracker {
 	/**
 	 * Runs over every room after each snapshot; `pane` is the room (or thread)
 	 * the viewer is reading, `reading` whether its end is on screen in a visible tab,
-	 * and `readThrough` how far you have read a room (`ReadPositions.through`).
+	 * `readThrough` how far you have read a room (`ReadPositions.through`), and
+	 * `history` whether what came before the page saw a room counts: only where
+	 * the server keeps read cursors, which carry what you read on other devices.
 	 */
-	observe(rooms: RoomSnapshot[], me: Identity | undefined, pane: string | undefined, reading: boolean, readThrough: (room: RoomSnapshot) => string | undefined = (room) => room.readMessageId): void {
+	observe(rooms: RoomSnapshot[], me: Identity | undefined, pane: string | undefined, reading: boolean, readThrough: (room: RoomSnapshot) => string | undefined = (room) => room.readMessageId, history = true): void {
 		if (!me) return;
 		const next: Record<string, number> = {};
 		for (const room of rooms) {
@@ -87,7 +90,7 @@ export class UnreadTracker {
 				return event !== undefined && !event.deleted && (read === undefined || compareLogIds(id, read) > 0);
 			});
 			this.arrivals.set(room.id, arrivals);
-			const count = arrivals.length + (room.id === pane && reading ? 0 : this.unreadBefore(room, me, watermark, read));
+			const count = arrivals.length + (!history || (room.id === pane && reading) ? 0 : this.unreadBefore(room, me, watermark, read));
 			if (count > 0) next[room.id] = count;
 		}
 		if (!sameCounts(this.byRoom, next)) this.byRoom = next;

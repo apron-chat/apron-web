@@ -56,6 +56,16 @@ describe('unread tracking', () => {
 		expect(tracker.byRoom).toEqual({});
 	});
 
+	it('counts no history where the server keeps no read cursors, as what you read on another device would count again', () => {
+		const tracker = new UnreadTracker();
+		const general = room('general', [message(10, 'general'), message(20, 'general')], { latestLogId: '20' });
+		tracker.observe([general], me, 'dm', true, () => '15', false);
+		expect(tracker.byRoom).toEqual({});
+		// What arrives while the page is open still counts.
+		tracker.observe([room('general', [message(10, 'general'), message(20, 'general'), message(30, 'general')])], me, 'dm', true, () => '15', false);
+		expect(tracker.byRoom).toEqual({ general: 1 });
+	});
+
 	it('counts history once a read cursor arrives after the listing, as from a server that keeps them', () => {
 		const tracker = new UnreadTracker();
 		tracker.observe([room('general', [], { latestLogId: '30' })], me, 'dm', true);

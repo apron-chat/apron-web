@@ -54,6 +54,10 @@ describe('mention tracking', () => {
 		expect(arrived).toEqual([]);
 		expect(tracker.pinged).toEqual([]);
 		expect(tracker.byRoom).toEqual({ dm: 2 });
+		// Where the server keeps no read cursors, the page knows no read position for this: nothing from before counts.
+		const unsynced = new MentionTracker();
+		unsynced.observe([dm], me, 'general', true, () => undefined);
+		expect(unsynced.byRoom).toEqual({});
 		// Opening it clears only what arrived while the page was open; reading past them clears these.
 		tracker.clearRoom('dm');
 		tracker.observe([dm], me, 'general', true, () => '15');
