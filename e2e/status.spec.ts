@@ -1,9 +1,11 @@
+import { NOW } from '../scripts/qa/lib/helpers.js';
 import { DEVICES, expect, test } from './fixtures';
 
 /**
  * `seen` (§4.5.2): when someone's shown status last became `offline`. An offline member's profile card says
  * "Last seen …", with the exact time as its tooltip, and their row in the member list says it in its tooltip.
- * Only while they show offline, and never for you.
+ * Only while they show offline, and never for you. Under ten minutes it says "recently", since a server may record
+ * `seen` coarsely; and it is never earlier than when this page saw them go offline.
  */
 
 test.use(DEVICES.desktop);
@@ -55,10 +57,31 @@ test.describe('live', () => {
 		await expect(seen).toHaveCount(0);
 		await expect(linus).toHaveAttribute('title', '@linus · Online');
 
-		// Gone again: a new seen, now.
+		// Gone again: a new seen, now, which reads as recent, with no exact time to contradict that.
 		await preview.setPresence('linus', 'offline');
 		await expect(card.getByTestId('profile-status')).toHaveText('Offline');
-		await expect(seen).toHaveText('Last seen just now');
-		await expect(linus).toHaveAttribute('title', '@linus · Offline · last seen just now');
+		await expect(seen).toHaveText('Last seen recently');
+		await expect(seen).toHaveAttribute('datetime', NOW.toISOString());
+		await expect(seen).toHaveAttribute('title', 'Last seen within the last 10 minutes');
+		await expect(linus).toHaveAttribute('title', '@linus · Offline · last seen recently');
+	});
+
+	test('never says someone this page watched leave was seen earlier than that, whatever older seen the server sends', async ({ preview, page }) => {
+		await preview.open();
+		const list = await preview.showMembers();
+		const ada = list.locator('button[data-user-id="ada"]');
+		await expect(ada).toHaveAttribute('title', '@ada · Online');
+		await ada.click();
+		const card = page.getByTestId('profile-card');
+		const seen = card.getByTestId('profile-seen');
+		// A server that records seen coarsely, or keeps an earlier departure's, sends one from 25 minutes ago.
+		await preview.setPresence('ada', 'offline', NOW.getTime() - 25 * 60_000);
+		await expect(card.getByTestId('profile-status')).toHaveText('Offline');
+		// This page saw it happen now: that is the time shown.
+		await expect(seen).toHaveText('Last seen recently');
+		await expect(seen).toHaveAttribute('datetime', NOW.toISOString());
+		await expect(ada).toHaveAttribute('title', '@ada · Offline · last seen recently');
+		// Linus, offline since before this page opened, shows the server's seen alone.
+		await expect(list.locator('button[data-user-id="linus"]')).toHaveAttribute('title', '@linus · Offline · last seen 3h ago');
 	});
 });

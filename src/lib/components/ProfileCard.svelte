@@ -65,7 +65,7 @@
 	let userId = $derived(person?.user_id ?? request?.userId ?? '');
 	let name = $derived(directory.name(person));
 	let me = $derived(directory.isMe(userId));
-	/** When they were last seen (§4.5.2), while they show offline: never yours. Redone each minute, so `5m ago` moves on. */
+	/** When they were last seen (§4.5.2), while they show offline: never yours. Redone each minute, so `recently` and `15m ago` move on. */
 	let seen = $derived.by(() => {
 		const id = directory.seen(person);
 		return id === undefined ? undefined : lastSeen(id, minuteNow());

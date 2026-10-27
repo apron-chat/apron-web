@@ -242,13 +242,14 @@ export class MemoryProtocolServer {
 
 	/**
 	 * Someone else's shown status changes (§4.5.2), as if it did now: a `user` notification with it, and with a new
-	 * `seen` when it changes to `offline`. A `seen` kept from before stays, but goes out only with `offline`.
+	 * `seen` when it changes to `offline`: now, or `recorded`, as a server that records it coarsely might (an earlier
+	 * time). A `seen` kept from before stays, but goes out only with `offline`.
 	 */
-	setPresence(userId: string, status: string): void {
+	setPresence(userId: string, status: string, recorded?: string): void {
 		if (!this.people[userId] || userId === 'preview_guest') throw new Error(`Unknown user: ${userId}`);
 		const before = this.presence.get(userId);
 		if (before?.status === status) return;
-		const seen = status === 'offline' ? String(Date.now()) : before?.seen;
+		const seen = status === 'offline' ? recorded ?? String(Date.now()) : before?.seen;
 		this.presence.set(userId, { status, ...(seen !== undefined ? { seen } : {}) });
 		const update = { user_id: userId, status, ...(status === 'offline' ? { seen } : {}) };
 		for (const peer of this.sockets) peer.deliver({ method: 'user', params: { new: update } });

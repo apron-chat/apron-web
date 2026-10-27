@@ -120,11 +120,19 @@ choices, words your own (`ownStatusLabel`), decides when the page is silent
 (`pageSilenced`: paused, or `dnd`) and sorts the member list (online, idle,
 dnd, unknown, offline, then none), where offline members are dimmed.
 `seen` (§4.5.2), when someone's shown status last became `offline`, merges
-into the kept user object like any field; `directory.seen` reads it from
-there through `shownSeen` (only while they show `offline`, never yours, and
-only a `log_id`-format time a `Date` can hold), and `lastSeen` words it
-("Last seen 5m ago", with its `datetime` and exact time) for `ProfileCard`'s
-`seen` and, through `withLastSeen`, the member row's tooltip.
+into the kept user object like any field. The client also keeps `sawOffline`
+(in memory, in the snapshot): the receipt time of each change of another
+user's kept status to `offline` from one that showed, recorded in
+`noteUser`, so a status learnt after a sign-in or held through a resume
+(none kept) records nothing; `dropKeptStatuses` clears it except on a
+resume, and `settleHeldStatuses` drops it for whoever it drops the `seen`
+of. `directory.seen` reads both through `shownSeen` (only while they show
+`offline`, never yours, the later of the two, and only a `log_id`-format
+time a `Date` can hold), and `lastSeen` words it ("Last seen recently" under
+`SEEN_RECENT_MS`, ten minutes, since a server may record `seen` coarsely,
+with a tooltip that says only that; else "Last seen 15m ago" and the exact
+time; always the `datetime`) for `ProfileCard`'s `seen` and, through
+`withLastSeen`, the member row's tooltip.
 `ProfileCard` shows an unknown value literally. Messages show no status: it
 is about now, and they are history. `PreferencesDialog` renders the design
 system's `CheckList` (what to notify about), `Callout` (installing for push,

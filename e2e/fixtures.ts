@@ -112,9 +112,15 @@ export class Preview {
 		);
 	}
 
-	/** Someone else's shown status changes, as if now (§4.5.2): with capability `status`, `offline` brings a new `seen`. */
-	setPresence(userId: string, status: string): Promise<void> {
-		return this.page.evaluate(([userId, status]) => (window as any).__apronPreview.setPresence(userId, status), [userId, status] as const);
+	/**
+	 * Someone else's shown status changes, as if now (§4.5.2): with capability `status`, `offline` brings a new `seen`,
+	 * now or `recorded` (epoch milliseconds, as a server that records it coarsely might send).
+	 */
+	setPresence(userId: string, status: string, recorded?: number): Promise<void> {
+		return this.page.evaluate(
+			([userId, status, recorded]) => (window as any).__apronPreview.setPresence(userId, status, recorded === undefined ? undefined : String(recorded)),
+			[userId, status, recorded] as const
+		);
 	}
 
 	/** Shows the open room's member list, where it is folded away (a narrow screen, or closed). */

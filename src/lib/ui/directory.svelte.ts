@@ -26,6 +26,8 @@ class Directory {
 	mediaOrigins = $state.raw<readonly string[]>([]);
 	you = $state.raw<Identity | undefined>();
 	private users = $state.raw<Users>({ users: {}, recordedUsers: {}, userAliases: {} });
+	/** When this client saw each user go offline (`ClientSnapshot.sawOffline`): a floor under their `seen`. */
+	private sawOffline = $state.raw<Record<string, number>>({});
 	private rooms = $state.raw<Record<string, string>>({});
 	/** The rooms among them that are threads without a title, which `rooms` calls "Untitled". */
 	private untitled = $state.raw<Record<string, true>>({});
@@ -68,6 +70,8 @@ class Directory {
 		if (!sameEntries(current.users, snapshot.users) || !sameEntries(current.recordedUsers, snapshot.recordedUsers) || !sameEntries(current.userAliases, snapshot.userAliases)) {
 			this.users = { users: snapshot.users, recordedUsers: snapshot.recordedUsers, userAliases: snapshot.userAliases };
 		}
+		const sawOffline = snapshot.sawOffline ?? {};
+		if (!sameEntries(this.sawOffline, sawOffline)) this.sawOffline = sawOffline;
 		const rooms: Record<string, string> = {};
 		const untitled: Record<string, true> = {};
 		const parents: Record<string, string> = {};
@@ -94,6 +98,7 @@ class Directory {
 	forget(): void {
 		this.you = undefined;
 		this.users = { users: {}, recordedUsers: {}, userAliases: {} };
+		this.sawOffline = {};
 		this.rooms = {};
 		this.untitled = {};
 		this.parents = {};
@@ -129,11 +134,12 @@ class Directory {
 	/**
 	 * When a user was last seen (§4.5.2), from the kept current object only,
 	 * as their status is: only while that shows `offline`, and never for you
-	 * (`shownSeen`).
+	 * (`shownSeen`). Never earlier than when this client saw them go offline
+	 * (`sawOffline`), which shows even where the server kept no `seen`.
 	 */
 	seen(from: Identity | undefined): string | undefined {
 		const id = this.person(from)?.user_id;
-		return id === undefined ? undefined : shownSeen(this.users.users[id], this.you?.user_id === id);
+		return id === undefined ? undefined : shownSeen(this.users.users[id], this.you?.user_id === id, this.sawOffline[id]);
 	}
 
 	/**

@@ -229,6 +229,12 @@ describe('knobs for the browser suite', () => {
 		server.setPresence('ada', 'offline');
 		await waitFor(() => users().ada.status === 'offline');
 		expect(Number(users().ada.seen)).toBeGreaterThanOrEqual(offline);
+		// As a server that records seen coarsely might: an earlier one.
+		server.setPresence('ada', 'online');
+		await waitFor(() => users().ada.status === 'online');
+		server.setPresence('ada', 'offline', '1724800000000');
+		await waitFor(() => users().ada.status === 'offline');
+		expect(users().ada.seen).toBe('1724800000000');
 
 		// Recorded objects carry neither.
 		const id = server.post('general', 'ada', 'Gone for the day');

@@ -280,6 +280,19 @@ export class ChatClient {
 	 * and reorder the member list in the meantime.
 	 */
 	private heldStatuses?: Map<string, { status: string; seen?: string }>;
+	/**
+	 * When this client received each other user's change of shown status to
+	 * `offline` from one it kept for them (not `offline`, not `""`) on this
+	 * signed-in connection (`noteUser`), in epoch milliseconds: a floor under
+	 * their `seen` (§4.5.2, `shownSeen`), since a server may record that
+	 * coarsely. Only ever the receipt time of a change it saw: a status held
+	 * through a resume, or learnt after a sign-in, changes from none. It
+	 * outlives a resume as the same user, as what this page saw; a resume
+	 * whose listing leaves someone out drops theirs with their `seen`
+	 * (`settleHeldStatuses`), and any other sign-in drops them all, as it does
+	 * the kept statuses. Never yours; lost on reload.
+	 */
+	private readonly sawOffline = new Map<string, number>();
 	private directory?: RoomListing[];
 	private readonly threadDirectory = new Map<string, RoomListing[]>();
 	/**
@@ -686,6 +699,7 @@ export class ChatClient {
 			typing: [...this.typing.values()].map(({ room, from }) => ({ room, from })),
 			users: this.usersWithHeldStatuses(heldStatuses),
 			...(heldStatuses.length ? { heldStatuses } : {}),
+			...(this.sawOffline.size ? { sawOffline: Object.fromEntries(this.sawOffline) } : {}),
 			recordedUsers: Object.fromEntries([...this.recordedUsers].map(([id, entry]) => [id, entry.identity])),
 			userAliases: Object.fromEntries(this.userAliases),
 			uploads: Object.fromEntries(this.uploads),
@@ -3028,6 +3042,8 @@ export class ChatClient {
 			this.users.set(userId, rest);
 		}
 		this.heldStatuses = hold && held.size ? held : undefined;
+		// What this page saw of others is about them as this identity sees them: another's sign-in starts afresh.
+		if (!hold) this.sawOffline.clear();
 	}
 
 	/**
@@ -3048,6 +3064,8 @@ export class ChatClient {
 		for (const [userId, { status }] of held) {
 			const user = this.users.get(userId);
 			if (user && !Object.hasOwn(user, 'status') && (status === 'offline' || status === '')) this.users.set(userId, { ...user, status });
+			// Nor the time this page saw them go, for the same reason: it would be as stale as that `seen`.
+			if (user && !Object.hasOwn(user, 'status')) this.sawOffline.delete(userId);
 		}
 	}
 
@@ -3104,6 +3122,11 @@ export class ChatClient {
 		}
 		const merged = complete ? replaceIdentity(current, identity) : mergeIdentity(current, identity);
 		if (merged !== current) this.users.set(identity.user_id, merged);
+		// Saw them go offline: from a status kept on this connection that showed (not `offline`, not `""`).
+		const before = current?.status;
+		if (!own && identity.user_id !== this.you?.user_id && merged.status === 'offline' && typeof before === 'string' && before !== '' && before !== 'offline') {
+			this.sawOffline.set(identity.user_id, Date.now());
+		}
 		if (this.you?.user_id === identity.user_id) this.you = merged;
 		return merged;
 	}
@@ -3117,6 +3140,12 @@ export class ChatClient {
 		this.userAliases.delete(next);
 		for (const [retired, current] of this.userAliases) if (current === old) this.userAliases.set(retired, next);
 		this.userAliases.set(old, next);
+		// The same person, so when this page saw them go offline goes with them.
+		const saw = this.sawOffline.get(old);
+		if (saw !== undefined) {
+			this.sawOffline.delete(old);
+			if (!this.sawOffline.has(next)) this.sawOffline.set(next, saw);
+		}
 	}
 
 	/**
@@ -3840,6 +3869,7 @@ export class ChatClient {
 		this.store.takeTouched();
 		this.memberCounts.clear();
 		this.users.clear();
+		this.sawOffline.clear();
 		this.recordedUsers.clear();
 		this.userAliases.clear();
 		this.greatestLogId = undefined;

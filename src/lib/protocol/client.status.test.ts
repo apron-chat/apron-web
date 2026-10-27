@@ -650,6 +650,94 @@ describe('seen', () => {
 		await socket.reply('auth', { you: { user_id: 'eve' } });
 		expect(user('bo')).toEqual({ user_id: 'bo' });
 	});
+
+	/**
+	 * The local floor: when this client received someone's change of shown
+	 * status to `offline`, from one it kept for them that showed, which
+	 * `shownSeen` puts under a coarse `seen`.
+	 */
+	describe('when this page saw them go offline', () => {
+		const NOW = 1724803600000;
+		beforeEach(() => vi.setSystemTime(NOW));
+
+		it('records the receipt time of each change to offline, from a user notification, a listing or a room\'s members, over an older seen', async () => {
+			await listed({ user_id: 'ada', status: 'online' }, [{ user_id: 'bo', status: 'online' }, { user_id: 'cy', status: 'idle' }, { user_id: 'di', status: 'dnd' }, { user_id: 'ed', status: 'offline', seen: '1724800000000' }]);
+			// Learnt offline from a listing, not seen happening: nothing.
+			expect(snapshot.sawOffline).toBeUndefined();
+			vi.setSystemTime(NOW + 1000);
+			// A server that records seen coarsely sends an older one than now.
+			socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'offline', seen: '1724803000000' } } });
+			expect(snapshot.sawOffline).toEqual({ bo: NOW + 1000 });
+			expect(user('bo')).toEqual({ user_id: 'bo', status: 'offline', seen: '1724803000000' });
+			vi.setSystemTime(NOW + 2000);
+			socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', title: 'Ops', members: [{ user_id: 'cy', status: 'offline' }] }], users: [{ user_id: 'di', status: 'offline', seen: '1724803500000' }] } });
+			expect(snapshot.sawOffline).toEqual({ bo: NOW + 1000, cy: NOW + 2000, di: NOW + 2000 });
+			// Offline again, or still: no new one.
+			vi.setSystemTime(NOW + 3000);
+			socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'offline', seen: '1724803100000' } } });
+			socket.receive({ method: 'user', params: { new: { user_id: 'ed', status: 'offline' } } });
+			expect(snapshot.sawOffline).toEqual({ bo: NOW + 1000, cy: NOW + 2000, di: NOW + 2000 });
+			// Back online it stays (shownSeen shows nothing then), and the next change to offline replaces it.
+			socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'online' } } });
+			expect(snapshot.sawOffline?.bo).toBe(NOW + 1000);
+			vi.setSystemTime(NOW + 4000);
+			socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'offline', seen: '1724803100000' } } });
+			expect(snapshot.sawOffline?.bo).toBe(NOW + 4000);
+		});
+
+		it('records nothing from no status, or none known, to offline', async () => {
+			await listed({ user_id: 'ada', status: 'online' }, [{ user_id: 'bo', status: '' }, { user_id: 'cy' }]);
+			socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'offline' } } });
+			socket.receive({ method: 'user', params: { new: { user_id: 'cy', status: 'offline' } } });
+			socket.receive({ method: 'user', params: { new: { user_id: 'di', status: 'offline' } } });
+			expect(snapshot.sawOffline).toBeUndefined();
+		});
+
+		it('never records it for you: not from others\' view of you, nor from your own status', async () => {
+			await listed({ user_id: 'ada', name: 'Ada', status: 'online' }, [{ user_id: 'ada', status: 'online' }]);
+			const asked = client.setStatus('invisible');
+			await socket.reply('me', { you: { user_id: 'ada', status: 'invisible' } });
+			await asked;
+			socket.receive({ method: 'user', params: { new: { user_id: 'ada', status: 'offline', seen: '1724803000000' } } });
+			socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', title: 'Ops', members: [{ user_id: 'ada', status: 'offline' }] }], users: [{ user_id: 'ada', status: 'offline' }] } });
+			expect(snapshot.sawOffline).toBeUndefined();
+		});
+
+		it('keeps them through a resume as the same user, records nothing from a held status, and drops one whose listing says nothing of them', async () => {
+			await listed({ user_id: 'ada', status: 'online' }, [{ user_id: 'bo', status: 'online' }, { user_id: 'cy', status: 'online' }, { user_id: 'di', status: 'online' }]);
+			socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'offline' } } });
+			socket.receive({ method: 'user', params: { new: { user_id: 'cy', status: 'offline' } } });
+			expect(snapshot.sawOffline).toEqual({ bo: NOW, cy: NOW });
+			reconnect();
+			vi.setSystemTime(NOW + 60_000);
+			hello();
+			await socket.reply('auth', { you: { user_id: 'ada' } });
+			expect(snapshot.sawOffline).toEqual({ bo: NOW, cy: NOW });
+			// Di, held online, said offline now: they may have gone any time while this page was away. Not seen happening.
+			socket.receive({ method: 'user', params: { new: { user_id: 'di', status: 'offline', seen: '1724803000000' } } });
+			// The listing says what Bo is now; Cy isn't in it, so as with a held seen, Cy's is no longer known.
+			await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', members: [{ user_id: 'bo' }] }], users: [{ user_id: 'bo', status: 'offline', seen: '1724803000000' }] });
+			expect(snapshot.sawOffline).toEqual({ bo: NOW });
+			expect([user('bo'), user('cy')]).toEqual([{ user_id: 'bo', status: 'offline', seen: '1724803000000' }, { user_id: 'cy', status: 'offline' }]);
+		});
+
+		it('drops them all at a sign-in as someone else', async () => {
+			await listed({ user_id: 'ada', status: 'online' }, [{ user_id: 'bo', status: 'online' }]);
+			socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'offline' } } });
+			expect(snapshot.sawOffline).toEqual({ bo: NOW });
+			reconnect();
+			hello();
+			await socket.reply('auth', { you: { user_id: 'eve' } });
+			expect(snapshot.sawOffline).toBeUndefined();
+		});
+
+		it('follows a user_id change to the identity that replaced it', async () => {
+			await listed({ user_id: 'ada', status: 'online' }, [{ user_id: 'guest_7', status: 'online' }]);
+			socket.receive({ method: 'user', params: { new: { user_id: 'guest_7', status: 'offline' } } });
+			socket.receive({ method: 'user', params: { old: { user_id: 'guest_7' }, new: { user_id: 'bo', status: 'offline' } } });
+			expect(snapshot.sawOffline).toEqual({ bo: NOW });
+		});
+	});
 });
 
 /**
