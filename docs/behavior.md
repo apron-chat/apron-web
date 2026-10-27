@@ -1011,9 +1011,11 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   it. A failed send restores the draft with those previews still removed;
   otherwise the draft forgets them once it is sent or cleared.
 - **Links as chips**: an Apron link in a message's text written as its URL,
-  in any of the three forms of
-  [PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links)
-  (one without `server` is the sending server's), reads as a mention that says
+  in either form of
+  [PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links),
+  `https://link.apron.chat/#…` or `apron:?…` (no other: `web+apron:?…` is
+  neither linked nor read as one; one without `server` is the sending
+  server's), reads as a mention that says
   in words what it is, from what this client knows: "Message in #general", a
   room's name, a thread's name "in #general", a known user as `@name`. Each but
   a user's leads with its kind's icon, the same icons as the link cards. A room
@@ -1034,6 +1036,15 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   the link, in its `https` form with the server, so copying it gives a link
   that opens the same place anywhere, a click opens it here, and a modified
   click opens link.apron.chat in a new tab.
+- **Opening a link**: a plain click on any Apron link opens it here, read as
+  Appendix A.4 says: its keys as `application/x-www-form-urlencoded` pairs,
+  each key's first value (a repeat is ignored, so a key appended to a link
+  can't replace one before it, PROTOCOL.md §5.4), and keys it doesn't know
+  ignored. Only the first `server` counts: if this client can't reach it
+  (`wss:`, or `ws:` only to this device), the link isn't opened here at all,
+  rather than opening a later `server` that may have been appended to it; the
+  click is left to the browser. So is a link with a message but no room, or a
+  token but no server.
 - **Link cards**: a link to a message, room or thread that this client knows
   more of than where it is also shows as a card under the text, up to three
   per message, in the shape of a link preview. Its first line is where it is,

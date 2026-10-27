@@ -33,7 +33,7 @@ const ALLOWED = {
 	ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'start', 'class', 'rel', 'target', 'type', 'data-user-id', 'data-room-id'],
 	ALLOW_DATA_ATTR: false,
 	// DOMPurify's own list of URL schemes, and Apron links' (Appendix A.4), which the page opens itself.
-	ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|apron|web\+apron):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+	ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|apron):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
 };
 
 /** Sanitized markup kept for reuse, by the markup it was made from, least recently used first. */
@@ -117,11 +117,12 @@ export function textId(text: string): string | undefined {
 const MENTION = new RegExp(`(?<![A-Za-z0-9])(?:@(${TEXT_ID.source})|#(${TEXT_ID.source}))`, 'g');
 
 /**
- * A bare `http(s)://` link, or an Apron link in its `apron:?` or `web+apron:?`
- * form (Appendix A.4), in escaped text: it runs to whitespace or an escaped
- * `<`, `>` or `"`, which can't appear in a URL as typed.
+ * A bare `http(s)://` link, or an Apron link in its `apron:?` form (Appendix
+ * A.4), in escaped text: it runs to whitespace or an escaped `<`, `>` or `"`,
+ * which can't appear in a URL as typed. `apron:` is a scheme only where one
+ * could start, so `web+apron:?`, a form Apron doesn't have, links nothing.
  */
-const BARE_URL = /\b(?:https?:\/\/|(?:web\+)?apron:\?)(?:(?!&(?:lt|gt|quot);)[^\s<])+/gi;
+const BARE_URL = /(?:\bhttps?:\/\/|(?<![A-Za-z0-9_+.-])apron:\?)(?:(?!&(?:lt|gt|quot);)[^\s<])+/gi;
 
 /**
  * An emoji as the picker draws it: a flag (two regional indicators), a keycap,
@@ -293,7 +294,7 @@ function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: Room
 			url = trimmed.endsWith(')') && closes > opens ? trimmed.slice(0, -1) : trimmed;
 			if (url === trimmed) break;
 		}
-		if (!(webOnly ? /^https?:\/\/[^/?#]/i : /^(?:https?:\/\/[^/?#]|(?:web\+)?apron:\?.)/i).test(url)) continue;
+		if (!(webOnly ? /^https?:\/\/[^/?#]/i : /^(?:https?:\/\/[^/?#]|apron:\?.)/i).test(url)) continue;
 		out += chipText(emojiText(text.slice(index, match.index)), resolve, resolveRoom);
 		out += (resolveLink && linkChip(url, resolveLink)) || `<a href="${url}"${LINK_ATTRS}>${url}</a>`;
 		index = match.index + url.length;
