@@ -575,6 +575,7 @@ export class ChatClient {
 		this.stopWaitingForPresence();
 		globalThis.document?.removeEventListener('visibilitychange', this.visibilityChanged);
 		globalThis.removeEventListener?.('online', this.networkReturned);
+		this.clearReadCursors();
 		this.clearStableTimer();
 		this.clearIdleRetry();
 		if (this.muteTimer) clearTimeout(this.muteTimer);
@@ -2054,7 +2055,8 @@ export class ChatClient {
 	 * first at once, and one that comes sooner waits out the rest of the
 	 * interval, replaced by any later one. Those waiting go at once when the
 	 * page is hidden, as it may be closing, and on the next connection's
-	 * sign-in if this one drops first; signing out drops them.
+	 * sign-in if this one drops first, as the same identity; signing out,
+	 * signing in as another, and stopping drop them.
 	 */
 	private sendReadCursor(roomId: string, messageId: string): void {
 		const waiting = this.readWaiting.get(roomId);
@@ -2938,7 +2940,11 @@ export class ChatClient {
 		this.setYou(cloneJson(identity as Identity), true);
 		if (signIn) this.dropKeptStatuses(identity.user_id === this.resumingUserId);
 		// The listings made for who was signed in, on this connection or before a drop: another identity lists its own.
-		if (signIn && previousUserId !== undefined && identity.user_id !== previousUserId) this.forgetListedRooms();
+		// So do read cursors still waiting to go out: they are the previous identity's.
+		if (signIn && previousUserId !== undefined && identity.user_id !== previousUserId) {
+			this.forgetListedRooms();
+			this.clearReadCursors();
+		}
 		this.resumingUserId = undefined;
 		if (signedIn && added && this.registeredSession) {
 			// Added to the account (§4.10, §4.11): another way back in, not how this session signed in,

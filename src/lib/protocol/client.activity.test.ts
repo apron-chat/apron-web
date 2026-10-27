@@ -188,6 +188,23 @@ describe('read cursors', () => {
 		started.client.stop();
 	});
 
+	it('drops the read cursors waiting when another identity signs in', async () => {
+		const first = latest();
+		await first.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' }, you: { user_id: 'alice' } });
+		await first.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
+		const reads = (peer: FakeSocket) => peer.sent.filter((frame) => frame.method === 'activity').map((frame) => (frame.params as { read_message_id?: string }).read_message_id);
+		client.markRead('general', '31');
+		client.markRead('general', '32');
+		first.drop();
+		vi.advanceTimersByTime(70_000);
+		const second = latest();
+		expect(second).not.toBe(first);
+		await second.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' }, you: { user_id: 'bob' } });
+		// Alice's waiting cursor is not sent as Bob's.
+		expect(reads(first)).toEqual(['31']);
+		expect(reads(second)).toEqual([]);
+	});
+
 	it('takes your kept read cursor as the server sends it after listing the room (§4.6)', async () => {
 		const room = { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '1724803312060', history_log_id: '10' };
 		await socket.greet(['history', 'rooms', 'activity'], { room, you: { user_id: 'alice' } });
