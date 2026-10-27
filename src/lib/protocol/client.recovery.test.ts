@@ -416,10 +416,17 @@ describe('after a reconnect', () => {
 		latest().drop();
 		expect(snapshot.directory?.map((listing) => [listing.id, listing.joined])).toEqual([['ops', false]]);
 		expect(snapshot.threadDirectory.general?.map((listing) => listing.id)).toEqual(['40']);
+		// Kept, and said to be: a link to a room missing from them waits for a fresh listing.
+		expect(snapshot.keptListings?.sort()).toEqual(['', 'general']);
 		// Back as the same user: still there until fresh ones replace them.
 		vi.advanceTimersByTime(5_000);
 		await latest().greet(['history', 'rooms'], { room: general });
 		expect(snapshot.directory?.map((listing) => listing.id)).toEqual(['ops']);
+		const fresh = client.listRooms();
+		await latest().reply('room_list', { joined: [], not_joined: [{ room_id: 'ops', log_id: '30', title: 'Ops' }, { room_id: 'new', log_id: '31', title: 'New' }] });
+		await fresh;
+		expect(snapshot.keptListings).toEqual(['general']);
+		expect(snapshot.directory?.map((listing) => listing.id)).toEqual(['ops', 'new']);
 
 		// Back as someone else: what they could join is their own.
 		latest().drop();
@@ -427,6 +434,25 @@ describe('after a reconnect', () => {
 		await latest().greet(['history', 'rooms'], { room: general, you: { user_id: 'guest_2', name: 'Guest' } });
 		expect(snapshot.directory).toBeUndefined();
 		expect(snapshot.threadDirectory).toEqual({});
+	});
+
+	it('counts a room kept through a drop as joined while the next connection waits for its listing', async () => {
+		await latest().greet(['history', 'rooms'], { room: general });
+		await latest().reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
+		const threads = client.listRooms('general');
+		await latest().reply('room_list', { joined: [], not_joined: [{ room_id: '40', log_id: '40', parent_room_id: 'general', title: 'Offsite' }] });
+		await threads;
+		// Joined just before the drop: the listing from before still names it.
+		latest().receive({ method: 'room_update', params: { joined: [{ room_id: '40', log_id: '41', parent_room_id: 'general', title: 'Offsite' }] } });
+		latest().drop();
+		expect(snapshot.threadDirectory.general?.map((listing) => [listing.id, listing.joined])).toEqual([['40', true]]);
+		vi.advanceTimersByTime(5_000);
+		const next = latest();
+		next.open();
+		next.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		await next.reply('auth', { you: { user_id: 'guest_1' } });
+		// Behind auth, before the joined listing: still joined, not offered to join again.
+		expect(snapshot.threadDirectory.general?.map((listing) => [listing.id, listing.joined])).toEqual([['40', true]]);
 	});
 
 	it('resumes a room from its checkpoint after a reconnect instead of paging all history', async () => {

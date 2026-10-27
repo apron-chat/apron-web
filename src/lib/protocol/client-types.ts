@@ -330,6 +330,12 @@ export interface ClientSnapshot {
 	 */
 	statusesBeforeResume?: Record<string, string>;
 	/**
+	 * Listings of rooms and threads to join kept from the last connection and not listed again on this one: `''` for
+	 * `directory`, a parent's `room_id` for its `threadDirectory`. They show as they were, but don't yet say what this
+	 * server lists: a link to a room missing from one should wait for the fresh listing. Absent when none is.
+	 */
+	keptListings?: string[];
+	/**
 	 * The latest recorded object seen per `user_id` (a message's or
 	 * reaction's `from`, a membership's `user`), by `log_id`. Never merged into
 	 * `users`: a fallback where no frame carries one, such as a mention in

@@ -80,7 +80,8 @@ async function expectUndisturbed(preview: Preview): Promise<void> {
 	await expect(page.locator('.ap-memberlist-sectionhead').first()).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Create room' })).toBeVisible();
 	await expect(preview.composer()).not.toHaveAttribute('contenteditable', 'false');
-	await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+	// Nothing said to a screen reader either: neither a stale "Connected" nor "Reconnecting…".
+	await expect(page.getByTestId('connection-status')).toHaveText('');
 }
 
 test('a connection dropped while the tab is hidden says nothing, there or once it is shown', async ({ preview, page }) => {
@@ -96,12 +97,13 @@ test('a connection dropped while the tab is hidden says nothing, there or once i
 	// Shown again, while the way back is slow: still nothing, for its first moments.
 	await setHidden(preview, false);
 	await expectUndisturbed(preview);
-	await page.waitForTimeout(1_000);
+	// Well inside the quiet moment (1.5 s), leaving room for a slow machine.
+	await page.waitForTimeout(500);
 	await expectUndisturbed(preview);
 	await expect(ownDot(preview, 'unknown')).toBeVisible();
 	await release(preview);
 	await expect(ownDot(preview, 'online')).toBeVisible();
-	await expectUndisturbed(preview);
+	await expect(page.getByTestId('connection-status')).toHaveText('Connected');
 	await expect(preview.message('Welcome to Apron!')).toBeVisible();
 });
 
@@ -116,13 +118,13 @@ test('a short drop while the tab shows keeps the page as it was, and what is typ
 	// Typing goes on through it; sending waits for the connection.
 	await page.keyboard.type(' a bit');
 	await expect(page.getByTestId('send-button')).toBeDisabled();
-	await page.waitForTimeout(800);
+	await page.waitForTimeout(300);
 	await expectUndisturbed(preview);
 	await release(preview);
 	await expect(ownDot(preview, 'online')).toBeVisible();
 	await expect(page.getByTestId('send-button')).toBeEnabled();
 	await expect(preview.composer()).toHaveText('Back in a bit');
-	await expectUndisturbed(preview);
+	await expect(page.getByTestId('connection-status')).toHaveText('Connected');
 });
 
 test('a way back that takes longer says so after its first moments, then goes quiet again', async ({ preview, page }) => {

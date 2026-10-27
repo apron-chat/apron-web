@@ -489,6 +489,19 @@ describe('kept statuses and sign-ins', () => {
 		expect(snapshot.statusesBeforeResume).toBeUndefined();
 	});
 
+	it('settles them at the resume\u2019s sign-in where no joined listing will come (no capability rooms)', async () => {
+		await listed({ user_id: 'ada', status: 'online' }, seen);
+		reconnect();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'] } });
+		await socket.reply('auth', { you: { user_id: 'ada' } });
+		expect(snapshot.statusesBeforeResume).toBeUndefined();
+		expect(snapshot.heldStatuses).toBeUndefined();
+		// What arrives now stands, for the member list too.
+		socket.receive({ method: 'user', params: { new: { user_id: 'bo', status: 'offline' } } });
+		expect(statusOf('bo')).toBe('offline');
+	});
+
 	it('drops them at once at a sign-in as someone else after a lost connection', async () => {
 		await listed({ user_id: 'ada', status: 'online' }, seen);
 		reconnect();

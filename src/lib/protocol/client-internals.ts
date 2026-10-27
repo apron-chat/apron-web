@@ -197,6 +197,8 @@ export const MAX_UNANSWERED_PINGS = 1;
  * whole ping interval otherwise.
  */
 export const PROBE_MS = 4_000;
+/** How long the page must have been hidden for its return to probe the socket: a glance at another tab doesn't. */
+export const PROBE_AFTER_HIDDEN_MS = 10_000;
 /**
  * The first reconnect after a connection that stayed up goes within this long,
  * jittered so that clients dropped together (a server restart) don't all come

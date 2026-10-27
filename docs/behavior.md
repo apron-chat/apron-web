@@ -38,10 +38,11 @@ this optional endpoint retain ordinary reconnect behavior.
 The first reconnect after a connection that stayed up goes within a quarter
 second, spread at random so a server's clients don't all come back at once;
 repeated failures back off from 1 s to about one attempt per minute with jitter.
-Where the server pings (§1), a tab shown again, or a network that comes back,
-checks at once that its socket still answers: one ping, and a socket whose
-`pong` doesn't come within 4 seconds is replaced as if it had closed, rather
-than looking connected for up to a whole ping interval after a laptop slept. An explicit server retry window takes precedence, including a
+Where the server pings (§1), a tab shown again after 10 seconds or more away,
+or a network that comes back, checks at once that its socket still answers:
+one ping, and a socket that hears nothing back (a `pong`, or any other frame)
+within 4 seconds is replaced as if it had closed, rather than looking connected
+for up to a whole ping interval after a laptop slept. An explicit server retry window takes precedence, including a
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.
@@ -89,7 +90,9 @@ profile bar's note stay up, and the composer still takes typing, while Send
 waits for the connection. Only your own dot in the profile bar says it: a ring
 broken into dashes, its tooltip the connection's state, in place of your status
 until the connection is back. Screen readers hear it as the pill shows it: not
-for those first moments, nor while a hidden tab waits. What was listed before
+for those first moments, nor while a hidden tab waits (the status says nothing
+then, rather than "Connected"). A link opened meanwhile waits for the new
+connection's listings before deciding a room or thread isn't there. What was listed before
 the drop stays listed: Browse rooms, Other threads, and the room's thread cards,
 until the new connection's listings replace them, so the open room shows what
 came meanwhile without waiting on its thread listing again, and an open

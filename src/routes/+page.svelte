@@ -1397,7 +1397,8 @@
 		if (activeRoom?.id !== target.room) {
 			if (!listed(target.room) && !client.viewRoom(target.room)) {
 				// Not among the rooms to join either, once those are listed: this server doesn't show it here.
-				if (session.snapshot.directory !== undefined || !session.canManageRooms) abandonLink('room');
+				// A listing kept from before a drop doesn't count: the room may be newer than it.
+				if ((session.snapshot.directory !== undefined && !session.snapshot.keptListings?.includes('')) || !session.canManageRooms) abandonLink('room');
 				return;
 			}
 			session.chooseRoom(client, target.room);
@@ -1414,7 +1415,7 @@
 		if (target.thread && activeThread !== target.thread) {
 			if (!listed(target.thread) && !client.viewRoom(target.thread)) {
 				// The room's threads are listed without it: the room is as far as the link goes.
-				if (session.snapshot.threadDirectory[target.room] !== undefined || !session.canManageRooms) abandonLink('thread');
+				if ((session.snapshot.threadDirectory[target.room] !== undefined && !session.snapshot.keptListings?.includes(target.room)) || !session.canManageRooms) abandonLink('thread');
 				return;
 			}
 			showThread(target.room, target.thread, 'replace');

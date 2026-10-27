@@ -336,6 +336,23 @@ describe('liveness pings', () => {
 		expect(pings(first)).toBe(0);
 	});
 
+	it('pings on the socket Try Again opens, at the same interval', () => {
+		const { client } = startClient();
+		onTestFinished(() => client.stop());
+		const first = latest();
+		first.open();
+		// Stuck before signing in (no scheme to use): Try Again replaces it.
+		first.receive({ method: 'server', params: { apron: 9, auth: ['token'], capabilities: [], ping: 30 } });
+		client.retryNow();
+		const second = latest();
+		expect(second).not.toBe(first);
+		second.open();
+		second.receive({ method: 'server', params: { apron: 9, auth: ['token'], capabilities: [], ping: 30 } });
+		vi.advanceTimersByTime(30_000);
+		expect(pings(second)).toBe(1);
+		expect(pings(first)).toBe(0);
+	});
+
 	it('replaces a socket whose ping goes a whole interval without a pong, and keeps one that answers', async () => {
 		let snapshot: ClientSnapshot | undefined;
 		const { client } = startClient({ onSnapshot: (next) => (snapshot = next) });
@@ -383,20 +400,27 @@ describe('liveness pings', () => {
 		onTestFinished(() => client.stop());
 		await latest().greet([], { ping: 30 });
 		const first = latest();
-		// Hidden: nothing to check. Shown again: one ping now, and a pong keeps the socket.
+		// A glance at another tab checks nothing.
 		show('hidden');
+		vi.advanceTimersByTime(5_000);
+		show('visible');
 		expect(pings(first)).toBe(0);
+		// Away for longer: one ping now, and anything heard back keeps the socket, a pong or any other frame.
+		show('hidden');
+		vi.advanceTimersByTime(10_000);
 		show('visible');
 		expect(pings(first)).toBe(1);
-		first.receive({ method: 'pong' });
+		first.receive({ method: 'message', params: { message_id: '1724803200001', log_id: '1724803200001', room_id: 'lobby', from: { user_id: 'bo' }, body: { text: 'hi' } } });
 		vi.advanceTimersByTime(10_000);
 		expect(snapshot?.status).toBe('connected');
 		expect(FakeSocket.instances).toHaveLength(1);
 
-		// The peer vanished while the tab was away: no pong within the probe's few seconds, and it goes.
+		// The peer vanished while the tab was away: nothing within the probe's few seconds, and it goes.
 		show('hidden');
+		vi.advanceTimersByTime(10_000);
+		const before = pings(first);
 		show('visible');
-		expect(pings(first)).toBe(2);
+		expect(pings(first)).toBe(before + 1);
 		vi.advanceTimersByTime(3_999);
 		expect(snapshot?.status).toBe('connected');
 		vi.advanceTimersByTime(1);
