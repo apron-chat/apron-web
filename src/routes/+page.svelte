@@ -385,8 +385,18 @@
 	 */
 	let threadsListed = $state<readonly string[]>([]);
 	let awaitingThreads = $derived(Boolean(session.ready && session.canManageRooms && session.activeRoomId && !threadsListed.includes(session.activeRoomId)));
+	/** Who the rooms in `threadsListed` were listed for. */
+	let threadsListedFor: string | undefined;
 	$effect(() => {
-		if (!session.ready) threadsListed = [];
+		// The client keeps its thread listings through a dropped connection (`disconnectedAt`) and refreshes them
+		// behind it, so a reconnect doesn't hold the room back again. A new session (a restart, signing out, another
+		// account) starts over.
+		const userId = session.snapshot.you?.user_id;
+		if (!session.ready && session.snapshot.disconnectedAt === undefined) threadsListed = [];
+		else if (userId !== undefined && userId !== threadsListedFor) {
+			if (threadsListedFor !== undefined) threadsListed = [];
+			threadsListedFor = userId;
+		}
 	});
 	$effect(() => {
 		const roomId = session.ready && session.canManageRooms ? session.activeRoomId : undefined;
@@ -487,7 +497,8 @@
 		: undefined);
 	// `server.agent` names the implementation, for debugging, not the server: the host is the label.
 	let backendLabel = $derived(backendHost(serverInput) || 'Apron');
-	let threadReplyCount = $derived(threadRoom?.loaded ? messages.length : undefined);
+	// A thread kept through a reconnect counts what it had while it catches up, rather than the count going and coming back.
+	let threadReplyCount = $derived(threadRoom?.loaded || threadRoom?.resumed ? messages.length : undefined);
 	/** Messages after the newest you had on screen, by `message_id`, so older ones loading above don't count. */
 	let unseenCount = $derived.by(() => {
 		const seen = seenThrough;

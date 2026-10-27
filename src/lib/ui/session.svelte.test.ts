@@ -266,3 +266,24 @@ describe('SessionView after a reconnect', () => {
 		session.dispose();
 	});
 });
+
+describe('SessionView quiet moments', () => {
+	it('gives each reconnect its own, even one that starts at the same time as the last', () => {
+		vi.useFakeTimers();
+		onTestFinished(() => { vi.useRealTimers(); });
+		const session = new SessionView();
+		const at = Date.now();
+		const away = (fields: Partial<ClientSnapshot> = {}): ClientSnapshot => ({ ...blankSnapshot(), status: 'reconnecting', disconnectedAt: at, ...fields });
+		session.apply(ready(), client());
+		session.apply(away({ retryingSince: at }), client());
+		expect(session.reconnectQuiet).toBe(true);
+		vi.advanceTimersByTime(RECONNECT_QUIET_MS);
+		expect(session.reconnectQuiet).toBe(false);
+		// Back, then away again on a clock that hasn't moved (a coarse one, or a test's).
+		vi.setSystemTime(at);
+		session.apply(ready(), client());
+		session.apply(away({ retryingSince: at }), client());
+		expect(session.reconnectQuiet).toBe(true);
+		session.dispose();
+	});
+});

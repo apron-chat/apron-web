@@ -191,6 +191,19 @@ export const PING_FRAME = '{"method":"ping"}';
 /** Pings a socket may leave unanswered for a whole interval before it is presumed dead. */
 export const MAX_UNANSWERED_PINGS = 1;
 /**
+ * How long a ping sent when the page is shown again, or the network comes back,
+ * may go unanswered before its socket is presumed dead: one whose peer vanished
+ * while the tab was away (a laptop asleep, timers frozen) can look open for a
+ * whole ping interval otherwise.
+ */
+export const PROBE_MS = 4_000;
+/**
+ * The first reconnect after a connection that stayed up goes within this long,
+ * jittered so that clients dropped together (a server restart) don't all come
+ * back at once; repeated failures back off from there.
+ */
+export const FIRST_RECONNECT_MS = 250;
+/**
  * How long a connection must stay authenticated before the reconnect backoff
  * starts over. Resetting on auth alone let a server that closes right after
  * auth be reconnected to every half second, each time paying for a new session.
@@ -514,6 +527,7 @@ export function pageHidden(): boolean {
 
 export function reconnectDelay(attempt: number, random = 0.5, retryAfterMs?: number): number {
 	const boundedAttempt = Math.max(1, Math.floor(attempt));
+	if (boundedAttempt === 1) return Math.max(retryAfterMs ?? 0, Math.round(FIRST_RECONNECT_MS * Math.min(1, Math.max(0, random))));
 	const base = Math.min(MAX_RECONNECT_DELAY_MS, 500 * 2 ** Math.min(7, boundedAttempt - 1));
 	const jitter = 0.8 + Math.min(1, Math.max(0, random)) * 0.4;
 	return Math.max(retryAfterMs ?? 0, Math.round(base * jitter));

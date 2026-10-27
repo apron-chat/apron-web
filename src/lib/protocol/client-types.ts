@@ -112,6 +112,11 @@ export interface RoomSnapshot {
 	 * threads after `loadRoom` completed.
 	 */
 	loaded: boolean;
+	/**
+	 * A thread loaded on an earlier connection, kept through the drop: its records are those it had, and its next
+	 * load catches up from where it was. Not `loaded` until then, but what it has stands meanwhile.
+	 */
+	resumed?: true;
 	/** A `loadRoom` request is in flight. */
 	loading: boolean;
 	/**
@@ -318,6 +323,12 @@ export interface ClientSnapshot {
 	 * no longer kept. Absent when none is.
 	 */
 	heldStatuses?: string[];
+	/**
+	 * Every status held from before a resume's sign-in, until its joined listing arrives (or won't): what the
+	 * member list showed then, by `user_id`. A list that sorts by status can keep this order meanwhile and change
+	 * over once, rather than as each fresh status arrives.
+	 */
+	statusesBeforeResume?: Record<string, string>;
 	/**
 	 * The latest recorded object seen per `user_id` (a message's or
 	 * reaction's `from`, a membership's `user`), by `log_id`. Never merged into

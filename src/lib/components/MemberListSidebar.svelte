@@ -32,9 +32,14 @@
 	}
 	let { client, session, room, open, canChange }: Props = $props();
 
-	/** Each member's `status` (§4.5) as kept: yours is the one you chose, as the profile bar shows it. */
+	/**
+	 * Each member's `status` (§4.5) as kept: yours is the one you chose, as the profile bar shows it. Resuming after a
+	 * lost connection, the ones from before stay until its listing arrives, then all change over at once: fresh ones
+	 * come one by one meanwhile, and the list would reorder with each.
+	 */
 	function statusOf(person: Identity): string | undefined {
-		return directory.status(person);
+		const before = directory.isMe(person.user_id) ? undefined : session.snapshot.statusesBeforeResume?.[person.user_id];
+		return before ?? directory.status(person);
 	}
 	/** By status (online, idle, dnd, unknown, offline, then none), and by name within each. */
 	let members = $derived(byStatus([...(room?.members ?? [])].sort((a, b) =>

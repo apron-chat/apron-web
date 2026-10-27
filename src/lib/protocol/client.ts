@@ -72,6 +72,7 @@ import {
 	pushKey,
 	MAX_TYPING_S,
 	MAX_UNANSWERED_PINGS,
+	PROBE_MS,
 	NO_NOTICES,
 	PASSKEY_IDLE_POLL_MS,
 	PASSKEY_IDLE_WAIT_MS,
@@ -304,6 +305,8 @@ export class ChatClient {
 	private presenceWaiter?: () => void;
 	/** Pings sent on the current socket since its last `pong`. */
 	private unansweredPings = 0;
+	/** A probe's ping waits for its `pong` (`PROBE_MS`): without one, the socket is dropped. */
+	private probeTimer?: ReturnType<typeof setTimeout>;
 	/** Drops the current socket as if it had closed: for one that stopped answering. */
 	private abandonSocket?: () => void;
 	private connectionId = 0;
@@ -395,13 +398,19 @@ export class ChatClient {
 	 * while it's hidden, so time away never counts as a reconnect taking long.
 	 */
 	private retryingSince?: number;
-	/** Keeps `retryingSince` in step with the page being shown or hidden, for as long as the client runs. */
+	/**
+	 * The page shown or hidden, for as long as the client runs: keeps `retryingSince` in step, and a page shown
+	 * again checks that its socket still answers.
+	 */
 	private readonly visibilityChanged = (): void => {
+		this.probe();
 		const since = this.retryingNow();
 		if (since === this.retryingSince) return;
 		this.retryingSince = since;
 		this.emit();
 	};
+	/** The network back: the socket may not have survived it. */
+	private readonly networkReturned = (): void => this.probe();
 
 	constructor(
 		private serverUrl: string,
@@ -514,6 +523,7 @@ export class ChatClient {
 		this.signInNeeded = undefined;
 		this.showReconnectDivider = this.reconnectAttempt > 0;
 		globalThis.document?.addEventListener('visibilitychange', this.visibilityChanged);
+		globalThis.addEventListener?.('online', this.networkReturned);
 		if (this.waitForPresence()) return;
 		this.connectNow();
 	}
@@ -526,6 +536,7 @@ export class ChatClient {
 		this.reconnectTimer = undefined;
 		this.stopWaitingForPresence();
 		globalThis.document?.removeEventListener('visibilitychange', this.visibilityChanged);
+		globalThis.removeEventListener?.('online', this.networkReturned);
 		this.clearStableTimer();
 		this.clearIdleRetry();
 		if (this.muteTimer) clearTimeout(this.muteTimer);
@@ -683,6 +694,7 @@ export class ChatClient {
 					...(this.historyLimited(room) ? { limited: true as const } : {}),
 					loaded: !history || (this.loadsOnOpen(room) ? this.threadLoaded(room) : room.checkpoint !== undefined),
 					loading: room.loading,
+					...(this.loadsOnOpen(room) && room.resumed ? { resumed: true as const } : {}),
 					...(this.hasOlderRecords(room) ? { olderAvailable: true } : {}),
 					...(room.loadingOlder ? { loadingOlder: true } : {}),
 					...(this.readCursor(room.id) !== undefined ? { readMessageId: this.readCursor(room.id) } : {}),
@@ -704,6 +716,7 @@ export class ChatClient {
 			typing: [...this.typing.values()].map(({ room, from }) => ({ room, from })),
 			users: this.usersWithHeldStatuses(heldStatuses),
 			...(heldStatuses.length ? { heldStatuses } : {}),
+			...(this.heldStatuses?.size ? { statusesBeforeResume: Object.fromEntries(this.heldStatuses) } : {}),
 			recordedUsers: Object.fromEntries([...this.recordedUsers].map(([id, entry]) => [id, entry.identity])),
 			userAliases: Object.fromEntries(this.userAliases),
 			uploads: Object.fromEntries(this.uploads),
@@ -2225,7 +2238,8 @@ export class ChatClient {
 	}
 
 	private withJoined(listing: RoomListing): RoomListing {
-		return { ...listing, joined: this.rooms.get(listing.id)?.kind === 'joined' };
+		// Through a drop, the rooms kept from it say what was joined until the next connection lists them.
+		return { ...listing, joined: (this.rooms.get(listing.id) ?? this.retainedRooms.get(listing.id))?.kind === 'joined' };
 	}
 
 	/**
@@ -2640,6 +2654,8 @@ export class ChatClient {
 				return;
 			case 'pong':
 				this.unansweredPings = 0;
+				if (this.probeTimer) clearTimeout(this.probeTimer);
+				this.probeTimer = undefined;
 				return;
 			case 'status':
 				this.handleStatus(frame.params);
@@ -2822,6 +2838,11 @@ export class ChatClient {
 		if (signIn) this.resetMutes();
 		this.setYou(cloneJson(identity as Identity), true);
 		if (signIn) this.dropKeptStatuses(identity.user_id === this.resumingUserId);
+		// The listings kept through a drop were made for who was signed in then: another identity lists its own.
+		if (signIn && this.resumingUserId !== undefined && identity.user_id !== this.resumingUserId) {
+			this.directory = undefined;
+			this.threadDirectory.clear();
+		}
 		this.resumingUserId = undefined;
 		if (signedIn && added && this.registeredSession) {
 			// Added to the account (§4.10, §4.11): another way back in, not how this session signed in,
@@ -2974,6 +2995,23 @@ export class ChatClient {
 	private stopPing(): void {
 		if (this.pingTimer) clearInterval(this.pingTimer);
 		this.pingTimer = undefined;
+		if (this.probeTimer) clearTimeout(this.probeTimer);
+		this.probeTimer = undefined;
+	}
+
+	/**
+	 * Checks at once that an open socket still answers, on a page someone can see: one ping, and the socket is
+	 * replaced through the usual reconnect if its `pong` doesn't come within `PROBE_MS`. Only where the server
+	 * pings (§1); the regular pings carry on as they were.
+	 */
+	private probe(): void {
+		const socket = this.socket;
+		if (!this.running || !socket || socket.readyState !== WebSocket.OPEN || this.server?.ping === undefined || this.probeTimer || absent()) return;
+		socket.send(PING_FRAME);
+		this.probeTimer = setTimeout(() => {
+			this.probeTimer = undefined;
+			if (socket === this.socket) this.abandonSocket?.();
+		}, PROBE_MS);
 	}
 
 	/**
@@ -3858,6 +3896,8 @@ export class ChatClient {
 		this.joinedComplete = false;
 		this.keptUserId = undefined;
 		this.resumingUserId = undefined;
+		this.directory = undefined;
+		this.threadDirectory.clear();
 		this.resetMutes();
 		this.forgetConnectionState();
 	}
@@ -3877,8 +3917,6 @@ export class ChatClient {
 		this.reads.clear();
 		this.listings.clear();
 		this.joinedListing = undefined;
-		this.directory = undefined;
-		this.threadDirectory.clear();
 		this.clearIdleRetry();
 		this.heldStatuses = undefined;
 		this.pushError = undefined;

@@ -18,8 +18,12 @@
 </script>
 
 {#if session.connection === 'reconnecting' && !session.reconnectNeedsAttention}
-	<!-- A short blip stays quiet: the room, history, and identity are kept in place, and the pill above the composer says it. -->
-	<span class="ap-sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
+	<!--
+		A short blip stays quiet: the room, history, and identity are kept in place, and the pill above the composer says
+		it. Its first moments, and a hidden tab's wait, say nothing here either, as the pill doesn't: a quick way back
+		isn't announced twice.
+	-->
+	<span class="ap-sr" data-testid="connection-status" role="status" aria-live="polite">{session.reconnectQuiet || session.waitingToReconnect ? 'Connected' : statusLabel(snapshot, session.stalled)}</span>
 {:else if session.starting && session.connection === 'connecting'}
 	<!-- Coming up with a view from before: the timeline's foot says it's checking; a banner would only alarm. -->
 	<span class="ap-sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>

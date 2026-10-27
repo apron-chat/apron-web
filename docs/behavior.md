@@ -35,8 +35,13 @@ request to the same URL with `?apron_connection_status=1`
 exposed through CORS; the client displays the reason and waits before retrying,
 including manual retries. Any other reply is ignored, and servers without
 this optional endpoint retain ordinary reconnect behavior.
-Repeated connection failures back off from 500 ms to about one attempt per minute
-with jitter. An explicit server retry window takes precedence, including a
+The first reconnect after a connection that stayed up goes within a quarter
+second, spread at random so a server's clients don't all come back at once;
+repeated failures back off from 1 s to about one attempt per minute with jitter.
+Where the server pings (§1), a tab shown again, or a network that comes back,
+checks at once that its socket still answers: one ping, and a socket whose
+`pong` doesn't come within 4 seconds is replaced as if it had closed, rather
+than looking connected for up to a whole ping interval after a laptop slept. An explicit server retry window takes precedence, including a
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.
@@ -83,15 +88,20 @@ keeps reading): the rooms' and member list's + buttons, the Online and Offline h
 profile bar's note stay up, and the composer still takes typing, while Send
 waits for the connection. Only your own dot in the profile bar says it: a ring
 broken into dashes, its tooltip the connection's state, in place of your status
-until the connection is back.
+until the connection is back. Screen readers hear it as the pill shows it: not
+for those first moments, nor while a hidden tab waits. What was listed before
+the drop stays listed: Browse rooms, Other threads, and the room's thread cards,
+until the new connection's listings replace them, so the open room shows what
+came meanwhile without waiting on its thread listing again, and an open
+thread's reply count stays while it catches up.
 A request that takes more than 600ms says so in a toast above the composer
 ("Leaving…"), which goes when it's done; one that fails leaves its error there
 until the next request, or until its × closes it. An error of the connection
 itself shows in the corner, also with a ×; closed, it stays away until it
-clears, and shows again if it comes back. The first time a room is shown on
-a connection its messages wait for its thread listing, for at most three
+clears, and shows again if it comes back. The first time a room is shown in
+a session its messages wait for its thread listing, for at most three
 seconds, so its thread cards arrive with them instead of shifting the timeline
-afterwards.
+afterwards; a reconnect keeps what was listed, so it doesn't wait again.
 With the `activity` capability, typing is reported as `activity` notifications that ask
 for a 15-second indicator (`typing: 15`) and refresh it at most once every 12
 seconds per room, with one `typing: 0` when typing pauses, to avoid charging a
@@ -273,7 +283,9 @@ room `members` and `users` of `room_list` and `room_update`, which carry
 `offline` and `""` too (a ring, and no dot). Signing in again as the same user
 after a lost connection (a resume), the ones from before still show until the
 joined `room_list` arrives, each replaced as a fresh one comes, so the member
-list doesn't grey out and reorder meanwhile. Then any the server didn't send
+list doesn't grey out and reorder meanwhile; the member list itself keeps
+showing them all, in their order, until that listing, then changes over once,
+rather than reordering as each fresh one comes. Then any the server didn't send
 again show no dot, except an `offline` or `""`, which stays: the server sends
 every other status, so its silence means one of those. A sign-in as someone
 else drops them at once. A

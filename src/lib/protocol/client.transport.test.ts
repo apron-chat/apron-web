@@ -65,6 +65,9 @@ describe('reconnects', () => {
 	});
 
 	it('retryNow skips the backoff and reconnects immediately', async () => {
+		// The longest first delay (a quarter second), still pending at 50 ms.
+		vi.spyOn(Math, 'random').mockReturnValue(1);
+		onTestFinished(() => { vi.restoreAllMocks(); });
 		latest().drop();
 		expect(FakeSocket.instances).toHaveLength(1);
 		vi.advanceTimersByTime(50);
@@ -370,6 +373,58 @@ describe('liveness pings', () => {
 		expect(pings(latest())).toBe(2);
 	});
 
+	it('checks at once that the socket still answers when the page is shown again, and replaces one that doesn\u2019t', async () => {
+		const listeners = new Set<() => void>();
+		const page = { visibilityState: 'visible', addEventListener: (_: string, fn: () => void) => listeners.add(fn), removeEventListener: (_: string, fn: () => void) => listeners.delete(fn) };
+		vi.stubGlobal('document', page);
+		const show = (state: 'visible' | 'hidden') => { page.visibilityState = state; for (const fn of [...listeners]) fn(); };
+		let snapshot: ClientSnapshot | undefined;
+		const { client } = startClient({ onSnapshot: (next) => (snapshot = next) });
+		onTestFinished(() => client.stop());
+		await latest().greet([], { ping: 30 });
+		const first = latest();
+		// Hidden: nothing to check. Shown again: one ping now, and a pong keeps the socket.
+		show('hidden');
+		expect(pings(first)).toBe(0);
+		show('visible');
+		expect(pings(first)).toBe(1);
+		first.receive({ method: 'pong' });
+		vi.advanceTimersByTime(10_000);
+		expect(snapshot?.status).toBe('connected');
+		expect(FakeSocket.instances).toHaveLength(1);
+
+		// The peer vanished while the tab was away: no pong within the probe's few seconds, and it goes.
+		show('hidden');
+		show('visible');
+		expect(pings(first)).toBe(2);
+		vi.advanceTimersByTime(3_999);
+		expect(snapshot?.status).toBe('connected');
+		vi.advanceTimersByTime(1);
+		expect(snapshot?.status).toBe('reconnecting');
+		expect(first.readyState).toBe(FakeSocket.CLOSED);
+		vi.advanceTimersByTime(1_000);
+		expect(FakeSocket.instances).toHaveLength(2);
+	});
+
+	it('checks the socket when the network comes back, only where the server pings', async () => {
+		const listeners = new Map<string, () => void>();
+		vi.stubGlobal('addEventListener', (type: string, fn: () => void) => listeners.set(type, fn));
+		vi.stubGlobal('removeEventListener', (type: string) => listeners.delete(type));
+		const { client } = startClient();
+		onTestFinished(() => client.stop());
+		await latest().greet([], { ping: 30 });
+		listeners.get('online')?.();
+		expect(pings(latest())).toBe(1);
+		client.stop();
+
+		// A server that doesn't ask for pings may not answer one: nothing is sent.
+		const { client: quiet } = startClient();
+		onTestFinished(() => quiet.stop());
+		await latest().greet([]);
+		listeners.get('online')?.();
+		expect(pings(latest())).toBe(0);
+	});
+
 	it('follows a replacing server frame to its new interval, or to none where it does not ask', async () => {
 		const { client } = startClient();
 		await latest().greet([], { ping: 30 });
@@ -388,12 +443,12 @@ describe('reconnect damping', () => {
 	});
 
 	it('keeps backing off when connections close right after auth', async () => {
-		// No jitter: the delays are exactly 0.5 s, 1 s, 2 s.
+		// Jitter at its middle: the first comes within a quarter second (125 ms here), then exactly 1 s, 2 s.
 		vi.spyOn(Math, 'random').mockReturnValue(0.5);
 		const { client } = startClient();
 		await latest().greet();
 		// Each connection authenticates, then drops at once: the delay keeps growing.
-		for (const delay of [500, 1_000, 2_000]) {
+		for (const delay of [125, 1_000, 2_000]) {
 			latest().drop();
 			const before = FakeSocket.instances.length;
 			vi.advanceTimersByTime(delay - 1);
@@ -402,11 +457,11 @@ describe('reconnect damping', () => {
 			expect(FakeSocket.instances).toHaveLength(before + 1);
 			await latest().greet();
 		}
-		// A connection that stays up resets it.
+		// A connection that stays up resets it: the next drop comes back within a quarter second again.
 		vi.advanceTimersByTime(30_000);
 		latest().drop();
 		const before = FakeSocket.instances.length;
-		vi.advanceTimersByTime(500);
+		vi.advanceTimersByTime(125);
 		expect(FakeSocket.instances).toHaveLength(before + 1);
 		vi.restoreAllMocks();
 	});
@@ -603,8 +658,12 @@ describe('recovery and reconnect policies', () => {
 		expect(reconnectDelay(1, 0, 700)).toBe(700);
 		expect(reconnectDelay(2, 0, 0)).toBe(800);
 		expect(reconnectDelay(2, 1, 0)).toBe(1200);
+		// The first, after a connection that stayed up, goes within a quarter second, spread so a server's
+		// clients don't all come back at once.
+		expect(reconnectDelay(1, 0)).toBe(0);
+		expect(reconnectDelay(1)).toBe(125);
+		expect(reconnectDelay(1, 1)).toBe(250);
 		// Prolonged failures back off to roughly one attempt per minute.
-		expect(reconnectDelay(1)).toBe(500);
 		expect(reconnectDelay(6)).toBe(16000);
 		expect(reconnectDelay(8)).toBe(60000);
 		expect(reconnectDelay(100, 0)).toBe(48000);

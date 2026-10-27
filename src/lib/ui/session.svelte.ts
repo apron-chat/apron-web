@@ -241,7 +241,12 @@ export class SessionView {
 	/** A new run of reconnecting where someone can see it starts RECONNECT_QUIET_MS of quiet; it runs out on its own. */
 	private trackQuiet(next: ClientSnapshot): void {
 		const since = next.retryingSince;
-		if (since === undefined || since === this.quietSince) return;
+		// A run that ended (back, or waiting hidden) is done with: the next starts its own quiet, even at the same time.
+		if (since === undefined) {
+			this.quietSince = undefined;
+			return;
+		}
+		if (since === this.quietSince) return;
 		this.quietSince = since;
 		if (this.quietTimer) clearTimeout(this.quietTimer);
 		const remaining = this.retryAsked ? 0 : RECONNECT_QUIET_MS - (Date.now() - since);
