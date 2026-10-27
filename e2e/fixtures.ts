@@ -1,7 +1,7 @@
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
 import type { PreviewKnobs } from '../src/lib/preview/memory-server';
 import { NARROW_MAX, NOW, VIEWPORTS } from '../scripts/qa/lib/helpers.js';
-import { OFFSITE, mockServer } from './mock-server';
+import { OFFSITE, mockServer, type MockOptions } from './mock-server';
 
 export { expect };
 export type { PreviewKnobs };
@@ -59,11 +59,11 @@ export class Preview {
 	 * Opens the app's own route, `/`, against `mockServer` (a scripted backend offering guests, passkeys and
 	 * email), and waits until it is connected as a guest.
 	 */
-	async openRoot(): Promise<void> {
+	async openRoot(options: MockOptions = {}): Promise<void> {
 		const base = process.env.E2E_URL;
 		if (!base) throw new Error('E2E_URL is unset: run through `npm run e2e` (global-setup serves the build).');
 		await this.page.clock.setFixedTime(NOW);
-		await mockServer(this.page);
+		await mockServer(this.page, options);
 		await this.page.goto(`${base}/`);
 		await expect(this.page.getByTestId('connection-status')).toHaveText('Connected');
 	}
@@ -110,6 +110,11 @@ export class Preview {
 			([room, from, body, fields]) => (window as any).__apronPreview.post(room, from, body, fields) as string,
 			[room, from, body, fields] as const
 		);
+	}
+
+	/** Someone else sets their complete reaction set on a message (§4.7), delivered live. */
+	reactAs(from: string, messageId: string, emojis: string[]): Promise<void> {
+		return this.page.evaluate(([from, messageId, emojis]) => (window as any).__apronPreview.reactAs(from, messageId, emojis), [from, messageId, emojis] as const);
 	}
 
 	/**

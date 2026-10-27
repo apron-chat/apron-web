@@ -333,6 +333,17 @@ export class MemoryProtocolServer {
 		return id;
 	}
 
+	/** Someone else sets their complete reaction set on a message (§4.7), as if they did it now: stored as sent, and broadcast. */
+	reactAs(from: string, messageId: string, emojis: string[]): void {
+		const target = this.findMessage(messageId);
+		if (!target || !this.people[from]) throw new Error(`Unknown message or user: ${messageId}, ${from}`);
+		const byUser = target.room.reactions.get(messageId) ?? new Map<string, string[]>();
+		byUser.set(from, [...emojis]);
+		target.room.reactions.set(messageId, byUser);
+		const record = { room_id: target.room.room_id, log_id: this.nextLog(target.room), message_id: messageId, reactions: [{ from: this.recorded(from), emojis: [...emojis] }] };
+		this.broadcast({ method: 'reactions', params: record }, target.room);
+	}
+
 	/**
 	 * Someone else starts a private room (§4.2.4) and adds you, as if they did it now: you get it in a `room_update`
 	 * `joined`, with their membership and yours. Untitled unless `title` is given. Returns its `room_id`.
