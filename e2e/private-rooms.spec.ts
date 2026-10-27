@@ -71,11 +71,8 @@ test.describe('signed in to an account', () => {
 		await preview.open();
 		const roomId = await page.evaluate(() => (window as any).__apronPreview.addYouToPrivate('margaret') as string);
 		const row = page.getByTestId('private-list').locator(`button[data-room="${roomId}"]`);
-		// Being added alerts as a mention would: the row counts it until opened.
-		await expect(row).toHaveAccessibleName('Margaret Hamilton 1 unread message, a mention of you');
-		await expect(row.getByTestId('room-unread')).toHaveText('@ 1');
-		await row.click();
 		await expect(row).toHaveAccessibleName('Margaret Hamilton');
+		await row.click();
 		const banner = page.getByTestId('added-banner');
 		await expect(banner).toContainText('You were added to this private room.');
 		await banner.getByRole('button', { name: 'Dismiss' }).click();

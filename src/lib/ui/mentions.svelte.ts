@@ -69,15 +69,6 @@ export class MentionTracker {
 		return arrived;
 	}
 
-	/**
-	 * Someone added you to a room or thread you aren't reading (`ArrivalWatch.added`): it counts as one mention there
-	 * until you open it, so its row turns orange with an `@`, as it would had they mentioned you in it.
-	 */
-	addedTo(roomId: string, pane: string | undefined): void {
-		if (roomId === pane) return;
-		this.byRoom = { ...this.byRoom, [roomId]: (this.byRoom[roomId] ?? 0) + 1 };
-	}
-
 	reset(): void {
 		this.dispose();
 		this.shown.clear();
