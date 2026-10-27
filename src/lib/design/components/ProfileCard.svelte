@@ -12,7 +12,7 @@
 	/**
 	 * Who a mention, a sender or a member is, in a Popover: their avatar, name,
 	 * `@user_id` (always, here: this is where people check who someone really
-	 * is, §3.3), status, roles, bio, and whether they're in the open room, with
+	 * is, §3.3), status (and when they were last seen, while offline), roles, bio, and whether they're in the open room, with
 	 * what you can do about them.
 	 */
 	interface Props extends PopoverPlacement {
@@ -27,6 +27,12 @@
 		status?: Presence | (string & {});
 		/** The status's words instead of its own, on the avatar's dot and under the name, such as your own invisible ("Invisible · others see you as offline"). */
 		statusLabel?: string;
+		/**
+		 * When they were last seen (§4.5.2), under the status while it is `offline` (and only then: a `seen` kept from
+		 * before they came back online says nothing now): its words ("Last seen 5m ago"), the `datetime`, and the exact
+		 * time as its tooltip.
+		 */
+		seen?: { text: string; datetime?: string; title?: string };
 		/** Server-assigned roles (§3.3), as badges under the status. */
 		roles?: string[];
 		/** Their bio (`ext:bio`), plain text under the name: its line breaks show. */
@@ -65,14 +71,16 @@
 		onfocusout?: (event: FocusEvent) => void;
 		/** A `data-testid` for the status in words. */
 		statusTestid?: string;
+		/** A `data-testid` for when they were last seen. */
+		seenTestid?: string;
 		/** A `data-testid` for the row of roles. */
 		rolesTestid?: string;
 		/** A `data-testid` for the bio. */
 		bioTestid?: string;
 	}
 	let {
-		userId, name, avatar, you = false, status, statusLabel, roles, bio, bioBody, sharesName = false, membership, onmessage, messaging = false, onmention, oncopyid, onaddtoroom, adding = false, note,
-		element = $bindable(), offsetHeight = $bindable(0), statusTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout
+		userId, name, avatar, you = false, status, statusLabel, seen, roles, bio, bioBody, sharesName = false, membership, onmessage, messaging = false, onmention, oncopyid, onaddtoroom, adding = false, note,
+		element = $bindable(), offsetHeight = $bindable(0), statusTestid, seenTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout
 	}: Props = $props();
 	const shownName = $derived(name || userId);
 	const shown = $derived(presence(status));
@@ -92,6 +100,7 @@
 			{:else if shown}
 				<div class="ap-profcard-status" data-testid={statusTestid}>{statusLabel ?? presenceLabel(status)}</div>
 			{/if}
+			{#if shown === 'offline' && !you && seen?.text}<time class="ap-profcard-seen" data-testid={seenTestid} datetime={seen.datetime} title={seen.title}>{seen.text}</time>{/if}
 			<RoleBadges {roles} data-testid={rolesTestid} overflow="drop" />
 		</div>
 	</div>

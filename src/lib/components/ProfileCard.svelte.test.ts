@@ -23,10 +23,10 @@ afterEach(() => {
 const ada: Identity = { user_id: 'ada', name: 'Ada', status: 'online' };
 
 /** The card for `userId`, signed in as `you`, with these users known. */
-function render(userId: string, users: Identity[], you: Identity = ada, room?: RoomSnapshot, member?: boolean, capabilities: string[] = [], recorded: Identity[] = []): HTMLElement {
+function render(userId: string, users: Identity[], you: Identity = ada, room?: RoomSnapshot, member?: boolean, capabilities: string[] = [], recorded: Identity[] = [], fields: Partial<ClientSnapshot> = {}): HTMLElement {
 	const snapshot: ClientSnapshot = {
 		...blankSnapshot(), authenticated: true, you, users: Object.fromEntries(users.map((user) => [user.user_id, user])),
-		recordedUsers: Object.fromEntries(recorded.map((user) => [user.user_id, user])), userAliases: {}
+		recordedUsers: Object.fromEntries(recorded.map((user) => [user.user_id, user])), userAliases: {}, ...fields
 	};
 	directory.apply(snapshot, undefined);
 	const session = { snapshot, canManageRooms: false, server: { apron: 9, auth: ['guest'], capabilities } } as unknown as SessionView;
@@ -44,6 +44,61 @@ describe('ProfileCard status', () => {
 		const card = render('ada', [hidden], hidden);
 		expect(card.querySelector('[data-testid="profile-status"]')?.textContent).toBe('Invisible · others see you as offline');
 		expect(card.querySelector('.ap-presence-invisible')).not.toBeNull();
+	});
+});
+
+describe('ProfileCard last seen', () => {
+	const NOW = Date.UTC(2026, 9, 22, 12);
+	const seen = String(NOW - 3 * 60 * 60 * 1000);
+
+	beforeEach(() => {
+		vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('says when an offline person was last seen (§4.5.2), with the exact time as its tooltip', () => {
+		const card = render('bob', [ada, { user_id: 'bob', name: 'Bob', status: 'offline', seen }]);
+		expect(card.querySelector('[data-testid="profile-status"]')?.textContent).toBe('Offline');
+		const time = card.querySelector<HTMLTimeElement>('[data-testid="profile-seen"]')!;
+		expect(time.textContent).toBe('Last seen 3h ago');
+		expect(time.getAttribute('datetime')).toBe(new Date(Number(seen)).toISOString());
+		expect(time.title).toMatch(/^Last seen \d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
+	});
+
+	it('says recently under ten minutes ago, with a tooltip that says no more than that, and the time shown as its datetime', () => {
+		const recent = String(NOW - 4 * 60 * 1000);
+		const card = render('bob', [ada, { user_id: 'bob', name: 'Bob', status: 'offline', seen: recent }]);
+		const time = card.querySelector<HTMLTimeElement>('[data-testid="profile-seen"]')!;
+		expect([time.textContent, time.getAttribute('datetime'), time.title]).toEqual(['Last seen recently', '2026-10-22T11:56:00.000Z', 'Last seen within the last 10 minutes']);
+	});
+
+	it('shows when this page saw them go offline over an older seen from the server', () => {
+		const card = render('bob', [ada, { user_id: 'bob', name: 'Bob', status: 'offline', seen }], ada, undefined, undefined, [], [], { sawOffline: { bob: NOW - 60 * 1000 } });
+		const time = card.querySelector<HTMLTimeElement>('[data-testid="profile-seen"]')!;
+		expect([time.textContent, time.getAttribute('datetime'), time.title]).toEqual(['Last seen recently', '2026-10-22T11:59:00.000Z', 'Last seen within the last 10 minutes']);
+	});
+
+	it('says nothing of a seen kept from before they came back online, an unreadable one, one past what a Date holds, a recorded one, or yours', () => {
+		// Each with the status the card shows: where it is offline, the seen alone decides.
+		const cases: [string, Identity[], Identity, Identity[], string | undefined][] = [
+			['back online', [ada, { user_id: 'bob', status: 'online', seen }], ada, [], 'Online'],
+			['no status', [ada, { user_id: 'bob', seen }], ada, [], undefined],
+			['unreadable', [ada, { user_id: 'bob', status: 'offline', seen: 'yesterday' }], ada, [], 'Offline'],
+			// The log_id format allows it, but formatting it as a date throws.
+			['past what a Date holds', [ada, { user_id: 'bob', status: 'offline', seen: '9000000000000000' }], ada, [], 'Offline'],
+			// Offline in the kept object, with a seen only in the recorded one.
+			['recorded only', [ada, { user_id: 'bob', status: 'offline' }], ada, [{ user_id: 'bob', status: 'offline', seen }], 'Offline'],
+			['yours', [{ ...ada, status: 'offline', seen }], { ...ada, status: 'offline', seen }, [], 'Offline']
+		];
+		for (const [what, users, you, recorded, status] of cases) {
+			const card = render(what === 'yours' ? 'ada' : 'bob', users, you, undefined, undefined, [], recorded);
+			expect(card.querySelector('[data-testid="profile-status"]')?.textContent, what).toBe(status);
+			expect(card.querySelector('[data-testid="profile-seen"]'), what).toBeNull();
+			profileCard.close();
+			dom.unmount();
+		}
 	});
 });
 

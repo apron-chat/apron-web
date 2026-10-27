@@ -11,7 +11,8 @@
 	import AddMemberForm from '$lib/design/components/AddMemberForm.svelte';
 	import MemberList from '$lib/design/components/MemberList.svelte';
 	import type { MemberListPerson, MemberListSection } from '$lib/design/components/types';
-	import { byStatus, ownStatusLabel } from '$lib/ui/user-status';
+	import { byStatus, lastSeen, ownStatusLabel, withLastSeen } from '$lib/ui/user-status';
+	import { minuteNow } from '$lib/ui/clock.svelte';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
 	import RoleBadges from './RoleBadges.svelte';
@@ -66,7 +67,7 @@
 	let note = $state<{ text: string; error: boolean } | undefined>();
 	let list = $state<MemberList | undefined>();
 	let form = $state<AddMemberForm | undefined>();
-	/** Each member as the list shows them, with their status in words: yours as you chose it. */
+	/** Each member as the list shows them, with their status in words: yours as you chose it, an offline one's with when they were last seen. */
 	let shown = $derived(sections.map((section): MemberListSection => ({ key: section.key, label: section.label, people: section.people.map(person) })));
 	/** The members by `user_id`, for their role badges. */
 	let byId = $derived(new Map(members.map((member) => [member.user_id, member])));
@@ -74,12 +75,15 @@
 	function person(member: Identity): MemberListPerson {
 		const me = directory.isMe(member.user_id);
 		const status = statusOf(member);
+		// `seen` (§4.5.2) only while they show offline, never yours: in the row's tooltip, after "Offline". Redone each minute.
+		const seen = directory.seen(member);
+		const last = seen === undefined ? undefined : lastSeen(seen, minuteNow());
 		return {
 			user_id: member.user_id,
 			name: directory.name(member),
 			avatar: directory.avatar(member),
 			status,
-			statusLabel: (me ? ownStatusLabel(status) : undefined) ?? presenceLabel(status),
+			statusLabel: (me ? ownStatusLabel(status) : undefined) ?? withLastSeen(presenceLabel(status), last),
 			handle: directory.sharesName(member),
 			you: me
 		};

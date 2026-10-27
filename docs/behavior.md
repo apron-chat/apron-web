@@ -268,6 +268,50 @@ sign-in is an `auth` as a user the connection isn't already signed in as: a
 repeat `auth` as the same user, or adding a passkey or an email address,
 keeps them.
 
+A user object with a shown `offline` may carry `seen` (§4.5.2): when that
+user's shown status last became `offline`, in the `log_id` format. While a
+member shows offline, their profile card says "Last seen 3h ago" under the
+status (as `15m`, `3h` or `12d ago` within two weeks, then the day as the
+browser's locale writes it, such as `Last seen Sep 14` in en-US, with the
+year when it isn't this one), with the exact local time as its tooltip, and
+their row's tooltip (and its screen-reader text) says "Offline · last seen 3h
+ago"; both move on each minute. Under ten minutes ago it says "Last seen
+recently", with no number: a server may record `seen` coarsely (one records
+it to the 10 minutes, and a departure within 10 minutes of the one before
+announces the older time again), so "4m ago" could be off by as much as it
+says. Its tooltip then says "Last seen within the last 10 minutes" rather
+than an exact time the words decline to give, though the `<time>` keeps the
+time in its `datetime`. A `seen` up to five minutes ahead of this device's
+clock is recent too; one further ahead says its day, since "ago" would be
+false. It merges like any other field, so a `seen` kept from before stays
+when they come back online (`{"status": "online"}` carries none), but it
+shows only while they show offline. One that isn't decimal digits of a
+positive integer below 2^53, or is past the last date a JavaScript `Date`
+holds (8.64e15 ms), shows nothing. It is never kept for you: your status is
+the one you chose, and `you` carries no `seen`. A sign-in drops each `seen`
+with the statuses. Resuming, a held `offline` shows with its `seen` until
+the joined listing arrives; an `offline` kept after it because nothing was
+said of them keeps no `seen`, since they may have come back and gone again
+meanwhile (the sign-in sends no `offline`, and a listing of what changed
+since leaves out rooms whose log didn't move), until an object that carries
+one arrives.
+
+The page also notes, in memory, when it received each other user's change
+of shown status to `offline` (from a `user` notification, a room's
+`members`, or a listing's or `room_update`'s `users`) from one it showed
+them with on this signed-in connection: not from `offline`, `""` or none.
+While they show offline, the later of that and their `seen` shows, so
+someone this page watched leave never reads as gone longer than that,
+however coarse the server's `seen`; it shows even where the server sent no
+`seen`, since it is what this page saw, not something the server claims. It
+is only ever the time a change was received: a status learnt after a
+sign-in, or held through a resume, changes from none, so someone who left
+while this page was away isn't given the time it came back. It is never
+yours. It stays through a resume as the same user, except for someone the
+resume's listing says nothing of (dropped with their `seen`, for the same
+reason), and any other sign-in drops it, as it does the statuses. A reload
+loses it, and the server's `seen` alone shows.
+
 In the composer, Enter sends and Shift+Enter starts a new line. On a phone or
 tablet (a touch screen with no pointer that hovers) Enter starts a new line
 instead, as mobile chat apps do, since an on-screen keyboard has no
@@ -967,9 +1011,11 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   it. A failed send restores the draft with those previews still removed;
   otherwise the draft forgets them once it is sent or cleared.
 - **Links as chips**: an Apron link in a message's text written as its URL,
-  in any of the three forms of
-  [PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links)
-  (one without `server` is the sending server's), reads as a mention that says
+  in either form of
+  [PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links),
+  `https://link.apron.chat/#…` or `apron:?…` (no other: `web+apron:?…` is
+  neither linked nor read as one; one without `server` is the sending
+  server's), reads as a mention that says
   in words what it is, from what this client knows: "Message in #general", a
   room's name, a thread's name "in #general", a known user as `@name`. Each but
   a user's leads with its kind's icon, the same icons as the link cards. A room
@@ -990,6 +1036,15 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   the link, in its `https` form with the server, so copying it gives a link
   that opens the same place anywhere, a click opens it here, and a modified
   click opens link.apron.chat in a new tab.
+- **Opening a link**: a plain click on any Apron link opens it here, read as
+  Appendix A.4 says: its keys as `application/x-www-form-urlencoded` pairs,
+  each key's first value (a repeat is ignored, so a key appended to a link
+  can't replace one before it, PROTOCOL.md §5.4), and keys it doesn't know
+  ignored. Only the first `server` counts: if this client can't reach it
+  (`wss:`, or `ws:` only to this device), the link isn't opened here at all,
+  rather than opening a later `server` that may have been appended to it; the
+  click is left to the browser. So is a link with a message but no room, or a
+  token but no server.
 - **Link cards**: a link to a message, room or thread that this client knows
   more of than where it is also shows as a card under the text, up to three
   per message, in the shape of a link preview. Its first line is where it is,

@@ -114,9 +114,11 @@ describe('bare links', () => {
 		expect(renderPlain('go to http://example.com')).toBe(`go to ${link('http://example.com')}`);
 	});
 
-	it('links Apron links in their apron: and web+apron: forms too, bare or in markdown (Appendix A.4)', () => {
+	it('links Apron links in their apron: form too, bare or in markdown (Appendix A.4)', () => {
 		expect(renderPlain('see apron:?room=ops&message=1 now')).toBe(`see ${link('apron:?room=ops&amp;message=1')} now`);
-		expect(renderPlain('web+apron:?room=ops.')).toBe(`${link('web+apron:?room=ops')}.`);
+		expect(renderPlain('APRON:?room=ops.')).toBe(`${link('APRON:?room=ops')}.`);
+		// No other form: not web+apron:, nor apron: inside another word or scheme.
+		for (const text of ['web+apron:?room=ops.', 'xapron:?room=ops', 'my_apron:?room=ops', 'x-apron:?room=ops', 'a.apron:?room=ops']) expect(renderPlain(text), text).toBe(text);
 		expect(renderMarkdown('[ops](apron:?room=ops)')).toContain('<a href="apron:?room=ops"');
 		// A bare scheme with no keys isn't a link, and other schemes stay unlinked.
 		expect(renderPlain('apron: is a scheme')).toBe('apron: is a scheme');

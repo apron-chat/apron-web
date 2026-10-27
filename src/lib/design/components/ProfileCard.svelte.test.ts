@@ -39,6 +39,20 @@ describe('ProfileCard', () => {
 		expect(box.querySelector('.ap-profcard-status')).toBeNull();
 	});
 
+	it('says when they were last seen under an offline status, as a time with its tooltip, and never otherwise (§4.5.2)', () => {
+		const seen = { text: 'Last seen 3h ago', datetime: '2024-08-28T00:06:40.000Z', title: 'Last seen 2024-08-27 20:06:40' };
+		let box = render({ userId: 'bo', status: 'offline', seen, seenTestid: 'seen' });
+		const time = box.querySelector<HTMLTimeElement>('[data-testid="seen"]')!;
+		expect([time.tagName, time.textContent, time.getAttribute('datetime'), time.title]).toEqual(['TIME', 'Last seen 3h ago', seen.datetime, seen.title]);
+		expect(box.querySelector('.ap-profcard-status')!.compareDocumentPosition(time) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		// A seen kept from before they came back online says nothing now; and none is yours.
+		for (const props of [{ status: 'online' }, { status: 'idle' }, { status: 'dnd' }, {}, { status: 'offline', you: true }]) {
+			dom.unmount();
+			box = render({ userId: 'bo', seen, ...props });
+			expect(box.querySelector('.ap-profcard-seen'), JSON.stringify(props)).toBeNull();
+		}
+	});
+
 	it('shows a bio as plain text, after the warning about a shared name', () => {
 		const box = render({ userId: 'ada', bio: 'Counts <b>things</b>.\nhttps://example.com', sharesName: true, bioTestid: 'bio' });
 		const bio = box.querySelector<HTMLElement>('[data-testid="bio"]')!;
