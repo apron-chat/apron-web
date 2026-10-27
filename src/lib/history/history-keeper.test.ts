@@ -3,8 +3,10 @@ import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChatClient, timelineMessages, type ClientSnapshot } from '$lib/protocol/client';
 import { MemoryProtocolServer } from '$lib/preview/memory-server';
-import { openHistory, readHistory, writeHistory } from './history-db';
-import { HistoryKeeper, restoredState, type HistoryClient } from './history-keeper';
+import { readKept } from '$lib/test/kept-history';
+import { openHistory, writeHistory } from './history-db';
+import { HistoryKeeper, plannedRoom, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
+import type { RoomSync } from '$lib/protocol/client';
 
 const URL = 'wss://chat.example/';
 const clients: ChatClient[] = [];
@@ -32,7 +34,8 @@ function saved(client: ChatClient): HistoryClient {
 		message: (id) => client.message(id),
 		roomRecord: (id) => client.roomRecord(id),
 		restore: (state) => client.restore(state),
-		beforeFreshSession: (hook) => client.beforeFreshSession(hook)
+		beforeFreshSession: (hook) => client.beforeFreshSession(hook),
+		olderPagesFrom: (source) => client.olderPagesFrom(source)
 	};
 }
 
@@ -58,7 +61,7 @@ describe('HistoryKeeper', () => {
 		await keeper.stop();
 		first.stop();
 
-		const kept = await readHistory(await openHistory(indexedDB), URL);
+		const kept = await readKept(await openHistory(indexedDB), URL);
 		expect(kept?.meta).toMatchObject({ userId: 'preview_guest', complete: true });
 		expect(kept?.rooms.find((row) => row.room === 'general')?.sync?.checkpoint).toBeDefined();
 
@@ -119,10 +122,53 @@ describe('HistoryKeeper', () => {
 		client.start();
 		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
-		const kept = await readHistory(db, URL);
+		const kept = await readKept(db, URL);
 		expect(kept?.messages.map((message) => message.message_id)).not.toContain(ghost.message_id);
 		expect(kept?.messages.filter((message) => message.room_id === 'general').map((message) => message.message_id)).toEqual(ids(client.snapshot(), 'general'));
 		await keeper.stop();
+	});
+
+	it('restores only each room’s newest, and pages what is older from this device before the server', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		for (let n = 0; n < 400; n++) server.post('general', 'ada', `#${n}`);
+		const indexedDB = new IDBFactory();
+		const first = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(first);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(first));
+		first.start();
+		await waitFor(() => Boolean(room(first.snapshot(), 'general')?.loaded));
+		while (room(first.snapshot(), 'general')?.olderAvailable) await first.loadOlder('general');
+		const all = ids(first.snapshot(), 'general');
+		expect(all.length).toBeGreaterThan(RESTORE_WINDOW);
+		await keeper.stop();
+		first.stop();
+
+		const from = server.frames.length;
+		const second = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(second);
+		const again = new HistoryKeeper({ indexedDB, locks: null });
+		again.watch(saved(second));
+		second.start();
+		await waitFor(() => Boolean(room(second.snapshot(), 'general')?.loaded));
+		const held = ids(second.snapshot(), 'general');
+		expect(held.length).toBeLessThanOrEqual(RESTORE_WINDOW);
+		expect(held).toEqual(all.slice(-held.length));
+		// Written while holding only the newest: what is kept still reaches as far down.
+		server.post('general', 'grace', 'One more');
+		await waitFor(() => ids(second.snapshot(), 'general').length === held.length + 1);
+		await again.stop();
+		second.stop();
+
+		const third = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(third);
+		new HistoryKeeper({ indexedDB, locks: null }).watch(saved(third));
+		third.start();
+		await waitFor(() => Boolean(room(third.snapshot(), 'general')?.loaded));
+		while (room(third.snapshot(), 'general')?.olderAvailable) await third.loadOlder('general');
+		expect(ids(third.snapshot(), 'general').slice(0, -1)).toEqual(all);
+		// Every older page came from this device: the server was asked only for what came since.
+		expect(historyOf(server, 'general', from).every((params) => params?.after !== undefined)).toBe(true);
 	});
 
 	it('keeps each server’s history apart, and a server switched back to goes on from its own', async () => {
@@ -142,8 +188,8 @@ describe('HistoryKeeper', () => {
 		await waitFor(() => client.snapshot().authenticated && Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
 		const db = await openHistory(indexedDB);
-		expect((await readHistory(db, URL))?.messages.filter((message) => message.room_id === 'general').map((message) => message.message_id)).toEqual(had);
-		expect((await readHistory(db, OTHER))?.messages.length).toBeGreaterThan(0);
+		expect((await readKept(db, URL))?.messages.filter((message) => message.room_id === 'general').map((message) => message.message_id)).toEqual(had);
+		expect((await readKept(db, OTHER))?.messages.length).toBeGreaterThan(0);
 
 		const posted = servers[URL].post('general', 'grace', 'While you were on the other server');
 		const from = servers[URL].frames.length;
@@ -152,7 +198,7 @@ describe('HistoryKeeper', () => {
 		expect(ids(client.snapshot(), 'general')).toEqual([...had, posted]);
 		expect(historyOf(servers[URL], 'general', from).every((params) => params?.after !== undefined)).toBe(true);
 		await keeper.flush();
-		expect((await readHistory(db, OTHER))?.messages.length).toBeGreaterThan(0);
+		expect((await readKept(db, OTHER))?.messages.length).toBeGreaterThan(0);
 		await keeper.stop();
 	});
 
@@ -186,7 +232,7 @@ describe('HistoryKeeper', () => {
 		client.start();
 		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
-		expect(await readHistory(await openHistory(indexedDB), URL)).toBeUndefined();
+		expect(await readKept(await openHistory(indexedDB), URL)).toBeUndefined();
 		await keeper.stop();
 	});
 
@@ -201,12 +247,12 @@ describe('HistoryKeeper', () => {
 		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
 		const db = await openHistory(indexedDB);
-		expect(await readHistory(db, URL)).toBeDefined();
+		expect(await readKept(db, URL)).toBeDefined();
 		await keeper.forget(URL);
-		expect(await readHistory(db, URL)).toBeUndefined();
+		expect(await readKept(db, URL)).toBeUndefined();
 		await keeper.setRetention(null);
 		await keeper.flush();
-		expect(await readHistory(db, URL)).toBeUndefined();
+		expect(await readKept(db, URL)).toBeUndefined();
 		await keeper.stop();
 	});
 });
@@ -260,42 +306,47 @@ describe('HistoryKeeper in two tabs', () => {
 		await one.stop();
 		await waitFor(() => (two as unknown as { writer?: { granted: boolean } }).writer?.granted === true);
 		await two.flush();
-		const kept = await readHistory(await openHistory(indexedDB), URL);
+		const kept = await readKept(await openHistory(indexedDB), URL);
 		expect(kept?.messages.filter((message) => message.room_id === 'general').map((message) => message.message_id)).toEqual(ids(second.snapshot(), 'general'));
 		await two.stop();
 	});
 });
 
-describe('restoredState', () => {
+describe('plannedRoom and restoredState', () => {
 	const day = 24 * 60 * 60 * 1000;
 	const now = Date.UTC(2026, 9, 27);
 	const at = (daysAgo: number) => String(now - daysAgo * day);
-	const message = (id: string, room = 'general') => ({ message_id: id, log_id: id, room_id: room, from: { user_id: 'ada' } });
-	const kept = (sync: Record<string, unknown>, messages = [message(at(40)), message(at(10))]) => ({
-		meta: { server: URL, userId: 'ada', complete: true, users: [], version: 1, savedAt: now },
-		rooms: [{ server: URL, room: 'general', record: { room_id: 'general' }, sync: { id: 'general', ...sync } }],
-		messages, reactions: [{ log_id: at(40), message_id: at(40), room_id: 'general', from: { user_id: 'bob' }, emojis: ['👍'] }], memberships: []
+	const cutoff = now - 30 * day;
+
+	it('starts a room no lower than the cutoff, and over when it isn’t caught up since', () => {
+		expect(plannedRoom({ id: 'general', checkpoint: at(1), floor: at(100) }, cutoff)).toEqual({ sync: { id: 'general', checkpoint: at(1), floor: at(100), olderBefore: String(cutoff), hasOlder: true }, from: cutoff });
+		expect(plannedRoom({ id: 'general', checkpoint: at(1), olderBefore: at(2) }, cutoff)).toEqual({ sync: { id: 'general', checkpoint: at(1), olderBefore: at(2) } });
+		expect(plannedRoom({ id: 'general', checkpoint: at(31) }, cutoff)).toBeUndefined();
 	});
 
-	it('keeps what is within the retention, and loads what is older from the server', () => {
-		const state = restoredState(kept({ checkpoint: at(1), floor: at(100) }), 30 * day, now);
-		expect(state.records.messages.map((record) => record.message_id)).toEqual([at(10)]);
-		expect(state.records.reactions).toEqual([]);
-		expect(state.rooms[0]).toMatchObject({ checkpoint: at(1), olderBefore: String(now - 30 * day), hasOlder: true });
+	it('keeps everything without a cutoff, or where positions are not times', () => {
+		expect(plannedRoom({ id: 'general', checkpoint: at(31) }, undefined)).toEqual({ sync: { id: 'general', checkpoint: at(31) } });
+		expect(plannedRoom({ id: 'counted', checkpoint: '20' }, cutoff)).toEqual({ sync: { id: 'counted', checkpoint: '20' } });
+	});
+
+	it('holds a room’s newest as its oldest page, and says how far down what is kept goes', () => {
+		const message = (log: string) => ({ log, kind: 'message' as const, record: { message_id: log, log_id: log, room_id: 'general', from: { user_id: 'ada' } } });
+		const meta = { server: URL, userId: 'ada', complete: true, users: [], version: 3, savedAt: now };
+		const row = (room: string, sync: RoomSync) => ({ server: URL, room, record: { room_id: room }, sync });
+		const { state, coverage } = restoredState({
+			meta, skipped: 0,
+			rooms: [
+				{ row: row('general', { id: 'general', checkpoint: at(1), floor: at(100) }), entries: [message(at(3)), message(at(2))], older: true },
+				{ row: row('quiet', { id: 'quiet', checkpoint: at(1), olderBefore: at(5), hasOlder: false }), entries: [message(at(5))], older: false }
+			]
+		}, 30 * day, now);
+		expect(state.rooms).toEqual([
+			{ id: 'general', checkpoint: at(1), floor: at(100), olderBefore: at(3), hasOlder: true },
+			{ id: 'quiet', checkpoint: at(1), olderBefore: at(5), hasOlder: false }
+		]);
+		expect(coverage).toEqual(new Map([['general', { from: String(cutoff), older: true }]]));
+		expect(state.records.messages.map((record) => record.message_id)).toEqual([at(3), at(2), at(5)]);
 		expect(state.complete).toBe(true);
-	});
-
-	it('starts over a room not caught up since before the cutoff, and lists every room again', () => {
-		const state = restoredState(kept({ checkpoint: at(31) }), 30 * day, now);
-		expect(state.rooms).toEqual([]);
-		expect(state.records.messages).toEqual([]);
-		expect(state.complete).toBe(false);
-	});
-
-	it('keeps everything without a retention, or where positions are not times', () => {
-		expect(restoredState(kept({ checkpoint: at(31) }), undefined, now).records.messages).toHaveLength(2);
-		const counted = restoredState(kept({ checkpoint: '20' }, [message('5'), message('19')]), 30 * day, now);
-		expect(counted.records.messages).toHaveLength(2);
-		expect(counted.rooms[0].olderBefore).toBeUndefined();
+		expect(restoredState({ meta, skipped: 1, rooms: [] }, 30 * day, now).state.complete).toBe(false);
 	});
 });

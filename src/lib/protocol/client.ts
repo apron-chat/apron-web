@@ -294,6 +294,8 @@ export class ChatClient {
 	private readonly retainedRooms = new Map<string, RoomState>();
 	/** What runs before a new session connects (`beforeFreshSession`), whether one is due, and the run under way. */
 	private freshHook: (() => Promise<void>) | undefined;
+	/** Where older pages come from before the server (`olderPagesFrom`). */
+	private olderSource: ((roomId: string, before: string, limit: number) => Promise<JsonObject | undefined>) | undefined;
 	private fresh = true;
 	private preparing: Promise<void> | undefined;
 	/**
@@ -836,6 +838,14 @@ export class ChatClient {
 	 */
 	beforeFreshSession(hook: (() => Promise<void>) | undefined): void {
 		this.freshHook = hook;
+	}
+
+	/**
+	 * Sets where `loadOlder` looks first for a page older than what a room holds: what this device kept
+	 * (`$lib/history`), answering as `history` would, or undefined where it has none, when the server pages.
+	 */
+	olderPagesFrom(source: ((roomId: string, before: string, limit: number) => Promise<JsonObject | undefined>) | undefined): void {
+		this.olderSource = source;
 	}
 
 	/** Calls `listener` with each change to the stored records until the returned function is called (`ProtocolStore.observe`). */
@@ -2646,6 +2656,14 @@ export class ChatClient {
 		this.emit();
 		try {
 			const before = decrement(room.olderBefore);
+			// What this device kept first: it says nothing new of the server's log, so only its records apply.
+			const kept = this.olderSource ? await this.olderSource(room.id, before, THREAD_PAGE_SIZE).catch(() => undefined) : undefined;
+			if (stale()) return;
+			if (kept && validHistoryMetadata(kept)) {
+				this.applyPage(room, kept);
+				this.noteOlderPage(room, kept);
+				return;
+			}
 			const result = await this.historyQueue.request(room.id, { room_id: room.id, before, limit: THREAD_PAGE_SIZE }, { retry: true }).promise;
 			if (stale()) return;
 			if (!validHistoryMetadata(result)) throw new Error('Invalid history response');

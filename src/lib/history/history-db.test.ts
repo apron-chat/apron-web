@@ -3,7 +3,8 @@ import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import type { StoreChange } from '$lib/protocol/reducer';
 import type { MessageRecord } from '$lib/protocol/types';
-import { openHistory, pruneHistory, readHistory, writeHistory, type HistoryWrite } from './history-db';
+import { readKept } from '$lib/test/kept-history';
+import { openHistory, pruneHistory, writeHistory, type HistoryWrite } from './history-db';
 
 const SERVER = 'wss://chat.example/';
 const day = 24 * 60 * 60 * 1000;
@@ -34,14 +35,14 @@ describe('writeHistory', () => {
 			{ kind: 'message', record: message(at(1, 3), at(1, 3), 'elsewhere') }
 		];
 		const version = await writeHistory(db, SERVER, write({ changes }), new Set(['general']));
-		const kept = await readHistory(db, SERVER);
+		const kept = await readKept(db, SERVER);
 		expect(kept?.meta.version).toBe(version);
 		expect(kept?.messages).toEqual([message(first.message_id, at(1), 'general', 'edited')]);
 		expect(kept?.reactions.map((set) => set.emojis)).toEqual([['🎉']]);
 
 		// Moved to a room that isn't kept: gone from the one it left.
 		await writeHistory(db, SERVER, write({ changes: [{ kind: 'message', record: message(first.message_id, at(0), 'elsewhere') }] }), new Set(['general']));
-		expect((await readHistory(db, SERVER))?.messages).toEqual([]);
+		expect((await readKept(db, SERVER))?.messages).toEqual([]);
 	});
 
 	it('drops what a bound or a rebuild drops, and a rebuild’s sync with it', async () => {
@@ -52,13 +53,13 @@ describe('writeHistory', () => {
 			rooms: [{ server: SERVER, room: 'general', record: { room_id: 'general' }, sync: { id: 'general', checkpoint: at(1) } }]
 		}), new Set());
 		await writeHistory(db, SERVER, write({ changes: [{ kind: 'evict', room: 'general', floor: at(2) }] }), new Set(['general']));
-		let kept = await readHistory(db, SERVER);
+		let kept = await readKept(db, SERVER);
 		expect(kept?.messages.map((record) => record.message_id)).toEqual([at(1)]);
 		expect(kept?.memberships).toEqual([]);
 		expect(kept?.reactions).toHaveLength(1);
 
 		await writeHistory(db, SERVER, write({ changes: [{ kind: 'membership', entry: membership }, { kind: 'clearRoom', room: 'general' }] }), new Set(['general']));
-		kept = await readHistory(db, SERVER);
+		kept = await readKept(db, SERVER);
 		expect(kept?.messages).toEqual([]);
 		expect(kept?.reactions).toEqual([]);
 		expect(kept?.memberships).toEqual([membership]);
@@ -70,13 +71,13 @@ describe('writeHistory', () => {
 		const room = (id: string) => ({ room: id, messages: [message(at(1), at(1), id)], reactions: [], memberships: [] });
 		await writeHistory(db, SERVER, write({ whole: [room('a'), room('b')], rooms: ['a', 'b'].map((id) => ({ server: SERVER, room: id, sync: { id } })) }), new Set());
 		await writeHistory(db, SERVER, write({ keepOnly: ['a'] }), new Set(['a', 'b']));
-		expect((await readHistory(db, SERVER))?.rooms.map((row) => row.room)).toEqual(['a']);
+		expect((await readKept(db, SERVER))?.rooms.map((row) => row.room)).toEqual(['a']);
 		await writeHistory(db, 'wss://other.example/', write({ whole: [room('c')] }), new Set());
 		await writeHistory(db, SERVER, write({ reset: true }), new Set());
-		const kept = await readHistory(db, SERVER);
+		const kept = await readKept(db, SERVER);
 		expect(kept?.rooms).toEqual([]);
 		expect(kept?.messages).toEqual([]);
-		expect((await readHistory(db, 'wss://other.example/'))?.messages).toHaveLength(1);
+		expect((await readKept(db, 'wss://other.example/'))?.messages).toHaveLength(1);
 	});
 });
 
@@ -94,7 +95,7 @@ describe('pruneHistory', () => {
 		}), new Set());
 		// `at(40)` was edited a day ago: its row sits at the edit, and stays.
 		await pruneHistory(db, now - 30 * day);
-		const kept = await readHistory(db, SERVER);
+		const kept = await readKept(db, SERVER);
 		expect(kept?.messages.map((record) => record.message_id).sort()).toEqual([at(40), '5']);
 		expect(kept?.reactions.map((set) => set.emojis)).toEqual([['👍']]);
 		expect(kept?.memberships).toEqual([]);

@@ -12,9 +12,10 @@
  * guest's; signing out removes it.
  */
 import type { ClientSnapshot, KeptState, RestoredState, RoomSync } from '$lib/protocol/client-types';
-import type { StoreChange, StoredRecords } from '$lib/protocol/reducer';
-import type { MessageRecord, RoomRecord } from '$lib/protocol/types';
-import { forgetHistory, historyVersion, openHistory, pruneHistory, readHistory, timeLike, writeHistory, type Databases, type KeptHistory, type RoomRow } from './history-db';
+import { compareLogIds, type StoreChange, type StoredRecords } from '$lib/protocol/reducer';
+import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types';
+import { forgetHistory, historyVersion, openHistory, pageHistory, pruneHistory, readHistory, timeLike, writeHistory, type Databases, type KeptHistory, type RoomRow } from './history-db';
+import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
 export interface HistoryClient {
@@ -28,6 +29,7 @@ export interface HistoryClient {
 	roomRecord(roomId: string): RoomRecord | undefined;
 	restore(state: RestoredState): boolean;
 	beforeFreshSession(hook: (() => Promise<void>) | undefined): void;
+	olderPagesFrom(source: ((roomId: string, before: string, limit: number) => Promise<JsonObject | undefined>) | undefined): void;
 }
 
 /** The longest a batch of changes waits to be written. */
@@ -35,50 +37,67 @@ export const FLUSH_MS = 2000;
 
 type Locks = Pick<LockManager, 'request'>;
 
+/** How many of a room's newest entries a restore reads back: what opens it; older ones page in as it scrolls back. */
+export const RESTORE_WINDOW = 300;
+
 /**
- * What was kept, as the client restores it: the rooms with a sync and their records. With a retention
- * (`retentionMs`), in rooms whose positions are times: what is older goes, the room's oldest page starts at the
- * cutoff with older ones to load from the server, and a room not caught up since before the cutoff starts over.
+ * Where a room's kept log reaches down to (`from`, its start when undefined), and whether the server has older
+ * than that (`older`): below the oldest page the client holds, older pages come from here first (`olderPage`).
  */
-export function restoredState(kept: KeptHistory, retentionMs: number | undefined, now: number): RestoredState {
+export interface Coverage {
+	from?: string;
+	older: boolean;
+}
+
+/**
+ * How a kept room comes back with a retention cutoff, in rooms whose positions are times: its sync, starting no
+ * lower than the cutoff (older pages load from the server), and where to read it from. Undefined when it isn't
+ * caught up since before the cutoff: paging forward from there would fetch everything since, so it starts over.
+ */
+export function plannedRoom(sync: RoomSync, cutoff: number | undefined): { sync: RoomSync; from?: number } | undefined {
+	if (cutoff === undefined || !timeLike(sync)) return { sync };
+	const synced = sync.checkpoint ?? sync.loadCheckpoint;
+	if (synced !== undefined && Number(synced) < cutoff) return undefined;
+	const oldest = sync.olderBefore ?? sync.floor;
+	return oldest === undefined || Number(oldest) < cutoff ? { sync: { ...sync, olderBefore: String(cutoff), hasOlder: true }, from: cutoff } : { sync };
+}
+
+/**
+ * What was kept, as the client restores it: each room planned (`plannedRoom`) with the newest of its log. A
+ * room with more kept below that holds only its newest, as if loaded newest first, and its `Coverage` says how
+ * far down the rest goes.
+ */
+export function restoredState(kept: KeptHistory, retentionMs: number | undefined, now: number): { state: RestoredState; coverage: Map<string, Coverage> } {
 	const cutoff = retentionMs === undefined ? undefined : now - retentionMs;
-	const rooms = new Map<string, RoomSync>();
-	const records: RoomRecord[] = [];
-	let dropped = false;
-	for (const row of kept.rooms) {
-		let sync = row.sync;
-		if (!sync) continue;
-		if (cutoff !== undefined && timeLike(sync)) {
-			const synced = sync.checkpoint ?? sync.loadCheckpoint;
-			// Paging forward from before the cutoff would fetch everything since: it starts over from its newest page.
-			if (synced !== undefined && Number(synced) < cutoff) {
-				dropped = true;
-				continue;
-			}
-			const oldest = sync.olderBefore ?? sync.floor;
-			if (oldest === undefined || Number(oldest) < cutoff) sync = { ...sync, olderBefore: String(cutoff), hasOlder: true };
+	const rooms: RoomSync[] = [];
+	const records: RestoredState['records'] = { rooms: [], messages: [], reactions: [], memberships: [] };
+	const coverage = new Map<string, Coverage>();
+	for (const { row, entries, older } of kept.rooms) {
+		const planned = row.sync && plannedRoom(row.sync, cutoff);
+		if (!planned) continue;
+		let sync = planned.sync;
+		if (older && entries.length) {
+			coverage.set(row.room, { ...(sync.olderBefore ?? sync.floor ? { from: sync.olderBefore ?? sync.floor } : {}), older: sync.hasOlder ?? false });
+			sync = { ...sync, olderBefore: entries[0].log, hasOlder: true };
 		}
-		rooms.set(row.room, sync);
-		if (row.record) records.push(row.record);
+		rooms.push(sync);
+		if (row.record) records.rooms.push(row.record);
+		for (const entry of entries) {
+			if (entry.kind === 'message') records.messages.push(entry.record);
+			else if (entry.kind === 'reaction') records.reactions.push(entry.record);
+			else if (entry.kind === 'membership') records.memberships.push(entry.record);
+		}
 	}
-	const retained = (room: string, log: string) => {
-		const sync = rooms.get(room);
-		return sync !== undefined && (cutoff === undefined || !timeLike(sync) || Number(log) >= cutoff);
-	};
-	const messages = kept.messages.filter((message) => retained(message.room_id, message.log_id));
-	const ids = new Set(messages.map((message) => message.message_id));
 	return {
-		userId: kept.meta.userId,
-		// A room dropped can't be told apart from one with no news: the next listing lists them all.
-		complete: kept.meta.complete && !dropped,
-		rooms: [...rooms.values()],
-		users: kept.meta.users,
-		records: {
-			rooms: records,
-			messages,
-			reactions: kept.reactions.filter((set) => ids.has(set.message_id)),
-			memberships: kept.memberships.filter((entry) => retained(entry.room_id, entry.log_id))
-		}
+		state: {
+			userId: kept.meta.userId,
+			// A room dropped can't be told apart from one with no news: the next listing lists them all.
+			complete: kept.meta.complete && kept.skipped === 0 && rooms.length === kept.rooms.length,
+			rooms,
+			users: kept.meta.users,
+			records
+		},
+		coverage
 	};
 }
 
@@ -103,6 +122,10 @@ export class HistoryKeeper {
 	private queue: StoreChange[] = [];
 	/** What this page knows is kept: from what it restored, then from each write. */
 	private known: Known | undefined;
+	/** How far down each room's kept log reaches below what the client holds, for the server `known` names. */
+	private coverage = new Map<string, Coverage>();
+	/** The ranges of each room's log served from here (`olderPage`): their records are kept already, so their changes aren't written again. */
+	private served = new Map<string, Array<[string, string]>>();
 	/** The writer: who for, and whether this tab holds the lock. */
 	private writer: { server: string; userId: string; granted: boolean; taking?: Promise<void>; release?: () => void; synced: Set<string>; reset: boolean; swept: boolean; rows: Map<string, string>; users?: string } | undefined;
 	private timer: ReturnType<typeof setTimeout> | undefined;
@@ -141,13 +164,20 @@ export class HistoryKeeper {
 		const server = client.url;
 		if (!this.keeping || !client.keptSessionFor(server)) return;
 		try {
-			const kept = await readHistory(await this.open(), server);
+			const now = this.now();
+			const cutoff = this.retentionMs === undefined || this.retentionMs === null ? undefined : now - this.retentionMs;
+			const kept = await readHistory(await this.open(), server, RESTORE_WINDOW, (row) => {
+				const planned = plannedRoom(row.sync!, cutoff);
+				return planned && (planned.from !== undefined ? { from: planned.from } : {});
+			});
 			// Moved on to another server meanwhile: that one's session restores its own.
 			if (!kept || client.url !== server) return;
-			const state = restoredState(kept, this.retentionMs ?? undefined, this.now());
+			const { state, coverage } = restoredState(kept, this.retentionMs ?? undefined, now);
 			// Too late, the client started without it: what is kept is no longer what it has.
 			if (!client.restore(state)) return;
 			this.known = { server: client.url, userId: state.userId, version: kept.meta.version, synced: new Set(state.rooms.map((room) => room.id)) };
+			this.coverage = coverage;
+			this.served.clear();
 		} catch (cause) {
 			console.warn('[apron] kept history could not be read', cause);
 		}
@@ -162,10 +192,51 @@ export class HistoryKeeper {
 		this.unfollow();
 		this.client = client;
 		client.beforeFreshSession(() => this.restore(client));
-		this.unwatch.push(() => client.beforeFreshSession(undefined));
+		client.olderPagesFrom((roomId, before, limit) => this.olderPage(client.url, roomId, before, limit));
+		this.unwatch.push(() => client.beforeFreshSession(undefined), () => client.olderPagesFrom(undefined));
 		this.unwatch.push(client.observeStore((change) => this.changed(change)));
 		this.unwatch.push(client.subscribe((snapshot) => this.consider(snapshot)));
 		void this.prune();
+	}
+
+	/**
+	 * A page of a room's history older than what the client holds, from what is kept here, as `history` would
+	 * answer it: undefined where nothing kept reaches (`Coverage`), or what is kept changed under this tab, so
+	 * the server pages instead. Its `more` goes on to the server's older ones once what is kept runs out.
+	 */
+	async olderPage(server: string, roomId: string, before: string, limit: number): Promise<JsonObject | undefined> {
+		const cover = this.coverage.get(roomId);
+		if (!cover || this.known?.server !== server || (cover.from !== undefined && compareLogIds(before, cover.from) < 0)) return undefined;
+		try {
+			const { page, more, version } = await pageHistory(await this.open(), server, roomId, { before, limit }, cover.from === undefined ? undefined : Number(cover.from));
+			// Another tab wrote meanwhile: what is kept may no longer be what this one restored from.
+			if (!this.writer?.granted && version !== this.known?.version) {
+				this.coverage.clear();
+				return undefined;
+			}
+			if (!page.length) return undefined;
+			const ranges = this.served.get(roomId) ?? [];
+			ranges.push([page[0].log, page.at(-1)!.log]);
+			this.served.set(roomId, ranges);
+			return historyResult(page, more || cover.older, { latest: page.at(-1)!.log, history: page[0].log });
+		} catch {
+			return undefined;
+		}
+	}
+
+	/**
+	 * A room's sync as kept: where what is kept reaches deeper than what the client holds (a restore holds only
+	 * the newest), the oldest page is that; once the client holds as deep, its own.
+	 */
+	private keptSync(roomId: string, sync: RoomSync): RoomSync {
+		const cover = this.coverage.get(roomId);
+		if (!cover) return sync;
+		if (sync.olderBefore !== undefined && (cover.from === undefined || compareLogIds(cover.from, sync.olderBefore) < 0)) {
+			const { olderBefore: _held, hasOlder: _more, ...rest } = sync;
+			return { ...rest, ...(cover.from !== undefined ? { olderBefore: cover.from } : {}), ...(cover.older ? { hasOlder: true } : {}) };
+		}
+		this.coverage.delete(roomId);
+		return sync;
 	}
 
 	/** Writes what is waiting now, as the page goes: once a writer this tab holds the lock for is ready. */
@@ -223,11 +294,24 @@ export class HistoryKeeper {
 			// Signed out, another server or another account: the client no longer has what is kept.
 			this.endWriter();
 			this.known = undefined;
+			this.coverage.clear();
+			this.served.clear();
 			this.queue = [];
 			return;
 		}
+		// What a page from here brings into the client is here already.
+		if (this.kept(change)) return;
 		// A rebuild drops the room's sync with its records: written again once the room settles, whatever it says.
-		if (change.kind === 'clearRoom') this.writer?.rows.delete(change.room);
+		if (change.kind === 'clearRoom') {
+			this.writer?.rows.delete(change.room);
+			this.coverage.delete(change.room);
+			this.served.delete(change.room);
+		}
+		// What is kept below a room's bound goes with it.
+		if (change.kind === 'evict') {
+			const cover = this.coverage.get(change.room);
+			if (cover && (cover.from === undefined || compareLogIds(cover.from, change.floor) < 0)) this.coverage.set(change.room, { ...cover, from: change.floor });
+		}
 		// Changes matter only on top of what is kept: with nothing known of it, whatever is written goes in whole.
 		if (!this.writer?.granted && !this.known) return;
 		// A reaction set is kept with its message, in the room the message is in now.
@@ -238,6 +322,14 @@ export class HistoryKeeper {
 			this.queue.push(change);
 		}
 		this.schedule();
+	}
+
+	/** A change to a record of a range served from here (`olderPage`), which is kept as it is. */
+	private kept(change: StoreChange): boolean {
+		const record = change.kind === 'message' ? change.record : change.kind === 'reaction' ? change.set : change.kind === 'membership' ? change.entry : undefined;
+		const room = change.kind === 'reaction' ? this.client?.message(change.set.message_id)?.room_id ?? change.set.room_id : record?.room_id;
+		const ranges = room === undefined ? undefined : this.served.get(room);
+		return Boolean(record && ranges?.some(([first, last]) => compareLogIds(record.log_id, first) >= 0 && compareLogIds(record.log_id, last) <= 0));
 	}
 
 	/** Each snapshot: a session saved here starts a writer for its account; a writer running goes on. */
@@ -266,7 +358,9 @@ export class HistoryKeeper {
 				writer.synced = new Set(known.synced);
 				writer.reset = false;
 			} else {
+				// Written whole: what is kept will be what the client holds, and reach no deeper.
 				this.queue = [];
+				this.coverage.clear();
 			}
 			writer.granted = true;
 			this.schedule(0);
@@ -342,7 +436,7 @@ export class HistoryKeeper {
 		for (const room of state.rooms) {
 			if (!room.sync || !synced.has(room.id)) continue;
 			const record = client.roomRecord(room.id);
-			const row: RoomRow = { server: writer.server, room: room.id, ...(record ? { record } : {}), sync: room.sync };
+			const row: RoomRow = { server: writer.server, room: room.id, ...(record ? { record } : {}), sync: this.keptSync(room.id, room.sync) };
 			const json = JSON.stringify(row);
 			if (writer.rows.get(room.id) === json) continue;
 			rows.push(row);
@@ -351,7 +445,10 @@ export class HistoryKeeper {
 		// Once the joined set is complete, a room kept and no longer joined goes, and so, the first time, does
 		// anything kept from before that isn't joined now.
 		const dropped = state.complete ? [...synced].filter((room) => !joined.has(room)) : [];
-		for (const room of dropped) synced.delete(room);
+		for (const room of dropped) {
+			synced.delete(room);
+			this.coverage.delete(room);
+		}
 		const sweep = state.complete && !writer.swept ? [...joined] : undefined;
 		const users = JSON.stringify(state.users);
 		if (!changes.length && !whole.length && !rows.length && !dropped.length && !sweep && !writer.reset && users === writer.users) return;

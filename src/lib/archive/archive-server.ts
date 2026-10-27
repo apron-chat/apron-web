@@ -1,7 +1,8 @@
 import { memorySocket, type MemoryHost, type MemorySocket } from '$lib/preview/memory-socket';
 import type { WebSocketFactory } from '$lib/protocol/client-types';
+import { historyResult, pageQuery, roomLog, sliceLog, type LogEntry } from '$lib/history/log';
 import { compareLogIds } from '$lib/protocol/reducer';
-import { cloneJson, isJsonObject, isLogId, type Identity, type JsonObject, type MessageRecord, type WireFrame } from '$lib/protocol/types';
+import { cloneJson, isJsonObject, type Identity, type JsonObject, type MembershipEntry, type MessageRecord, type ReactionSet, type WireFrame } from '$lib/protocol/types';
 import type { Archive, ArchiveRoom } from './archive';
 
 /** What it advertises (§3.1): enough to list and read, nothing to write with. */
@@ -9,18 +10,6 @@ export const ARCHIVE_CAPABILITIES = ['history', 'rooms', 'reactions', 'ext', 'ex
 
 /** Who is reading an export that was made signed out. */
 const VIEWER: Identity = { user_id: 'archive_viewer', name: 'Viewer' };
-
-/** The most changes one `history` page holds. */
-const PAGE_LIMIT = 200;
-
-type Kind = 'rooms' | 'messages' | 'reactions' | 'memberships';
-
-/** One record of a room's log, as `history` sends it. */
-interface Entry {
-	log_id: string;
-	kind: Kind;
-	record: JsonObject;
-}
 
 /**
  * A server in this page that serves one export (`parseArchive`) read-only:
@@ -33,51 +22,44 @@ interface Entry {
  */
 export class ArchiveServer {
 	private readonly rooms = new Map<string, ArchiveRoom>();
-	/** Each room's log, ascending by `log_id`. */
-	private readonly logs = new Map<string, Entry[]>();
+	/** Each room's log, ascending by `log_id` (`$lib/history/log`). */
+	private readonly logs = new Map<string, LogEntry[]>();
 	/** Every message, for the `reply_to` snapshots `history` embeds (§3.5.4). */
 	private readonly messages = new Map<string, MessageRecord>();
 	private readonly users = new Map<string, Identity>();
 
 	constructor(private readonly archive: Archive) {
 		for (const user of archive.users) this.users.set(user.user_id, user);
-		for (const room of archive.rooms) {
-			this.rooms.set(room.record.room_id, room);
-			this.logs.set(room.record.room_id, []);
-		}
 		for (const message of archive.messages) {
 			const kept = this.messages.get(message.message_id);
 			if (!kept || compareLogIds(message.log_id, kept.log_id) > 0) this.messages.set(message.message_id, message);
 		}
-		for (const message of this.messages.values()) this.log(message.room_id, 'messages', message);
-		const reactions = new Map<string, JsonObject & { reactions: JsonObject[] }>();
-		for (const set of archive.reactions) {
-			const room = this.messages.get(set.message_id)?.room_id ?? set.room_id;
-			if (room === undefined) continue;
-			const key = `${set.message_id}\n${set.log_id}`;
-			const record = reactions.get(key) ?? { log_id: set.log_id, message_id: set.message_id, room_id: room, reactions: [] };
-			record.reactions.push({ from: set.from, emojis: set.emojis });
-			reactions.set(key, record);
-		}
-		for (const record of reactions.values()) this.log(String(record.room_id), 'reactions', record);
-		const memberships = new Map<string, JsonObject & { members: JsonObject[] }>();
-		for (const entry of archive.memberships) {
-			const key = `${entry.room_id}\n${entry.log_id}`;
-			const record = memberships.get(key) ?? { log_id: entry.log_id, room_id: entry.room_id, members: [] };
-			record.members.push({ user: entry.user, joined: entry.joined });
-			memberships.set(key, record);
-		}
-		for (const record of memberships.values()) this.log(String(record.room_id), 'memberships', record);
-		for (const [id, log] of this.logs) {
-			const room = this.rooms.get(id)!;
-			// Every room record carries `log_id` with capability `history` (§4.3.3): one exported without gets the position
-			// before its room's first record, since no two records share one.
-			if (room.record.log_id === undefined) {
-				const first = Math.min(...log.map((entry) => Number(entry.log_id)));
-				room.record = { ...room.record, log_id: String(Number.isFinite(first) && first > 1 ? first - 1 : 1) };
+		const byRoom = <T>(records: Iterable<T>, room: (record: T) => string | undefined) => {
+			const rooms = new Map<string, T[]>();
+			for (const record of records) {
+				const id = room(record);
+				if (id === undefined) continue;
+				const list = rooms.get(id);
+				if (list) list.push(record);
+				else rooms.set(id, [record]);
 			}
-			log.push({ log_id: room.record.log_id!, kind: 'rooms', record: room.record });
-			log.sort((a, b) => compareLogIds(a.log_id, b.log_id));
+			return rooms;
+		};
+		const messages = byRoom(this.messages.values(), (message) => message.room_id);
+		// A reaction set is in the room its message is in.
+		const reactions = byRoom<ReactionSet>(archive.reactions, (set) => this.messages.get(set.message_id)?.room_id ?? set.room_id);
+		const memberships = byRoom<MembershipEntry>(archive.memberships, (entry) => entry.room_id);
+		for (const room of archive.rooms) {
+			const id = room.record.room_id;
+			this.rooms.set(id, room);
+			const records = { messages: messages.get(id), reactions: reactions.get(id), memberships: memberships.get(id) };
+			// Every room record carries `log_id` with capability `history` (§4.3.3): one exported without gets the
+			// position before its room's first record, since no two records share one.
+			if (room.record.log_id === undefined) {
+				const first = roomLog(records)[0]?.log;
+				room.record = { ...room.record, log_id: String(first !== undefined && Number(first) > 1 ? Number(first) - 1 : 1) };
+			}
+			this.logs.set(id, roomLog({ room: room.record, ...records }));
 		}
 	}
 
@@ -91,12 +73,6 @@ export class ArchiveServer {
 		received: (socket, frame) => this.receive(socket, frame),
 		closed: () => undefined
 	};
-
-	/** Adds a record to its room's log, if the export has that room. */
-	private log(roomId: string, kind: Kind, record: JsonObject): void {
-		const log = this.logs.get(roomId);
-		if (log && isLogId(record.log_id)) log.push({ log_id: record.log_id, kind, record });
-	}
 
 	private receive(socket: MemorySocket, frame: WireFrame): void {
 		if (frame.method === 'ping') {
@@ -150,13 +126,13 @@ export class ArchiveServer {
 		return {
 			...room.record,
 			latest_log_id: this.latest(room),
-			history_log_id: log[0]?.log_id ?? null,
+			history_log_id: log[0]?.log ?? null,
 			...(withMembers ? { members: this.membersOf(room).map((user_id) => ({ user_id })) } : {})
 		};
 	}
 
 	private latest(room: ArchiveRoom): string {
-		return this.logs.get(room.record.room_id)!.at(-1)?.log_id ?? room.record.log_id!;
+		return this.logs.get(room.record.room_id)!.at(-1)?.log ?? room.record.log_id!;
 	}
 
 	/** Who had joined: as the export listed them, else as its memberships leave them. */
@@ -168,21 +144,9 @@ export class ArchiveServer {
 	}
 
 	/** `history` (§4.3.2): a slice of the room's log, the oldest from `after`, else the newest up to `before`. */
-	private history(log: Entry[], params: JsonObject): JsonObject {
-		const after = isLogId(params.after) ? params.after : undefined;
-		const before = isLogId(params.before) ? params.before : undefined;
-		const limit = Math.max(1, Math.min(Math.floor(Number(params.limit)) || PAGE_LIMIT, PAGE_LIMIT));
-		const matches = log.filter((entry) => (after === undefined || compareLogIds(entry.log_id, after) >= 0) && (before === undefined || compareLogIds(entry.log_id, before) <= 0));
-		const page = after !== undefined ? matches.slice(0, limit) : matches.slice(-limit);
-		const result: JsonObject & Record<Kind, JsonObject[]> = { rooms: [], messages: [], reactions: [], memberships: [] };
-		for (const entry of page) result[entry.kind].push(entry.kind === 'messages' ? this.withReply(entry.record as MessageRecord) : entry.record);
-		return {
-			...result,
-			more: matches.length > page.length,
-			...(page.length ? { first_log_id: page[0].log_id, last_log_id: page.at(-1)!.log_id } : {}),
-			latest_log_id: log.at(-1)!.log_id,
-			history_log_id: log[0].log_id
-		};
+	private history(log: LogEntry[], params: JsonObject): JsonObject {
+		const { page, more } = sliceLog(log, pageQuery(params));
+		return historyResult(page, more, { latest: log.at(-1)!.log, history: log[0].log }, (message) => this.withReply(message));
 	}
 
 	/** A message with the snapshot it replies to embedded, when the export has it, so a quote shows from any room. */

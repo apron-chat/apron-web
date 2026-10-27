@@ -21,6 +21,7 @@
 import type { RoomSync } from '$lib/protocol/client-types';
 import type { StoreChange } from '$lib/protocol/reducer';
 import type { Identity, MembershipEntry, MessageRecord, ReactionSet, RoomRecord } from '$lib/protocol/types';
+import type { LogEntry, PageQuery } from './log';
 
 export const DB_NAME = 'apron-history';
 const DB_VERSION = 1;
@@ -52,13 +53,19 @@ interface RecordRow {
 	value: MessageRecord | ReactionSet | MembershipEntry;
 }
 
-/** Everything kept for one server, as read in one transaction. */
+/** One room as read back: its row, the newest of its log (`window` entries, ascending), and whether more is kept below. */
+export interface KeptRoom {
+	row: RoomRow;
+	entries: LogEntry[];
+	older: boolean;
+}
+
+/** What is kept for one server, as read in one transaction: each room's newest. */
 export interface KeptHistory {
 	meta: MetaRow;
-	rooms: RoomRow[];
-	messages: MessageRecord[];
-	reactions: ReactionSet[];
-	memberships: MembershipEntry[];
+	rooms: KeptRoom[];
+	/** Rooms with a sync that `plan` passed over. */
+	skipped: number;
 }
 
 export type Databases = Pick<IDBFactory, 'open'>;
@@ -134,22 +141,69 @@ function membershipRow(server: string, entry: MembershipEntry): RecordRow {
 	return { server, room: entry.room_id, log: Number(entry.log_id), kind: 'j', id: entry.user.user_id, value: entry };
 }
 
-/** Reads everything kept for `server`, or undefined when nothing is. */
-export async function readHistory(db: IDBDatabase, server: string): Promise<KeptHistory | undefined> {
+function entryOf(row: RecordRow): LogEntry {
+	const log = String(row.log);
+	if (row.kind === 'm') return { log, kind: 'message', record: row.value as MessageRecord };
+	if (row.kind === 'r') return { log, kind: 'reaction', record: row.value as ReactionSet };
+	return { log, kind: 'membership', record: row.value as MembershipEntry };
+}
+
+/**
+ * A page of one room's kept log, as `sliceLog` pages one in memory, with a cursor: within the query's bounds and
+ * not below `from`, the oldest `limit` rows with `after`, else the newest, never splitting the rows at one `log_id`.
+ */
+function pageRows(records: IDBObjectStore, server: string, room: string, query: PageQuery, from?: number): Promise<{ page: LogEntry[]; more: boolean }> {
+	const forward = query.after !== undefined;
+	const lower = Math.max(from ?? 0, query.after !== undefined ? Number(query.after) : 0);
+	const range = IDBKeyRange.bound([server, room, lower], query.before !== undefined ? [server, room, Number(query.before), []] : [server, room, []]);
+	return new Promise((resolve, reject) => {
+		const rows: RecordRow[] = [];
+		const request = records.openCursor(range, forward ? 'next' : 'prev');
+		request.onsuccess = () => {
+			const cursor = request.result;
+			const row = cursor?.value as RecordRow | undefined;
+			if (!cursor || !row) return resolve({ page: (forward ? rows : rows.reverse()).map(entryOf), more: false });
+			if (rows.length >= query.limit && row.log !== rows.at(-1)!.log) return resolve({ page: (forward ? rows : rows.reverse()).map(entryOf), more: true });
+			rows.push(row);
+			cursor.continue();
+		};
+		request.onerror = () => reject(request.error);
+	});
+}
+
+/**
+ * Reads back what is kept for `server`, or undefined when nothing is: for each room `plan` takes (its row with
+ * a sync, and where to read from, if not its start), its newest `window` entries, in one transaction.
+ */
+export async function readHistory(db: IDBDatabase, server: string, window: number, plan: (row: RoomRow) => { from?: number } | undefined): Promise<KeptHistory | undefined> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readonly');
-	const [meta, rooms, rows] = await Promise.all([
+	const [meta, rows] = await Promise.all([
 		done(transaction.objectStore('meta').get(server)) as Promise<MetaRow | undefined>,
-		done(transaction.objectStore('rooms').getAll(serverRange(server))) as Promise<RoomRow[]>,
-		done(transaction.objectStore('records').getAll(serverRange(server))) as Promise<RecordRow[]>
+		done(transaction.objectStore('rooms').getAll(serverRange(server))) as Promise<RoomRow[]>
 	]);
 	if (!meta) return undefined;
-	const kept: KeptHistory = { meta, rooms, messages: [], reactions: [], memberships: [] };
-	for (const row of rows) {
-		if (row.kind === 'm') kept.messages.push(row.value as MessageRecord);
-		else if (row.kind === 'r') kept.reactions.push(row.value as ReactionSet);
-		else kept.memberships.push(row.value as MembershipEntry);
-	}
-	return kept;
+	const records = transaction.objectStore('records');
+	const rooms = await Promise.all(rows.map(async (row) => {
+		const planned = row.sync ? plan(row) : undefined;
+		if (!planned) return undefined;
+		const { page, more } = await pageRows(records, server, row.room, { limit: window }, planned.from);
+		return { row, entries: page, older: more };
+	}));
+	const read = rooms.filter((room) => room !== undefined);
+	return { meta, rooms: read, skipped: rows.filter((row) => row.sync).length - read.length };
+}
+
+/**
+ * A page of one room's kept log (`pageRows`), and the version it was read at, so a reader can tell whether it
+ * is still what it restored from.
+ */
+export async function pageHistory(db: IDBDatabase, server: string, room: string, query: PageQuery, from?: number): Promise<{ page: LogEntry[]; more: boolean; version?: number }> {
+	const transaction = db.transaction(['meta', 'records'], 'readonly');
+	const [meta, page] = await Promise.all([
+		done(transaction.objectStore('meta').get(server)) as Promise<MetaRow | undefined>,
+		pageRows(transaction.objectStore('records'), server, room, query, from)
+	]);
+	return { ...page, ...(meta ? { version: meta.version } : {}) };
 }
 
 /** The version of what is kept for `server`, or undefined when nothing is. */
