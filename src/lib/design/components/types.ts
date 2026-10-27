@@ -307,8 +307,8 @@ export interface MessageUpload {
 	height?: number;
 	/** 0–1 once the write started. */
 	progress?: number;
-	/** Why the write failed. */
-	failed?: string;
+	/** The write failed: why, where the sender's client knows, else just that it did. */
+	failed?: string | true;
 }
 
 /** One of a message's embeds (§4.8), as its row lists it. */

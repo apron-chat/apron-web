@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UploadState } from '$lib/protocol/client';
+	import type { MessageUpload } from '$lib/design/components/types';
 	import type { Embed } from '$lib/protocol/types';
 	import EmbedCard from './EmbedCard.svelte';
 	import EmbedFallback from './EmbedFallback.svelte';
@@ -13,7 +13,7 @@
 	 * unknown kind renders from `og`, else as the fallback card — never an error.
 	 */
 	/** `detail`: who sent it and when, for an image shown full screen. */
-	let { embed, upload, detail }: { embed: Embed; upload?: UploadState; detail?: string } = $props();
+	let { embed, upload, detail }: { embed: Embed; upload?: MessageUpload; detail?: string } = $props();
 </script>
 
 {#if embed.kind === 'upload'}

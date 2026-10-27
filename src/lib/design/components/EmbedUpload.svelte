@@ -2,6 +2,7 @@
 	/* upload (§4.8.4, writes §4.8.3): pending while url is absent; og.video / og.audio / og.image preview; else a file card.
 	   Its `class` and `testid` go on whichever of those shows. */
 	import FileIcon from '@lucide/svelte/icons/file';
+	import FileX from '@lucide/svelte/icons/file-x';
 	import type { EmbedComponentProps } from './types';
 	import { ogRatio, plainClick, safeHttp } from './util';
 
@@ -15,10 +16,10 @@
 	const pending = $derived(failed ? (typeof failed === 'string' ? `Upload failed · ${failed}` : 'Upload failed') : `${detail ? `${detail} · ` : ''}${pct != null ? `Uploading · ${pct}%` : 'Uploading…'}`);
 </script>
 
-{#snippet glyph()}<span class="ap-embed-fileglyph"><FileIcon size={20} aria-hidden="true" /></span>{/snippet}
+{#snippet glyph()}<span class="ap-embed-fileglyph">{#if failed}<FileX size={20} aria-hidden="true" />{:else}<FileIcon size={20} aria-hidden="true" />{/if}</span>{/snippet}
 
 {#if !url}
-	<div role="status" data-testid={testid} class={['ap-embed', 'ap-embed-card', 'ap-embed-pending', className]}>
+	<div role="status" data-testid={testid} class={['ap-embed', 'ap-embed-card', 'ap-embed-pending', failed && 'ap-embed-failed', className]}>
 		{@render glyph()}
 		<span class="ap-embed-cardtext">
 			<span class="ap-embed-title">{title}</span>
