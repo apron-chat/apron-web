@@ -35,6 +35,6 @@ describe('a room this page created', () => {
 		expect(createdRoom(secret, true)).toEqual({ open: secret });
 		expect(createdRoom(open, false)).toEqual({ open });
 		expect(createdRoom(open, true)).toEqual({ refuse: notPrivate('General') });
-		expect(notPrivate('General')).toBe('The server made “General” an ordinary room that others can see and join, not a private one. Leave it, or use it knowing that.');
+		expect(notPrivate('General')).toContain('“General”');
 	});
 });

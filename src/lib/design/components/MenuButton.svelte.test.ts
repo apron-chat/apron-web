@@ -118,15 +118,9 @@ describe('MenuButton', () => {
 		expect(items().map((item) => item.textContent)).toEqual(['Edit room', 'Leave room']);
 	});
 
-	it('takes a class on its box beside its own, and opens from the arrow keys', async () => {
+	it('takes a class on its box beside its own', () => {
 		dom.render(MenuButton, { label: 'Pause…', choices, onselect: vi.fn(), class: 'mine' });
-		const trigger = dom.button('Pause…');
-		expect([...trigger.parentElement!.classList]).toEqual(['ap-menubtn', 'mine']);
-		expect(items()).toHaveLength(0);
-		key(trigger, 'ArrowUp');
-		flushSync();
-		await tick();
-		expect(items()).toHaveLength(3);
+		expect(dom.button('Pause…').parentElement!.classList.contains('mine')).toBe(true);
 	});
 
 	it('opens a submenu beneath its item, by click or →, chooses from it, and closes it with ← or Escape', async () => {

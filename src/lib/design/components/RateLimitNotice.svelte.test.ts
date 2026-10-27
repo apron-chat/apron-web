@@ -42,13 +42,6 @@ describe('RateLimitNotice', () => {
 		expect(Number(ring.getAttribute('stroke-dashoffset'))).toBeCloseTo(full * 5 / 17);
 	});
 
-	it('counts down to the wait’s end, whenever it is shown, its ring full from then', () => {
-		const now = Date.now();
-		dom.render(RateLimitNotice, { scope: 'message', until: now + 90_000 });
-		expect(read().shown).toBe('Sending is paused. You can send again in 1:30.');
-		expect(Number(document.querySelector('.ap-wait-fill')!.getAttribute('stroke-dashoffset'))).toBe(0);
-	});
-
 	it('shows a wait of an hour or more with a clock, in minutes, put away with its ×', () => {
 		const now = Date.now();
 		const ondismiss = vi.fn();

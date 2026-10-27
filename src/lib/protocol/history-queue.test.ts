@@ -70,12 +70,15 @@ describe('the history queue', () => {
 		expect(rooms()).toEqual(['a', 'b', 'c']);
 	});
 
-	it('answers each with its own result', async () => {
-		const { queue, sent } = connection();
-		const handle = queue.request('a', { room_id: 'a' });
+	it('answers each with its own result, whatever order the answers come in', async () => {
+		const { queue, sent } = connection(2);
+		const a = queue.request('a', { room_id: 'a' });
+		const b = queue.request('b', { room_id: 'b' });
+		sent[1].resolve({ more: true });
 		sent[0].resolve({ more: false });
-		await expect(handle.promise).resolves.toEqual({ more: false });
-		expect(queue.holds('a')).toBe(false);
+		await expect(a.promise).resolves.toEqual({ more: false });
+		await expect(b.promise).resolves.toEqual({ more: true });
+		expect([queue.holds('a'), queue.holds('b')]).toEqual([false, false]);
 	});
 
 	it('holds everything during a wait, and sends it once pumped after the wait', async () => {

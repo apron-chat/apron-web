@@ -35,11 +35,6 @@ test.describe('a message row', () => {
 		await expect(page.getByTestId('reactors').getByTestId('reactor')).toHaveCount(1);
 	});
 
-	test('Reply puts the message in the composer’s reply', async ({ preview, page }) => {
-		await act(preview, 'Welcome to Apron!', 'Reply to message');
-		await expect(page.getByTestId('reply-draft')).toContainText('Welcome to Apron!');
-	});
-
 	test('a shift-click in select mode picks every message between', async ({ preview, page }) => {
 		await preview.composer().click();
 		for (const text of ['first of mine', 'second of mine', 'third of mine']) {

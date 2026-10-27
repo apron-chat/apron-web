@@ -138,7 +138,6 @@ describe('lastSeen', () => {
 	const text = (seen: string) => status.lastSeen(seen, now)?.text;
 
 	it('says recently under ten minutes ago, then how long ago, as the rest of the app does, then the day', () => {
-		expect(status.SEEN_RECENT_MS).toBe(600_000);
 		expect(text(at(0))).toBe('Last seen recently');
 		expect(text(at(59_000))).toBe('Last seen recently');
 		expect(text(at(4 * minute))).toBe('Last seen recently');

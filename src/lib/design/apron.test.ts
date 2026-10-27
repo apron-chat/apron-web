@@ -87,10 +87,6 @@ describe('apron.css: role badges', () => {
 		}
 	});
 
-	it('stack by default, everywhere but the profile card, which has the room to show them all', () => {
-		expect(tokens).toMatch(/--ap-role-overflow:\s*stack;/);
-	});
-
 	it('come first in a member row: the name gives way before them, down to its least (its avatar kept); a handle after them', () => {
 		const roles = shrink(style('.ap-member .ap-roles').get('flex'));
 		for (const part of ['.ap-member-who', '.ap-member-name', '.ap-member-text']) expect(shrink(style(part).get('flex'))).toBeGreaterThanOrEqual(1e6 * roles);

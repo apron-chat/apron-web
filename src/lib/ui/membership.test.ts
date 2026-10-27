@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MembershipRecord } from '$lib/protocol/reducer';
-import { BASELINE_MIN_MEMBERS, isBaseline, listNames, membershipSummary, netMemberships } from './membership';
+import { isBaseline, listNames, membershipSummary, netMemberships } from './membership';
 
 let nextLog = 1000;
 const record = (...entries: [string, boolean][]): MembershipRecord => ({
@@ -38,7 +38,6 @@ describe('baselines', () => {
 	const joins = (count: number, leave = false) => record(...Array.from({ length: count }, (_, index): [string, boolean] => [`user${index}`, !(leave && index === 0)]));
 
 	it('skips a record that joins more than 20 users at once, unless it also removes someone', () => {
-		expect(BASELINE_MIN_MEMBERS).toBe(21);
 		expect(isBaseline(joins(21))).toBe(true);
 		expect(isBaseline(joins(20))).toBe(false);
 		// One that also removes someone is a change, kept.
