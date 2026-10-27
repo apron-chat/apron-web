@@ -106,7 +106,7 @@
 
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { fitRoles, rolePeek, ROLE_PEEK, ROLE_STACK_MAX } from './util';
+	import { fitRoles, roleMore, roleMoreChars } from './util';
 
 	/**
 	 * A user's `roles` (§3.3): server-assigned labels, shown beside the name as
@@ -116,8 +116,8 @@
 	interface Props {
 		roles?: string[];
 		/**
-		 * What happens to badges that don't fit the row: `drop` them whole, or `stack` them as layers behind the last
-		 * badge that fits. Defaults to the `--ap-role-overflow` token (`drop` where it's unset).
+		 * What happens to badges that don't fit the row: `drop` them whole, or `stack` them behind the last badge that
+		 * fits, which ends with how many ("+2"). Defaults to the `--ap-role-overflow` token (`drop` where it's unset).
 		 */
 		overflow?: 'drop' | 'stack';
 		/** On the row of badges. */
@@ -129,19 +129,10 @@
 	let row = $state<HTMLElement>();
 	let stack = $state(false);
 	let fit = $state<{ shown: number; room?: number }>({ shown: Infinity });
+	/** A badge's font size in px, as last measured: the count's width is in em of it. */
+	let em = $state(10);
 	/** Each badge's own width as laid out, by role, from when it last wasn't narrowed: a narrowed one can't show it. */
 	const natural = new Map<string, number>();
-
-	const kind = (role: string) => (role === 'admin' ? 'admin' : role === 'bot' ? 'bot' : 'other');
-
-	/** The layers behind the last badge shown: one box-shadow pair per stacked role, each the badge's own size and a step further out, its fill 1px inside its edge. */
-	function layers(behind: string[]): string {
-		return behind.slice(0, ROLE_STACK_MAX).flatMap((role, i) => {
-			const k = kind(role);
-			const x = ROLE_PEEK * (i + 1);
-			return [`${x}px 0 0 -1px var(--ap-role-${k}-fill)`, `${x}px 0 0 0 var(--ap-role-${k}-line)`];
-		}).join(', ');
-	}
 
 	function measure(): void {
 		// Not laid out (in a pane that's hidden): there's no room to read, so the fit waits for it to show.
@@ -150,17 +141,20 @@
 		if (!badges.length) return;
 		const style = getComputedStyle(row);
 		const gap = parseFloat(style.columnGap) || 0;
-		const em = parseFloat(getComputedStyle(badges[0]).fontSize) || 10;
+		const size = parseFloat(getComputedStyle(badges[0]).fontSize) || 10;
+		if (size !== em) em = size;
 		const minRaw = style.getPropertyValue('--ap-role-min').trim();
-		const min = minRaw.endsWith('em') ? parseFloat(minRaw) * em : parseFloat(minRaw) || 4 * em;
+		const min = minRaw.endsWith('em') ? parseFloat(minRaw) * size : parseFloat(minRaw) || 4 * size;
 		const lead = parseFloat(style.getPropertyValue('--ap-role-lead')) || 0;
-		// A badge's own width, shown or not, as laid out (to the fraction of a pixel, which adds up over a row); for the
-		// first while it's narrowed, as it was before, else its text and padding (scrollWidth, which ignores the
-		// narrowing) plus its border.
-		const widths = badges.map((b) => {
-			const role = b.textContent ?? '';
-			if (!b.style.maxWidth) natural.set(role, b.getBoundingClientRect().width);
-			return natural.get(role) ?? b.scrollWidth + (b.offsetWidth - b.clientWidth);
+		// A badge's own width, shown or not, without the count it may end with, as laid out (to the fraction of a pixel,
+		// which adds up over a row); for the first while it's narrowed, as it was before, else its role's text and
+		// padding (scrollWidth, which ignores the narrowing) plus its border.
+		const widths = badges.map((b, i) => {
+			const role = shown[i];
+			const count = b.querySelector<HTMLElement>(':scope > .ap-role-more');
+			if (!b.style.maxWidth) natural.set(role, b.getBoundingClientRect().width - (count?.getBoundingClientRect().width ?? 0));
+			const text = b.querySelector<HTMLElement>(':scope > .ap-role-label') ?? b;
+			return natural.get(role) ?? text.scrollWidth + (b.offsetWidth - b.clientWidth);
 		});
 		// The room for badges: what the row has now, plus what the rows around it have spare, plus what the items beside it
 		// that give way first (the name, down to its least) can still give up, less the lead before the first badge. So
@@ -171,7 +165,7 @@
 		const own = px(style.flexShrink);
 		const yielded = rows[0] ? [...rows[0].children].reduce((sum, item) => (item === row ? sum : sum + give(item, own)), 0) : 0;
 		const room = row.getBoundingClientRect().width + rows.reduce((sum, r) => sum + free(r), 0) + yielded - lead - 0.5;
-		const next = fitRoles(widths, room, gap, min);
+		const next = fitRoles(widths, room, gap, min, (hidden) => roleMore(hidden, size));
 		if (next.shown !== fit.shown || next.room !== fit.room) fit = next;
 	}
 
@@ -192,11 +186,10 @@
 	const behind = $derived(stack && last < shown.length - 1 ? shown.slice(last + 1) : []);
 </script>
 
+<!-- The last badge shown, with roles behind it, ends with how many: its words (screen readers read the roles behind it themselves). -->
 {#if shown.length}
-	<span class={['ap-roles', stack && 'ap-roles-stack', stack && fit.shown === 0 && 'ap-roles-gone']} data-testid={testid} bind:this={row}>{#each shown as role, i (role)}<span
-			class={['ap-role', role === 'admin' && 'ap-role-admin', role === 'bot' && 'ap-role-bot', stack && i === last && behind.length && 'ap-role-stacked', stack && i > last && 'ap-role-behind']}
-			style:max-width={stack && i === last && fit.room !== undefined ? `${fit.room}px` : undefined}
-			style:box-shadow={stack && i === last && behind.length ? layers(behind) : undefined}
-			style:margin-right={stack && i === last && behind.length ? `${rolePeek(behind.length)}px` : undefined}
-			title={stack && i === last && behind.length ? `Roles: ${shown.join(', ')}` : `Role: ${role}`}>{role}</span>{/each}</span>
+	<span class={['ap-roles', stack && 'ap-roles-stack', stack && fit.shown === 0 && 'ap-roles-gone']} data-testid={testid} bind:this={row}>{#each shown as role, i (role)}{@const front = stack && i === last && behind.length > 0}<span
+			class={['ap-role', role === 'admin' && 'ap-role-admin', role === 'bot' && 'ap-role-bot', front && 'ap-role-stacked', stack && i > last && 'ap-role-behind']}
+			style:max-width={stack && i === last && fit.room !== undefined ? `${fit.room + roleMore(behind.length, em)}px` : undefined}
+			title={front ? `Roles: ${shown.join(', ')}` : `Role: ${role}`}>{#if front}<span class="ap-role-label">{role}</span><span class="ap-role-more" style:--ap-role-more-chars={roleMoreChars(behind.length)} aria-hidden="true">+{behind.length}</span>{:else}{role}{/if}</span>{/each}</span>
 {/if}

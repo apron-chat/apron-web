@@ -174,18 +174,28 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-role-bot { border-color: color-mix(in srgb, var(--denim) 55%, transparent); color: var(--denim); }
 /*
  * Stacked roles (--ap-role-overflow: stack, or RoleBadges' overflow prop): instead of dropping, the badges that don't fit
- * sit as layers behind the last one that does, each the badge's own size and a step further out, in its own role's
- * colors, up to three deep; its title names every role. The row stays one line and keeps every badge in the DOM (the
- * hidden ones out of the flow and invisible, still read by screen readers). RoleBadges measures the room it has as its
- * own width, plus the free space in the flex rows around it, plus what the parts of its row that give way before it (a
- * higher flex-shrink: the name) can still give up, down to their min-width; so the result depends only on the row's
- * width, never on how it got there. The layers are box-shadows: drawn only outside a badge's border, they never show through its transparent inside, whatever
- * the ground. Where not even one badge and its stack fit, the first narrows (ellipsized) to --ap-role-min, and below
- * that none show.
+ * go behind the last one that does, which ends with how many ("+2", .ap-role-more): a segment of its own, from its top
+ * border to its bottom, set off by a divider in the badge's border color and filled darker. Its title names every role.
+ * The row stays one line and keeps every badge in the DOM (the hidden ones out of the flow and invisible, still read by
+ * screen readers, so the count itself is hidden from them). RoleBadges measures the room it has as its own width, plus
+ * the free space in the flex rows around it, plus what the parts of its row that give way before it (a higher
+ * flex-shrink: the name) can still give up, down to their min-width; so the result depends only on the row's width,
+ * never on how it got there. The count is as wide as its characters at ROLE_MORE_EM each plus ROLE_MORE_PAD (util.ts),
+ * which RoleBadges counts without measuring it. Where not even one badge and its count fit, the first narrows
+ * (its role ellipsized, the count kept) to --ap-role-min, and below that none show.
  */
-.ap-roles { --ap-role-admin-fill: var(--accent-soft); --ap-role-admin-line: color-mix(in srgb, var(--accent) 55%, transparent); --ap-role-bot-fill: var(--denim-soft); --ap-role-bot-line: color-mix(in srgb, var(--denim) 55%, transparent); --ap-role-other-fill: var(--bg-300); --ap-role-other-line: var(--line-strong); }
+.ap-roles { --ap-role-more-fill: color-mix(in srgb, currentColor 20%, transparent); }
 .ap-roles-stack { position: relative; flex-wrap: nowrap; }
 .ap-roles-stack > .ap-role { max-width: 12em; }
+/* The badge with the count: a row of its role (narrowing first, ellipsized) and the count, which take its full inside height. */
+.ap-roles-stack > .ap-role-stacked { display: inline-flex; height: var(--ap-role-h); padding: 0; }
+.ap-role-stacked > .ap-role-label, .ap-role-more { line-height: calc(var(--ap-role-h) - 2px); }
+.ap-role-stacked > .ap-role-label { flex: 0 1 auto; min-width: 0; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; }
+.ap-role-more { flex: none; width: calc(9px + var(--ap-role-more-chars) * .65em); box-sizing: border-box; border-left: 1px solid; border-left-color: inherit; background: var(--ap-role-more-fill); text-align: center; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+@supports (text-box: trim-both cap alphabetic) {
+	.ap-roles-stack > .ap-role-stacked { padding-block: 0; }
+	.ap-role-stacked > .ap-role-label, .ap-role-more { line-height: inherit; padding-block: calc((var(--ap-role-h) - 2px - 1cap) / 2); text-box: trim-both cap alphabetic; }
+}
 /* Out of the flow, so the row is only as wide as what shows and what follows it (the time) stays beside it. */
 .ap-roles-stack > .ap-role-behind { position: absolute; top: 0; left: 0; opacity: 0; pointer-events: none; }
 /* None fit: the row takes no room, lead included, and gives it back to the name. */

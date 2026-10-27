@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cssPx } from './components/util';
+import { cssPx, ROLE_MORE_EM, ROLE_MORE_PAD } from './components/util';
 
 // Read from disk: Vitest hands CSS imports, `?raw` ones included, over empty. (The app has no Node types: hence the indirection.)
 const fsModule = 'node:fs';
@@ -77,7 +77,17 @@ describe('apron.css: role badges', () => {
 		expect(behind.get('position')).toBe('absolute');
 		expect(behind.get('opacity')).toBe('0');
 		expect(behind.get('display')).toBeUndefined();
-		for (const kind of ['admin', 'bot', 'other']) for (const part of ['fill', 'line']) expect(style('.ap-roles').get(`--ap-role-${kind}-${part}`)).toBeTruthy();
+		expect(style('.ap-roles').get('--ap-role-more-fill')).toBeTruthy();
+	});
+
+	it('stacked, end the front badge with a count as wide as RoleBadges counts it, border to border', () => {
+		const count = style('.ap-role-more');
+		expect(count.get('width')).toBe(`calc(${ROLE_MORE_PAD}px + var(--ap-role-more-chars) * ${String(ROLE_MORE_EM).replace(/^0/, '')}em)`);
+		expect(count.get('border-left')).toBe('1px solid');
+		expect(count.get('border-left-color')).toBe('inherit');
+		// Its badge has no padding of its own, so the count runs from its top border to its bottom.
+		const front = style('.ap-roles-stack > .ap-role-stacked');
+		expect([front.get('display'), front.get('padding'), front.get('height')]).toEqual(['inline-flex', '0', 'var(--ap-role-h)']);
 	});
 
 	it('stack by default, everywhere but the profile card, which has the room to show them all', () => {

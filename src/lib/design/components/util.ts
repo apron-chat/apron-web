@@ -19,32 +19,41 @@ export function uid(u: { user_id?: string } | undefined | null): string | undefi
 export { roomName, roomNameTip, titled, UNTITLED } from '../../naming';
 export { LONG_WAIT_MS, punctuated, waitLabel, waitWords } from '../../words';
 
-/** How far each role stacked behind a badge peeks out past the one in front of it, in px, its 1px edge included (`.ap-role-stacked`). */
-export const ROLE_PEEK = 4;
-/** Stacked roles drawn behind a badge: past this many, the stack shows no deeper. */
-export const ROLE_STACK_MAX = 3;
+/**
+ * The count a stacked badge ends with for the roles behind it ("+2", `.ap-role-more`) is as wide as its characters at
+ * this many em each (wide enough for a digit or + in the badge's caps), plus ROLE_MORE_PAD: so its CSS and `fitRoles`
+ * agree on its width without measuring it.
+ */
+export const ROLE_MORE_EM = 0.65;
+/** The count's width besides its characters, in px: its 1px divider and 4px either side. */
+export const ROLE_MORE_PAD = 9;
 
-/** The width the stack behind a badge adds, for `hidden` roles behind it: each layer, the badge's own size, peeks out by ROLE_PEEK. */
-export function rolePeek(hidden: number): number {
-	const layers = Math.min(Math.max(hidden, 0), ROLE_STACK_MAX);
-	return layers * ROLE_PEEK;
+/** The characters in the count for `hidden` roles behind a badge: "+" and the number; none for none. */
+export function roleMoreChars(hidden: number): number {
+	return hidden > 0 ? String(hidden).length + 1 : 0;
+}
+
+/** The width the count adds to a badge, for `hidden` roles behind it, at the badge's font size `em` in px. */
+export function roleMore(hidden: number, em: number): number {
+	const chars = roleMoreChars(hidden);
+	return chars ? ROLE_MORE_PAD + chars * ROLE_MORE_EM * em : 0;
 }
 
 /**
  * How many of a row of role badges show, when they are stacked rather than dropped: as many whole badges as fit, the
- * last of them carrying the rest as a stack behind it (`rolePeek`). Where not even the first whole badge and its stack
- * fit, the first narrows to `room` (ellipsized), but never under `min`; below that none show. `widths` are the badges'
- * own widths in order, `gap` the space between them, `available` the row's.
+ * last of them carrying the count of the rest, which adds `more(hidden)` to it (`roleMore`). Where not even the first
+ * whole badge and its count fit, the first narrows to `room` besides its count (ellipsized), but never under `min`;
+ * below that none show. `widths` are the badges' own widths in order, `gap` the space between them, `available` the row's.
  */
-export function fitRoles(widths: number[], available: number, gap: number, min: number): { shown: number; room?: number } {
+export function fitRoles(widths: number[], available: number, gap: number, min: number, more: (hidden: number) => number): { shown: number; room?: number } {
 	const n = widths.length;
 	if (!n) return { shown: 0 };
 	let used = 0;
 	const ends: number[] = [];
 	for (const w of widths) ends.push((used += (ends.length ? gap : 0) + w));
 	if (ends[n - 1] <= available) return { shown: n };
-	for (let k = n - 1; k >= 1; k--) if (ends[k - 1] + rolePeek(n - k) <= available) return { shown: k };
-	const room = Math.floor(available - rolePeek(n - 1));
+	for (let k = n - 1; k >= 1; k--) if (ends[k - 1] + more(n - k) <= available) return { shown: k };
+	const room = Math.floor(available - more(n - 1));
 	return room >= min ? { shown: 1, room } : { shown: 0 };
 }
 
