@@ -1249,6 +1249,8 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-notice-body { min-width: 0; }
 .ap-notice pre { position: relative; padding-right: 96px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ap-notice-copy { position: absolute; top: var(--space-1); right: var(--space-1); font-family: var(--font-sans); }
+.ap-notice-qr { display: block; margin-block: var(--space-2); font-family: var(--font-sans); }
+.ap-qr { display: block; width: min(100%, 280px); margin: 0 auto var(--space-3); }
 /* Join and leave lines — quieter still: smaller, tighter, and the time only on hover or focus */
 .ap-msg-member { margin-top: var(--space-1); padding-block: 0; font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-msg-member .ap-msg-system-time { opacity: 0; transition: opacity var(--duration-medium); }

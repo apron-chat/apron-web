@@ -198,7 +198,13 @@ reload. A notice sent before authentication, such as a server's welcome
 connection's welcome replaces it, and signing in with a passkey or a stored
 session drops it, since it speaks to whoever connected. A code block in a
 notice wraps and has a Copy button, such as for the token `/invite-bot` gives
-on the demo worker. A server-wide `~server` notice names
+on the demo worker. In a `~private` notice with a code block, each sign-in
+link ([PROTOCOL.md Appendix A.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a4-links),
+an Apron link with `server` and `token`, which only servers write) has a Show
+QR code button after it, such as the link `/invite-device` gives, so a phone
+can scan it. The code shows only once tapped, in a dialog that warns that
+anyone who scans it can sign in as you, and it encodes the link's `href`
+exactly as the server wrote it. A server-wide `~server` notice names
 a room like any message; one for a room you haven't joined also shows as a
 notice where you are. `~server`, `~room`, and `~private` are sender scopes, not rooms (Appendix A.1); a
 room ID starting with `@` or `~` is an ordinary room.

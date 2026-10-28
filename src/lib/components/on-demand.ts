@@ -9,3 +9,4 @@ export { default as NewThreadDialog } from './NewThreadDialog.svelte';
 export { default as PreferencesDialog } from './PreferencesDialog.svelte';
 export { default as RoomEditor } from './RoomEditor.svelte';
 export { default as SignInLinkDialog } from './SignInLinkDialog.svelte';
+export { default as SignInQrDialog } from './SignInQrDialog.svelte';
