@@ -108,7 +108,9 @@ describe('hints', () => {
 		const away = { phase: 'idle' as const, here: false, guest: false };
 		expect(hint(away)).toBe('Your device lists the passkeys saved for this server: pick one to sign in to its account.');
 		expect(hint({ ...away, passkey: 'register' })).toBe('Creates an account and saves a new passkey for it on this device. Your display name names both.');
-		expect(hint({})).toBe('Connected as a guest. Sign in with a passkey you saved, or stay a guest.');
+		// Each server has its own accounts: a passkey saved for another is no account here.
+		expect(hint({})).toBe('Each server has its own accounts: sign in with a passkey you saved for this server.');
+		expect(hint({ host: 'server.apron.chat' })).toBe('Each server has its own accounts: sign in with a passkey you saved for `server.apron.chat`.');
 		expect(hint({ passkey: 'register' })).toMatch(/^Connected as a guest. Creating an account keeps this identity/);
 		expect(hint({ registered: true })).toBe('Signed in. Choose Guest to sign out.');
 		// Where passkeys only sign in, or only sign up, it says so.

@@ -1233,6 +1233,14 @@ sheet only ever opens for a tap:
   then says "Connected. Tap again to continue with your passkey.", ready
   on that connection. Connected as a guest, **Stay a guest** leaves the
   panel as it is. On Guest, **Connect** connects without a ceremony.
+- Connected, the sign-in hint says each server has its own accounts, and
+  names the server in the form by its host (as code): a passkey saved for
+  another server is no account here. A sign-in whose sheet is dismissed
+  says "Cancelled."; where passkeys also create accounts, it says
+  "Cancelled. No passkey for this server? Choose Create account." and marks
+  **Create account** with a dot until another choice or tap. A device with
+  no passkey for the server offers only another device or a security key
+  (on iOS, a QR code), which otherwise reads as a fault.
 - Signing in asks no display name: the account keeps the name it has, and
   the guest's name the ceremony started from isn't sent to it with `me`.
   The form, and the name remembered for the next visit, take the account's.

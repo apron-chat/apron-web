@@ -11,7 +11,7 @@
 	import { offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
 	import { codeStillFor, returnUrl, type SentCode } from '$lib/ui/sign-in-link';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import { passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, type PasskeyMode, type SignOutHandler, type Scheme } from '$lib/ui/sign-in';
+	import { CANCELLED_TRY_CREATE, passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, type PasskeyMode, type SignOutHandler, type Scheme } from '$lib/ui/sign-in';
 	import { saveDisplayName, saveServerUrl } from '$lib/ui/storage';
 	import SignInForm from '$lib/design/components/SignInForm.svelte';
 
@@ -141,7 +141,15 @@
 	 * asks no display name for it, and none is applied to that account.
 	 */
 	let passkeyLogin = $derived(chosen === 'webauthn' && mode === 'login' && !(here && registered));
-	let hint = $derived(signInHint({ scheme: chosen, use, passkey: passkeyChosen, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly }));
+	/** The server in the form by its host, as the hint names it. */
+	let host = $derived.by(() => {
+		try {
+			return new URL(normalizedInput).host || undefined;
+		} catch {
+			return undefined;
+		}
+	});
+	let hint = $derived(signInHint({ scheme: chosen, use, passkey: passkeyChosen, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly, host }));
 	$effect(() => {
 		busy = view.phase === 'busy' || view.phase === 'connecting';
 	});
@@ -437,6 +445,8 @@
 			if (action === 'login' && displayName.trim()) client.setDisplayName(displayName);
 			const refused = cause instanceof DOMException && cause.name === 'NotAllowedError';
 			if (followUp && refused) notice = 'Connected. Tap again to continue with your passkey.';
+			// Most likely no passkey for this server on this device: point to Create account, where there is one.
+			else if (refused && action === 'login' && passkeyChoice(use)) error = CANCELLED_TRY_CREATE;
 			else error = passkeyMessage(cause);
 		}
 	}
@@ -461,7 +471,7 @@
 <SignInForm
 	label="Sign in" phase={view.phase} onsubmit={submit}
 	{header} {schemes} scheme={chosen} onscheme={(candidate) => (scheme = candidate as Scheme)}
-	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }}
+	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }} passkeyNudge={error === CANCELLED_TRY_CREATE ? 'register' : undefined}
 	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}
 	hint={view.phase === 'ready' && notice ? notice : hint} hintStatus={view.phase === 'ready'} error={errorText} {busy}
