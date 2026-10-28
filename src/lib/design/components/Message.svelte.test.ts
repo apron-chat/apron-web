@@ -270,6 +270,19 @@ describe('a message row’s toolbar', () => {
 		expect(dom.button('More actions')).not.toBeNull();
 	});
 
+	it('puts the rarer actions away on a press anywhere else, not one inside the toolbar', () => {
+		const row = render({ caps: ALL });
+		engage(row);
+		dom.button('More actions').click();
+		flushSync();
+		dom.button('Select message').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+		flushSync();
+		expect(dom.queryByRole('button', 'Select message')).not.toBeNull();
+		document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+		flushSync();
+		expect([dom.queryByRole('button', 'Select message'), dom.queryByRole('button', 'More actions')]).toEqual([null, expect.anything()]);
+	});
+
 	it('opens your picker beside React, says whether it is open, and lets the button go with the picker', () => {
 		let open = $state(false);
 		const release = vi.fn();

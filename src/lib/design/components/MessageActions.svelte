@@ -46,6 +46,16 @@
 
 	let bar = $state<HTMLElement | undefined>();
 
+	// A press anywhere else puts the rest away, as it would any menu, rather than leaving them for the next hover.
+	$effect(() => {
+		if (!open) return;
+		const away = (event: PointerEvent) => {
+			if (!bar?.contains(event.target as Node)) open = false;
+		};
+		document.addEventListener('pointerdown', away, true);
+		return () => document.removeEventListener('pointerdown', away, true);
+	});
+
 	/** ⋯ goes as the rest show, so the focus it held moves on to the first of them rather than dropping out. */
 	function showMore(event: MouseEvent): void {
 		if (onmore && !more) return onmore();
