@@ -10,6 +10,7 @@
 	import { roomFaces } from '$lib/ui/faces';
 	import type { Face } from '$lib/design/components/types';
 	import { listInBackground } from '$lib/ui/background-listing';
+	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
@@ -120,6 +121,22 @@
 		return untrack(() => listInBackground(() => client.listRooms(roomId, BACKGROUND_LISTING_MS)));
 	});
 
+	/**
+	 * The open room whose threads are folded to those with news, as under a room that isn't open: picking the room
+	 * again while reading it folds them, and once more unfolds them. Going anywhere else unfolds them.
+	 */
+	let folded = $state<string | undefined>();
+	$effect(() => {
+		void session.activeRoomId;
+		void activeThread;
+		folded = undefined;
+	});
+	function pickRoom(room: RoomSnapshot, current: boolean): void {
+		// One pane at a time on a phone: picking the open room there goes back to it, out of the list.
+		if (current && innerWidth >= NARROW_MAX) folded = folded === room.id ? undefined : room.id;
+		onroom(room);
+	}
+
 	function list(parentRoomId?: string): void {
 		listError = '';
 		client.listRooms(parentRoomId).catch((cause: unknown) => (listError = cause instanceof Error ? cause.message : 'Unable to list rooms'));
@@ -127,7 +144,7 @@
 
 </script>
 
-<!-- A room's row, with its threads under it while it's open (and those with news while it isn't); a private room's with its faces. -->
+<!-- A room's row, with its threads under it while it's open (and only those with news while it isn't, or is folded); a private room's with its faces. -->
 {#snippet roomRow(room: RoomSnapshot, faces?: Face[])}
 	{@const active = room.id === session.activeRoomId}
 	{@const current = active && !activeThread}
@@ -135,12 +152,12 @@
 	<RoomItem
 		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} muted={room.mutedUntil !== undefined} active={current}
 		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering && !session.reconnectQuiet}
-		onselect={() => onroom(room)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
+		onselect={() => pickRoom(room, current)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
 	/>
-	{#if active}
+	{#if active && folded !== room.id}
 		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
-		<!-- Under a room that isn't open, only its joined threads with news, so activity there isn't missed. -->
+		<!-- Under a room that isn't open (or is folded), only its joined threads with news, so activity there isn't missed. -->
 		{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
 		{#if news.length > 0}
 			<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
