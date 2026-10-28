@@ -60,4 +60,20 @@ describe('SignInForm', () => {
 		expect([submit.type, submit.disabled]).toEqual(['submit', true]);
 		expect(dom.button('Cancel').disabled).toBe(false);
 	});
+
+	it('shows what the hint quotes in backticks as code', () => {
+		render({ hint: 'Each server has its own accounts: sign in with a passkey you saved for `chat.example`.' });
+		const hint = document.querySelector('.ap-form-hint')!;
+		expect(hint.textContent).toBe('Each server has its own accounts: sign in with a passkey you saved for chat.example.');
+		expect([...hint.querySelectorAll('code')].map((code) => code.textContent)).toEqual(['chat.example']);
+	});
+
+	it('marks the passkey choice it nudges toward, only while another is chosen', () => {
+		const nudged = () => [...document.querySelectorAll('.ap-choice-nudge .ap-choice-title')].map((title) => title.textContent);
+		render({ scheme: 'webauthn', passkeyChoice: true, passkeyMode: 'login', passkeyNudge: 'register' });
+		expect(nudged()).toEqual(['Create account']);
+		document.body.innerHTML = '';
+		render({ scheme: 'webauthn', passkeyChoice: true, passkeyMode: 'register', passkeyNudge: 'register' });
+		expect(nudged()).toEqual([]);
+	});
 });

@@ -10,8 +10,8 @@
   var schemes = ['guest', 'webauthn', 'email', 'external', 'token'];
   add({ schemes: schemes, scheme: 'external', name: 'Ada', sent: { scheme: 'external', page: 'https://chat.work.example/sso' }, submit: 'Sign in', secondary: { label: 'Cancel', onclick: function () {} } });
   add({ schemes: schemes, scheme: 'token', token: 'inv_7Kq2', name: 'Ada', hint: 'Signs in with a token the server gave you. If it’s an invite, add your name for the account it creates.', submit: 'Sign in' });
-  add({ schemes: ['guest', 'webauthn', 'email'], scheme: 'webauthn', passkeyChoice: true, askName: false, hint: 'Connected as a guest. Sign in with a passkey you saved, or stay a guest.', hintStatus: true,
-    error: 'The passkey sheet was closed before it finished.', submit: 'Sign in with passkey', secondary: { label: 'Stay a guest', onclick: function () {} } });
+  add({ schemes: ['guest', 'webauthn', 'email'], scheme: 'webauthn', passkeyChoice: true, askName: false, hint: 'Each server has its own accounts: sign in with a passkey you saved for `server.apron.chat`.', hintStatus: true,
+    passkeyNudge: 'register', error: 'Cancelled. No passkey for this server? Choose Create account.', submit: 'Sign in with passkey', secondary: { label: 'Stay a guest', onclick: function () {} } });
   add({ schemes: schemes, scheme: 'guest', name: 'Ada', hint: 'No token needed; the server picks a guest identity.', busy: true, submit: 'Connect', secondary: { label: 'Cancel', onclick: function () {} } });
 </script>
 </body>

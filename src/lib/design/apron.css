@@ -997,6 +997,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-choice-title { font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; }
 .ap-choice-text { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-choice-on, .ap-choice-on:hover:not(:disabled) { background: var(--chosen); border-color: var(--line-strong); color: var(--ink); box-shadow: var(--shadow-chosen); }
+/* A dot in the top-right corner, just inside the border, to draw the eye to a choice (SignInForm `passkeyNudge`). */
+.ap-choice-nudge { position: relative; }
+.ap-choice-nudge::after { content: ''; position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--danger); }
 @media (prefers-reduced-motion: reduce) { .ap-choice-item { transition: none; } }
 
 /* CheckList — choices that combine, one per row: a checkbox, a title with an optional muted note, and an optional line saying what it does */

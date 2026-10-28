@@ -30,6 +30,8 @@
 		passkeyChoice?: boolean;
 		passkeyMode?: 'login' | 'register';
 		onpasskeymode?: (mode: 'login' | 'register') => void;
+		/** Marks that passkey choice with a dot, while another is chosen, to draw the eye to it; the error or hint says why. */
+		passkeyNudge?: 'login' | 'register';
 		/** `bind:token`, `bind:email`, `bind:code` and `bind:name` (the display name; under Token, an optional name for an invite). */
 		token?: string;
 		email?: string;
@@ -44,7 +46,7 @@
 		sent?: { scheme: 'email' | 'external'; email?: string; page?: string };
 		/** Gives up the code asked for: Use another address (email), or Start again. */
 		onrestart?: () => void;
-		/** What the chosen scheme does, or what to do next. */
+		/** What the chosen scheme does, or what to do next. Text between backticks shows as code, such as a server's host. */
 		hint?: string;
 		/** The hint is news, said as a status (such as "Connected. Tap again…"). */
 		hintStatus?: boolean;
@@ -71,7 +73,7 @@
 		class?: ClassValue;
 	}
 	let {
-		header, schemes, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
+		header, schemes, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
 		askName = true, sent, onrestart, hint, hintStatus = false, error, busy = false, submit, secondary,
 		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, pageLinkTestid, onsubmit, label, phase, class: className
 	}: Props = $props();
@@ -89,7 +91,7 @@
 	{#if passkeyChoice}
 		<div class="ap-choice" role="radiogroup" aria-label="Passkey" data-testid={passkeyChoiceTestid}>
 			{#each PASSKEY_CHOICES as [value, title, text] (value)}
-				<button class="ap-choice-item" class:ap-choice-on={passkeyMode === value} type="button" role="radio" aria-checked={passkeyMode === value} data-testid={passkeyChoiceTestid ? `${passkeyChoiceTestid}-${value}` : undefined} disabled={busy} onclick={() => onpasskeymode?.(value)}>
+				<button class="ap-choice-item" class:ap-choice-on={passkeyMode === value} class:ap-choice-nudge={passkeyNudge === value && passkeyMode !== value} type="button" role="radio" aria-checked={passkeyMode === value} data-testid={passkeyChoiceTestid ? `${passkeyChoiceTestid}-${value}` : undefined} disabled={busy} onclick={() => onpasskeymode?.(value)}>
 					<span class="ap-choice-title">{title}</span>
 					<span class="ap-choice-text">{text}</span>
 				</button>
@@ -129,7 +131,7 @@
 		</p>
 		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={onrestart}>Start again</button>
 	{:else}
-		<p class="ap-form-hint" role={hintStatus ? 'status' : undefined}>{hint}</p>
+		<p class="ap-form-hint" role={hintStatus ? 'status' : undefined}>{#each hint?.split('`') ?? [] as part, index (index)}{#if index % 2}<code>{part}</code>{:else}{part}{/if}{/each}</p>
 	{/if}
 	{#if error}<p class="ap-form-note ap-tone-danger" role="alert">{error}</p>{/if}
 	<div class="ap-connect-actions">
