@@ -2739,7 +2739,7 @@
 	<meta property="og:image" content="https://web.apron.chat/og.png" />
 	<meta property="og:image:width" content="2400" />
 	<meta property="og:image:height" content="1260" />
-	<meta property="og:image:alt" content="The Apron web client: rooms, a thread, direct messages, members, reactions and a code block." />
+	<meta property="og:image:alt" content="The Apron web client: an engineering room with a mention, a replied-to message, reactions and a benchmark in a terminal, beside rooms, a thread, direct messages and members." />
 	<meta name="twitter:card" content="summary_large_image" />
 </svelte:head>
 
