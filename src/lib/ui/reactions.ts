@@ -2,11 +2,12 @@ import type { ReactionSummary } from '$lib/protocol/client';
 import { isEmojiSequence } from '$lib/protocol/custom-emoji';
 import type { CustomEmojiImage } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
+import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 
 /** A reactor's display name; callers pass the directory's, which prefers the kept object (§3.3). */
 export type NameOf = (user: Identity) => string;
 
-const recordedName: NameOf = (user) => user.name || user.user_id;
+const recordedName: NameOf = (user) => withoutBidiOverrides(user.name || '') || user.user_id;
 
 /** How many names a chip's tooltip lists before summing up the rest. */
 const NAMES_MAX = 8;

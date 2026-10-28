@@ -384,7 +384,13 @@ goes in `body.mentions` ([PROTOCOL.md §3.5](https://github.com/shazow/apron/blo
 and an edit resubmits the message's mentions. A `markdown` body renders as CommonMark
 ([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)) with three extensions beyond it: GitHub tables,
 strikethrough, and a typed line break kept as a break; raw HTML shows as
-text. A rendered body (plain or CommonMark, never inside
+text. What users write shows without the bidi embeddings and overrides U+202A
+to U+202E, and isolated in its own direction ([PROTOCOL.md §3.5.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#352-rendering)):
+message text, names, roles, bios, room and thread titles and descriptions,
+embed titles and previews, notifications, and the server's title and
+description. Only what shows drops them: the client keeps and sends what was
+written, so an edited message or room goes back with every character its
+author typed, and IDs, tokens and URLs are never changed. A rendered body (plain or CommonMark, never inside
 code) shows a known user's `@user_id` as a chip with their current name, a known room's
 `#room_id` as a link showing its title that opens the room (or joins it), and unknown
 IDs as written ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)): `@` names only users. The ID after

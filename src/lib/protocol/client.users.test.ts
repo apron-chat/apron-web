@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { userIn, type ChatClient, type ClientSnapshot } from './client';
+import { bioOf, userIn, type ChatClient, type ClientSnapshot } from './client';
 import { FakeSocket, settle, startClient } from '$lib/test/client';
 
 /**
@@ -151,10 +151,12 @@ describe('your own user', () => {
 		expect(snapshot.server).not.toHaveProperty('avatar');
 	});
 
-	it('takes the bidi embeddings and overrides out of what users write (§3.5.2)', async () => {
+	it('keeps what users write as sent, bidi embeddings and overrides too: only display drops them (§3.5.2)', async () => {
 		await socket.greet(['rooms'], { you: { user_id: 'guest_1', name: 'Guest' } });
-		socket.receive({ method: 'user', params: { new: { user_id: 'mallory', name: 'Mal\u202Elory\u202C', ext: { bio: 'evil\u202Egnp.exe' } } } });
-		expect(snapshot.users.mallory).toEqual({ user_id: 'mallory', name: 'Mallory', ext: { bio: 'evilgnp.exe' } });
+		socket.receive({ method: 'user', params: { new: { user_id: 'mal\u202Elory', name: 'Mal\u202Elory\u202C', ext: { bio: 'evil\u202Egnp.exe', key: 'k\u202Ay' } } } });
+		expect(snapshot.users['mal\u202Elory']).toEqual({ user_id: 'mal\u202Elory', name: 'Mal\u202Elory\u202C', ext: { bio: 'evil\u202Egnp.exe', key: 'k\u202Ay' } });
+		// The bio as shown is cleaned (`ext:bio`).
+		expect(bioOf(snapshot.users['mal\u202Elory'])).toBe('evilgnp.exe');
 	});
 
 	it('merges roles like any profile field, and an empty list clears them', async () => {

@@ -78,6 +78,10 @@ export interface PreviewKnobs {
 	permissions?: JsonObject;
 	/** Fields of the `server` frame (§3.1) to add or replace, e.g. `title` or `avatar`; `ext` merges by its keys, e.g. `emoji`. */
 	server?: JsonObject;
+	/** Fields of the seeded people to add or replace, by `user_id`, e.g. a `name` or `roles`, before anything is seeded. */
+	people?: Record<string, JsonObject>;
+	/** The `title` and `description` of seeded rooms and threads, by `room_id`, in place of the demo's. */
+	rooms?: Record<string, { title?: string; description?: string }>;
 }
 
 /**
@@ -155,6 +159,7 @@ export class MemoryProtocolServer {
 	constructor(knobs: PreviewKnobs = {}) {
 		this.knobs = knobs;
 		const people = this.people;
+		for (const [id, fields] of Object.entries(knobs.people ?? {})) if (people[id]) Object.assign(people[id], structuredClone(fields));
 		const general = this.makeRoom(roomId, 'general', ['preview_guest', 'ada', 'grace', 'linus', 'margaret']);
 		general.description = 'Say hello. Everything here lives only as long as this page.';
 		for (const item of seed) {
@@ -229,6 +234,12 @@ export class MemoryProtocolServer {
 		}
 		if (knobs.seed === 'rich') this.seedRich(general);
 		if (this.hasStatus) this.seedPresence();
+		for (const [id, fields] of Object.entries(knobs.rooms ?? {})) {
+			const room = this.rooms.get(id);
+			if (!room) continue;
+			if (fields.title !== undefined) room.title = fields.title;
+			if (fields.description !== undefined) room.description = fields.description;
+		}
 	}
 
 	private get hasStatus(): boolean {

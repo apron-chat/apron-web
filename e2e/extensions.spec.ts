@@ -287,7 +287,35 @@ test.describe('without ext:emoji', () => {
 	});
 });
 
+/**
+ * Every bidi embedding or override (U+202A–U+202E) the page shows, as text or in an attribute, outside the editors:
+ * what users write is shown without them (§3.5.2), and an editor holds it as written.
+ */
+function overridesShown(page: Preview['page']): Promise<string[]> {
+	return page.evaluate(() => {
+		const bidi = /[‪-‮]/;
+		const found: string[] = [];
+		if (bidi.test(document.title)) found.push(`<title> ${document.title}`);
+		for (const element of document.body.querySelectorAll('*')) {
+			if (element.closest('textarea, input, [contenteditable="true"]')) continue;
+			for (const attribute of element.attributes) if (bidi.test(attribute.value)) found.push(`${element.tagName}[${attribute.name}] ${attribute.value}`);
+			for (const node of element.childNodes) if (node.nodeType === Node.TEXT_NODE && bidi.test(node.nodeValue ?? '')) found.push(`${element.tagName}.${element.className} ${node.nodeValue}`);
+		}
+		return found;
+	});
+}
+
+const RLO = '‮';
+
 test.describe('text direction (§3.5.2)', () => {
+	test.use({
+		knobs: {
+			server: { title: `Mock${RLO} Chat`, description: `Where${RLO} we talk.` },
+			people: { ada: { name: `Ada${RLO} Lovelace`, roles: [`ad${RLO}min`], ext: { bio: `Writes${RLO} programs` } } },
+			rooms: { engineering: { title: `engi${RLO}neering`, description: `About${RLO} builds` }, thread_deploy: { title: `Deploy${RLO} checklist`, description: `Before${RLO} a deploy` } }
+		}
+	});
+
 	test('drops bidi overrides from what users write, and isolates names from the words around them', async ({ preview, page }) => {
 		await preview.open();
 		await preview.post('general', 'ada', 'See evil‮gnp.exe', { from: { user_id: 'mallory', name: 'Mal‮lory' } });
@@ -298,5 +326,85 @@ test.describe('text direction (§3.5.2)', () => {
 		expect(await message.innerText()).not.toMatch(/[‪-‮]/);
 		expect(await sender.evaluate((element) => getComputedStyle(element).unicodeBidi)).toBe('plaintext');
 		expect(await message.locator('.ap-msg-text p').evaluate((element) => getComputedStyle(element).unicodeBidi)).toBe('plaintext');
+	});
+
+	test('shows none anywhere: names, roles, bios, titles, descriptions, messages, replies, embeds and the server', async ({ preview, page }) => {
+		await preview.open();
+		const posted = await preview.post('general', 'ada', {
+			text: `Shipped${RLO} it`, format: 'markdown',
+			embeds: [{ kind: 'link', url: 'https://example.com/', og: { title: `Release${RLO} notes`, description: `What${RLO} changed`, site_name: `Exa${RLO}mple` } }]
+		});
+		await preview.post('general', 'grace', `Nice${RLO} work`, { reply_to: { message_id: posted } });
+		await preview.reactAs('ada', WELCOME, ['👍']);
+		await expect(page.locator(`article[data-message-id="${posted}"]`)).toContainText('Release notes');
+		await expect(page.locator('.ap-reply-text').filter({ hasText: 'Shipped it' })).toBeVisible();
+		await expect(page.locator('.ap-shell-sidehead-name')).toHaveText('Mock Chat');
+		await preview.showMembers();
+		await expect(page.getByTestId('room-member-list')).toContainText('Ada Lovelace');
+		expect(await overridesShown(page)).toEqual([]);
+
+		// Ada's profile card: her name, role and bio.
+		await page.getByTestId('message-list').getByRole('button', { name: 'Ada Lovelace', exact: true }).first().click();
+		const card = page.getByTestId('profile-card');
+		await expect(card.getByTestId('profile-bio')).toHaveText('Writes programs');
+		await expect(card).toContainText('admin');
+		expect(await overridesShown(page)).toEqual([]);
+		await page.keyboard.press('Escape');
+
+		// A room's title and description, in the sidebar, the header and the page title; a thread's.
+		await preview.openRoom('engineering');
+		await expect(preview.heading()).toHaveText('engineering');
+		expect(await overridesShown(page)).toEqual([]);
+		await preview.openRoom('general');
+		await preview.openThread('thread_deploy');
+		await expect(preview.heading()).toContainText('Deploy checklist');
+		expect(await overridesShown(page)).toEqual([]);
+	});
+
+	test('shows none in the server\'s title and description where it is picked', async ({ preview, page }) => {
+		await preview.openRoot({ server: { title: `Mock${RLO} Chat`, description: `Where${RLO} **we** talk.` } });
+		await expect(page.locator('.ap-shell-sidehead-name')).toHaveText('Mock Chat');
+		await page.getByRole('button', { name: 'Connection settings', exact: true }).click();
+		await expect(page.getByTestId('connect-server')).toContainText('Mock Chat');
+		await expect(page.locator('.ap-connect-server-desc')).toHaveText('Where we talk.');
+		expect(await overridesShown(page)).toEqual([]);
+	});
+
+	test('keeps every character on the wire: an edit sends back what was written, a room edit its title', async ({ preview, page }) => {
+		await preview.open('#room=engineering');
+		// Your own message, sent as typed, then edited: the override stays in what is sent.
+		await preview.composer().click();
+		await page.keyboard.insertText(`mine ${RLO}abc`);
+		await page.getByRole('button', { name: 'Send message', exact: true }).click();
+		const sent = await preview.waitForSent('message', (p) => typeof p.body?.text === 'string' && p.body.text.startsWith('mine'));
+		expect(sent.body.text).toBe(`mine ${RLO}abc`);
+		const mine = preview.message('mine abc');
+		await expect(mine).toBeVisible();
+		await expect(async () => {
+			await mine.hover();
+			await expect(mine.getByRole('button', { name: 'Edit message', exact: true })).toBeVisible({ timeout: 1000 });
+		}).toPass();
+		await mine.getByRole('button', { name: 'Edit message', exact: true }).click();
+		const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
+		await expect(editor).toBeVisible();
+		await editor.press('ControlOrMeta+End');
+		await page.keyboard.insertText(' more');
+		await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+		const edit = await preview.waitForSent('message', (p) => p.message_id !== undefined && typeof p.body?.text === 'string' && p.body.text.endsWith('more'));
+		expect(edit.body.text).toBe(`mine ${RLO}abc more`);
+		await expect(preview.message('mine abc more')).toBeVisible();
+
+		// The room's description changed alone: its title goes back as written.
+		await page.getByTestId('room-actions').click();
+		await page.getByTestId('edit-room').click();
+		const dialog = page.getByRole('dialog', { name: 'Edit room', exact: true });
+		// The editor starts from the title as written.
+		await expect(dialog.getByRole('textbox', { name: 'Room title', exact: true })).toHaveValue(`engi${RLO}neering`);
+		await dialog.getByRole('textbox', { name: /description/i }).fill('About builds, and releases');
+		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+		const saved = await preview.waitForSent('room_set', (p) => p.room_id === 'engineering');
+		expect(saved.description).toBe('About builds, and releases');
+		expect(saved.title ?? `engi${RLO}neering`).toBe(`engi${RLO}neering`);
+		expect(await overridesShown(page)).toEqual([]);
 	});
 });

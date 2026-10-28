@@ -129,13 +129,12 @@ import {
 	type ValidHistoryResponse
 } from './client-internals';
 import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, serverAddress, serverSettings, yourPermissions } from './client-views';
-import { parseFrame } from './plain-text';
 import { reactionKey } from './custom-emoji';
 import { HistoryQueue } from './history-queue';
 
 export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
-export { IDLE_RETRY_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
+export { editableTitle, IDLE_RETRY_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
 export type { MediaLimit, MediaTypes, Permissions, ServerLook, ServerMedia } from './client-views';
 export {
 	bioOf,
@@ -2746,7 +2745,7 @@ export class ChatClient {
 	private handleMessage(raw: unknown): void {
 		let value: unknown;
 		try {
-			value = typeof raw === 'string' ? parseFrame(raw) : raw;
+			value = typeof raw === 'string' ? JSON.parse(raw) : raw;
 		} catch {
 			this.error = 'The server sent invalid JSON';
 			this.emit();

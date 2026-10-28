@@ -431,8 +431,14 @@ is kept on the snapshot's `server` as sent: `apron` (the version), `capabilities
 `description`, `avatar` (which `serverLook` reads, the avatar only where a
 user's would load), `signup`, `ping`, `push`, `status` and `ext`. A server is
 known by its address, `serverAddress` (RFC 3986 §6.2.2–6.2.3, without a
-fragment, which `new WebSocket()` refuses), which the client's URL, its kept session's keys, link servers and Recent all use.
-Every frame is parsed by `parseFrame` (`plain-text.ts`), which takes the bidi
-embeddings and overrides U+202A to U+202E out of every string in it (§3.5.2),
-so no name, title or message shows its characters out of order. Every `auth` the client sends carries `agent: "apron-web/0.4"`
+fragment, which `new WebSocket()` refuses), which the client's URL, its kept
+session's keys, link servers and Recent all use.
+Frames are kept as sent. What users write loses the bidi embeddings and
+overrides U+202A to U+202E (§3.5.2) only where it is shown, through
+`withoutBidiOverrides` (`plain-text.ts`): in `roomTitle` and `peopleTitle`,
+`serverLook`, every render in `markdown.ts`, the directory's `person` and
+`name` (`shownPerson`, so names that look alike once they are dropped share
+a name), an embed's text (`shownEmbed`), thread previews, renames and
+notifications. Editors start from the records, so an edit sends back every
+character, and IDs, tokens, write URLs and `ext` are never touched. Every `auth` the client sends carries `agent: "apron-web/0.4"`
 (§3.2).

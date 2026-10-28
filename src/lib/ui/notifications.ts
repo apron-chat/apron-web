@@ -1,4 +1,5 @@
 import { compareLogIds } from '$lib/protocol/reducer';
+import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { isJsonObject } from '$lib/protocol/types';
 import { loadShownMarks, markShown } from './push-store';
 
@@ -210,9 +211,9 @@ export function notificationClickTarget(message: unknown): NotificationTarget | 
 	return { tab, server, roomId, ...(threadId !== undefined ? { threadId } : {}) };
 }
 
-/** A message's text as a notification body: one line, at most 180 characters. */
+/** A message's text as a notification body: one line, at most 180 characters, without bidi embeddings and overrides (§3.5.2). */
 export function notificationBody(text: string | undefined): string {
-	const line = text?.replace(/\s+/g, ' ').trim() ?? '';
+	const line = text === undefined ? '' : withoutBidiOverrides(text).replace(/\s+/g, ' ').trim();
 	return line.length > 180 ? `${line.slice(0, 179)}…` : line;
 }
 
@@ -346,7 +347,8 @@ export function pushNotification(message: unknown, pushId: string | undefined): 
 	if (pushId === undefined || messageId === undefined) return undefined;
 	const roomId = message.room_id;
 	const from = isJsonObject(message.from) ? message.from : {};
-	const sender = [from.name, from.user_id].find((value): value is string => typeof value === 'string' && value.trim() !== '') ?? 'Someone';
+	const name = typeof from.name === 'string' ? withoutBidiOverrides(from.name) : undefined;
+	const sender = [name, from.user_id].find((value): value is string => typeof value === 'string' && value.trim() !== '') ?? 'Someone';
 	const text = isJsonObject(message.body) && typeof message.body.text === 'string' ? message.body.text : undefined;
 	const body = notificationBody(text) || 'New message';
 	const target: PushTarget = { push: true, roomId, pushId, messageId, group: notificationGroup(pushId, roomId) };

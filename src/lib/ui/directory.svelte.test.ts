@@ -127,6 +127,21 @@ describe('directory', () => {
 		expect(directory.sharesName(impostors.guest_4)).toBe(true);
 	});
 
+	it('shows names and roles without bidi embeddings and overrides, and tells names alike once they are dropped (§3.5.2)', () => {
+		// Built, not written: the Svelte compiler warns of a bidi override in a string literal.
+		const rlo = String.fromCodePoint(0x202e);
+		const mallory = { user_id: 'mallory', name: `A${rlo}da`, roles: [`ad${rlo}min`] };
+		directory.apply(snapshot([ada, mallory]), undefined);
+		expect(directory.name(mallory)).toBe('Ada');
+		expect(directory.person(mallory)).toEqual({ user_id: 'mallory', name: 'Ada', roles: ['admin'] });
+		// Shown as "Ada", Mallory passes for no one: both show their handle.
+		expect(directory.sharesName(mallory)).toBe(true);
+		expect(directory.sharesName(ada)).toBe(true);
+		expect(renderMarkdown('@mallory', directory.resolve)).toContain('@Ada (mallory)');
+		// The kept object is as sent.
+		expect(mallory.name).toBe(`A${rlo}da`);
+	});
+
 	it('reads a status (§4.5) from the kept object only, following renames', () => {
 		const stale = { user_id: 'cy', name: 'Cy', status: 'online' };
 		directory.apply(snapshot([ada, { ...bo, status: 'idle' }, { user_id: 'dee', status: 'away' }], { recordedUsers: { cy: stale, guest_5: { user_id: 'guest_5' } }, userAliases: { guest_5: 'bo' } }), undefined);

@@ -145,6 +145,8 @@ describe('thread grouping', () => {
 		expect(threadLatest({ latestMessage: { ...latest, deleted: true } })).toEqual({ sender: '', text: 'Message deleted' });
 		expect(threadLatest({ latestMessage: message(1, 'bob', { body: { embeds: [{ kind: 'image' }] } }) })).toMatchObject({ text: 'Attachment' });
 		expect(threadLatest({ latestMessage: undefined })).toBeUndefined();
+		// Shown without bidi embeddings and overrides (§3.5.2).
+		expect(threadLatest({ latestMessage: message(2, 'bob', { body: { text: 'evil\u202Egnp.exe' } }) })).toMatchObject({ text: 'evilgnp.exe' });
 		expect(threadDescriptionText({ description: undefined })).toBe('');
 	});
 

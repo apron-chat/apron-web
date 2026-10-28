@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { renderBio, renderMarkdown, renderPlain, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
+import { markdownText, renderBio, renderMarkdown, renderPlain, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
 
 const resolve: MentionResolver = (id) => {
 	if (id === 'alice') return { kind: 'user', id, name: 'Alice Chen' };
@@ -8,6 +8,18 @@ const resolve: MentionResolver = (id) => {
 	if (id === 'ops') return { kind: 'room', id, title: 'Ops & Co' };
 	return undefined;
 };
+
+describe('bidi embeddings and overrides (§3.5.2)', () => {
+	it('are dropped from text as it renders, in every form, the text itself left as written', () => {
+		const text = 'evil\u202Egnp.exe \u202A**bold**\u202C';
+		expect(renderMarkdown(text)).toBe('<p>evilgnp.exe <strong>bold</strong></p>\n');
+		expect(renderPlain(text)).toBe('evilgnp.exe **bold**');
+		expect(renderBio('bio\u202Etxt')).toBe('biotxt');
+		expect(markdownText('a\u202Db')).toBe('ab');
+		expect(mentionSegments('hi\u202E @alice', resolve)).toEqual(['hi ', { target: { kind: 'user', id: 'alice', name: 'Alice Chen' }, hash: false }]);
+		expect(text).toContain('\u202E');
+	});
+});
 
 describe('mentions (Appendix A.3)', () => {
 	it('renders a known user_id with the latest name, marking the viewer’s own chip', () => {

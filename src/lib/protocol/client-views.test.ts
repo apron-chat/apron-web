@@ -82,12 +82,21 @@ describe('serverLook (§3.1)', () => {
 		expect(serverLook({ apron: 9, auth: [], title: ' ', description: 7 } as never, 'wss://chat.example/')).toEqual({});
 		expect(serverLook(undefined, undefined)).toEqual({});
 	});
+
+	it('shows the title and description without bidi embeddings and overrides (§3.5.2), the frame kept as sent', () => {
+		const frame = { apron: 9, auth: ['guest'], title: 'Mock\u202E Chat', description: 'Where\u202A **we** talk.' };
+		expect(serverLook(frame, 'wss://chat.example/')).toEqual({ title: 'Mock Chat', description: 'Where **we** talk.' });
+		expect(frame.title).toBe('Mock\u202E Chat');
+		expect(serverLook({ apron: 9, auth: [], title: '\u202E' }, 'wss://chat.example/')).toEqual({});
+	});
 });
 
 describe('peopleTitle', () => {
 	it('names a private room after the others in it, sorted, or "You" alone', () => {
 		expect(peopleTitle(['Mira', 'dev'])).toBe('dev, Mira');
 		expect(peopleTitle(['Bob'])).toBe('Bob');
+		// Shown, so without bidi embeddings and overrides (§3.5.2).
+		expect(peopleTitle(['Mal\u202Elory', 'Bob'])).toBe('Bob, Mallory');
 		expect(peopleTitle([])).toBe('You');
 	});
 });

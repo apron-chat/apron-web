@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanPlainText, parseFrame, withoutBidiOverrides } from './plain-text';
+import { cleanPlainText, shownEmbed, shownPerson, withoutBidiOverrides } from './plain-text';
 
 describe('cleanPlainText', () => {
 	it('drops bidi embeddings, overrides and isolates, which could make the text around it read backwards', () => {
@@ -27,15 +27,37 @@ describe('cleanPlainText', () => {
 });
 
 describe('bidi embeddings and overrides (§3.5.2)', () => {
-	it('are taken out of what users write, isolates kept', () => {
+	it('are taken out of text as it is shown, isolates kept', () => {
 		expect(withoutBidiOverrides('evil\u202Egnp.exe\u202A\u202B\u202C\u202D \u2068x\u2069')).toBe('evilgnp.exe \u2068x\u2069');
+		const plain = 'nothing to drop';
+		expect(withoutBidiOverrides(plain)).toBe(plain);
 	});
 
-	it('are taken out of every string of a frame, written or escaped, keys and other values left alone', () => {
-		const raw = '{"method":"message","params":{"from":{"user_id":"ada","name":"Ada\\u202e"},"body":{"text":"evil\u202Egnp.exe","n":1}}}';
-		expect(parseFrame(raw)).toEqual({ method: 'message', params: { from: { user_id: 'ada', name: 'Ada' }, body: { text: 'evilgnp.exe', n: 1 } } });
-		// A backslash written before `u202e` is text, not an escape.
-		expect(parseFrame('{"a":"plain","b":[1,"\\\\u202e"]}')).toEqual({ a: 'plain', b: [1, '\\u202e'] });
-		expect(() => parseFrame('{')).toThrow();
+	it('are taken out of a user\'s name and roles as shown, the object kept as written', () => {
+		const mallory = { user_id: 'mal\u202Elory', name: 'Mal\u202Elory', roles: ['ad\u202Dmin', 'ok'], ext: { bio: 'x' } };
+		const shown = shownPerson(mallory);
+		expect(shown).toEqual({ user_id: 'mal\u202Elory', name: 'Mallory', roles: ['admin', 'ok'], ext: { bio: 'x' } });
+		// The user_id is an identifier: kept, and so is the object itself.
+		expect(mallory.name).toBe('Mal\u202Elory');
+		expect(shownPerson(mallory)).toBe(shown);
+		const ada = { user_id: 'ada', name: 'Ada' };
+		expect(shownPerson(ada)).toBe(ada);
+		expect(shownPerson(undefined)).toBeUndefined();
+	});
+
+	it('are taken out of an embed\'s text as shown, never out of its addresses or IDs', () => {
+		const embed = {
+			kind: 'upload', embed_id: 'e\u202E1', url: 'https://x.example/a\u202Eb', title: 'evil\u202Egnp.exe', text: 't\u202Ax',
+			og: { title: 'O\u202Bg', description: 'd\u202Ce', site_name: 's\u202Dn', image: { url: 'https://x.example/i\u202E.png', alt: 'a\u202Elt' } }
+		};
+		const shown = shownEmbed(embed);
+		expect(shown).toEqual({
+			kind: 'upload', embed_id: 'e\u202E1', url: 'https://x.example/a\u202Eb', title: 'evilgnp.exe', text: 'tx',
+			og: { title: 'Og', description: 'de', site_name: 'sn', image: { url: 'https://x.example/i\u202E.png', alt: 'alt' } }
+		});
+		expect(embed.title).toBe('evil\u202Egnp.exe');
+		expect(shownEmbed(embed)).toBe(shown);
+		const plain = { kind: 'upload', url: 'https://x.example/\u202E', title: 'File' };
+		expect(shownEmbed(plain)).toBe(plain);
 	});
 });

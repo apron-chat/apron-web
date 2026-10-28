@@ -138,6 +138,35 @@ describe('saves', () => {
 		expect(deleted).toMatchObject({ message_id: '100', room_id: 'general', deleted: true });
 	});
 
+	it('keeps bidi embeddings and overrides in IDs, write URLs, ext and text as sent, and an edit sends them back (§3.5.2)', async () => {
+		await connect(['edit', 'rooms', 'reactions', 'ext']);
+		const id = '100';
+		socket.receive({ method: 'message', params: message(id, {
+			from: { user_id: 'al\u202Eice', name: 'Al\u202Eice' },
+			body: { text: 'evil\u202Egnp.exe \u202Aquoted\u202C', format: 'markdown', embeds: [{ kind: 'upload', embed_id: 'e\u202D1', url: 'https://x.example/f\u202E', title: 'f\u202Eile' }] },
+			ext: { irc: { msgid: 'a\u202B1' } }
+		}) });
+		const kept = client.message(id);
+		expect(kept?.message_id).toBe(id);
+		expect(kept?.from).toEqual({ user_id: 'al\u202Eice', name: 'Al\u202Eice' });
+		expect(kept?.body?.text).toBe('evil\u202Egnp.exe \u202Aquoted\u202C');
+		expect(kept?.body?.embeds).toEqual([{ kind: 'upload', embed_id: 'e\u202D1', url: 'https://x.example/f\u202E', title: 'f\u202Eile' }]);
+		expect(kept?.ext).toEqual({ irc: { msgid: 'a\u202B1' } });
+		// The edit's text keeps every character typed, and the embed its ID and URL.
+		quiet(client.editMessage(id, `${kept?.body?.text} and more`));
+		expect(socket.request('message').params).toEqual({
+			message_id: id, room_id: 'general',
+			body: { text: 'evil\u202Egnp.exe \u202Aquoted\u202C and more', format: 'markdown', embeds: [{ kind: 'upload', embed_id: 'e\u202D1', url: 'https://x.example/f\u202E', title: 'f\u202Eile' }] }
+		});
+		// A room ID with one is a room like any other.
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'r\u202Eoom', log_id: '30', title: 'T\u202Eitle' }] } });
+		expect(room('r\u202Eoom').record?.title).toBe('T\u202Eitle');
+		// Its title as shown drops them.
+		expect(room('r\u202Eoom').title).toBe('Title');
+		quiet(client.send('r\u202Eoom', 'hi'));
+		expect(socket.request('message').params).toMatchObject({ room_id: 'r\u202Eoom', body: { text: 'hi' } });
+	});
+
 	it('sends only the ext keys a save changes, an empty value clearing one, and settles on a record whatever its ext', async () => {
 		await connect(['edit', 'rooms', 'reactions', 'ext']);
 		socket.receive({ method: 'message', params: message('100', { body: { text: 'old' }, ext: { irc: { nick: 'ada_' }, git: 'abc' } }) });

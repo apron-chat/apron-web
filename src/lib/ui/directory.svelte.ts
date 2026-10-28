@@ -1,5 +1,6 @@
 import { bioOf, serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
 import { safeAvatar } from '$lib/protocol/embeds';
+import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
 import type { EmojiResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 import { readPlaceLink, writeApronLink } from './apron-link';
@@ -39,8 +40,9 @@ class Directory {
 	/**
 	 * Every known `user_id` by the display name it shows under: its kept name,
 	 * else (only when nothing is kept for it, not when it was cleared) the name
-	 * it was last recorded with, else its `user_id`. Retired IDs count as the
-	 * identity that replaced them.
+	 * it was last recorded with, else its `user_id`; as shown, without bidi
+	 * embeddings and overrides (§3.5.2), so none tells two alike names apart.
+	 * Retired IDs count as the identity that replaced them.
 	 */
 	private readonly byName = $derived.by(() => {
 		const { users, recordedUsers, userAliases } = this.users;
@@ -48,7 +50,7 @@ class Directory {
 		for (const id of new Set([...Object.keys(users), ...Object.keys(recordedUsers)])) {
 			if (userAliases[id] !== undefined) continue;
 			const kept = users[id];
-			const name = (kept && Object.hasOwn(kept, 'name') ? kept.name : recordedUsers[id]?.name) || id;
+			const name = withoutBidiOverrides((kept && Object.hasOwn(kept, 'name') ? kept.name : recordedUsers[id]?.name) || '') || id;
 			let ids = names.get(name);
 			if (!ids) names.set(name, (ids = new Set()));
 			ids.add(id);
@@ -83,7 +85,7 @@ class Directory {
 		const untitled: Record<string, true> = {};
 		const parents: Record<string, string> = {};
 		for (const room of [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat(), ...snapshot.rooms]) {
-			rooms[room.id] = room.title;
+			rooms[room.id] = room.title; // shown already (`roomTitle`)
 			if (room.untitled) untitled[room.id] = true;
 			else delete untitled[room.id];
 			if (room.parentRoomId !== undefined) parents[room.id] = room.parentRoomId;
@@ -115,9 +117,13 @@ class Directory {
 		this.parents = {};
 	}
 
-	/** How to show a user a frame names (a `from`, a member): the kept fields, else the recorded ones. */
+	/**
+	 * How to show a user a frame names (a `from`, a member): the kept fields,
+	 * else the recorded ones; the name and roles as shown, without bidi
+	 * embeddings and overrides (§3.5.2, `shownPerson`).
+	 */
 	person(from: Identity | undefined): Identity | undefined {
-		return from ? userIn(this.users, from) : undefined;
+		return from ? shownPerson(userIn(this.users, from)) : undefined;
 	}
 
 	/** A display name: the kept `name`, else the recorded one where none is kept; empty or unknown shows the `user_id`. */

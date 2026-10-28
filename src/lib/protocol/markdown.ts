@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
 import { emojiKeySegments } from './custom-emoji';
+import { withoutBidiOverrides } from './plain-text';
 
 /**
  * A body's `markdown` format is CommonMark (§3.5). This renders CommonMark
@@ -182,16 +183,19 @@ function markdown(source: string): string {
 /**
  * Markdown rendering with raw HTML and unsafe URL schemes disabled, keeping
  * typed line breaks. Without a DOM to sanitize with (tests, prerendering) the
- * body is rendered as plain text instead, which needs no sanitizing.
+ * body is rendered as plain text instead, which needs no sanitizing. Like
+ * every render here, it shows the text without bidi embeddings and overrides
+ * (§3.5.2); the text itself stays as written.
  */
-export function renderMarkdown(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver): string {
+export function renderMarkdown(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver): string {
+	const source = withoutBidiOverrides(text);
 	if (!DOMPurify.isSupported) return linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink, resolveEmoji);
 	return sanitize(linkText(markdown(source), resolve, resolveRoom, resolveLink, resolveEmoji));
 }
 
 /** A plain body as HTML: escaped, with bare links and mentions linked. Line breaks are kept by CSS (`pre-wrap`). */
 export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver): string {
-	const html = linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink, resolveEmoji);
+	const html = linkifyText(escapeHtml(withoutBidiOverrides(source)), resolve, resolveRoom, false, resolveLink, resolveEmoji);
 	return DOMPurify.isSupported ? sanitize(html) : html;
 }
 
@@ -202,7 +206,7 @@ export function renderPlain(source: string, resolve?: MentionResolver, resolveRo
  * CSS (`pre-line`).
  */
 export function renderBio(source: string): string {
-	const html = linkifyText(escapeHtml(source), undefined, undefined, true);
+	const html = linkifyText(escapeHtml(withoutBidiOverrides(source)), undefined, undefined, true);
 	return DOMPurify.isSupported ? sanitize(html) : html;
 }
 
@@ -212,7 +216,7 @@ export function renderBio(source: string): string {
  * breaks) and entities decoded. The result is text, never markup.
  */
 export function markdownText(source: string): string {
-	return unescapeHtml(markdown(source)
+	return unescapeHtml(markdown(withoutBidiOverrides(source))
 		.replace(/<br\s*\/?>|<\/(?:p|li|h[1-6]|pre|blockquote|tr)>/gi, '\n')
 		.replace(/<[^>]*>/g, ''))
 		.replace(/\n{2,}/g, '\n')
@@ -404,7 +408,9 @@ export function customEmojiTag(emoji: CustomEmojiImage): string {
  * to known rooms (`#room_id`). Unknown IDs, and an `@` or `#` right after a
  * letter or digit, stay text.
  */
-export function mentionSegments(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver): MentionSegment[] {
+export function mentionSegments(written: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver): MentionSegment[] {
+	// Shown, so without bidi embeddings and overrides (§3.5.2).
+	const text = withoutBidiOverrides(written);
 	if (!resolve && !resolveRoom) return [text];
 	const segments: MentionSegment[] = [];
 	let last = 0;

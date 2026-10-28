@@ -1,6 +1,6 @@
 /** Pure helpers over client snapshots, capabilities, and server URLs. */
 import { parseOrigins, safeAvatar, serverOrigin } from './embeds';
-import { cleanPlainText } from './plain-text';
+import { cleanPlainText, withoutBidiOverrides } from './plain-text';
 import { timelineEvents } from './reducer';
 import { isJsonObject } from './types';
 import type {
@@ -104,7 +104,8 @@ export const PRIVATE_ROOM = 'Private room';
  */
 export function peopleTitle(names: readonly string[]): string {
 	if (!names.length) return 'You';
-	return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) || a.localeCompare(b)).join(', ');
+	// Shown, so without bidi embeddings and overrides (§3.5.2).
+	return names.map(withoutBidiOverrides).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) || a.localeCompare(b)).join(', ');
 }
 
 /** What the client offers the signed-in user (`ext:permissions`, `you.ext.permissions`). */
@@ -175,11 +176,15 @@ export interface ServerLook {
 
 /**
  * How the server at `url` shows itself, from its `server` frame (§3.1): each
- * field only as a non-blank string, and the avatar only from a source that
- * avatars load from. A server is never known by these (§1).
+ * field only as a non-blank string, as shown, without bidi embeddings and
+ * overrides (§3.5.2), and the avatar only from a source that avatars load
+ * from. A server is never known by these (§1).
  */
 export function serverLook(server: ServerParams | undefined, url: string | undefined): ServerLook {
-	const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+	const text = (value: unknown) => {
+		const shown = typeof value === 'string' ? withoutBidiOverrides(value).trim() : '';
+		return shown || undefined;
+	};
 	const title = text(server?.title);
 	const description = text(server?.description);
 	const avatar = safeAvatar(server?.avatar, url ? serverOrigin(url) : undefined);

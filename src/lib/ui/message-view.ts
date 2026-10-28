@@ -1,5 +1,6 @@
 import type { Notice, RoomListing, RoomSnapshot, UploadState } from '$lib/protocol/client';
 import { markdownText, mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
+import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { systemScope, type Embed, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
 import type { EmbedProps, MessageCaps, MessageEmbed, MessageUpload, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
@@ -66,9 +67,10 @@ function bodyOf(body: MessageBody | undefined): NonNullable<MessageView['body']>
 	return { html, markdown, code: html.includes('<pre') };
 }
 
-/** A scoped notice's title: its sender as the server names it (§3.3), `Name (~id)`. */
+/** A scoped notice's title: its sender as the server names it (§3.3), `Name (~id)`, the name as shown (§3.5.2). */
 function noticeTitle(from: Identity): string {
-	return from.name && from.name !== from.user_id ? `${from.name} (${from.user_id})` : from.user_id;
+	const name = withoutBidiOverrides(from.name ?? '');
+	return name && name !== from.user_id ? `${name} (${from.user_id})` : from.user_id;
 }
 
 /** What a record's row shows that depends only on the record and the directory: kept per record, rendered again only when either changes. */

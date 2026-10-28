@@ -2,6 +2,7 @@
 	import { preferencesDialog } from './lazy';
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
+	import { shownPerson } from '$lib/protocol/plain-text';
 	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, type ChatClient, type OperationHandle } from '$lib/protocol/client';
 	import { addError, passkeyMessage, statusLabel, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { returnUrl } from '$lib/ui/sign-in-link';
@@ -73,6 +74,8 @@
 	let avatarStatus = $state<'idle' | 'uploading' | 'removing'>('idle');
 	let avatarError = $state('');
 	let you = $derived(session.you);
+	/** You as the bar shows you: your name without bidi embeddings and overrides (§3.5.2); the editor starts from it as written. */
+	let shownYou = $derived(shownPerson(you));
 	/** While notifications are paused, when that ends in words ("until 14:30"). */
 	let paused = $derived(pause?.until !== undefined ? pausedUntilLabel(pause.until) : undefined);
 	let avatar = $derived(directory.avatar(you));
@@ -352,7 +355,7 @@
 
 <!-- The design system's ProfileBar and ProfileEditor draw it; the app fills in its avatar, and the ways to sign in this server offers. -->
 {#snippet barAvatar()}
-	<Avatar name={you?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={shownStatus} statusLabel={ownLabel} />
+	<Avatar name={shownYou?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={shownStatus} statusLabel={ownLabel} />
 {/snippet}
 {#snippet face()}
 	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" status={shownStatus} statusLabel={ownLabel} />
@@ -453,7 +456,7 @@
 {/snippet}
 
 <DesignProfileBar
-	{you}
+	you={shownYou}
 	placeholder={session.starting ? 'Signing in…' : 'Not signed in'}
 	backend={backendLabel}
 	note={wayBack ? 'add a sign-in' : undefined}

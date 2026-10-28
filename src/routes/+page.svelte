@@ -5,8 +5,9 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, keepsBio, normalizeWebSocketUrl, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
+	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
 	import { readApronLink, writeApronLink, type ApronLink } from '$lib/ui/apron-link';
@@ -536,10 +537,10 @@
 	let canStartThreads = $derived(session.canManageRooms && !session.readOnly && Boolean(activeRoom) && activeRoom?.parentRoomId === undefined);
 	/** Editing the open room's or thread's title and description (capability `rooms`); the server decides who may. */
 	let canEditPane = $derived(session.canManageRooms && !session.readOnly && Boolean(activeThread ? activeThreadEntry : activeRoom));
-	/** What the Edit form edits: the open thread, else the room. */
+	/** What the Edit form edits: the open thread, else the room; its title as written (`editableTitle`), so saving sends back every character. */
 	let editTarget = $derived(activeThread
-		? (activeThreadEntry ? { id: activeThreadEntry.id, title: activeThreadEntry.title, description: activeThreadEntry.description } : undefined)
-		: (activeRoom ? { id: activeRoom.id, title: activeRoom.title, description: activeRoom.description } : undefined));
+		? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.rooms.find((room) => room.id === activeThreadEntry?.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
+		: (activeRoom ? { id: activeRoom.id, title: editableTitle(activeRoom), description: activeRoom.description } : undefined));
 	/** Room and thread descriptions put away with their ×, on this device. */
 	let hiddenDescriptions = $state(loadHiddenDescriptions());
 	/** Whether the open room's or thread's description is put away: the header's Description brings it back. */
@@ -2752,8 +2753,8 @@
 		current={{
 			url: client.url, keptSession: Boolean(snapshot.keptSession),
 			...(links.asked.server && links.asked.server !== client.url ? { targetKeptSession: client.keptSessionFor(links.asked.server) } : {}),
-			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}),
-			...(snapshot.authenticated && snapshot.you && snapshot.server?.auth.some((scheme) => scheme === 'email' || scheme === 'external') ? { addAs: snapshot.you.name ? `${snapshot.you.name} (@${snapshot.you.user_id})` : `@${snapshot.you.user_id}` } : {})
+			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${withoutBidiOverrides(session.you.name)} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}),
+			...(snapshot.authenticated && snapshot.you && snapshot.server?.auth.some((scheme) => scheme === 'email' || scheme === 'external') ? { addAs: snapshot.you.name ? `${withoutBidiOverrides(snapshot.you.name)} (@${snapshot.you.user_id})` : `@${snapshot.you.user_id}` } : {})
 		}}
 		onconfirm={() => links.confirm()} onadd={() => links.addAsked()} oncancel={() => links.cancel()}
 	/>
