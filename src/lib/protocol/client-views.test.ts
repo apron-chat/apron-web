@@ -8,14 +8,16 @@ describe('serverMedia (ext:media)', () => {
 	const media = {
 		origins: ['https://media.chat.example', 'https://media.chat.example/f', 'http://media.chat.example'],
 		upload: { 'image/*': { max_bytes: 5_242_880, max_side: 2048 }, 'image/gif': { max_bytes: 5_242_880 }, 'audio/*': { max_bytes: 10_485_760 } },
-		avatar: { 'image/*': { max_bytes: 262_144, max_side: 512 } }
+		avatar: { 'image/*': { max_bytes: 262_144, max_side: 512 } },
+		emoji: { 'image/png': { max_bytes: 262_144 }, 'image/gif': { max_bytes: 262_144 }, 'image/webp': { max_bytes: 262_144, max_side: 128 } }
 	};
 
 	it('reads the media only while the server advertises the extension', () => {
 		expect(serverMedia(server(['ext:media'], { media }))).toEqual({
 			origins: ['https://media.chat.example'],
 			upload: media.upload,
-			avatar: media.avatar
+			avatar: media.avatar,
+			emoji: media.emoji
 		});
 		expect(serverMedia(server([], { media }))).toEqual({ origins: [] });
 		expect(serverMedia(undefined)).toEqual({ origins: [] });
@@ -32,9 +34,11 @@ describe('serverMedia (ext:media)', () => {
 				'*/png': {},
 				nonsense: {}
 			},
-			avatar: ['image/*']
+			avatar: ['image/*'],
+			emoji: { 'Image/GIF': { max_bytes: 0 }, 'image/png': null }
 		};
-		expect(serverMedia(server(['ext:media'], { media: odd }))).toEqual({ origins: [], upload: { 'image/*': {}, 'audio/*': {}, 'image/png': {} } });
+		expect(serverMedia(server(['ext:media'], { media: odd }))).toEqual({ origins: [], upload: { 'image/*': {}, 'audio/*': {}, 'image/png': {} }, emoji: { 'image/gif': {} } });
+		expect(serverMedia(server(['ext:media'], { media: { emoji: 'image/png' } }))).toEqual({ origins: [] });
 	});
 
 	it('takes a file by its most specific pattern, whatever the order of keys', () => {

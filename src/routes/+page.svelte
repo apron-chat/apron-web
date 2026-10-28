@@ -49,7 +49,7 @@
 	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
 	import { couldNotAdd } from '$lib/ui/members';
 	import { roomFaces } from '$lib/ui/faces';
-	import { composerAction } from '$lib/ui/commands';
+	import { attachmentLimits, composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
@@ -1939,6 +1939,10 @@
 		const staged = drafts.files;
 		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: false });
 		const command = action.kind === 'command';
+		// `/emoji add` takes its image to the server's emoji limits (`ext.media.emoji`), not those it was staged to.
+		const media = serverMedia(session.server);
+		const limits = attachmentLimits(action, media);
+		const refit = limits !== media.upload ? staged.map(({ file }) => prepareUpload(file, { limits })) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
 		const mentions = composerMentions;
 		const dismissed = composerDismissed;
@@ -1952,15 +1956,22 @@
 		composer?.focus();
 		feedback.pending(staged.length === 1 ? `Uploading ${staged[0].title || staged[0].file.name || 'file'}…` : `Uploading ${staged.length} files…`);
 		// A file that couldn't be readied was already taken off with its reason; the rest go.
-		const readied = await Promise.allSettled(staged.map(({ prepared }) => prepared));
+		const readied = await Promise.allSettled(refit ?? staged.map(({ prepared }) => prepared));
 		// Each goes out under the name it was given on the draft, if it was renamed.
 		const files = readied.flatMap((result, index) => (result.status === 'fulfilled' ? [{ ...result.value, ...(staged[index].title ? { title: staged[index].title } : {}) }] : []));
 		const kept = staged.filter((_, index) => readied[index].status === 'fulfilled');
-		const restore = () => {
-			if (!drafts.restore(originKey, draft, reply, kept)) return;
+		const restore = (back = kept) => {
+			if (!drafts.restore(originKey, draft, reply, back)) return;
 			composerDismissed = dismissed;
 			composer?.focus();
 		};
+		// One `/emoji add` can't take is handed back with the draft, unsent, with the reason.
+		const refused = refit && readied.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+		if (refused) {
+			feedback.error(refused.reason, 'Unable to attach the file');
+			restore(staged);
+			return;
+		}
 		if (client !== chat) {
 			restore();
 			return;

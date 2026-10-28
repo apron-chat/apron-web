@@ -181,7 +181,7 @@ export interface MediaLimit {
 	max_side?: number;
 }
 
-/** A category of files (`ext:media` `upload` or `avatar`): each MIME pattern it takes (`type/subtype`, `type/*`, `*\/*`), with its limits. */
+/** A category of files (`ext:media` `upload`, `avatar` or `emoji`): each MIME pattern it takes (`type/subtype`, `type/*`, `*\/*`), with its limits. */
 export type MediaTypes = Record<string, MediaLimit>;
 
 /** What a server says about media (`ext:media`): origins besides its own, and the files it takes, by category. */
@@ -192,6 +192,8 @@ export interface ServerMedia {
 	upload?: MediaTypes;
 	/** `/avatar` (§4.8.6). Absent: nothing is known. */
 	avatar?: MediaTypes;
+	/** Custom emoji images, as `/emoji add` takes them (`ext:emoji`). Absent: nothing is known. */
+	emoji?: MediaTypes;
 }
 
 const MIME_PATTERN = /^(\*\/\*|[\w!#$&^.+-]+\/(\*|[\w!#$&^.+-]+))$/;
@@ -208,7 +210,8 @@ export function serverMedia(server: ServerParams | undefined): ServerMedia {
 	const media = isJsonObject(ext) && isJsonObject(ext.media) ? ext.media : {};
 	const upload = mediaTypes(media.upload);
 	const avatar = mediaTypes(media.avatar);
-	return { origins: parseOrigins(media.origins), ...(upload ? { upload } : {}), ...(avatar ? { avatar } : {}) };
+	const emoji = mediaTypes(media.emoji);
+	return { origins: parseOrigins(media.origins), ...(upload ? { upload } : {}), ...(avatar ? { avatar } : {}), ...(emoji ? { emoji } : {}) };
 }
 
 function mediaTypes(value: unknown): MediaTypes | undefined {
