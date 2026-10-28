@@ -2280,6 +2280,17 @@
 			const event = rowEvent(view);
 			return event ? copyMessageLink(event) : false;
 		},
+		// Touch's menu offers this, since its rows take no text selection: the text as written, Markdown and all.
+		copyText: async (view) => {
+			const text = rowEvent(view) ? textOf(rowEvent(view)!) : '';
+			if (!text) return false;
+			try {
+				await navigator.clipboard.writeText(text);
+				return true;
+			} catch {
+				return false;
+			}
+		},
 		select: (view, range) => {
 			if (view.id) selection.toggle(view.id, selectableOrder, range);
 		},

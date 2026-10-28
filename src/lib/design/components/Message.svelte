@@ -2,13 +2,15 @@
 	import type { MessageHandlers } from './types';
 
 	const LONG_PRESS_MS = 500;
+	/** How far a held finger may drift before the press counts as a scroll: a finger is never quite still. */
+	const SLOP_PX = 10;
 	const NONE: MessageHandlers = {};
-	/** The one touch long press in progress, page-wide: a second finger elsewhere starts over. */
-	let press: ReturnType<typeof setTimeout> | undefined;
+	/** The one touch long press in progress, page-wide, and where it began: a second finger elsewhere starts over. */
+	let press: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | undefined;
 
 	function cancelPress(): void {
 		if (!press) return;
-		clearTimeout(press);
+		clearTimeout(press.timer);
 		press = undefined;
 	}
 </script>
@@ -43,11 +45,12 @@
 	let { view, on = NONE, testids, editor, embed }: Props = $props();
 
 	let engaged = $state(false);
-	/** Whether the last press on the row was a touch, which leaves it hovered and focused: the toolbar sticks. */
-	let touched = false;
-	/** A tap showed the toolbar; the next one on the row hides it again, with `dismissed`, until a tap after that. */
-	let tapped = false;
-	let dismissed = $state(false);
+	/** The last press on the row was a touch: its toolbar shows only once a long press opens it (`held`). */
+	let touch = $state(false);
+	/** A long press opened the toolbar as touch's menu: larger, with Reply and React up front and the rest behind ⋯. */
+	let held = $state(false);
+	/** The click that ends a long press: the press opened the menu, so the click does nothing else. */
+	let swallow = false;
 
 	const t = $derived(times(view.timestamp, view.time));
 	const quoted = $derived(Boolean(view.reply) && !view.deleted);
@@ -55,34 +58,49 @@
 	/** A check column: select mode, on a message you may pick. */
 	const checkable = $derived(Boolean(view.selecting && view.caps?.select));
 	const caps = $derived(view.caps);
-	const toolbar = $derived(engaged && !view.editing && !view.selecting && caps !== undefined && (caps.reply || caps.edit || caps.removeReply || caps.react || caps.startThread || caps.link));
+	const actionable = $derived(caps !== undefined && (caps.reply || caps.edit || caps.removeReply || caps.react || caps.startThread || caps.link || caps.select));
+	const toolbar = $derived(engaged && !view.editing && !view.selecting && actionable);
 
-	/** The toolbar's actions, in order; the rarer ones wait behind ⋯. */
+	/**
+	 * The toolbar's actions, in order; the rarer ones wait behind ⋯. Touch's menu (`held`) keeps only Reply and React
+	 * up front, with everything else behind ⋯, and offers Copy text, since its rows take no text selection.
+	 */
 	function actions(): { items: MessageAction[]; more?: MessageAction[] } {
 		const can = caps!;
-		const items: MessageAction[] = [];
-		if (view.deleted && can.removeReply) items.push({ id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) });
-		if (can.reply) items.push({ id: 'reply', label: 'Reply to message', glyph: 'Reply', onclick: () => on.reply?.(view) });
-		if (can.react && !view.deleted) {
-			items.push({ id: 'react', label: 'React', title: 'React', popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) });
+		const unreplied: MessageAction | undefined = view.deleted && can.removeReply ? { id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) } : undefined;
+		const reply: MessageAction | undefined = can.reply ? { id: 'reply', label: 'Reply to message', glyph: 'Reply', onclick: () => on.reply?.(view) } : undefined;
+		const react: MessageAction | undefined = can.react && !view.deleted
+			? { id: 'react', label: 'React', title: 'React', popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) }
+			: undefined;
+		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Start thread', onclick: () => on.startThread?.(view) } : undefined;
+		const edit: MessageAction | undefined = can.edit ? { id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', onclick: () => on.edit?.(view) } : undefined;
+		const unreply: MessageAction | undefined = can.edit && view.reply ? { id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) } : undefined;
+		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', testid: testids?.select, onclick: () => on.beginSelect?.(view) } : undefined;
+		const copy: MessageAction | undefined = held && view.body && on.copyText ? { id: 'copy', label: 'Copy text', glyph: 'Copy text', done: { label: 'Text copied', glyph: 'Copied' }, onclick: () => on.copyText?.(view) } : undefined;
+		const link: MessageAction | undefined = can.link ? { id: 'link', label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', done: { label: 'Link copied', glyph: 'Copied' }, onclick: () => on.copyLink?.(view) } : undefined;
+		const remove: MessageAction | undefined = can.edit ? { id: 'delete', label: 'Delete message', title: 'Delete', glyph: 'Delete', danger: true, onclick: () => on.delete?.(view) } : undefined;
+		const present = (list: Array<MessageAction | undefined>) => list.filter((it): it is MessageAction => it !== undefined);
+		if (held) {
+			const front = present([reply, react]);
+			const rest = present([unreplied, thread, edit, select, copy, link, unreply, remove]);
+			return front.length ? { items: front, more: rest } : { items: rest };
 		}
-		if (can.startThread) items.push({ id: 'thread', label: 'Start thread', title: 'Start thread', onclick: () => on.startThread?.(view) });
-		if (can.edit) items.push({ id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', onclick: () => on.edit?.(view) });
-		if (!can.edit && !can.link) return { items };
-		const more: MessageAction[] = [];
-		if (can.edit && view.reply) more.push({ id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) });
-		if (can.edit && can.select) more.push({ id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', testid: testids?.select, onclick: () => on.beginSelect?.(view) });
-		if (can.link) more.push({ id: 'link', label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', done: { label: 'Link copied', glyph: 'Copied' }, onclick: () => on.copyLink?.(view) });
-		if (can.edit) more.push({ id: 'delete', label: 'Delete message', title: 'Delete', glyph: 'Delete', danger: true, onclick: () => on.delete?.(view) });
-		return { items, more };
+		const more = present([unreply, select, link, remove]);
+		return { items: present([unreplied, reply, react, thread, edit]), ...(more.length ? { more } : {}) };
 	}
 
 	/**
 	 * A click: a room mention opens it; outside select mode a person (a mention, the sender's name or avatar) opens
 	 * their profile; in select mode it picks the message, a shift-click filling the range; else a shift-click starts
-	 * select mode with it picked.
+	 * select mode with it picked. The click that ends a long press does none of that, and a tap on the row while its
+	 * touch menu is open puts the menu away.
 	 */
 	function click(event: MouseEvent): void {
+		if (swallow) {
+			swallow = false;
+			event.preventDefault();
+			return;
+		}
 		const target = event.target as HTMLElement | null;
 		const room = target?.closest?.<HTMLElement>('[data-room-id]');
 		if (room?.dataset.roomId) {
@@ -98,24 +116,33 @@
 			return;
 		}
 		if (event.shiftKey && view.caps?.select) on.beginSelect?.(view);
-		else if (touched) tap(event.currentTarget as HTMLElement);
+		else if (held) release(event.currentTarget as HTMLElement);
 	}
 
-	/** A tap on the row, off its controls: it toggles the toolbar, which touch can't hover away from. */
-	function tap(row: HTMLElement): void {
-		tapped = !tapped;
-		dismissed = !tapped;
-		if (dismissed && row.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+	/** Puts touch's menu away, and the focus it took with it. */
+	function release(row: HTMLElement): void {
+		held = false;
+		if (row.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
 	}
 
-	/** Focus leaving the row, for another message or anywhere else, takes the toolbar away; the next tap shows it. */
+	/** Focus leaving the row, for another message or anywhere else, puts touch's menu away. */
 	function focusout(event: FocusEvent): void {
 		if (event.relatedTarget instanceof Node && (event.currentTarget as HTMLElement).contains(event.relatedTarget)) return;
-		tapped = false;
+		// A focused button taken out (⋯ as the rest show) blurs too, but focus hasn't left: that one is gone once this settles.
+		const row = event.currentTarget as HTMLElement;
+		const from = event.target as Node;
+		queueMicrotask(() => {
+			if (from.isConnected && !row.contains(document.activeElement)) held = false;
+		});
 	}
 
-	/** Keyboard: `x` on a focused message picks it, the same as a shift-click. */
+	/** Keyboard: `x` on a focused message picks it, the same as a shift-click; Escape puts touch's menu away. */
 	function keydown(event: KeyboardEvent): void {
+		if (event.key === 'Escape' && held) {
+			event.preventDefault();
+			release(event.currentTarget as HTMLElement);
+			return;
+		}
 		if (event.key !== 'x' || event.metaKey || event.ctrlKey || event.altKey || !view.caps?.select) return;
 		if ((event.target as HTMLElement | null)?.closest?.('input, textarea, select')) return;
 		event.preventDefault();
@@ -129,22 +156,55 @@
 		on.select?.(view, false);
 	}
 
-	/** Touch has no hover or shift: a long press starts select mode instead, unless it's on a chip, which lists who reacted. */
+	/**
+	 * A press held where touch's menu may open: not in select mode or the editor, and not on a reaction chip (whose
+	 * own long press lists who reacted) or on a link or media, whose long press is the browser's.
+	 */
+	function holdable(target: EventTarget | null): boolean {
+		return !view.selecting && !view.editing && actionable && !(target as HTMLElement | null)?.closest?.('.ap-rchip, a, img, video, audio');
+	}
+
+	/** Touch has no hover or right-click: a long press opens the toolbar as its menu. A tap doesn't, so a stray one can't. */
 	function pointerdown(event: PointerEvent): void {
 		cancelPress();
-		touched = event.pointerType === 'touch';
-		if (event.pointerType !== 'touch' || view.selecting || view.editing || !view.caps?.select) return;
-		if ((event.target as HTMLElement | null)?.closest?.('.ap-rchip')) return;
+		swallow = false;
+		touch = event.pointerType === 'touch';
+		if (!touch || held || !holdable(event.target)) return;
 		const row = event.currentTarget as HTMLElement;
-		press = setTimeout(() => {
-			press = undefined;
-			if (row.isConnected) on.beginSelect?.(view);
-		}, LONG_PRESS_MS);
+		press = {
+			timer: setTimeout(() => {
+				press = undefined;
+				if (row.isConnected) hold(row);
+			}, LONG_PRESS_MS),
+			x: event.clientX,
+			y: event.clientY
+		};
+	}
+
+	/** A finger that drifts past SLOP_PX is scrolling, not holding. */
+	function pointermove(event: PointerEvent): void {
+		if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > SLOP_PX) cancelPress();
+	}
+
+	/** Android's own long press, which would select the text under the finger: it opens the menu in its place. */
+	function contextmenu(event: MouseEvent): void {
+		if (!touch || !holdable(event.target)) return;
+		event.preventDefault();
+		cancelPress();
+		if (!held) hold(event.currentTarget as HTMLElement);
+	}
+
+	/** Opens touch's menu on the row, focused so that focus leaving it (a tap elsewhere, another's menu) puts it away. */
+	function hold(row: HTMLElement): void {
+		held = true;
+		engaged = true;
+		swallow = true;
+		row.focus({ preventScroll: true });
 	}
 
 	function engage(event: Event): void {
 		engaged = true;
-		if ((event as PointerEvent).pointerType === 'mouse') dismissed = false;
+		if ((event as PointerEvent).pointerType === 'mouse') touch = false;
 	}
 
 	/** Its code blocks, decorated by `on.code` (a notice's get Copy buttons), again whenever the body changes. */
@@ -173,7 +233,7 @@
 {:else}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 	<article
-		class={['ap-msg', grouped && 'ap-msg-grouped', view.mention && 'ap-msg-mention', view.pinged && 'ap-msg-pinged', view.highlighted && 'ap-msg-highlighted', checkable && 'ap-msg-selectable', checkable && view.selected && 'ap-msg-selected', dismissed && !view.selecting && 'ap-msg-dismissed']}
+		class={['ap-msg', grouped && 'ap-msg-grouped', view.mention && 'ap-msg-mention', view.pinged && 'ap-msg-pinged', view.highlighted && 'ap-msg-highlighted', checkable && 'ap-msg-selectable', checkable && view.selected && 'ap-msg-selected', touch && !held && !view.selecting && 'ap-msg-dismissed', held && 'ap-msg-held']}
 		data-message-id={view.id}
 		data-timeline-item=""
 		data-testid={testids?.row}
@@ -185,8 +245,9 @@
 		onfocusout={focusout}
 		onpointerdown={pointerdown}
 		onpointerup={cancelPress}
-		onpointermove={cancelPress}
+		onpointermove={pointermove}
 		onpointercancel={cancelPress}
+		oncontextmenu={contextmenu}
 	>
 		{#if quoted}<div class="ap-msg-reply"><ReplyPreview reply={view.reply!} onjump={on.jump} data-testid={testids?.reply} /></div>{/if}
 		{#if checkable}<span class="ap-msg-check" role="checkbox" aria-checked={Boolean(view.selected)} aria-label="Select message" tabindex="0" onkeydown={checkKey}>{view.selected ? '✓' : ''}</span>{/if}
@@ -218,7 +279,7 @@
 		</div>
 		{#if toolbar}
 			{@const { items, more } = actions()}
-			<div class="ap-msg-actions"><MessageActions {items} {more} /></div>
+			<div class="ap-msg-actions"><MessageActions {items} {more} touch={held} /></div>
 		{/if}
 	</article>
 {/if}
