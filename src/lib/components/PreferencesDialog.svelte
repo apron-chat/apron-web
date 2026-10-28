@@ -304,7 +304,7 @@
 					<Button size="sm" variant="ghost" label={exporting ? 'Exporting…' : 'Export'} disabled={!onexport} aria-disabled={exporting ? 'true' : undefined} aria-busy={exporting ? 'true' : undefined} onclick={exportChats} data-testid="export-chats" />
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Open an export" hint="Reads a saved export in a new tab, read-only. Its images still load from the server they were posted to.">
+			<SettingRow title="Open an export" hint="Reads a saved export in a new tab, read-only, and asks before loading its images from the sites it names.">
 				{#snippet control()}
 					<Button size="sm" variant="ghost" label="Open…" onclick={openExport} />
 				{/snippet}

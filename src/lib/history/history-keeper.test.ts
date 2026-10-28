@@ -5,7 +5,7 @@ import { ChatClient, timelineMessages, type ClientSnapshot } from '$lib/protocol
 import { MemoryProtocolServer } from '$lib/preview/memory-server';
 import { readKept } from '$lib/test/kept-history';
 import { openHistory, writeHistory } from './history-db';
-import { HistoryKeeper, plannedRoom, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
+import { HistoryKeeper, mergeOf, plannedRoom, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
 import type { RoomSync } from '$lib/protocol/client';
 
 const URL = 'wss://chat.example/';
@@ -193,6 +193,41 @@ describe('HistoryKeeper', () => {
 		await keeper.stop();
 	});
 
+	it('keeps a joined thread as a room: restored to its newest, going on from its last load, paged back from this device', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		for (let n = 0; n < 250; n++) server.post('thread_deploy', n % 2 ? 'ada' : 'grace', `Step ${n}`);
+		const indexedDB = new IDBFactory();
+		const first = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(first);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(first));
+		first.start();
+		await waitFor(() => Boolean(room(first.snapshot(), 'thread_deploy')));
+		await first.loadRoom('thread_deploy');
+		while (room(first.snapshot(), 'thread_deploy')?.olderAvailable) await first.loadOlder('thread_deploy');
+		const all = ids(first.snapshot(), 'thread_deploy');
+		expect(all.length).toBeGreaterThan(RESTORE_WINDOW);
+		await keeper.stop();
+		first.stop();
+
+		const posted = server.post('thread_deploy', 'ada', 'While you were away');
+		const from = server.frames.length;
+		const second = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(second);
+		new HistoryKeeper({ indexedDB, locks: null }).watch(saved(second));
+		second.start();
+		await waitFor(() => Boolean(room(second.snapshot(), 'thread_deploy')));
+		// Shown at once as it was kept, its newest only.
+		const held = ids(second.snapshot(), 'thread_deploy');
+		expect(held.length).toBeLessThan(all.length);
+		expect(held).toEqual(all.slice(-held.length));
+		await second.loadRoom('thread_deploy');
+		while (room(second.snapshot(), 'thread_deploy')?.olderAvailable) await second.loadOlder('thread_deploy');
+		expect(ids(second.snapshot(), 'thread_deploy')).toEqual([...all, posted]);
+		// Its load went on from where the last one got to, and older pages came from this device.
+		expect(historyOf(server, 'thread_deploy', from).every((params) => params?.after !== undefined)).toBe(true);
+	});
+
 	it('keeps each server’s history apart, and a server switched back to goes on from its own', async () => {
 		const servers: Record<string, MemoryProtocolServer> = { [URL]: new MemoryProtocolServer({ account: true }), 'wss://other.example/': new MemoryProtocolServer({ account: true }) };
 		const OTHER = 'wss://other.example/';
@@ -303,7 +338,160 @@ function memoryLocks(): Pick<LockManager, 'request'> {
 	return { request } as Pick<LockManager, 'request'>;
 }
 
+describe('HistoryKeeper, when things go wrong', () => {
+	it('shows none of what was kept for one account to another that the saved session now signs in as', async () => {
+		const indexedDB = new IDBFactory();
+		const db = await openHistory(indexedDB);
+		const secret = { message_id: '1710000000090', log_id: '1710000000090', room_id: 'secret', from: { user_id: 'zed' }, body: { text: 'Only for Zed' } };
+		await writeHistory(db, URL, {
+			changes: [], dropped: [],
+			whole: [{ room: 'secret', messages: [secret], reactions: [], memberships: [] }],
+			rooms: [{ server: URL, room: 'secret', record: { room_id: 'secret', log_id: '1710000000080', title: 'Secret', private: true }, sync: { id: 'secret', checkpoint: '1710000000090', latestLogId: '1710000000090', floor: '1710000000080' } }],
+			meta: { server: URL, userId: 'zed', complete: true, users: [{ user_id: 'zed', name: 'Zed' }] }
+		}, new Set());
+		// The saved session signs in as someone else (the preview server's `preview_guest`).
+		const server = new MemoryProtocolServer({ account: true });
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		expect(client.snapshot().you?.user_id).toBe('preview_guest');
+		expect(client.message(secret.message_id)).toBeUndefined();
+		expect(client.roomRecord('secret')).toBeUndefined();
+		expect(client.viewRoom('secret')).toBe(false);
+		expect(client.snapshot().users.zed).toBeUndefined();
+		expect(client.snapshot().recordedUsers.zed).toBeUndefined();
+		expect(client.storedRecords().messages.map((message) => message.room_id)).not.toContain('secret');
+		// What is kept becomes this account's.
+		await keeper.flush();
+		const kept = await readKept(db, URL);
+		expect(kept?.meta.userId).toBe('preview_guest');
+		expect(kept?.rooms.map((row) => row.room)).not.toContain('secret');
+		expect(kept?.messages.map((message) => message.message_id)).not.toContain(secret.message_id);
+		await keeper.stop();
+	});
+
+	it('keeps the joined set as complete only once every joined room has a sync kept', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		// Engineering never settles (a recovery under way as the page goes).
+		keeper.watch({ ...saved(client), keptState: () => {
+			const state = client.keptState();
+			return state && { ...state, rooms: state.rooms.map((entry) => (entry.id === 'engineering' ? { id: entry.id } : entry)) };
+		} });
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded && room(client.snapshot(), 'engineering')?.loaded));
+		await keeper.stop();
+		client.stop();
+		const db = await openHistory(indexedDB);
+		expect((await readKept(db, URL))?.meta.complete).toBe(false);
+
+		// So the next visit lists every joined room, not only those that changed since: engineering is there.
+		const from = server.frames.length;
+		const next = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(next);
+		new HistoryKeeper({ indexedDB, locks: null }).watch(saved(next));
+		next.start();
+		await waitFor(() => Boolean(room(next.snapshot(), 'general')?.loaded));
+		const listings = server.frames.slice(from).filter((frame) => frame.method === 'room_list' && frame.params?.filter === 'joined');
+		expect(listings.length).toBeGreaterThan(0);
+		expect(listings.every((frame) => frame.params?.latest_log_id === undefined)).toBe(true);
+		expect(room(next.snapshot(), 'engineering')).toBeDefined();
+	});
+
+	it('queues nothing more once a write has failed', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		let failure: string | undefined;
+		const keeper = new HistoryKeeper({ indexedDB, locks: null, onfailure: (message) => (failure = message) });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		// IndexedDB goes away under the page.
+		(await (keeper as unknown as { db: Promise<IDBDatabase> }).db).close();
+		server.post('general', 'grace', 'Not kept');
+		await keeper.flush();
+		expect(failure).toBeDefined();
+		for (let n = 0; n < 20; n++) server.post('general', 'grace', `#${n}`);
+		await waitFor(() => ids(client.snapshot(), 'general').length > 20);
+		expect((keeper as unknown as { queue: unknown[] }).queue).toEqual([]);
+		await keeper.stop();
+	});
+});
+
+describe('mergeOf', () => {
+	const held = { id: 'general', checkpoint: '900', olderBefore: '500', hasOlder: true };
+	it('writes a room over all of what is kept when nothing deeper is', () => {
+		expect(mergeOf(undefined, held)).toEqual({});
+		expect(mergeOf({ id: 'general', checkpoint: '700', olderBefore: '600' }, held)).toEqual({});
+		expect(mergeOf({ id: 'general', checkpoint: '700', olderBefore: '100' }, { id: 'general', checkpoint: '900' })).toEqual({});
+	});
+
+	it('writes only over what the client holds when what is kept reaches up to it, and keeps the rest', () => {
+		expect(mergeOf({ id: 'general', checkpoint: '700', olderBefore: '100', hasOlder: true }, held)).toEqual({ from: 500, cover: { from: '100', older: true } });
+		expect(mergeOf({ id: 'general', checkpoint: '499', floor: '50' }, held)).toEqual({ from: 500, cover: { from: '50', older: false } });
+	});
+
+	it('leaves what is kept as it is when there is a gap between it and what the client holds', () => {
+		expect(mergeOf({ id: 'general', checkpoint: '400', olderBefore: '100' }, held)).toBe('skip');
+	});
+});
+
 describe('HistoryKeeper in two tabs', () => {
+	it('keeps what is kept below what the tab taking over holds', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		for (let n = 0; n < 400; n++) server.post('general', 'ada', `#${n}`);
+		const indexedDB = new IDBFactory();
+		const locks = memoryLocks();
+		const first = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(first);
+		const one = new HistoryKeeper({ indexedDB, locks });
+		one.watch(saved(first));
+		first.start();
+		await waitFor(() => Boolean(room(first.snapshot(), 'general')?.loaded));
+		while (room(first.snapshot(), 'general')?.olderAvailable) await first.loadOlder('general');
+		const all = ids(first.snapshot(), 'general');
+		await one.flush();
+		// A second tab restores only the newest, and waits its turn to write while the first writes on.
+		const second = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(second);
+		const two = new HistoryKeeper({ indexedDB, locks });
+		two.watch(saved(second));
+		second.start();
+		await waitFor(() => Boolean(room(second.snapshot(), 'general')?.loaded));
+		expect(ids(second.snapshot(), 'general').length).toBeLessThan(all.length);
+		const posted = server.post('general', 'grace', 'Both tabs see this');
+		await waitFor(() => ids(first.snapshot(), 'general').includes(posted) && ids(second.snapshot(), 'general').includes(posted));
+		await one.stop();
+		first.stop();
+		// The second takes over, and writes over only what it holds.
+		await waitFor(() => (two as unknown as { writer?: { granted: boolean } }).writer?.granted === true);
+		await two.flush();
+		await two.stop();
+		second.stop();
+		const kept = await readKept(await openHistory(indexedDB), URL);
+		expect(kept?.messages.filter((message) => message.room_id === 'general').length).toBe(all.length + 1);
+
+		// The next visit pages all of it from this device.
+		const from = server.frames.length;
+		const third = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(third);
+		new HistoryKeeper({ indexedDB, locks }).watch(saved(third));
+		third.start();
+		await waitFor(() => Boolean(room(third.snapshot(), 'general')?.loaded));
+		while (room(third.snapshot(), 'general')?.olderAvailable) await third.loadOlder('general');
+		expect(ids(third.snapshot(), 'general')).toEqual([...all, posted]);
+		expect(historyOf(server, 'general', from).every((params) => params?.after !== undefined)).toBe(true);
+	});
+
 	it('writes from one tab at a time, and the next writes whole when it takes over', async () => {
 		const server = new MemoryProtocolServer({ account: true });
 		const indexedDB = new IDBFactory();

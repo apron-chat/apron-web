@@ -521,6 +521,8 @@ export interface KeptState {
 	rooms: Array<{ id: string; sync?: RoomSync }>;
 	/** The kept user objects, without `status` and `seen`, which are about now. */
 	users: Identity[];
+	/** Retired `user_id`s and the current ones that replaced them (`ClientSnapshot.userAliases`). */
+	aliases?: Record<string, string>;
 }
 
 /** What `ChatClient.restore` takes: kept rooms with the records they had. */
@@ -529,6 +531,7 @@ export interface RestoredState {
 	complete: boolean;
 	rooms: RoomSync[];
 	users: Identity[];
+	aliases?: Record<string, string>;
 	records: { rooms: RoomRecord[]; messages: MessageRecord[]; reactions: ReactionSet[]; memberships: MembershipEntry[] };
 }
 

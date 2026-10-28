@@ -23,6 +23,9 @@ test('an export opens on /archive as it was, read-only', async ({ preview, page 
 
 	await page.goto(`${process.env.E2E_URL}/archive`);
 	await page.getByTestId('archive-file').setInputFiles({ name: download.suggestedFilename(), mimeType: 'application/jsonl', buffer: Buffer.from(text) });
+	// Its images load from the sites it names only when asked to.
+	await expect(page.getByTestId('archive-hosts')).toContainText('apron-preview.invalid');
+	await page.getByRole('button', { name: 'Open without images' }).click();
 	await expect(page.getByText(/^An export from apron-preview\.invalid, saved .+\. It’s read-only\.$/)).toBeVisible();
 	await page.locator('[data-room="general"]').first().click();
 	await expect(page.getByText('Welcome to Apron!', { exact: false })).toBeVisible();

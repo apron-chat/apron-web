@@ -481,9 +481,15 @@ each, with every settled room's sync (`ChatClient.keptState`), so a room's
 checkpoint is never kept without the records it covers. A room joined and
 settled that isn't kept yet is written whole (`storedRecords(roomId)`), a few
 rooms a write (`WHOLE_BUDGET`) so writing many isn't one long task; one no
-longer joined goes once the joined set is complete. One tab writes per server,
-under a Web Lock; a tab that takes it over writes everything whole unless
-`version` is still what it read.
+longer joined goes once the joined set is complete, which is kept as complete
+only once every joined room has a sync kept (one without would be left out of
+the next visit's listing of what changed since). One tab writes per server,
+under a Web Lock. A tab that takes it over goes on from what it restored when
+`version` is still what it read; otherwise, for the same account, it writes
+each room over only as far down as it holds it, keeping what is kept below when
+that reaches up to it, and leaving a room as it is kept when there is a gap
+between the two (`mergeOf`); another account's goes first. A write that fails
+(a full disk) stops keeping for the page.
 
 Before each new session signs in (the first, another server, a `restart`, but
 not a reconnect), the client runs its `beforeFreshSession` hook while the
@@ -492,7 +498,9 @@ keeper's reads back each room's newest `RESTORE_WINDOW` entries (`plannedRoom`
 applies the retention), and `ChatClient.restore` takes them as a dropped
 connection's kept state: the rooms retained with their records and syncs, so
 the first sign-in resumes each from its checkpoint through `requestRooms`, the
-path a reconnect takes. A room held only to its newest shows as loaded newest
+path a reconnect takes. Should that sign-in be as another account than the one
+it was kept for (a saved token that now resumes as someone else), everything the
+restore brought in goes before anything shows it (`dropRestored`). A room held only to its newest shows as loaded newest
 first, and the keeper remembers how far down the rest reaches (`Coverage`):
 `loadOlder` asks it first (`olderPagesFrom`), and it answers from IndexedDB
 while what is kept is still what it restored from, the server paging beyond.

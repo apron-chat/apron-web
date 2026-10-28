@@ -33,6 +33,8 @@ export interface MetaRow {
 	userId: string;
 	complete: boolean;
 	users: Identity[];
+	/** Retired `user_id`s and the current ones that replaced them. */
+	aliases?: Record<string, string>;
 	version: number;
 	savedAt: number;
 }
@@ -214,6 +216,11 @@ export async function pageHistory(db: IDBDatabase, server: string, room: string,
 	return { ...page, ...(meta ? { version: meta.version } : {}) };
 }
 
+/** Every room row kept for `server`. */
+export async function readRoomRows(db: IDBDatabase, server: string): Promise<RoomRow[]> {
+	return await done(db.transaction('rooms', 'readonly').objectStore('rooms').getAll(serverRange(server))) as RoomRow[];
+}
+
 /** The version of what is kept for `server`, or undefined when nothing is. */
 export async function historyVersion(db: IDBDatabase, server: string): Promise<{ version: number; userId: string } | undefined> {
 	const meta = await done(db.transaction('meta', 'readonly').objectStore('meta').get(server)) as MetaRow | undefined;
@@ -224,8 +231,8 @@ export async function historyVersion(db: IDBDatabase, server: string): Promise<{
 export interface HistoryWrite {
 	/** Changes to the records of rooms kept as they are, in the order they were made. */
 	changes: StoreChange[];
-	/** Rooms whose rows are replaced with these records, in full. */
-	whole: Array<{ room: string; messages: MessageRecord[]; reactions: ReactionSet[]; memberships: MembershipEntry[] }>;
+	/** Rooms whose rows are replaced with these records: all of them, or only those from `from` up. */
+	whole: Array<{ room: string; from?: number; messages: MessageRecord[]; reactions: ReactionSet[]; memberships: MembershipEntry[] }>;
 	/** Room rows to put. */
 	rooms: RoomRow[];
 	/** Rooms to drop, rows and records. */
@@ -299,7 +306,7 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
 		}
 	}
 	for (const room of write.whole) {
-		records.delete(roomRange(server, room.room));
+		records.delete(room.from === undefined ? roomRange(server, room.room) : IDBKeyRange.bound([server, room.room, room.from], [server, room.room, []]));
 		for (const message of room.messages) records.put(messageRow(server, message));
 		for (const set of room.reactions) records.put(reactionRow(server, set, room.room));
 		for (const entry of room.memberships) records.put(membershipRow(server, entry));
@@ -319,28 +326,17 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
 }
 
 /**
- * Drops what is older than `cutoff` (epoch milliseconds, a `log_id` on servers whose `log_id`s are times):
- * messages and memberships logged before it, and reaction sets before it whose message is gone. Only in rooms
- * whose positions read as times, so a server counting from 1 loses nothing.
+ * Drops what is older than `cutoff` (epoch milliseconds, a `log_id` on servers whose `log_id`s are times): every
+ * record logged before it, as a server that discards the start of its log does, so a reaction set logged before it
+ * goes even when its message was edited since (a page from here, which starts at the cutoff, would never hold it).
+ * Only in rooms whose positions read as times, so a server counting from 1 loses nothing.
  */
 export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<void> {
 	const transaction = db.transaction(['rooms', 'records'], 'readwrite', { durability: 'relaxed' });
 	const finished = committed(transaction);
 	const records = transaction.objectStore('records');
-	const byKey = records.index('key');
 	const rooms = await done(transaction.objectStore('rooms').getAll()) as RoomRow[];
-	for (const { server, room, sync } of rooms) {
-		if (!timeLike(sync)) continue;
-		const reactions: RecordRow[] = [];
-		await eachRow(records, roomRange(server, room, cutoff), (row, cursor) => {
-			if (row.kind === 'r') reactions.push(row);
-			else cursor.delete();
-		});
-		for (const row of reactions) {
-			const message = (row.value as ReactionSet).message_id;
-			if (!(await done(byKey.count(IDBKeyRange.only([server, 'm', message]))))) records.delete([server, room, row.log, row.kind, row.id]);
-		}
-	}
+	for (const { server, room, sync } of rooms) if (timeLike(sync)) records.delete(roomRange(server, room, cutoff));
 	await finished;
 }
 

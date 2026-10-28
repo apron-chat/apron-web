@@ -82,7 +82,7 @@ describe('writeHistory', () => {
 });
 
 describe('pruneHistory', () => {
-	it('drops what is older than the cutoff in rooms whose positions are times, but not reactions on what stays', async () => {
+	it('drops everything logged before the cutoff in rooms whose positions are times', async () => {
 		const db = await opened();
 		const edited = message(at(40), at(1));
 		await writeHistory(db, SERVER, write({
@@ -97,7 +97,8 @@ describe('pruneHistory', () => {
 		await pruneHistory(db, now - 30 * day);
 		const kept = await readKept(db, SERVER);
 		expect(kept?.messages.map((record) => record.message_id).sort()).toEqual([at(40), '5']);
-		expect(kept?.reactions.map((set) => set.emojis)).toEqual([['👍']]);
+		// Even a reaction set on a message edited since: a page from here, which starts at the cutoff, never holds it.
+		expect(kept?.reactions).toEqual([]);
 		expect(kept?.memberships).toEqual([]);
 	});
 });

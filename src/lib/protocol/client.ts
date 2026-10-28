@@ -298,6 +298,8 @@ export class ChatClient {
 	private olderSource: ((roomId: string, before: string, limit: number) => Promise<JsonObject | undefined>) | undefined;
 	private fresh = true;
 	private preparing: Promise<void> | undefined;
+	/** Whose kept state `restore` took, until the next sign-in says whether it is theirs. */
+	private restoredUserId: string | undefined;
 	/**
 	 * The joined rooms kept from the last connection were its whole joined set
 	 * (its `room_list` arrived): a reconnect as the same identity may then list
@@ -867,7 +869,7 @@ export class ChatClient {
 			...(room.recovery ? {} : { sync: roomSync(room) })
 		}));
 		const users = [...this.users.values()].map(({ status: _status, seen: _seen, ...user }) => user as Identity);
-		return { userId: you, complete: this.joinedComplete && !this.joinedListing, rooms, users };
+		return { userId: you, complete: this.joinedComplete && !this.joinedListing, rooms, users, ...(this.userAliases.size ? { aliases: Object.fromEntries(this.userAliases) } : {}) };
 	}
 
 	/**
@@ -893,7 +895,8 @@ export class ChatClient {
 			this.store.putMembership(entry);
 			this.noteRecorded(entry.user, entry.log_id);
 		}
-		for (const user of state.users) this.users.set(user.user_id, cloneJson(user));
+		for (const user of state.users) this.noteUser(cloneJson(user));
+		for (const [old, next] of Object.entries(state.aliases ?? {})) this.userAliases.set(old, next);
 		for (const sync of state.rooms) {
 			const room = Object.assign(newRoomState(sync.id, 'joined'), {
 				latestLogId: sync.latestLogId, historyLogId: sync.historyLogId, floor: sync.floor, checkpoint: sync.checkpoint,
@@ -907,7 +910,29 @@ export class ChatClient {
 		this.joinedComplete = state.complete;
 		this.keptUserId = state.complete ? state.userId : undefined;
 		this.resumingUserId = state.userId;
+		this.restoredUserId = state.userId;
 		return true;
+	}
+
+	/**
+	 * A sign-in as someone other than whose kept state `restore` took (a saved token that now resumes as another
+	 * account): the rooms, records and users it brought in go before anything shows them, and the joined listing,
+	 * asked for as theirs, is asked again as this account's (`listJoinedRooms`).
+	 */
+	private dropRestored(): void {
+		for (const room of this.rooms.values()) this.discardRoom(room, 'Signed in as another account');
+		this.rooms.clear();
+		this.retainedRooms.clear();
+		this.store.clear();
+		this.store.takeTouched();
+		this.users.clear();
+		this.recordedUsers.clear();
+		this.userAliases.clear();
+		this.memberCounts.clear();
+		this.greatestLogId = undefined;
+		this.joinedComplete = false;
+		this.keptUserId = undefined;
+		this.activeRoomId = undefined;
 	}
 
 	/** Your own emoji set on a message, including a requested change not yet confirmed. */
@@ -3095,6 +3120,9 @@ export class ChatClient {
 		// as they arrive like any other (§4.5).
 		if (signIn) this.resetMutes();
 		const previousUserId = this.you?.user_id ?? this.resumingUserId;
+		// What a restore brought in is for the account it was kept for: anyone else sees none of it.
+		if (this.restoredUserId !== undefined && signIn && identity.user_id !== this.restoredUserId) this.dropRestored();
+		this.restoredUserId = undefined;
 		this.setYou(cloneJson(identity as Identity), true);
 		if (signIn) this.dropKeptStatuses(identity.user_id === this.resumingUserId);
 		// The listings made for who was signed in, on this connection or before a drop: another identity lists its own.

@@ -672,7 +672,8 @@ all), and with it how far each joined room is caught up. The next visit shows it
 at once and goes on as a reconnect does: each room asks the server only for what
 came after its checkpoint (§4.3.5), and the joined listing only for rooms that
 changed since (`latest_log_id`, §4.2.1); a thread opened again goes on from
-where its last load got to. Each room opens with its newest hundred records; as
+where its last load got to. Each room opens with the newest hundred entries of its
+log (messages, reaction sets and joins and leaves); as
 you scroll back, older pages come from this device first, then from the server
 once what is kept runs out, as messages older than the retention do. The retention counts by when a message
 was logged, on servers whose `log_id`s are times (as the reference servers'
@@ -701,8 +702,10 @@ guest who may only read (`ext:permissions` `write: false`), lists its
 rooms and threads as they were joined, pages their history, and refuses
 anything that would change them. The read-only bar says where and when the
 export was saved. Nothing is sent to the exported server and nothing is
-remembered, as in `/__preview`, but its images load from the origins that
-server named for its media, kept in the export.
+remembered, as in `/__preview`. An export names the sites its images load from
+(the server's origin and those it named for its media), and since a file can
+name any, `/archive` lists them and asks first: **Load images**, or **Open
+without images**, when each shows as a card.
 
 With the `command` capability, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#41-command)): the composer shows a **Command** tag, sets the line in
