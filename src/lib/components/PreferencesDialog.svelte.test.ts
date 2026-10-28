@@ -100,4 +100,31 @@ describe('PreferencesDialog', () => {
 		flushSync();
 		expect(live.textContent).toBe('This server doesn’t offer Invisible. Your status is None.');
 	});
+
+	it('has a Devices section only with devices, which creates a token to copy', async () => {
+		const nav = () => [...document.querySelectorAll<HTMLButtonElement>('.ap-preferences-nav button')].map((button) => button.textContent);
+		render(PreferencesDialog, notificationProps());
+		expect(nav()).toEqual(['Notifications', 'Appearance']);
+		cleanup();
+
+		let answer: Promise<{ token: string; origin: string }> = Promise.resolve({ token: 'tok+en/1', origin: 'https://web.example' });
+		render(PreferencesDialog, notificationProps({ devices: { onadd: () => answer } }));
+		expect(nav()).toEqual(['Notifications', 'Appearance', 'Devices']);
+		[...document.querySelectorAll<HTMLButtonElement>('.ap-preferences-nav button')].find((button) => button.textContent === 'Devices')!.click();
+		flushSync();
+		const create = () => document.querySelector<HTMLButtonElement>('.ap-pref-device-create')!;
+		expect(create().textContent).toBe('Create token');
+		create().click();
+		await tick();
+		flushSync();
+		expect(document.querySelector<HTMLInputElement>('#ap-device-token')!.value).toBe('tok+en/1');
+		expect(document.querySelector('.ap-pref-device-token')!.textContent).toContain('The app signs in from https://web.example, the origin it was issued for.');
+		expect(create().textContent).toBe('Create another');
+
+		answer = Promise.reject(new Error('Too many devices added; try again later. Try again in 12m.'));
+		create().click();
+		await tick();
+		flushSync();
+		expect(document.querySelector('.ap-pref-device-setting [role="alert"]')!.textContent).toBe('Too many devices added; try again later. Try again in 12m.');
+	});
 });

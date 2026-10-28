@@ -2,7 +2,7 @@
 
 | Protocol Version | 9          |
 |------------------|------------|
-| Last Updated     | 2026-10-26 |
+| Last Updated     | 2026-10-28 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -35,6 +35,7 @@ the fallback of that capability:
 | `ext:media`    | loads embed media from the server's media origins, and fits files to its limits ([§6](#6-extmedia)) | loads embed media from the server's origin; refuses no file |
 | `ext:permissions` | moves other users' messages, and adds their authors, as `you` allows ([§7](#7-extpermissions)) | moves your own messages only       |
 | `ext:bio`      | shows bios on profile cards, and edits your own ([§8](#8-extbio)); also with `ext`              | no bios                            |
+| `ext:device_add` | creates a token that signs an app in to your account ([§9](#9-extdevice_add))                 | no Devices section                 |
 
 Some features have no capability:
 
@@ -576,3 +577,60 @@ class Identity {
   characters, and Save waits while the bio is over 250.
 - Save sends a changed bio first, then the handle. When the server refuses the
   bio, the editor says why and stays open, and the handle is not sent.
+
+---
+
+## 9. `ext:device_add`
+
+A passkey works only on the domain of the web client that registered it
+([§4.10](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-webauthn-authentication)),
+so an account made with a passkey has no way to sign in from a native app.
+§4.10 lets a server issue more bearer tokens for such a client. A request,
+rather than a command, gives the client the token as data, which it can
+copy or hand to the app, without reading it out of a notice
+([§2](#2-the-boundary)).
+
+Adds the `ext:device_add` request:
+
+```ts
+class DeviceAdd {}  // params: {}
+
+class DeviceAddResult {
+  token: string;   // a bearer token for scheme "token" (§3.2.1)
+  origin: string;  // the Origin the token resumes from; "" for none
+}
+```
+
+```jsonc
+// -> on a connection from https://web.apron.chat, signed in to an account
+{"method": "ext:device_add", "id": "c70", "params": {}}
+// <-
+{"id": "c70", "result": {"token": "Zk9…", "origin": "https://web.apron.chat"}}
+```
+
+- The server lists `ext:device_add` in `capabilities`, and `token` in
+  `server.auth`.
+- The token is a new session for the signed-in account. The connection's own
+  token stays as it was.
+- The server binds the token to the `Origin` of the connection that asked for
+  it, as it binds a passkey sign-in's token
+  ([§4.10](https://github.com/shazow/apron/blob/main/PROTOCOL.md#410-webauthn-authentication)),
+  and returns that origin. A client that presents the token with
+  `scheme: "token"` sends the same `Origin`; from any other origin the token
+  is `denied`.
+- Lifetime and revocation are server policy, as for any bearer token
+  ([§3.2.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#321-bearer-tokens)).
+- A user without an account, such as a guest, is `denied`.
+- The server MAY limit how often an account adds devices, with `retry_after`.
+- A retry with the same request `id`
+  ([§1.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#12-retries-and-deduplication))
+  answers with the same token, not a second one.
+
+### 9.1 apron-web
+
+- Preferences has a Devices section while you are signed in to an account on
+  a server that lists `ext:device_add`.
+- Create token sends `ext:device_add`. apron-web shows the token in a field
+  with a Copy button and the origin it was issued for. The token is never
+  saved.
+- When the server refuses, the section shows its `message`.

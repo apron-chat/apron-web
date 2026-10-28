@@ -102,6 +102,8 @@
 	let canSetBio = $derived(keepsBio(session.server) && session.snapshot.authenticated && you !== undefined);
 	/** Avatars are uploaded with a `/avatar` command (§4.8.6), which needs capabilities `command` and `embed:upload`. */
 	let canUploadAvatar = $derived(session.snapshot.capabilities.command && session.snapshot.capabilities['embed:upload']);
+	/** A token for an app that can't use this account's passkeys (`ext:device_add`), while signed in to an account. */
+	let canAddDevice = $derived(session.snapshot.capabilities['ext:device_add'] && session.snapshot.passkeySession);
 	let snapshot = $derived(session.snapshot);
 	let connected = $derived(snapshot.status === 'connected');
 	let canUsePasskey = $derived(!!session.server?.auth.includes('webauthn'));
@@ -474,6 +476,7 @@
 			{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
 			{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
+			devices={canAddDevice ? { onadd: () => client.addDevice() } : undefined}
 			onclosed={() => preferencesTrigger?.focus()}
 		/>
 	{/if}

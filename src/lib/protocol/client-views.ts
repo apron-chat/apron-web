@@ -12,7 +12,7 @@ import type {
 } from './types';
 import type { Capabilities, ClientSnapshot, RoomSnapshot } from './client-types';
 
-const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio'];
+const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio', 'ext:device_add'];
 
 /**
  * How to render a user (§3.3): field by field, the kept object for its

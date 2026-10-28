@@ -416,6 +416,12 @@ export interface MessageResult extends JsonObject {
 	message_id: string;
 }
 
+/** A bearer token for another device (`ext:device_add`, EXT.md §9), and the origin it resumes from. */
+export interface DeviceToken extends JsonObject {
+	token: string;
+	origin: string;
+}
+
 export interface RoomResult extends JsonObject {
 	room_id: string;
 }

@@ -1286,6 +1286,16 @@ verification failure alike (§4.10 `denied`), so this is where the reason
 shows. The connection's own sign-in, as a guest or by a saved session,
 warns too when refused, without the token.
 
+On a server that lists `ext:device_add`
+([EXT.md §9](../EXT.md#9-extdevice_add)), Preferences has a **Devices**
+section while you are signed in to an account. An app that can't use this
+browser's passkeys, such as one on your phone, signs in as you with a token
+from there: **Create token** asks the server for a new one and shows it with
+a **Copy** button and the origin it was issued for, which the app sends as
+its `Origin` when it signs in with the token. The token is never saved, and
+closing Preferences forgets it. A refusal, such as too many devices added,
+shows the server's message.
+
 A server may keep guests read-only, and says so with `guest_posting: false`
 in its settings (below). Signed in as a guest there, the composer gives
 way to a bar saying so with a **Sign in** button (it opens the sign-in panel

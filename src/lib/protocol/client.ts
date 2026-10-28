@@ -44,6 +44,7 @@ import {
 	type ClientSnapshot,
 	type ConnectionStatus,
 	type CreateRoomOptions,
+	type DeviceToken,
 	type EmbedEdits,
 	type HistoryStart,
 	type MessageFormat,
@@ -1820,6 +1821,22 @@ export class ChatClient {
 		// A caller that doesn't wait for the answer leaves no unhandled rejection.
 		promise.catch(() => undefined);
 		return promise;
+	}
+
+	/**
+	 * Issues a bearer token for another device with `ext:device_add` (EXT.md
+	 * §9), such as an app that can't use this account's passkeys: resolves
+	 * with the token and the origin it resumes from. Needs the capability and
+	 * a signed-in account; rejects with the server's error, such as
+	 * `retry_after`.
+	 */
+	addDevice(): Promise<DeviceToken> {
+		if (!this.hasCap('ext:device_add')) return Promise.reject(new Error('This server doesn’t add devices'));
+		if (!this.authenticated || !this.registeredSession) return Promise.reject(new Error('Sign in to add a device'));
+		return this.enqueueRequest<DeviceToken>('ext:device_add', {}, { visible: false, allowBeforeAuth: false }).promise.then((result) => {
+			if (typeof result.token !== 'string' || result.token === '' || typeof result.origin !== 'string') throw new Error('The server sent no token');
+			return { token: result.token, origin: result.origin };
+		});
 	}
 
 	/**

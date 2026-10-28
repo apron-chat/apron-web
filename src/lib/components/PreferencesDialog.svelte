@@ -15,6 +15,7 @@
 	import { NOTIFY_SCOPES, notifyScopeNotes, pushWake } from '$lib/ui/notify-scopes';
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import FontFamilyField from './FontFamilyField.svelte';
+	import type { DeviceToken } from '$lib/protocol/client';
 
 	type LocalFontAccessWindow = Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> };
 
@@ -45,15 +46,21 @@
 		 * something else for.
 		 */
 		status?: { value?: string; accepted?: readonly string[]; unsupported: readonly string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void; disabled?: boolean };
+		/**
+		 * Signing in an app with a token from here (`ext:device_add`), while
+		 * signed in to an account on a server that offers it.
+		 */
+		devices?: { onadd: () => Promise<DeviceToken> };
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onclosed }: Props = $props();
+	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, devices, onclosed }: Props = $props();
 
-	const SECTIONS = [
+	let sections = $derived([
 		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
-		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' }
-	];
+		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
+		...(devices ? [{ value: 'devices', label: 'Devices', hint: 'Sign in to this account from an app.', id: 'ap-pref-devices' }] : [])
+	]);
 	let preferencesSection = $state('notifications');
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
@@ -66,6 +73,9 @@
 	let fontBrowserState = $state<FontBrowserState>('idle');
 	let fontError = $state('');
 	let testNotificationStatus = $state<'idle' | 'sending' | NotificationTestResult>('idle');
+	let deviceStatus = $state<'idle' | 'adding' | 'copied' | 'copy-failed'>('idle');
+	let deviceToken = $state<DeviceToken | undefined>();
+	let deviceError = $state('');
 
 	type Note = { text: string; tone?: 'ok' | 'err' };
 	/**
@@ -126,8 +136,33 @@
 			fontBrowserState = typeof window !== 'undefined' && typeof (window as LocalFontAccessWindow).queryLocalFonts === 'function' ? 'idle' : 'unsupported';
 			fontError = '';
 			testNotificationStatus = 'idle';
+			deviceStatus = 'idle';
+			deviceToken = undefined;
+			deviceError = '';
 		});
 	});
+
+	async function addDevice(): Promise<void> {
+		if (!devices) return;
+		deviceStatus = 'adding';
+		deviceError = '';
+		try {
+			deviceToken = await devices.onadd();
+		} catch (cause) {
+			deviceError = cause instanceof Error ? cause.message : 'Couldn’t create a token.';
+		}
+		deviceStatus = 'idle';
+	}
+
+	async function copyDeviceToken(): Promise<void> {
+		if (!deviceToken) return;
+		try {
+			await navigator.clipboard.writeText(deviceToken.token);
+			deviceStatus = 'copied';
+		} catch {
+			deviceStatus = 'copy-failed';
+		}
+	}
 
 	async function sendTestNotification(): Promise<void> {
 		testNotificationStatus = 'sending';
@@ -196,7 +231,7 @@
 </script>
 
 <Dialog bind:open title="Preferences" size="lg" closeLabel="Close preferences" backdropCloses flush onclose={preferencesClosed}>
-	<SettingsSections sections={SECTIONS} bind:current={preferencesSection}>
+	<SettingsSections {sections} bind:current={preferencesSection}>
 		{#if preferencesSection === 'notifications'}
 			<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
 			{#if status}
@@ -244,6 +279,24 @@
 					</Callout>
 				</div>
 			{/if}
+		{:else if preferencesSection === 'devices' && devices}
+			<SettingRow title="Sign in an app" hint="An app that can’t use this browser’s passkeys, such as one on your phone, signs in as you with a token from here. Keep it private: anyone with it can sign in as you." class="ap-pref-device-setting">
+				{#if deviceToken}
+					<div class="ap-pref-device-token">
+						<label class="ap-pref-help" for="ap-device-token">Token</label>
+						<div class="ap-pref-device-copy">
+							<input id="ap-device-token" class="ap-field" readonly value={deviceToken.token} onfocus={(event) => event.currentTarget.select()} />
+							<Button size="sm" label={deviceStatus === 'copied' ? 'Copied' : 'Copy'} onclick={copyDeviceToken} />
+						</div>
+						<p class="ap-pref-help">{deviceToken.origin ? `The app signs in from ${deviceToken.origin}, the origin it was issued for.` : 'The app signs in without an origin, as it was issued.'}</p>
+						{#if deviceStatus === 'copy-failed'}<p class="ap-pref-note ap-tone-danger" role="alert">Couldn’t copy; select the token and copy it.</p>{/if}
+					</div>
+				{/if}
+				{#if deviceError}<p class="ap-pref-note ap-tone-danger" role="alert">{deviceError}</p>{/if}
+				{#snippet control()}
+					<Button class="ap-pref-device-create" size="sm" variant={deviceToken ? 'ghost' : 'primary'} label={deviceStatus === 'adding' ? 'Creating…' : deviceToken ? 'Create another' : 'Create token'} disabled={deviceStatus === 'adding'} aria-busy={deviceStatus === 'adding'} onclick={addDevice} />
+				{/snippet}
+			</SettingRow>
 		{:else}
 			<SettingRow title="Theme" for="ap-theme-mode" hint="System follows your operating system’s light or dark preference." class="ap-pref-theme-setting">
 				{#snippet control()}
