@@ -36,7 +36,7 @@ the fallback of that capability:
 | `ext:settings` | follows the server's settings ([§3](#3-extsettings))                                            | keeps read cursors on the server; states no limit of private rooms |
 | `ext:limits`   | holds back the requests that a refused request's category of limit covers ([§4](#4-extlimits)) | holds back by method ([§2](#2-the-boundary)) |
 | `ext:media`    | loads embed media from the server's media origins, and fits files to its limits ([§6](#6-extmedia)) | loads embed media from the server's origin; refuses no file |
-| `ext:permissions` | offers writing, adding members, and moving others' messages as `you` allows ([§7](#7-extpermissions)) | writes; adds members only to private rooms you're in; moves your own messages only |
+| `ext:permissions` | offers writing, adding members, and moving others' messages as `you` allows ([§7](#7-extpermissions)) | writes; offers adding members in any room, as PROTOCOL.md allows; moves your own messages only |
 | `ext:bio`      | shows bios on profile cards, and edits your own ([§8](#8-extbio)); also with `ext`              | no bios                            |
 | `ext:emoji`    | shows the server's custom emoji in reactions and text, and offers them to pick ([§9](#9-extemoji)) | shows keys as text, and in reactions as a placeholder |
 
@@ -220,19 +220,25 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
 
 ### 7.1 apron-web
 
-- apron-web reads permissions only from `you`. A key that is absent or not a
-  boolean takes its default: `write` on, the others off. So does every key
-  when `permissions` isn't an object, such as an older server's list of names.
+- apron-web reads permissions only from `you`, and only while the server
+  advertises `ext:permissions`. A key that is absent or not a boolean takes
+  its default: `write` on, the others off. So does every key when
+  `permissions` isn't an object, such as an older server's list of names.
+- Without the extension, apron-web offers what PROTOCOL.md allows: it
+  writes, offers adding members in any room (§4.2.2), and offers to move
+  only your own messages. The server decides: a `denied` add shows its
+  reason where it was asked, and an `unsupported` one stops the offer.
 - With `write: false`, apron-web only reads: it replaces the composer with a
   note, and offers no reactions, edits, moves, deletions, joins, leaves, room
   or thread changes, or member changes. Browse rooms offers Open in place of
   Join, which reads a room through its history. For a guest, the note offers
   to sign in.
 - With `add_members`, the member list's + and a profile card's Add to room
-  are offered in any room. Without it, they are offered only in a private
-  room that the user is a member of.
-- When apron-web moves messages into a thread, it adds their authors with
-  `add_members`, or when the thread is in a private room.
+  are offered in any room. With `add_members: false` or absent, they are
+  offered only in a private room that the user is a member of.
+- When apron-web moves messages into a thread, it adds their authors where it
+  offers adding members: with `add_members`, without the extension, or when
+  the thread is in a private room.
 - apron-web offers to move the messages of other users only with `move_any`.
   Without it, it offers to move only your own messages.
 - apron-web shows roles as badges only. They grant nothing.

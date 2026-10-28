@@ -30,7 +30,7 @@
 		 * it at all answers `unsupported`, and the offer goes.
 		 */
 		canChange: boolean;
-		/** Offer adding others too: with `add_members` (`ext:permissions`), or in a private room you are a member of. */
+		/** Offer adding others too: with `add_members` (`ext:permissions`) or without that extension, or in a private room you are a member of. */
 		canAdd: boolean;
 	}
 	let { client, session, room, open, canChange, canAdd }: Props = $props();

@@ -99,10 +99,18 @@ describe('yourPermissions (ext:permissions)', () => {
 		const admin = { user_id: 'ada', roles: ['admin'], ext: { permissions: { add_members: true, move_any: true, delete_any: true } } };
 		expect(yourPermissions(server(['ext:permissions']), admin)).toEqual({ write: true, add_members: true, move_any: true });
 		expect(yourPermissions(server(['ext:permissions']), { user_id: 'guest_1', ext: { permissions: { write: false } } })).toEqual({ ...DEFAULTS, write: false });
-		// Without the extension, every key takes its default: roles grant nothing.
-		expect(yourPermissions(server([]), admin)).toEqual(DEFAULTS);
+		// An absent key takes its default while the extension is advertised.
 		expect(yourPermissions(server(['ext:permissions']), undefined)).toEqual(DEFAULTS);
 		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada' })).toEqual(DEFAULTS);
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: {} } })).toEqual(DEFAULTS);
+	});
+
+	it('offers what PROTOCOL.md allows without the extension: writes, adding people anywhere, and moving only your own', () => {
+		const CORE = { write: true, add_members: true, move_any: false };
+		expect(yourPermissions(server([]), { user_id: 'ada' })).toEqual(CORE);
+		expect(yourPermissions(undefined, undefined)).toEqual(CORE);
+		// you.ext.permissions means nothing then, whatever it says.
+		expect(yourPermissions(server([]), { user_id: 'ada', ext: { permissions: { write: false, move_any: true, add_members: false } } })).toEqual(CORE);
 	});
 
 	it('takes the default for a key of the wrong type, and for all of them when permissions is not an object', () => {

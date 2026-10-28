@@ -549,8 +549,9 @@
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneSteady);
 	/**
-	 * Adding others to the open pane's room: anywhere with `add_members` (`ext:permissions`), else only to a private
-	 * room you are a member of (§4.2.4), whose members add people to it.
+	 * Adding others to the open pane's room: anywhere with `add_members` (`ext:permissions`), or on a server without
+	 * that extension, where the server answers `denied` if it won't; else only to a private room you are a member of
+	 * (§4.2.4), whose members add people to it.
 	 */
 	let canAddMembers = $derived(canChangeMembers && (yourPermissions(session.server, session.you).add_members || Boolean(paneRoom?.private && paneRoom.joined)));
 	/**
@@ -2512,8 +2513,8 @@
 	 * Who comes along when picked messages move into a thread: each moved
 	 * message's author not in it yet is added to it (§4.2.2), so they still
 	 * see their messages. Only where this viewer may add people: with
-	 * `add_members` in `you.ext.permissions`, or in a private room, whose
-	 * members add people to it (§4.2.4).
+	 * `add_members` in `you.ext.permissions` (or without that extension), or
+	 * in a private room, whose members add people to it (§4.2.4).
 	 */
 	function moveAuthors(): MoveAuthors | undefined {
 		if (!canChangeMembers || session.snapshot.memberChangesUnsupported) return undefined;

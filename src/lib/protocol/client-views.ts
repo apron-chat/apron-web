@@ -107,27 +107,38 @@ export function peopleTitle(names: readonly string[]): string {
 	return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) || a.localeCompare(b)).join(', ');
 }
 
-/** What the signed-in user may do (`ext:permissions`, `you.ext.permissions`). */
+/** What the client offers the signed-in user (`ext:permissions`, `you.ext.permissions`). */
 export interface Permissions {
 	/** May send the requests of `ext:limits`' `write` row: post, react, join, leave, and change rooms. */
 	write: boolean;
-	/** May add other users to any room (`room_join` with a `user_id`); without it, only to the private rooms they are a member of. */
+	/** Offer adding other users to any room (`room_join` with a `user_id`); without it, only to the private rooms they are a member of. */
 	add_members: boolean;
 	/** May move other users' messages; without it, only their own. */
 	move_any: boolean;
 }
 
+/** The extension's defaults, for each key that is absent. */
 const DEFAULT_PERMISSIONS: Permissions = { write: true, add_members: false, move_any: false };
+
+/**
+ * Without the extension: what PROTOCOL.md allows. Any member may ask to add
+ * others to any room (§4.2.2), and the server answers `denied` or
+ * `unsupported` where it doesn't let them; moves stay with your own
+ * messages.
+ */
+const CORE_PERMISSIONS: Permissions = { write: true, add_members: true, move_any: false };
 
 /**
  * What the signed-in user may do that the core leaves to the server
  * (extension `ext:permissions`, `you.ext.permissions`), read from `you`
  * only. Each key that is absent or not a boolean takes its default (`write`
- * on, the rest off); so does every key without the extension, or when
- * `permissions` isn't an object.
+ * on, the rest off); so does every key when `permissions` isn't an object.
+ * Without the extension the client offers what PROTOCOL.md allows instead
+ * (CORE_PERMISSIONS), and handles the server's refusals.
  */
 export function yourPermissions(server: ServerParams | undefined, you: Identity | undefined): Permissions {
-	const ext = hasCapability(server, 'ext:permissions') ? you?.ext : undefined;
+	if (!hasCapability(server, 'ext:permissions')) return { ...CORE_PERMISSIONS };
+	const ext = you?.ext;
 	const granted = isJsonObject(ext) && isJsonObject(ext.permissions) ? ext.permissions : {};
 	const flag = (key: keyof Permissions) => (typeof granted[key] === 'boolean' ? (granted[key] as boolean) : DEFAULT_PERMISSIONS[key]);
 	return { write: flag('write'), add_members: flag('add_members'), move_any: flag('move_any') };

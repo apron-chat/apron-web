@@ -58,6 +58,10 @@ export const PREVIEW_PERMISSIONS = { add_members: true };
 export interface PreviewKnobs {
 	/** Capabilities to advertise beyond `PREVIEW_CAPABILITIES`, e.g. `embed:upload` or `status`. */
 	capabilities?: string[];
+	/** Capabilities of `PREVIEW_CAPABILITIES` not to advertise, e.g. `ext:permissions`. */
+	withoutCapabilities?: string[];
+	/** Refuses adding others (`room_join` with a `user_id`, §4.2.2) to a room that isn't private with `denied`, as server policy may. */
+	denyAdding?: boolean;
 	/**
 	 * Plays a server that doesn't keep private rooms (§4.2.4): rooms (`rooms`) or threads (`threads`) created
 	 * through `room_set` come back without `private`, whatever was asked.
@@ -395,7 +399,7 @@ export class MemoryProtocolServer {
 			server.sockets.add(socket);
 			socket.readyState = 1;
 			socket.onopen?.({} as Event);
-			const capabilities = [...PREVIEW_CAPABILITIES, ...(server.knobs.capabilities ?? [])];
+			const capabilities = [...PREVIEW_CAPABILITIES.filter((name) => !server.knobs.withoutCapabilities?.includes(name)), ...(server.knobs.capabilities ?? [])];
 			// With `status`, the optional statuses it takes (§4.5).
 			const statuses = capabilities.includes('status') ? { status: ['dnd', 'invisible'] } : {};
 			// A test's fields replace the demo's, `ext` key by key.
@@ -577,10 +581,13 @@ export class MemoryProtocolServer {
 		reply({ room_id: room.room_id, log_id: String(room.log_id) });
 	}
 
-	private joinRoom(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
+	private joinRoom(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string, code?: number) => void): void {
 		const room = this.rooms.get(String(p.room_id));
 		if (!room || this.hidden(room)) return fail('Unknown room');
-		if (typeof p.user_id === 'string' && p.user_id !== 'preview_guest') return this.changeMember(room, p.user_id, true, reply, fail);
+		if (typeof p.user_id === 'string' && p.user_id !== 'preview_guest') {
+			if (this.knobs.denyAdding && !room.private) return fail('Only moderators add people here', -32001);
+			return this.changeMember(room, p.user_id, true, reply, fail);
+		}
 		room.members.add('preview_guest');
 		socket.deliver({ method: 'room_update', params: { joined: [this.roomRecord(room, true)], users: this.users() } });
 		reply();

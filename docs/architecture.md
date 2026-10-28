@@ -279,7 +279,9 @@ end of the interval, and flushes those waiting when the page is hidden and
 after the next sign-in. `yourPermissions` reads extension `ext:permissions`
 (`you.ext.permissions`, an object, only where `capabilities` lists it; a key
 that is absent or not a boolean takes its default, and so does every key
-when `permissions` isn't an object): with `write: false` the snapshot is
+when `permissions` isn't an object; without the extension it offers what
+PROTOCOL.md allows: writing, adding members anywhere, moving your own
+messages): with `write: false` the snapshot is
 `readOnly`, whoever you are. A `retry_after` refusal's `data.ext.limits` counts only where
 `capabilities` lists `ext:limits`: `limitScope` turns it, with the refused
 request, into the wait's `LimitScope`, and `heldBack` refuses what

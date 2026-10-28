@@ -32,6 +32,15 @@ async function action(preview: Preview, id: string, name: string): Promise<void>
 	await button.click();
 }
 
+/** Picks a message (shift-click) and asks to move it to a new thread from the selection bar. */
+async function pickAndMoveToNewThread(preview: Preview, id: string): Promise<void> {
+	await preview.page.locator(`article[data-message-id="${id}"]`).click({ modifiers: ['Shift'] });
+	const bar = preview.page.getByTestId('selection-bar');
+	await expect(bar).toContainText('1 message selected');
+	await bar.getByRole('button', { name: 'Move to thread ▾', exact: true }).click();
+	await preview.page.getByTestId('new-thread').click();
+}
+
 test.describe('the server frame: title, description and avatar (§3.1), and the address (§1)', () => {
 	test('shows the title and avatar, always with the address, and keeps one recent entry per address', async ({ preview, page }) => {
 		// Saved before addresses were normalized: two entries for this server, and another server with the same title.
@@ -108,13 +117,66 @@ test.describe('ext:permissions and ext:settings', () => {
 	test.describe('without add_members', () => {
 		test.use({ knobs: { permissions: {} } });
 
-		test('adds people only to a private room you are in', async ({ preview, page }) => {
+		test('adds people only to a private room you are in, and moves only your own messages', async ({ preview, page }) => {
 			await preview.open('#room=private_1710000000060');
 			await preview.showMembers();
 			await expect(page.getByRole('button', { name: 'Add member', exact: true })).toBeVisible();
 			await preview.openRoom('engineering');
 			await preview.showMembers();
 			await expect(page.getByRole('button', { name: 'Add member', exact: true })).toHaveCount(0);
+			await preview.openRoom('general');
+			await pickAndMoveToNewThread(preview, WELCOME);
+			await expect(page.getByText('You can only move your own messages, so none were moved')).toBeVisible();
+		});
+	});
+
+	test.describe('with add_members and move_any', () => {
+		test.use({ knobs: { permissions: { add_members: true, move_any: true } } });
+
+		test('adds people in any room, and moves anyone\'s messages', async ({ preview, page }) => {
+			await preview.open('#room=engineering');
+			await preview.showMembers();
+			await expect(page.getByRole('button', { name: 'Add member', exact: true })).toBeVisible();
+			await preview.openRoom('general');
+			await pickAndMoveToNewThread(preview, WELCOME);
+			await expect(page.getByRole('dialog', { name: 'Move to a new thread', exact: true })).toBeVisible();
+		});
+	});
+
+	test.describe('without the extension', () => {
+		// you.ext.permissions means nothing where the server doesn't advertise ext:permissions.
+		test.use({ knobs: { withoutCapabilities: ['ext:permissions'], permissions: { write: false, add_members: false, move_any: true } } });
+
+		test('offers what PROTOCOL.md allows: writing, adding people in any room, and moving only your own', async ({ preview, page }) => {
+			await preview.open('#room=private_1710000000060');
+			await preview.showMembers();
+			await expect(page.getByRole('button', { name: 'Add member', exact: true })).toBeVisible();
+			await preview.openRoom('engineering');
+			await expect(preview.composer()).toBeVisible();
+			await preview.showMembers();
+			await expect(page.getByRole('button', { name: 'Add member', exact: true })).toBeVisible();
+			await preview.openRoom('general');
+			await pickAndMoveToNewThread(preview, WELCOME);
+			await expect(page.getByText('You can only move your own messages, so none were moved')).toBeVisible();
+			await expect(page.getByRole('dialog', { name: 'Move to a new thread', exact: true })).toHaveCount(0);
+		});
+	});
+
+	test.describe('without the extension, on a server that refuses', () => {
+		test.use({ knobs: { withoutCapabilities: ['ext:permissions'], denyAdding: true } });
+
+		test('shows why an add was denied, and keeps offering it', async ({ preview, page }) => {
+			await preview.open('#room=engineering');
+			await preview.showMembers();
+			await page.getByRole('button', { name: 'Add member', exact: true }).click();
+			const dialog = page.getByRole('dialog', { name: 'Add people to engineering' });
+			await dialog.getByRole('combobox', { name: 'Add', exact: true }).fill('grace');
+			await page.keyboard.press('Enter');
+			await dialog.getByRole('button', { name: /^Add Grace/ }).click();
+			await expect(dialog.getByRole('alert')).toContainText('Only moderators add people here');
+			await page.keyboard.press('Escape');
+			await expect(page.getByRole('button', { name: 'Add member', exact: true })).toBeVisible();
+			await expect(page.getByRole('complementary', { name: 'Room member list' }).locator('li.ap-member[data-user="grace"]')).toHaveCount(0);
 		});
 	});
 

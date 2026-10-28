@@ -866,8 +866,9 @@ device, per account, until it's put away or you leave. In a private room the
 member list's **+** and a profile card's **Add to room** are offered even
 without `add_members` ([EXT.md §7](../EXT.md#7-extpermissions)), and moving
 messages into one of its threads adds their authors, since members of a
-private room add people to it. Elsewhere they are offered only where the
-server grants you `add_members`. Leaving a private room asks first and says it can't be
+private room add people to it. Elsewhere they are offered where the
+server grants you `add_members`, or on a server without `ext:permissions`,
+which decides each add itself (a refusal shows its reason). Leaving a private room asks first and says it can't be
 joined again (only someone in it can add you back), or, as its last member,
 that it ends when you leave: the server removes it then.
 
@@ -948,7 +949,7 @@ stay selected and the bar says how many didn't move. A thread delivers to its
 members only, so once messages move into one (new or existing, but not back to
 the room), each of their authors who isn't in it yet is added to it (`room_join`
 with their `user_id`, §4.2.2), where you may add people: in a private room's
-thread, or where the server grants you `add_members`. The server
+thread, or where the server grants you `add_members` (or lacks `ext:permissions`). The server
 decides each (it adds no guests); the moves stand either way, and the toast says
 how many authors weren't added and why. Escape leaves select mode.
 
