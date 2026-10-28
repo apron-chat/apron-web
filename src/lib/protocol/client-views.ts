@@ -275,8 +275,9 @@ export function defaultWebSocketUrl(locationLike?: Location): string {
  * 3986 §6.2.2 and §6.2.3. The scheme and host are lowercased, a default port
  * dropped (`80` for `ws:`, `443` for `wss:`), an empty path is `/`, dot
  * segments go, percent-encoded unreserved characters are decoded and the
- * rest's hex digits uppercased. `ws:` and `wss:` stay apart. Throws on a
- * value that isn't a URL.
+ * rest's hex digits uppercased. A fragment goes too: it names nothing on the
+ * server, and a WebSocket URL can't carry one. `ws:` and `wss:` stay apart.
+ * Throws on a value that isn't a URL.
  */
 export function serverAddress(value: string): string {
 	// WHATWG URL does the case, the port, the empty path and the dot segments for `ws:` and `wss:`.
@@ -287,6 +288,7 @@ export function serverAddress(value: string): string {
 	});
 	url.pathname = percent(url.pathname);
 	if (url.search) url.search = percent(url.search);
+	url.hash = '';
 	return url.toString();
 }
 

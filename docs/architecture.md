@@ -430,8 +430,8 @@ is kept on the snapshot's `server` as sent: `apron` (the version), `capabilities
 `title` or else its host, never by `agent`), `welcome`, `title`,
 `description`, `avatar` (which `serverLook` reads, the avatar only where a
 user's would load), `signup`, `ping`, `push`, `status` and `ext`. A server is
-known by its address, `serverAddress` (RFC 3986 §6.2.2–6.2.3), which the
-client's URL, its kept session's keys, link servers and Recent all use.
+known by its address, `serverAddress` (RFC 3986 §6.2.2–6.2.3, without a
+fragment, which `new WebSocket()` refuses), which the client's URL, its kept session's keys, link servers and Recent all use.
 Every frame is parsed by `parseFrame` (`plain-text.ts`), which takes the bidi
 embeddings and overrides U+202A to U+202E out of every string in it (§3.5.2),
 so no name, title or message shows its characters out of order. Every `auth` the client sends carries `agent: "apron-web/0.4"`

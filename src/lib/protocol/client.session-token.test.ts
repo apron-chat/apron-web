@@ -76,6 +76,19 @@ describe('persisted session tokens', () => {
 		expect(storage.get('apron.session:wss://fake.test/')).toBe('session-tls');
 	});
 
+	it('finds a session kept under the address with a fragment, and keeps it under the address without one', async () => {
+		storage.set('apron.session:ws://fake.test/#team', 'session-frag');
+		storage.set('apron.signin-added:ws://fake.test/#team', 'webauthn');
+		startClient({ storage, onSnapshot: (next) => (snapshot = next) });
+		latest().open();
+		latest().receive({ method: 'server', params: { apron: 9, auth: ['token', 'guest'], capabilities: [] } });
+		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'session-frag' }));
+		expect(storage.get(TOKEN_KEY)).toBe('session-frag');
+		expect(storage.get('apron.signin-added:ws://fake.test/')).toBe('webauthn');
+		expect(storage.has('apron.session:ws://fake.test/#team')).toBe(false);
+		expect(storage.has('apron.signin-added:ws://fake.test/#team')).toBe(false);
+	});
+
 	it('names the account a sign-up invite creates, with that token only', async () => {
 		const { client } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
 		await latest().greet([], { auth: ['token', 'guest'] });

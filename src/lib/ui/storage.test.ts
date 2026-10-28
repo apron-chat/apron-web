@@ -31,6 +31,15 @@ describe('recent servers', () => {
 		]);
 	});
 
+	it('folds an entry saved with a fragment into its address without one', () => {
+		values.set('apron.recentServers', JSON.stringify([
+			{ url: 'wss://chat.example/ws#team', title: 'Team' },
+			{ url: 'wss://chat.example/ws', title: 'Older' }
+		]));
+		expect(loadRecentServers()).toEqual([{ url: 'wss://chat.example/ws', title: 'Team' }]);
+		expect(rememberServer(loadRecentServers(), 'wss://chat.example/ws#other', { title: 'Team' })).toEqual([{ url: 'wss://chat.example/ws', title: 'Team' }]);
+	});
+
 	it('remembers how a server looked, never finding it by its title', () => {
 		let recent = rememberServer([], 'wss://chat.example', { title: 'Chat', avatar: 'https://chat.example/icon.png' });
 		recent = rememberServer(recent, 'wss://evil.example/', { title: 'Chat' });

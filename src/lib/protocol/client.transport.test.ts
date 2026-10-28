@@ -725,6 +725,17 @@ describe('server address (§1)', () => {
 		expect(() => serverAddress('not a url')).toThrow();
 	});
 
+	it('drops a fragment, which a WebSocket URL can\'t carry: the address connects, and is the same server', () => {
+		expect(serverAddress('wss://chat.example/ws?x=%41#frag')).toBe('wss://chat.example/ws?x=A');
+		expect(serverAddress('wss://chat.example/ws#')).toBe('wss://chat.example/ws');
+		expect(normalizeWebSocketUrl('wss://chat.example/ws#team')).toBe('wss://chat.example/ws');
+		expect(normalizeWebSocketUrl('https://chat.example#team')).toBe('wss://chat.example/');
+		expect(normalizeWebSocketUrl('chat.example/ws#team')).toBe('ws://chat.example/ws');
+		expect(sameServer('wss://chat.example/ws#team', 'wss://chat.example/ws')).toBe(true);
+		// What new WebSocket() takes: no fragment left to throw on.
+		expect(new URL(normalizeWebSocketUrl('wss://x.example/ws#f')).hash).toBe('');
+	});
+
 	it('tells servers apart by address only: ws: and wss: are two', () => {
 		expect(sameServer('wss://chat.example', 'WSS://CHAT.example:443/')).toBe(true);
 		expect(sameServer('ws://chat.example/', 'wss://chat.example/')).toBe(false);

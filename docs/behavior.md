@@ -1176,8 +1176,8 @@ nothing works before signing in, and so does a session held for a sign-in
 (below) with nothing on screen yet. The server and name
 are stored in local storage, and the last few backends are listed under the
 form, each once by its address normalized by RFC 3986 (lowercase scheme and
-host, no default port, `/` for an empty path, percent-encoding normalized;
-`ws:` and `wss:` are two servers), with the title and avatar its last
+host, no default port, `/` for an empty path, percent-encoding normalized,
+no fragment, which a WebSocket URL can't carry; `ws:` and `wss:` are two servers), with the title and avatar its last
 `server` frame sent, and always its address. A server is never found by its
 title or avatar, and a session token kept under an address written another
 way moves to its normalized one. The sidebar's head shows the connected
