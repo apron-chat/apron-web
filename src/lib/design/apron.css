@@ -513,8 +513,8 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-rail-tile { display: grid; place-items: center; width: var(--rail-tile); height: var(--rail-tile); border-radius: var(--radius-lg); background: var(--bg-200); color: var(--ink); font-size: var(--text-field); font-weight: 600; object-fit: cover; }
 
 /* AppShell — rooms | main pane | member list, with a rail before them in rail.css. A thread opens in the main pane; there is no thread pane.
-   --corner: how far a header's content keeps clear of a PanelToggle in the window's corner. */
-.ap-shell { --corner: calc(var(--space-3) + var(--control-md) + var(--space-2)); position: relative; display: grid; grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr); height: 100%; min-height: 0; overflow: clip; background: var(--bg-100); }
+   --toggle-clear: how far a header's content keeps clear of a PanelToggle at its panel's inner edge. */
+.ap-shell { --toggle-clear: calc(var(--space-3) + var(--control-md) + var(--space-2)); position: relative; display: grid; grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr); height: 100%; min-height: 0; overflow: clip; background: var(--bg-100); }
 .ap-shell-side { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--bg-000); border-right: 1px solid var(--line); }
 .ap-shell-sidehead { display: flex; align-items: center; height: var(--header-h); padding: 0 var(--space-4); border-bottom: 1px solid var(--line); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; box-sizing: border-box; }
 .ap-shell-sidebody { flex: 1; overflow: auto; padding: var(--space-3) var(--space-2); }
@@ -535,12 +535,15 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
  * edge, so they ride the moving border rather than squeeze, and fade. A drag (ap-shell-resizing) follows the pointer instead.
  */
 .ap-shell-slides { transition: grid-template-columns var(--duration-slide) var(--ease-slide); }
-/* The rooms list's toggle sits over its header, then over the room's once it's shut: the room's keeps clear of it. */
-.ap-shell-side-toggle .ap-shell-sidehead { padding-left: var(--corner); }
-.ap-shell-side-toggle.ap-shell-side-shut .ap-roomhead { padding-left: var(--corner); }
-/* With a column of its own, the member list's toggle sits over its header, then over the room's. */
-.ap-shell-members-toggle .ap-memberlist-head { padding-right: var(--corner); }
-.ap-shell-members-toggle:not(.ap-shell-members-open) .ap-roomhead { padding-right: var(--corner); }
+/*
+ * Each panel's toggle sits at its inner edge (logical sides, so dir="rtl" mirrors it): the rooms list's at the end of its
+ * header, after the server, then at the start of the room's once it's shut; the member list's (with a column of its own)
+ * at the start of its header, before Members, then at the end of the room's. The headers keep clear of it.
+ */
+.ap-shell-side-toggle .ap-shell-sidehead { padding-inline-end: var(--toggle-clear); }
+.ap-shell-side-toggle.ap-shell-side-shut .ap-roomhead { padding-inline-start: var(--toggle-clear); }
+.ap-shell-members-toggle .ap-memberlist-head { padding-inline-start: var(--toggle-clear); }
+.ap-shell-members-toggle:not(.ap-shell-members-open) .ap-roomhead { padding-inline-end: var(--toggle-clear); }
 .ap-shell-slides .ap-roomhead { transition: padding var(--duration-slide) var(--ease-slide); }
 /* Each panel's contents keep its open width, against the edge that faces the conversation. */
 .ap-shell .ap-shell-side { align-items: flex-end; }
@@ -551,12 +554,19 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-shell-slides .ap-shell-side, .ap-shell-slides.ap-shell-members-wide .ap-memberlist { transition: opacity var(--duration-slide) var(--ease-slide), visibility 0s; }
 .ap-shell-side-shut .ap-shell-side, .ap-shell-members-wide:not(.ap-shell-members-open) .ap-memberlist { opacity: 0; visibility: hidden; }
 .ap-shell-slides.ap-shell-side-shut .ap-shell-side, .ap-shell-slides.ap-shell-members-wide:not(.ap-shell-members-open) .ap-memberlist { transition: opacity var(--duration-slide) var(--ease-slide), visibility 0s var(--duration-slide); }
-.ap-shell-resizing, .ap-shell-resizing .ap-shell-side, .ap-shell-resizing .ap-memberlist, .ap-shell-resizing .ap-roomhead { transition: none; }
+.ap-shell-resizing, .ap-shell-resizing .ap-shell-side, .ap-shell-resizing .ap-memberlist, .ap-shell-resizing .ap-roomhead, .ap-shell-resizing .ap-shell-toggle { transition: none; }
 .ap-shell-resizing, .ap-shell-resizing * { user-select: none; }
-/* PanelToggle: in the window's top corner, over the header beside it, staying put while its panel slides. */
+/*
+ * PanelToggle: placed by its panel's column (--side-col, --member-list-track) as PanelHandle is, a --space-3 inside the
+ * border, so it rides the border as the panel slides or is dragged; shut, the border is at the window's edge and the
+ * toggle a --space-3 in from it, over the room's header.
+ */
 .ap-shell-toggle { position: absolute; z-index: var(--z-toggle); top: calc((var(--header-h) - var(--control-md)) / 2); }
-.ap-shell-toggle-left { left: var(--space-3); }
-.ap-shell-toggle-right { right: var(--space-3); }
+.ap-shell-toggle-left { inset-inline-start: max(var(--space-3), calc(var(--side-col, var(--sidebar-w)) - var(--space-3) - var(--control-md))); }
+.ap-shell-toggle-right { inset-inline-end: max(var(--space-3), calc(var(--member-list-track, var(--member-list-w)) - var(--space-3) - var(--control-md))); }
+.ap-shell-slides .ap-shell-toggle { transition: left var(--duration-slide) var(--ease-slide), right var(--duration-slide) var(--ease-slide); }
+/* Mirrored, its icon's panel is on the other side too. */
+:where([dir='rtl']) .ap-shell-toggle svg { transform: scaleX(-1); }
 /* PanelHandle: placed by its panel's column (--sidebar-w, --member-list-track), sliding with it, so the border goes with the list as it opens and shuts. */
 .ap-shell-handle { position: absolute; top: 0; bottom: 0; left: max(0px, calc(var(--side-col, var(--sidebar-w)) - 4px)); width: 9px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; z-index: var(--z-handle); cursor: col-resize; touch-action: none; }
 .ap-shell-handle::after { content: ''; position: absolute; top: 0; bottom: 0; left: min(4px, var(--side-col, var(--sidebar-w))); width: 1px; background: var(--line); }
@@ -567,7 +577,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-shell-slides .ap-shell-handle-resizing { transition: none; }
 .ap-shell-handle-right { left: auto; right: calc(var(--member-list-track, var(--member-list-w)) - 9px); }
 .ap-shell-handle-right::after, .ap-shell-handle-right:hover::after, .ap-shell-handle-right:focus-visible::after, .ap-shell-handle-right.ap-shell-handle-resizing::after { left: 0; }
-/* The member list's, shut: out of reach until it's open again (from its corner toggle). */
+/* The member list's, shut: out of reach until it's open again (from its toggle, at the end of the room's header). */
 .ap-shell-handle-right.ap-shell-handle-shut { visibility: hidden; }
 .ap-shell-slides .ap-shell-handle-right.ap-shell-handle-shut { transition: left var(--duration-slide) var(--ease-slide), right var(--duration-slide) var(--ease-slide), visibility 0s var(--duration-slide); }
 /*
@@ -595,6 +605,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 }
 /* Narrower, it overlays the conversation, sliding in from the right edge as the column does on wide screens. */
 @media (max-width: 959px) {
+	/* Its toggle, if any, stays at the end of the room's header: the overlay opens below it. */
+	.ap-shell .ap-shell-toggle-right { inset-inline-end: var(--space-3); }
 	.ap-shell .ap-memberlist { position: absolute; z-index: var(--z-overlay); top: var(--header-h); right: 0; bottom: 0; width: min(var(--member-list-w), calc(100vw - 24px)); box-shadow: var(--shadow-float); transition: transform var(--duration-slide) var(--ease-slide), visibility 0s; }
 	.ap-shell .ap-memberlist:not(.ap-memberlist-open) { transform: translateX(calc(100% + 24px)); transition: transform var(--duration-slide) var(--ease-slide), visibility 0s var(--duration-slide); }
 }
@@ -602,7 +614,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 @media (max-width: 719px) {
 	.ap-shell { grid-template-columns: minmax(0, 1fr); }
 	.ap-shell .ap-shell-toggle-left, .ap-shell-handle, .ap-typing.ap-shell-typing { display: none; }
-	.ap-shell-side-toggle .ap-shell-sidehead, .ap-shell.ap-shell-side-toggle .ap-roomhead { padding-left: var(--space-4); }
+	.ap-shell-side-toggle .ap-shell-sidehead { padding-inline-end: var(--space-4); }
+	.ap-shell.ap-shell-side-toggle .ap-roomhead { padding-inline-start: var(--space-4); }
 	.ap-shell .ap-shell-side { align-items: stretch; }
 	.ap-shell .ap-shell-side > * { width: auto; }
 	.ap-shell[data-pane='main'] .ap-shell-side { display: none; }
@@ -610,7 +623,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 	.ap-shell-side-shut .ap-shell-side, .ap-shell-slides.ap-shell-side-shut .ap-shell-side { opacity: 1; visibility: visible; transition: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-	.ap-shell, .ap-shell .ap-shell-side, .ap-shell .ap-memberlist, .ap-shell .ap-roomhead, .ap-shell .ap-memberlist:not(.ap-memberlist-open), .ap-shell-slides .ap-shell-handle { transition: none; }
+	.ap-shell, .ap-shell .ap-shell-side, .ap-shell .ap-memberlist, .ap-shell .ap-roomhead, .ap-shell .ap-memberlist:not(.ap-memberlist-open), .ap-shell-slides .ap-shell-handle, .ap-shell-slides .ap-shell-toggle { transition: none; }
 }
 
 /* MemberList — who is in the room (§4.2.1): Online, then Offline (§4.5), each folding away from its heading */
@@ -621,7 +634,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-count { color: var(--ink-muted); font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
 /* Small, after the count, as the rooms list's header buttons: most visits are to see who is here. */
 .ap-memberlist-head .ap-memberlist-addtoggle { width: var(--control-sm); height: var(--control-sm); }
-/* Wider on the left, so names line up with the header's Members and the section carets have a gutter to sit in. */
+/* Wider on the left, so the avatars line up under the header's start (its toggle, with a column of its own, or Members) and the section carets have a gutter to sit in. */
 .ap-memberlist-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2) var(--space-3) var(--space-3); }
 .ap-memberlist-placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 .ap-memberlist-placeholder .ap-skel { height: 12px; }

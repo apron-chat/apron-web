@@ -16,11 +16,11 @@
 		mainAttach?: Attachment<HTMLElement>;
 		/** The MemberList: a column of its own with `membersWide`, else over the conversation, sliding in from the right. */
 		members?: Snippet;
-		/** The rooms list's <PanelToggle>, in the window's top-left corner: the header beside it keeps clear of it. */
+		/** The rooms list's <PanelToggle>, at its inner edge: at the end of its header, or the start of the room's once it's shut, which keep clear of it. */
 		sideToggle?: Snippet;
 		/** The rooms list's <PanelHandle>, on its border. */
 		sideHandle?: Snippet;
-		/** The member list's <PanelToggle>, top right; only with `membersWide`, since the room header toggles the overlay. */
+		/** The member list's <PanelToggle>, at its inner edge: at the start of its header, or the end of the room's once it's shut; only with `membersWide`, since the room header toggles the overlay. */
 		membersToggle?: Snippet;
 		/** The member list's <PanelHandle>; only with `membersWide`. */
 		membersHandle?: Snippet;

@@ -157,3 +157,57 @@ test.describe('the member list under 960px', () => {
 		});
 	});
 });
+
+/**
+ * Each panel's toggle sits at its inner edge, the edge facing the conversation: the rooms list's after the server in
+ * its header, the member list's before Members; shut, each at the room header's end nearest the edge its panel went to.
+ * Under `dir="rtl"` the panels and their inner edges mirror. Measured along the line, from its start.
+ */
+test.describe('the panel toggles', () => {
+	test.use(DEVICES.desktop);
+
+	for (const dir of ['ltr', 'rtl'] as const) {
+		test(`sit at their panels' inner edges, and at the room header's ends once shut (${dir})`, async ({ preview, page }) => {
+			await preview.open();
+			if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+			await showMembers(preview);
+			const width = page.viewportSize()!.width;
+			/** A box's start and end along the line: from the left, or from the right under rtl. */
+			const span = (box: { x: number; width: number }) =>
+				dir === 'ltr' ? { start: box.x, end: box.x + box.width } : { start: width - box.x - box.width, end: width - box.x };
+			const at = async (locator: ReturnType<typeof page.locator>) => span((await locator.boundingBox())!);
+			const near = (actual: number, expected: number, what: string) => expect(Math.abs(actual - expected), `${what}: ${actual} ≈ ${expected}`).toBeLessThan(1.5);
+			const button = (name: string) => page.getByRole('button', { name, exact: true });
+
+			const side = await at(page.locator('.ap-shell-side'));
+			const server = await at(page.locator('.ap-shell-sidehead-server'));
+			const hideRooms = await at(button('Hide rooms'));
+			near(hideRooms.end, side.end - 12, 'the rooms toggle ends a --space-3 inside the list');
+			expect(server.end, 'the server stops before the toggle').toBeLessThanOrEqual(hideRooms.start);
+			near(server.start, side.start + 16, 'the server starts at the list\'s outer edge');
+
+			const list = page.getByRole('complementary', { name: 'Room member list', exact: true });
+			const members = await at(list);
+			const heading = await at(list.getByRole('heading', { name: 'Members', exact: true }));
+			const hideMembers = await at(button('Hide member list'));
+			near(hideMembers.start, members.start + 12, 'the member list toggle starts a --space-3 inside the list');
+			expect(hideMembers.end, 'Members follows the toggle').toBeLessThanOrEqual(heading.start);
+
+			await preview.press(button('Hide rooms'));
+			await preview.press(button('Hide member list'));
+			await expect(list).toBeHidden();
+			const showRooms = await at(button('Show rooms'));
+			const showMembersToggle = await at(button('Show member list'));
+			near(showRooms.start, 12, 'shut, the rooms toggle starts the room header');
+			near(showMembersToggle.end, width - 12, 'shut, the member list toggle ends the room header');
+			// The header's own contents keep clear of both.
+			const header = await page.locator('.ap-roomhead > *').evaluateAll((children) =>
+				children.map((child) => child.getBoundingClientRect()).filter((rect) => rect.width > 0).map((rect) => ({ x: rect.x, width: rect.width })));
+			expect(header.length).toBeGreaterThan(0);
+			for (const box of header.map(span)) {
+				expect(box.start).toBeGreaterThanOrEqual(showRooms.end);
+				expect(box.end).toBeLessThanOrEqual(showMembersToggle.start);
+			}
+		});
+	}
+});

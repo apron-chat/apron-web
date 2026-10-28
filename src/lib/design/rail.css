@@ -20,8 +20,9 @@
 
 /* AppShell with a rail (no ap-shell-norail): the rail's column first, then apron.css's columns. */
 .ap-shell:not(.ap-shell-norail) { grid-template-columns: var(--rail-w) var(--side-col, var(--sidebar-w)) minmax(0, 1fr); }
-/* Beside a rail, what is placed against the rooms list's left edge moves over by it. */
-.ap-shell:not(.ap-shell-norail) :is(.ap-shell-toggle-left, .ap-shell-nudge), .ap-shell:not(.ap-shell-norail) .ap-shell-handle:not(.ap-shell-handle-right) { margin-left: var(--rail-w); }
+/* Beside a rail, what is placed by the rooms list's column moves over by it (the toggle on its logical side, as it's placed). */
+.ap-shell:not(.ap-shell-norail) .ap-shell-nudge, .ap-shell:not(.ap-shell-norail) .ap-shell-handle:not(.ap-shell-handle-right) { margin-left: var(--rail-w); }
+.ap-shell:not(.ap-shell-norail) .ap-shell-toggle-left { margin-inline-start: var(--rail-w); }
 @media (min-width: 960px) {
 	.ap-shell-members-wide:not(.ap-shell-norail) { grid-template-columns: var(--rail-w) var(--side-col, var(--sidebar-w)) minmax(0, 1fr) var(--member-list-track); }
 }

@@ -217,15 +217,17 @@ never count as unread or mention you, and a message after one starts a new
 sender group.
 
 On wide screens the rooms list is a column beside the conversation: drag its
-right border to resize it, and click the border, or the panel button in the
-window's top-left corner, to collapse or expand it. The button stays in that
-corner, over the list's header while it is open and over the room's once it
-is shut, so the same spot opens and shuts it, with or without a room open. Its width and whether
+right border to resize it, and click the border, or the panel button at its
+inner edge, to collapse or expand it. The button sits at the end of the list's
+header, after the server, while it is open, and rides the border as the list
+slides or is dragged; once it is shut, at the start of the room's header, beside
+the window edge the list went to, with or without a room open. Its width and whether
 it is collapsed are remembered. On
 phones it is a pane of its own instead, which the title bar's back button
 returns to.
 
-The member list's panel button, in the window's top-right corner, toggles a right-hand
+The member list's panel button, at its inner edge (the start of its header,
+before Members, or the end of the room's once it is shut), toggles a right-hand
 sidebar, **Members**, listing the open room's or thread's members from its `room_list`
 snapshot, with their role badges, in sections as Discord lists them, each
 headed with its count: **Online**, then **Offline** (offline, or your own
@@ -250,7 +252,7 @@ a confirm): how members bring people into a private room. Who may is the server'
 policy; its error shows in the panel. A server that answers `unsupported`
 gets no controls until its next `server` frame. A count kept from a truncated listing stays while later records
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
-drag its left border, or click the border to collapse it (the corner button
+drag its left border, or click the border to collapse it (the panel button
 brings it back, and takes focus when the border collapsed it from the keyboard), and its width and whether it is collapsed are remembered.
 Dragging either list shut restores its earlier width when it reopens.
 
