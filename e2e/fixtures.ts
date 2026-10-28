@@ -152,6 +152,17 @@ export class Preview {
 		await expect(rooms).toBeVisible();
 	}
 
+	/**
+	 * Opens the connect screen as people reach it: the profile's Connect to a server… (on a narrow viewport, from
+	 * the rooms pane). Only on `/` (`openRoot`): the preview has no connect screen.
+	 */
+	async openConnect(): Promise<void> {
+		await this.roomsPane();
+		await this.press(this.page.getByRole('button', { name: /^Your profile on/ }));
+		await this.press(this.page.getByRole('dialog', { name: 'Edit profile', exact: true }).getByRole('button', { name: 'Connect to a server…', exact: true }));
+		await expect(this.page.getByRole('form', { name: 'Sign in' })).toBeVisible();
+	}
+
 	/** Opens a room from the sidebar, by its row's `data-room`, as interop finds it. */
 	async openRoom(id: string): Promise<void> {
 		await this.roomsPane();

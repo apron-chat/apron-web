@@ -51,6 +51,7 @@
 		pause?: { until?: PausedUntil };
 		onpause: (until: PausedUntil) => Promise<void> | void;
 		onresume: () => Promise<void> | void;
+		/** The connect screen, from the profile editor's Connect to a server… button. */
 		onconnect: () => void;
 		/** The room or thread the phone's rooms list opened over, and the › back to it. */
 		returnTo?: string;
@@ -148,7 +149,7 @@
 {/snippet}
 
 <aside class="ap-shell-side" aria-label="Rooms">
-	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={serverLook?.avatar} {onconnect} {returnTo} {onreturn} />
+	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={serverLook?.avatar} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
 		<SidebarSection title="Rooms" collapsible={false} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
 			{#if rooms.length === 0}
@@ -176,7 +177,7 @@
 			</SidebarSection>
 		{/if}
 	</div>
-	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} />
+	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} {onconnect} />
 </aside>
 
 {#if createOpen && newRoomDialog.component}{@const NewRoomDialog = newRoomDialog.component}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}

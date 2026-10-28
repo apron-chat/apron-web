@@ -61,6 +61,20 @@ describe('ProfileEditor', () => {
 		expect(dom.button('Save').disabled).toBe(true);
 	});
 
+	it('offers Connect to a server… in a Server group of its own, enabled while saving, and none without onconnect', () => {
+		const onconnect = vi.fn();
+		dom.render(ProfileEditor, { userId: 'guest_7', name: 'Ada', onconnect, status: 'saving', dialog: false });
+		const group = dom.byRole('group', 'Server');
+		const connect = dom.button('Connect to a server…', group);
+		expect(connect.disabled).toBe(false);
+		connect.click();
+		expect(onconnect).toHaveBeenCalledOnce();
+		dom.unmount();
+		document.body.replaceChildren();
+		dom.render(ProfileEditor, { userId: 'guest_7', name: 'Ada', dialog: false });
+		expect(dom.queryByRole('group', 'Server')).toBeNull();
+	});
+
 	it('has no Bio field without maxBio, and says why the server refused one', () => {
 		dom.render(ProfileEditor, { userId: 'ada', name: 'Ada', dialog: false });
 		expect(document.querySelector('textarea')).toBeNull();

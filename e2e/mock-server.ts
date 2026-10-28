@@ -4,8 +4,11 @@ import { NOW } from '../scripts/qa/lib/helpers.js';
 /** Any URL off this machine. */
 export const OFFSITE = /^https?:\/\/(?!127\.0\.0\.1[:/]|localhost[:/])/;
 
-/** What a test changes about the scripted server: `server` frame fields (§3.1), and fields of `you` (§3.3). */
-export type MockOptions = { server?: Record<string, unknown>; you?: Record<string, unknown> };
+/**
+ * What a test changes about the scripted server: `server` frame fields (§3.1), fields of `you` (§3.3), and a `token`
+ * its `auth` answers with, which makes the session an account's rather than a guest's.
+ */
+export type MockOptions = { server?: Record<string, unknown>; you?: Record<string, unknown>; token?: string };
 
 /**
  * A scripted server for the app's own route (`/`), which, unlike `/__preview`, connects to a real backend
@@ -28,7 +31,7 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 			const reply = (result: unknown) => frame.id !== undefined && ws.send(JSON.stringify({ id: frame.id, result }));
 			switch (frame.method) {
 				case 'ping': return ws.send(JSON.stringify({ method: 'pong' }));
-				case 'auth': return reply({ you });
+				case 'auth': return reply({ you, ...(options.token ? { token: options.token } : {}) });
 				case 'room_list': return reply({ joined: [general], users: [you, ada, bob] });
 				// Idle reports (§4.5.3): taken, and kept nowhere.
 				case 'status': return reply({});

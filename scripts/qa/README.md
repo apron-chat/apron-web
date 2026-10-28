@@ -133,6 +133,7 @@ Results, traces and the report go to `.qa/e2e/`. There are no retries: a test th
 | `a11y.spec.ts` | axe-core on connect, room, preferences and thread, desktop and phone: no serious or critical violation beyond `e2e/a11y-baseline.json` (per rule, by count). After fixing some, `E2E_UPDATE_A11Y=1 npm run e2e -- a11y` lowers the baseline; commit it. |
 | `status.spec.ts` | `seen` (§4.5.2): an offline member's profile card says "Last seen 2h ago" (`profile-seen`, a `<time>` with the exact time as its tooltip) and their row's tooltip says so, from the scripted server's listing; nothing for someone online or for you; live, it goes when they come back online and comes back new when they go again. |
 | `extensions.spec.ts` | The server's `title`, `description` and `avatar` beside its address on the connect screen, in Recent (one entry per normalized address, entries saved under another spelling folded in) and the sidebar's head; `ext:permissions` as an object (`write: false` for a guest and an account, `add_members` only in private rooms without it, the old list ignored); `ext:settings` without `guest_posting` or `add_members`; `ext:emoji` keys as images in text (static copies under reduced motion, never in code), in reactions, in the picker (not `hidden` ones) and the `:shortcode` list; unknown keys as placeholders that toggle the key; ❤ and ❤️ as one chip; bidi overrides dropped and names isolated. |
+| `connect.spec.ts` | The sidebar's head: the server's avatar (or initials) and title over its host, the host alone without a title, a long title cut short with an ellipsis, its address the tooltip, and nothing to press; the profile's **Connect to a server…** opens the connect screen for a guest and an account, from the keyboard, and on a phone beside the head's › back. |
 | `contract-scenes.spec.ts`, `contract.spec.ts` | The interop contract, below. |
 
 Tests drive the app as a user does (roles and names, the test ids interop relies on) and assert the wire from
@@ -152,7 +153,7 @@ with a new `seen` when it goes `offline`); without them the preview is the demo,
 a private conversation with Grace and a titled private room, and advertises `ext:settings` `private_rooms: 5`
 and `ext:permissions` with `add_members`. `preview.openRoot(options?)` opens `/` instead, against a scripted WebSocket server (`e2e/mock-server.ts`)
 for the connect screen and sign-in (with `status`: General's Bob is online, and Ada offline, last seen two hours
-before the fixed clock; `options.server` adds fields to its `server` frame, `options.you` to `you`); every request off the machine is refused, so no test reaches a real server.
+before the fixed clock; `options.server` adds fields to its `server` frame, `options.you` to `you`, and `options.token` signs in to an account rather than a guest); every request off the machine is refused, so no test reaches a real server.
 
 ### The interop contract
 

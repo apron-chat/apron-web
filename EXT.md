@@ -48,7 +48,7 @@ Some features have no capability:
 - `server.title`, `description` and `avatar`
   ([§3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame))
   show the server on the connect screen and under Recent, always with its
-  address, and its title and avatar in the sidebar.
+  address, and its title and avatar in the sidebar, over its host.
 - After a failed WebSocket handshake, apron-web asks the server why over HTTP
   ([§5](#5-connection-status)).
 - apron-web writes no `ext` of its own, except `ext.bio` ([§8](#8-extbio)).

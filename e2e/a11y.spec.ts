@@ -29,9 +29,7 @@ const baseline: Baseline = (() => {
 const SCREENS: Record<string, (preview: Preview) => Promise<void>> = {
 	connect: async (preview) => {
 		await preview.openRoot();
-		await preview.roomsPane();
-		await preview.press(preview.page.getByRole('button', { name: 'Connection settings', exact: true }));
-		await expect(preview.page.getByRole('form', { name: 'Sign in' })).toBeVisible();
+		await preview.openConnect();
 	},
 	room: (preview) => preview.open(),
 	preferences: async (preview) => {

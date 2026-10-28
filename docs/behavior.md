@@ -1166,8 +1166,8 @@ Media in `og` loads only from the chat server's own origin and the origins it
 names with `ext:media`, and stream URLs only from its own origin; links may
 point anywhere `http(s)`.
 
-**Connect** in the
-sidebar header opens the connect screen: a WebSocket URL or an HTTP(S) server
+**Connect to a server…** in the profile editor (the profile bar at the foot of
+the sidebar, for guests and accounts alike) opens the connect screen: a WebSocket URL or an HTTP(S) server
 base URL, a display name, and a sign-in choice among the schemes the server
 advertises (Guest by default; Passkey, below; Email, External and Token, further down). Once the server in the field
 has answered, the top of the form shows it as it shows itself
@@ -1187,7 +1187,10 @@ no fragment, which a WebSocket URL can't carry; `ws:` and `wss:` are two servers
 `server` frame sent, and always its address. A server is never found by its
 title or avatar, and a session token kept under an address written another
 way moves to its normalized one. The sidebar's head shows the connected
-server's title (or host) and avatar, its address the tooltip. The profile bar at the foot of the sidebar edits your handle, which is
+server, and is not a control: its avatar (or its initials), its title over its
+host (with a port that isn't the default), or its host alone without a title,
+both cut short with an ellipsis, the host always left to right; its address is
+the tooltip. The profile bar at the foot of the sidebar edits your handle, which is
 sent with the protocol `me` request after authentication; the editor shows
 what the server actually kept. The kept name is the one asked for from then
 on, and the one remembered for the next visit, so a server that normalizes

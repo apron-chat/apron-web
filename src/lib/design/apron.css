@@ -765,10 +765,17 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-threads-others .ap-roomrow-active .ap-room-join { opacity: 1; pointer-events: auto; }
 .ap-threads-others .ap-roomrow-active .ap-room { padding-right: calc(var(--control-sm) + var(--space-2)); }
 
-/* SidebarHead — the rooms list's header: the server's name, Connect, and on phones a › back to the pane */
+/* SidebarHead — the rooms list's header: the server you're on, and on phones a › back to the pane */
 .ap-shell-sidehead { gap: var(--space-2); }
-.ap-shell-sidehead-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ap-shell-sidehead-avatar { flex: none; width: var(--control-sm); height: var(--control-sm); border-radius: var(--radius-sm); object-fit: cover; }
+/* The server: its avatar (or initials), and its title over its host; who you're connected to, not a control. */
+.ap-shell-sidehead-server { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-2); }
+.ap-shell-sidehead-avatar { flex: none; width: var(--control-lg); height: var(--control-lg); border-radius: var(--radius-inner); object-fit: cover; }
+.ap-shell-sidehead-initials { display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: var(--text-ui); line-height: 1; font-weight: 600; user-select: none; }
+.ap-shell-sidehead-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ap-shell-sidehead-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-body); line-height: var(--leading-ui); font-weight: 600; }
+/* The address reads left to right, whatever the title's direction or the page's. */
+.ap-shell-sidehead-host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 400; color: var(--ink-muted); direction: ltr; unicode-bidi: isolate; text-align: left; }
+:where([dir='rtl']) .ap-shell-sidehead-host { text-align: right; }
 /* As the room header's ‹ (.ap-roomhead-back). */
 .ap-shell-sidehead-return { display: none; flex: none; width: var(--control-lg); height: var(--control-lg); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--denim); font: inherit; font-size: 22px; cursor: pointer; }
 /* The rooms list's column keeps its contents to itself; on phones it's the whole screen, with no border. */
@@ -945,7 +952,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-msg-text pre .ap-diff-add::before { content: "+ "; } .ap-msg-text pre .ap-diff-del::before { content: "\2212 "; }
 
 /* ProfileEditor sign-in row */
-.ap-profedit-signin { display: flex; flex-direction: column; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--line); }
+.ap-profedit-signin, .ap-profedit-server { display: flex; flex-direction: column; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--line); }
 .ap-profedit-row { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
 /* The ways in on offer, as a row of buttons; adding an email or external sign-in, a field and its button. */
 .ap-profedit-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }

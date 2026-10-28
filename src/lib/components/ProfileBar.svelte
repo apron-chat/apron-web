@@ -51,8 +51,10 @@
 		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
 		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
+		/** Opens the connect screen as it is: another server, or another way to sign in. */
+		onconnect: () => void;
 	}
-	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin, onconnect }: Props = $props();
 
 	let open = $state(false);
 	let preferencesOpen = $state(false);
@@ -180,6 +182,12 @@
 	function close(): void {
 		open = false;
 		status = 'idle';
+	}
+
+	/** The editor's Connect to a server…: the connect screen, in its place. */
+	function connect(): void {
+		close();
+		onconnect();
 	}
 
 	function showPreferences(): void {
@@ -451,6 +459,7 @@
 		onsave={save}
 		oncancel={close}
 		signin={canUsePasskey || canUseEmail || canUseExternal ? signin : undefined}
+		onconnect={connect}
 		changeAvatarTestid="change-avatar" removeAvatarTestid="remove-avatar" avatarFileTestid="avatar-input" nameTestid="display-name-input" bioTestid="bio-input"
 	/>
 {/snippet}
