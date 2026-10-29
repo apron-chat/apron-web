@@ -398,6 +398,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-room-active .ap-room-name { font-weight: 600; }
 .ap-room-active::before { content: ''; position: absolute; inset-inline-start: var(--space-1); top: var(--space-1_5); bottom: var(--space-1_5); width: 3px; border-radius: var(--radius-full); background: var(--accent); pointer-events: none; }
 .ap-room-unread { color: var(--ink); }
+
 /* A muted room (§4.5 `mute` with its `room_id`): a bell-off at the end of its row, next to its count, and what's new in it stays quiet. */
 .ap-muted { flex: none; width: 14px; height: 14px; color: var(--ink-muted); }
 .ap-room-unread .ap-room-name { font-weight: 600; }
@@ -553,14 +554,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-shell { --toggle-clear: calc(var(--space-3) + var(--control-md) + var(--space-2)); position: relative; display: grid; grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr); height: 100%; min-height: 0; overflow: clip; background: var(--bg-100); }
 .ap-shell-side { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--bg-000); border-inline-end: 1px solid var(--line); }
 .ap-shell-sidehead { display: flex; align-items: center; height: var(--header-h); padding: 0 var(--space-4); border-bottom: 1px solid var(--line); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; box-sizing: border-box; }
-.ap-shell-sidebody { flex: 1; overflow: auto; padding: var(--space-3) var(--space-2); }
-/* Its rows reach its outer edge through that padding, square there and rounded inside, their text where it was, and the
-   open room's accent bar sits on the edge; the member list's rows do the same on its end side. */
-.ap-shell-sidebody .ap-room { margin-inline-start: calc(-1 * var(--space-2)); width: calc(100% + var(--space-2)); border-start-start-radius: 0; border-end-start-radius: 0; }
-.ap-shell-sidebody .ap-room:not(.ap-room-nested) { padding-inline-start: calc(var(--space-3) + var(--space-2)); }
-.ap-shell-sidebody .ap-room-nested { padding-inline-start: calc(var(--space-3) + var(--space-4) + var(--space-2)); }
-.ap-shell-sidebody .ap-room-active:not(.ap-room-nested)::before { inset-inline-start: 0; border-start-start-radius: 0; border-end-start-radius: 0; }
-.ap-shell-sidebody .ap-room-nested.ap-room-active::before { inset-inline-start: calc(20px + var(--space-2)); }
+.ap-shell-sidebody { --edge: var(--space-2); flex: 1; overflow: auto; padding: var(--space-3) var(--edge); }
+/* Its rows are edge rows (below) on its start side; a button doesn't stretch, so a room's is widened by hand. */
+.ap-shell-sidebody .ap-room { width: calc(100% + var(--edge)); }
 .ap-shell-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; container-type: inline-size; }
 /*
  * Filling the window (ap-shell-viewport). While an on-screen keyboard is up (the page sets data-keyboard, --app-height and
@@ -692,7 +688,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* Small, after the count, as the rooms list's header buttons: most visits are to see who is here. */
 .ap-memberlist-head .ap-memberlist-addtoggle { width: var(--control-sm); height: var(--control-sm); }
 /* Wider at the start (the left, or the right under dir="rtl"), so the avatars line up under the header's start (its toggle, with a column of its own, or Members). */
-.ap-memberlist-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-2); padding-inline-start: var(--space-3); }
+.ap-memberlist-body { --edge: var(--space-2); flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--edge); padding-inline-start: var(--space-3); }
 .ap-memberlist-placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 .ap-memberlist-placeholder .ap-skel { height: 12px; }
 .ap-memberlist-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
@@ -701,10 +697,20 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-sectionhead { padding: 0 var(--space-1) var(--space-1); }
 .ap-memberlist-sectionhead .ap-sect-toggle { padding-inline-start: 0; }
 .ap-memberlist-people { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.ap-member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; margin-inline-end: calc(-1 * var(--space-2)); padding: 2px var(--space-1); padding-inline-end: calc(var(--space-1) + var(--space-2)); border-radius: var(--radius-md); border-start-end-radius: 0; border-end-end-radius: 0; color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); cursor: pointer; }
+.ap-member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); border-radius: var(--radius-md); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); cursor: pointer; }
 /* The whole row is a press (MemberList: its menu, or their card), so the pointer anywhere on it tints it, as a message
    under the pointer; and it stays tinted while its menu is open. */
 .ap-member:hover, .ap-member-menu { background: var(--hover-soft); }
+
+/*
+ * Edge rows: in a pane's list, a row's fill reaches the pane's edge, square there and rounded inside, and the accent bar
+ * at its start (the open room) sits on that edge: the rooms list's rows on its start side, the member list's on its end.
+ * The fill grows through a transparent border, so the row's text, and what's placed inside it, stay where they were.
+ * --edge is how far the row sits in from the edge; --edge-margin, the part of that which is its own margin, if any.
+ */
+.ap-shell-sidebody .ap-room { margin-inline-start: calc(var(--edge-margin, 0px) - var(--edge)); border-inline-start: var(--edge) solid transparent; border-start-start-radius: 0; border-end-start-radius: 0; }
+.ap-member { margin-inline-end: calc(var(--edge-margin, 0px) - var(--edge)); border-inline-end: var(--edge) solid transparent; border-start-end-radius: 0; border-end-end-radius: 0; }
+.ap-shell-sidebody .ap-room-active:not(.ap-room-nested)::before { inset-inline-start: calc(-1 * var(--edge)); border-start-start-radius: 0; border-end-start-radius: 0; }
 /* Role badges follow the name, as beside a message's sender. */
 .ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1e12 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 /* Offline members (§4.5) recede, badges and all; their ring and name still read. */
@@ -757,7 +763,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-timeline { flex: 1; overflow: auto; overscroll-behavior: contain; padding-bottom: var(--space-2); }
 
 /* Thread rows nested under their room, and the open-thread header breadcrumb */
-.ap-room-nested { padding: 3px var(--space-3) 3px calc(var(--space-3) + var(--space-4)); font-size: var(--text-ui); line-height: var(--leading-ui); align-items: flex-start; }
+.ap-room-nested { padding: 3px var(--space-3); padding-inline-start: calc(var(--space-3) + var(--space-4)); font-size: var(--text-ui); line-height: var(--leading-ui); align-items: flex-start; }
 /* Counts stay beside the title when preview lines follow it. */
 .ap-room-nested .ap-count { margin-top: -1px; }
 /* Top-aligned, as a thread's row is: centred on its first line, with the name, the count and the time. */
