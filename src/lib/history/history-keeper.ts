@@ -15,7 +15,7 @@ import type { ClientSnapshot, KeptState, RestoredState, RoomSync } from '$lib/pr
 import { compareLogIds, type StoreChange, type StoredRecords } from '$lib/protocol/reducer';
 import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types';
 import { decrement } from '$lib/protocol/client-internals';
-import { forgetHistory, historyVersion, openHistory, pageHistory, pruneHistory, readHistory, readRoomRows, timeLike, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
+import { forgetHistory, HistoryGone, historyVersion, openHistory, pageHistory, pruneHistory, readHistory, readRoomRows, timeLike, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -57,11 +57,14 @@ export interface Coverage {
  * How a kept room comes back with a retention cutoff, in rooms whose positions are times: its sync, starting no
  * lower than the cutoff (older pages load from the server), and where to read it from. Undefined when it isn't
  * caught up since before the cutoff: paging forward from there would fetch everything since, so it starts over.
+ * It was caught up as of `caughtUpAt` (epoch milliseconds) when that is known, else as of its checkpoint, which
+ * for a quiet room is long ago.
  */
-export function plannedRoom(sync: RoomSync, cutoff: number | undefined): { sync: RoomSync; from?: number } | undefined {
+export function plannedRoom(sync: RoomSync, cutoff: number | undefined, caughtUpAt?: number): { sync: RoomSync; from?: number } | undefined {
 	if (cutoff === undefined || !timeLike(sync)) return { sync };
-	const synced = sync.checkpoint ?? sync.loadCheckpoint;
-	if (synced !== undefined && Number(synced) < cutoff) return undefined;
+	const checkpoint = sync.checkpoint ?? sync.loadCheckpoint;
+	const synced = caughtUpAt ?? (checkpoint === undefined ? undefined : Number(checkpoint));
+	if (synced !== undefined && synced < cutoff) return undefined;
 	const oldest = sync.olderBefore ?? sync.floor;
 	return oldest === undefined || Number(oldest) < cutoff ? { sync: { ...sync, olderBefore: String(cutoff), hasOlder: true }, from: cutoff } : { sync };
 }
@@ -76,8 +79,10 @@ export function restoredState(kept: KeptHistory, retentionMs: number | undefined
 	const rooms: RoomSync[] = [];
 	const records: RestoredState['records'] = { rooms: [], messages: [], reactions: [], memberships: [] };
 	const coverage = new Map<string, Coverage>();
+	// Written with every joined room kept and none catching up: each was caught up when it was saved.
+	const caughtUpAt = kept.meta.complete && kept.meta.current ? kept.meta.savedAt : undefined;
 	for (const { row, entries, older } of kept.rooms) {
-		const planned = row.sync && plannedRoom(row.sync, cutoff);
+		const planned = row.sync && plannedRoom(row.sync, cutoff, caughtUpAt);
 		if (!planned) continue;
 		let sync = planned.sync;
 		if (older && entries.length) {
@@ -121,6 +126,8 @@ interface Writer {
 	release?: () => void;
 	synced: Set<string>;
 	withSync: Set<string>;
+	/** Rooms rebuilt (`clearRoom`) before the writer was granted: their kept sync goes until they settle. */
+	cleared: Set<string>;
 	disk?: Map<string, RoomSync>;
 	skip: Set<string>;
 	reset: boolean;
@@ -325,8 +332,19 @@ export class HistoryKeeper {
 
 	private async prune(): Promise<void> {
 		if (!this.keeping || this.retentionMs === undefined || this.retentionMs === null) return;
+		const cutoff = this.now() - this.retentionMs;
+		// What is kept now starts no lower than the cutoff: older pages come from the server.
+		const syncs = new Map((this.client?.keptState()?.rooms ?? []).map((room) => [room.id, room.sync]));
+		for (const [room, cover] of this.coverage) {
+			if (!timeLike(syncs.get(room))) continue;
+			if (cover.from === undefined || Number(cover.from) < cutoff) this.coverage.set(room, { from: String(cutoff), older: true });
+		}
 		try {
-			await pruneHistory(await this.open(), this.now() - this.retentionMs);
+			const versions = await pruneHistory(await this.open(), cutoff);
+			// This tab's own prune leaves what it knows of what is kept as true as it was.
+			const known = this.known;
+			const pruned = known && versions.get(known.server);
+			if (known && pruned?.from === known.version) known.version = pruned.to;
 		} catch {
 			// Kept as it was; the next visit restores only what is recent.
 		}
@@ -350,6 +368,7 @@ export class HistoryKeeper {
 		if (change.kind === 'clearRoom') {
 			this.writer?.rows.delete(change.room);
 			this.writer?.withSync.delete(change.room);
+			this.writer?.cleared.add(change.room);
 			this.coverage.delete(change.room);
 			this.served.delete(change.room);
 		}
@@ -397,7 +416,7 @@ export class HistoryKeeper {
 	}
 
 	private startWriter(server: string, userId: string): void {
-		const writer: Writer = { server, userId, granted: false, synced: new Set(), withSync: new Set(), skip: new Set(), reset: true, swept: false, rows: new Map() };
+		const writer: Writer = { server, userId, granted: false, synced: new Set(), withSync: new Set(), cleared: new Set(), skip: new Set(), reset: true, swept: false, rows: new Map() };
 		this.writer = writer;
 		const take = () => (writer.taking = taking());
 		const taking = async () => {
@@ -408,7 +427,7 @@ export class HistoryKeeper {
 			if (known && known.server === server && known.userId === userId && kept?.version === known.version && kept.userId === userId) {
 				// What this page knows is kept is still what is there: go on from it.
 				writer.synced = new Set(known.synced);
-				writer.withSync = new Set(known.synced);
+				writer.withSync = new Set([...known.synced].filter((room) => !writer.cleared.has(room)));
 				writer.reset = false;
 			} else {
 				this.queue = [];
@@ -536,13 +555,14 @@ export class HistoryKeeper {
 		const withSync = new Set([...writer.withSync, ...written.keys()]);
 		for (const room of dropped) withSync.delete(room);
 		const complete = state.complete && state.rooms.every((room) => withSync.has(room.id));
-		const users = JSON.stringify([state.users, state.aliases, complete]);
+		const current = state.rooms.every((room) => room.sync !== undefined);
+		const users = JSON.stringify([state.users, state.aliases, complete, current]);
 		if (!changes.length && !whole.length && !rows.length && !dropped.length && !sweep && !writer.reset && users === writer.users) return;
 		try {
 			const db = await this.open();
 			const version = await writeHistory(db, writer.server, {
-				changes, whole, rooms: rows, dropped, ...(sweep ? { keepOnly: sweep } : {}), reset: writer.reset,
-				meta: { server: writer.server, userId: writer.userId, complete, users: state.users, ...(state.aliases ? { aliases: state.aliases } : {}) }
+				changes, whole, rooms: rows, dropped, ...(sweep ? { keepOnly: sweep } : {}), reset: writer.reset, continues: !writer.reset,
+				meta: { server: writer.server, userId: writer.userId, complete, current, users: state.users, ...(state.aliases ? { aliases: state.aliases } : {}) }
 			}, kept);
 			if (this.writer !== writer) return;
 			writer.reset = false;
@@ -554,6 +574,15 @@ export class HistoryKeeper {
 			for (const room of dropped) writer.rows.delete(room);
 			this.known = { server: writer.server, userId: writer.userId, version, synced: new Set(synced) };
 		} catch (cause) {
+			if (cause instanceof HistoryGone) {
+				// Another tab signed out or stopped keeping: nothing goes back until a session here starts a writer again.
+				this.endWriter();
+				this.known = undefined;
+				this.coverage.clear();
+				this.served.clear();
+				this.queue = [];
+				return;
+			}
 			// A full disk, or IndexedDB gone: what is kept stays as it was, and this page keeps nothing more.
 			this.failure = cause instanceof Error && cause.name === 'QuotaExceededError' ? 'There isn’t enough space on this device to keep more history.' : 'History couldn’t be saved on this device.';
 			console.warn('[apron] keeping history stopped', cause);

@@ -679,9 +679,11 @@ once what is kept runs out, as messages older than the retention do. The retenti
 was logged, on servers whose `log_id`s are times (as the reference servers'
 are); elsewhere everything loaded is kept. A room last caught up before the
 cutoff starts over from its newest page rather than paging through everything
-since. It is kept only for a session saved here (an account, or a token the
+since (a quiet room saved recently counts as caught up then, however old its
+last message). It is kept only for a session saved here (an account, or a token the
 server resumes), never for a guest; signing out removes it, as does choosing
-not to keep any. Each server's history is kept apart: switching to another
+not to keep any, in any tab: the others stop writing it back, and a retention
+chosen in one tab holds in the others. Each server's history is kept apart: switching to another
 server, or connecting again from the sign-in screen, goes on from what was kept
 for that server in the same way, and leaves the others' as they are. One tab
 writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped

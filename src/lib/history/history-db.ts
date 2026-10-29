@@ -32,6 +32,8 @@ export interface MetaRow {
 	server: string;
 	userId: string;
 	complete: boolean;
+	/** No joined room was catching up when it was saved: each room kept was caught up as of `savedAt`. */
+	current?: boolean;
 	users: Identity[];
 	/** Retired `user_id`s and the current ones that replaced them. */
 	aliases?: Record<string, string>;
@@ -242,6 +244,8 @@ export interface HistoryWrite {
 	meta: Omit<MetaRow, 'version' | 'savedAt'>;
 	/** Everything kept for the server goes first: another account's, or nothing known of what is there. */
 	reset?: boolean;
+	/** Written on top of what is kept: when nothing is (another tab forgot it), nothing is written (`HistoryGone`). */
+	continues?: boolean;
 }
 
 /**
@@ -256,13 +260,20 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
 	const rooms = transaction.objectStore('rooms');
 	const records = transaction.objectStore('records');
 	const byKey = records.index('key');
+	const previous = await done(meta.get(server)) as MetaRow | undefined;
+	if (write.continues && !previous) {
+		// Written over what is kept, and nothing is: another tab forgot it (signed out, or chose not to keep).
+		finished.catch(() => undefined);
+		transaction.abort();
+		throw new HistoryGone();
+	}
 	/**
 	 * Replaces the row of the same message or reaction set (`kind`, `id`) wherever it was, as `row` when its room
-	 * is kept: a message moved to a room that isn't goes from the one it left all the same.
+	 * is kept (`always`: whatever `kept` says): a message moved to a room that isn't goes from the one it left all the same.
 	 */
-	const replace = async (row: RecordRow) => {
+	const replace = async (row: RecordRow, always = false) => {
 		for (const key of await done(byKey.getAllKeys(IDBKeyRange.only([server, row.kind, row.id])))) records.delete(key);
-		if (kept.has(row.room)) records.put(row);
+		if (always || kept.has(row.room)) records.put(row);
 	};
 	if (write.reset) {
 		records.delete(serverRange(server));
@@ -306,9 +317,16 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
 		}
 	}
 	for (const room of write.whole) {
-		records.delete(room.from === undefined ? roomRange(server, room.room) : IDBKeyRange.bound([server, room.room, room.from], [server, room.room, []]));
-		for (const message of room.messages) records.put(messageRow(server, message));
-		for (const set of room.reactions) records.put(reactionRow(server, set, room.room));
+		if (room.from === undefined) {
+			records.delete(roomRange(server, room.room));
+			for (const message of room.messages) records.put(messageRow(server, message));
+			for (const set of room.reactions) records.put(reactionRow(server, set, room.room));
+		} else {
+			// Over what is kept below `from`: an earlier snapshot of a message or set there is replaced, not kept beside.
+			records.delete(IDBKeyRange.bound([server, room.room, room.from], [server, room.room, []]));
+			for (const message of room.messages) await replace(messageRow(server, message), true);
+			for (const set of room.reactions) await replace(reactionRow(server, set, room.room), true);
+		}
 		for (const entry of room.memberships) records.put(membershipRow(server, entry));
 	}
 	for (const row of write.rooms) rooms.put(row);
@@ -318,7 +336,6 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
 		records.delete(roomRange(server, room));
 		rooms.delete([server, room]);
 	}
-	const previous = await done(meta.get(server)) as MetaRow | undefined;
 	const version = (previous?.version ?? 0) + 1;
 	meta.put({ ...write.meta, server, version, savedAt: Date.now() } satisfies MetaRow);
 	await finished;
@@ -331,13 +348,37 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
  * goes even when its message was edited since (a page from here, which starts at the cutoff, would never hold it).
  * Only in rooms whose positions read as times, so a server counting from 1 loses nothing.
  */
-export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<void> {
-	const transaction = db.transaction(['rooms', 'records'], 'readwrite', { durability: 'relaxed' });
+export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<Map<string, { from: number; to: number }>> {
+	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readwrite', { durability: 'relaxed' });
 	const finished = committed(transaction);
 	const records = transaction.objectStore('records');
 	const rooms = await done(transaction.objectStore('rooms').getAll()) as RoomRow[];
-	for (const { server, room, sync } of rooms) if (timeLike(sync)) records.delete(roomRange(server, room, cutoff));
+	const pruned = new Set<string>();
+	for (const { server, room, sync } of rooms) {
+		if (!timeLike(sync)) continue;
+		const range = roomRange(server, room, cutoff);
+		if (await done(records.count(range))) pruned.add(server);
+		records.delete(range);
+	}
+	// A new version for each server pruned, so another tab paging what it restored from here knows it changed.
+	const meta = transaction.objectStore('meta');
+	const versions = new Map<string, { from: number; to: number }>();
+	for (const server of pruned) {
+		const row = await done(meta.get(server)) as MetaRow | undefined;
+		if (!row) continue;
+		meta.put({ ...row, version: row.version + 1 });
+		versions.set(server, { from: row.version, to: row.version + 1 });
+	}
 	await finished;
+	return versions;
+}
+
+/** What `writeHistory` throws when it would write over what is kept and nothing is: another tab forgot it. */
+export class HistoryGone extends Error {
+	constructor() {
+		super('What was kept on this device was removed');
+		this.name = 'HistoryGone';
+	}
 }
 
 /** Removes what is kept for `server`, or for every server. */

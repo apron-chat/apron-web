@@ -476,6 +476,8 @@ export function saveAppearance(preferences: AppearancePreferences): void {
 	write(KEY.appearance, JSON.stringify(preferences));
 }
 
+export const HISTORY_RETENTION_KEY = KEY.historyRetention;
+
 export function loadHistoryRetention(): string | undefined {
 	return read(KEY.historyRetention) ?? undefined;
 }

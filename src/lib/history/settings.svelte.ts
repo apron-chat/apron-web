@@ -1,4 +1,4 @@
-import { loadHistoryRetention, saveHistoryRetention } from '$lib/ui/storage';
+import { HISTORY_RETENTION_KEY, loadHistoryRetention, saveHistoryRetention } from '$lib/ui/storage';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -33,6 +33,11 @@ export class HistorySettings {
 	load(): void {
 		const saved = loadHistoryRetention();
 		this.retention = known(saved) ? saved : DEFAULT_RETENTION;
+	}
+
+	/** Another tab changed `key` in storage: the retention chosen there holds here too. */
+	storageChanged(key: string | null): void {
+		if (key === HISTORY_RETENTION_KEY || key === null) this.load();
 	}
 
 	update(value: string): void {

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { StoreChange } from '$lib/protocol/reducer';
 import type { MessageRecord } from '$lib/protocol/types';
 import { readKept } from '$lib/test/kept-history';
-import { openHistory, pruneHistory, writeHistory, type HistoryWrite } from './history-db';
+import { HistoryGone, openHistory, pruneHistory, writeHistory, type HistoryWrite } from './history-db';
 
 const SERVER = 'wss://chat.example/';
 const day = 24 * 60 * 60 * 1000;
@@ -66,6 +66,21 @@ describe('writeHistory', () => {
 		expect(kept?.rooms).toEqual([{ server: SERVER, room: 'general', record: { room_id: 'general' } }]);
 	});
 
+	it('replaces an earlier snapshot below where a room is written over from', async () => {
+		const db = await opened();
+		await writeHistory(db, SERVER, write({ whole: [{ room: 'general', messages: [message(at(5)), message(at(4))], reactions: [], memberships: [] }] }), new Set());
+		// Edited since: the client holds its latest snapshot, above `from`, and the room from there.
+		const edited = message(at(5), at(1), 'general', 'edited');
+		await writeHistory(db, SERVER, write({ whole: [{ room: 'general', from: Number(at(2)), messages: [edited], reactions: [], memberships: [] }] }), new Set());
+		expect((await readKept(db, SERVER))?.messages).toEqual([message(at(4)), edited]);
+	});
+
+	it('writes nothing on top of what is kept once another tab has forgotten it', async () => {
+		const db = await opened();
+		await expect(writeHistory(db, SERVER, write({ continues: true, whole: [{ room: 'general', messages: [message(at(1))], reactions: [], memberships: [] }] }), new Set())).rejects.toBeInstanceOf(HistoryGone);
+		expect(await readKept(db, SERVER)).toBeUndefined();
+	});
+
 	it('keeps only the rooms named, and starts over on a reset', async () => {
 		const db = await opened();
 		const room = (id: string) => ({ room: id, messages: [message(at(1), at(1), id)], reactions: [], memberships: [] });
@@ -93,8 +108,13 @@ describe('pruneHistory', () => {
 			],
 			rooms: [{ server: SERVER, room: 'general', sync: { id: 'general', checkpoint: at(1) } }, { server: SERVER, room: 'counted', sync: { id: 'counted', checkpoint: '9' } }]
 		}), new Set());
+		const before = (await readKept(db, SERVER))!.meta.version;
 		// `at(40)` was edited a day ago: its row sits at the edit, and stays.
-		await pruneHistory(db, now - 30 * day);
+		const versions = await pruneHistory(db, now - 30 * day);
+		// A new version, so a tab paging what it restored from here knows it changed.
+		expect(versions).toEqual(new Map([[SERVER, { from: before, to: before + 1 }]]));
+		expect((await readKept(db, SERVER))?.meta.version).toBe(before + 1);
+		expect(await pruneHistory(db, now - 30 * day)).toEqual(new Map());
 		const kept = await readKept(db, SERVER);
 		expect(kept?.messages.map((record) => record.message_id).sort()).toEqual([at(40), '5']);
 		// Even a reaction set on a message edited since: a page from here, which starts at the cutoff, never holds it.

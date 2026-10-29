@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ChatClient, timelineMessages, type ClientSnapshot } from '$lib/protocol/client';
 import { MemoryProtocolServer } from '$lib/preview/memory-server';
 import { readKept } from '$lib/test/kept-history';
-import { openHistory, writeHistory } from './history-db';
+import { forgetHistory, openHistory, writeHistory } from './history-db';
 import { HistoryKeeper, mergeOf, plannedRoom, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
 import type { RoomSync } from '$lib/protocol/client';
 
@@ -169,6 +169,56 @@ describe('HistoryKeeper', () => {
 		expect(ids(third.snapshot(), 'general').slice(0, -1)).toEqual(all);
 		// Every older page came from this device: the server was asked only for what came since.
 		expect(historyOf(server, 'general', from).every((params) => params?.after !== undefined)).toBe(true);
+	});
+
+	it('pages from the server what a shorter retention pruned from this device', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		for (let n = 0; n < 400; n++) server.post('general', 'ada', `#${n}`);
+		const indexedDB = new IDBFactory();
+		const first = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(first);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(first));
+		first.start();
+		await waitFor(() => Boolean(room(first.snapshot(), 'general')?.loaded));
+		while (room(first.snapshot(), 'general')?.olderAvailable) await first.loadOlder('general');
+		const all = ids(first.snapshot(), 'general');
+		await keeper.stop();
+		first.stop();
+
+		const now = Number(all.at(-1)) + 1;
+		const second = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(second);
+		const again = new HistoryKeeper({ indexedDB, locks: null, now: () => now });
+		again.watch(saved(second));
+		second.start();
+		await waitFor(() => Boolean(room(second.snapshot(), 'general')?.loaded));
+		// Keeping less from now on: the older half goes from this device, and still comes from the server.
+		await again.setRetention(now - Number(all[200]));
+		while (room(second.snapshot(), 'general')?.olderAvailable) await second.loadOlder('general');
+		expect(ids(second.snapshot(), 'general')).toEqual(all);
+		await again.stop();
+	});
+
+	it('writes nothing back once another tab has forgotten what is kept', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		const db = await openHistory(indexedDB);
+		// Another tab signs out, or stops keeping.
+		await forgetHistory(db, URL);
+		const posted = server.post('general', 'grace', 'After');
+		await waitFor(() => ids(client.snapshot(), 'general').includes(posted));
+		await keeper.flush();
+		expect(await readKept(db, URL)).toBeUndefined();
+		expect(keeper.failure).toBeUndefined();
+		await keeper.stop();
 	});
 
 	it('flushes what changed while a write was under way, not only that write', async () => {
@@ -532,6 +582,16 @@ describe('plannedRoom and restoredState', () => {
 		expect(plannedRoom({ id: 'general', checkpoint: at(1), floor: at(100) }, cutoff)).toEqual({ sync: { id: 'general', checkpoint: at(1), floor: at(100), olderBefore: String(cutoff), hasOlder: true }, from: cutoff });
 		expect(plannedRoom({ id: 'general', checkpoint: at(1), olderBefore: at(2) }, cutoff)).toEqual({ sync: { id: 'general', checkpoint: at(1), olderBefore: at(2) } });
 		expect(plannedRoom({ id: 'general', checkpoint: at(31) }, cutoff)).toBeUndefined();
+	});
+
+	it('takes a room as caught up when it was saved, when every joined room was: a quiet room’s checkpoint is old', () => {
+		expect(plannedRoom({ id: 'quiet', checkpoint: at(40) }, cutoff, now - day)).toEqual({ sync: { id: 'quiet', checkpoint: at(40), olderBefore: String(cutoff), hasOlder: true }, from: cutoff });
+		expect(plannedRoom({ id: 'quiet', checkpoint: at(40) }, cutoff, now - 31 * day)).toBeUndefined();
+		const meta = { server: URL, userId: 'ada', complete: true, users: [], version: 3, savedAt: now - day };
+		const rows = [{ row: { server: URL, room: 'quiet', sync: { id: 'quiet', checkpoint: at(40) } }, entries: [], older: false }];
+		expect(restoredState({ meta: { ...meta, current: true }, skipped: 0, rooms: rows }, 30 * day, now).state.rooms.map((sync) => sync.id)).toEqual(['quiet']);
+		// Saved while a room was catching up: each goes by its own checkpoint.
+		expect(restoredState({ meta, skipped: 0, rooms: rows }, 30 * day, now).state.rooms).toEqual([]);
 	});
 
 	it('keeps everything without a cutoff, or where positions are not times', () => {

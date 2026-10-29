@@ -4240,6 +4240,8 @@ export class ChatClient {
 		this.keptUserId = undefined;
 		this.resumingUserId = undefined;
 		this.fresh = true;
+		// A restore taken for the session discarded isn't the next one's to drop (`dropRestored`).
+		this.restoredUserId = undefined;
 		this.forgetListedRooms();
 		this.resetMutes();
 		this.forgetConnectionState();

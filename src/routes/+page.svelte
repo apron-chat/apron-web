@@ -1093,6 +1093,8 @@
 		const storageChanged = (event: StorageEvent) => {
 			if (previewMode) return;
 			pushSettings.storageChanged(event.key);
+			// Not keeping history, or keeping less, chosen in another tab: this one stops or prunes too.
+			historySettings.storageChanged(event.key);
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 			// A description put away or brought back in another tab is here too.
 			if (event.key === HIDDEN_DESCRIPTIONS_KEY) hiddenDescriptions = loadHiddenDescriptions();
