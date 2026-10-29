@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '$lib/protocol/types';
-import { matchesTerms, newestMatches, searchTerms, snippet } from './search';
+import { matchesTerms, newestMatches, parseQuery, queryMatcher, searchTerms, snippet, type SearchContext } from './search';
 
 const message = (id: string, text: string, log = id, fields: Partial<MessageRecord> = {}): MessageRecord => ({ message_id: id, log_id: log, room_id: 'general', from: { user_id: 'ada' }, body: { text }, ...fields });
 
@@ -50,5 +50,52 @@ describe('snippet', () => {
 
 	it('starts at the beginning when the match is near it', () => {
 		expect(text(snippet('deploy now', ['deploy']))).toBe('[deploy] now');
+	});
+});
+
+describe('parseQuery', () => {
+	it('takes user: and room: as filters, by id or name, quoted with spaces, and the rest as words', () => {
+		expect(parseQuery('deploy user:@Ada room:#General')).toEqual({ terms: ['deploy'], users: ['ada'], rooms: ['general'] });
+		expect(parseQuery('USER:"Ada Lovelace" user:bob room:"Deploy checklist" late')).toEqual({ terms: ['late'], users: ['ada lovelace', 'bob'], rooms: ['deploy checklist'] });
+		expect(parseQuery('room:ops room:#OPS')).toMatchObject({ rooms: ['ops'] });
+	});
+
+	it('keeps anything else with a colon as words, and drops an empty filter', () => {
+		expect(parseQuery('at 14:30 https://example.com user:')).toEqual({ terms: ['at', '14:30', 'https://example.com'], users: [], rooms: [] });
+		expect(parseQuery('nouser:ada')).toMatchObject({ terms: ['nouser:ada'], users: [] });
+	});
+});
+
+describe('queryMatcher', () => {
+	const ada = { user_id: 'ada', name: 'Ada Lovelace' };
+	const context: SearchContext = {
+		users: [ada, { user_id: 'bob', name: 'Bob' }],
+		rooms: [{ id: 'general', title: 'General' }, { id: 'thread_deploy', title: 'Deploy checklist', parentRoomId: 'general' }, { id: 'ops', title: 'Ops' }],
+		parentOf: (roomId) => (roomId === 'thread_unseen' ? 'general' : undefined)
+	};
+	const sent = (id: string, room: string, from: { user_id: string; name?: string }, text = 'the deploy is done') => message(id, text, id, { room_id: room, from });
+	const ids = (query: string, messages: MessageRecord[]) => messages.filter(queryMatcher(parseQuery(query), context)!).map((found) => found.message_id);
+	const all = [
+		sent('1', 'general', ada), sent('2', 'thread_deploy', { user_id: 'bob' }), sent('3', 'ops', ada, 'lunch?'),
+		sent('4', 'thread_unseen', { user_id: 'carol', name: 'Carol' }), sent('5', 'elsewhere', { user_id: 'dave' })
+	];
+
+	it('keeps what a user sent, by @user_id or by name, as known or as the message carries it', () => {
+		expect(ids('user:@ada', all)).toEqual(['1', '3']);
+		expect(ids('user:"ada lovelace" deploy', all)).toEqual(['1']);
+		expect(ids('user:carol', all)).toEqual(['4']);
+		expect(ids('user:@ada user:bob', all)).toEqual(['1', '2', '3']);
+	});
+
+	it('keeps what is in a room and its threads, by #room_id or title, shown or not', () => {
+		expect(ids('room:#general', all)).toEqual(['1', '2', '4']);
+		expect(ids('room:"deploy checklist"', all)).toEqual(['2']);
+		expect(ids('room:#elsewhere', all)).toEqual(['5']);
+		expect(ids('room:#general user:bob', all)).toEqual(['2']);
+	});
+
+	it('asks for nothing without words or filters, and never keeps a deleted message', () => {
+		expect(queryMatcher(parseQuery('  '), context)).toBeUndefined();
+		expect(queryMatcher(parseQuery('user:@ada'), context)!(message('9', 'x', '10', { from: ada, deleted: true }))).toBe(false);
 	});
 });

@@ -21,6 +21,8 @@
 		more?: boolean;
 		/** Under the field: what is searched, such as "Messages kept on this device for the last 30 days." */
 		note?: string;
+		/** In the empty field, such as how to narrow a search. */
+		placeholder?: string;
 		/** A result picked, by press or Enter, by its `id`. */
 		onpick?: (id: string) => void;
 		/** It closed, whichever way. */
@@ -30,7 +32,7 @@
 		/** A `data-testid` for the listbox of results. */
 		listTestid?: string;
 	}
-	let { open = $bindable(false), query = $bindable(''), results, searching = false, more = false, note, onpick, onclose, class: className, listTestid }: Props = $props();
+	let { open = $bindable(false), query = $bindable(''), results, searching = false, more = false, note, placeholder = 'Words in a message', onpick, onclose, class: className, listTestid }: Props = $props();
 	const uid = $props.id();
 	const listId = `${uid}-results`;
 	/** The result the keyboard is on: the first, once there are any. */
@@ -79,7 +81,7 @@
 		<input
 			id="{uid}-query" class="ap-field ap-search-input" type="search" bind:this={input} bind:value={query} onkeydown={keydown}
 			role="combobox" aria-autocomplete="list" aria-expanded={results.length > 0} aria-controls={listId} aria-activedescendant={results.length ? `${listId}-${active}` : undefined}
-			placeholder="Words in a message" autocomplete="off" spellcheck="false" dir="auto"
+			{placeholder} autocomplete="off" spellcheck="false" dir="auto"
 		/>
 		{#if note}<p class="ap-form-hint">{note}</p>{/if}
 	</div>

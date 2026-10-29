@@ -6,12 +6,13 @@
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import type { MessageRecord } from '$lib/protocol/types';
 	import { plainTextOf, senderName } from '$lib/ui/messages';
-	import { matchesTerms, newestMatches, searchTerms, snippet } from '$lib/ui/search';
+	import { newestMatches, parseQuery, queryMatcher, snippet, type SearchQuery } from '$lib/ui/search';
 	import { dayLabelOf } from '$lib/ui/time';
 
 	/**
 	 * Search messages (`$lib/ui/search`): what this server's history keeps on this device (`keeper`), and what the
-	 * page holds, as the query is typed. A result picked opens where it is (`onopen`).
+	 * page holds, as the query is typed, narrowed by its `user:` and `room:` filters. A result picked opens where it
+	 * is (`onopen`).
 	 */
 	interface Props {
 		client: ChatClient;
@@ -37,22 +38,26 @@
 	/** Counts searches: one that a newer one replaced stops, and its results go unshown. */
 	let generation = 0;
 
+	/** What is typed, read: its words, and its `user:` and `room:` filters. */
+	let parsed = $derived(parseQuery(query));
+
 	$effect(() => {
-		const terms = searchTerms(query);
+		const asked = parsed;
 		const run = ++generation;
-		if (!terms.length) {
+		if (!asked.terms.length && !asked.users.length && !asked.rooms.length) {
 			found = [];
 			more = false;
 			searching = false;
 			return;
 		}
 		searching = true;
-		const timer = setTimeout(() => void search(terms, run), SEARCH_DELAY_MS);
+		const timer = setTimeout(() => void search(asked, run), SEARCH_DELAY_MS);
 		return () => clearTimeout(timer);
 	});
 
-	async function search(terms: string[], run: number): Promise<void> {
-		const test = (message: MessageRecord) => matchesTerms(message, terms);
+	async function search(asked: SearchQuery, run: number): Promise<void> {
+		const test = queryMatcher(asked, { users: Object.values(client.snapshot().users), rooms, parentOf: (roomId) => client.roomRecord(roomId)?.parent_room_id });
+		if (!test) return;
 		const loaded = client.storedRecords().messages.filter(test);
 		const kept = keeper ? await keeper.searchKept(client.url, test, () => run !== generation) : [];
 		if (run !== generation) return;
@@ -69,7 +74,7 @@
 	}
 
 	let results = $derived.by((): SearchResult[] => {
-		const terms = searchTerms(query);
+		const terms = parsed.terms;
 		return found.map((message) => {
 			const at = times(Number(message.message_id));
 			const day = dayLabelOf(message.message_id);
@@ -90,4 +95,4 @@
 	}
 </script>
 
-<SearchPanel bind:open bind:query {results} {searching} {more} {note} onpick={pick} {onclose} listTestid="search-results" />
+<SearchPanel bind:open bind:query {results} {searching} {more} {note} placeholder="Words, user:@name, room:#name" onpick={pick} {onclose} listTestid="search-results" />

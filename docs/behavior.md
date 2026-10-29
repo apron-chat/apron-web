@@ -692,7 +692,11 @@ keeping more if the device ran out of space.
 **Search messages** (the magnifier in the room header, or Ctrl+K, ⌘K on a Mac)
 looks through this server's history kept on this device and what the page has
 loaded, as you type: a message matches when its text holds every word typed,
-in any case and with or without accents. The newest hundred matches are
+in any case and with or without accents. `user:` keeps what someone sent, by
+`@user_id` or name (`user:@ada`, `user:"Ada Lovelace"`), and `room:` what is in
+a room and its threads, by `#room_id` or title (`room:#general`); several of
+one filter keep what matches any of them, and filters alone, without words,
+list everything they keep. The newest hundred matches are
 listed, newest first, each with its room (a thread's with its room after it),
 sender, time and a line of it with the words marked; ↑ ↓ and Enter, or a click,
 open one where it is, paging back to it from this device as a link to it does.
