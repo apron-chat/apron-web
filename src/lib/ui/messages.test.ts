@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '$lib/protocol/types';
-import { avatarHue, mayMove, mentionsMe, mentionsOf } from './messages';
+import { avatarHue, mayMove, mentionsMe, mentionsOf, messageSnippet, plainTextOf } from './messages';
 
 describe('avatarHue', () => {
 	it('gives each user_id one stable hue and spreads different IDs apart, even ones a character apart', () => {
@@ -39,5 +39,23 @@ describe('mayMove', () => {
 		expect(mayMove(event('bob'), { user_id: 'alice', roles: ['admin'] })).toBe(false);
 		expect(mayMove(event('bob'), { user_id: 'alice' }, true)).toBe(true);
 		expect(mayMove(event('bob'), undefined, true)).toBe(false);
+	});
+});
+
+describe('messageSnippet', () => {
+	const event = (body: MessageRecord['body']): MessageRecord => ({ message_id: '10', log_id: '10', room_id: 'general', from: { user_id: 'ada' }, body });
+	const markdown = (text: string) => event({ text, format: 'markdown' });
+
+	it('quotes a markdown message as plain text: code kept, emphasis dropped, a link by its text, mentions as written', () => {
+		expect(messageSnippet(markdown('Tabulated `log₁₀` to 7 places. **0 errors**, 4,000 gears turned.'))).toBe('Tabulated log₁₀ to 7 places. 0 errors, 4,000 gears turned.');
+		expect(messageSnippet(markdown('_see_ [the notes](https://example.com/notes) for **@bob**, a < b & c'))).toBe('see the notes for @bob, a < b & c');
+		// Its first lines, past any block syntax.
+		expect(messageSnippet(markdown('# Plan\n\n- ~~one~~ first\n- two\n\n```\nx = 1\n```'), 3, 280)).toBe('Plan\none first\ntwo');
+		expect(plainTextOf(markdown('> quoted *line*'))).toBe('quoted line');
+	});
+
+	it('quotes a plain message as written', () => {
+		expect(messageSnippet(event({ text: 'Tabulated `log₁₀`, **as typed**' }))).toBe('Tabulated `log₁₀`, **as typed**');
+		expect(messageSnippet(markdown(''))).toBe('Empty message');
 	});
 });

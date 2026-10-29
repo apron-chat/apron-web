@@ -59,7 +59,7 @@
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
 	import { ReadPositions } from '$lib/ui/read-positions';
-	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, senderName, textOf } from '$lib/ui/messages';
+	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
@@ -1250,7 +1250,7 @@
 	async function notifyMessage(event: MessageRecord, mention: boolean): Promise<void> {
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
 		if (!room || !client) return;
-		const body = notificationBody(event.body?.text);
+		const body = notificationBody(plainTextOf(event));
 		const id = accountPushId;
 		const target: NotificationTarget = {
 			tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}),

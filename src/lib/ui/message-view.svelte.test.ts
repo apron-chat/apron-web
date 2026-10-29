@@ -82,6 +82,9 @@ describe('messageView', () => {
 		const quoted = messageRecord(5, 'other', { from: { user_id: 'ada' }, body: { text: 'ping @you in #ops\nmore' } });
 		const reply = messageView(messageRecord(6, 'ops', { from: you, reply_to: { message_id: '5' } }), row(), context([quoted])).reply;
 		expect(reply).toEqual({ id: '5', name: 'Ada', avatar: ada.avatar, hue: avatarHue('ada'), snippet: ['ping ', { user_id: 'you', name: 'You', me: true }, ' in ', { roomId: 'ops', name: 'ops', thread: undefined, hash: true }] });
+		// A markdown one reads as plain text, its mentions still picked out.
+		const marked = messageRecord(10, 'other', { from: { user_id: 'ada' }, body: { text: '**ping** `@you`', format: 'markdown' } });
+		expect(messageView(messageRecord(11, 'ops', { reply_to: { message_id: '10' } }), row(), context([marked])).reply?.snippet).toEqual(['ping ', { user_id: 'you', name: 'You', me: true }]);
 		expect(messageView(messageRecord(7, 'ops', { reply_to: { message_id: '5' } }), row(), context([{ ...quoted, deleted: true }])).reply).toEqual({ id: '5', name: 'Ada', avatar: ada.avatar, hue: avatarHue('ada'), deleted: true });
 		expect(messageView(messageRecord(8, 'ops', { reply_to: { message_id: '404' } }), row(), context()).reply).toEqual({});
 		expect(messageView(messageRecord(9, 'ops', { reply_to: { message_id: '5' }, deleted: true }), row(), context([quoted])).reply).toBeUndefined();
