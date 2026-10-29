@@ -157,10 +157,10 @@
 	{#if active && folded !== room.id}
 		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
-		<!-- Under a room that isn't open (or is folded), only its joined threads with news, so activity there isn't missed. -->
+		<!-- Under a room that isn't open (or is folded), only its joined threads with news, so activity there isn't missed. Folded, a … after them unfolds it. -->
 		{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
-		{#if news.length > 0}
-			<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+		{#if news.length > 0 || active}
+			<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} onexpand={active ? () => (folded = undefined) : undefined} />
 		{/if}
 	{/if}
 {/snippet}

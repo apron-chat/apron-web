@@ -60,7 +60,7 @@ describe('Sidebar', () => {
 		session.dispose();
 	});
 
-	it('folds the open room’s threads to those with news when it is picked again, and unfolds them when picked once more or on leaving it', () => {
+	it('folds the open room’s threads to those with news when it is picked again, and unfolds them when picked once more, from the … after them, or on leaving it', () => {
 		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
 		const thread = (id: string, title: string): RoomSnapshot => ({ ...general, id, title, parentRoomId: 'general', timeline: createTimeline(id) }) as RoomSnapshot;
 		const random: RoomSnapshot = { ...general, id: 'random', title: 'Random', timeline: createTimeline('random') } as RoomSnapshot;
@@ -74,13 +74,26 @@ describe('Sidebar', () => {
 		const room = (id: string) => document.querySelector<HTMLElement>(`button[data-room="${id}"]`)!;
 		expect(listed()).toEqual(['deploy', 'cert']);
 
+		const expand = () => document.querySelector<HTMLElement>('[data-testid="expand-threads"]');
+		expect(expand()).toBeNull();
+
 		room('general').click();
 		flushSync();
 		expect(listed()).toEqual(['cert']);
+		expect(expand()?.getAttribute('aria-label')).toBe('Show all threads in General');
 		expect(onroom).toHaveBeenCalledTimes(1);
 		room('general').click();
 		flushSync();
 		expect(listed()).toEqual(['deploy', 'cert']);
+		expect(expand()).toBeNull();
+
+		// The … after the folded list unfolds it too.
+		room('general').click();
+		flushSync();
+		expand()!.click();
+		flushSync();
+		expect(listed()).toEqual(['deploy', 'cert']);
+		expect(onroom).toHaveBeenCalledTimes(3);
 
 		// Folded, then another room opened and this one again: it opens unfolded.
 		room('general').click();

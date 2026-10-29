@@ -732,8 +732,9 @@ open, it lists only that room's joined threads with news (unread replies or
 mentions), in the same rows, so activity there isn't missed; picking one opens
 its room with the thread open, and quiet threads wait until the room is opened.
 Picking the open room again while reading it folds its threads the same way, to
-those with news (not on a phone, where it returns to the room); picking it once
-more unfolds them, as does opening anything else. First the ones you've joined,
+those with news (not on a phone, where it returns to the room), followed by a
+small **…** button that says the list is cut short; the **…**, or picking the room
+once more, unfolds them, as does opening anything else. First the ones you've joined,
 on a guide line from the room, most recently active first (by their newest
 message, else the newest `log_id` the server reported, else their creation).
 While the pointer or keyboard focus is on the list its rows hold still, a
