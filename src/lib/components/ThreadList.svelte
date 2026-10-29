@@ -30,10 +30,8 @@
 		onopen: (thread: string) => void;
 		onjoin: (thread: string) => void;
 		onleave: (thread: string) => void;
-		/** Folded to the threads with news: the "…" after them, which shows them all again. */
-		onexpand?: () => void;
 	}
-	let { roomId, roomTitle, threads, others, activeThread, mentions, unread, muted = {}, canJoin, onthread, onopen, onjoin, onleave, onexpand }: Props = $props();
+	let { roomId, roomTitle, threads, others, activeThread, mentions, unread, muted = {}, canJoin, onthread, onopen, onjoin, onleave }: Props = $props();
 
 	/** A thread you haven't joined: what its listing says, its description as text and when it was last active. */
 	type Other = { id: string; title: string; untitled?: true; private: boolean; description: string; latestLogId?: string };
@@ -127,8 +125,6 @@
 		testid="thread-list"
 		room={roomTitle}
 		joined={joined.length > 0 ? joinedRows : undefined}
-		{onexpand}
-		expandTestid="expand-threads"
 		others={allOthers.length}
 		{otherRows}
 		bind:othersOpen

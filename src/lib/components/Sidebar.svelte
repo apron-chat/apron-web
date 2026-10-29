@@ -153,14 +153,15 @@
 		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} muted={room.mutedUntil !== undefined} active={current}
 		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering && !session.reconnectQuiet}
 		onselect={() => pickRoom(room, current)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
+		onexpand={active && folded === room.id ? () => (folded = undefined) : undefined} expandTestid="expand-threads"
 	/>
 	{#if active && folded !== room.id}
 		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
-		<!-- Under a room that isn't open (or is folded), only its joined threads with news, so activity there isn't missed. Folded, a … after them unfolds it. -->
+		<!-- Under a room that isn't open (or is folded, when its row has a … that unfolds it), only its joined threads with news, so activity there isn't missed. -->
 		{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
-		{#if news.length > 0 || active}
-			<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} onexpand={active ? () => (folded = undefined) : undefined} />
+		{#if news.length > 0}
+			<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 		{/if}
 	{/if}
 {/snippet}

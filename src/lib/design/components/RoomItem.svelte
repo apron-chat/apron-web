@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import Plus from '@lucide/svelte/icons/plus';
 	import type { ClassValue } from 'svelte/elements';
 	import Faces from './Faces.svelte';
@@ -39,6 +40,8 @@
 		onleave?: (e: MouseEvent) => void;
 		/** A + at the end of the open room's row, always shown, that starts a thread in it (where there is no `onleave`). */
 		onnewthread?: () => void;
+		/** The open room folded to its threads with news: a "…" pill at the end of its row, before its +, that shows them all. */
+		onexpand?: () => void;
 		/** Listed under Browse rooms, and joined by picking it, rather than one of your rooms. */
 		listed?: boolean;
 		/** The row's tooltip, such as an untitled room's `room_id`. */
@@ -46,21 +49,25 @@
 		/** A `data-testid` for its unread bubble, and one for its +. */
 		unreadTestid?: string;
 		newThreadTestid?: string;
+		expandTestid?: string;
 		/** Classes for the row's button, added to its own. */
 		class?: ClassValue;
 	}
-	let { room, name, topic, private: isPrivate, faces, muted = false, unread, mentions, active, loading, onselect, onleave, onnewthread, listed, title, unreadTestid, newThreadTestid, class: className }: Props = $props();
+	let { room, name, topic, private: isPrivate, faces, muted = false, unread, mentions, active, loading, onselect, onleave, onnewthread, onexpand, listed, title, unreadTestid, newThreadTestid, expandTestid, class: className }: Props = $props();
 	const shown = $derived(roomName(name, room));
 </script>
 
 {#snippet lead()}{#if faces?.length}<Faces people={faces} size="sm" />{/if}{/snippet}
 {#snippet lines()}{#if topic}<span class="ap-room-topic">{topic}</span>{/if}{/snippet}
 {#snippet start()}
-	<button type="button" class="ap-iconbtn ap-room-new" data-testid={newThreadTestid} aria-label="New thread in {shown}" title="New thread" onclick={onnewthread}><Plus size={16} aria-hidden="true" /></button>
+	<span class="ap-room-ends">
+		{#if onexpand}<button type="button" class="ap-room-expand" data-testid={expandTestid} aria-label="Show all threads in {shown}" title="Show all threads" onclick={onexpand}><Ellipsis size={14} aria-hidden="true" /></button>{/if}
+		{#if onnewthread}<button type="button" class="ap-iconbtn ap-room-new" data-testid={newThreadTestid} aria-label="New thread in {shown}" title="New thread" onclick={onnewthread}><Plus size={16} aria-hidden="true" /></button>{/if}
+	</span>
 {/snippet}
 
 <RoomRow
-	{room} noun="room" label={shown} private={isPrivate} {muted} {active} {listed} {title} {onselect} {onleave} lead={faces?.length ? lead : undefined} {lines} start={onnewthread ? start : undefined}
+	{room} noun="room" label={shown} private={isPrivate} {muted} {active} {listed} {title} {onselect} {onleave} lead={faces?.length ? lead : undefined} {lines} start={onnewthread || onexpand ? start : undefined}
 	class={[(unread || mentions) && !muted && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
 >
 	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} quiet={muted} noun="message" testid={unreadTestid} />

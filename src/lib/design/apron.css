@@ -7,7 +7,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-threads-expand, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-room-expand, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
@@ -788,10 +788,13 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-room-count { flex: none; font-size: var(--text-sm); line-height: var(--leading-ui); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-room-active .ap-room-count { color: var(--ink); }
 .ap-room-loading { flex: none; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-/* The open room's row: a + that starts a thread in it, always shown, the row making room for it. */
+/* The open room's row: a + that starts a thread in it, always shown, and while its threads are folded to those with news a "…" pill before it that shows them all; the row makes room for them. */
 .ap-roomstart { position: relative; }
 .ap-roomstart .ap-room { padding-inline-end: calc(var(--control-md) + var(--space-1) + var(--space-2)); }
-.ap-room-new { position: absolute; top: 50%; inset-inline-end: var(--space-1); transform: translateY(-50%); }
+.ap-roomstart:has(.ap-room-expand) .ap-room { padding-inline-end: calc(var(--control-md) + 32px + var(--space-1) * 2 + var(--space-2)); }
+.ap-room-ends { position: absolute; top: 50%; inset-inline-end: var(--space-1); transform: translateY(-50%); display: flex; align-items: center; gap: var(--space-1); }
+.ap-room-expand { display: inline-grid; place-items: center; height: 18px; padding: 0 var(--space-2); border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; transition: background-color var(--duration-fast) ease, color var(--duration-fast) ease; }
+.ap-room-expand:hover { background: var(--hover); border-color: var(--ink-muted); color: var(--ink); }
 .ap-roomhead-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .ap-roomhead-crumb { font: inherit; padding: 0; border: 0; background: none; color: var(--ink-muted); cursor: pointer; }
 .ap-roomhead-crumb:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
@@ -815,9 +818,6 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-threads-head .ap-sect-caret { position: absolute; inset-inline-start: -12px; width: 10px; text-align: center; }
 .ap-threads-count { margin-inline-start: 2px; font-weight: 400; }
 .ap-threads-more .ap-room-name { color: var(--denim); font-size: var(--text-sm); }
-/* The open room folded to its threads with news: a "…" pill after them, on the guide's indent, that shows them all. */
-.ap-threads-expand { display: inline-grid; place-items: center; align-self: flex-start; height: 18px; margin-block: 3px 2px; margin-inline-start: calc(var(--space-3) + var(--space-4)); padding: 0 var(--space-2); border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; transition: background-color var(--duration-fast) ease, color var(--duration-fast) ease; }
-.ap-threads-expand:hover { background: var(--hover); color: var(--ink); }
 /* The guide from the room carries on beside the threads you haven't joined, dashed, as they aren't yours yet. */
 .ap-threads-others { position: relative; display: flex; flex-direction: column; gap: 1px; }
 .ap-threads-others::before { content: ''; position: absolute; inset-inline-start: 21px; top: 0; bottom: 0; border-inline-start: 1px dashed var(--line-strong); pointer-events: none; }

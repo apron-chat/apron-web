@@ -90,8 +90,8 @@ const rows: Row[] = [
 		tag: () => byText('12'), topic: () => byText('Deploys'), join: () => dom.button('Join room'), description: () => dom.button('Show the room description'),
 		actions: () => dom.button('Room actions'), edit: () => dom.byRole('menuitem', 'Edit room'), leave: () => dom.byRole('menuitem', 'Leave room')
 	}, () => open('Room actions')],
-	['RoomItem', RoomItem, { room: 'general', name: 'General', unread: 2, active: true, onnewthread: vi.fn(), unreadTestid: 'unread', newThreadTestid: 'new-thread' }, {
-		unread: () => labelled('2 unread messages'), 'new-thread': () => dom.button('New thread in General')
+	['RoomItem', RoomItem, { room: 'general', name: 'General', unread: 2, active: true, onnewthread: vi.fn(), onexpand: vi.fn(), unreadTestid: 'unread', newThreadTestid: 'new-thread', expandTestid: 'expand' }, {
+		unread: () => labelled('2 unread messages'), 'new-thread': () => dom.button('New thread in General'), expand: () => dom.button('Show all threads in General')
 	}],
 	['ThreadItem', ThreadItem, {
 		thread: 'deploy', name: 'Deploy', unread: 2, ago: { text: '2h', datetime: '2026-10-22T10:00:00.000Z' }, description: 'What to check', latest: { sender: 'Dana', text: 'Done' },
@@ -105,8 +105,8 @@ const rows: Row[] = [
 	}, {
 		card: () => dom.button(/^Deploy/), unread: () => labelled('2 unread replies'), 'last-reply': () => byText('9h'), description: () => around('Lock held'), latest: () => around('Ada done')
 	}],
-	['ThreadList', ThreadList, { room: 'General', others: 4, otherRows: dom.html('<div>Offsite</div>'), more: 3, onmore: vi.fn(), onexpand: vi.fn(), othersToggleTestid: 'others', moreTestid: 'more', expandTestid: 'expand', testid: 'list' }, {
-		list: () => dom.byRole('group', 'Threads in General'), others: () => dom.button(/Other threads/), more: () => dom.button('3 more…'), expand: () => dom.button('Show all threads in General')
+	['ThreadList', ThreadList, { room: 'General', others: 4, otherRows: dom.html('<div>Offsite</div>'), more: 3, onmore: vi.fn(), othersToggleTestid: 'others', moreTestid: 'more', testid: 'list' }, {
+		list: () => dom.byRole('group', 'Threads in General'), others: () => dom.button(/Other threads/), more: () => dom.button('3 more…')
 	}],
 	['SelectionBar', SelectionBar, { count: 2, onnewthread: vi.fn(), newThreadTestid: 'new-thread', testid: 'bar' }, {
 		bar: () => dom.byRole('toolbar', 'Selected messages'), 'new-thread': () => dom.button('New thread')
