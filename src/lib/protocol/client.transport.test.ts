@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import { capabilitiesOf, defaultWebSocketUrl, normalizeWebSocketUrl, reconnectDelay, recoveryBufferFits, ChatClient, type ClientSnapshot } from './client';
+import { capabilitiesOf, defaultWebSocketUrl, normalizeWebSocketUrl, sameServer, serverAddress, reconnectDelay, recoveryBufferFits, ChatClient, type ClientSnapshot } from './client';
 import type { MessageRecord } from './types';
 import { FakeSocket, quiet, settle, startClient } from '$lib/test/client';
 
@@ -711,6 +711,36 @@ describe('default server URL', () => {
 		expect(normalizeWebSocketUrl('localhost:8080')).toBe('ws://localhost:8080/');
 		expect(normalizeWebSocketUrl('wss://other.example/ws?room=general')).toBe('wss://other.example/ws?room=general');
 		expect(normalizeWebSocketUrl('/', location)).toBe('wss://web.apron.chat/');
+	});
+});
+
+describe('server address (§1)', () => {
+	it('normalizes by RFC 3986 §6.2.2 and §6.2.3: case, default port, empty path, percent-encoding, dot segments', () => {
+		expect(serverAddress('WSS://Chat.Example:443')).toBe('wss://chat.example/');
+		expect(serverAddress('ws://chat.example:80/ws')).toBe('ws://chat.example/ws');
+		expect(serverAddress('wss://chat.example:8443/ws')).toBe('wss://chat.example:8443/ws');
+		expect(serverAddress('wss://chat.example/%7eada/%2f/a%2Fb')).toBe('wss://chat.example/~ada/%2F/a%2Fb');
+		expect(serverAddress('wss://chat.example/a/./b/../ws?x=%61%3d')).toBe('wss://chat.example/a/ws?x=a%3D');
+		expect(normalizeWebSocketUrl('HTTPS://Chat.Example:443')).toBe('wss://chat.example/');
+		expect(() => serverAddress('not a url')).toThrow();
+	});
+
+	it('drops a fragment, which a WebSocket URL can\'t carry: the address connects, and is the same server', () => {
+		expect(serverAddress('wss://chat.example/ws?x=%41#frag')).toBe('wss://chat.example/ws?x=A');
+		expect(serverAddress('wss://chat.example/ws#')).toBe('wss://chat.example/ws');
+		expect(normalizeWebSocketUrl('wss://chat.example/ws#team')).toBe('wss://chat.example/ws');
+		expect(normalizeWebSocketUrl('https://chat.example#team')).toBe('wss://chat.example/');
+		expect(normalizeWebSocketUrl('chat.example/ws#team')).toBe('ws://chat.example/ws');
+		expect(sameServer('wss://chat.example/ws#team', 'wss://chat.example/ws')).toBe(true);
+		// What new WebSocket() takes: no fragment left to throw on.
+		expect(new URL(normalizeWebSocketUrl('wss://x.example/ws#f')).hash).toBe('');
+	});
+
+	it('tells servers apart by address only: ws: and wss: are two', () => {
+		expect(sameServer('wss://chat.example', 'WSS://CHAT.example:443/')).toBe(true);
+		expect(sameServer('ws://chat.example/', 'wss://chat.example/')).toBe(false);
+		expect(sameServer('wss://chat.example/ws', 'wss://chat.example/')).toBe(false);
+		expect(sameServer(undefined, 'wss://chat.example/')).toBe(false);
 	});
 });
 

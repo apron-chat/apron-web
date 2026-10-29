@@ -158,6 +158,12 @@ export interface ServerParams {
 	signup?: string[];
 	/** CommonMark for the sign-in screen (§3.2): how this server's schemes fit together. */
 	welcome?: string;
+	/** A plain display name (§3.1); without it, clients show the server's address. Never what a server is known by. */
+	title?: string;
+	/** CommonMark (§3.1): in a few words, what the server is about. */
+	description?: string;
+	/** The server's icon (§3.1): square, loaded as user avatars are (§4.8.6). */
+	avatar?: string;
 	/**
 	 * Extensions' data, each under its name without `ext:` (§4, §4.12), such
 	 * as `settings` for `ext:settings`. Read only with that extension's capability.

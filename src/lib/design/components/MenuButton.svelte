@@ -7,7 +7,8 @@
 
 	/**
 	 * A button that opens a menu of choices. Its `onselect` is the choice's, not the DOM event. A choice with
-	 * `choices` of its own opens them beneath it as a submenu, with → or a click, and closes them with ← or Escape.
+	 * `choices` of its own opens them beneath it as a submenu, with → or a click, and closes them with ← or Escape
+	 * (mirrored under `dir="rtl"`: ← opens, → closes, and its chevron points left).
 	 */
 	interface Props {
 		/** The button's text; with `icon`, its name for screen readers and its tooltip. */
@@ -90,7 +91,14 @@
 		else items().find((item) => item.dataset.parent === value)?.focus();
 	}
 
+	/** Laid out right to left, as CSS resolves it (`dir="rtl"` on the page or an ancestor). */
+	const rtl = () => !!root && getComputedStyle(root).direction === 'rtl';
+	/** The arrow along the line, the way its chevron points, that opens a submenu; and the one back that closes it. */
+	const inward = () => (rtl() ? 'ArrowLeft' : 'ArrowRight');
+	const outward = () => (rtl() ? 'ArrowRight' : 'ArrowLeft');
+
 	function keydown(event: KeyboardEvent): void {
+
 		if (!open) {
 			// On the closed button, the arrows open the menu at its first or last item.
 			if (!busy && event.target === trigger && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
@@ -107,10 +115,10 @@
 			// In a submenu, Escape closes only it.
 			if (item?.dataset.parent !== undefined) void toggleSubmenu(item.dataset.parent);
 			else close(true);
-		} else if (event.key === 'ArrowRight' && item?.dataset.submenu !== undefined) {
+		} else if (event.key === inward() && item?.dataset.submenu !== undefined) {
 			event.preventDefault();
 			if (expanded !== item.dataset.submenu) void toggleSubmenu(item.dataset.submenu);
-		} else if (event.key === 'ArrowLeft' && expanded !== undefined && (item?.dataset.parent === expanded || item?.dataset.submenu === expanded)) {
+		} else if (event.key === outward() && expanded !== undefined && (item?.dataset.parent === expanded || item?.dataset.submenu === expanded)) {
 			event.preventDefault();
 			void toggleSubmenu(expanded);
 		} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {

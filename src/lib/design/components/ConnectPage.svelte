@@ -1,14 +1,18 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import type { RecentBackend } from './types';
 	import { initials } from './util';
 
 	interface Props {
 		/** The card: a SignInForm, with a ConnectHeader as its `header`. */
 		children?: Snippet;
-		/** Backends signed in to before, offered under the card. */
-		recent?: Array<{ url: string; label?: string }>;
-		onpickrecent?: (r: { url: string; label?: string }) => void;
+		/**
+		 * Backends signed in to before, offered under the card: each by its `label` (its title, else its host), its
+		 * `avatar` or initials, and always its address, `url`, since a title and an avatar can be copied (§5.3).
+		 */
+		recent?: RecentBackend[];
+		onpickrecent?: (r: RecentBackend) => void;
 		/** Something is under way: the recent backends wait. */
 		busy?: boolean;
 		/** Fills the viewport, as the app's whole page. */
@@ -27,10 +31,10 @@
 			<span class="ap-fieldlabel">Recent</span>
 			{#each recent as r (r.url)}
 				<button class="ap-connect-recent-item" type="button" disabled={busy} onclick={() => onpickrecent?.(r)}>
-					<span class="ap-rail-tile ap-connect-tile" aria-hidden="true">{initials(r.label || r.url)}</span>
+					{#if r.avatar}<img class="ap-rail-tile ap-connect-tile" src={r.avatar} alt="" />{:else}<span class="ap-rail-tile ap-connect-tile" aria-hidden="true">{initials(r.label || r.url)}</span>{/if}
 					<span class="ap-room-text">
 						<span class="ap-room-name">{r.label || r.url}</span>
-						<span class="ap-room-topic">{r.url}</span>
+						<span class="ap-room-topic ap-connect-address">{r.url}</span>
 					</span>
 				</button>
 			{/each}

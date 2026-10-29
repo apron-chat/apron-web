@@ -17,6 +17,7 @@
  */
 
 import { unescapeHtml } from '$lib/protocol/markdown';
+import { serverAddress } from '$lib/protocol/client-views';
 
 export interface ApronLink {
 	/** A `ws:` or `wss:` URL; absent in a relative link. */
@@ -173,8 +174,9 @@ function reachable(value: string): string | undefined {
 	try {
 		const url = new URL(value);
 		if (url.username || url.password || url.hash) return undefined;
-		if (url.protocol === 'wss:') return url.toString();
-		return url.protocol === 'ws:' && loopback(url.hostname) ? url.toString() : undefined;
+		// The server's address as clients compare it (§1).
+		if (url.protocol === 'wss:') return serverAddress(url.toString());
+		return url.protocol === 'ws:' && loopback(url.hostname) ? serverAddress(url.toString()) : undefined;
 	} catch {
 		return undefined;
 	}

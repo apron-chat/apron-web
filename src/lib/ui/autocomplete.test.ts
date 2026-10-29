@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import data from '@emoji-mart/data/sets/15/native.json';
 import { isAutocompleteDismissed, type DismissedAutocomplete } from './autocomplete-dismiss';
 import { insertText } from './draft';
-import { emojiQuery, searchEmoji } from './emoji-autocomplete';
+import { parseCatalog } from '$lib/protocol/custom-emoji';
+import { emojiQuery, searchEmoji, withCustomEmoji } from './emoji-autocomplete';
 import { roomQuery, searchRooms, type RoomSuggestion } from './room-autocomplete';
 
 // The composer's inline autocompletes: `:emoji`, `#room`, and closing one with Escape.
@@ -39,6 +40,16 @@ describe('emoji autocomplete', () => {
 		expect(searchEmoji(data, 'smile')[0]?.id).toBe('smile');
 		expect(searchEmoji(data, 'joy').some((item) => item.id === 'joy')).toBe(true);
 		expect(searchEmoji(data, '').length).toBe(0);
+	});
+
+	it('offers the server\'s custom emoji first, by key, alt or tag, inserting the key (ext:emoji)', () => {
+		const catalog = parseCatalog({ ':smile-cat:': { url: 'https://e.example/1', tags: ['happy'] }, ':hidden_smile:': { url: 'https://e.example/2', hidden: true } }, undefined);
+		const found = withCustomEmoji(catalog, 'smile', searchEmoji(data, 'smile'), (emoji) => emoji.url);
+		expect(found[0]).toEqual({ id: 'smile-cat', name: ':smile-cat:', native: ':smile-cat:', image: 'https://e.example/1' });
+		expect(found[1]?.id).toBe('smile');
+		expect(found.length).toBeLessThanOrEqual(8);
+		expect(withCustomEmoji(catalog, 'happy', [], (emoji) => emoji.url).map((item) => item.native)).toEqual([':smile-cat:']);
+		expect(withCustomEmoji(undefined, 'smile', [], () => '')).toEqual([]);
 	});
 });
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { userIn, type ChatClient, type ClientSnapshot } from './client';
+import { bioOf, userIn, type ChatClient, type ClientSnapshot } from './client';
 import { FakeSocket, settle, startClient } from '$lib/test/client';
 
 /**
@@ -128,7 +128,7 @@ describe('your own user', () => {
 	});
 
 	it('takes your permissions only from you, so a listing that names you keeps them (ext:permissions)', async () => {
-		const you = { user_id: 'ada', name: 'Ada', roles: ['admin'], ext: { bio: 'hi', permissions: ['move_any', 'add_members'] } };
+		const you = { user_id: 'ada', name: 'Ada', roles: ['admin'], ext: { bio: 'hi', permissions: { move_any: true, add_members: true } } };
 		await socket.greet(['rooms', 'ext', 'ext:permissions'], { you });
 		expect(snapshot.you).toEqual(you);
 		// Your rooms' listing and a joined room carry you as others see you: without permissions.
@@ -136,10 +136,27 @@ describe('your own user', () => {
 		await socket.reply('room_list', { joined: [], not_joined: [], users: [{ user_id: 'ada', name: 'Ada', roles: ['admin'], ext: { bio: 'hello' } }] });
 		await listing;
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '20', title: 'Ops', members: [{ user_id: 'ada' }] }], users: [{ user_id: 'ada', name: 'Ada', roles: ['admin'] }] } });
-		expect(snapshot.you).toEqual({ user_id: 'ada', name: 'Ada', roles: ['admin'], ext: { permissions: ['move_any', 'add_members'] } });
+		expect(snapshot.you).toEqual({ user_id: 'ada', name: 'Ada', roles: ['admin'], ext: { permissions: { move_any: true, add_members: true } } });
 		// A you that changes them still does: a role taken away clears move_any.
-		socket.receive({ method: 'user', params: { you: { user_id: 'ada', ext: { permissions: ['add_members'] } } } });
-		expect(snapshot.you?.ext).toEqual({ permissions: ['add_members'] });
+		socket.receive({ method: 'user', params: { you: { user_id: 'ada', ext: { permissions: { add_members: true } } } } });
+		expect(snapshot.you?.ext).toEqual({ permissions: { add_members: true } });
+	});
+
+	it('keeps the server frame\'s title, description and avatar as strings (§3.1)', async () => {
+		await socket.greet(['rooms'], { you: { user_id: 'guest_1' } });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [], title: 'Work', description: 'The **team**', avatar: 'https://chat.example/icon.png' } });
+		expect(snapshot.server).toMatchObject({ title: 'Work', description: 'The **team**', avatar: 'https://chat.example/icon.png' });
+		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [], title: 7 } });
+		expect(snapshot.server).not.toHaveProperty('title');
+		expect(snapshot.server).not.toHaveProperty('avatar');
+	});
+
+	it('keeps what users write as sent, bidi embeddings and overrides too: only display drops them (§3.5.2)', async () => {
+		await socket.greet(['rooms'], { you: { user_id: 'guest_1', name: 'Guest' } });
+		socket.receive({ method: 'user', params: { new: { user_id: 'mal\u202Elory', name: 'Mal\u202Elory\u202C', ext: { bio: 'evil\u202Egnp.exe', key: 'k\u202Ay' } } } });
+		expect(snapshot.users['mal\u202Elory']).toEqual({ user_id: 'mal\u202Elory', name: 'Mal\u202Elory\u202C', ext: { bio: 'evil\u202Egnp.exe', key: 'k\u202Ay' } });
+		// The bio as shown is cleaned (`ext:bio`).
+		expect(bioOf(snapshot.users['mal\u202Elory'])).toBe('evilgnp.exe');
 	});
 
 	it('merges roles like any profile field, and an empty list clears them', async () => {

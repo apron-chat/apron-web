@@ -175,4 +175,38 @@ describe('MenuButton', () => {
 		await tick();
 		expect(items()).toHaveLength(3);
 	});
+
+	it('mirrors the arrows that open and close a submenu under rtl: ← opens it, → closes it', async () => {
+		const actions = [
+			{ value: 'link', label: 'Copy link' },
+			{ value: 'mute', label: 'Mute room', choices: [{ value: 'mute:1h', label: 'For 1 hour' }, { value: 'mute:forever', label: 'Until I unmute' }] }
+		];
+		dom.render(MenuButton, { label: 'Room actions', choices: actions, onselect: vi.fn() });
+		const trigger = dom.button('Room actions');
+		// As `dir="rtl"` on the page resolves it.
+		trigger.parentElement!.style.direction = 'rtl';
+		trigger.click();
+		flushSync();
+		await tick();
+		const opener = () => document.querySelector<HTMLButtonElement>('[aria-haspopup="menu"].ap-menu-item')!;
+		opener().focus();
+		// → points away from the chevron now, and leaves it shut.
+		key(opener(), 'ArrowRight');
+		flushSync();
+		await tick();
+		expect(opener().getAttribute('aria-expanded')).toBe('false');
+		key(opener(), 'ArrowLeft');
+		flushSync();
+		await tick();
+		expect(opener().getAttribute('aria-expanded')).toBe('true');
+		expect(document.activeElement).toBe(items()[2]);
+		key(items()[2], 'ArrowLeft');
+		flushSync();
+		await tick();
+		expect(opener().getAttribute('aria-expanded')).toBe('true');
+		key(items()[2], 'ArrowRight');
+		flushSync();
+		await tick();
+		expect([items().length, document.activeElement, opener().getAttribute('aria-expanded')]).toEqual([2, opener(), 'false']);
+	});
 });

@@ -61,6 +61,34 @@ describe('persisted session tokens', () => {
 		expect(storage.has('apron.session:ws://fake.test/')).toBe(false);
 	});
 
+	it('finds a session kept under an address written before addresses were normalized (§1), and keeps it under the address', async () => {
+		storage.set('apron.session:WS://Fake.Test:80', 'session-old');
+		storage.set('apron.signin:WS://Fake.Test:80', 'email');
+		storage.set('apron.session:wss://fake.test/', 'session-tls');
+		startClient({ storage, onSnapshot: (next) => (snapshot = next) });
+		latest().open();
+		latest().receive({ method: 'server', params: { apron: 9, auth: ['token', 'guest'], capabilities: [] } });
+		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'session-old' }));
+		expect(storage.get(TOKEN_KEY)).toBe('session-old');
+		expect(storage.get('apron.signin:ws://fake.test/')).toBe('email');
+		expect(storage.has('apron.session:WS://Fake.Test:80')).toBe(false);
+		// `wss:` is another server.
+		expect(storage.get('apron.session:wss://fake.test/')).toBe('session-tls');
+	});
+
+	it('finds a session kept under the address with a fragment, and keeps it under the address without one', async () => {
+		storage.set('apron.session:ws://fake.test/#team', 'session-frag');
+		storage.set('apron.signin-added:ws://fake.test/#team', 'webauthn');
+		startClient({ storage, onSnapshot: (next) => (snapshot = next) });
+		latest().open();
+		latest().receive({ method: 'server', params: { apron: 9, auth: ['token', 'guest'], capabilities: [] } });
+		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'session-frag' }));
+		expect(storage.get(TOKEN_KEY)).toBe('session-frag');
+		expect(storage.get('apron.signin-added:ws://fake.test/')).toBe('webauthn');
+		expect(storage.has('apron.session:ws://fake.test/#team')).toBe(false);
+		expect(storage.has('apron.signin-added:ws://fake.test/#team')).toBe(false);
+	});
+
 	it('names the account a sign-up invite creates, with that token only', async () => {
 		const { client } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
 		await latest().greet([], { auth: ['token', 'guest'] });
@@ -108,26 +136,30 @@ describe('persisted session tokens', () => {
 		expect(storage.has('apron.session:ws://fake.test/')).toBe(false);
 	});
 
-	it('reads only as a guest where the server says guests only read (ext:settings), until a sign-in', async () => {
-		const readOnly = { settings: { guest_posting: false } };
+	it('reads only where you may not write (ext:permissions), whoever you are', async () => {
+		const readOnly = { permissions: { write: false } };
 		const { client: guest } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
-		await latest().greet(['ext:settings'], { auth: ['webauthn', 'token', 'guest'], ext: readOnly });
+		await latest().greet(['ext:permissions'], { auth: ['webauthn', 'token', 'guest'], you: { user_id: 'guest_1', name: 'Guest', ext: readOnly } });
 		expect(snapshot.readOnly).toBe(true);
 		guest.stop();
 
-		// A signed-in session writes; so does a guest where guests may post, where nothing is said,
-		// or where the server sends settings without advertising `ext:settings`.
-		const { client: signedIn } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
-		await latest().greet(['ext:settings'], { auth: ['webauthn', 'token', 'guest'], ext: readOnly, token: 'session-3' });
-		expect(snapshot.readOnly).toBe(false);
-		signedIn.stop();
-		for (const [caps, ext] of [[['ext:settings'], { settings: { guest_posting: true } }], [['ext:settings'], { settings: {} }], [['ext:settings'], undefined], [[], readOnly]] as const) {
+		// You write where nothing is said, where the server says so, where `permissions` has the wrong type, or where
+		// the server sends permissions without advertising `ext:permissions`. The old `guest_posting` means nothing.
+		for (const [caps, ext] of [
+			[['ext:permissions'], { permissions: { write: true } }], [['ext:permissions'], { permissions: {} }], [['ext:permissions'], undefined],
+			[['ext:permissions'], { permissions: ['write'] }], [[], readOnly]
+		] as const) {
 			storage.clear();
 			const { client: open } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
-			await latest().greet([...caps], { ...(ext ? { ext } : {}) });
+			await latest().greet([...caps], { you: { user_id: 'guest_1', name: 'Guest', ...(ext ? { ext } : {}) } });
 			expect(snapshot.readOnly).toBe(false);
 			open.stop();
 		}
+		storage.clear();
+		const { client: settings } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
+		await latest().greet(['ext:settings'], { ext: { settings: { guest_posting: false } } });
+		expect(snapshot.readOnly).toBe(false);
+		settings.stop();
 	});
 
 	it('drops a welcome sent before auth once a stored session signs in', async () => {

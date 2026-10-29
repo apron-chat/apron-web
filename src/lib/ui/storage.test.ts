@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -12,6 +12,44 @@ beforeEach(() => {
 afterEach(() => {
 	values.clear();
 	vi.unstubAllGlobals();
+});
+
+describe('recent servers', () => {
+	it('keys each by its normalized address (§1), folding older entries for the same server into the newest', () => {
+		values.set('apron.recentServers', JSON.stringify([
+			{ url: 'wss://Chat.Example:443', label: 'chat.example' },
+			{ url: 'wss://chat.example/', title: 'Old title' },
+			{ url: 'ws://chat.example/', title: 'Plain' },
+			{ url: 'not a url' },
+			{ url: 7 },
+			{ url: 'wss://other.example/%7eada', title: 'Other', avatar: 'https://other.example/a.png' }
+		]));
+		expect(loadRecentServers()).toEqual([
+			{ url: 'wss://chat.example/' },
+			{ url: 'ws://chat.example/', title: 'Plain' },
+			{ url: 'wss://other.example/~ada', title: 'Other', avatar: 'https://other.example/a.png' }
+		]);
+	});
+
+	it('folds an entry saved with a fragment into its address without one', () => {
+		values.set('apron.recentServers', JSON.stringify([
+			{ url: 'wss://chat.example/ws#team', title: 'Team' },
+			{ url: 'wss://chat.example/ws', title: 'Older' }
+		]));
+		expect(loadRecentServers()).toEqual([{ url: 'wss://chat.example/ws', title: 'Team' }]);
+		expect(rememberServer(loadRecentServers(), 'wss://chat.example/ws#other', { title: 'Team' })).toEqual([{ url: 'wss://chat.example/ws', title: 'Team' }]);
+	});
+
+	it('remembers how a server looked, never finding it by its title', () => {
+		let recent = rememberServer([], 'wss://chat.example', { title: 'Chat', avatar: 'https://chat.example/icon.png' });
+		recent = rememberServer(recent, 'wss://evil.example/', { title: 'Chat' });
+		expect(recent.map((server) => server.url)).toEqual(['wss://evil.example/', 'wss://chat.example/']);
+		// A new server frame updates its entry in place; a server not listed isn't added.
+		recent = refreshRecentServer(recent, 'WSS://CHAT.EXAMPLE:443/', { title: 'Chat, renamed' });
+		expect(recent[1]).toEqual({ url: 'wss://chat.example/', title: 'Chat, renamed' });
+		expect(refreshRecentServer(recent, 'wss://new.example/', { title: 'New' })).toBe(recent);
+		expect(JSON.parse(values.get('apron.recentServers')!)).toEqual(recent);
+	});
 });
 
 describe('preference storage', () => {

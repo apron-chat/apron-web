@@ -2,6 +2,7 @@
 	import { preferencesDialog } from './lazy';
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
+	import { shownPerson } from '$lib/protocol/plain-text';
 	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, type ChatClient, type OperationHandle } from '$lib/protocol/client';
 	import { addError, passkeyMessage, statusLabel, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { returnUrl } from '$lib/ui/sign-in-link';
@@ -50,8 +51,10 @@
 		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
 		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
+		/** Opens the connect screen as it is: another server, or another way to sign in. */
+		onconnect: () => void;
 	}
-	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin, onconnect }: Props = $props();
 
 	let open = $state(false);
 	let preferencesOpen = $state(false);
@@ -73,6 +76,8 @@
 	let avatarStatus = $state<'idle' | 'uploading' | 'removing'>('idle');
 	let avatarError = $state('');
 	let you = $derived(session.you);
+	/** You as the bar shows you: your name without bidi embeddings and overrides (§3.5.2); the editor starts from it as written. */
+	let shownYou = $derived(shownPerson(you));
 	/** While notifications are paused, when that ends in words ("until 14:30"). */
 	let paused = $derived(pause?.until !== undefined ? pausedUntilLabel(pause.until) : undefined);
 	let avatar = $derived(directory.avatar(you));
@@ -177,6 +182,12 @@
 	function close(): void {
 		open = false;
 		status = 'idle';
+	}
+
+	/** The editor's Connect to a server…: the connect screen, in its place. */
+	function connect(): void {
+		close();
+		onconnect();
 	}
 
 	function showPreferences(): void {
@@ -352,7 +363,7 @@
 
 <!-- The design system's ProfileBar and ProfileEditor draw it; the app fills in its avatar, and the ways to sign in this server offers. -->
 {#snippet barAvatar()}
-	<Avatar name={you?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={shownStatus} statusLabel={ownLabel} />
+	<Avatar name={shownYou?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={shownStatus} statusLabel={ownLabel} />
 {/snippet}
 {#snippet face()}
 	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" status={shownStatus} statusLabel={ownLabel} />
@@ -448,12 +459,13 @@
 		onsave={save}
 		oncancel={close}
 		signin={canUsePasskey || canUseEmail || canUseExternal ? signin : undefined}
+		onconnect={connect}
 		changeAvatarTestid="change-avatar" removeAvatarTestid="remove-avatar" avatarFileTestid="avatar-input" nameTestid="display-name-input" bioTestid="bio-input"
 	/>
 {/snippet}
 
 <DesignProfileBar
-	{you}
+	you={shownYou}
 	placeholder={session.starting ? 'Signing in…' : 'Not signed in'}
 	backend={backendLabel}
 	note={wayBack ? 'add a sign-in' : undefined}

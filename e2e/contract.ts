@@ -388,7 +388,9 @@ export const SCENES: Scene[] = [
 			await look();
 			await card.getByRole('button', { name: 'Cancel', exact: true }).click();
 			await expect(card).toBeHidden();
-			await page.getByRole('button', { name: 'Connection settings', exact: true }).click();
+			// The connect screen as it is, from the profile.
+			await page.getByRole('button', { name: /^Your profile on/ }).click();
+			await page.getByRole('dialog', { name: 'Edit profile' }).getByRole('button', { name: 'Connect to a server…', exact: true }).click();
 			await expect(card).toBeVisible();
 			// Another server: Done becomes Connect.
 			await page.getByTestId('server-url-input').fill('ws://127.0.0.1:9/ws');

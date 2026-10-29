@@ -5,7 +5,38 @@
  * `emoji-picker.svelte.ts`.
  */
 
+import type { CustomEmoji, EmojiCatalog } from '$lib/protocol/custom-emoji';
 import { NARROW_MAX } from './breakpoints';
+
+/** A custom emoji category as emoji-mart's `custom` option takes it. */
+export interface PickerCategory {
+	id: string;
+	name: string;
+	emojis: { id: string; name: string; keywords: string[]; skins: { src: string; native: string }[] }[];
+}
+
+/**
+ * A catalog's emoji (`ext:emoji`) as emoji-mart's custom categories, one per
+ * `category` in the catalog's order (those without one under the server's),
+ * leaving out `hidden` ones; and the key each emoji-mart ID picks. Search
+ * finds each by its key's name, its `alt`, and its tags.
+ */
+export function pickerCategories(catalog: EmojiCatalog | undefined, src: (emoji: CustomEmoji) => string): { categories: PickerCategory[]; keys: Map<string, string> } {
+	const categories = new Map<string, PickerCategory>();
+	const keys = new Map<string, string>();
+	for (const emoji of catalog?.values() ?? []) {
+		if (emoji.hidden) continue;
+		const name = emoji.category ?? 'This server';
+		let category = categories.get(name);
+		if (!category) categories.set(name, (category = { id: `apron-custom-${categories.size}`, name, emojis: [] }));
+		// Stable, so emoji-mart's frequently used row finds it again; keys are case-sensitive, and so are its IDs.
+		const id = `apron-${emoji.key.slice(1, -1)}`;
+		keys.set(id, emoji.key);
+		// `native` is what emoji-mart names its button and image by: the key, which a screen reader then reads.
+		category.emojis.push({ id, name: emoji.alt ?? emoji.key, keywords: [emoji.key.slice(1, -1), ...(emoji.alt ? [emoji.alt] : []), ...emoji.tags], skins: [{ src: src(emoji), native: emoji.key }] });
+	}
+	return { categories: [...categories.values()], keys };
+}
 
 /** The desktop popover: emoji-mart's nine 36px columns, its padding and scrollbar gutter, and our 1px hairline each side. */
 export const PICKER_WIDTH = 9 * 36 + 12 + 16 + 2;
@@ -36,17 +67,20 @@ export interface PlaceOptions {
 	gap?: number;
 	/** Kept clear at the viewport's edges. */
 	margin?: number;
+	/** The anchor is laid out right to left (`dir="rtl"`): line up with its right edge first, mirrored. */
+	rtl?: boolean;
 }
 
 /**
  * Where the picker opens for a trigger at `anchor` (viewport coordinates):
  * below it when it fits, else above, else on the roomier side, shortened to
  * fit; lined up with the anchor's left edge, or its right edge near the
- * viewport's right, and always inside the viewport. Narrow viewports get a
+ * viewport's right (mirrored under `rtl`: its right edge, or its left near the
+ * viewport's left), and always inside the viewport. Narrow viewports get a
  * bottom sheet instead.
  */
 export function placePicker(anchor: Box, viewport: Viewport, options: PlaceOptions = {}): Placement {
-	const { width = PICKER_WIDTH, height = PICKER_HEIGHT, gap = 4, margin = 8 } = options;
+	const { width = PICKER_WIDTH, height = PICKER_HEIGHT, gap = 4, margin = 8, rtl = false } = options;
 	if (viewport.width < NARROW_MAX) {
 		return { mode: 'sheet', height: Math.max(Math.min(PICKER_MIN_HEIGHT, viewport.height), Math.min(height, Math.round(viewport.height * 0.6))) };
 	}
@@ -57,7 +91,9 @@ export function placePicker(anchor: Box, viewport: Viewport, options: PlaceOptio
 	const fitted = Math.min(height, Math.max(room, Math.min(PICKER_MIN_HEIGHT, viewport.height - 2 * margin)));
 	const rawTop = side === 'below' ? anchor.bottom + gap : anchor.top - gap - fitted;
 	const top = clamp(rawTop, margin, viewport.height - margin - fitted);
-	const rawLeft = anchor.left + width <= viewport.width - margin ? anchor.left : anchor.right - width;
+	const rawLeft = rtl
+		? (anchor.right - width >= margin ? anchor.right - width : anchor.left)
+		: (anchor.left + width <= viewport.width - margin ? anchor.left : anchor.right - width);
 	const left = clamp(rawLeft, margin, viewport.width - margin - width);
 	return { mode: 'popover', side, top, left, width, height: fitted };
 }

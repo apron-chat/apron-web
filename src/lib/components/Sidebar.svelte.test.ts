@@ -39,4 +39,24 @@ describe('Sidebar', () => {
 		expect(listed()).toBe(2);
 		session.dispose();
 	});
+
+	it('names the server in its head, and reaches the connect screen from the profile, closing it', () => {
+		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'wss://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
+		const session = new SessionView();
+		session.apply(live(), client);
+		const onconnect = vi.fn();
+		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', serverLook: { title: 'Fake' }, serverAddress: client.url, threads: [], mentions: {}, unread: {}, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onsignin: vi.fn(), onconnect } as never);
+		const head = document.querySelector('.ap-shell-sidehead')!;
+		expect(head.querySelector('.ap-shell-sidehead-name')?.textContent).toBe('Fake');
+		expect(head.querySelector('.ap-shell-sidehead-host')?.textContent).toBe('fake.test');
+		expect(head.querySelector('button')).toBeNull();
+		dom.button(/^Your profile on fake\.test/).click();
+		flushSync();
+		const editor = dom.byRole('dialog', 'Edit profile');
+		dom.button('Connect to a server…', editor).click();
+		flushSync();
+		expect(onconnect).toHaveBeenCalledOnce();
+		expect(dom.queryByRole('dialog', 'Edit profile')).toBeNull();
+		session.dispose();
+	});
 });

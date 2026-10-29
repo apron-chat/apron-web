@@ -3,6 +3,8 @@
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import { currentTheme, pickerColors, placePicker } from '$lib/ui/emoji';
 	import { emojiPicker, loadEmojiMart } from '$lib/ui/emoji-picker.svelte';
+	import { customEmoji } from '$lib/ui/custom-emoji.svelte';
+	import { pickerCategories } from '$lib/ui/emoji';
 	import EmojiPopover from '$lib/design/components/EmojiPopover.svelte';
 
 	/**
@@ -12,7 +14,9 @@
 	 * never clip it: a popover beside the
 	 * trigger on wide screens, a bottom sheet on narrow ones. emoji-mart and its
 	 * data load the first time it opens, from this app's origin: it gets its
-	 * data, strings and native glyphs passed in, so it fetches nothing.
+	 * data, strings and native glyphs passed in, so it fetches nothing. The
+	 * server's custom emoji (`ext:emoji`) come first, in their categories,
+	 * once their catalog has arrived; picking one picks its key.
 	 */
 
 	type PickerElement = HTMLElement & { update: (props: Record<string, unknown>) => void };
@@ -26,7 +30,7 @@
 	let request = $derived(emojiPicker.current);
 	let placement = $derived.by(() => {
 		void reflowed;
-		return request ? placePicker(request.anchor.getBoundingClientRect(), { width: innerWidth, height: innerHeight }) : undefined;
+		return request ? placePicker(request.anchor.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, { rtl: getComputedStyle(request.anchor).direction === 'rtl' }) : undefined;
 	});
 
 	function theme(): 'light' | 'dark' {
@@ -39,10 +43,19 @@
 		for (const [property, value] of Object.entries(pickerColors((token) => style.getPropertyValue(token)))) picker.style.setProperty(property, value);
 	}
 
-	// Builds the picker for each request, once emoji-mart has loaded.
+	// Opening the picker is when the server's custom emoji are first needed.
+	$effect(() => {
+		if (request) customEmoji.need();
+	});
+
+	/** The custom emoji the picker offers (none `hidden`), in emoji-mart's categories, and the key each of its IDs picks. */
+	let custom = $derived(pickerCategories(customEmoji.catalog, (emoji) => customEmoji.image(emoji).src));
+
+	// Builds the picker for each request, once emoji-mart has loaded, and again when the custom emoji arrive.
 	$effect(() => {
 		const current = request;
 		const target = mount;
+		const offered = custom;
 		if (!current || !target) return;
 		const sheet = untrack(() => placement?.mode === 'sheet');
 		let cancelled = false;
@@ -71,8 +84,12 @@
 					dynamicWidth: sheet,
 					// A touch keyboard would cover the sheet; there, search is a tap away.
 					autoFocus: !matchMedia('(pointer: coarse)').matches,
-					onEmojiSelect: (emoji: { native?: string }) => {
-						if (emoji.native) emojiPicker.pick(emoji.native);
+					// emoji-mart lists custom categories after its own, and takes any it had before away first.
+					custom: offered.categories,
+					onEmojiSelect: (emoji: { native?: string; id?: string }) => {
+						const key = emoji.id === undefined ? undefined : offered.keys.get(emoji.id);
+						if (key) emojiPicker.pick(key);
+						else if (emoji.native) emojiPicker.pick(emoji.native);
 					}
 				}) as unknown as PickerElement;
 				paint(picker);

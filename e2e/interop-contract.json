@@ -27,7 +27,7 @@
 			"webauthn.spec.ts:96",
 			"webauthn.spec.ts:103",
 			"webauthn.spec.ts:109",
-			"webauthn.spec.ts:181"
+			"webauthn.spec.ts:183"
 		],
 		"display-name-input": [
 			"test-helpers.ts:80",
@@ -188,7 +188,7 @@
 			"reference.spec.ts:89"
 		],
 		"server-url-input": [
-			"webauthn.spec.ts:179"
+			"webauthn.spec.ts:181"
 		],
 		"staged-files": [
 			"reference.spec.ts:74",
@@ -330,6 +330,16 @@
 				"webauthn.spec.ts:177"
 			]
 		},
+		"button \"Connect to a server…\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Connect to a server…",
+			"exact": true,
+			"at": [
+				"webauthn.spec.ts:180"
+			]
+		},
 		"button \"Connect\"": {
 			"roles": [
 				"button"
@@ -337,17 +347,7 @@
 			"name": "Connect",
 			"exact": true,
 			"at": [
-				"webauthn.spec.ts:180"
-			]
-		},
-		"button \"Connection settings\"": {
-			"roles": [
-				"button"
-			],
-			"name": "Connection settings",
-			"exact": true,
-			"at": [
-				"webauthn.spec.ts:178"
+				"webauthn.spec.ts:182"
 			]
 		},
 		"button \"Create account with passkey\"": {

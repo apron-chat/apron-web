@@ -274,9 +274,9 @@ export interface ClientSnapshot {
 	 */
 	signInCode?: { scheme: 'email' | 'external'; url: string; email?: string; page?: string };
 	/**
-	 * Signed in as a guest on a server whose guests only read
-	 * (`ext:settings` with `guest_posting: false`): posting, reacting, and
-	 * room changes are denied until the user signs in.
+	 * Signed in as someone who only reads (`ext:permissions` with
+	 * `write: false`, as a server may keep its guests): posting, reacting,
+	 * joining, leaving, and room changes are denied.
 	 */
 	readOnly?: boolean;
 	/**

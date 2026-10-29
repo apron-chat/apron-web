@@ -4,8 +4,9 @@
 
 	/**
 	 * A side panel's inner border as a resize handle (the design system's
-	 * PanelHandle), driving its SidebarLayout: a drag resizes it, a press
-	 * without one collapses or expands it, and so do Enter and Space.
+	 * PanelHandle), driving its SidebarLayout: a drag resizes it (toward the
+	 * conversation widens, whichever side `dir` puts it on), a press without
+	 * one collapses or expands it, and so do Enter and Space.
 	 */
 	interface Props {
 		layout: SidebarLayout;

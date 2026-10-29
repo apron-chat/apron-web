@@ -168,6 +168,17 @@ describe('prepareUpload with the server\'s limits (ext:media)', () => {
 		expect(await prepareUpload(blob, { codec, limits: { 'application/octet-stream': {} } })).toEqual({ file: blob });
 	});
 
+	it('fits a custom emoji to the emoji category: stills re-encoded within it, animations as they are', async () => {
+		const emoji = { 'image/png': { max_bytes: 262_144 }, 'image/gif': { max_bytes: 262_144 }, 'image/webp': { max_bytes: 262_144, max_side: 128 } };
+		const { codec, encodes } = fakeCodec(1000, 1000, (w) => (w > 128 ? 300_000 : 20_000));
+		const photo = await prepareUpload(file(bytes(JPEG), 'party.jpg', 'image/jpeg'), { codec, limits: emoji });
+		expect(photo).toMatchObject({ width: 128, height: 128, file: { type: 'image/webp' } });
+		expect(encodes.map((encode) => encode.type)).toEqual(['image/webp']);
+		const party = file(gif(2), 'party.gif', 'image/gif');
+		expect(await prepareUpload(party, { codec, limits: emoji })).toEqual({ file: party, width: 1000, height: 1000 });
+		await expect(prepareUpload(file(gif(2), 'party.gif', 'image/gif', 262_144), { codec, limits: emoji })).rejects.toThrow('this server takes images up to 256 KB');
+	});
+
 	it('fits an avatar to the server\'s limits', async () => {
 		const { codec, encodes } = fakeCodec(1000, 1000, (w) => (w > 128 ? 50_000 : 20_000));
 		const prepared = await prepareAvatar(file(png(), 'me.png', 'image/png'), { codec, limits: { 'image/*': { max_bytes: 30_000, max_side: 128 } } });

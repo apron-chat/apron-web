@@ -5,8 +5,9 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, findMessage, keepsBio, normalizeWebSocketUrl, pushesJoined, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
+	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
 	import { readApronLink, writeApronLink, type ApronLink } from '$lib/ui/apron-link';
@@ -49,7 +50,7 @@
 	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
 	import { couldNotAdd } from '$lib/ui/members';
 	import { roomFaces } from '$lib/ui/faces';
-	import { composerAction } from '$lib/ui/commands';
+	import { attachmentLimits, composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
@@ -64,7 +65,7 @@
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { WIDE_MIN } from '$lib/ui/breakpoints';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -211,12 +212,8 @@
 		void notifyScopesSaved;
 		return notifyScopesOf(loadNotifyScopes(notifyKey));
 	});
-	/**
-	 * The wake scopes the server pushes for you (§4.9; `joined` only where your
-	 * permissions say so, EXT.md §7), and the `wake` push sends: the checked
-	 * ones of them. A change of permissions registers again at once.
-	 */
-	let webPushOffered = $derived(offeredWake(session.server?.push, pushesJoined(session.server, session.you)));
+	/** The wake scopes the server pushes (§4.9), and the `wake` push sends: the checked ones of them. */
+	let webPushOffered = $derived(offeredWake(session.server?.push));
 	let webPushWake = $derived(pushWake(notifyScopes, webPushOffered));
 	/** Why push doesn't work: the browser couldn't subscribe, or the server refused the registration. */
 	let webPushError = $derived(pushSettings.error ?? session.snapshot.pushError);
@@ -508,6 +505,16 @@
 		: undefined);
 	// `server.agent` names the implementation, for debugging, not the server: the host is the label.
 	let backendLabel = $derived(backendHost(serverInput) || 'Apron');
+	/** How the connected server shows itself (§3.1): its title and avatar, never what it is known by (§1). */
+	let currentLook = $derived(client && session.server ? serverLook(session.server, client.url) : {});
+	// A recent server keeps how its latest `server` frame shows it, for the connect screen while it isn't connected.
+	$effect(() => {
+		const url = client?.url;
+		const live = session.snapshot.server;
+		if (previewMode || !url || !live) return;
+		const look = serverLook(live, url);
+		untrack(() => (recentServers = refreshRecentServer(recentServers, url, look)));
+	});
 	// A thread kept through a reconnect counts what it had while it catches up, rather than the count going and coming back.
 	let threadReplyCount = $derived(threadRoom?.loaded || threadRoom?.resumed ? messages.length : undefined);
 	/** Messages after the newest you had on screen, by `message_id`, so older ones loading above don't count. */
@@ -530,10 +537,10 @@
 	let canStartThreads = $derived(session.canManageRooms && !session.readOnly && Boolean(activeRoom) && activeRoom?.parentRoomId === undefined);
 	/** Editing the open room's or thread's title and description (capability `rooms`); the server decides who may. */
 	let canEditPane = $derived(session.canManageRooms && !session.readOnly && Boolean(activeThread ? activeThreadEntry : activeRoom));
-	/** What the Edit form edits: the open thread, else the room. */
+	/** What the Edit form edits: the open thread, else the room; its title as written (`editableTitle`), so saving sends back every character. */
 	let editTarget = $derived(activeThread
-		? (activeThreadEntry ? { id: activeThreadEntry.id, title: activeThreadEntry.title, description: activeThreadEntry.description } : undefined)
-		: (activeRoom ? { id: activeRoom.id, title: activeRoom.title, description: activeRoom.description } : undefined));
+		? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.rooms.find((room) => room.id === activeThreadEntry?.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
+		: (activeRoom ? { id: activeRoom.id, title: editableTitle(activeRoom), description: activeRoom.description } : undefined));
 	/** Room and thread descriptions put away with their ×, on this device. */
 	let hiddenDescriptions = $state(loadHiddenDescriptions());
 	/** Whether the open room's or thread's description is put away: the header's Description brings it back. */
@@ -542,6 +549,12 @@
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneSteady);
+	/**
+	 * Adding others to the open pane's room: anywhere with `add_members` (`ext:permissions`), or on a server without
+	 * that extension, where the server answers `denied` if it won't; else only to a private room you are a member of
+	 * (§4.2.4), whose members add people to it.
+	 */
+	let canAddMembers = $derived(canChangeMembers && (yourPermissions(session.server, session.you).add_members || Boolean(paneRoom?.private && paneRoom.joined)));
 	/**
 	 * Starting a private conversation (§4.2.4): the + beside Private and a profile card's Message, for an account
 	 * signed in (not a guest) on a server that creates rooms (capability `rooms`).
@@ -1378,7 +1391,7 @@
 
 	function connected(): void {
 		if (previewMode) return;
-		if (client) recentServers = rememberServer(recentServers, client.url, backendHost(client.url) || undefined);
+		if (client) recentServers = rememberServer(recentServers, client.url, currentLook);
 		connectOpen = false;
 		offeringLink = false;
 	}
@@ -1928,6 +1941,10 @@
 		const staged = drafts.files;
 		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: false });
 		const command = action.kind === 'command';
+		// `/emoji add` takes its image to the server's emoji limits (`ext.media.emoji`), not those it was staged to.
+		const media = serverMedia(session.server);
+		const limits = attachmentLimits(action, media);
+		const refit = limits !== media.upload ? staged.map(({ file }) => prepareUpload(file, { limits })) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
 		const mentions = composerMentions;
 		const dismissed = composerDismissed;
@@ -1941,15 +1958,22 @@
 		composer?.focus();
 		feedback.pending(staged.length === 1 ? `Uploading ${staged[0].title || staged[0].file.name || 'file'}…` : `Uploading ${staged.length} files…`);
 		// A file that couldn't be readied was already taken off with its reason; the rest go.
-		const readied = await Promise.allSettled(staged.map(({ prepared }) => prepared));
+		const readied = await Promise.allSettled(refit ?? staged.map(({ prepared }) => prepared));
 		// Each goes out under the name it was given on the draft, if it was renamed.
 		const files = readied.flatMap((result, index) => (result.status === 'fulfilled' ? [{ ...result.value, ...(staged[index].title ? { title: staged[index].title } : {}) }] : []));
 		const kept = staged.filter((_, index) => readied[index].status === 'fulfilled');
-		const restore = () => {
-			if (!drafts.restore(originKey, draft, reply, kept)) return;
+		const restore = (back = kept) => {
+			if (!drafts.restore(originKey, draft, reply, back)) return;
 			composerDismissed = dismissed;
 			composer?.focus();
 		};
+		// One `/emoji add` can't take is handed back with the draft, unsent, with the reason.
+		const refused = refit && readied.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+		if (refused) {
+			feedback.error(refused.reason, 'Unable to attach the file');
+			restore(staged);
+			return;
+		}
 		if (client !== chat) {
 			restore();
 			return;
@@ -2214,7 +2238,7 @@
 	/** A message's reaction chips, from the timeline of the room it lives in. */
 	function reactionsFor(event: MessageRecord): ReactionChip[] {
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
-		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user));
+		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.resolveEmoji);
 	}
 
 	function react(event: MessageRecord, emoji: string): void {
@@ -2482,7 +2506,7 @@
 	 * the server decides whose it lets you move, and a refusal moves none (MessageSelection.move).
 	 */
 	function canSelect(event: MessageRecord): boolean {
-		return session.canEdit && !event.deleted && event.room_id === paneRoom?.id;
+		return session.canEdit && !session.readOnly && !event.deleted && event.room_id === paneRoom?.id;
 	}
 
 	/** Whether a picked message is yours, which the server always lets you move. */
@@ -2501,13 +2525,12 @@
 	 * Who comes along when picked messages move into a thread: each moved
 	 * message's author not in it yet is added to it (§4.2.2), so they still
 	 * see their messages. Only where this viewer may add people: with
-	 * `server.ext.settings.add_members` on, or with `add_members` in
-	 * `you.ext.permissions`, or in a private room, whose members add people
-	 * to it (§4.2.4) whatever the setting says.
+	 * `add_members` in `you.ext.permissions` (or without that extension), or
+	 * in a private room, whose members add people to it (§4.2.4).
 	 */
 	function moveAuthors(): MoveAuthors | undefined {
 		if (!canChangeMembers || session.snapshot.memberChangesUnsupported) return undefined;
-		if (!activeRoom?.private && !serverSettings(session.server).add_members && !yourPermissions(session.server, session.you).add_members) return undefined;
+		if (!activeRoom?.private && !yourPermissions(session.server, session.you).add_members) return undefined;
 		return {
 			of: (id) => resolveMessage(id)?.from?.user_id,
 			skip: (userId, room) => userId === session.you?.user_id || Boolean(session.rooms.find((other) => other.id === room)?.members?.some((member) => member.user_id === userId))
@@ -2516,7 +2539,8 @@
 
 	/** What the toolbar offers: only what the server can do, and only on messages this viewer may change. */
 	function capsFor(event: MessageRecord): MessageCaps {
-		const own = session.canEdit && isOwn(event, session.you);
+		// Edits, moves and deletes are `message` requests: a reader who may not write makes none (`ext:permissions`).
+		const own = session.canEdit && !session.readOnly && isOwn(event, session.you);
 		return {
 			reply: canCompose && !event.deleted,
 			edit: own && !event.deleted,
@@ -2751,8 +2775,8 @@
 		current={{
 			url: client.url, keptSession: Boolean(snapshot.keptSession),
 			...(links.asked.server && links.asked.server !== client.url ? { targetKeptSession: client.keptSessionFor(links.asked.server) } : {}),
-			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${session.you.name} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}),
-			...(snapshot.authenticated && snapshot.you && snapshot.server?.auth.some((scheme) => scheme === 'email' || scheme === 'external') ? { addAs: snapshot.you.name ? `${snapshot.you.name} (@${snapshot.you.user_id})` : `@${snapshot.you.user_id}` } : {})
+			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${withoutBidiOverrides(session.you.name)} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}),
+			...(snapshot.authenticated && snapshot.you && snapshot.server?.auth.some((scheme) => scheme === 'email' || scheme === 'external') ? { addAs: snapshot.you.name ? `${withoutBidiOverrides(snapshot.you.name)} (@${snapshot.you.user_id})` : `@${snapshot.you.user_id}` } : {})
 		}}
 		onconfirm={() => links.confirm()} onadd={() => links.addAsked()} oncancel={() => links.cancel()}
 	/>
@@ -2798,7 +2822,7 @@
 	{#snippet sideToggle()}<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />{/snippet}
 	{#snippet side()}
 		<Sidebar
-			client={client!} {session} {backendLabel} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
+			client={client!} {session} {backendLabel} serverLook={currentLook} serverAddress={client?.url} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
@@ -2949,7 +2973,7 @@
 					oncancel={() => { selection.cancel(); composer?.focus(); }}
 				/>
 			{:else if session.readOnly}
-				<ReadOnlyBar {passkeyUnavailable} onsignin={() => openConnect({ signIn: true })} />
+				<ReadOnlyBar guest={!session.passkeySession} {passkeyUnavailable} onsignin={() => openConnect({ signIn: true })} />
 			{:else}
 				<Composer
 					bind:this={composer}
@@ -2975,7 +2999,7 @@
 		{/if}
 	{/snippet}
 	{#snippet members()}
-		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} />
+		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} canAdd={canAddMembers} />
 	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
@@ -2996,7 +3020,7 @@
 		<NewPrivateDialog client={client!} {session} enabled={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopen={openPrivateRoom} onclose={() => (newPrivateOpen = false)} />
 	{/if}
 	<!-- Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut. -->
-	<ProfileCard {client} {session} room={paneRoom} canChange={canChangeMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
+	<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	<ReactorsPopover />
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
 	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />

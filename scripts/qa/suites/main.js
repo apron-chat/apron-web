@@ -131,7 +131,9 @@ export default {
 			name: 'connection',
 			viewports: ['desktop'],
 			steps: async (p) => {
-				await pressButton(p, 'Connection settings');
+				await press(p.getByRole('button', { name: /^Your profile/ }));
+				await wait(p, 300);
+				await pressButton(p, 'Connect to a server…');
 				await wait(p, 500);
 			}
 		},

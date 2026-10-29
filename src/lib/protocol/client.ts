@@ -128,13 +128,14 @@ import {
 	type TypingState,
 	type ValidHistoryResponse
 } from './client-internals';
-import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, serverSettings } from './client-views';
+import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, serverAddress, serverSettings, yourPermissions } from './client-views';
+import { reactionKey } from './custom-emoji';
 import { HistoryQueue } from './history-queue';
 
 export * from './client-types';
 export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
-export { IDLE_RETRY_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
-export type { MediaLimit, MediaTypes, ServerMedia } from './client-views';
+export { editableTitle, IDLE_RETRY_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
+export type { MediaLimit, MediaTypes, Permissions, ServerLook, ServerMedia } from './client-views';
 export {
 	bioOf,
 	canEdit,
@@ -150,9 +151,11 @@ export {
 	MAX_BIO_CHARS,
 	mediaLimit,
 	normalizeWebSocketUrl,
+	sameServer,
+	serverAddress,
+	serverLook,
 	peopleTitle,
 	PRIVATE_ROOM,
-	pushesJoined,
 	serverMedia,
 	serverSettings,
 	timelineMessages,
@@ -161,6 +164,15 @@ export {
 	webPushKey,
 	yourPermissions
 } from './client-views';
+
+/** A server URL as its address (§1, `serverAddress`), or as given when it isn't a URL. */
+function addressOf(url: string): string {
+	try {
+		return serverAddress(url);
+	} catch {
+		return url;
+	}
+}
 
 /**
  * A browser-only Apron protocol v9 session; instantiate one per mounted UI.
@@ -457,6 +469,8 @@ export class ChatClient {
 		private readonly now: () => number = () => Date.now(),
 		{ historyStart = 'newest', historyConcurrency }: Pick<ChatClientOptions, 'historyStart' | 'historyConcurrency'> = {}
 	) {
+		// A server is known by its normalized address (§1): its kept session too.
+		this.serverUrl = addressOf(serverUrl);
 		this.historyStart = historyStart;
 		this.historyQueue = new HistoryQueue({
 			send: (params, allowBeforeAuth) => this.enqueueRequest('history', params, { visible: false, allowBeforeAuth }),
@@ -480,7 +494,7 @@ export class ChatClient {
 	}
 
 	setUrl(serverUrl: string): void {
-		const nextUrl = serverUrl.trim();
+		const nextUrl = addressOf(serverUrl.trim());
 		if (!nextUrl || nextUrl === this.serverUrl) return;
 		this.switchServer(nextUrl);
 		if (this.running) this.restart();
@@ -695,7 +709,7 @@ export class ChatClient {
 			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith, signInMethods: [this.signedInWith, ...[...this.addedMethods].filter((method) => method !== this.signedInWith)] } : {}),
 			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
 			...(this.passkeyAbort ? { passkeyBusy: !this.adding } : {}),
-			readOnly: this.authenticated && !this.registeredSession && !serverSettings(this.server).guest_posting,
+			readOnly: this.authenticated && !yourPermissions(this.server, this.you).write,
 			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
 			...(this.mutedUntil !== undefined ? { mutedUntil: this.mutedUntil } : {}),
 			...(roomMutes.length ? { roomMutes: Object.fromEntries(roomMutes) } : {}),
@@ -1629,10 +1643,15 @@ export class ChatClient {
 		return request;
 	}
 
-	/** Adds the emoji to your set on the message, or removes it when present. */
+	/**
+	 * Adds the emoji (or key) to your set on the message, or removes it when
+	 * present: in any form that differs only in U+FE0F, which is the same
+	 * entry (§4.7).
+	 */
 	toggleReaction(messageId: string, emoji: string): OperationHandle {
 		const current = this.ownReactions(messageId);
-		const next = current.includes(emoji) ? current.filter((entry) => entry !== emoji) : [...current, emoji];
+		const key = reactionKey(emoji);
+		const next = current.some((entry) => reactionKey(entry) === key) ? current.filter((entry) => reactionKey(entry) !== key) : [...current, emoji];
 		return this.react(messageId, next);
 	}
 
@@ -2799,6 +2818,10 @@ export class ChatClient {
 			auth,
 			...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
 			...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
+			// How it shows itself (§3.1): never what it is known by, its address (§1).
+			...(typeof params.title === 'string' ? { title: params.title } : {}),
+			...(typeof params.description === 'string' ? { description: params.description } : {}),
+			...(typeof params.avatar === 'string' ? { avatar: params.avatar } : {}),
 			...(isJsonObject(params.ext) ? { ext: params.ext } : {}),
 			...(isJsonObject(params.push) ? { push: params.push } : {}),
 			...(Array.isArray(params.status) ? { status: params.status.filter(isString) } : {}),
@@ -4412,6 +4435,7 @@ export class ChatClient {
 		let method: string | null = null;
 		let added: string | null = null;
 		try {
+			this.adoptSessionKeptUnnormalized();
 			stored = globalThis.localStorage?.getItem(this.sessionStorageKey()) ?? null;
 			method = globalThis.localStorage?.getItem(this.signInMethodKey()) ?? null;
 			added = globalThis.localStorage?.getItem(this.addedMethodsKey()) ?? null;
@@ -4426,6 +4450,30 @@ export class ChatClient {
 		this.addedMethods = new Set(readMethods(added));
 	}
 
+	/**
+	 * A session kept under this server's address as it was written before
+	 * addresses were normalized (§1), such as `wss://Chat.Example:443`, moves
+	 * to this address's keys, with how it signed in. Only when none is kept here.
+	 */
+	private adoptSessionKeptUnnormalized(): void {
+		const storage = globalThis.localStorage;
+		if (!storage || storage.getItem(this.sessionStorageKey()) !== null) return;
+		const prefix = 'apron.session:';
+		for (let index = 0; index < storage.length; index++) {
+			const key = storage.key(index);
+			if (!key?.startsWith(prefix)) continue;
+			const url = key.slice(prefix.length);
+			if (url === this.serverUrl || addressOf(url) !== this.serverUrl) continue;
+			for (const kind of [prefix, 'apron.signin:', 'apron.signin-added:']) {
+				const value = storage.getItem(`${kind}${url}`);
+				if (value === null) continue;
+				storage.setItem(`${kind}${this.serverUrl}`, value);
+				storage.removeItem(`${kind}${url}`);
+			}
+			return;
+		}
+	}
+
 	private addedMethodsKey(): string {
 		return `apron.signin-added:${this.serverUrl}`;
 	}
@@ -4436,7 +4484,7 @@ export class ChatClient {
 	 */
 	keptSessionFor(url: string): boolean {
 		try {
-			return Boolean(globalThis.localStorage?.getItem(`apron.session:${url}`));
+			return Boolean(globalThis.localStorage?.getItem(`apron.session:${addressOf(url)}`));
 		} catch {
 			return false;
 		}

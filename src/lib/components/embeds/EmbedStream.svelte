@@ -3,6 +3,7 @@
 	import DesignEmbedStream from '$lib/design/components/EmbedStream.svelte';
 	import { readStream, sameOriginMedia } from '$lib/protocol/embeds';
 	import { renderMarkdown } from '$lib/protocol/markdown';
+	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import type { Embed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
@@ -23,7 +24,8 @@
 	let streamed = $state('');
 	let ended = $state(false);
 	let live = $derived(Boolean(url) && !ended && embed.text === undefined);
-	let text = $derived(embed.text !== undefined ? String(embed.text) : streamed);
+	// Shown without bidi embeddings and overrides (§3.5.2), as it streams too.
+	let text = $derived(embed.text !== undefined ? String(embed.text) : withoutBidiOverrides(streamed));
 	let terminal = $derived(format === 'terminal' ? renderTerminal(text) : []);
 	/** Highlights the Markdown's fenced code blocks as they arrive. */
 	const highlight = fromAction(highlightCode, () => text);

@@ -2,6 +2,7 @@ import { childRooms, timelineMessages, type Notice, type RoomListing, type RoomR
 import { compareLogIds, type MembershipRecord } from '$lib/protocol/reducer';
 import { isLogId, type Identity, type MessageRecord } from '$lib/protocol/types';
 import { markdownText } from '$lib/protocol/markdown';
+import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { isBaseline, MembershipRun } from './membership';
 import { embedsOf, isOwn, senderName, textOf } from './messages';
 import { dayKey, dayKeyOf, dayLabel, dayLabelOf, isGrouped } from './time';
@@ -205,7 +206,7 @@ export function threadLatest(entry: Pick<ThreadEntry, 'latestMessage'>): { sende
 	const event = entry.latestMessage;
 	if (!event) return undefined;
 	if (event.deleted) return { sender: '', text: 'Message deleted' };
-	const text = textOf(event).replace(/\s+/g, ' ').trim();
+	const text = withoutBidiOverrides(textOf(event)).replace(/\s+/g, ' ').trim();
 	return { sender: senderName(event), text: text || (embedsOf(event).length ? 'Attachment' : 'Empty message') };
 }
 
@@ -461,7 +462,7 @@ export function buildThreadTimeline({ messages, renames = [], now = new Date(), 
 		for (; next < renames.length && (before === undefined || compareLogIds(renames[next].log_id, before) < 0); next++) {
 			const rename = renames[next];
 			pushDay(rename.log_id);
-			items.push({ kind: 'renamed', key: `renamed:${rename.log_id}`, logId: rename.log_id, title: rename.title });
+			items.push({ kind: 'renamed', key: `renamed:${rename.log_id}`, logId: rename.log_id, title: withoutBidiOverrides(rename.title) });
 			previous = undefined;
 		}
 	};

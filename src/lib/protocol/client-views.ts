@@ -1,6 +1,6 @@
 /** Pure helpers over client snapshots, capabilities, and server URLs. */
-import { parseOrigins } from './embeds';
-import { cleanPlainText } from './plain-text';
+import { parseOrigins, safeAvatar, serverOrigin } from './embeds';
+import { cleanPlainText, withoutBidiOverrides } from './plain-text';
 import { timelineEvents } from './reducer';
 import { isJsonObject } from './types';
 import type {
@@ -77,16 +77,18 @@ export const canReact = (server: ServerParams | undefined) => hasCapability(serv
 export const hasHistory = (server: ServerParams | undefined) => hasCapability(server, 'history');
 
 /**
- * The server's settings (extension `ext:settings`, `server.ext.settings`),
- * each `true` unless the server says `false`: also without the extension.
+ * The server's settings (extension `ext:settings`, `server.ext.settings`):
+ * `read_cursors` is `true` unless the server says `false`, also without the
+ * extension; `private_rooms` only as a count. A value of the wrong type takes
+ * its default.
  */
-export function serverSettings(server: ServerParams | undefined): { guest_posting: boolean; read_cursors: boolean; add_members: boolean; private_rooms?: number } {
+export function serverSettings(server: ServerParams | undefined): { read_cursors: boolean; private_rooms?: number } {
 	const ext = hasCapability(server, 'ext:settings') ? server?.ext : undefined;
 	const settings = isJsonObject(ext) && isJsonObject(ext.settings) ? ext.settings : {};
-	// A number, unlike the rest: the most private rooms one user may be in at once. Absent (or not a count) states no limit.
+	// The most private rooms one user may be a member of. Absent (or not a count) states no limit.
 	const limit = settings.private_rooms;
 	return {
-		guest_posting: settings.guest_posting !== false, read_cursors: settings.read_cursors !== false, add_members: settings.add_members !== false,
+		read_cursors: settings.read_cursors !== false,
 		...(typeof limit === 'number' && Number.isInteger(limit) && limit >= 0 ? { private_rooms: limit } : {})
 	};
 }
@@ -102,28 +104,45 @@ export const PRIVATE_ROOM = 'Private room';
  */
 export function peopleTitle(names: readonly string[]): string {
 	if (!names.length) return 'You';
-	return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) || a.localeCompare(b)).join(', ');
+	// Shown, so without bidi embeddings and overrides (§3.5.2).
+	return names.map(withoutBidiOverrides).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) || a.localeCompare(b)).join(', ');
 }
+
+/** What the client offers the signed-in user (`ext:permissions`, `you.ext.permissions`). */
+export interface Permissions {
+	/** May send the requests of `ext:limits`' `write` row: post, react, join, leave, and change rooms. */
+	write: boolean;
+	/** Offer adding other users to any room (`room_join` with a `user_id`); without it, only to the private rooms they are a member of. */
+	add_members: boolean;
+	/** May move other users' messages; without it, only their own. */
+	move_any: boolean;
+}
+
+/** The extension's defaults, for each key that is absent. */
+const DEFAULT_PERMISSIONS: Permissions = { write: true, add_members: false, move_any: false };
+
+/**
+ * Without the extension: what PROTOCOL.md allows. Any member may ask to add
+ * others to any room (§4.2.2), and the server answers `denied` or
+ * `unsupported` where it doesn't let them; moves stay with your own
+ * messages.
+ */
+const CORE_PERMISSIONS: Permissions = { write: true, add_members: true, move_any: false };
 
 /**
  * What the signed-in user may do that the core leaves to the server
- * (extension `ext:permissions`, `you.ext.permissions`): move other users'
- * messages, add other users to rooms, and be pushed for wake scope
- * `joined`. Read from `you` only; each is `false` without the extension.
+ * (extension `ext:permissions`, `you.ext.permissions`), read from `you`
+ * only. Each key that is absent or not a boolean takes its default (`write`
+ * on, the rest off); so does every key when `permissions` isn't an object.
+ * Without the extension the client offers what PROTOCOL.md allows instead
+ * (CORE_PERMISSIONS), and handles the server's refusals.
  */
-export function yourPermissions(server: ServerParams | undefined, you: Identity | undefined): { move_any: boolean; add_members: boolean; push_joined: boolean } {
-	const ext = hasCapability(server, 'ext:permissions') ? you?.ext : undefined;
-	const granted: unknown[] = isJsonObject(ext) && Array.isArray(ext.permissions) ? ext.permissions : [];
-	return { move_any: granted.includes('move_any'), add_members: granted.includes('add_members'), push_joined: granted.includes('push_joined') };
-}
-
-/**
- * Whether push wakes you for `joined` where `server.push.wake` lists it: on a
- * server with `ext:permissions`, only with `push_joined` (EXT.md §7); on any
- * other, as listed.
- */
-export function pushesJoined(server: ServerParams | undefined, you: Identity | undefined): boolean {
-	return !hasCapability(server, 'ext:permissions') || yourPermissions(server, you).push_joined;
+export function yourPermissions(server: ServerParams | undefined, you: Identity | undefined): Permissions {
+	if (!hasCapability(server, 'ext:permissions')) return { ...CORE_PERMISSIONS };
+	const ext = you?.ext;
+	const granted = isJsonObject(ext) && isJsonObject(ext.permissions) ? ext.permissions : {};
+	const flag = (key: keyof Permissions) => (typeof granted[key] === 'boolean' ? (granted[key] as boolean) : DEFAULT_PERMISSIONS[key]);
+	return { write: flag('write'), add_members: flag('add_members'), move_any: flag('move_any') };
 }
 
 /** The longest bio (extension `ext:bio`), in characters (code points). */
@@ -145,13 +164,40 @@ export function bioOf(user: Identity | undefined): string | undefined {
 	return typeof bio === 'string' ? cleanBio(bio) || undefined : undefined;
 }
 
+/** How a server shows itself (§3.1), where people pick it or sign in to it, always beside its address. */
+export interface ServerLook {
+	/** Its `title`, plain text; absent without one, when clients show its address. */
+	title?: string;
+	/** Its `description`, CommonMark. */
+	description?: string;
+	/** Its `avatar`, where the client loads it as a user's (§4.8.6): `https:`, a small image data URL, or its own origin. */
+	avatar?: string;
+}
+
+/**
+ * How the server at `url` shows itself, from its `server` frame (§3.1): each
+ * field only as a non-blank string, as shown, without bidi embeddings and
+ * overrides (§3.5.2), and the avatar only from a source that avatars load
+ * from. A server is never known by these (§1).
+ */
+export function serverLook(server: ServerParams | undefined, url: string | undefined): ServerLook {
+	const text = (value: unknown) => {
+		const shown = typeof value === 'string' ? withoutBidiOverrides(value).trim() : '';
+		return shown || undefined;
+	};
+	const title = text(server?.title);
+	const description = text(server?.description);
+	const avatar = safeAvatar(server?.avatar, url ? serverOrigin(url) : undefined);
+	return { ...(title ? { title } : {}), ...(description ? { description } : {}), ...(avatar ? { avatar } : {}) };
+}
+
 /** What a server takes of one type of file (`ext:media`): the largest file, and the longest image side it keeps. */
 export interface MediaLimit {
 	max_bytes?: number;
 	max_side?: number;
 }
 
-/** A category of files (`ext:media` `upload` or `avatar`): each MIME pattern it takes (`type/subtype`, `type/*`, `*\/*`), with its limits. */
+/** A category of files (`ext:media` `upload`, `avatar` or `emoji`): each MIME pattern it takes (`type/subtype`, `type/*`, `*\/*`), with its limits. */
 export type MediaTypes = Record<string, MediaLimit>;
 
 /** What a server says about media (`ext:media`): origins besides its own, and the files it takes, by category. */
@@ -162,6 +208,8 @@ export interface ServerMedia {
 	upload?: MediaTypes;
 	/** `/avatar` (§4.8.6). Absent: nothing is known. */
 	avatar?: MediaTypes;
+	/** Custom emoji images, as `/emoji add` takes them (`ext:emoji`). Absent: nothing is known. */
+	emoji?: MediaTypes;
 }
 
 const MIME_PATTERN = /^(\*\/\*|[\w!#$&^.+-]+\/(\*|[\w!#$&^.+-]+))$/;
@@ -178,7 +226,8 @@ export function serverMedia(server: ServerParams | undefined): ServerMedia {
 	const media = isJsonObject(ext) && isJsonObject(ext.media) ? ext.media : {};
 	const upload = mediaTypes(media.upload);
 	const avatar = mediaTypes(media.avatar);
-	return { origins: parseOrigins(media.origins), ...(upload ? { upload } : {}), ...(avatar ? { avatar } : {}) };
+	const emoji = mediaTypes(media.emoji);
+	return { origins: parseOrigins(media.origins), ...(upload ? { upload } : {}), ...(avatar ? { avatar } : {}), ...(emoji ? { emoji } : {}) };
 }
 
 function mediaTypes(value: unknown): MediaTypes | undefined {
@@ -226,16 +275,48 @@ export function defaultWebSocketUrl(locationLike?: Location): string {
 	return `${protocol}//${locationLike.host}/ws`;
 }
 
+/**
+ * A server's address as clients compare it (§1): the URI normalized by RFC
+ * 3986 §6.2.2 and §6.2.3. The scheme and host are lowercased, a default port
+ * dropped (`80` for `ws:`, `443` for `wss:`), an empty path is `/`, dot
+ * segments go, percent-encoded unreserved characters are decoded and the
+ * rest's hex digits uppercased. A fragment goes too: it names nothing on the
+ * server, and a WebSocket URL can't carry one. `ws:` and `wss:` stay apart.
+ * Throws on a value that isn't a URL.
+ */
+export function serverAddress(value: string): string {
+	// WHATWG URL does the case, the port, the empty path and the dot segments for `ws:` and `wss:`.
+	const url = new URL(value);
+	const percent = (part: string) => part.replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => {
+		const char = String.fromCharCode(parseInt(hex, 16));
+		return /^[A-Za-z0-9._~-]$/.test(char) ? char : `%${hex.toUpperCase()}`;
+	});
+	url.pathname = percent(url.pathname);
+	if (url.search) url.search = percent(url.search);
+	url.hash = '';
+	return url.toString();
+}
+
+/** Whether two addresses are the same server (§1), compared normalized (`serverAddress`); never by title or avatar. */
+export function sameServer(a: string | undefined, b: string | undefined): boolean {
+	if (a === undefined || b === undefined) return false;
+	try {
+		return serverAddress(a) === serverAddress(b);
+	} catch {
+		return a === b;
+	}
+}
+
+/** What the user typed for a server, as its address (`serverAddress`): a WebSocket URL, an HTTP(S) base URL, a path on this host, or a bare host. */
 export function normalizeWebSocketUrl(input: string, locationLike?: Location): string {
 	const value = input.trim();
-	if (!value) return defaultWebSocketUrl(locationLike);
-	if (value.startsWith('ws://') || value.startsWith('wss://')) return new URL(value).toString();
-	if (value.startsWith('http://') || value.startsWith('https://')) {
-		return new URL(value.replace(/^http/, 'ws')).toString();
-	}
+	if (!value) return serverAddress(defaultWebSocketUrl(locationLike));
+	// Schemes are case-insensitive (RFC 3986 §3.1).
+	if (/^wss?:\/\//i.test(value)) return serverAddress(value);
+	if (/^https?:\/\//i.test(value)) return serverAddress(value.replace(/^http/i, 'ws'));
 	if (value.startsWith('/')) {
 		const base = locationLike ? `${locationLike.protocol === 'https:' ? 'wss:' : 'ws:'}//${locationLike.host}` : 'ws://localhost:5173';
-		return `${base}${value}`;
+		return serverAddress(`${base}${value}`);
 	}
-	return new URL(`ws://${value}`).toString();
+	return serverAddress(`ws://${value}`);
 }

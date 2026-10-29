@@ -5,7 +5,7 @@
 
 	/** A part of AppShell, as its `sideToggle` or `membersToggle`. */
 	interface Props {
-		/** The window's corner it sits in: top left for the rooms list, top right for the member list. */
+		/** Its panel's side: left for the rooms list, right for the member list (mirrored under `dir="rtl"`). */
 		side: 'left' | 'right';
 		/** What it shows and hides, as the label says it: "rooms", "member list". */
 		panel: string;
@@ -27,8 +27,9 @@
 </script>
 
 <!--
-	In the window's top corner, over the header beside it: the panel's own while it's open, the conversation's once
-	it's shut. It stays put while its panel slides, so the same spot opens and shuts it.
+	At its panel's inner edge, over a header: the panel's own while it's open (after the rooms list's server, before the
+	member list's Members), the conversation's once it's shut (at the edge the panel shut against). It rides the border as
+	the panel slides, so it's always beside the edge it moves.
 -->
 <button bind:this={button} type="button" aria-label={label} title={label} aria-expanded={open} class={['ap-iconbtn', 'ap-shell-toggle', `ap-shell-toggle-${side}`, className]} onclick={ontoggle}>
 	{#if side === 'left'}<PanelLeft size={18} strokeWidth={1.8} aria-hidden="true" />{:else}<PanelRight size={18} strokeWidth={1.8} aria-hidden="true" />{/if}

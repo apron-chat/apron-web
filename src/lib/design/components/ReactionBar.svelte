@@ -104,7 +104,7 @@
 				onpointerup={cancelPress}
 				onpointercancel={cancelPress}
 				onpointerleave={cancelPress}
-			><span class="ap-rchip-emoji" aria-hidden="true">{c.emoji}</span><span class="ap-rchip-count" aria-hidden="true">{c.count}</span></button>
+			><span class="ap-rchip-emoji" aria-hidden="true">{#if c.image}<img class="ap-cemoji" src={c.image.src} alt="" style:aspect-ratio={c.image.width && c.image.height ? `${c.image.width} / ${c.image.height}` : '1 / 1'} />{:else if c.placeholder}<span class="ap-rchip-placeholder"></span>{:else}{c.emoji}{/if}</span><span class="ap-rchip-count" aria-hidden="true">{c.count}</span></button>
 		{/each}
 		{#if add && !disabled}<button type="button" class="ap-rchip ap-rchip-add" aria-label="Add a reaction" title="Add a reaction" onclick={onopen}>+</button>{/if}
 	</div>

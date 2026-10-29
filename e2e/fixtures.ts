@@ -1,7 +1,7 @@
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
 import type { PreviewKnobs } from '../src/lib/preview/memory-server';
 import { NARROW_MAX, NOW, VIEWPORTS } from '../scripts/qa/lib/helpers.js';
-import { OFFSITE, mockServer } from './mock-server';
+import { OFFSITE, mockServer, type MockOptions } from './mock-server';
 
 export { expect };
 export type { PreviewKnobs };
@@ -59,11 +59,11 @@ export class Preview {
 	 * Opens the app's own route, `/`, against `mockServer` (a scripted backend offering guests, passkeys and
 	 * email), and waits until it is connected as a guest.
 	 */
-	async openRoot(): Promise<void> {
+	async openRoot(options: MockOptions = {}): Promise<void> {
 		const base = process.env.E2E_URL;
 		if (!base) throw new Error('E2E_URL is unset: run through `npm run e2e` (global-setup serves the build).');
 		await this.page.clock.setFixedTime(NOW);
-		await mockServer(this.page);
+		await mockServer(this.page, options);
 		await this.page.goto(`${base}/`);
 		await expect(this.page.getByTestId('connection-status')).toHaveText('Connected');
 	}
@@ -112,6 +112,11 @@ export class Preview {
 		);
 	}
 
+	/** Someone else sets their complete reaction set on a message (§4.7), delivered live. */
+	reactAs(from: string, messageId: string, emojis: string[]): Promise<void> {
+		return this.page.evaluate(([from, messageId, emojis]) => (window as any).__apronPreview.reactAs(from, messageId, emojis), [from, messageId, emojis] as const);
+	}
+
 	/**
 	 * Someone else's shown status changes, as if now (§4.5.2): with capability `status`, `offline` brings a new `seen`,
 	 * now or `recorded` (epoch milliseconds, as a server that records it coarsely might send).
@@ -145,6 +150,17 @@ export class Preview {
 		if (await rooms.isVisible()) return;
 		await this.press(this.page.getByRole('button', { name: 'Back to rooms', exact: true }));
 		await expect(rooms).toBeVisible();
+	}
+
+	/**
+	 * Opens the connect screen as people reach it: the profile's Connect to a server… (on a narrow viewport, from
+	 * the rooms pane). Only on `/` (`openRoot`): the preview has no connect screen.
+	 */
+	async openConnect(): Promise<void> {
+		await this.roomsPane();
+		await this.press(this.page.getByRole('button', { name: /^Your profile on/ }));
+		await this.press(this.page.getByRole('dialog', { name: 'Edit profile', exact: true }).getByRole('button', { name: 'Connect to a server…', exact: true }));
+		await expect(this.page.getByRole('form', { name: 'Sign in' })).toBeVisible();
 	}
 
 	/** Opens a room from the sidebar, by its row's `data-room`, as interop finds it. */

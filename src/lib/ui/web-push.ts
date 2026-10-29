@@ -30,8 +30,8 @@ export interface WebPushPreference {
 /**
  * The wake scopes a server advertises in `server.push.wake` (§4.9), ours or
  * third-party (`ext:`), that it pushes for you: `joined` only while
- * `joined` is true (pushesJoined), so it reads as alerting only while open
- * otherwise, and isn't registered.
+ * `joined` is true, so it reads as alerting only while open otherwise, and
+ * isn't registered.
  */
 export function offeredWake(push: unknown, joined = true): string[] {
 	const wake = push && typeof push === 'object' ? (push as { wake?: unknown }).wake : undefined;

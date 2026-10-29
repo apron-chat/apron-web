@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, peopleTitle, pushesJoined, serverMedia, serverSettings, yourPermissions } from './client-views';
+import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, peopleTitle, serverLook, serverMedia, serverSettings, yourPermissions } from './client-views';
 import type { ServerParams } from './types';
 
 const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 9, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
@@ -8,14 +8,16 @@ describe('serverMedia (ext:media)', () => {
 	const media = {
 		origins: ['https://media.chat.example', 'https://media.chat.example/f', 'http://media.chat.example'],
 		upload: { 'image/*': { max_bytes: 5_242_880, max_side: 2048 }, 'image/gif': { max_bytes: 5_242_880 }, 'audio/*': { max_bytes: 10_485_760 } },
-		avatar: { 'image/*': { max_bytes: 262_144, max_side: 512 } }
+		avatar: { 'image/*': { max_bytes: 262_144, max_side: 512 } },
+		emoji: { 'image/png': { max_bytes: 262_144 }, 'image/gif': { max_bytes: 262_144 }, 'image/webp': { max_bytes: 262_144, max_side: 128 } }
 	};
 
 	it('reads the media only while the server advertises the extension', () => {
 		expect(serverMedia(server(['ext:media'], { media }))).toEqual({
 			origins: ['https://media.chat.example'],
 			upload: media.upload,
-			avatar: media.avatar
+			avatar: media.avatar,
+			emoji: media.emoji
 		});
 		expect(serverMedia(server([], { media }))).toEqual({ origins: [] });
 		expect(serverMedia(undefined)).toEqual({ origins: [] });
@@ -32,9 +34,11 @@ describe('serverMedia (ext:media)', () => {
 				'*/png': {},
 				nonsense: {}
 			},
-			avatar: ['image/*']
+			avatar: ['image/*'],
+			emoji: { 'Image/GIF': { max_bytes: 0 }, 'image/png': null }
 		};
-		expect(serverMedia(server(['ext:media'], { media: odd }))).toEqual({ origins: [], upload: { 'image/*': {}, 'audio/*': {}, 'image/png': {} } });
+		expect(serverMedia(server(['ext:media'], { media: odd }))).toEqual({ origins: [], upload: { 'image/*': {}, 'audio/*': {}, 'image/png': {} }, emoji: { 'image/gif': {} } });
+		expect(serverMedia(server(['ext:media'], { media: { emoji: 'image/png' } }))).toEqual({ origins: [] });
 	});
 
 	it('takes a file by its most specific pattern, whatever the order of keys', () => {
@@ -57,35 +61,72 @@ describe('serverSettings (ext:settings)', () => {
 		// Only while the server lists the extension.
 		expect(serverSettings(server([], { settings: { private_rooms: 5 } }))).not.toHaveProperty('private_rooms');
 	});
+
+	it('keeps read cursors unless the server says false, and knows no other setting', () => {
+		expect(serverSettings(server(['ext:settings'], { settings: { read_cursors: false } }))).toEqual({ read_cursors: false });
+		for (const odd of [undefined, 'false', 0, null]) expect(serverSettings(server(['ext:settings'], { settings: { read_cursors: odd } })).read_cursors).toBe(true);
+		expect(serverSettings(server([], { settings: { read_cursors: false } })).read_cursors).toBe(true);
+		// Settings that moved to ext:permissions mean nothing here.
+		expect(serverSettings(server(['ext:settings'], { settings: { guest_posting: false, add_members: false } }))).toEqual({ read_cursors: true });
+	});
+});
+
+describe('serverLook (§3.1)', () => {
+	it('reads title, description and avatar as strings, the avatar only from where avatars load (§4.8.6)', () => {
+		const frame = { apron: 9, auth: ['guest'], title: '  Work chat ', description: 'Where **we** talk.', avatar: 'https://cdn.example/icon.png' };
+		expect(serverLook(frame, 'wss://chat.example/ws')).toEqual({ title: 'Work chat', description: 'Where **we** talk.', avatar: 'https://cdn.example/icon.png' });
+		expect(serverLook({ ...frame, avatar: '/icon.png' }, 'wss://chat.example/ws').avatar).toBeUndefined();
+		expect(serverLook({ ...frame, avatar: 'https://chat.example/icon.svg' }, 'wss://chat.example/ws').avatar).toBe('https://chat.example/icon.svg');
+		expect(serverLook({ ...frame, avatar: 'http://chat.example/icon.png' }, 'wss://chat.example/ws').avatar).toBeUndefined();
+		expect(serverLook({ ...frame, avatar: 'javascript:alert(1)' }, 'wss://chat.example/ws').avatar).toBeUndefined();
+		expect(serverLook({ apron: 9, auth: [], title: ' ', description: 7 } as never, 'wss://chat.example/')).toEqual({});
+		expect(serverLook(undefined, undefined)).toEqual({});
+	});
+
+	it('shows the title and description without bidi embeddings and overrides (§3.5.2), the frame kept as sent', () => {
+		const frame = { apron: 9, auth: ['guest'], title: 'Mock\u202E Chat', description: 'Where\u202A **we** talk.' };
+		expect(serverLook(frame, 'wss://chat.example/')).toEqual({ title: 'Mock Chat', description: 'Where **we** talk.' });
+		expect(frame.title).toBe('Mock\u202E Chat');
+		expect(serverLook({ apron: 9, auth: [], title: '\u202E' }, 'wss://chat.example/')).toEqual({});
+	});
 });
 
 describe('peopleTitle', () => {
 	it('names a private room after the others in it, sorted, or "You" alone', () => {
 		expect(peopleTitle(['Mira', 'dev'])).toBe('dev, Mira');
 		expect(peopleTitle(['Bob'])).toBe('Bob');
+		// Shown, so without bidi embeddings and overrides (§3.5.2).
+		expect(peopleTitle(['Mal\u202Elory', 'Bob'])).toBe('Bob, Mallory');
 		expect(peopleTitle([])).toBe('You');
 	});
 });
 
 describe('yourPermissions (ext:permissions)', () => {
-	const you = { user_id: 'ada', roles: ['admin'], ext: { permissions: ['move_any', 7, 'delete_any', 'add_members'] } };
+	const DEFAULTS = { write: true, add_members: false, move_any: false };
 
-	it('reads known permissions from you, only while the server advertises the extension', () => {
-		expect(yourPermissions(server(['ext:permissions']), you)).toEqual({ move_any: true, add_members: true, push_joined: false });
-		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: ['move_any', 'push_joined'] } })).toEqual({ move_any: true, add_members: false, push_joined: true });
-		// Without the extension, or without the list, roles grant nothing.
-		expect(yourPermissions(server([]), you)).toEqual({ move_any: false, add_members: false, push_joined: false });
-		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', roles: ['admin'], ext: { permissions: 'move_any' } })).toEqual({ move_any: false, add_members: false, push_joined: false });
-		expect(yourPermissions(server(['ext:permissions']), undefined)).toEqual({ move_any: false, add_members: false, push_joined: false });
+	it('reads each permission from you, only while the server advertises the extension', () => {
+		const admin = { user_id: 'ada', roles: ['admin'], ext: { permissions: { add_members: true, move_any: true, delete_any: true } } };
+		expect(yourPermissions(server(['ext:permissions']), admin)).toEqual({ write: true, add_members: true, move_any: true });
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'guest_1', ext: { permissions: { write: false } } })).toEqual({ ...DEFAULTS, write: false });
+		// An absent key takes its default while the extension is advertised.
+		expect(yourPermissions(server(['ext:permissions']), undefined)).toEqual(DEFAULTS);
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada' })).toEqual(DEFAULTS);
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: {} } })).toEqual(DEFAULTS);
 	});
 
-	it('takes joined as pushed only with push_joined where the server has the extension, and as listed elsewhere', () => {
-		const granted = { user_id: 'ada', ext: { permissions: ['push_joined'] } };
-		expect(pushesJoined(server(['ext:permissions']), granted)).toBe(true);
-		// Roles grant nothing: an admin without the permission is not pushed for it.
-		expect(pushesJoined(server(['ext:permissions']), you)).toBe(false);
-		expect(pushesJoined(server(['ext:permissions']), undefined)).toBe(false);
-		expect(pushesJoined(server([]), undefined)).toBe(true);
+	it('offers what PROTOCOL.md allows without the extension: writes, adding people anywhere, and moving only your own', () => {
+		const CORE = { write: true, add_members: true, move_any: false };
+		expect(yourPermissions(server([]), { user_id: 'ada' })).toEqual(CORE);
+		expect(yourPermissions(undefined, undefined)).toEqual(CORE);
+		// you.ext.permissions means nothing then, whatever it says.
+		expect(yourPermissions(server([]), { user_id: 'ada', ext: { permissions: { write: false, move_any: true, add_members: false } } })).toEqual(CORE);
+	});
+
+	it('takes the default for a key of the wrong type, and for all of them when permissions is not an object', () => {
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: { write: 'no', move_any: 1, add_members: true } } })).toEqual({ ...DEFAULTS, add_members: true });
+		// The old list of names is the wrong type: nothing in it counts.
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: ['move_any', 'add_members'] } })).toEqual(DEFAULTS);
+		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: 'move_any' } })).toEqual(DEFAULTS);
 	});
 });
 

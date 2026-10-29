@@ -5,6 +5,12 @@ import { NOW } from '../scripts/qa/lib/helpers.js';
 export const OFFSITE = /^https?:\/\/(?!127\.0\.0\.1[:/]|localhost[:/])/;
 
 /**
+ * What a test changes about the scripted server: `server` frame fields (§3.1), fields of `you` (§3.3), and a `token`
+ * its `auth` answers with, which makes the session an account's rather than a guest's.
+ */
+export type MockOptions = { server?: Record<string, unknown>; you?: Record<string, unknown>; token?: string };
+
+/**
  * A scripted server for the app's own route (`/`), which, unlike `/__preview`, connects to a real backend
  * (`wss://server.apron.chat` by default) and shows the connect screen and sign-in. Every WebSocket the page
  * opens is answered here instead, and every request off this machine is refused, so no test reaches the
@@ -12,10 +18,10 @@ export const OFFSITE = /^https?:\/\/(?!127\.0\.0\.1[:/]|localhost[:/])/;
  * `status` (§4.5), General's other members show their status: Bob online, and Ada offline, last seen two hours
  * before the tests' clock (`seen`, §4.5.2).
  */
-export async function mockServer(page: Page): Promise<void> {
+export async function mockServer(page: Page, options: MockOptions = {}): Promise<void> {
 	await page.route(OFFSITE, (route) => route.abort());
 	await page.routeWebSocket(/.*/, (ws) => {
-		const you = { user_id: 'guest_1', name: 'Guest 1', status: 'online' };
+		const you = { user_id: 'guest_1', name: 'Guest 1', status: 'online', ...options.you };
 		// Complete objects, as the listing carries them: the shown status, and `seen` with a shown `offline`.
 		const ada = { user_id: 'ada', name: 'Ada', status: 'offline', seen: String(NOW.getTime() - 2 * 60 * 60 * 1000) };
 		const bob = { user_id: 'bob', name: 'Bob', status: 'online' };
@@ -25,7 +31,7 @@ export async function mockServer(page: Page): Promise<void> {
 			const reply = (result: unknown) => frame.id !== undefined && ws.send(JSON.stringify({ id: frame.id, result }));
 			switch (frame.method) {
 				case 'ping': return ws.send(JSON.stringify({ method: 'pong' }));
-				case 'auth': return reply({ you });
+				case 'auth': return reply({ you, ...(options.token ? { token: options.token } : {}) });
 				case 'room_list': return reply({ joined: [general], users: [you, ada, bob] });
 				// Idle reports (§4.5.3): taken, and kept nowhere.
 				case 'status': return reply({});
@@ -34,6 +40,6 @@ export async function mockServer(page: Page): Promise<void> {
 					if (frame.id !== undefined) ws.send(JSON.stringify({ id: frame.id, error: { code: -32601, message: `Not in the mock: ${frame.method}` } }));
 			}
 		});
-		ws.send(JSON.stringify({ method: 'server', params: { apron: 9, agent: 'apron-e2e-mock', auth: ['guest', 'webauthn', 'email'], signup: ['guest', 'webauthn'], ping: 60, capabilities: ['history', 'rooms', 'status'] } }));
+		ws.send(JSON.stringify({ method: 'server', params: { apron: 9, agent: 'apron-e2e-mock', auth: ['guest', 'webauthn', 'email'], signup: ['guest', 'webauthn'], ping: 60, capabilities: ['history', 'rooms', 'status'], ...options.server } }));
 	});
 }
