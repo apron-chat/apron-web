@@ -1,7 +1,7 @@
 import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /**
- * Coming back from a dropped connection (behavior.md, "A short drop of the connection"): the page stays as it was,
+ * Coming back from a dropped connection (behavior.md, "Quiet reconnects"): the page stays as it was,
  * says nothing for the way back's first moments, nor while a hidden tab waits, and only your own dot shows it.
  * The tab's visibility is played here, since a test's page is never hidden.
  */
