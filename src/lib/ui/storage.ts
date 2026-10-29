@@ -23,7 +23,7 @@ const KEY = {
 	memberSections: 'apron.memberSections',
 	/** Whether Other threads, the threads you haven't joined under the open room, is folded away. */
 	otherThreads: 'apron.otherThreads',
-	/** The sidebar's sections folded to their rows with news (`rooms`, `private`, `more`). */
+	/** The sidebar's sections folded to their rows with news (`rooms`, `private`, `other`). */
 	sidebarFolds: 'apron.sidebarFolds',
 	/** The room and thread descriptions put away with their ×, each kept as the fingerprint of the text put away. Still stored under its old name, so what's put away stays put away. */
 	hiddenDescriptions: 'apron.hiddenSummaries',

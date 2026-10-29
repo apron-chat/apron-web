@@ -95,7 +95,7 @@ until the connection is back. Screen readers hear it as the pill shows it: not
 for those first moments, nor while a hidden tab waits (the status says nothing
 then, rather than "Connected"). A link opened meanwhile waits for the new
 connection's listings before deciding a room or thread isn't there. What was listed before
-the drop stays listed: More rooms, Other threads, and the room's thread cards,
+the drop stays listed: Other Rooms, Other threads, and the room's thread cards,
 until the new connection's listings replace them, so the open room shows what
 came meanwhile without waiting on its thread listing again, and an open
 thread's reply count stays while it catches up.
@@ -810,10 +810,10 @@ The sidebar's section headings fold as picking the open room does: **Rooms** or
 **Private** folds to the rooms with news, in them or in their threads, and
 the open room (which reading would otherwise take away), and the heading shows
 the **…** before its **+**; the **…**, or the heading again, shows them all.
-**More rooms** folds alike, to nothing, as its rooms have no news. Each starts
+**Other Rooms** folds alike, to nothing, as its rooms have no news. Each starts
 open and stays as you left it, on this device.
 
-The sidebar's **Private** section, right below Rooms and above More rooms,
+The sidebar's **Private** section, right below Rooms and above Other Rooms,
 lists every joined top-level private room (`private: true` and no
 `parent_room_id`, [PROTOCOL.md §4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)):
 conversations started with people and titled private rooms alike. Nothing is
@@ -945,7 +945,7 @@ asking, since Join brings it back from the same list. A thread is a room of its
 own, so leaving its parent keeps it. A
 server that keeps you in a room answers `denied`, and its message shows as
 the error.
-**More rooms** in the sidebar lists, via `room_list` with
+**Other Rooms** in the sidebar lists, via `room_list` with
 `filter: "not_joined"`, the most active visible rooms you haven't joined, each
 with its member count and **Join**. It starts open, so a newcomer sees what
 else there is without looking for it, and folds as the other sections do;
@@ -1349,7 +1349,7 @@ as a guest there, the composer gives way to a bar saying so with a **Sign in**
 button (it opens the sign-in panel on Passkey); signed in to an account, the
 bar only says so. Replying, reacting, editing, moving and deleting messages,
 starting threads, editing rooms and threads, adding or removing members, and
-Join and Leave are hidden; a room picked under More rooms (which says no
+Join and Leave are hidden; a room picked under Other Rooms (which says no
 Join) opens to read through its history without joining it, and Other threads
 offers no Join, since picking one already reads it. Other
 servers' denials show as errors as usual.

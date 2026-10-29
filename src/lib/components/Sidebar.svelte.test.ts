@@ -46,7 +46,7 @@ describe('Sidebar', () => {
 		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', threads: [], mentions: {}, unread: {}, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn(), ...props } as never);
 	const names = (testid: string) => [...document.querySelectorAll(`[data-testid="${testid}"] .ap-room-name`)].map((name) => name.textContent);
 
-	it('shows More rooms open from the start, each with its member count and Join, and folds it to nothing, there being no news there', () => {
+	it('shows Other Rooms open from the start, each with its member count and Join, and folds it to nothing, there being no news there', () => {
 		const listRooms = vi.fn((_parent?: string) => Promise.resolve());
 		const client = fake(listRooms);
 		const session = new SessionView();
@@ -56,7 +56,7 @@ describe('Sidebar', () => {
 		sidebar(client, session, { onjoin });
 		flushSync();
 		const toggle = document.querySelector<HTMLButtonElement>('[data-testid="browse-rooms"]')!;
-		expect([toggle.textContent, toggle.getAttribute('aria-expanded')]).toEqual(['More rooms', 'true']);
+		expect([toggle.textContent, toggle.getAttribute('aria-expanded')]).toEqual(['Other Rooms', 'true']);
 		const directory = document.querySelector('[data-testid="room-directory"]')!;
 		expect([...directory.querySelectorAll('.ap-room-topic')].map((topic) => topic.textContent)).toEqual(['12 members · Join', 'Join']);
 		expect(directory.querySelector('.ap-sect-note')).toBeNull();
@@ -67,10 +67,10 @@ describe('Sidebar', () => {
 		expect([toggle.getAttribute('aria-expanded'), names('room-directory')]).toEqual(['false', []]);
 		// Its …, as the heading does, shows them all again, listed afresh.
 		const listed = listRooms.mock.calls.length;
-		dom.button('Show all More rooms').click();
+		dom.button('Show all Other Rooms').click();
 		flushSync();
 		expect([toggle.getAttribute('aria-expanded'), names('room-directory'), listRooms.mock.calls.length]).toEqual(['true', ['Design', 'Quiet'], listed + 1]);
-		expect(dom.queryByRole('button', 'Show all More rooms')).toBeNull();
+		expect(dom.queryByRole('button', 'Show all Other Rooms')).toBeNull();
 		session.dispose();
 	});
 

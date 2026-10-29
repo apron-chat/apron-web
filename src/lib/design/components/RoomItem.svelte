@@ -9,7 +9,7 @@
 	import { roomName } from './util';
 
 	/**
-	 * A room's row in the rooms list, or a listed room's under More rooms (with its `topic`, joined by picking it).
+	 * A room's row in the rooms list, or a listed room's under Other Rooms (with its `topic`, joined by picking it).
 	 * A thread's row is a <ThreadItem>. The row's button names the room in `data-room`, or in `data-join` while `listed`.
 	 */
 	interface Props {
@@ -42,7 +42,7 @@
 		onnewthread?: () => void;
 		/** The open room folded to its threads with news: a "…" pill at the end of its row, before its +, that shows them all. */
 		onexpand?: () => void;
-		/** Listed under More rooms, and joined by picking it, rather than one of your rooms. */
+		/** Listed under Other Rooms, and joined by picking it, rather than one of your rooms. */
 		listed?: boolean;
 		/** The row's tooltip, such as an untitled room's `room_id`. */
 		title?: string;

@@ -60,8 +60,8 @@ describe('preference storage', () => {
 		expect(loadShutMemberSections()).toEqual(['offline']);
 		// The sidebar's sections folded to what has news, the same way.
 		expect(loadFoldedSections()).toEqual([]);
-		saveFoldedSections(['rooms', 'more']);
-		expect(loadFoldedSections()).toEqual(['rooms', 'more']);
+		saveFoldedSections(['rooms', 'other']);
+		expect(loadFoldedSections()).toEqual(['rooms', 'other']);
 		values.set('apron.sidebarFolds', '{');
 		expect(loadFoldedSections()).toEqual([]);
 		values.set('apron.memberSections', '{"offline":true}');

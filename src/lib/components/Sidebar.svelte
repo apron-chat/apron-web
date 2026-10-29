@@ -87,7 +87,7 @@
 	/**
 	 * The sections folded to their rows with news, as picking the open room folds its threads: Rooms and Private keep the
 	 * rooms with unread messages or mentions, in them or their threads, and the open one, which reading would otherwise
-	 * take away; More rooms, whose rooms have none, keeps nothing. All open from the start, and kept as left, on this device.
+	 * take away; Other Rooms, whose rooms have none, keeps nothing. All open from the start, and kept as left, on this device.
 	 */
 	let folds = $state(new Set(loadFoldedSections()));
 	function fold(key: string, folded: boolean): void {
@@ -113,11 +113,11 @@
 	let roomsKey = $derived([...rooms, ...privateRooms].filter((room) => room.joined).map((room) => room.id).join('\u0000'));
 	/**
 	 * How long a listing made in the background is reused, a client choice: switching between rooms shouldn't list
-	 * again each time, and any server may rate-limit `room_list`. Joining or leaving lists afresh (the client drops what it changed), and so does opening More rooms.
+	 * again each time, and any server may rate-limit `room_list`. Joining or leaving lists afresh (the client drops what it changed), and so does opening Other Rooms.
 	 */
 	const BACKGROUND_LISTING_MS = 60_000;
 
-	// More rooms and Other threads show only when there is something to join, so list both in the background:
+	// Other Rooms and Other threads show only when there is something to join, so list both in the background:
 	// the rooms whenever the rooms you've joined change, and the active room's threads whenever it or what you've
 	// joined changes. Threads you haven't joined deliver nothing live (§3.4): this listing is also what brings their
 	// cards up to date. One refused for a while lists again once the wait is over.
@@ -198,8 +198,8 @@
 		{/if}
 		{#if canBrowse && unjoined.length > 0}
 			<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
-			<SidebarSection title="More rooms" folded={folds.has('more')} onfold={(folded) => { fold('more', folded); if (!folded) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
-				{#if !folds.has('more')}
+			<SidebarSection title="Other Rooms" folded={folds.has('other')} onfold={(folded) => { fold('other', folded); if (!folded) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
+				{#if !folds.has('other')}
 					{#each unjoined as listing (listing.id)}
 						<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
 						{@const members = listing.memberCount ?? listing.members.length}

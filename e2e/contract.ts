@@ -140,7 +140,7 @@ export const SCENES: Scene[] = [
 			await expect(embeds.locator('.ap-embed-html script')).toHaveCount(0);
 			expect(await page.evaluate(() => (window as { __embedRan?: boolean }).__embedRan)).toBeUndefined();
 			await embeds.getByRole('button', { name: 'Load live view', exact: true }).click();
-			// More rooms starts open.
+			// Other Rooms starts open.
 			await expect(page.getByTestId('browse-rooms')).toHaveAttribute('aria-expanded', 'true');
 			await expect(page.getByTestId('room-directory')).toBeVisible();
 			await look();
