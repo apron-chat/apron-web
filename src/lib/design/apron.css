@@ -66,7 +66,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-menu, .ap-mpick, .ap-font-options { margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
 /* A floating card's surface: a profile card, the profile editor, a nudge. */
 .ap-popover, .ap-profedit, .ap-nudge { background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
-/* An icon button: a glyph with no frame, tinted under the pointer. ap-iconbtn-lg is a header's (40px), ap-iconbtn-round a
+/* An icon button: a glyph with no frame, tinted under the pointer. ap-iconbtn-lg is a header's (--control-lg), ap-iconbtn-round a
    circle; a component's own class sets anything else (a smaller size, where it sits). */
 .ap-iconbtn { font: inherit; display: inline-grid; place-items: center; width: var(--control-md); height: var(--control-md); padding: 0; border: 0; border-radius: var(--radius-inner); background: transparent; color: var(--ink-muted); cursor: pointer; }
 .ap-iconbtn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
