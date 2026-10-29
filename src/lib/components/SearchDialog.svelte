@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount, untrack } from 'svelte';
 	import AutocompletePicker from './AutocompletePicker.svelte';
 	import SearchPanel from '$lib/design/components/SearchPanel.svelte';
 	import type { SearchResult } from '$lib/design/components/types';
@@ -26,18 +27,20 @@
 		roomSuggestions: RoomSuggestion[];
 		/** What is searched, in words, under the field. */
 		note?: string;
+		/** What the field starts with, the caret after it: such as the open room's filter, `room:#general `. */
+		initial?: string;
 		onopen: (message: MessageRecord) => void;
 		/** The title's "history" link: Preferences, at History. */
 		onhistory?: () => void;
 		onclose: () => void;
 	}
-	let { client, keeper, rooms, roomSuggestions, note, onopen, onhistory, onclose }: Props = $props();
+	let { client, keeper, rooms, roomSuggestions, note, initial = '', onopen, onhistory, onclose }: Props = $props();
 
 	/** How long typing pauses before a search starts. */
 	const SEARCH_DELAY_MS = 150;
 
 	let open = $state(true);
-	let query = $state('');
+	let query = $state(untrack(() => initial));
 	let found = $state.raw<MessageRecord[]>([]);
 	let more = $state(false);
 	let searching = $state(false);
@@ -45,7 +48,10 @@
 	let generation = 0;
 
 	let panel = $state<SearchPanel | undefined>();
-	let caret = $state(0);
+	let caret = $state(untrack(() => initial.length));
+
+	// What it starts with stays: the caret goes after it, ready for words.
+	onMount(() => void panel?.place(query.length));
 
 	// --- Suggesting a filter's value, as the composer suggests a mention ---
 

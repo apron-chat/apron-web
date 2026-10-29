@@ -690,7 +690,8 @@ writes at a time; another takes over when it closes. Preferences says how much A
 keeping more if the device ran out of space.
 
 **Search local history** (the magnifier in the room header, or Ctrl+K, ⌘K on a Mac)
-looks through this server's history kept on this device and what the page has
+starts narrowed to the open room or thread (`room:#general `, the caret after
+it; Backspace widens it to everywhere), and looks through this server's history kept on this device and what the page has
 loaded, as you type: a message matches when its text holds every word typed,
 in any case and with or without accents. `user:` keeps what someone sent, by
 `@user_id` or name (`user:@ada`, `user:"Ada Lovelace"`), and `room:` what is in

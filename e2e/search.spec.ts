@@ -17,6 +17,13 @@ test('narrows by room and by person, and opens a result in its room', async ({ p
 	const field = search.getByRole('combobox');
 	const results = search.getByTestId('search-results').getByRole('option');
 
+	// Opened from a room, it starts narrowed to that room, the caret after it.
+	await expect(field).toHaveValue('room:#general ');
+	await field.pressSequentially('thread');
+	await expect(field).toHaveValue('room:#general thread');
+	await expect(results).toHaveCount(3);
+	await expect(results.locator('.ap-search-room')).toHaveText(['general', 'general', 'general']);
+
 	await field.fill('thread');
 	await expect(results).toHaveCount(4);
 	await field.fill('thread user:@linus');
@@ -65,6 +72,13 @@ test('suggests people for user: and rooms for room:, as the composer does for @ 
 	await expect(search).toBeVisible();
 	await field.press('Escape');
 	await expect(search).toHaveCount(0);
+});
+
+test('opened from a thread, it starts narrowed to that thread', async ({ preview, page }) => {
+	await preview.open();
+	await preview.openThread('thread_deploy');
+	await page.keyboard.press('ControlOrMeta+k');
+	await expect(page.getByRole('dialog', { name: 'Search local history' }).getByRole('combobox')).toHaveValue('room:#thread_deploy ');
 });
 
 /** Its title's "history" opens Preferences at History, where what this device keeps is chosen. */

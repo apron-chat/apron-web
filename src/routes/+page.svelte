@@ -3127,7 +3127,7 @@
 	{/if}
 	{#if searchOpen && client && searchDialog.component}
 		{@const SearchDialog = searchDialog.component}
-		<SearchDialog {client} keeper={historyKeeper} rooms={session.rooms} {roomSuggestions} note={searchNote()} onopen={openFound} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
+		<SearchDialog {client} keeper={historyKeeper} rooms={session.rooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} onopen={openFound} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
 	{/if}
 	{#if newPrivateOpen && newPrivateDialog.component}
 		{@const NewPrivateDialog = newPrivateDialog.component}
