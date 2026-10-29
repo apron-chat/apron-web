@@ -63,6 +63,23 @@ describe('MemberList', () => {
 		expect(name.textContent).toBe('محمد(you)');
 	});
 
+	it('opens a card from anywhere on its row, anchored on the name, but Remove only removes', () => {
+		const onprofile = vi.fn(), onremove = vi.fn();
+		render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo', status: 'online', roles: ['admin'] }] }], onprofile, onremove, busy: false });
+		const row = document.querySelector<HTMLLIElement>('li.ap-member')!;
+		const who = row.querySelector<HTMLButtonElement>('.ap-member-who')!;
+		row.click();
+		row.querySelector<HTMLElement>('.ap-role')!.click();
+		expect(onprofile.mock.calls).toEqual([['bo', who], ['bo', who]]);
+		dom.button('Remove Bo').click();
+		expect([onremove.mock.calls, onprofile.mock.calls.length]).toEqual([[['bo']], 2]);
+		dom.unmount();
+		// Disabled while a change is in flight, it opens nothing either.
+		render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo' }] }], onprofile, onremove, busy: true });
+		dom.button('Remove Bo').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		expect(onprofile).toHaveBeenCalledTimes(2);
+	});
+
 	it('dims offline members only, saying each status in words on hover and to a screen reader; an unknown one is not offline (§4.5)', () => {
 		render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo', status: 'online' }, { user_id: 'eve', name: 'Eve', status: 'brb' }, { user_id: 'cy', name: 'Cy' }] }, sections[1]] });
 		const rows = [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
