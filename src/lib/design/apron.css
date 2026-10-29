@@ -176,11 +176,18 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* Its width: as written, up to 12em; past the row's width, the row's width (ellipsized); but never under --ap-role-min,
    so a badge with less room than that doesn't fit its row and drops. */
 .ap-role { display: inline-block; flex: none; max-width: min(12em, max(var(--ap-role-min), 100%)); height: var(--ap-role-h); padding: 0 5px; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-caps); line-height: var(--leading-sm); font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
-/* Caps-only text sits high in its line box, so trim the box to the cap height and pad it evenly to the 16px badge
-   (2 × (14px − 1cap) / 2 + 1cap + the 2px border), whatever the system face; without text-box, the line box overhangs
-   the badge's 14px inside, which lowers the caps to about center. */
-@supports (text-box: trim-both cap alphabetic) {
-	.ap-role { height: auto; padding-block: calc((var(--ap-role-h) - 2px - 1cap) / 2); text-box: trim-both cap alphabetic; }
+/*
+ * Caps-only text, centered on its caps in whatever face: where a face's ascent and descent would place the caps (high in
+ * DejaVu Sans, low in Inter), its line box has no height (line-height: 0) and a strut sets the baseline instead. The
+ * strut, an empty inline-block, has its baseline at its bottom; as tall as half the space inside the border plus half a
+ * cap height (the `cap` unit; .36em, a usual one, where it's unknown), rounded to a pixel so the baseline lands on one,
+ * it puts the caps in the middle. The badge (.ap-role), a stacked badge's role (.ap-role-label) and its count
+ * (.ap-role-more), each with --ap-role-in, the height inside its border.
+ */
+.ap-role:not(.ap-role-stacked), .ap-role-stacked > .ap-role-label { --ap-role-in: calc(var(--ap-role-h) - 2px); line-height: 0; }
+.ap-role-more { --ap-role-in: var(--ap-role-h); line-height: 0; }
+:is(.ap-role:not(.ap-role-stacked), .ap-role-stacked > .ap-role-label, .ap-role-more)::before {
+	content: ''; display: inline-block; height: calc(var(--ap-role-in) / 2 + .36em); height: calc(var(--ap-role-in) / 2 + .5cap); height: round(calc(var(--ap-role-in) / 2 + .5cap), 1px);
 }
 .ap-role-admin { border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); }
 .ap-role-bot { border-color: color-mix(in srgb, var(--denim) 55%, transparent); color: var(--denim); }
@@ -207,17 +214,12 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-role-stacked.ap-role-admin { --ap-role-more: var(--accent); --ap-role-more-ink: var(--on-accent); }
 .ap-role-stacked.ap-role-bot { --ap-role-more: var(--denim); --ap-role-more-ink: var(--on-accent); }
 .ap-roles-stack > .ap-role-stacked { display: inline-flex; height: var(--ap-role-h); padding: 0; border-width: 0; }
-.ap-role-stacked > .ap-role-label { flex: 0 1 auto; min-width: 0; padding: 0 5px; box-sizing: border-box; border: 1px solid; border-color: inherit; border-inline-end: 0; border-radius: 0; border-start-start-radius: var(--radius-sm); border-end-start-radius: var(--radius-sm); line-height: calc(var(--ap-role-h) - 2px); overflow: hidden; text-overflow: ellipsis; }
-.ap-role-more { flex: none; width: calc(9px + var(--ap-role-more-chars) * .65em); box-sizing: border-box; background: var(--ap-role-more); color: var(--ap-role-more-ink); line-height: var(--ap-role-h); text-align: center; letter-spacing: 0; font-variant-numeric: tabular-nums lining-nums; }
+.ap-role-stacked > .ap-role-label { flex: 0 1 auto; min-width: 0; padding: 0 5px; box-sizing: border-box; border: 1px solid; border-color: inherit; border-inline-end: 0; border-radius: 0; border-start-start-radius: var(--radius-sm); border-end-start-radius: var(--radius-sm); overflow: hidden; text-overflow: ellipsis; }
+.ap-role-more { flex: none; width: calc(9px + var(--ap-role-more-chars) * .65em); box-sizing: border-box; background: var(--ap-role-more); color: var(--ap-role-more-ink); text-align: center; letter-spacing: 0; font-variant-numeric: tabular-nums lining-nums; }
 /* The count reads "+2" in either direction (under dir="rtl" the line would make it "2+"). */
 .ap-role-more { direction: ltr; }
 /* The + is drawn about the middle of the lowercase: a hair smaller and raised, it sits level with the digit's caps. */
 .ap-role-plus { display: inline-block; font-size: .9em; transform: translateY(-.08em); margin-right: -.02em; }
-@supports (text-box: trim-both cap alphabetic) {
-	.ap-roles-stack > .ap-role-stacked { padding-block: 0; }
-	.ap-role-stacked > .ap-role-label { line-height: inherit; padding-block: calc((var(--ap-role-h) - 2px - 1cap) / 2); text-box: trim-both cap alphabetic; }
-	.ap-role-more { line-height: inherit; padding-block: calc((var(--ap-role-h) - 1cap) / 2); text-box: trim-both cap alphabetic; }
-}
 /* Out of the flow, so the row is only as wide as what shows and what follows it (the time) stays beside it. */
 .ap-roles-stack > .ap-role-behind { position: absolute; top: 0; inset-inline-start: 0; opacity: 0; pointer-events: none; }
 /* None fit: the row takes no room, lead included, and gives it back to the name. */
@@ -692,10 +694,11 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-sectionhead { padding: 0 var(--space-1) var(--space-1); }
 .ap-memberlist-sectionhead .ap-sect-toggle { padding-inline-start: 0; }
 .ap-memberlist-people { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.ap-member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-member { --ap-member-bg: var(--bg-000); position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); border-radius: var(--radius-md); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); cursor: pointer; }
+/* The whole row opens their card (MemberList), so the pointer anywhere on it tints it, as a message under the pointer. */
+.ap-member:hover { --ap-member-bg: var(--hover-soft); background: var(--ap-member-bg); }
 /* Role badges follow the name, as beside a message's sender; the remove button floats over the row's far end. */
 .ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1e12 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
-.ap-member-who:hover .ap-member-name { text-decoration: underline; }
 /* Offline members (§4.5) recede, badges and all; their ring and name still read. */
 .ap-member-offline .ap-member-who { color: var(--ink-muted); }
 .ap-member-offline .ap-avatar, .ap-member-offline .ap-roles { opacity: var(--opacity-dim); }
@@ -713,10 +716,11 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 	/* A member's button: its avatar and the name's least. */
 	.ap-member-who { min-width: calc-size(max-content, min(size, calc(var(--avatar-sm) + var(--space-2) + var(--ap-name-min)), 100%)); }
 }
-/* Remove shows on hover or focus, over the end of the row rather than holding a gap there, so names and badges keep the width. */
-.ap-member .ap-member-remove { position: absolute; top: 50%; inset-inline-end: var(--space-1); width: var(--control-sm); height: var(--control-sm); transform: translateY(-50%); background: var(--bg-000); box-shadow: -8px 0 6px var(--bg-000); opacity: 0; pointer-events: none; }
+/* Remove shows on hover or focus, over the end of the row rather than holding a gap there, so names and badges keep the
+   width: on the row's own color (--ap-member-bg, tinted while hovered), with a fade of it over what it covers. */
+.ap-member .ap-member-remove { position: absolute; top: 50%; inset-inline-end: var(--space-1); width: var(--control-sm); height: var(--control-sm); transform: translateY(-50%); background: var(--ap-member-bg); box-shadow: -8px 0 6px var(--ap-member-bg); opacity: 0; pointer-events: none; }
 /* Mirrored, it floats over the left end, its fade toward the name on its right. */
-:where([dir='rtl']) .ap-member .ap-member-remove { box-shadow: 8px 0 6px var(--bg-000); }
+:where([dir='rtl']) .ap-member .ap-member-remove { box-shadow: 8px 0 6px var(--ap-member-bg); }
 .ap-member:hover .ap-member-remove, .ap-member:focus-within .ap-member-remove { opacity: 1; pointer-events: auto; }
 /* Touch screens have no hover, so it's always there, in the row's flow at its far end. */
 @media (hover: none) { .ap-member .ap-member-remove { position: static; flex: none; margin-inline-start: auto; transform: none; background: transparent; box-shadow: none; opacity: 1; pointer-events: auto; } }

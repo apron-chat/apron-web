@@ -89,7 +89,10 @@
 									{@const name = person.name || person.user_id}
 									{@const shown = presence(person.status)}
 									{@const words = person.statusLabel ?? presenceLabel(person.status)}
-									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline']} data-user={person.user_id} data-status={shown}>
+									<!-- The whole row opens their card, as its name does: a press anywhere but on a button of its own (Remove) presses the name, which keyboards reach. -->
+									<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline']} data-user={person.user_id} data-status={shown}
+										onclick={(event) => { if (!(event.target as Element).closest('button')) event.currentTarget.querySelector<HTMLButtonElement>('.ap-member-who')?.click(); }}>
 										<button class="ap-member-who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => onprofile?.(person.user_id, event.currentTarget)}>
 											{#if avatar}{@render avatar(person)}{:else}<Avatar {name} user_id={person.user_id} src={person.avatar} size="sm" status={person.status} statusLabel={words} />{/if}
 											<span class="ap-member-name">
