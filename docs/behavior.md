@@ -261,7 +261,8 @@ Dragging either list shut restores its earlier width when it reopens.
 Both lists open and shut the same way, in 240ms: the column slides, its
 contents keep their width against the edge facing the conversation (so they
 ride the moving border rather than squeeze), and fade; below 960px the member
-list's overlay slides in from the right edge instead. Each frame moves the
+list's overlay slides in from the window's end instead (the right edge, or the
+left under right-to-left, below its button). Each frame moves the
 grid's columns only, nothing else's style; the timeline takes its final width
 when the slide starts and keeps it until the slide ends, so its messages are
 laid out once rather than re-wrapped on every frame (it stays at the latest
@@ -394,7 +395,9 @@ message text, names, roles, bios, room and thread titles and descriptions,
 embed titles and previews, notifications, and the server's title and
 description. Only what shows drops them: the client keeps and sends what was
 written, so an edited message or room goes back with every character its
-author typed, and IDs, tokens and URLs are never changed. A rendered body (plain or CommonMark, never inside
+author typed, and IDs, tokens and URLs are never changed. Times and days, as
+the browser's locale writes them, keep their own direction too, so under a
+right-to-left layout an English time still reads "3:42 PM". A rendered body (plain or CommonMark, never inside
 code) shows a known user's `@user_id` as a chip with their current name, a known room's
 `#room_id` as a link showing its title that opens the room (or joins it), and unknown
 IDs as written ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)): `@` names only users. The ID after

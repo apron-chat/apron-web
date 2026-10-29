@@ -14,7 +14,7 @@
 		mainLabel?: string;
 		/** An attachment for the main pane's `<main>`, such as one taking files dropped on it. */
 		mainAttach?: Attachment<HTMLElement>;
-		/** The MemberList: a column of its own with `membersWide`, else over the conversation, sliding in from the right. */
+		/** The MemberList: a column of its own with `membersWide`, else over the conversation, sliding in from the inline end (the right, or the left under `dir="rtl"`). */
 		members?: Snippet;
 		/** The rooms list's <PanelToggle>, at its inner edge: at the end of its header, or the start of the room's once it's shut, which keep clear of it. */
 		sideToggle?: Snippet;

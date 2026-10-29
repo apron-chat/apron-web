@@ -131,9 +131,11 @@ describe('apron.css', () => {
 		expect(offsets.filter((d) => !/^(0|var\(--focus-offset(-inset)?\))$/.test(d.value)).map(where)).toEqual([]);
 	});
 
-	// The one literal: the room header tag's point, a square turned on its corner with its tip rounded.
+	// The one literal: the room header tag's point, a square turned on its corner with its tip rounded (another corner
+	// under dir="rtl", where it points the other way).
 	it('rounds corners only by the --radius-* scale', () => {
-		const off = declarations.filter((d) => /^border(-[a-z]+)*-radius$/.test(d.property) && d.selector !== '.ap-roomhead-tag::before')
+		const tagPoint = ['.ap-roomhead-tag::before', ":where([dir='rtl']) .ap-roomhead-tag::before"];
+		const off = declarations.filter((d) => /^border(-[a-z]+)*-radius$/.test(d.property) && !tagPoint.includes(d.selector))
 			.filter((d) => !d.value.split(/\s+/).every((part) => /^(0|inherit|var\(--radius-[a-z]+\))$/.test(part)));
 		expect(off.map(where)).toEqual([]);
 	});
