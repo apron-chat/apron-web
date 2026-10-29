@@ -1,46 +1,46 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { DEVICES, expect, test } from './fixtures';
 
-/** The sidebar's top-level rooms in an order of your own (`src/lib/ui/room-order.svelte.ts`, svelte-dnd-action). */
+/** The sidebar's top-level rooms in an order of your own: dragged by their rows, or moved with Alt+↑/↓. */
 
 const rows = (page: Page) => page.getByTestId('room-list').locator('button[data-room]');
+const row = (page: Page, room: string) => page.getByTestId('room-list').locator(`button[data-room="${room}"]`);
 const order = (page: Page) => rows(page).evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.room));
+/** Every room's threads fold away while one is carried: how a drag shows from outside. */
 const threadLists = (page: Page) => page.getByRole('complementary', { name: 'Rooms' }).getByTestId('thread-list');
-const lifted = (page: Page) => page.locator('#dnd-action-dragged-el');
+/** A thread of general in the preview's seed, by its title. */
+const deployThread = (page: Page) => threadLists(page).getByText('Deploy checklist', { exact: true });
+/** Lets any input the browser has queued (a click after a tap) run. */
+const nextFrame = (page: Page) => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
 
 async function middle(page: Page, room: string): Promise<{ x: number; y: number; top: number }> {
-	const box = (await page.getByTestId('room-list').locator(`button[data-room="${room}"]`).boundingBox())!;
+	const box = (await row(page, room).boundingBox())!;
 	return { x: box.x + box.width / 2, y: box.y + box.height / 2, top: box.y };
 }
 
 test.describe('room order, with a mouse', () => {
 	test.use(DEVICES.desktop);
 
-	test('a room dragged by its row lands where it’s let go, every room’s threads folded away while it’s carried', async ({ preview, page }) => {
+	test('a room dragged by any part of its row lands where it’s let go, every room’s threads folded away while it’s carried', async ({ preview, page }) => {
 		await preview.open('#room=general');
 		expect(await order(page)).toEqual(['general', 'engineering']);
 		await expect(threadLists(page)).toHaveCount(1);
-		// From the row's edge, its padding, not its text: the row is a button the library would otherwise leave alone.
-		const edge = (await page.getByTestId('room-list').locator('button[data-room="engineering"]').boundingBox())!;
+		// From the row's very edge, not its name.
+		const edge = (await row(page, 'engineering').boundingBox())!;
 		await page.mouse.move(edge.x + 3, edge.y + 2);
 		await page.mouse.down();
 		await page.mouse.move(edge.x + 3, edge.y - 8, { steps: 3 });
-		await expect(lifted(page)).toHaveCount(1);
 		await expect(threadLists(page)).toHaveCount(0);
-		// Over the top of general, now just its row.
 		const to = await middle(page, 'general');
 		await page.mouse.move(to.x, to.top + 4, { steps: 10 });
 		await page.mouse.up();
 		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
-		// The threads come back as they were, and the open room stays open: a drag isn't a pick.
+		// The threads come back, and the open room stays open: a drag isn't a pick.
 		await expect(threadLists(page)).toHaveCount(1);
 		await expect(preview.heading()).toHaveText('general');
-		// A click still picks.
-		await rows(page).filter({ hasText: 'engineering' }).click();
-		await expect(preview.heading()).toHaveText('engineering');
 	});
 
-	test('a room let go outside the list goes back, and its threads stay put as a drag can’t start from them', async ({ preview, page }) => {
+	test('a click still opens a room, and one let go outside the list goes back', async ({ preview, page }) => {
 		await preview.open('#room=general');
 		const from = await middle(page, 'engineering');
 		await page.mouse.move(from.x, from.y);
@@ -49,57 +49,58 @@ test.describe('room order, with a mouse', () => {
 		await page.mouse.up();
 		await expect(threadLists(page)).toHaveCount(1);
 		expect(await order(page)).toEqual(['general', 'engineering']);
-		// Pressing a thread (on its title) and moving doesn't carry its room.
-		const thread = (await threadLists(page).locator('button[data-thread] .ap-room-label').first().boundingBox())!;
+		await row(page, 'engineering').click();
+		await expect(preview.heading()).toHaveText('engineering');
+	});
+
+	test('pressing a thread and moving doesn’t carry its room', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		const thread = (await deployThread(page).boundingBox())!;
 		await page.mouse.move(thread.x + thread.width / 2, thread.y + thread.height / 2);
 		await page.mouse.down();
 		await page.mouse.move(thread.x + thread.width / 2, thread.y + 60, { steps: 6 });
-		await expect(lifted(page)).toHaveCount(0);
+		await expect(threadLists(page)).toHaveCount(1);
 		await page.mouse.up();
+		expect(await order(page)).toEqual(['general', 'engineering']);
 	});
 
 	test('Alt+↑ and Alt+↓ move the focused room, the keyboard staying on it', async ({ preview, page }) => {
 		await preview.open('#room=general');
-		await rows(page).filter({ hasText: 'general' }).focus();
+		await row(page, 'general').focus();
 		await page.keyboard.press('Alt+ArrowDown');
 		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
-		await expect(page.getByTestId('room-list').locator('button[data-room="general"]')).toBeFocused();
+		await expect(row(page, 'general')).toBeFocused();
 		await page.keyboard.press('Alt+ArrowUp');
 		await expect.poll(() => order(page)).toEqual(['general', 'engineering']);
-		await expect(page.getByTestId('room-list').locator('button[data-room="general"]')).toBeFocused();
+		await expect(row(page, 'general')).toBeFocused();
 	});
 });
 
 test.describe('room order, by touch', () => {
 	test.use({ ...DEVICES.tablet, hasTouch: true });
 
-	/** Touches through the browser's own input, which svelte-dnd-action listens to as a phone's. */
+	/**
+	 * Touches through the browser's own input (CDP), as a finger's: Playwright can tap, but can't hold and move one.
+	 * `tap` is down for a moment, well short of the hold that lifts a room.
+	 */
 	async function finger(context: BrowserContext, page: Page) {
 		const cdp = await context.newCDPSession(page);
-		return (type: 'touchStart' | 'touchMove' | 'touchEnd', x = 0, y = 0) =>
+		const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x = 0, y = 0) =>
 			cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+		const tap = async (x: number, y: number) => {
+			await touch('touchStart', x, y);
+			await page.waitForTimeout(60);
+			await touch('touchEnd');
+			await nextFrame(page);
+		};
+		return { touch, tap };
 	}
 
-	/** A tap as a finger makes one: down for a moment, well short of the hold that lifts a room. */
-	async function tap(touch: Awaited<ReturnType<typeof finger>>, page: Page, x: number, y: number): Promise<void> {
-		await touch('touchStart', x, y);
-		await page.waitForTimeout(60);
-		await touch('touchEnd');
-	}
-
-	test('a room held lifts and can be dragged; a tap picks it and a swipe doesn’t carry it', async ({ preview, page, context }) => {
+	test('a room held lifts, and can then be dragged to another place', async ({ preview, page, context }) => {
 		await preview.open('#room=general');
-		const touch = await finger(context, page);
-		let from = await middle(page, 'engineering');
+		const { touch } = await finger(context, page);
+		const from = await middle(page, 'engineering');
 		await touch('touchStart', from.x, from.y);
-		for (let i = 1; i <= 6; i++) await touch('touchMove', from.x, from.y - i * 10);
-		await touch('touchEnd');
-		await expect(lifted(page)).toHaveCount(0);
-		expect(await order(page)).toEqual(['general', 'engineering']);
-
-		from = await middle(page, 'engineering');
-		await touch('touchStart', from.x, from.y);
-		await expect(lifted(page)).toHaveCount(1);
 		await expect(threadLists(page)).toHaveCount(0);
 		const to = await middle(page, 'general');
 		for (let i = 1; i <= 12; i++) await touch('touchMove', from.x, from.y + (to.top + 4 - from.y) * (i / 12));
@@ -107,35 +108,49 @@ test.describe('room order, by touch', () => {
 		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
 		await expect(threadLists(page)).toHaveCount(1);
 		await expect(preview.heading()).toHaveText('general');
+	});
 
-		// A tap picks once: a second click would find it open, and fold its threads.
-		from = await middle(page, 'engineering');
-		await tap(touch, page, from.x, from.y);
+	test('a swipe across the rooms doesn’t carry one', async ({ preview, page, context }) => {
+		await preview.open('#room=general');
+		const { touch } = await finger(context, page);
+		const from = await middle(page, 'engineering');
+		await touch('touchStart', from.x, from.y);
+		for (let i = 1; i <= 6; i++) await touch('touchMove', from.x, from.y - i * 10);
+		await touch('touchEnd');
+		await expect(threadLists(page)).toHaveCount(1);
+		expect(await order(page)).toEqual(['general', 'engineering']);
+	});
+
+	test('a tap opens a room', async ({ preview, page, context }) => {
+		await preview.open('#room=general');
+		const { tap } = await finger(context, page);
+		const room = await middle(page, 'engineering');
+		await tap(room.x, room.y);
 		await expect(preview.heading()).toHaveText('engineering');
-		await page.waitForTimeout(300);
-		await expect(page.getByTestId('expand-threads')).toHaveCount(0);
-		// A thread tapped opens it, not a drag of its room.
-		await page.getByTestId('room-list').locator('button[data-room="general"]').click();
-		const thread = (await threadLists(page).locator('button[data-thread] .ap-room-label').first().boundingBox())!;
-		await tap(touch, page, thread.x + thread.width / 2, thread.y + thread.height / 2);
-		await expect(preview.heading()).toHaveText(/^general › /);
+	});
+
+	test('a tap on a thread opens the thread', async ({ preview, page, context }) => {
+		await preview.open('#room=general');
+		const { tap } = await finger(context, page);
+		const thread = (await deployThread(page).boundingBox())!;
+		await tap(thread.x + thread.width / 2, thread.y + thread.height / 2);
+		await expect(preview.heading()).toHaveText('general › Deploy checklist');
 	});
 });
 
 test.describe('folding a room on a phone', () => {
 	test.use(DEVICES.phone);
 
+	// A tap is one pick: were it two (svelte-dnd-action clicks after a tap, as the browser does), this fold would undo itself.
 	test('tapping the open room folds its threads in the rooms list, which stays, its › going back to the room', async ({ preview, page }) => {
 		await preview.open('#room=general');
 		await preview.roomsPane();
-		const general = page.getByTestId('room-list').locator('button[data-room="general"]');
 		await expect(threadLists(page)).toHaveCount(1);
-		await preview.press(general);
+		await preview.press(row(page, 'general'));
 		await expect(page.getByTestId('room-list')).toBeVisible();
-		await expect(page.getByTestId('expand-threads')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Show all threads in general' })).toBeVisible();
 		await expect(threadLists(page)).toHaveCount(0);
-		await preview.press(general);
-		await expect(page.getByTestId('expand-threads')).toHaveCount(0);
+		await preview.press(row(page, 'general'));
 		await expect(threadLists(page)).toHaveCount(1);
 		await preview.press(page.getByRole('button', { name: 'Back to general' }));
 		await expect(page.getByTestId('room-list')).toBeHidden();

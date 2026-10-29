@@ -193,7 +193,7 @@ export class Preview {
 		await this.roomsPane();
 		const row = this.page.locator(`[data-testid="room-list"] button[data-room="${id}"]`);
 		if ((await row.getAttribute('aria-current')) === 'page') {
-			if (this.narrow) await this.press(this.page.locator('.ap-shell-sidehead-return'));
+			if (this.narrow) await this.press(this.page.getByRole('complementary', { name: 'Rooms' }).getByRole('button', { name: /^Back to / }));
 			await expect(this.page.getByTestId('room-list')).toBeVisible({ visible: !this.narrow });
 			return;
 		}

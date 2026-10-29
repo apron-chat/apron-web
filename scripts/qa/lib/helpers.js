@@ -154,7 +154,7 @@ export async function openRoom(page, name, settle = 500) {
 	const target = roomList(page).getByText(name, { exact: true }).first();
 	const open = await target.evaluate((el) => el.closest('button[data-room]')?.getAttribute('aria-current') === 'page');
 	if (open) {
-		if (isNarrow(page)) await press(page.locator('.ap-shell-sidehead-return'));
+		if (isNarrow(page)) await press(page.getByRole('complementary', { name: 'Rooms' }).getByRole('button', { name: /^Back to / }));
 	} else await press(target);
 	await wait(page, settle);
 }

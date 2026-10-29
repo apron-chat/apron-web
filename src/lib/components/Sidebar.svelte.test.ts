@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { flushSync, tick } from 'svelte';
+import { flushSync } from 'svelte';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { capabilitiesOf, type ChatClient, type ClientSnapshot, type RoomSnapshot } from '$lib/protocol/client';
 import { createTimeline } from '$lib/protocol/reducer';
@@ -244,7 +244,7 @@ describe('Sidebar', () => {
 		session.dispose();
 	});
 
-	it('lists the rooms in the order kept for the account, new ones last, and moves one with Alt+↑/↓, keeping the keyboard on it', async () => {
+	it('lists the rooms in the order kept for the account, new ones last, and moves one with Alt+↑/↓, saying so', () => {
 		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
 		const room = (id: string, title: string): RoomSnapshot => ({ ...general, id, title, timeline: createTimeline(id) }) as RoomSnapshot;
 		saveRoomOrder('acct', ['random', 'general']);
@@ -263,11 +263,10 @@ describe('Sidebar', () => {
 		random.focus();
 		random.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }));
 		flushSync();
-		await tick();
 		expect(listed()).toEqual(['general', 'random', 'ops']);
 		expect(loadRoomOrder('acct')).toEqual(['general', 'random', 'ops']);
-		expect(document.activeElement).toBe(document.querySelector('button[data-room="random"]'));
-		expect(document.querySelector('.ap-shell-side [aria-live]')!.textContent).toBe('Random moved down, 2 of 3');
+		// Where the keyboard ends up is the browser's to show: e2e/room-order.spec.ts.
+		expect(document.querySelector('[aria-live]')!.textContent).toBe('Random moved down, 2 of 3');
 		// Not past the top; a plain arrow doesn't move it.
 		const general_ = document.querySelector<HTMLElement>('button[data-room="general"]')!;
 		general_.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true, cancelable: true }));
