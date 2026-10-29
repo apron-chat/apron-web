@@ -40,6 +40,6 @@
 		</span>
 	</div>
 	{#if returnTo !== undefined && onreturn}
-		<button class="ap-shell-sidehead-return" type="button" aria-label="Back to {returnTo}" title="Back to {returnTo}" onclick={onreturn}>›</button>
+		<button class="ap-iconbtn ap-iconbtn-lg ap-shell-sidehead-return" type="button" aria-label="Back to {returnTo}" title="Back to {returnTo}" onclick={onreturn}>›</button>
 	{/if}
 </div>

@@ -112,8 +112,8 @@
 {#if open}
 	<div class="ap-rpalette" role="toolbar" tabindex="-1" aria-label="Pick a reaction" onkeydown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onclose?.(); } }}>
 		{#each PALETTE as e (e)}
-			<button type="button" class={['ap-rpick', mine.has(e) && 'ap-rpick-mine']} aria-pressed={mine.has(e)} aria-label="React with {e}" title={e} {disabled} onclick={() => { onclose?.(); ontoggle?.(e); }}>{e}</button>
+			<button type="button" class={['ap-iconbtn', 'ap-iconbtn-lg', 'ap-iconbtn-round', 'ap-rpick', mine.has(e) && 'ap-rpick-mine']} aria-pressed={mine.has(e)} aria-label="React with {e}" title={e} {disabled} onclick={() => { onclose?.(); ontoggle?.(e); }}>{e}</button>
 		{/each}
-		<button type="button" class="ap-rpick ap-rpick-close" aria-label="Close reactions" title="Close" onclick={onclose}>×</button>
+		<button type="button" class="ap-iconbtn ap-iconbtn-lg ap-iconbtn-round ap-rpick ap-rpick-close" aria-label="Close reactions" title="Close" onclick={onclose}>×</button>
 	</div>
 {/if}

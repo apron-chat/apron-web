@@ -70,10 +70,10 @@
 	<div class={['ap-roomrow', nested && 'ap-roomrow-nested', active && 'ap-roomrow-active']}>
 		{@render row()}
 		{#if onleave}
-			<button type="button" class="ap-room-exit" data-leave={room} title="Leave {noun}" aria-label="Leave {label}" onclick={onleave}><DoorOpen size={15} aria-hidden="true" /></button>
+			<button type="button" class="ap-iconbtn ap-room-exit" data-leave={room} title="Leave {noun}" aria-label="Leave {label}" onclick={onleave}><DoorOpen size={15} aria-hidden="true" /></button>
 		{/if}
 		{#if onjoin}
-			<button type="button" class="ap-room-join" data-join={room} title="Join {noun}" aria-label="Join {label}" onclick={onjoin}><LogIn size={15} aria-hidden="true" /></button>
+			<button type="button" class="ap-iconbtn ap-room-join" data-join={room} title="Join {noun}" aria-label="Join {label}" onclick={onjoin}><LogIn size={15} aria-hidden="true" /></button>
 		{/if}
 	</div>
 {:else if start}

@@ -98,7 +98,7 @@
 			<span class="ap-pick-chip">
 				<Avatar name={person.name || person.user_id} src={person.src} hue={person.hue} size="sm" />
 				<bdi class="ap-pick-chip-name">{person.name || person.user_id}</bdi>
-				<button type="button" class="ap-pick-chip-remove" aria-label="Remove {person.name || person.user_id}" disabled={busy} onclick={() => { onremove?.(person.user_id); input?.focus(); }}><X size={12} aria-hidden="true" /></button>
+				<button type="button" class="ap-iconbtn ap-iconbtn-round ap-pick-chip-remove" aria-label="Remove {person.name || person.user_id}" disabled={busy} onclick={() => { onremove?.(person.user_id); input?.focus(); }}><X size={12} aria-hidden="true" /></button>
 			</span>
 		{/each}
 		<input

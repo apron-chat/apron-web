@@ -129,7 +129,7 @@
 
 <header class={['ap-roomhead', isPrivate && 'ap-roomhead-private', className]}>
 	{#if onback}
-		<button type="button" class={['ap-roomhead-back', elsewhere > 0 && 'ap-roomhead-back-tagged']} aria-label={backLabel} onclick={onback}>
+		<button type="button" class={['ap-iconbtn', 'ap-iconbtn-lg', 'ap-roomhead-back', elsewhere > 0 && 'ap-roomhead-back-tagged']} aria-label={backLabel} onclick={onback}>
 			{#if elsewhere > 0}<span class={['ap-roomhead-tag', mentionsElsewhere ? 'ap-roomhead-tag-at' : 'ap-roomhead-tag-quiet']} data-testid={tagTestid} aria-hidden="true">{#if mentionsElsewhere}@&#8239;{/if}{count99(elsewhere)}</span>{:else}‹{/if}
 		</button>
 	{/if}
