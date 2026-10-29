@@ -735,7 +735,9 @@ its room with the thread open, and quiet threads wait until the room is opened.
 Picking the open room again while reading it folds its threads the same way, to
 those with news (not on a phone, where it returns to the room), and its row
 shows a small **…** button before its **+** that says the list is cut short; the
-**…**, or picking the room once more, unfolds them, as does opening anything else. First the ones you've joined,
+**…**, or picking the room once more, unfolds them. A folded room stays folded as
+you go to other rooms and come back (kept on this device, per account on each
+server), and a thread you open in it is listed, picked out, while you read it. First the ones you've joined,
 on a guide line from the room, most recently active first (by their newest
 message, else the newest `log_id` the server reported, else their creation).
 While the pointer or keyboard focus is on the list its rows hold still, a

@@ -564,7 +564,7 @@
 	let newPrivateOpen = $state(false);
 	/** Notices the private rooms someone else added you to, as they arrive. */
 	const arrivals = new ArrivalWatch();
-	/** Whose added rooms are kept: each account on each server. */
+	/** Whose added rooms, and the sidebar's folded rooms, are kept: each account on each server. */
 	let addedAccount = $derived(notifyAccount(serverUrl, session.you?.user_id));
 	/** The private rooms someone else added you to whose "You were added" banner still shows, kept on this device. */
 	let addedRooms = $state<string[]>([]);
@@ -2822,7 +2822,7 @@
 	{#snippet sideToggle()}<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />{/snippet}
 	{#snippet side()}
 		<Sidebar
-			client={client!} {session} {backendLabel} serverLook={currentLook} serverAddress={client?.url} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
+			client={client!} {session} {backendLabel} serverLook={currentLook} serverAddress={client?.url} account={addedAccount} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}

@@ -29,6 +29,8 @@ const KEY = {
 	hiddenDescriptions: 'apron.hiddenSummaries',
 	/** Private rooms someone else added you to, per account (`notifyAccount`), until their banner is put away or you leave. */
 	addedRooms: 'apron.addedRooms',
+	/** The rooms whose threads you folded to those with news, per account (`notifyAccount`), until you unfold them. */
+	threadFolds: 'apron.threadFolds',
 	/** How far you have read each room and thread, by `readPositionKey`: the `message_id` read through. */
 	readPositions: 'apron.readPositions',
 	/** app.html reads this one too, to apply the theme before the app loads. */
@@ -45,6 +47,8 @@ export type SidebarPrefs = { width: number; collapsed: boolean };
 const RECENT_SERVERS_MAX = 5;
 /** The most rooms kept as added per account; the ones added longest ago go first. */
 const ADDED_ROOMS_MAX = 50;
+/** The most rooms kept folded per account; the ones folded longest ago unfold first. */
+const THREAD_FOLDS_MAX = 200;
 /** The most descriptions kept put away; the ones put away longest ago show again first. */
 const HIDDEN_DESCRIPTIONS_MAX = 200;
 /** The most read positions kept; the ones moved longest ago go first. */
@@ -404,6 +408,17 @@ export function saveAddedRooms(account: string, rooms: readonly string[]): void 
 	const kept = rooms.slice(-ADDED_ROOMS_MAX);
 	const { [account]: _previous, ...others } = readScopeChoices(KEY.addedRooms);
 	write(KEY.addedRooms, JSON.stringify(kept.length ? { ...others, [account]: kept } : others));
+}
+
+/** The rooms whose threads this account folded to those with news, folded longest ago first. */
+export function loadThreadFolds(account: string): string[] {
+	return readScopeChoices(KEY.threadFolds)[account] ?? [];
+}
+
+export function saveThreadFolds(account: string, rooms: readonly string[]): void {
+	const kept = rooms.slice(-THREAD_FOLDS_MAX);
+	const { [account]: _previous, ...others } = readScopeChoices(KEY.threadFolds);
+	write(KEY.threadFolds, JSON.stringify(kept.length ? { ...others, [account]: kept } : others));
 }
 
 /**
