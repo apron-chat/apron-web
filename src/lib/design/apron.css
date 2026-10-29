@@ -789,11 +789,11 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-room-active .ap-room-count { color: var(--ink); }
 .ap-room-loading { flex: none; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 /* The open room's row: a + that starts a thread in it, always shown, and while its threads are folded to those with news a "…" pill before it that shows them all; the row makes room for them. */
-.ap-roomstart { position: relative; }
+.ap-roomstart { position: relative; --expand-w: calc(14px + var(--space-2) * 2 + 2px); }
 .ap-roomstart .ap-room { padding-inline-end: calc(var(--control-md) + var(--space-1) + var(--space-2)); }
-.ap-roomstart:has(.ap-room-expand) .ap-room { padding-inline-end: calc(var(--control-md) + 32px + var(--space-1) * 2 + var(--space-2)); }
+.ap-roomstart:has(.ap-room-expand) .ap-room { padding-inline-end: calc(var(--control-md) + var(--expand-w) + var(--space-1) * 2 + var(--space-2)); }
 .ap-room-ends { position: absolute; top: 50%; inset-inline-end: var(--space-1); transform: translateY(-50%); display: flex; align-items: center; gap: var(--space-1); }
-.ap-room-expand { display: inline-grid; place-items: center; height: 18px; padding: 0 var(--space-2); border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; transition: background-color var(--duration-fast) ease, color var(--duration-fast) ease; }
+.ap-room-expand { display: inline-grid; place-items: center; box-sizing: border-box; width: var(--expand-w); height: 18px; padding: 0 var(--space-2); border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, color var(--duration-fast) ease; }
 .ap-room-expand:hover { background: var(--hover); border-color: var(--ink-muted); color: var(--ink); }
 .ap-roomhead-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .ap-roomhead-crumb { font: inherit; padding: 0; border: 0; background: none; color: var(--ink-muted); cursor: pointer; }

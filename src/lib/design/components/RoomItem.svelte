@@ -46,7 +46,7 @@
 		listed?: boolean;
 		/** The row's tooltip, such as an untitled room's `room_id`. */
 		title?: string;
-		/** A `data-testid` for its unread bubble, and one for its +. */
+		/** A `data-testid` for its unread bubble, one for its +, and one for its …. */
 		unreadTestid?: string;
 		newThreadTestid?: string;
 		expandTestid?: string;
@@ -55,13 +55,19 @@
 	}
 	let { room, name, topic, private: isPrivate, faces, muted = false, unread, mentions, active, loading, onselect, onleave, onnewthread, onexpand, listed, title, unreadTestid, newThreadTestid, expandTestid, class: className }: Props = $props();
 	const shown = $derived(roomName(name, room));
+
+	/** The … goes once it has unfolded the threads: keyboard focus moves to the row's button rather than dropping to the page. */
+	function expand(event: MouseEvent): void {
+		(event.currentTarget as HTMLElement).closest('.ap-roomstart')?.querySelector<HTMLElement>('.ap-room')?.focus();
+		onexpand?.();
+	}
 </script>
 
 {#snippet lead()}{#if faces?.length}<Faces people={faces} size="sm" />{/if}{/snippet}
 {#snippet lines()}{#if topic}<span class="ap-room-topic">{topic}</span>{/if}{/snippet}
 {#snippet start()}
 	<span class="ap-room-ends">
-		{#if onexpand}<button type="button" class="ap-room-expand" data-testid={expandTestid} aria-label="Show all threads in {shown}" title="Show all threads" onclick={onexpand}><Ellipsis size={14} aria-hidden="true" /></button>{/if}
+		{#if onexpand}<button type="button" class="ap-room-expand" data-testid={expandTestid} aria-label="Show all threads in {shown}" title="Show all threads" onclick={expand}><Ellipsis size={14} aria-hidden="true" /></button>{/if}
 		{#if onnewthread}<button type="button" class="ap-iconbtn ap-room-new" data-testid={newThreadTestid} aria-label="New thread in {shown}" title="New thread" onclick={onnewthread}><Plus size={16} aria-hidden="true" /></button>{/if}
 	</span>
 {/snippet}

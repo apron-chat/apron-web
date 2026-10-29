@@ -36,8 +36,10 @@ describe('RoomItem', () => {
 		render({ active: true, onnewthread, onexpand });
 		const expand = dom.button('Show all threads in General');
 		expect(expand.nextElementSibling).toBe(dom.button('New thread in General'));
+		expand.focus();
 		expand.click();
 		expect(onexpand).toHaveBeenCalledOnce();
+		expect(document.activeElement).toBe(dom.button('General'));
 	});
 
 	it('ends a row with its unread bubble, and a … while history loads', () => {
