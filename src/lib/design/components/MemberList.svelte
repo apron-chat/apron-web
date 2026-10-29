@@ -1,13 +1,16 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import MessageCircle from '@lucide/svelte/icons/message-circle';
 	import Plus from '@lucide/svelte/icons/plus';
+	import UserMinus from '@lucide/svelte/icons/user-minus';
+	import UserRound from '@lucide/svelte/icons/user-round';
 	import Avatar from './Avatar.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import FoldHeading from './FoldHeading.svelte';
 	import { hold } from './hold';
 	import RoleBadges from './RoleBadges.svelte';
-	import type { MemberListPerson, MemberListSection, MenuChoice } from './types';
+	import type { ContextMenuChoice, MemberListPerson, MemberListSection } from './types';
 	import { presence, presenceLabel } from './util';
 
 	interface Props {
@@ -66,16 +69,16 @@
 	 * one is under way). Pressing the row drops it down beneath the row; a right-click, the context menu key or a long
 	 * press opens it where that was.
 	 */
-	let menu = $state<{ person: MemberListPerson; name: string; x: number; y: number; keyboard?: true; who: HTMLElement; choices: (MenuChoice & { danger?: boolean })[] } | undefined>();
+	let menu = $state<{ person: MemberListPerson; name: string; x: number; y: number; keyboard?: true; who: HTMLElement; choices: ContextMenuChoice[] } | undefined>();
 	let menuOpen = $state(false);
 	/** A press on the row whose menu is open: it closes the menu, and the click that follows doesn't open it again. */
 	let closing: string | undefined;
 
-	function choicesFor(person: MemberListPerson): (MenuChoice & { danger?: boolean })[] {
-		const choices: (MenuChoice & { danger?: boolean })[] = [{ value: 'profile', label: 'Profile' }];
+	function choicesFor(person: MemberListPerson): ContextMenuChoice[] {
+		const choices: ContextMenuChoice[] = [{ value: 'profile', label: 'Profile', icon: UserRound }];
 		if (person.you) return choices;
-		if (onmessage) choices.push({ value: 'message', label: 'Direct message' });
-		if (onremove && !busy) choices.push({ value: 'remove', label: 'Remove from room', danger: true });
+		if (onmessage) choices.push({ value: 'message', label: 'Direct message', icon: MessageCircle });
+		if (onremove && !busy) choices.push({ value: 'remove', label: 'Remove from room', danger: true, icon: UserMinus });
 		return choices;
 	}
 

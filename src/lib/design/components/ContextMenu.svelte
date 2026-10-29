@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
-	import type { MenuChoice } from './types';
+	import type { ContextMenuChoice } from './types';
 
 	/**
 	 * A menu at a point, such as where a row was right-clicked or held (the `hold` attachment), fixed to the viewport
 	 * and kept inside it. Opened from the keyboard (`keyboard`) it has its first choice focused, and otherwise the menu
 	 * itself, with no ring: ↑ ↓ Home End move, Enter chooses, Escape or a press anywhere else closes it, and focus goes
-	 * back to `returnFocus`. A `danger` choice is drawn in the danger color.
+	 * back to `returnFocus`. A choice's `icon` leads it; a `danger` choice is drawn in the danger color.
 	 */
 	interface Props {
 		/** Shown while true; bindable, and set false however it closes. */
@@ -19,7 +19,7 @@
 		keyboard?: boolean;
 		/** Names the menu for screen readers, such as "Ada". */
 		label: string;
-		choices: (MenuChoice & { danger?: boolean })[];
+		choices: ContextMenuChoice[];
 		/** Called with the chosen value; the menu closes first. */
 		onselect: (value: string) => void;
 		/** Where focus goes back to as it closes, such as the row it was opened on. */
@@ -98,7 +98,7 @@
 		{#each choices as choice (choice.value)}
 			<li role="none">
 				<button class={['ap-menu-item', choice.danger && 'ap-menu-item-danger']} type="button" tabindex="-1" role="menuitem" data-testid={choice.testid} onclick={() => choose(choice.value)}>
-					<span class="ap-menu-label">{choice.label}</span>{#if choice.hint}<span class="ap-menu-hint">{choice.hint}</span>{/if}
+					<span class="ap-menu-label">{#if choice.icon}<span class="ap-menu-lead"><choice.icon size={16} aria-hidden="true" /></span>{/if}{choice.label}</span>{#if choice.hint}<span class="ap-menu-hint">{choice.hint}</span>{/if}
 				</button>
 			</li>
 		{/each}

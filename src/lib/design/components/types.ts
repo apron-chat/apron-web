@@ -1,4 +1,4 @@
-import type { Snippet } from 'svelte';
+import type { Component, Snippet } from 'svelte';
 import type { ClassValue } from 'svelte/elements';
 import type { Sender } from './util';
 export type { Sender };
@@ -445,6 +445,12 @@ export interface MenuChoice {
 	testid?: string;
 	/** A submenu: the item opens these choices beneath it, and is not a choice itself. */
 	choices?: MenuChoice[];
+}
+
+/** A ContextMenu's choice: a MenuChoice, led by an `icon` (a Lucide icon, or one that takes `size`) and `danger` for one that takes something away. */
+export interface ContextMenuChoice extends MenuChoice {
+	icon?: Component<{ size?: number; 'aria-hidden'?: boolean | 'true' }>;
+	danger?: boolean;
 }
 
 /** What a wait the server asked for (`retry_after`, §1.1) holds back: pages of history (`history`), sending (`message`), or files (`upload`). */
