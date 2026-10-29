@@ -939,8 +939,7 @@ the error.
 picking one joins it and opens it once its `room_update` arrives.
 
 With the `edit` capability, several messages move at a time: shift-click a
-message (or press `x` on it, long-press it on touch, or pick **Select** from its
-More menu) to enter select mode, shift-click another to fill the range, and the
+message (or press `x` on it, or pick **Select** from its More menu) to enter select mode, shift-click another to fill the range, and the
 selection bar replaces the composer with the count, **Move to thread** (or, in a
 thread, back to the room), **New thread** (with the `rooms` capability) and Cancel. A
 move is a save of the message with the destination's `room_id`, one request per
@@ -972,6 +971,15 @@ reply's avatar bending into it. A reply always starts a new sender group, so
 it always has that avatar and name. The quote may point into another room:
 clicking it opens that room or thread, loading the thread's history if needed,
 and highlights the message.
+
+On touch screens a message's actions wait for a long press, which a finger
+may drift up to 10px through (further is a scroll), or the system's own long
+press; a tap shows nothing, and messages take no text selection, so a stray
+press doesn't select words or pop the toolbar. The press opens a larger
+toolbar with **Reply** and **React** up front and ⋯ opening the rest as a
+menu of rows: Start thread, Edit, Select, **Copy text**, Copy link, Remove reply
+reference and Delete, as each applies. A tap on the message, Escape or focus
+leaving puts it away. A press on a reaction chip, a link or media is theirs.
 
 With the `reactions` capability, a message's **React** action opens the full emoji
 picker right away, its frequently used row starting from emoji-mart's own
@@ -1266,6 +1274,14 @@ sheet only ever opens for a tap:
   then says "Connected. Tap again to continue with your passkey.", ready
   on that connection. Connected as a guest, **Stay a guest** leaves the
   panel as it is. On Guest, **Connect** connects without a ceremony.
+- Connected, the sign-in hint says each server has its own accounts, and
+  names the server in the form by its host (as code): a passkey saved for
+  another server is no account here. A sign-in whose sheet is dismissed
+  says "Cancelled."; where passkeys also create accounts, it says
+  "Cancelled. No passkey for this server? Choose Create account." and marks
+  **Create account** with a dot until another choice or tap. A device with
+  no passkey for the server offers only another device or a security key
+  (on iOS, a QR code), which otherwise reads as a fault.
 - Signing in asks no display name: the account keeps the name it has, and
   the guest's name the ceremony started from isn't sent to it with `me`.
   The form, and the name remembered for the next visit, take the account's.

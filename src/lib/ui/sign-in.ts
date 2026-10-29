@@ -152,8 +152,15 @@ function primaryAction(input: SignInInput): SignInAction {
 	}
 }
 
-/** What the panel says about the chosen scheme. */
-export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered' | 'passkey'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean }): string {
+/**
+ * A passkey sign-in whose sheet was dismissed, where passkeys also create
+ * accounts: on a device with no passkey for this server the sheet offers only
+ * another device or a security key (on iOS, a QR code), which reads as a fault.
+ */
+export const CANCELLED_TRY_CREATE = 'Cancelled. No passkey for this server? Choose Create account.';
+
+/** What the panel says about the chosen scheme. `host` names the server in the form, shown as code (`…`). */
+export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered' | 'passkey'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean; host?: string }): string {
 	if (input.scheme === 'webauthn') {
 		if (input.here && input.registered) return 'Signed in. Choose Guest to sign out.';
 		const asGuest = input.phase === 'ready' && input.guest;
@@ -162,7 +169,8 @@ export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'register
 			return 'Creates an account and saves a new passkey for it on this device. Your display name names both.';
 		}
 		const only = input.use.signUp ? '' : ' New here? Create an account another way first.';
-		if (asGuest) return `Connected as a guest. Sign in with a passkey you saved, or stay a guest.${only}`;
+		// A passkey is for the server it was made on: one saved for another server is no account here.
+		if (asGuest) return `Each server has its own accounts: sign in with a passkey you saved for ${input.host ? `\`${input.host}\`` : 'this server'}.${only}`;
 		return `Your device lists the passkeys saved for this server: pick one to sign in to its account.${only}`;
 	}
 	if (input.scheme === 'email') {

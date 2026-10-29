@@ -2304,6 +2304,17 @@
 			const event = rowEvent(view);
 			return event ? copyMessageLink(event) : false;
 		},
+		// Touch's menu offers this, since its rows take no text selection: the text as written, Markdown and all.
+		copyText: async (view) => {
+			const text = rowEvent(view) ? textOf(rowEvent(view)!) : '';
+			if (!text) return false;
+			try {
+				await navigator.clipboard.writeText(text);
+				return true;
+			} catch {
+				return false;
+			}
+		},
 		select: (view, range) => {
 			if (view.id) selection.toggle(view.id, selectableOrder, range);
 		},
@@ -2743,6 +2754,17 @@
 <svelte:head>
 	<title>{tabTitle(unread.total, presence.titleFlash)}</title>
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
+	<!-- Link previews. og.png is apron.chat's `npm run screenshot -- og`; absolute, as crawlers require. -->
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="Apron" />
+	<meta property="og:title" content="Apron" />
+	<meta property="og:description" content="Apron, a chat frontend for the Apron Chat Protocol." />
+	<meta property="og:url" content="https://web.apron.chat/" />
+	<meta property="og:image" content="https://web.apron.chat/og.png" />
+	<meta property="og:image:width" content="2400" />
+	<meta property="og:image:height" content="1260" />
+	<meta property="og:image:alt" content="The Apron web client: an engineering room with a mention, a replied-to message, reactions and a benchmark in a terminal, beside rooms, a thread, direct messages and members." />
+	<meta name="twitter:card" content="summary_large_image" />
 </svelte:head>
 
 {#if client && links.asked && signInLinkDialog.component}

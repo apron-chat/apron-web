@@ -102,6 +102,13 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 @keyframes ap-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
 .ap-msg-highlighted, .ap-msg-highlighted:hover { background: var(--bg-300); }
 .ap-msg-actions { position: absolute; top: -14px; inset-inline-end: var(--space-2); z-index: var(--z-float); visibility: hidden; }
+/* On a touch screen a long press opens a message's menu (with Copy text), so its row takes no text selection or callout,
+   which would fight it; a link, media and the editor keep the browser's own. */
+@media (hover: none) and (pointer: coarse) {
+	.ap-msg { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+	.ap-msg :is(a, img, video) { -webkit-touch-callout: default; }
+	.ap-msg :is(input, textarea, [contenteditable]) { -webkit-user-select: text; user-select: text; }
+}
 .ap-msg:hover .ap-msg-actions, .ap-msg:focus-within .ap-msg-actions, .ap-msg-actions:focus-within { visibility: visible; }
 /* The toolbar stays up while its React button's emoji picker is open. */
 .ap-msg-actions:has([aria-expanded='true']) { visibility: visible; }
@@ -111,9 +118,12 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg:has(.ap-msg-actions [aria-expanded='true']) .ap-msg-hovertime { visibility: visible; }
 .ap-timeline:has(.ap-msg-actions [aria-expanded='true']) .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected, :has(.ap-msg-actions [aria-expanded='true'])):hover { background: transparent; }
 .ap-timeline:has(.ap-msg-actions [aria-expanded='true']) .ap-msg:not(:has(.ap-msg-actions [aria-expanded='true'])):is(:hover, :focus-within) :is(.ap-msg-actions, .ap-msg-hovertime, .ap-rchip-add) { visibility: hidden; }
-/* A second tap on a message puts its toolbar away: touch leaves the row hovered, so it stays otherwise. */
+/* On touch a tap shows a message nothing (its toolbar waits for a long press), though touch leaves the row hovered. */
 .ap-msg.ap-msg-dismissed:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected, :has(.ap-msg-actions [aria-expanded='true'])):hover { background: transparent; }
 .ap-msg.ap-msg-dismissed:not(:has(.ap-msg-actions [aria-expanded='true'])) :is(.ap-msg-actions, .ap-msg-hovertime, .ap-rchip-add) { visibility: hidden; }
+/* The message a long press opened the menu on keeps the hover look, not the focus ring that holds it open. */
+.ap-msg-held:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected) { background: var(--hover-soft); }
+.ap-msg-held:focus { outline: none; }
 /* select mode: a check column on the left; the whole row toggles */
 .ap-msg-selectable { grid-template-columns: 24px var(--avatar-md) minmax(0, 1fr); cursor: pointer; user-select: none; }
 .ap-msg-selectable:hover { background: var(--hover-soft); }
@@ -458,6 +468,11 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-actions-btn { font: inherit; font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; min-width: var(--control-md); height: var(--control-md); padding: 0 var(--space-2); border: 0; border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; }
 .ap-actions-btn:hover { background: var(--hover); color: var(--ink); }
 .ap-actions-danger:hover { color: var(--danger); }
+/* Touch's menu, opened by a long press: buttons a finger can hit, and ⋯ opening every action as a menu, one row each. */
+.ap-actions-touch .ap-actions-btn { min-width: var(--control-xl); height: var(--control-xl); padding: 0 var(--space-3); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); }
+.ap-actions-menu { flex-direction: column; align-items: stretch; min-width: 12rem; border-radius: var(--radius-lg); }
+.ap-actions-menu .ap-actions-btn { border-radius: var(--radius-md); text-align: start; }
+.ap-actions-menu .ap-actions-danger { color: var(--danger); }
 
 /* JumpBar — bar above the composer, or a floating button */
 .ap-jumpbar { display: flex; align-items: center; gap: var(--space-3); margin: 0 var(--space-4); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); box-shadow: var(--shadow-float); font-size: var(--text-ui); line-height: var(--leading-ui); }
@@ -1042,6 +1057,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-choice-title { font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; }
 .ap-choice-text { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-choice-on, .ap-choice-on:hover:not(:disabled) { background: var(--chosen); border-color: var(--line-strong); color: var(--ink); box-shadow: var(--shadow-chosen); }
+/* A dot in the top end corner (the right, or the left under dir="rtl"), just inside the border, to draw the eye to a choice (SignInForm `passkeyNudge`). */
+.ap-choice-nudge { position: relative; }
+.ap-choice-nudge::after { content: ''; position: absolute; top: 3px; inset-inline-end: 3px; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--danger); }
 @media (prefers-reduced-motion: reduce) { .ap-choice-item { transition: none; } }
 
 /* CheckList — choices that combine, one per row: a checkbox, a title with an optional muted note, and an optional line saying what it does */

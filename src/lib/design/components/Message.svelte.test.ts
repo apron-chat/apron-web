@@ -270,6 +270,19 @@ describe('a message row’s toolbar', () => {
 		expect(dom.button('More actions')).not.toBeNull();
 	});
 
+	it('puts the rarer actions away on a press anywhere else, not one inside the toolbar', () => {
+		const row = render({ caps: ALL });
+		engage(row);
+		dom.button('More actions').click();
+		flushSync();
+		dom.button('Select message').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+		flushSync();
+		expect(dom.queryByRole('button', 'Select message')).not.toBeNull();
+		document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+		flushSync();
+		expect([dom.queryByRole('button', 'Select message'), dom.queryByRole('button', 'More actions')]).toEqual([null, expect.anything()]);
+	});
+
 	it('opens your picker beside React, says whether it is open, and lets the button go with the picker', () => {
 		let open = $state(false);
 		const release = vi.fn();
@@ -331,53 +344,112 @@ describe('select gestures', () => {
 		expect(select).not.toHaveBeenCalled();
 	});
 
-	it('starts select mode from a long touch press, but not one that moves or lands on a chip', () => {
+	/** A finger held on `target` from (x, y) for the long press's length. */
+	function hold(target: Element, x = 0, y = 0): void {
+		dom.touch('pointerdown', target, x, y);
+		vi.advanceTimersByTime(500);
+		flushSync();
+	}
+	const held = (row: Element) => row.classList.contains('ap-msg-held');
+	const buttons = () => [...dom.byRole('toolbar', 'Message actions').querySelectorAll('button')].map(dom.nameOf);
+
+	it('opens a larger menu from a long touch press, Reply and React up front and the rest behind ⋯ as rows, Select on anyone’s', () => {
 		vi.useFakeTimers();
-		const beginSelect = vi.fn();
-		const row = render({ caps: { ...NONE, select: true }, reactions: [{ emoji: '👍', count: 1 }] }, { beginSelect });
+		const copyText = vi.fn(async () => true);
+		// Not yours: Select is still there.
+		const row = render({ caps: { ...ALL, edit: false, removeReply: false } }, { copyText });
 		const text = row.querySelector('.ap-msg-text')!;
-		dom.touch('pointerdown', text);
-		vi.advanceTimersByTime(500);
-		expect(beginSelect).toHaveBeenCalledOnce();
-		dom.touch('pointerdown', text);
-		dom.touch('pointermove', text);
-		vi.advanceTimersByTime(500);
-		dom.touch('pointerdown', dom.button('👍 1. Add yours'));
-		vi.advanceTimersByTime(500);
-		expect(beginSelect).toHaveBeenCalledOnce();
-		// One that ends after its row has gone does nothing.
-		dom.touch('pointerdown', text);
-		dom.unmount();
-		vi.advanceTimersByTime(500);
-		expect(beginSelect).toHaveBeenCalledOnce();
+		hold(text);
+		expect(held(row)).toBe(true);
+		expect(dom.byRole('toolbar', 'Message actions').classList.contains('ap-actions-touch')).toBe(true);
+		expect(buttons()).toEqual(['Reply to message', 'React', 'More actions']);
+		// The click that ends the press does nothing else.
+		click(text);
+		flushSync();
+		expect(held(row)).toBe(true);
+		dom.button('More actions').click();
+		flushSync();
+		expect(dom.byRole('toolbar', 'Message actions').getAttribute('aria-orientation')).toBe('vertical');
+		expect(buttons()).toEqual(['Reply to message', 'React', 'Start thread', 'Select message', 'Copy text', 'Copy link to message']);
+		dom.button('Copy text').click();
+		expect(copyText).toHaveBeenCalledOnce();
 	});
 
-	it('puts its toolbar away on a second tap, and brings it back on a third or after focus leaves', () => {
-		const row = render({ caps: ALL });
-		engage(row);
+	it('opens the menu only from a press held still, never a tap, nor on a chip, a link or a row gone', () => {
+		vi.useFakeTimers();
+		const row = render({ caps: ALL, reactions: [{ emoji: '👍', count: 1 }] });
 		const text = row.querySelector('.ap-msg-text')!;
-		const tap = () => {
-			dom.touch('pointerdown', text);
-			click(text);
-			flushSync();
-			return row.classList.contains('ap-msg-dismissed');
-		};
-		expect(tap()).toBe(false);
-		expect(tap()).toBe(true);
-		expect(tap()).toBe(false);
-		row.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-		expect(tap()).toBe(false);
-		expect(tap()).toBe(true);
-		// A mouse brings it back, and its clicks never put it away.
+		// A tap: no menu, and no hover toolbar left behind.
+		dom.touch('pointerdown', text);
+		click(text);
+		flushSync();
+		expect([held(row), row.classList.contains('ap-msg-dismissed')]).toEqual([false, true]);
+		// A finger drifts a little while held; past the slop it's a scroll.
+		dom.touch('pointerdown', text, 0, 0);
+		dom.touch('pointermove', text, 6, 6);
+		vi.advanceTimersByTime(500);
+		flushSync();
+		expect(held(row)).toBe(true);
+		dom.unmount();
+		const again = render({ caps: ALL, reactions: [{ emoji: '👍', count: 1 }], body: { html: 'see <a href="https://example.com">this</a>', markdown: false } });
+		dom.touch('pointerdown', again.querySelector('.ap-msg-text')!, 0, 0);
+		dom.touch('pointermove', again.querySelector('.ap-msg-text')!, 20, 0);
+		hold(dom.button('👍 1. Add yours'));
+		hold(again.querySelector('a')!);
+		expect(held(again)).toBe(false);
+		// One that ends after its row has gone does nothing.
+		dom.touch('pointerdown', again.querySelector('.ap-msg-text')!);
+		dom.unmount();
+		vi.advanceTimersByTime(500);
+	});
+
+	it('opens at once on Android’s own long press, in its place', () => {
+		const row = render({ caps: ALL });
+		const text = row.querySelector('.ap-msg-text')!;
+		dom.touch('pointerdown', text);
+		const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+		text.dispatchEvent(menu);
+		flushSync();
+		expect([held(row), menu.defaultPrevented]).toEqual([true, true]);
+		// A mouse's right-click stays the browser's.
+		row.dispatchEvent(new Event('pointerenter'));
+		const right = new MouseEvent('pointerdown', { bubbles: true });
+		Object.defineProperty(right, 'pointerType', { value: 'mouse' });
+		text.dispatchEvent(right);
+		const native = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+		text.dispatchEvent(native);
+		expect(native.defaultPrevented).toBe(false);
+	});
+
+	it('puts its menu away on a tap on the row, Escape or focus leaving, and a mouse brings back the hover toolbar', async () => {
+		vi.useFakeTimers();
+		const row = render({ caps: ALL });
+		const text = row.querySelector('.ap-msg-text')!;
+		hold(text);
+		click(text);
+		dom.touch('pointerdown', text);
+		click(text);
+		flushSync();
+		expect([held(row), row.classList.contains('ap-msg-dismissed')]).toEqual([false, true]);
+		hold(text);
+		dom.press(row, 'Escape');
+		await Promise.resolve();
+		flushSync();
+		expect(held(row)).toBe(false);
+		hold(text);
+		// ⋯ goes as the rest show: the focus it held moves on to them, and the menu stays.
+		dom.button('More actions').focus();
+		dom.button('More actions').click();
+		await tick();
+		flushSync();
+		expect([held(row), dom.nameOf(document.activeElement!)]).toEqual([true, 'Start thread']);
+		(document.activeElement as HTMLElement).blur();
+		await Promise.resolve();
+		flushSync();
+		expect(held(row)).toBe(false);
 		const mouse = new MouseEvent('pointerenter');
 		Object.defineProperty(mouse, 'pointerType', { value: 'mouse' });
 		row.dispatchEvent(mouse);
-		flushSync();
-		expect(row.classList.contains('ap-msg-dismissed')).toBe(false);
-		for (let i = 0; i < 2; i++) {
-			row.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-			click(text);
-		}
 		flushSync();
 		expect(row.classList.contains('ap-msg-dismissed')).toBe(false);
 	});
