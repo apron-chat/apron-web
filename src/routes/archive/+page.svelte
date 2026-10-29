@@ -12,12 +12,12 @@
 	keepSettingsInMemory();
 
 	/** The export being read, and the server in this page that serves it. */
-	let reading = $state<{ archive: Archive; server: ArchiveServer } | undefined>();
+	let reading = $state.raw<{ archive: Archive; server: ArchiveServer } | undefined>();
 	/**
 	 * An export read, waiting for the reader to say whether its images load: from the sites it names, which then
 	 * learn that someone is reading it. A file says what it likes, so nothing loads from them unasked.
 	 */
-	let asking = $state<{ archive: Archive; hosts: string[] } | undefined>();
+	let asking = $state.raw<{ archive: Archive; hosts: string[] } | undefined>();
 	let error = $state('');
 	let busy = $state(false);
 	let input = $state<HTMLInputElement | undefined>();
@@ -64,7 +64,7 @@
 </svelte:head>
 
 {#if reading}
-	<AppPage webSocketFactory={reading.server.factory} archive={{ server: reading.archive.server, exportedAt: reading.archive.exportedAt }} />
+	<AppPage webSocketFactory={reading.server.factory} />
 {:else}
 	<ConnectPage page>
 		<!-- A file dropped anywhere on the card is read like one chosen. -->

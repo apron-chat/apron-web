@@ -157,8 +157,10 @@ export {
 	MAX_BIO_CHARS,
 	mediaLimit,
 	normalizeWebSocketUrl,
+	offersSignIn,
 	sameServer,
 	serverAddress,
+	serverArchive,
 	serverLook,
 	peopleTitle,
 	PRIVATE_ROOM,
@@ -849,6 +851,11 @@ export class ChatClient {
 	 */
 	olderPagesFrom(source: ((roomId: string, before: string, limit: number) => Promise<JsonObject | undefined>) | undefined): void {
 		this.olderSource = source;
+	}
+
+	/** Each room's sync (`RoomSync`): with `storedRecords`, where what is stored of a room's log starts and ends (`$lib/archive`). */
+	roomSyncs(): RoomSync[] {
+		return [...this.rooms.values()].map(roomSync);
 	}
 
 	/** Calls `listener` with each change to the stored records until the returned function is called (`ProtocolStore.observe`). */

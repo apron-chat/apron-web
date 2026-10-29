@@ -27,6 +27,8 @@ test('an export opens on /archive as it was, read-only', async ({ preview, page 
 	await expect(page.getByTestId('archive-hosts')).toContainText('apron-preview.invalid');
 	await page.getByRole('button', { name: 'Open without images' }).click();
 	await expect(page.getByText(/^An export from apron-preview\.invalid, saved .+\. It’s read-only\.$/)).toBeVisible();
+	// It offers only guests' sign-in, so nothing lifts read-only, and nothing offers to.
+	await expect(page.locator('.ap-composer-readonly').getByRole('button', { name: 'Sign in' })).toHaveCount(0);
 	await page.locator('[data-room="general"]').first().click();
 	await expect(page.getByText('Welcome to Apron!', { exact: false })).toBeVisible();
 	await expect(page.getByRole('textbox', { name: /^Message/ })).toHaveCount(0);

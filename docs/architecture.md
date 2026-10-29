@@ -444,18 +444,27 @@ notifications. Editors start from the records, so an edit sends back every
 character, and IDs, tokens, write URLs and `ext` are never touched. Every `auth` the client sends carries `agent: "apron-web/0.4"`
 (§3.2).
 
-Exports live in `src/lib/archive`. `archive.ts` writes and reads the format:
-`exportArchive` takes a `ChatClient`'s `storedRecords()` (the `ProtocolStore`'s
-records, which `records()` returns as the store keeps them: one per key, and
-every membership logged) and its snapshot, and writes a header line, the users,
-the rooms, then each record as the wire would carry it, in `log_id` order;
-`parseArchive` reads one back through the same decoders as a server's frames,
-skipping lines it can't. `ArchiveServer` is the server in the page that
-`/archive` (`src/routes/archive`) mounts the app against, as `/__preview` mounts
-it against `MemoryProtocolServer`: it answers `auth`, `room_list` and `history`
-from the export and refuses everything else. Both make their sockets with
-`memorySocket` (`src/lib/preview/memory-socket.ts`), a `WebSocket` as far as
-the client can tell. Unlike `/__preview`, `/archive` is in every build.
+Exports live in `src/lib/archive`, in the format [ARCHIVE.md](../ARCHIVE.md)
+specifies. `archive.ts` writes and reads it: `exportArchive` takes a
+`ChatClient`'s `storedRecords()` (the `ProtocolStore`'s records, which
+`records()` returns as the store keeps them: one per key, and every membership
+logged), its `roomSyncs()` and its snapshot, and writes a header line, one
+`room_list`-shaped line listing the shown rooms (and their parents) with each
+one's `history_log_id` set to where its unbroken stretch of records starts (the
+oldest page it loaded, `olderBefore`, or its retention floor), then each record
+in a stretch, one per line in `log_id` order, as a `history` result would carry
+it; a message outside every stretch goes only when one in a stretch replies to
+it. `parseArchive` reads one back through the same decoders as a server's
+frames, skipping lines and records it can't. `ArchiveServer` is the server in
+the page that `/archive` (`src/routes/archive`) mounts the app against, as
+`/__preview` mounts it against `MemoryProtocolServer`: it offers only guest
+sign-in, as a `you` with `ext:permissions` `write: false`, says what it serves with `ext:archive`
+(which the read-only bar reads, `serverArchive`), answers `auth`, `room_list`
+and `history` (each room's stretch, or without `room_id` the joined rooms'
+together from the greatest of their bounds), refuses writes with `denied` and
+replies `unsupported` to the rest. Both make their sockets with `memorySocket`
+(`src/lib/preview/memory-socket.ts`), a `WebSocket` as far as the client can
+tell. Unlike `/__preview`, `/archive` is in every build.
 
 History kept on this device lives in `src/lib/history`. `log.ts` pages a
 room's log as `history` does (§4.3.2), for everything that answers it from what

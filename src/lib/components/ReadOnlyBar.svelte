@@ -7,11 +7,11 @@
 	 * may lift it. Rooms can still be listed and read, without joining.
 	 */
 	interface Props {
-		/** You read as a guest: signing in may let you post. */
+		/** You read as a guest, on a server that offers another way to sign in: signing in may let you post. */
 		guest: boolean;
 		/** Why passkeys can't be used in this browser, when they can't. */
 		passkeyUnavailable?: string;
-		/** Reading an export (`/archive`): what it is, said in place of the guest's line, with no sign-in to offer. */
+		/** Reading an archive (`ext:archive`): what it is, said in place of the guest's line, with no sign-in to offer. */
 		archive?: string;
 		onsignin: () => void;
 	}

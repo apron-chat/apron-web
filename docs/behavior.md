@@ -688,20 +688,21 @@ writes at a time; another takes over when it closes. Preferences says how much A
 keeping more if the device ran out of space.
 
 **Export** saves what this page has loaded from the server as a `.jsonl` file
-(`apron-<host>-<day>.jsonl`): the rooms and threads the rooms list shows, any
-other room a loaded message is in (such as a quoted message's), the rooms those
-are threads of, and every loaded record of theirs, compacted as the client keeps
-them (§4.3.4): each room's record, each message's latest snapshot, each
-message's reactions, and the join and leave records, with who you are and the
-users as they were, without their statuses. Threads listed but never opened load
-their newest page first; older messages of a room are in the export only once
-scrolled back to, or kept on this device. **Open an export** opens `/archive` in a new tab, where a
+(`apron-<host>-<day>.jsonl`, in the format [ARCHIVE.md](../ARCHIVE.md)
+specifies): the rooms and threads the rooms list shows, the rooms those are
+threads of, and each room's records from the oldest page loaded to its latest,
+compacted as the client keeps them (§4.3.4): each message's latest snapshot,
+each message's reactions, and the join and leave records, with who you are and
+the users as they were, without their statuses. A quoted message from before
+that, or from another room, goes along only as the quote. Threads listed but
+never opened load their newest page first; older messages of a room are in the
+export only once scrolled back to (or restored on this device). **Open an export** opens `/archive` in a new tab, where a
 chosen or dropped export opens in this same app, read-only, against a server in
 the page that serves only that file: it signs in as the export's `you`, as a
 guest who may only read (`ext:permissions` `write: false`), lists its
 rooms and threads as they were joined, pages their history, and refuses
 anything that would change them. The read-only bar says where and when the
-export was saved. Nothing is sent to the exported server and nothing is
+export was saved, and offers no sign-in: the server offers only guests'. Nothing is sent to the exported server and nothing is
 remembered, as in `/__preview`. An export names the sites its images load from
 (the server's origin and those it named for its media), and since a file can
 name any, `/archive` lists them and asks first: **Load images**, or **Open
@@ -1428,8 +1429,9 @@ warns too when refused, without the token.
 A server may let someone only read, such as its guests, and says so in their
 `you` with `write: false` ([EXT.md §7](../EXT.md#7-extpermissions)). Signed in
 as a guest there, the composer gives way to a bar saying so with a **Sign in**
-button (it opens the sign-in panel on Passkey); signed in to an account, the
-bar only says so. Replying, reacting, editing, moving and deleting messages,
+button (it opens the sign-in panel on Passkey); signed in to an account, or as
+a guest on a server whose `auth` offers only `guest` (nothing would lift it,
+as on `/archive`), the bar only says so. Replying, reacting, editing, moving and deleting messages,
 starting threads, editing rooms and threads, adding or removing members, and
 Join and Leave are hidden; a room picked under Other Rooms (which says no
 Join) opens to read through its history without joining it, and Other Threads

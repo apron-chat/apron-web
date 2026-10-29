@@ -103,7 +103,7 @@
 	async function exportChats(): Promise<{ name: string; rooms: number; messages: number } | undefined> {
 		const unopened = client.snapshot().rooms.filter((room) => room.parentRoomId !== undefined && !room.loaded && !room.resumed);
 		await Promise.allSettled(unopened.map((room) => client.loadRoom(room.id)));
-		const file = exportArchive(client.url, client.snapshot(), client.storedRecords());
+		const file = exportArchive(client.url, client.snapshot(), client.storedRecords(), client.roomSyncs());
 		if (file.rooms === 0) return undefined;
 		const url = URL.createObjectURL(new Blob([file.text], { type: 'application/jsonl' }));
 		const link = Object.assign(document.createElement('a'), { href: url, download: file.name });
