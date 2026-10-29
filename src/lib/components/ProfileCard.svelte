@@ -57,7 +57,7 @@
 	let placement = $derived.by(() => {
 		void reflowed;
 		if (!request) return undefined;
-		return placePicker(request.anchor.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, { width: WIDTH, height: measured || 200 });
+		return placePicker(request.anchor.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, { width: WIDTH, height: measured || 200, rtl: getComputedStyle(request.anchor).direction === 'rtl' });
 	});
 
 	let person = $derived(request ? directory.person({ user_id: request.userId }) : undefined);

@@ -67,17 +67,20 @@ export interface PlaceOptions {
 	gap?: number;
 	/** Kept clear at the viewport's edges. */
 	margin?: number;
+	/** The anchor is laid out right to left (`dir="rtl"`): line up with its right edge first, mirrored. */
+	rtl?: boolean;
 }
 
 /**
  * Where the picker opens for a trigger at `anchor` (viewport coordinates):
  * below it when it fits, else above, else on the roomier side, shortened to
  * fit; lined up with the anchor's left edge, or its right edge near the
- * viewport's right, and always inside the viewport. Narrow viewports get a
+ * viewport's right (mirrored under `rtl`: its right edge, or its left near the
+ * viewport's left), and always inside the viewport. Narrow viewports get a
  * bottom sheet instead.
  */
 export function placePicker(anchor: Box, viewport: Viewport, options: PlaceOptions = {}): Placement {
-	const { width = PICKER_WIDTH, height = PICKER_HEIGHT, gap = 4, margin = 8 } = options;
+	const { width = PICKER_WIDTH, height = PICKER_HEIGHT, gap = 4, margin = 8, rtl = false } = options;
 	if (viewport.width < NARROW_MAX) {
 		return { mode: 'sheet', height: Math.max(Math.min(PICKER_MIN_HEIGHT, viewport.height), Math.min(height, Math.round(viewport.height * 0.6))) };
 	}
@@ -88,7 +91,9 @@ export function placePicker(anchor: Box, viewport: Viewport, options: PlaceOptio
 	const fitted = Math.min(height, Math.max(room, Math.min(PICKER_MIN_HEIGHT, viewport.height - 2 * margin)));
 	const rawTop = side === 'below' ? anchor.bottom + gap : anchor.top - gap - fitted;
 	const top = clamp(rawTop, margin, viewport.height - margin - fitted);
-	const rawLeft = anchor.left + width <= viewport.width - margin ? anchor.left : anchor.right - width;
+	const rawLeft = rtl
+		? (anchor.right - width >= margin ? anchor.right - width : anchor.left)
+		: (anchor.left + width <= viewport.width - margin ? anchor.left : anchor.right - width);
 	const left = clamp(rawLeft, margin, viewport.width - margin - width);
 	return { mode: 'popover', side, top, left, width, height: fitted };
 }

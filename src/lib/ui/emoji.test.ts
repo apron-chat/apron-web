@@ -29,6 +29,21 @@ describe('placing the emoji picker', () => {
 		expect(left.left).toBe(8);
 	});
 
+	it('mirrored (rtl), lines up with the right edge, or the left near the viewport’s left, and never leaves the viewport', () => {
+		const rtl = placePicker(button(1000, 100), desktop, { rtl: true });
+		if (rtl.mode !== 'popover') throw new Error('expected a popover');
+		expect(rtl.left + rtl.width).toBe(1028);
+		const near = placePicker(button(40, 100), desktop, { rtl: true });
+		if (near.mode !== 'popover') throw new Error('expected a popover');
+		expect(near.left).toBe(40);
+		const off = placePicker({ left: 1270, top: 100, right: 1300, bottom: 128 }, desktop, { rtl: true });
+		if (off.mode !== 'popover') throw new Error('expected a popover');
+		expect(off.left + off.width).toBe(desktop.width - 8);
+		// With room either way, each direction lines up with the anchor's start.
+		expect(placePicker(button(600, 100), desktop)).toMatchObject({ left: 600 });
+		expect(placePicker(button(600, 100), desktop, { rtl: true })).toMatchObject({ left: 628 - PICKER_WIDTH });
+	});
+
 	it('takes the roomier side and shortens to fit when neither side has the full height', () => {
 		const short = { width: 1024, height: 600 };
 		const placed = placePicker(button(100, 250), short);

@@ -30,7 +30,7 @@
 	let request = $derived(emojiPicker.current);
 	let placement = $derived.by(() => {
 		void reflowed;
-		return request ? placePicker(request.anchor.getBoundingClientRect(), { width: innerWidth, height: innerHeight }) : undefined;
+		return request ? placePicker(request.anchor.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, { rtl: getComputedStyle(request.anchor).direction === 'rtl' }) : undefined;
 	});
 
 	function theme(): 'light' | 'dark' {
