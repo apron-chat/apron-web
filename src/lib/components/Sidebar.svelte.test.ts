@@ -59,4 +59,50 @@ describe('Sidebar', () => {
 		expect(dom.queryByRole('dialog', 'Edit profile')).toBeNull();
 		session.dispose();
 	});
+
+	it('folds the open room’s threads to those with news when it is picked again, and unfolds them when picked once more, from the … after them, or on leaving it', () => {
+		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
+		const thread = (id: string, title: string): RoomSnapshot => ({ ...general, id, title, parentRoomId: 'general', timeline: createTimeline(id) }) as RoomSnapshot;
+		const random: RoomSnapshot = { ...general, id: 'random', title: 'Random', timeline: createTimeline('random') } as RoomSnapshot;
+		const session = new SessionView();
+		session.apply(live({ rooms: [general, random, thread('deploy', 'Deploy'), thread('cert', 'Expired cert')] }), client);
+		const onroom = vi.fn();
+		const threads = [thread('deploy', 'Deploy'), thread('cert', 'Expired cert')].map((room) => ({ id: room.id, parentRoomId: 'general', title: room.title, loaded: true, participants: [], joined: true }));
+		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', threads, mentions: {}, unread: { cert: 2 }, displayName: 'Ada', onroom, onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() } as never);
+		flushSync();
+		const listed = () => [...document.querySelectorAll<HTMLElement>('button[data-thread]')].map((button) => button.dataset.thread);
+		const room = (id: string) => document.querySelector<HTMLElement>(`button[data-room="${id}"]`)!;
+		expect(listed()).toEqual(['deploy', 'cert']);
+
+		const expand = () => document.querySelector<HTMLElement>('[data-testid="expand-threads"]');
+		expect(expand()).toBeNull();
+
+		room('general').click();
+		flushSync();
+		expect(listed()).toEqual(['cert']);
+		expect(expand()?.getAttribute('aria-label')).toBe('Show all threads in General');
+		expect(onroom).toHaveBeenCalledTimes(1);
+		room('general').click();
+		flushSync();
+		expect(listed()).toEqual(['deploy', 'cert']);
+		expect(expand()).toBeNull();
+
+		// The … after the folded list unfolds it too.
+		room('general').click();
+		flushSync();
+		expand()!.click();
+		flushSync();
+		expect(listed()).toEqual(['deploy', 'cert']);
+		expect(onroom).toHaveBeenCalledTimes(3);
+
+		// Folded, then another room opened and this one again: it opens unfolded.
+		room('general').click();
+		flushSync();
+		session.apply(live({ rooms: session.rooms, activeRoom: 'random' }), client);
+		flushSync();
+		session.apply(live({ rooms: session.rooms, activeRoom: 'general' }), client);
+		flushSync();
+		expect(listed()).toEqual(['deploy', 'cert']);
+		session.dispose();
+	});
 });
