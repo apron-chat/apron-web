@@ -1,4 +1,4 @@
-<!-- @dsCard group="Navigation" height=360 subtitle="A heading with a + that doesn't fold, collapsible room groups with a caption, and one still loading" -->
+<!-- @dsCard group="Navigation" height=360 subtitle="A heading that folds its rows to those with news, with a +; folded, a … before the + shows them all again (More rooms has none, so shows nothing); a heading that doesn't fold; and one still loading" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>SidebarSection</title></head>
@@ -9,10 +9,12 @@
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   var noop = function () {};
   var rooms = function (list) { return A.parts.apply(null, list.map(function (p) { return p.thread ? A.part(A.ThreadItem, p) : A.part(A.RoomItem, p); })); };
-  add(A.SidebarSection, { title: 'Rooms', collapsible: false, onadd: noop, addLabel: 'Create room',
+  add(A.SidebarSection, { title: 'Rooms', onadd: noop, addLabel: 'Create room',
     children: rooms([{ room: 'general', name: 'General', active: true, onnewthread: noop }, { room: 'ops', name: 'Ops', unread: 12 }, { thread: 'deploy', name: 'Deploy', unread: 2 }, { room: 'design', name: 'Design' }]) });
   add(A.SidebarSection, { title: 'More rooms', children: rooms([{ room: 'random', name: 'Random', topic: '12 members · Join' }]) });
-  add(A.SidebarSection, { title: 'Archive', open: false, children: rooms([{ room: 'old', name: 'Old' }]) });
+  add(A.SidebarSection, { title: 'Private', folded: true, onadd: noop, addLabel: 'New private conversation', children: rooms([{ room: 'bo', name: 'Bo', unread: 1 }]) });
+  add(A.SidebarSection, { title: 'More rooms', folded: true });
+  add(A.SidebarSection, { title: 'Pinned', foldable: false, children: rooms([{ room: 'old', name: 'Old' }]) });
   add(A.SidebarSection, { title: 'Muted', loading: true });
 </script>
 </body>

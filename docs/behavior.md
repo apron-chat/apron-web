@@ -806,6 +806,13 @@ comes back without `private: true` gets the same error, and neither the reply
 composer opens on it nor do selected messages move into it. Private rooms and
 threads show a lock beside their name.
 
+The sidebar's section headings fold as picking the open room does: **Rooms** or
+**Private** folds to the rooms with news, in them or in their threads, and
+the open room (which reading would otherwise take away), and the heading shows
+the **…** before its **+**; the **…**, or the heading again, shows them all.
+**More rooms** folds alike, to nothing, as its rooms have no news. Each starts
+open and stays as you left it, on this device.
+
 The sidebar's **Private** section, right below Rooms and above More rooms,
 lists every joined top-level private room (`private: true` and no
 `parent_room_id`, [PROTOCOL.md §4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)):
@@ -941,7 +948,8 @@ the error.
 **More rooms** in the sidebar lists, via `room_list` with
 `filter: "not_joined"`, the most active visible rooms you haven't joined, each
 with its member count and **Join**. It starts open, so a newcomer sees what
-else there is without looking for it, and folds; opening it again lists afresh.
+else there is without looking for it, and folds as the other sections do;
+unfolding it lists afresh.
 Picking one joins it and opens it once its `room_update` arrives.
 
 With the `edit` capability, several messages move at a time: shift-click a

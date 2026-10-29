@@ -23,6 +23,8 @@ const KEY = {
 	memberSections: 'apron.memberSections',
 	/** Whether Other threads, the threads you haven't joined under the open room, is folded away. */
 	otherThreads: 'apron.otherThreads',
+	/** The sidebar's sections folded to their rows with news (`rooms`, `private`, `more`). */
+	sidebarFolds: 'apron.sidebarFolds',
 	/** The room and thread descriptions put away with their ×, each kept as the fingerprint of the text put away. Still stored under its old name, so what's put away stays put away. */
 	hiddenDescriptions: 'apron.hiddenSummaries',
 	/** Private rooms someone else added you to, per account (`notifyAccount`), until their banner is put away or you leave. */
@@ -186,6 +188,20 @@ export function loadShutMemberSections(): string[] {
 
 export function saveShutMemberSections(shut: readonly string[]): void {
 	write(KEY.memberSections, JSON.stringify(shut));
+}
+
+/** The sidebar's sections folded to their rows with news, by key; none until one is, and they stay as they were left. */
+export function loadFoldedSections(): string[] {
+	try {
+		const folded: unknown = JSON.parse(read(KEY.sidebarFolds) ?? '[]');
+		return Array.isArray(folded) ? folded.filter((key): key is string => typeof key === 'string') : [];
+	} catch {
+		return [];
+	}
+}
+
+export function saveFoldedSections(folded: readonly string[]): void {
+	write(KEY.sidebarFolds, JSON.stringify(folded));
 }
 
 /** Other threads is open until it's folded, and stays as it was left. */
