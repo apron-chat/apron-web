@@ -694,11 +694,11 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-sectionhead { padding: 0 var(--space-1) var(--space-1); }
 .ap-memberlist-sectionhead .ap-sect-toggle { padding-inline-start: 0; }
 .ap-memberlist-people { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.ap-member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); cursor: pointer; }
+.ap-member { --ap-member-bg: var(--bg-000); position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); border-radius: var(--radius-md); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); cursor: pointer; }
+/* The whole row opens their card (MemberList), so the pointer anywhere on it tints it, as a message under the pointer. */
+.ap-member:hover { --ap-member-bg: var(--hover-soft); background: var(--ap-member-bg); }
 /* Role badges follow the name, as beside a message's sender; the remove button floats over the row's far end. */
 .ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1e12 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
-/* The whole row opens their card (MemberList), so a pointer anywhere on it says so. */
-.ap-member:hover .ap-member-name { text-decoration: underline; }
 /* Offline members (§4.5) recede, badges and all; their ring and name still read. */
 .ap-member-offline .ap-member-who { color: var(--ink-muted); }
 .ap-member-offline .ap-avatar, .ap-member-offline .ap-roles { opacity: var(--opacity-dim); }
@@ -716,10 +716,11 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 	/* A member's button: its avatar and the name's least. */
 	.ap-member-who { min-width: calc-size(max-content, min(size, calc(var(--avatar-sm) + var(--space-2) + var(--ap-name-min)), 100%)); }
 }
-/* Remove shows on hover or focus, over the end of the row rather than holding a gap there, so names and badges keep the width. */
-.ap-member .ap-member-remove { position: absolute; top: 50%; inset-inline-end: var(--space-1); width: var(--control-sm); height: var(--control-sm); transform: translateY(-50%); background: var(--bg-000); box-shadow: -8px 0 6px var(--bg-000); opacity: 0; pointer-events: none; }
+/* Remove shows on hover or focus, over the end of the row rather than holding a gap there, so names and badges keep the
+   width: on the row's own color (--ap-member-bg, tinted while hovered), with a fade of it over what it covers. */
+.ap-member .ap-member-remove { position: absolute; top: 50%; inset-inline-end: var(--space-1); width: var(--control-sm); height: var(--control-sm); transform: translateY(-50%); background: var(--ap-member-bg); box-shadow: -8px 0 6px var(--ap-member-bg); opacity: 0; pointer-events: none; }
 /* Mirrored, it floats over the left end, its fade toward the name on its right. */
-:where([dir='rtl']) .ap-member .ap-member-remove { box-shadow: 8px 0 6px var(--bg-000); }
+:where([dir='rtl']) .ap-member .ap-member-remove { box-shadow: 8px 0 6px var(--ap-member-bg); }
 .ap-member:hover .ap-member-remove, .ap-member:focus-within .ap-member-remove { opacity: 1; pointer-events: auto; }
 /* Touch screens have no hover, so it's always there, in the row's flow at its far end. */
 @media (hover: none) { .ap-member .ap-member-remove { position: static; flex: none; margin-inline-start: auto; transform: none; background: transparent; box-shadow: none; opacity: 1; pointer-events: auto; } }
