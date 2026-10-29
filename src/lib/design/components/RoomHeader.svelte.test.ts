@@ -119,11 +119,11 @@ describe('RoomHeader', () => {
 		const back = () => dom.button(/^Back to rooms/);
 		/** The tag on the back arrow: what it shows, and whether it's the quiet or the @ kind. */
 		const tag = () => {
-			const shown = back().firstElementChild;
+			const shown = back().querySelector('.ap-roomhead-tag');
 			return shown && [shown.textContent, shown.classList.contains('ap-roomhead-tag-quiet') ? 'quiet' : shown.classList.contains('ap-roomhead-tag-at') ? 'at' : ''];
 		};
 		render({ onback: vi.fn() });
-		expect([back().getAttribute('aria-label'), back().textContent?.trim(), tag()]).toEqual(['Back to rooms', '‹', null]);
+		expect([back().getAttribute('aria-label'), back().querySelector('svg') !== null, tag()]).toEqual(['Back to rooms', true, null]);
 		dom.unmount();
 		render({ onback: vi.fn(), unreadElsewhere: 12 });
 		expect([back().getAttribute('aria-label'), tag()]).toEqual(['Back to rooms, 12 unread messages', ['12', 'quiet']]);

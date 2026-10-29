@@ -55,7 +55,7 @@
 		<span class="ap-profile-edit" aria-hidden="true">Edit</span>
 	</button>
 	{#if onpreferences}
-		<button class="ap-profile-settings" bind:this={preferencesButton} type="button" aria-label={paused ? `Open preferences. Notifications paused ${paused}` : 'Open preferences'} aria-haspopup="dialog" title={paused ? `Preferences · notifications paused ${paused}` : 'Preferences'} onclick={onpreferences}>
+		<button class="ap-iconbtn ap-iconbtn-lg ap-profile-settings" bind:this={preferencesButton} type="button" aria-label={paused ? `Open preferences. Notifications paused ${paused}` : 'Open preferences'} aria-haspopup="dialog" title={paused ? `Preferences · notifications paused ${paused}` : 'Preferences'} onclick={onpreferences}>
 			<Settings size={18} strokeWidth={1.6} aria-hidden="true" />
 			{#if paused}<span class="ap-profile-paused" aria-hidden="true"><BellOff size={10} strokeWidth={2.2} /></span>{/if}
 		</button>
