@@ -133,6 +133,7 @@ test.describe('room order, in a short window', () => {
 	// The sidebar's rooms scroll here, and a drag near its edge scrolls them, by where the pointer is.
 	test.use({ viewport: { width: 1280, height: 180 } });
 
+	// While the sidebar scrolls under it, the gap the others leave can lag behind the room; where it lands doesn't.
 	test('a room carried to the edge of the scrolling sidebar stays over its list, and lands at its end', async ({ preview, page }) => {
 		await preview.open('#room=general');
 		const scroller = await page.getByTestId('room-list').evaluate((list) => {
@@ -155,9 +156,26 @@ test.describe('room order, in a short window', () => {
 			const middleY = carried.y + carried.height / 2;
 			return middleY >= list.y && middleY <= list.y + list.height;
 		}).toBe(true);
-		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
 		await page.mouse.up();
 		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
+	});
+});
+
+test.describe('room order, in a short window, lifted without moving', () => {
+	test.use({ viewport: { width: 1280, height: 180 } });
+
+	test('a room lifted and let go where it was stays where it was, nothing scrolling under the pointer', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		const from = await middle(page, 'general');
+		await page.mouse.move(from.x, from.y);
+		await page.mouse.down();
+		// Lifted towards the middle of the sidebar, away from its top and bottom, where a pointer would scroll it.
+		await page.mouse.move(from.x, from.y - 12, { steps: 3 });
+		await expect(threadLists(page)).toHaveCount(0);
+		await page.waitForTimeout(300);
+		await page.mouse.up();
+		await expect(threadLists(page)).toHaveCount(1);
+		expect(await order(page)).toEqual(['general', 'engineering']);
 	});
 });
 
@@ -186,6 +204,30 @@ test.describe('room order, in a window too short for the list', () => {
 	});
 });
 
+test.describe('room order, with the window resized mid-drag', () => {
+	test.use(DEVICES.desktop);
+
+	test('the sidebar settles where it is rather than jumping each frame', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		const from = await middle(page, 'general');
+		await page.mouse.move(from.x, from.y);
+		await page.mouse.down();
+		await page.mouse.move(from.x, from.y + 12, { steps: 3 });
+		await expect(threadLists(page)).toHaveCount(0);
+		await page.setViewportSize({ width: 1280, height: 140 });
+		await page.waitForTimeout(200);
+		const scrolls = await page.getByTestId('room-list').evaluate((list) => new Promise<number[]>((done) => {
+			let node: HTMLElement | null = list;
+			while (node && !/(auto|scroll|hidden)/.test(getComputedStyle(node).overflowY)) node = node.parentElement;
+			const seen: number[] = [];
+			const each = () => (seen.push(node!.scrollTop), seen.length < 8 ? requestAnimationFrame(each) : done(seen));
+			requestAnimationFrame(each);
+		}));
+		expect(new Set(scrolls).size).toBe(1);
+		await page.mouse.up();
+	});
+});
+
 test.describe('room order, with pointer moves out of step with frames', () => {
 	test.use(DEVICES.desktop);
 
@@ -195,12 +237,19 @@ test.describe('room order, with pointer moves out of step with frames', () => {
 		await page.mouse.move(from.x, from.y);
 		await page.mouse.down();
 		await page.mouse.move(from.x, from.y + 12, { steps: 3 });
-		// Moves well off the list, more often than frames are drawn, as some browsers send them.
-		await page.evaluate(() => new Promise<void>((done) => {
+		// Moves well off the list, more often than frames are drawn, as some browsers send them: right after each, before
+		// any frame (when the library may check where it is), the room is already back in the list's column.
+		const strays = await page.getByTestId('room-list').evaluate((list, id) => new Promise<number>((done) => {
 			let i = 0;
-			const timer = setInterval(() => dispatchEvent(new MouseEvent('mousemove', { clientX: 700 + (i++ % 30), clientY: 600, buttons: 1 })), 3);
-			setTimeout(() => (clearInterval(timer), done()), 1500);
-		}));
+			let stray = 0;
+			const timer = setInterval(() => {
+				dispatchEvent(new MouseEvent('mousemove', { clientX: 700 + (i++ % 30), clientY: 600, buttons: 1 }));
+				const carried = document.getElementById(id)!.getBoundingClientRect();
+				if (Math.abs(carried.left - list.getBoundingClientRect().left) > 1) stray++;
+			}, 3);
+			setTimeout(() => (clearInterval(timer), done(stray)), 1500);
+		}), DRAGGED_ELEMENT_ID);
+		expect(strays).toBe(0);
 		// The list has made way for it where it's seen, at the end, before it's let go.
 		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
 		await page.mouse.up();

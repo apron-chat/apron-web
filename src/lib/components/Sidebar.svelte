@@ -150,21 +150,21 @@
 			});
 		}
 		refocus = undefined;
+		// Where it was seen as it was let go, which the library's own slot for it can lag behind once the sidebar has
+		// scrolled under it (the library keeps where the rooms were until it scrolls something itself).
 		const seen = landing;
 		landing = undefined;
-		if (info.trigger !== TRIGGERS.DROPPED_INTO_ZONE) {
-			if (seen) order.move(info.id, seen.target, seen.side);
-			return;
-		}
+		if (seen) return order.move(info.id, seen.target, seen.side);
+		if (info.trigger !== TRIGGERS.DROPPED_INTO_ZONE) return;
 		const ids = items.map((room) => room.id);
 		const at = ids.indexOf(info.id);
 		if (at > 0) order.move(info.id, ids[at - 1], 'after');
 		else if (ids.length > 1) order.move(info.id, ids[1], 'before');
 	}
 	/**
-	 * Where the carried room was seen as it was let go: next to the room its copy's middle is nearest. A drop the library
-	 * loses as outside its section (it can, as it scrolls a long one) lands there, since `contain` keeps the copy over
-	 * the section; the library has already slid its copy back by the time it tells of the drop, so it's noted on release.
+	 * Where the carried room was seen as it was let go: next to the room its copy's middle is nearest, the rule the
+	 * library uses too, on where things are now. `contain` keeps the copy over its section, so this is always somewhere
+	 * in it. The library has slid its copy into its slot by the time it tells of the drop, so it's noted on release.
 	 */
 	let landing: { target: string; side: 'before' | 'after' } | undefined;
 	function seenLanding(copy: HTMLElement, zone: HTMLElement, id: string): typeof landing {
@@ -178,41 +178,66 @@
 		if (next) return { target: next.dataset.room!, side: 'before' };
 		return others.length ? { target: others[others.length - 1].dataset.room!, side: 'after' } : undefined;
 	}
+	/** How near the sidebar's top or bottom the pointer brings more of the section into view, at most (the library's own reach). */
+	const EDGE = 30;
 	/**
 	 * Keeps the carried room in its section's column, moving only up and down, over the part of its section in view, so
 	 * it lands where it's seen (the library finds where it lands by its copy's middle). The library moves its copy by its
 	 * `transform` to follow the pointer (and slides it as it resizes it), which this corrects right after each move,
-	 * before the library's timed check reads it, and each frame, before it's drawn. The library also scrolls the sidebar
-	 * by where the pointer is, and checks the room against the section as it was before it scrolled. So once the threads
-	 * have folded away (Svelte's next update, before the library's next frame, when it picks what it may scroll), a
-	 * section that fits is brought whole into view and the sidebar is held still while the room is carried; a longer one
-	 * scrolls, within its own ends, and a drop the library loses there still lands where it's seen (`landing`).
+	 * before the library's timed check reads it, and each frame, before it's drawn.
+	 *
+	 * The sidebar is scrolled here, not by the library, which checks the room against the section as it was before it
+	 * scrolled and so can lose it: the library picks what it may scroll at its next frame, by `overflow`, so the
+	 * sidebar's is hidden until then. With the pointer near the sidebar's top or bottom, more of the section is brought
+	 * into view, each frame before the room is placed; the sidebar never scrolls past the section, nor further from it
+	 * than it was (a wheel, say), and nothing scrolls under a pointer away from the edges. The room lands where it's
+	 * seen as it's let go (`landing`).
 	 */
 	function contain(copy: HTMLElement, zone: HTMLElement, id: string): () => void {
 		const view = (zone.closest('.ap-shell-sidebody') as HTMLElement | null) ?? zone;
 		const scrolling = view.style.overflow;
-		/** Whether the folded section fits in view; unknown until the threads have folded away. */
-		let fits: boolean | undefined;
+		view.style.overflow = 'hidden';
+		requestAnimationFrame(() => requestAnimationFrame(() => {
+			if (!over) view.style.overflow = scrolling;
+		}));
+		/** The sidebar's scroll as the threads folded away (Svelte's next update): it may only come nearer the section. */
+		let start: number | undefined;
+		let pointer: number | undefined;
 		let over = false;
 		void tick().then(() => {
 			if (over) return;
-			fits = zone.getBoundingClientRect().height <= view.getBoundingClientRect().height;
-			// Not scrollable, the library leaves it be (it reads `overflow`).
-			if (fits) view.style.overflow = 'hidden';
+			start = view.scrollTop;
 			clamp();
 		});
+		/** Brings more of the section into view while the pointer is near the sidebar's edge on that side. */
+		const reach = () => {
+			if (pointer === undefined || start === undefined) return;
+			const shown = view.getBoundingClientRect();
+			const list = zone.getBoundingClientRect();
+			const edge = Math.min(EDGE, shown.height / 4);
+			const by =
+				pointer < shown.top + edge ? Math.max(-Math.ceil((shown.top + edge - pointer) / 3), list.top - shown.top, -view.scrollTop)
+				: pointer > shown.bottom - edge ? Math.min(Math.ceil((pointer - shown.bottom + edge) / 3), list.bottom - shown.bottom)
+				: 0;
+			if ((by < 0 && list.top < shown.top) || (by > 0 && list.bottom > shown.bottom)) {
+				view.scrollTop += by;
+				start = view.scrollTop;
+			}
+		};
 		const clamp = () => {
 			const shift = copy.style.transform ? new DOMMatrixReadOnly(copy.style.transform) : new DOMMatrixReadOnly();
 			const box = copy.getBoundingClientRect();
 			const shown = view.getBoundingClientRect();
 			let list = zone.getBoundingClientRect();
-			const off =
-				fits === undefined ? 0
-				: fits ? (list.top < shown.top ? list.top - shown.top : list.bottom > shown.bottom ? list.bottom - shown.bottom : 0)
-				: list.top > shown.top ? list.top - shown.top : list.bottom < shown.bottom ? list.bottom - shown.bottom : 0;
-			if (off) {
-				view.scrollTop += off;
-				list = zone.getBoundingClientRect();
+			if (start !== undefined) {
+				// Between the scrolls that show the section's top or bottom edge (all of it if it fits) and where it was.
+				const top = list.top - shown.top + view.scrollTop;
+				const ends = [top, top + list.height - shown.height];
+				const scroll = Math.min(Math.max(view.scrollTop, Math.min(start, ...ends)), Math.max(start, ...ends));
+				if (Math.abs(scroll - view.scrollTop) >= 1) {
+					view.scrollTop = scroll;
+					list = zone.getBoundingClientRect();
+				}
 			}
 			const upper = Math.max(list.top, shown.top);
 			const lower = Math.min(list.bottom, shown.bottom);
@@ -225,8 +250,13 @@
 		};
 		let frame = 0;
 		const each = () => {
+			reach();
 			clamp();
 			frame = requestAnimationFrame(each);
+		};
+		const follow = (event: MouseEvent | TouchEvent) => {
+			pointer = 'touches' in event ? (event.touches[0]?.clientY ?? pointer) : event.clientY;
+			clamp();
 		};
 		const release = () => {
 			clamp();
@@ -234,16 +264,16 @@
 		};
 		// Added after the library's own move listeners (the drag has begun), so these run after them; the release is
 		// caught on the way down, before the library's.
-		addEventListener('mousemove', clamp);
-		addEventListener('touchmove', clamp, { passive: true });
+		addEventListener('mousemove', follow);
+		addEventListener('touchmove', follow, { passive: true });
 		addEventListener('mouseup', release, true);
 		addEventListener('touchend', release, true);
 		each();
 		return () => {
 			over = true;
 			cancelAnimationFrame(frame);
-			removeEventListener('mousemove', clamp);
-			removeEventListener('touchmove', clamp);
+			removeEventListener('mousemove', follow);
+			removeEventListener('touchmove', follow);
 			removeEventListener('mouseup', release, true);
 			removeEventListener('touchend', release, true);
 			view.style.overflow = scrolling;
