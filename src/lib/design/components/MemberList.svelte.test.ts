@@ -130,6 +130,38 @@ describe('MemberList', () => {
 			expect([onprofile.mock.calls.at(-1), dom.queryByRole('menu')]).toEqual([['bo', who('bo')], null]);
 		});
 
+		it('opens the profile for a tap, the menu staying for a long press; a tap with the menu open only puts it away', () => {
+			vi.useFakeTimers();
+			const onprofile = vi.fn();
+			render({ sections, onprofile, onremove: vi.fn() });
+			const name = row('bo').querySelector('.ap-member-text')!;
+			dom.touch('pointerdown', name, 30, 40);
+			dom.touch('pointerup', name, 30, 40);
+			tap(name);
+			flushSync();
+			expect([onprofile.mock.calls, dom.queryByRole('menu')]).toEqual([[['bo', who('bo')]], null]);
+			dom.touch('pointerdown', name, 30, 40);
+			vi.advanceTimersByTime(500);
+			flushSync();
+			dom.touch('pointerup', name, 30, 40);
+			tap(name);
+			flushSync();
+			expect([onprofile.mock.calls.length, choices()]).toEqual([1, ['Profile', 'Remove from room']]);
+			// With the menu open, a tap on its row only puts it away: no card.
+			dom.touch('pointerdown', name, 30, 40);
+			dom.touch('pointerdown', document.body);
+			dispatchEvent(new MouseEvent('pointerup'));
+			tap(name);
+			flushSync();
+			expect([onprofile.mock.calls.length, dom.queryByRole('menu')]).toEqual([1, null]);
+			// A mouse's click after a finger's still drops the menu down.
+			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			tap(name);
+			flushSync();
+			expect(dom.byRole('menu', 'Bo')).toBeTruthy();
+			vi.useRealTimers();
+		});
+
 		it('keeps a long press going while the list is redrawn under it (presence, the minute), and opens at its end', () => {
 			vi.useFakeTimers();
 			const state = $state({ sections, onremove: vi.fn(), onprofile: vi.fn() });

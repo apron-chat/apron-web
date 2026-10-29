@@ -30,8 +30,9 @@
 		shut?: string[];
 		ontogglesection?: (key: string) => void;
 		/**
-		 * Open their profile, from the row's button: its menu's Profile, or pressing the row itself where Profile is all
-		 * its menu would hold (your own row, with nothing else offered).
+		 * Open their profile, from the row's button: its menu's Profile, a tap on the row (a finger has the long press for
+		 * the menu), or pressing the row itself where Profile is all its menu would hold (your own row, with nothing else
+		 * offered).
 		 */
 		onprofile?: (userId: string, anchor: HTMLElement) => void;
 		/** Offer Direct message in every row's menu but yours: open or start a private conversation with them. */
@@ -66,8 +67,8 @@
 
 	/**
 	 * A row's menu: Profile, then Direct message (not to a system identity) and Remove from room on everyone but you,
-	 * where offered, neither while a change is under way. Pressing the row drops it down beneath the row; a right-click,
-	 * the context menu key or a long press opens it where that was.
+	 * where offered, neither while a change is under way. Clicking the row drops it down beneath the row; a right-click,
+	 * the context menu key or a long press opens it where that was. A tap opens their profile instead.
 	 */
 	let menu = $state<{ person: MemberListPerson; name: string; x: number; y: number; keyboard?: true; who: HTMLElement; choices: ContextMenuChoice[] } | undefined>();
 	let menuOpen = $state(false);
@@ -76,6 +77,8 @@
 	 * once that press is over, whether a click followed or not (a scroll, a drag off the row).
 	 */
 	let closing: string | undefined;
+	/** The press under way is a finger's: its click is a tap. */
+	let touched = false;
 	const menuId = $props.id();
 
 	function choicesFor(person: MemberListPerson): ContextMenuChoice[] {
@@ -101,9 +104,12 @@
 
 	/**
 	 * The row pressed (its name, or anywhere on it): the menu dropped down beneath it, or straight to their profile where
-	 * that's all it holds. From the keyboard (Enter or Space on the name) its first choice is focused, as a menu button's.
+	 * that's all it holds, or for a tap. From the keyboard (Enter or Space on the name) its first choice is focused, as a
+	 * menu button's.
 	 */
 	function press(who: HTMLElement, person: MemberListPerson, name: string, keyboard: boolean): void {
+		const tapped = touched && !keyboard;
+		touched = false;
 		if (closing === person.user_id) {
 			// Put away by this press: focus back on the name, as Escape leaves it.
 			closing = undefined;
@@ -113,7 +119,7 @@
 		const row = who.closest('li') ?? who;
 		const box = row.getBoundingClientRect(), start = who.getBoundingClientRect();
 		const rtl = getComputedStyle(row).direction === 'rtl';
-		if (!show(person, name, who, { x: rtl ? start.right : start.left, y: box.bottom + 2, ...(keyboard ? { keyboard: true as const } : {}) })) onprofile?.(person.user_id, who);
+		if (tapped || !show(person, name, who, { x: rtl ? start.right : start.left, y: box.bottom + 2, ...(keyboard ? { keyboard: true as const } : {}) })) onprofile?.(person.user_id, who);
 	}
 
 	/**
@@ -125,8 +131,9 @@
 		return person ? show(person, nameOf(person), row.querySelector<HTMLElement>('.ap-member-who') ?? row, at) : false;
 	});
 
-	/** A press on the row whose menu is open, noted until it's over. */
-	function pressing(userId: string): void {
+	/** A press on a row: a finger's, noted for its click; on the row whose menu is open, noted until it's over. */
+	function pressing(event: PointerEvent, userId: string): void {
+		touched = event.pointerType === 'touch';
 		if (!menuOpen || menu?.person.user_id !== userId) return;
 		closing = userId;
 		const done = () => setTimeout(() => (closing = undefined));
@@ -186,11 +193,11 @@
 									{@const words = person.statusLabel ?? presenceLabel(person.status)}
 									{@const menued = choicesFor(person).length > 1}
 									{@const opened = menuOpen && menu?.person.user_id === person.user_id}
-									<!-- The whole row is its name's: a press anywhere else on it presses the name (which keyboards reach), dropping its menu down. Held or right-clicked, the menu opens there. -->
+									<!-- The whole row is its name's: a press anywhere else on it presses the name (which keyboards reach), dropping its menu down, or for a tap opening their profile. Held or right-clicked, the menu opens there. -->
 									<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline', opened && 'ap-member-menu']} data-user={person.user_id} data-status={shown}
 										{@attach rowMenu}
-										onpointerdown={() => pressing(person.user_id)}
+										onpointerdown={(event) => pressing(event, person.user_id)}
 										onclick={(event) => { const who = event.currentTarget.querySelector<HTMLElement>('.ap-member-who'); if (who && !(event.target as Element).closest('button')) press(who, person, name, false); }}>
 										<button class="ap-member-who" type="button" data-user-id={person.user_id} aria-haspopup={menued ? 'menu' : 'dialog'} aria-expanded={menued ? opened : undefined} aria-controls={opened ? menuId : undefined} title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => press(event.currentTarget, person, name, event.detail === 0)} onkeydown={(event) => namekey(event, person, name)}>
 											{#if avatar}{@render avatar(person)}{:else}<Avatar {name} user_id={person.user_id} src={person.avatar} size="sm" status={person.status} statusLabel={words} />{/if}
