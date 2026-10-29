@@ -60,7 +60,7 @@ describe('Sidebar', () => {
 		session.dispose();
 	});
 
-	it('folds the open room’s threads to those with news when it is picked again, and unfolds them when picked once more, from the … after them, or on leaving it', () => {
+	it('folds the open room’s threads to those with news when it is picked again, and unfolds them when picked once more, from the … on its row, or on leaving it', () => {
 		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
 		const thread = (id: string, title: string): RoomSnapshot => ({ ...general, id, title, parentRoomId: 'general', timeline: createTimeline(id) }) as RoomSnapshot;
 		const random: RoomSnapshot = { ...general, id: 'random', title: 'Random', timeline: createTimeline('random') } as RoomSnapshot;
@@ -81,6 +81,8 @@ describe('Sidebar', () => {
 		flushSync();
 		expect(listed()).toEqual(['cert']);
 		expect(expand()?.getAttribute('aria-label')).toBe('Show all threads in General');
+		// On the room's own row, beside its +.
+		expect(expand()!.closest('.ap-roomstart')?.querySelector('[data-room="general"]')).not.toBeNull();
 		expect(onroom).toHaveBeenCalledTimes(1);
 		room('general').click();
 		flushSync();

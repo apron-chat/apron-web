@@ -10,7 +10,7 @@ function render(props: Record<string, unknown>) {
 }
 
 describe('RoomItem', () => {
-	it('names its actions for what they act on, Leave and the open room’s + for a new thread, in a row that makes room for them', () => {
+	it('names its actions for what they act on, Leave, the open room’s + for a new thread and the … before it while folded, in a row that makes room for them', () => {
 		const onleave = vi.fn();
 		const row = render({ title: 'Open it', onleave });
 		expect(row.dataset.room).toBe('general');
@@ -27,9 +27,19 @@ describe('RoomItem', () => {
 		const onnewthread = vi.fn();
 		render({ active: true, onnewthread });
 		const add = dom.button('New thread in General');
-		expect(add.previousElementSibling).toBe(dom.button('General'));
+		expect(add.parentElement!.previousElementSibling).toBe(dom.button('General'));
 		add.click();
 		expect(onnewthread).toHaveBeenCalledOnce();
+		dom.unmount();
+		// Folded to its threads with news, a … before the + shows them all.
+		const onexpand = vi.fn();
+		render({ active: true, onnewthread, onexpand });
+		const expand = dom.button('Show all threads in General');
+		expect(expand.nextElementSibling).toBe(dom.button('New thread in General'));
+		expand.focus();
+		expand.click();
+		expect(onexpand).toHaveBeenCalledOnce();
+		expect(document.activeElement).toBe(dom.button('General'));
 	});
 
 	it('ends a row with its unread bubble, and a … while history loads', () => {
