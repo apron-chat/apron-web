@@ -1,4 +1,4 @@
-import type { MentionPerson } from '$lib/protocol/markdown';
+import { markdownText, type MentionPerson } from '$lib/protocol/markdown';
 import { cleanPlainText } from '$lib/protocol/plain-text';
 import { isJsonObject, isSystemId, type Embed, type Identity, type MessageRecord } from '$lib/protocol/types';
 import { directory } from './directory.svelte';
@@ -15,6 +15,16 @@ export function isSystem(event: MessageRecord): boolean {
 
 export function textOf(event: MessageRecord): string {
 	return typeof event.body?.text === 'string' ? event.body.text : '';
+}
+
+/**
+ * A message's text as plain text, for where it isn't rendered (a quote, a card, a notification): a markdown body
+ * (§3.5) without its syntax, so `**0 errors**` reads "0 errors", code keeps what's in it and a link shows its text.
+ * Mentions stay as written, for whoever picks them out.
+ */
+export function plainTextOf(event: MessageRecord): string {
+	const text = textOf(event);
+	return text && event.body?.format === 'markdown' ? markdownText(text) : text;
 }
 
 export function embedsOf(event: MessageRecord): Embed[] {
@@ -49,11 +59,11 @@ export function hueOf(userId: string | undefined): number | undefined {
 
 /**
  * A message's text as a quote shows it: its first `lines` non-empty lines as
- * written, cut to about `max` characters; one line of about 120 for a reply's
+ * plain text (`plainTextOf`), cut to about `max` characters; one line of about 120 for a reply's
  * quote or a caption, three of about 280 for a link's card.
  */
 export function messageSnippet(target: MessageRecord, lines = 1, max = 120): string {
-	const text = cleanPlainText(textOf(target)).split('\n').map((line) => line.trim()).filter(Boolean).slice(0, lines).join('\n');
+	const text = cleanPlainText(plainTextOf(target)).split('\n').map((line) => line.trim()).filter(Boolean).slice(0, lines).join('\n');
 	const short = text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 	return short || (embedsOf(target).length ? 'Attachment' : 'Empty message');
 }

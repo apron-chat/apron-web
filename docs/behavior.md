@@ -971,7 +971,9 @@ how many authors weren't added and why. Escape leaves select mode.
 
 A reply's quote is one line above the sender's name (the quoted sender's
 avatar and name, then the start of their message), with a line from the
-reply's avatar bending into it. A reply always starts a new sender group, so
+reply's avatar bending into it. A markdown message is quoted as plain text, as
+are a link card's lines and a message's notification: `**0 errors**` reads
+"0 errors", code keeps what's in it, and a link shows its text. A reply always starts a new sender group, so
 it always has that avatar and name. The quote may point into another room:
 clicking it opens that room or thread, loading the thread's history if needed,
 and highlights the message.
