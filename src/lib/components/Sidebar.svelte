@@ -247,9 +247,10 @@
 		if (account !== undefined) saveThreadFolds(account, threadsFolded);
 	}
 	function pickRoom(room: RoomSnapshot, current: boolean): void {
-		// One pane at a time on a phone: picking the open room there goes back to it, out of the list.
-		if (current && innerWidth >= NARROW_MAX) foldThreads(room.id, !threadsFolded.includes(room.id));
-		onroom(room);
+		if (!current) return onroom(room);
+		foldThreads(room.id, !threadsFolded.includes(room.id));
+		// One pane at a time on a phone: there the list stays, to see the fold, and its › goes back to the room.
+		if (innerWidth >= NARROW_MAX) onroom(room);
 	}
 
 	function list(parentRoomId?: string): void {

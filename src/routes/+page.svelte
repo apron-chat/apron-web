@@ -1667,8 +1667,9 @@
 
 	/**
 	 * Shows the rooms list over the open room or thread (phones), as a history
-	 * entry of its own: Back, the list's ›, or picking the open one again
-	 * returns to it, and picking another takes the entry's place.
+	 * entry of its own: Back or the list's › returns to it (picking the open
+	 * room folds its threads, staying in the list), and picking another takes
+	 * the entry's place.
 	 */
 	function openRooms(): void {
 		mobilePane = 'rooms';

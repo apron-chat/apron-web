@@ -276,4 +276,36 @@ describe('Sidebar', () => {
 		expect(listed()).toEqual(['general', 'random', 'ops']);
 		session.dispose();
 	});
+
+	it('on a phone, folds the open room’s threads when it’s picked, staying in the list rather than going back to the room', () => {
+		const width = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+		Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+		try {
+			const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
+			const thread = (id: string, title: string): RoomSnapshot => ({ ...general, id, title, parentRoomId: 'general', timeline: createTimeline(id) }) as RoomSnapshot;
+			const random: RoomSnapshot = { ...general, id: 'random', title: 'Random', timeline: createTimeline('random') } as RoomSnapshot;
+			const session = new SessionView();
+			session.apply(live({ rooms: [general, random, thread('deploy', 'Deploy'), thread('cert', 'Expired cert')] }), client);
+			const onroom = vi.fn();
+			const threads = [thread('deploy', 'Deploy'), thread('cert', 'Expired cert')].map((room) => ({ id: room.id, parentRoomId: 'general', title: room.title, loaded: true, participants: [], joined: true }));
+			dom.render(Sidebar, { client, session, backendLabel: 'fake.test', threads, mentions: {}, unread: { cert: 2 }, displayName: 'Ada', onroom, onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() } as never);
+			flushSync();
+			const listed = () => [...document.querySelectorAll<HTMLElement>('button[data-thread]')].map((button) => button.dataset.thread);
+			const room = (id: string) => document.querySelector<HTMLElement>(`button[data-room="${id}"]`)!;
+			room('general').click();
+			flushSync();
+			expect(listed()).toEqual(['cert']);
+			expect(onroom).not.toHaveBeenCalled();
+			room('general').click();
+			flushSync();
+			expect(listed()).toEqual(['deploy', 'cert']);
+			expect(onroom).not.toHaveBeenCalled();
+			// Another room is picked as ever, out of the list.
+			room('random').click();
+			expect(onroom).toHaveBeenCalledOnce();
+			session.dispose();
+		} finally {
+			if (width) Object.defineProperty(window, 'innerWidth', width);
+		}
+	});
 });

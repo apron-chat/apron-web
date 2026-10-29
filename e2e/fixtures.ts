@@ -185,10 +185,19 @@ export class Preview {
 		await expect(this.page.getByRole('form', { name: 'Sign in' })).toBeVisible();
 	}
 
-	/** Opens a room from the sidebar, by its row's `data-room`, as interop finds it. */
+	/**
+	 * Opens a room from the sidebar, by its row's `data-room`, as interop finds it. The open room is already open:
+	 * picking it would fold its threads (on a phone, staying in the list), so on a phone the list's › goes back to it.
+	 */
 	async openRoom(id: string): Promise<void> {
 		await this.roomsPane();
-		await this.press(this.page.locator(`[data-testid="room-list"] button[data-room="${id}"]`));
+		const row = this.page.locator(`[data-testid="room-list"] button[data-room="${id}"]`);
+		if ((await row.getAttribute('aria-current')) === 'page') {
+			if (this.narrow) await this.press(this.page.locator('.ap-shell-sidehead-return'));
+			await expect(this.page.getByTestId('room-list')).toBeVisible({ visible: !this.narrow });
+			return;
+		}
+		await this.press(row);
 		await expect(this.page).toHaveURL(new RegExp(`[#&]room=${id}(&|$)`));
 	}
 

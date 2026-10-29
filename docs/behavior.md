@@ -744,7 +744,7 @@ open, it lists only that room's joined threads with news (unread replies or
 mentions), in the same rows, so activity there isn't missed; picking one opens
 its room with the thread open, and quiet threads wait until the room is opened.
 Picking the open room again while reading it folds its threads the same way, to
-those with news (not on a phone, where it returns to the room), and its row
+those with news (on a phone the rooms list stays, its › going back to the room), and its row
 shows a small **…** button before its **+** that says the list is cut short; the
 **…**, or picking the room once more, unfolds them. A folded room stays folded as
 you go to other rooms and come back (kept on this device, per account on each

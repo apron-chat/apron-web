@@ -121,3 +121,24 @@ test.describe('room order, by touch', () => {
 		await expect(preview.heading()).toHaveText(/^general › /);
 	});
 });
+
+test.describe('folding a room on a phone', () => {
+	test.use(DEVICES.phone);
+
+	test('tapping the open room folds its threads in the rooms list, which stays, its › going back to the room', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		await preview.roomsPane();
+		const general = page.getByTestId('room-list').locator('button[data-room="general"]');
+		await expect(threadLists(page)).toHaveCount(1);
+		await preview.press(general);
+		await expect(page.getByTestId('room-list')).toBeVisible();
+		await expect(page.getByTestId('expand-threads')).toBeVisible();
+		await expect(threadLists(page)).toHaveCount(0);
+		await preview.press(general);
+		await expect(page.getByTestId('expand-threads')).toHaveCount(0);
+		await expect(threadLists(page)).toHaveCount(1);
+		await preview.press(page.getByRole('button', { name: 'Back to general' }));
+		await expect(page.getByTestId('room-list')).toBeHidden();
+		await expect(preview.heading()).toHaveText('general');
+	});
+});
