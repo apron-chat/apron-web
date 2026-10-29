@@ -71,8 +71,6 @@ export interface CollapseOptions {
 	rooms?: string[];
 	/** False: names are text, only IDs become chips, as for a draft set from outside, which nobody is typing. */
 	names?: boolean;
-	/** Where an `@` stands (in the draft text) whose name stays text: a chip turned back into it. */
-	keep?: number;
 }
 
 export interface Collapsed {
@@ -132,7 +130,7 @@ export function collapseMentions(parts: DraftPart[], people: MentionPerson[], op
 				at += 1;
 				continue;
 			}
-			const typing = { final, followed, caret: caret - (offset + at + 1), names: options.names !== false && offset + at !== options.keep };
+			const typing = { final, followed, caret: caret - (offset + at + 1), names: options.names !== false };
 			const hit = room ? roomAt(part.slice(at + 1), rooms, typing) : mentionAt(part.slice(at + 1), people, isUser, typing);
 			if (!hit) {
 				at += 1;
@@ -170,9 +168,10 @@ function mentionAt(
 	for (const person of names ? people : []) {
 		const name = person.name?.trim().toLowerCase();
 		if (!name || !lower.startsWith(name)) continue;
-		// A name becomes a chip as it is typed: the caret is at its end, or in what ends it (one character, or the next
-		// word, for a name that could have grown into a longer one until then); one elsewhere in the text stays text.
-		if (caret < name.length || !/^[^\n]?\S*$/.test(rest.slice(name.length, caret))) continue;
+		// A name becomes a chip as it is typed: the caret is at its end, or in what ends it (a line break, punctuation
+		// and a space as a phone puts in, then the next word for a name that could have grown into a longer one until
+		// then); one elsewhere in the text stays text.
+		if (caret < name.length || !/^\W{0,2}\S*$/.test(rest.slice(name.length, caret))) continue;
 		if (name.length < rest.length && WORD.test(rest[name.length])) continue;
 		// Sent as `@user_id`, what follows the name must not read as more of the ID ("@Ada.x" is not `@ada` then ".x").
 		if ((textId(person.id + rest.slice(name.length))?.length ?? 0) > person.id.length) continue;

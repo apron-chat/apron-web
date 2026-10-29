@@ -62,8 +62,6 @@ export class DraftField {
 	private anchor = 0;
 	/** The draft text the field shows, and the field showing it. */
 	private shown: { field: HTMLElement; text: string } | undefined;
-	/** Where the `@` of the last chip turned back into text stands: its name stays text as typing goes on. */
-	private kept: number | undefined;
 	/** The selection in the draft text when the field last lost focus: where a picked emoji or a mention goes. */
 	private lastSelection: { start: number; end: number } | undefined;
 	/** A phone or tablet, where Enter starts a new line (`enterAction`). */
@@ -119,7 +117,6 @@ export class DraftField {
 			untrack(() => {
 				this.lastSelection = undefined;
 				// Nobody typed it: its `@user_id`s become chips, the last one too, and a name in plain text stays text.
-				this.kept = undefined;
 				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, final: true, names: false, isUser: this.isUser, rooms: this.roomIds });
 				this.draw(current, collapsed.parts, document.activeElement === current ? collapsed.caret : undefined);
 				this.commit(current, collapsed.parts, false);
@@ -171,7 +168,6 @@ export class DraftField {
 
 	/** Closes the picker and forgets where the caret was: the field is changing under it. */
 	reset(): void {
-		this.kept = undefined;
 		this.closeCompletions();
 		this.dismissedAutocomplete = undefined;
 		this.lastSelection = undefined;
@@ -182,7 +178,6 @@ export class DraftField {
 		this.closeCompletions();
 		this.dismissedAutocomplete = undefined;
 		this.collapse(true);
-		this.kept = undefined;
 	}
 
 	// --- The field's handlers, named rather than arrows in its markup: the field keeps one listener as its attributes change while typing ---
@@ -319,7 +314,6 @@ export class DraftField {
 	}
 
 	private picked(field: HTMLElement, inserted: { parts: DraftPart[]; caret: number }): void {
-		this.kept = undefined;
 		this.closeCompletions();
 		this.dismissedAutocomplete = undefined;
 		this.active = 0;
@@ -370,7 +364,6 @@ export class DraftField {
 		if (caret === undefined || (anchor !== undefined && anchor !== caret)) return false;
 		const reverted = unchip(parts, caret, (part) => mentionLabel(this.chipMention(part)));
 		if (!reverted) return false;
-		this.kept = chipStart(parts, caret);
 		this.draw(field, reverted.parts, reverted.caret);
 		this.commit(field, reverted.parts, true);
 		this.refreshQuery();
@@ -382,7 +375,7 @@ export class DraftField {
 		const field = this.element;
 		if (!field) return;
 		const { parts, caret } = readDraft(field);
-		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds, keep: this.kept });
+		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds });
 		if (collapsed.changed) this.draw(field, collapsed.parts, caret === undefined ? undefined : collapsed.caret);
 		this.commit(field, collapsed.parts, collapsed.changed || draftText(collapsed.parts) !== this.host.value);
 	}
@@ -430,17 +423,6 @@ export class DraftField {
 		element.textContent = label;
 		return element;
 	}
-}
-
-/** Where the chip ending at `caret` starts, in the draft text. */
-function chipStart(parts: DraftPart[], caret: number): number | undefined {
-	let at = 0;
-	for (const part of parts) {
-		const length = typeof part === 'string' ? part.length : part.id.length + 1;
-		if (typeof part !== 'string' && at + length === caret) return at;
-		at += length;
-	}
-	return undefined;
 }
 
 /**

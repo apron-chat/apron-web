@@ -89,15 +89,15 @@
 		return { items: present([unreplied, reply, react, thread, edit]), ...(more.length ? { more } : {}) };
 	}
 
+	/** Where text is written, whose keys and clicks are its own: `x` there is a letter. */
+	const FIELD = 'input, textarea, select, [contenteditable]';
+
 	/**
 	 * A click: a room mention opens it; outside select mode a person (a mention, the sender's name or avatar) opens
 	 * their profile; in select mode it picks the message, a shift-click filling the range; else a shift-click starts
 	 * select mode with it picked. The click that ends a long press does none of that, and a tap on the row while its
 	 * touch menu is open puts the menu away.
 	 */
-	/** Where text is written, whose keys and clicks are its own: `x` there is a letter. */
-	const FIELD = 'input, textarea, select, [contenteditable]';
-
 	function click(event: MouseEvent): void {
 		if (swallow) {
 			swallow = false;

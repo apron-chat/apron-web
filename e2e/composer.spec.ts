@@ -80,15 +80,14 @@ test.describe('mentions in the composer', () => {
 		await page.keyboard.press('Backspace');
 		await expect(chip(preview)).toHaveCount(0);
 		await expect(preview.composer()).toHaveText('@Ada Lovelace');
-		// Editing it goes on from the caret at its end.
+		// Editing it goes on from the caret at its end: a name changed into no one's is text, and no mention.
 		await page.keyboard.press('Escape');
-		await page.keyboard.type('!');
-		await expect(preview.composer()).toHaveText('@Ada Lovelace!');
-		// Text it stays, as typing goes on and when it is sent: no mention.
-		await page.keyboard.type(' see you');
+		await page.keyboard.press('Backspace');
+		await page.keyboard.type('! see you');
+		await expect(preview.composer()).toHaveText('@Ada Lovelac! see you');
 		await expect(chip(preview)).toHaveCount(0);
 		await page.keyboard.press('Enter');
-		const sent = await preview.waitForSent('message', (p) => p.body?.text === '@Ada Lovelace! see you');
+		const sent = await preview.waitForSent('message', (p) => p.body?.text === '@Ada Lovelac! see you');
 		expect(sent.body.mentions ?? []).toEqual([]);
 	});
 });
@@ -133,6 +132,40 @@ test.describe('mentions in the message editor', () => {
 
 		const edit = await preview.waitForSent('message', (p) => p.message_id !== undefined);
 		expect(edit.body).toMatchObject({ text: `@ada hello fixed and @${other} `, mentions: ['ada', other] });
+	});
+});
+
+test.describe('the message editor\u2019s picker', () => {
+	test.use({ viewport: { width: 1280, height: 480 } });
+
+	test('opens below the field where the timeline has no room above it, and stays in view', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('edit me');
+		await page.keyboard.press('Enter');
+		const mine = preview.message('edit me');
+		await expect(mine).toBeVisible();
+		// Messages after it, so it can be scrolled to the top of the timeline and edited there.
+		for (const word of ['filler 1', 'filler 2', 'filler 3', 'filler 4', 'filler 5', 'filler 6', 'filler 7', 'filler 8']) {
+			await page.keyboard.type(word);
+			await page.keyboard.press('Enter');
+			await expect(preview.message(word)).toBeVisible();
+		}
+		await mine.evaluate((row) => row.scrollIntoView({ block: 'start' }));
+		await expect(async () => {
+			await mine.hover();
+			await expect(mine.getByRole('button', { name: 'Edit message', exact: true })).toBeVisible({ timeout: 1000 });
+		}).toPass();
+		await mine.getByRole('button', { name: 'Edit message', exact: true }).click();
+		const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
+		await editor.evaluate((field) => field.scrollIntoView({ block: 'start' }));
+		await expect(editor).toBeFocused();
+		await page.keyboard.type(' @');
+		const list = page.getByTestId('message-editor').getByRole('listbox');
+		await expect(list).toBeVisible();
+		const [box, timeline] = await Promise.all([list.boundingBox(), page.locator('.ap-timeline').boundingBox()]);
+		expect(box!.y).toBeGreaterThanOrEqual(timeline!.y);
+		await expect(list).toHaveClass(/ap-mpick-below/);
 	});
 });
 

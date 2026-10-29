@@ -45,14 +45,15 @@ describe('composer mentions', () => {
 	it('chips a name only as it is typed, at the caret, and an ID anywhere', () => {
 		// Typed out and finished, at the caret: a chip. The same name elsewhere in the text is text.
 		expect(typed('hi @Bob,', 8).parts).toEqual(['hi ', { id: 'bob' }, ',']);
-		expect(typed('hi @Bob, there').changed).toBe(false);
+		expect(typed('hi @Bob and you').changed).toBe(false);
 		expect(typed('hi @Bob there', 0, true).changed).toBe(false);
 		expect(typed('hi @bob there', 0, true).parts).toEqual(['hi ', { id: 'bob' }, ' there']);
+		// A line break ends a name too, as do punctuation and a space put in at once.
+		expect(typed('hi @Bob\n').parts).toEqual(['hi ', { id: 'bob' }, '\n']);
+		expect(typed('hi @Bob\nnext').parts).toEqual(['hi ', { id: 'bob' }, '\nnext']);
+		expect(typed('hi @Bob. ').parts).toEqual(['hi ', { id: 'bob' }, '. ']);
 		// A draft set from outside: IDs only.
 		expect(collapseMentions(['@Bob and @bob'], people, { caret: 13, final: true, names: false }).parts).toEqual(['@Bob and ', { id: 'bob' }]);
-		// A chip turned back into text stays text as typing goes on after it.
-		expect(collapseMentions(['hi @Bob '], people, { caret: 8, keep: 3 }).changed).toBe(false);
-		expect(collapseMentions(['hi @Bob'], people, { caret: 7, final: true, keep: 3 }).changed).toBe(false);
 	});
 
 	it('leaves ambiguous names, unknown handles, emails, system IDs and code as text', () => {

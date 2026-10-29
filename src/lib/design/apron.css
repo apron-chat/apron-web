@@ -1324,6 +1324,8 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 
 /* Shared autocomplete picker — above the composer while typing @…, #… or :… */
 .ap-mpick { position: absolute; inset-inline-start: var(--space-4); bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); width: min(320px, calc(100% - 2 * var(--space-4))); max-height: 240px; overflow: auto; }
+/* Without room above, as over a timeline's first message being edited: below the field. */
+.ap-mpick-below { bottom: auto; top: calc(100% + var(--space-1)); }
 .ap-mpick-item { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-field); line-height: var(--leading-field); }
 .ap-mpick-active { background: var(--hover); }
 .ap-mpick-name { font-weight: 600; }

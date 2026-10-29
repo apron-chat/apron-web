@@ -122,7 +122,7 @@ describe('MessageEditor', () => {
 		expect(oncancel).toHaveBeenCalledOnce();
 	});
 
-	it('saves who its chips mention: one it can\u2019t name stays from the message, and a chip backspaced into text is no mention', () => {
+	it('saves who its chips mention: one it can\u2019t name stays from the message, and a chip backspaced into text and changed is no mention', () => {
 		// Bob isn't among the people here, but the message mentions him.
 		const { onsave } = render({ text: 'hi @bob and @ada', embeds: [photo], mentions: ['bob', 'ada'], people: [{ id: 'ada', name: 'Ada Lovelace' }] });
 		expect(field().querySelector('[data-user-id="bob"]')).not.toBeNull();
@@ -139,7 +139,12 @@ describe('MessageEditor', () => {
 		field().dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteContentBackward' }));
 		flushSync();
 		expect(field().querySelector('[data-user-id="ada"]')).toBeNull();
+		expect(field().textContent).toBe('hi @bob and @Ada Lovelace');
+		// Changed into no one's name, it is text. (Left whole, it would be Ada's chip again as it was sent.)
+		field().lastChild!.textContent = ' and @Ada Lovelac';
+		field().dispatchEvent(new InputEvent('input', { bubbles: true }));
+		flushSync();
 		button('Save changes').click();
-		expect(onsave).toHaveBeenLastCalledWith('hi @bob and @Ada Lovelace', { removed: [photo] }, ['bob']);
+		expect(onsave).toHaveBeenLastCalledWith('hi @bob and @Ada Lovelac', { removed: [photo] }, ['bob']);
 	});
 });
