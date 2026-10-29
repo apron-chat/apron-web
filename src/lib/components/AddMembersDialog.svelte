@@ -19,12 +19,10 @@
 		client: ChatClient;
 		session: SessionView;
 		room: RoomSnapshot;
-		/** Some were added to the room with this id: "Added Bo and Cy.", for the member list to say. */
-		onadded: (roomId: string, text: string) => void;
 		/** It closed: done, or put away. */
 		onclose: () => void;
 	}
-	let { client, session, room, onadded, onclose }: Props = $props();
+	let { client, session, room, onclose }: Props = $props();
 
 	/** The most people listed at once: typing narrows it. */
 	const PEOPLE_SHOWN = 50;
@@ -65,8 +63,7 @@
 		const refused = await addMembers(client, roomId, ids);
 		saving = false;
 		const name = (userId: string) => directory.name({ user_id: userId });
-		const added = ids.filter((id) => !refused.some((refusal) => refusal.userId === id));
-		if (added.length) onadded(roomId, `Added ${added.length > 2 ? `${added.length} people` : added.map(name).join(' and ')}.`);
+		// Who was added says so in the timeline, as a join line, as anyone joining does.
 		chosenIds = refused.map(({ userId }) => userId);
 		if (refused.length) error = couldNotAdd(refused, name);
 		else open = false;

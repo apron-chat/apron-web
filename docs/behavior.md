@@ -248,7 +248,7 @@ who aren't members yet, but you and the system identities, narrowed by a name
 or `@user_id` typed; when none of them matches, the `@user_id` typed is offered
 to add by it. **Add** sends `room_join` with each picked `user_id` in turn; one
 the server refuses doesn't stop the rest, stays picked, and the dialog says
-why, while those added are said in the panel. Each other
+why, while those added show in the timeline's join line, as anyone joining does. Each other
 member's remove button removes them (`room_leave` with their `user_id`, after
 a confirm): how members bring people into a private room. Who may is the server's
 policy; its error shows in the panel. A server that answers `unsupported`

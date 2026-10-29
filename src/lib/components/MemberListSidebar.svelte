@@ -147,6 +147,5 @@
 </MemberList>
 <!-- Gone as soon as adding is: the room left, or the server refusing member changes. -->
 {#if addOpen && changing && client && room}
-	<!-- An add that settles after the room changed says nothing under the next room's members. -->
-	<AddMembersDialog {client} {session} {room} onadded={(roomId, text) => { if (roomId === room?.id) note = { text, error: false }; }} onclose={() => (addOpen = false)} />
+	<AddMembersDialog {client} {session} {room} onclose={() => (addOpen = false)} />
 {/if}
