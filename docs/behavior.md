@@ -689,7 +689,7 @@ for that server in the same way, and leaves the others' as they are. One tab
 writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped
 keeping more if the device ran out of space.
 
-**Search local history** (the magnifier in the room header, or Ctrl+K, ⌘K on a Mac)
+**Search local history** (first in the room header's ⋯ menu, or Ctrl+K, ⌘K on a Mac)
 starts narrowed to the open room or thread (`room:#general `, the caret after
 it; Backspace widens it to everywhere), and looks through this server's history kept on this device and what the page has
 loaded, as you type: a message matches when its text holds every word typed,

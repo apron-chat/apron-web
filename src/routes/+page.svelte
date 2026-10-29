@@ -1548,8 +1548,8 @@
 
 	/** Search can be opened: signed in, with rooms listed. */
 	let canSearch = $derived(Boolean(client) && session.ready);
-	/** Search's shortcut, as this platform writes it. */
-	const searchHint = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘K' : 'Ctrl+K';
+	/** Search's shortcut, as this platform writes it; none on a touch screen, which has no keys for it. */
+	const searchHint = globalThis.matchMedia?.('(pointer: coarse)').matches ? undefined : /Mac/.test(globalThis.navigator?.platform ?? '') ? '⌘K' : 'Ctrl+K';
 
 	/** What Search looks through, in words: history kept on this device for this session, and what is loaded. */
 	function searchNote(): string {

@@ -142,6 +142,7 @@
 	editTestid="edit-room"
 	leaveTestid="leave-room"
 	copyLinkTestid="copy-room-link"
+	searchTestid="search-history"
 	muteTestid="mute-room"
 	unmuteTestid="unmute-room"
 	unmuteButtonTestid="unmute-room-button"

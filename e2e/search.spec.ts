@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { DEVICES, expect, test } from './fixtures';
 
 /**
- * Search local history (`SearchDialog`): Ctrl/⌘K or the room header's magnifier, words, and `user:` and `room:`
+ * Search local history (`SearchDialog`): Ctrl/⌘K or the room header's ⋯ menu, words, and `user:` and `room:`
  * filters. On `/__preview`, which keeps nothing on the device, it searches what the page holds; history.spec.ts
  * searches what a reload kept.
  */
@@ -11,7 +11,8 @@ test.use(DEVICES.desktop);
 
 test('narrows by room and by person, and opens a result in its room', async ({ preview, page }) => {
 	await preview.open();
-	await page.getByRole('button', { name: 'Search local history' }).click();
+	await page.getByTestId('room-actions').click();
+	await page.getByTestId('search-history').click();
 	const search = page.getByRole('dialog', { name: 'Search local history' });
 	await expect(search).toContainText('Messages loaded on this page.');
 	const field = search.getByRole('combobox');
@@ -83,7 +84,8 @@ test('opened from a thread, it starts narrowed to that thread', async ({ preview
 
 /** Its title's "history" opens Preferences at History, where what this device keeps is chosen. */
 async function historyLink(page: Page): Promise<void> {
-	await page.getByRole('button', { name: 'Search local history' }).first().click();
+	await page.getByTestId('room-actions').first().click();
+	await page.getByTestId('search-history').click();
 	const search = page.getByRole('dialog', { name: 'Search local history' });
 	await search.getByRole('button', { name: 'history', exact: true }).click();
 	await expect(search).toHaveCount(0);
