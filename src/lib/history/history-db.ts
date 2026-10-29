@@ -178,8 +178,11 @@ async function pageRows(records: IDBObjectStore, server: string, room: string, q
 	// Fewer than `limit` rows: all of them.
 	if (edge === undefined) return { page: (await done(records.getAll(range)) as RecordRow[]).map(entryOf), more: false };
 	const pageRange = forward ? IDBKeyRange.bound([server, room, lower], [server, room, edge, []]) : IDBKeyRange.bound([server, room, edge], upper);
-	const restRange = forward ? IDBKeyRange.bound([server, room, edge, []], upper, true, false) : IDBKeyRange.bound([server, room, lower], [server, room, edge], false, true);
-	const [rows, rest] = await Promise.all([done(records.getAll(pageRange)) as Promise<RecordRow[]>, done(records.count(restRange))]);
+	// The page reaches the end of the range: nothing past it, and a range from there to there, open at one end, is
+	// one IndexedDB refuses to make.
+	const atEnd = forward ? query.before !== undefined && edge >= Number(query.before) : edge <= lower;
+	const restRange = atEnd ? undefined : forward ? IDBKeyRange.bound([server, room, edge, []], upper, true, false) : IDBKeyRange.bound([server, room, lower], [server, room, edge], false, true);
+	const [rows, rest] = await Promise.all([done(records.getAll(pageRange)) as Promise<RecordRow[]>, restRange ? done(records.count(restRange)) : 0]);
 	return { page: rows.map(entryOf), more: rest > 0 };
 }
 

@@ -61,6 +61,20 @@ function keptServers(page: Page): Promise<number> {
 	}));
 }
 
+/** How many messages are kept on this device, for every server. */
+function keptMessages(page: Page): Promise<number> {
+	return page.evaluate(() => new Promise<number>((resolve) => {
+		const request = indexedDB.open('apron-history');
+		request.onsuccess = () => {
+			const db = request.result;
+			if (!db.objectStoreNames.contains('records')) return resolve(0);
+			const all = db.transaction('records').objectStore('records').getAll();
+			all.onsuccess = () => { resolve(all.result.filter((row: { kind: string }) => row.kind === 'm').length); db.close(); };
+		};
+		request.onerror = () => resolve(-1);
+	}));
+}
+
 test('a reload shows what it kept, and asks only for what came since', async ({ page }) => {
 	const base = process.env.E2E_URL;
 	await page.clock.setFixedTime(NOW);
@@ -72,8 +86,9 @@ test('a reload shows what it kept, and asks only for what came since', async ({ 
 
 	await page.goto(`${base}/`);
 	await expect(page.getByText('Message 79', { exact: true })).toBeVisible();
-	// Written within a couple of seconds, or as the tab hides.
-	await expect.poll(() => keptServers(page), { timeout: 10_000 }).toBe(1);
+	// Written within a couple of seconds, or as the tab hides: the room's checkpoint with its messages.
+	await expect.poll(() => keptMessages(page), { timeout: 10_000 }).toBe(80);
+	expect(await keptServers(page)).toBe(1);
 
 	messages.push(message(80, 'While you were away'));
 	frames.length = 0;

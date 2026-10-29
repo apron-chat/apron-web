@@ -62,6 +62,9 @@ describe('pageHistory', () => {
 			const { page, more } = await pageHistory(db, SERVER, 'general', query);
 			expect({ query, page, more }).toEqual({ query, ...sliceLog(log, query) });
 		}
+		// A page that ends where the range does: at `from`, or at `before` going forward.
+		expect(await pageHistory(db, SERVER, 'general', { before: '60', limit: 2 }, 55)).toMatchObject({ page: [{ log: '55' }, { log: '55' }, { log: '60' }], more: false });
+		expect(await pageHistory(db, SERVER, 'general', { after: '50', before: '60', limit: 4 })).toMatchObject({ page: [{ log: '50' }, { log: '55' }, { log: '55' }, { log: '60' }], more: false });
 		// Nothing below `from`.
 		expect((await pageHistory(db, SERVER, 'general', { before: '60', limit: 200 }, 40)).page.map((entry) => entry.log)).toEqual(['40', '50', '55', '55', '60']);
 	});
