@@ -60,7 +60,8 @@ export function memorySocket(url: string, host: MemoryHost): WebSocket {
 		if (socket.readyState !== 0) return;
 		socket.readyState = 1;
 		socket.onopen?.({} as Event);
-		host.opened(end);
+		// Closed from `onopen`: the host never hears of it, as `closed` already ran.
+		if (socket.readyState === 1) host.opened(end);
 	});
 	return socket as unknown as WebSocket;
 }

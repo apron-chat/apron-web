@@ -146,6 +146,9 @@
 		let saved: Awaited<ReturnType<typeof onexport>>;
 		try {
 			saved = await onexport();
+		} catch {
+			exportNote = 'The export couldn’t be saved. Try again, or free up memory by closing other tabs.';
+			return;
 		} finally {
 			exporting = false;
 		}
