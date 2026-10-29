@@ -29,10 +29,16 @@ test('Add member adds everyone picked, and keeps who the server refused picked, 
 test.describe('on a phone, signed in to an account', () => {
 	test.use({ ...DEVICES.phone, knobs: { account: true } });
 
-	test('a member\'s menu opens over the member list, where its Remove from room asks, then removes them', async ({ preview, page }) => {
+	test('a tap on a member opens their profile, and a long press their menu, over the member list, where Remove from room asks, then removes them', async ({ preview, page }) => {
 		await preview.open();
 		const list = await preview.showMembers();
-		await preview.press(list.locator('li.ap-member[data-user="grace"]'));
+		const grace = list.locator('li.ap-member[data-user="grace"]');
+		await preview.press(grace);
+		await expect(page.getByRole('dialog', { name: /Grace Hopper/ })).toBeVisible();
+		await expect(page.getByRole('menu')).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog', { name: /Grace Hopper/ })).toHaveCount(0);
+		await preview.hold(grace);
 		const menu = page.getByRole('menu', { name: 'Grace Hopper' });
 		await expect(menu.getByRole('menuitem')).toHaveText(['Profile', 'Direct message', 'Remove from room']);
 		// Over the member list, which is an overlay here: what's at its middle is the menu.
