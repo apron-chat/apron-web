@@ -217,7 +217,9 @@ never count as unread or mention you, and a message after one starts a new
 sender group.
 
 On wide screens the rooms list is a column beside the conversation: drag its
-right border to resize it, and click the border, or the panel button at its
+inner border (its right one, or its left under a right-to-left layout, where
+both lists mirror) to resize it, or move it with the arrow keys, the one
+pointing toward the conversation widening it; and click the border, or the panel button at its
 inner edge, to collapse or expand it. The button sits at the end of the list's
 header, after the server, while it is open, and rides the border as the list
 slides or is dragged; once it is shut, at the start of the room's header, beside
@@ -252,7 +254,7 @@ a confirm): how members bring people into a private room. Who may is the server'
 policy; its error shows in the panel. A server that answers `unsupported`
 gets no controls until its next `server` frame. A count kept from a truncated listing stays while later records
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
-drag its left border, or click the border to collapse it (the panel button
+drag its inner border (its left one, or its right under right-to-left), or click the border to collapse it (the panel button
 brings it back, and takes focus when the border collapsed it from the keyboard), and its width and whether it is collapsed are remembered.
 Dragging either list shut restores its earlier width when it reopens.
 

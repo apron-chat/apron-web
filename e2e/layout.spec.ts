@@ -211,3 +211,76 @@ test.describe('the panel toggles', () => {
 		});
 	}
 });
+
+/**
+ * Each panel's border handle sits on its inner border, the one facing the conversation, in either direction: the rooms
+ * list's straddling its end, the member list's just inside its start. A drag toward the conversation widens the panel
+ * and one away narrows it, so under `dir="rtl"`, where the panels mirror, the pointer moves the other way.
+ */
+test.describe('the panel handles', () => {
+	test.use(DEVICES.desktop);
+
+	for (const dir of ['ltr', 'rtl'] as const) {
+		test(`sit on their panels' inner borders, and a drag toward the conversation widens the panel (${dir})`, async ({ preview, page }) => {
+			await preview.open();
+			if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+			await showMembers(preview);
+			const width = page.viewportSize()!.width;
+			/** A box's start and end along the line: from the left, or from the right under rtl. */
+			const span = (box: { x: number; width: number }) =>
+				dir === 'ltr' ? { start: box.x, end: box.x + box.width } : { start: width - box.x - box.width, end: width - box.x };
+			const at = async (locator: ReturnType<typeof page.locator>) => span((await locator.boundingBox())!);
+			const near = (actual: number, expected: number, what: string) => expect(Math.abs(actual - expected), `${what}: ${actual} ≈ ${expected}`).toBeLessThan(1.5);
+			/** Toward the conversation, along the screen's x axis, from a panel at the line's start (rooms) or end (members). */
+			const inward = (panel: 'rooms' | 'members') => ((panel === 'rooms') === (dir === 'ltr') ? 1 : -1);
+
+			const side = page.locator('.ap-shell-side');
+			const list = page.getByRole('complementary', { name: 'Room member list', exact: true });
+			const roomsHandle = page.getByRole('button', { name: 'Collapse sidebar', exact: true });
+			const membersHandle = page.getByRole('button', { name: 'Collapse member list', exact: true });
+
+			const rooms = await at(side);
+			const roomsBorder = await at(roomsHandle);
+			near(roomsBorder.start, rooms.end - 4, 'the rooms handle straddles the list\'s inner border');
+			expect(roomsBorder.end, 'it reaches past the border into the conversation').toBeGreaterThan(rooms.end);
+			const members = await at(list);
+			const membersBorder = await at(membersHandle);
+			near(membersBorder.start, members.start, 'the member list handle starts at its inner border');
+			expect(membersBorder.end, 'inside the list').toBeLessThanOrEqual(members.start + 9 + 0.5);
+
+			/** Drags a handle from its middle by `dx` px along the screen's x axis, in steps as a hand would. */
+			const dragBy = async (handle: typeof roomsHandle, dx: number) => {
+				const box = (await handle.boundingBox())!;
+				const x = box.x + box.width / 2;
+				const y = box.y + box.height / 2;
+				await page.mouse.move(x, y);
+				await page.mouse.down();
+				await page.mouse.move(x + dx, y, { steps: 6 });
+				await page.mouse.up();
+			};
+			const widthOf = async (locator: typeof side) => (await locator.boundingBox())!.width;
+
+			for (const [panel, locator, handle] of [['rooms', side, roomsHandle], ['members', list, membersHandle]] as const) {
+				const before = await widthOf(locator);
+				await dragBy(handle, 60 * inward(panel));
+				await expect.poll(() => widthOf(locator), { message: `${panel}: dragged toward the conversation, wider` }).toBeCloseTo(before + 60, 0);
+				await dragBy(handle, -40 * inward(panel));
+				await expect.poll(() => widthOf(locator), { message: `${panel}: dragged away from it, narrower` }).toBeCloseTo(before + 20, 0);
+				// The handle stays on the border it moved.
+				const after = await at(locator);
+				const border = await at(handle);
+				if (panel === 'rooms') near(border.start, after.end - 4, 'the rooms handle follows its border');
+				else near(border.start, after.start, 'the member list handle follows its border');
+			}
+
+			// From the keyboard, the arrow pointing toward the conversation widens.
+			const toward = (panel: 'rooms' | 'members') => (inward(panel) === 1 ? 'ArrowRight' : 'ArrowLeft');
+			for (const [panel, locator, handle] of [['rooms', side, roomsHandle], ['members', list, membersHandle]] as const) {
+				const before = await widthOf(locator);
+				await handle.focus();
+				await page.keyboard.press(toward(panel));
+				await expect.poll(() => widthOf(locator), { message: `${panel}: ${toward(panel)} widens` }).toBeCloseTo(before + 16, 0);
+			}
+		});
+	}
+});

@@ -18,11 +18,11 @@
 		members?: Snippet;
 		/** The rooms list's <PanelToggle>, at its inner edge: at the end of its header, or the start of the room's once it's shut, which keep clear of it. */
 		sideToggle?: Snippet;
-		/** The rooms list's <PanelHandle>, on its border. */
+		/** The rooms list's <PanelHandle>, on its inner border (mirrored under `dir="rtl"`). */
 		sideHandle?: Snippet;
 		/** The member list's <PanelToggle>, at its inner edge: at the start of its header, or the end of the room's once it's shut; only with `membersWide`, since the room header toggles the overlay. */
 		membersToggle?: Snippet;
-		/** The member list's <PanelHandle>; only with `membersWide`. */
+		/** The member list's <PanelHandle>, on its inner border; only with `membersWide`. */
 		membersHandle?: Snippet;
 		/**
 		 * An offer over the rooms list's foot, such as a <Nudge pointer> pointing at the gear that changes it later.
