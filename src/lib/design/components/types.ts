@@ -183,6 +183,14 @@ export interface ComposerField {
 	command: boolean;
 }
 
+/** What the MessageEditor gives your own `field`: put both on it, for the editor's look and the field's name. */
+export interface MessageEditorField {
+	/** The editor's field class, `ap-msgedit-field`. */
+	class: string;
+	/** The field's accessible name, "Edit message". */
+	label: string;
+}
+
 /** A room or thread a `#` can name, in the MentionPicker. */
 export interface PickerRoom {
 	id: string;

@@ -221,6 +221,17 @@ describe('saves', () => {
 		expect(socket.request('message').params.body).toEqual({ text: 'bare', format: 'markdown' });
 	});
 
+	it('replaces body.mentions with those an edit names, drops them for none, and keeps them when not given', async () => {
+		await connect();
+		socket.receive({ method: 'message', params: message('100', { body: { text: '@ada hi', mentions: ['ada'] } }) });
+		quiet(client.editMessage('100', '@ada hi again'));
+		expect(socket.request('message').params.body).toEqual({ text: '@ada hi again', mentions: ['ada'] });
+		quiet(client.editMessage('100', '@ada @alan hi', undefined, undefined, ['ada', 'alan', 'ada']));
+		expect(socket.request('message').params.body).toEqual({ text: '@ada @alan hi', mentions: ['ada', 'alan'] });
+		quiet(client.editMessage('100', 'hi', undefined, undefined, []));
+		expect(socket.request('message').params.body).toEqual({ text: 'hi' });
+	});
+
 	it('rejects saves of messages that are not loaded without sending anything', async () => {
 		await connect();
 		const handle = client.editMessage('404', 'nope');

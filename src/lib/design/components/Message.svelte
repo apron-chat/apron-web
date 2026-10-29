@@ -89,6 +89,9 @@
 		return { items: present([unreplied, reply, react, thread, edit]), ...(more.length ? { more } : {}) };
 	}
 
+	/** Where text is written, whose keys and clicks are its own: `x` there is a letter. */
+	const FIELD = 'input, textarea, select, [contenteditable]';
+
 	/**
 	 * A click: a room mention opens it; outside select mode a person (a mention, the sender's name or avatar) opens
 	 * their profile; in select mode it picks the message, a shift-click filling the range; else a shift-click starts
@@ -102,6 +105,8 @@
 			return;
 		}
 		const target = event.target as HTMLElement | null;
+		// A field (the editor's, rich or not) keeps its clicks: a shift-click there extends its selection, a chip in it stays put.
+		if (target?.closest?.(FIELD)) return;
 		const room = target?.closest?.<HTMLElement>('[data-room-id]');
 		if (room?.dataset.roomId) {
 			on.openRoom?.(room.dataset.roomId);
@@ -144,7 +149,7 @@
 			return;
 		}
 		if (event.key !== 'x' || event.metaKey || event.ctrlKey || event.altKey || !view.caps?.select) return;
-		if ((event.target as HTMLElement | null)?.closest?.('input, textarea, select')) return;
+		if ((event.target as HTMLElement | null)?.closest?.(FIELD)) return;
 		event.preventDefault();
 		if (view.selecting) on.select?.(view, false);
 		else on.beginSelect?.(view);

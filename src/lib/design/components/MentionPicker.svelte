@@ -1,5 +1,9 @@
 <script lang="ts">
-	/* Above the Composer while you type `@name` (people), `#room` (rooms and threads) or `:shortcode` (emoji); ↑ ↓ move, Tab or Enter takes one. */
+	/*
+	 * Above the Composer while you type `@name` (people), `#room` (rooms and threads) or `:shortcode` (emoji); ↑ ↓ move, Tab or
+	 * Enter takes one. It opens below the field instead where what scrolls around it has no room above, as over the first
+	 * message of a timeline being edited.
+	 */
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
@@ -39,10 +43,33 @@
 	const q = $derived(query.toLowerCase());
 	const key = (item: Sender | PickerRoom | PickerEmoji, index: number): string => ('user_id' in item ? uid(item) : item.id) ?? String(index);
 	let list = $state<HTMLUListElement>();
+	let none = $state<HTMLDivElement>();
+	/** Opens below the field, for want of room above. */
+	let below = $state(false);
 
 	function split(text: string): [string, string, string] | null {
 		const i = q ? text.toLowerCase().indexOf(q) : -1;
 		return i < 0 ? null : [text.slice(0, i), text.slice(i, i + q.length), text.slice(i + q.length)];
+	}
+
+	// Where it opens, as it opens and as its length changes: above, unless what clips it has more room below.
+	$effect(() => {
+		void items.length;
+		const box = list ?? none;
+		const anchor = box?.offsetParent;
+		if (!box || !anchor) return;
+		const clip = clipOf(anchor);
+		const at = anchor.getBoundingClientRect();
+		const room = { above: at.top - clip.top, below: clip.bottom - at.bottom };
+		below = room.above < box.offsetHeight && room.below > room.above;
+	});
+
+	/** The edges of the nearest box around `node` that clips what overflows it, else the window's. */
+	function clipOf(node: Element): { top: number; bottom: number } {
+		for (let at = node.parentElement; at; at = at.parentElement) {
+			if (getComputedStyle(at).overflowY !== 'visible') return at.getBoundingClientRect();
+		}
+		return { top: 0, bottom: window.innerHeight };
 	}
 
 	// The highlighted option stays in view as the keys move it through a list that scrolls.
@@ -57,9 +84,9 @@
 
 {#if !items.length}
 	<!-- A listbox even with no options, as the field's `aria-controls` names it. -->
-	<div {id} aria-label={listLabel} data-testid={testid} class={['ap-mpick', className]} role="listbox"><div class="ap-mpick-empty">{emptyText}</div></div>
+	<div {id} aria-label={listLabel} data-testid={testid} class={['ap-mpick', below && 'ap-mpick-below', className]} role="listbox" bind:this={none}><div class="ap-mpick-empty">{emptyText}</div></div>
 {:else}
-	<ul {id} aria-label={listLabel} data-testid={testid} class={['ap-mpick', className]} role="listbox" bind:this={list}>
+	<ul {id} aria-label={listLabel} data-testid={testid} class={['ap-mpick', below && 'ap-mpick-below', className]} role="listbox" bind:this={list}>
 		{#each items as item, i (key(item, i))}
 			<li id={id && `${id}-${i}`} role="option" aria-selected={i === active} class={['ap-mpick-item', i === active && 'ap-mpick-active']} onmousedown={(e) => { e.preventDefault(); onpick?.(item, i); }} onmouseenter={() => onhover?.(i)}>
 				{#if 'user_id' in item}

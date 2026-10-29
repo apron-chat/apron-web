@@ -2581,9 +2581,9 @@
 	}
 
 	/** Saves an edit: the new text, and any embeds removed or renamed in the editor, together. */
-	function saveEdit(event: MessageRecord, text: string, edits?: EmbedEdits): void {
+	function saveEdit(event: MessageRecord, text: string, edits: EmbedEdits | undefined, mentions: string[]): void {
 		if (!client || !session.canEdit) return;
-		feedback.track(client.editMessage(event.message_id, text, undefined, edits), 'Saving edit…');
+		feedback.track(client.editMessage(event.message_id, text, undefined, edits, mentions), 'Saving edit…');
 		editingId = undefined;
 	}
 
@@ -2824,7 +2824,7 @@
 {#snippet editMessage(view: MessageView)}
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}
-	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} onsave={(text, edits) => saveEdit(event, text, edits)} oncancel={() => (editingId = undefined)} />{/if}
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={() => (editingId = undefined)} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
 {/snippet}
 <!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
 {#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}

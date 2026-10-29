@@ -69,6 +69,8 @@ export interface CollapseOptions {
 	isUser?: (id: string) => boolean;
 	/** The rooms and threads a typed `#room_id` can name. */
 	rooms?: string[];
+	/** False: names are text, only IDs become chips, as for a draft set from outside, which nobody is typing. */
+	names?: boolean;
 }
 
 export interface Collapsed {
@@ -85,8 +87,10 @@ const BEFORE_ID = /[A-Za-z0-9]/;
  * Turns a typed `@user_id` or `@name` into a chip once it is finished: an
  * exact ID (case-sensitive), or a name (case-insensitive, spaces allowed)
  * that exactly one person in `people` has, followed by a character that
- * cannot continue it. The longest match wins, an ID over a name of the same
- * length. A typed `#room_id` naming one of `rooms` becomes a room chip the
+ * cannot continue it. An ID becomes a chip wherever it is, since it is how
+ * a mention is written (Appendix A.3); a name only as it is typed, ending
+ * at the caret or just before it, so a name elsewhere in the text stays
+ * text. The longest match wins, an ID over a name of the same length. A typed `#room_id` naming one of `rooms` becomes a room chip the
  * same way. While typing, a match the caret sits in, or whose text up to the
  * caret could still grow into a longer name or ID, waits.
  * Mentions inside code spans stay text.
@@ -126,7 +130,7 @@ export function collapseMentions(parts: DraftPart[], people: MentionPerson[], op
 				at += 1;
 				continue;
 			}
-			const typing = { final, followed, caret: caret - (offset + at + 1) };
+			const typing = { final, followed, caret: caret - (offset + at + 1), names: options.names !== false };
 			const hit = room ? roomAt(part.slice(at + 1), rooms, typing) : mentionAt(part.slice(at + 1), people, isUser, typing);
 			if (!hit) {
 				at += 1;
@@ -154,16 +158,20 @@ function mentionAt(
 	rest: string,
 	people: MentionPerson[],
 	isUser: (id: string) => boolean,
-	{ final, followed, caret }: { final: boolean; followed: boolean; caret: number }
+	{ final, followed, caret, names }: { final: boolean; followed: boolean; caret: number; names: boolean }
 ): { id: string; length: number } | undefined {
 	if (rest.startsWith('@')) return undefined;
 	const candidates: Array<{ id: string; length: number; exact: boolean }> = [];
 	const run = textId(rest);
 	if (run && isUser(run)) candidates.push({ id: run, length: run.length, exact: true });
 	const lower = rest.toLowerCase();
-	for (const person of people) {
+	for (const person of names ? people : []) {
 		const name = person.name?.trim().toLowerCase();
 		if (!name || !lower.startsWith(name)) continue;
+		// A name becomes a chip as it is typed: the caret is at its end, or in what ends it (a line break, punctuation
+		// and a space as a phone puts in, then the next word for a name that could have grown into a longer one until
+		// then); one elsewhere in the text stays text.
+		if (caret < name.length || !/^\W{0,2}\S*$/.test(rest.slice(name.length, caret))) continue;
 		if (name.length < rest.length && WORD.test(rest[name.length])) continue;
 		// Sent as `@user_id`, what follows the name must not read as more of the ID ("@Ada.x" is not `@ada` then ".x").
 		if ((textId(person.id + rest.slice(name.length))?.length ?? 0) > person.id.length) continue;

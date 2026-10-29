@@ -35,4 +35,21 @@ describe('MessageEditor', () => {
 		key(root.querySelector('textarea')!, { key: 'Escape' });
 		expect(oncancel).toHaveBeenCalledOnce();
 	});
+
+	it('takes your own field, its picker anchored with it, in place of the textarea, and Escape a field handles first doesn\u2019t cancel', () => {
+		const oncancel = vi.fn();
+		const root = render({
+			oncancel,
+			field: dom.html('<div><ul class="ap-mpick" role="listbox"></ul><div role="textbox" aria-label="Edit message" tabindex="0"></div></div>')
+		});
+		expect(root.querySelector('textarea')).toBeNull();
+		const wrap = root.querySelector('.ap-msgedit-wrap')!;
+		expect(wrap.querySelector('[role="listbox"]')).not.toBeNull();
+		const field = wrap.querySelector('[role="textbox"]')!;
+		field.addEventListener('keydown', (event) => event.preventDefault(), { once: true });
+		key(field, { key: 'Escape' });
+		expect(oncancel).not.toHaveBeenCalled();
+		key(field, { key: 'Escape' });
+		expect(oncancel).toHaveBeenCalledOnce();
+	});
 });

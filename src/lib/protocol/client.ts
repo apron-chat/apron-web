@@ -1569,11 +1569,17 @@ export class ChatClient {
 	 * Replaces the text (and optionally the format) and keeps every other body
 	 * key. With `edits`, the embeds change in the same save: those removed are
 	 * left out, and those renamed get their new `title`; any it names that are
-	 * gone already are skipped.
+	 * gone already are skipped. With `mentions`, they replace the body's
+	 * (§3.5): who the new text mentions, none leaving the key out.
 	 */
-	editMessage(messageId: string, text: string, format?: MessageFormat, edits?: EmbedEdits): OperationHandle<MessageResult> {
+	editMessage(messageId: string, text: string, format?: MessageFormat, edits?: EmbedEdits, mentions?: string[]): OperationHandle<MessageResult> {
 		const current = this.messageBase(messageId);
 		const { embeds, ...rest }: MessageBody = { ...(isJsonObject(current?.body) ? current.body : {}), text, ...(format ? { format } : {}) };
+		if (mentions) {
+			const named = [...new Set(mentions)];
+			if (named.length > 0) rest.mentions = named;
+			else delete rest.mentions;
+		}
 		if (!edits || !Array.isArray(embeds)) return this.saveMessage(messageId, { body: { ...rest, ...(embeds !== undefined ? { embeds } : {}) } });
 		const removed = new Set((edits.removed ?? []).map(embedKey));
 		const titles = new Map((edits.renamed ?? []).map(({ embed, title }) => [embedKey(embed), title]));
