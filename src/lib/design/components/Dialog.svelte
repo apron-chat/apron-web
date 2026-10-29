@@ -7,6 +7,8 @@
 		/** Shown as a modal while true; bindable, and set false however it closes (Escape, the close button, the backdrop). */
 		open?: boolean;
 		title: string;
+		/** Rendered in place of `title`, such as a title with a link in it; it names the dialog all the same. */
+		heading?: Snippet;
 		/** One line under the title. */
 		subtitle?: string;
 		/** `sm` for a short question, `md` for a form with room to write (RoomForm), `lg` for a settings panel of fixed height. */
@@ -33,7 +35,7 @@
 		class?: ClassValue;
 	}
 	let {
-		open = $bindable(false), title, subtitle, size = 'sm', closeLabel = 'Close', locked = false, backdropCloses = false, error, onsubmit, onclose, children, footer, flush = false,
+		open = $bindable(false), title, heading, subtitle, size = 'sm', closeLabel = 'Close', locked = false, backdropCloses = false, error, onsubmit, onclose, children, footer, flush = false,
 		class: className
 	}: Props = $props();
 
@@ -75,7 +77,7 @@
 	<svelte:element this={onsubmit ? 'form' : 'div'} class="ap-dialog-frame" role={onsubmit ? undefined : 'presentation'} {onsubmit}>
 		<header class="ap-dialog-head">
 			<div class="ap-dialog-heading">
-				<h2 class="ap-dialog-title" id={titleId}>{title}</h2>
+				<h2 class="ap-dialog-title" id={titleId}>{#if heading}{@render heading()}{:else}{title}{/if}</h2>
 				{#if subtitle}<p class="ap-dialog-sub">{subtitle}</p>{/if}
 			</div>
 			<button class="ap-iconbtn ap-dialog-close" type="button" aria-label={closeLabel} disabled={locked} onclick={() => dialog?.close()}>

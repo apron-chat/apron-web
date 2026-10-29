@@ -59,7 +59,7 @@
 		onmemberlist: () => void;
 		/** The room's or thread's description was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
-		/** Opens Search messages; `searchHint` names its shortcut. */
+		/** Opens Search local history; `searchHint` names its shortcut. */
 		onsearch?: () => void;
 		searchHint?: string;
 	}

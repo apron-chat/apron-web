@@ -23,6 +23,8 @@
 		note?: string;
 		/** In the empty field, such as how to narrow a search. */
 		placeholder?: string;
+		/** The title's "history" is a link, such as to the settings of what this device keeps; the panel closes. */
+		onhistory?: () => void;
 		/** A result picked, by press or Enter, by its `id`. */
 		onpick?: (id: string) => void;
 		/** It closed, whichever way. */
@@ -32,7 +34,7 @@
 		/** A `data-testid` for the listbox of results. */
 		listTestid?: string;
 	}
-	let { open = $bindable(false), query = $bindable(''), results, searching = false, more = false, note, placeholder = 'Words in a message', onpick, onclose, class: className, listTestid }: Props = $props();
+	let { open = $bindable(false), query = $bindable(''), results, searching = false, more = false, note, placeholder = 'Words in a message', onhistory, onpick, onclose, class: className, listTestid }: Props = $props();
 	const uid = $props.id();
 	const listId = `${uid}-results`;
 	/** The result the keyboard is on: the first, once there are any. */
@@ -75,7 +77,8 @@
 	}
 </script>
 
-<Dialog class={['ap-search', className]} bind:open size="md" title="Search messages" backdropCloses {onclose}>
+<Dialog class={['ap-search', className]} bind:open size="md" title="Search local history" backdropCloses {onclose}>
+	{#snippet heading()}Search local {#if onhistory}<button type="button" class="ap-link" onclick={() => { open = false; onhistory(); }}>history</button>{:else}history{/if}{/snippet}
 	<div class="ap-fieldlabel">
 		<label class="ap-sr" for="{uid}-query">Search for</label>
 		<input

@@ -73,7 +73,7 @@
 		mutedWithRoom?: boolean;
 		/** A request in flight: Join and the actions menu can't be used. */
 		busy?: boolean;
-		/** Search messages: a magnifier before the member list's toggle opens a <SearchPanel>. `searchHint` names its shortcut, for the tooltip. */
+		/** Search local history: a magnifier before the member list's toggle opens a <SearchPanel>. `searchHint` names its shortcut, for the tooltip. */
 		onsearch?: () => void;
 		searchHint?: string;
 		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
@@ -163,7 +163,7 @@
 		<button type="button" class="ap-btn ap-btn-sm" data-testid={joinTestid} aria-label="Join {noun}" title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={busy} onclick={onjoin}>Join</button>
 	{/if}
 	{#if onsearch}
-		<button type="button" class="ap-iconbtn ap-roomhead-search" aria-label="Search messages" title={searchHint ? `Search messages (${searchHint})` : 'Search messages'} onclick={onsearch}>
+		<button type="button" class="ap-iconbtn ap-roomhead-search" aria-label="Search local history" title={searchHint ? `Search local history (${searchHint})` : 'Search local history'} onclick={onsearch}>
 			<Search size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
 	{/if}

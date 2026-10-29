@@ -46,4 +46,16 @@ describe('SearchPanel', () => {
 		render({ query: 'the', results: [result('1', 'the')], more: true });
 		expect(queryByText('Only the newest are listed. Add words to narrow it down.')).not.toBeNull();
 	});
+
+	it('is named Search local history, its “history” a link that closes it when there is somewhere to go', () => {
+		const onhistory = vi.fn();
+		const { state } = render({ onhistory });
+		const title = document.querySelector('.ap-dialog-title')!;
+		expect(document.querySelector('dialog')!.getAttribute('aria-labelledby')).toBe(title.id);
+		expect(title.textContent!.replace(/\s+/g, ' ').trim()).toBe('Search local history');
+		dom.button('history').click();
+		flushSync();
+		expect(onhistory).toHaveBeenCalledOnce();
+		expect(state.open).toBe(false);
+	});
 });

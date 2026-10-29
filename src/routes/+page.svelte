@@ -65,7 +65,7 @@
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { WIDE_MIN } from '$lib/ui/breakpoints';
+	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
@@ -78,6 +78,7 @@
 	import { ViewKeeper } from '$lib/ui/view-keeper';
 	import { HistoryKeeper } from '$lib/history/history-keeper';
 	import { historySettings } from '$lib/history/settings.svelte';
+	import { preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
@@ -286,7 +287,7 @@
 	let editingId = $state<string | undefined>();
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
-	/** Search messages is open (`SearchDialog`). */
+	/** Search local history is open (`SearchDialog`). */
 	let searchOpen = $state(false);
 	/**
 	 * Sign-in links (§4.11.2): one of no proposal this browser made waits for the viewer's answer (`asked`), one
@@ -1545,7 +1546,7 @@
 
 	// --- Search ---
 
-	/** Search messages can be opened: signed in, with rooms listed. */
+	/** Search can be opened: signed in, with rooms listed. */
 	let canSearch = $derived(Boolean(client) && session.ready);
 	/** Search's shortcut, as this platform writes it. */
 	const searchHint = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘K' : 'Ctrl+K';
@@ -1556,6 +1557,15 @@
 		if (!kept) return 'Messages loaded on this page.';
 		const span = { '1': 'the last day', '7': 'the last week', '30': 'the last 30 days', '365': 'the last year' }[historySettings.retention as string];
 		return `Messages kept on this device${span ? ` from ${span}` : ''}, and those loaded now.`;
+	}
+
+	/**
+	 * Search's link to History: Preferences, at History. On a phone the profile bar that owns Preferences is in the
+	 * rooms list, which shows first.
+	 */
+	function showHistoryPreferences(): void {
+		if (mobilePane !== 'rooms' && window.innerWidth < NARROW_MAX) openRooms();
+		preferencesOpener.open('history');
 	}
 
 	/** A search result picked: it opens where it is, as a link to it would, paging back to it. */
@@ -2830,7 +2840,7 @@
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
-		// Ctrl+K (⌘K on a Mac) searches messages, from anywhere on the page.
+		// Ctrl+K (⌘K on a Mac) searches local history, from anywhere on the page.
 		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k' && canSearch) {
 			event.preventDefault();
 			searchOpen = true;
@@ -3117,7 +3127,7 @@
 	{/if}
 	{#if searchOpen && client && searchDialog.component}
 		{@const SearchDialog = searchDialog.component}
-		<SearchDialog {client} keeper={historyKeeper} rooms={session.rooms} note={searchNote()} onopen={openFound} onclose={() => (searchOpen = false)} />
+		<SearchDialog {client} keeper={historyKeeper} rooms={session.rooms} note={searchNote()} onopen={openFound} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
 	{/if}
 	{#if newPrivateOpen && newPrivateDialog.component}
 		{@const NewPrivateDialog = newPrivateDialog.component}

@@ -135,7 +135,7 @@ test('search finds a message only this device still has, and opens it where it i
 	await expect(page.getByText('The needle in the haystack')).toHaveCount(0);
 	frames.length = 0;
 	await page.keyboard.press('ControlOrMeta+k');
-	const search = page.getByRole('dialog', { name: 'Search messages' });
+	const search = page.getByRole('dialog', { name: 'Search local history' });
 	await search.getByRole('combobox').fill('NEEDLE hay');
 	const results = search.getByTestId('search-results');
 	await expect(results.getByRole('option')).toHaveCount(1);

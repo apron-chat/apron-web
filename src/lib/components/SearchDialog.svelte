@@ -10,7 +10,7 @@
 	import { dayLabelOf } from '$lib/ui/time';
 
 	/**
-	 * Search messages (`$lib/ui/search`): what this server's history keeps on this device (`keeper`), and what the
+	 * Search local history (`$lib/ui/search`): what this server's history keeps on this device (`keeper`), and what the
 	 * page holds, as the query is typed, narrowed by its `user:` and `room:` filters. A result picked opens where it
 	 * is (`onopen`).
 	 */
@@ -23,9 +23,11 @@
 		/** What is searched, in words, under the field. */
 		note?: string;
 		onopen: (message: MessageRecord) => void;
+		/** The title's "history" link: Preferences, at History. */
+		onhistory?: () => void;
 		onclose: () => void;
 	}
-	let { client, keeper, rooms, note, onopen, onclose }: Props = $props();
+	let { client, keeper, rooms, note, onopen, onhistory, onclose }: Props = $props();
 
 	/** How long typing pauses before a search starts. */
 	const SEARCH_DELAY_MS = 150;
@@ -95,4 +97,4 @@
 	}
 </script>
 
-<SearchPanel bind:open bind:query {results} {searching} {more} {note} placeholder="Words, user:@name, room:#name" onpick={pick} {onclose} listTestid="search-results" />
+<SearchPanel bind:open bind:query {results} {searching} {more} {note} placeholder="Words, user:@name, room:#name" {onhistory} onpick={pick} {onclose} listTestid="search-results" />

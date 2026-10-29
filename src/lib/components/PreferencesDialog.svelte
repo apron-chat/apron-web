@@ -22,6 +22,8 @@
 
 	interface Props {
 		open?: boolean;
+		/** The section shown: `notifications`, `appearance` or `history`. Bindable. */
+		section?: string;
 		/** Notifications on this device: the one switch, for while Apron is open and, by push, while it's closed. */
 		notificationsEnabled: boolean;
 		notificationsSupported: boolean;
@@ -55,14 +57,13 @@
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, onclosed }: Props = $props();
+	let { open = $bindable(false), section: preferencesSection = $bindable('notifications'), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, onclosed }: Props = $props();
 
 	const SECTIONS = [
 		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
 		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
 		{ value: 'history', label: 'History', hint: 'What this device keeps of your chats, and exports of them.', id: 'ap-pref-history' }
 	];
-	let preferencesSection = $state('notifications');
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
 	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: it wakes for nothing. */

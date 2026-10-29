@@ -1,4 +1,4 @@
-<!-- @dsCard group="Input" height=560 subtitle="Searching messages kept on this device: the field, and what matched below it, newest first, each with its room, sender, time and a line of it with the words marked" -->
+<!-- @dsCard group="Input" height=560 subtitle="Searching local history: a title whose “history” links to what this device keeps, the field, and what matched below it, newest first, each with its room, sender, time and a line of it with the words marked" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>SearchPanel</title></head>
@@ -15,6 +15,8 @@
       { id: '2', room: 'general', who: 'Ada', when: 'Mon 09:41', parts: [{ text: '…before we ', match: false }, { text: 'deploy', match: true }, { text: ', run the migrations on staging and check the dashboards for anything odd.', match: false }] },
       { id: '1', room: 'engineering', who: 'Linus', when: 'Oct 12', parts: [{ text: 'Deploy', match: true }, { text: ' freeze starts Friday.', match: false }] }
     ],
+    placeholder: 'Words, user:@name, room:#name',
+    onhistory: function () {},
     onpick: function () {}
   });
 </script>

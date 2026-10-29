@@ -689,7 +689,7 @@ for that server in the same way, and leaves the others' as they are. One tab
 writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped
 keeping more if the device ran out of space.
 
-**Search messages** (the magnifier in the room header, or Ctrl+K, ⌘K on a Mac)
+**Search local history** (the magnifier in the room header, or Ctrl+K, ⌘K on a Mac)
 looks through this server's history kept on this device and what the page has
 loaded, as you type: a message matches when its text holds every word typed,
 in any case and with or without accents. `user:` keeps what someone sent, by
@@ -703,7 +703,9 @@ open one where it is, paging back to it from this device as a link to it does.
 One too far back to reach that way says so. The field's note says what is
 searched: what is kept here, and for how long, or only what is loaded, for a
 session that keeps nothing (a guest, "Don't keep", `/__preview`, `/archive`).
-There is no server search in the protocol, so nothing is asked of the server.
+Its title's "history" links to Preferences at History (over the rooms list,
+on a phone), where what this device keeps is chosen. There is no server search
+in the protocol, so nothing is asked of the server.
 
 **Export** saves what this page has loaded from the server as a `.jsonl` file
 (`apron-<host>-<day>.jsonl`, in the format [ARCHIVE.md](../ARCHIVE.md)
