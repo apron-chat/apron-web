@@ -180,6 +180,7 @@ and `time.ts` read messages, `connection.ts` words the connection state, and
 `commands.ts` maps the composer's `/` commands to requests (and picks the `ext:media` category a send's files fit: `emoji` for `/emoji add`),
 `sign-in-link.ts` reads and scrubs a sign-in link (emailed, or the return from an external sign-in page) from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,
 `members.ts` reads the `user_id` typed to add a member, adds people to a room in turn (`addMembers`, whose refusals `couldNotAdd` words) and splits the member list into Online and Offline (`memberSections`), `people.ts` sorts people by name (`byName`) and narrows who could be picked by what's typed (`pickable`, `matching`) for both people pickers, and
+`room-order.svelte.ts` keeps the sidebar's top-level rooms in an order of your own (`RoomOrder`, by account under `apron.roomOrder`), which the sidebar drags rooms in with svelte-dnd-action and moves with Alt+↑/↓,
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
 Preferences and read positions included (on this device only; nothing is synced),
 `session-cache.ts` keeps `SessionView`'s held view in IndexedDB per server, trimmed to

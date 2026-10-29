@@ -12,7 +12,8 @@
 	import { listInBackground } from '$lib/ui/background-listing';
 	import { loadSidebarFolds, loadThreadFolds, saveSidebarFolds, saveThreadFolds } from '$lib/ui/storage';
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
-	import { ListDrag } from '$lib/ui/list-drag.svelte';
+	import { flip } from 'svelte/animate';
+	import { dndzone, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
@@ -31,7 +32,7 @@
 		serverAddress?: string;
 		/** Whose folded rooms are kept on this device (`notifyAccount`); without one they're kept for this page only. */
 		account?: string;
-		/** The top-level rooms' order, kept by the page for the account (the room's ⋯ menu moves them too); its own, for this page only, without one. */
+		/** The top-level rooms' order, kept by the page for the account; its own, for this page only, without one. */
 		order?: RoomOrder;
 		/** The active room's threads (rooms whose parent it is) to list under it: joined ones, and the open one. */
 		threads: ThreadEntry[];
@@ -95,9 +96,69 @@
 		untrack(() => order.adopt(listed));
 	});
 
-	/** Dragging a room (with its threads) to another place in its list: Rooms or Private. */
-	let sidebody = $state<HTMLElement>();
-	const drag = new ListDrag({ handle: 'button[data-room]', onmove: (id, drop) => order.move(id, drop.target, drop.side), scroller: () => sidebody });
+	/**
+	 * Dragging a room to another place in its section (svelte-dnd-action): by its row, with a mouse once it moves, or
+	 * held on a touch screen for `HOLD_MS`, when it lifts; a shorter touch scrolls or picks it. While one is carried every
+	 * room's threads fold away, so the list is just its rooms, and come back as they were once it's dropped.
+	 */
+	const HOLD_MS = 350;
+	/** How long the other rooms take to make way, none for reduced motion. */
+	const FLIP_MS = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 150;
+	type Section = 'rooms' | 'private';
+	/** Each section's rooms while one is carried in it, as they'd land; none between drags. */
+	let carried = $state<Partial<Record<Section, RoomSnapshot[]>>>({});
+	let reordering = $derived(Object.keys(carried).length > 0);
+	function consider(section: Section, event: CustomEvent<DndEvent<RoomSnapshot>>): void {
+		carried = { ...carried, [section]: event.detail.items };
+		// The library holds the list at its height as the drag starts, before the threads fold away: let it close up.
+		if (event.detail.info.trigger === TRIGGERS.DRAG_STARTED) (event.currentTarget as HTMLElement).style.minHeight = '';
+	}
+	/** Dropped: next to the room shown before it in its section (or after it, at the top), so the ones a folded section hides keep their places. */
+	function finalize(section: Section, event: CustomEvent<DndEvent<RoomSnapshot>>): void {
+		const { items, info } = event.detail;
+		const { [section]: _done, ...rest } = carried;
+		carried = rest;
+		if (info.trigger !== TRIGGERS.DROPPED_INTO_ZONE) return;
+		const ids = items.map((room) => room.id);
+		const at = ids.indexOf(info.id);
+		if (at > 0) order.move(info.id, ids[at - 1], 'after');
+		else if (ids.length > 1) order.move(info.id, ids[1], 'before');
+	}
+	/** The room as it's carried: its threads left behind (the others' fold away too), raised off the list. */
+	function lift(element: HTMLElement | undefined): void {
+		if (!element) return;
+		element.classList.add('ap-roomblock-lifted');
+		for (const threads of element.querySelectorAll('.ap-threads')) threads.remove();
+	}
+	/**
+	 * Hands svelte-dnd-action, listening on the room's block, the presses on the room's own row, and only those: its
+	 * threads, its + and its … keep their presses. The library starts no drag from a nested button (it takes one for a
+	 * form control), and the row is one, so a press on it reaches the library as a press on the block. Native listeners:
+	 * Svelte delegates `onmousedown` and `ontouchstart` to the root, past the block.
+	 */
+	function grip(node: HTMLElement): () => void {
+		const press = (event: Event) => {
+			if (!(event.target instanceof Element && event.target.closest('button[data-room]'))) event.stopPropagation();
+			else Object.defineProperty(event, 'target', { value: node.parentElement });
+		};
+		node.addEventListener('mousedown', press);
+		node.addEventListener('touchstart', press, { passive: true });
+		return () => {
+			node.removeEventListener('mousedown', press);
+			node.removeEventListener('touchstart', press);
+		};
+	}
+	/**
+	 * A tap that doesn't become a drag gets a click from the library as well as the browser's own (with the hold before a
+	 * touch drag, the browser's always comes too): the library's, a plain Event, is dropped, so a tap picks once.
+	 */
+	function oneClick(node: HTMLElement): () => void {
+		const click = (event: Event) => {
+			if (!(event instanceof MouseEvent)) event.stopImmediatePropagation();
+		};
+		node.addEventListener('click', click, true);
+		return () => node.removeEventListener('click', click, true);
+	}
 	/** What the last keyboard move did, for assistive tech. */
 	let moved = $state('');
 	/** Alt+↑ or Alt+↓ on a room moves it a place up or down among those `shown` with it, and keeps the keyboard on it. */
@@ -210,7 +271,9 @@
 		onselect={() => pickRoom(room, current)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
 		onexpand={active && isFolded ? () => foldThreads(room.id, false) : undefined} expandTestid="expand-threads"
 	/>
-	{#if active && !isFolded}
+	{#if reordering}
+		<!-- While a room is carried, every room's threads are folded away. -->
+	{:else if active && !isFolded}
 		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
 		<!-- Under a room that isn't open (or is folded, when its row has a … that unfolds it), only its joined threads with news, so activity there isn't missed; and the one open in it, which stays while you read it. -->
@@ -222,14 +285,23 @@
 	{/if}
 {/snippet}
 
-<!-- A list of rooms that can be put in another order: dragged by their rows (with their threads), or moved with Alt+↑/↓. -->
-{#snippet roomList(list: RoomSnapshot[], withFaces: boolean)}
-	<!-- The rows inside are the controls; the list takes their presses and keys to reorder them. -->
+<!--
+	A section's rooms, in an order that can be changed: dragged by their rows, or moved with Alt+↑/↓. The rooms are the
+	controls: the library's own keyboard dragging and announcements stay off (tab indexes -1, no aria), Alt+↑/↓ standing
+	in for them, and it keeps no outline on the list while a room is carried.
+-->
+{#snippet roomList(section: Section, list: RoomSnapshot[], withFaces: boolean)}
+	{@const items = carried[section] ?? list}
+	<!-- The rows inside are the controls; the list takes their keys to reorder them. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class={['ap-roomlist', drag.dragging !== undefined && list.some((room) => room.id === drag.dragging) && 'ap-roomlist-dragging']} onpointerdown={(event) => drag.press(event)} onkeydown={(event) => reorderKey(event, list)}>
-		{#each list as room (room.id)}
-			<div class={['ap-roomblock', drag.dragging === room.id && 'ap-roomblock-dragged', drag.drop?.target === room.id && `ap-roomblock-drop-${drag.drop.side}`]} data-drag-id={room.id}>
-				{@render roomRow(room, withFaces ? roomFaces(room, session.you) : undefined)}
+	<div
+		class="ap-roomlist"
+		use:dndzone={{ items, type: section, flipDurationMs: FLIP_MS, delayTouchStart: HOLD_MS, zoneTabIndex: -1, zoneItemTabIndex: -1, autoAriaDisabled: true, dropTargetStyle: {}, useCursorForDetection: true, transformDraggedElement: lift }}
+		onconsider={(event) => consider(section, event)} onfinalize={(event) => finalize(section, event)} onkeydown={(event) => reorderKey(event, list)} {@attach oneClick}
+	>
+		{#each items as room (room.id)}
+			<div class="ap-roomblock" animate:flip={{ duration: FLIP_MS }}>
+				<div class="ap-roomgrip" {@attach grip}>{@render roomRow(room, withFaces ? roomFaces(room, session.you) : undefined)}</div>
 			</div>
 		{/each}
 	</div>
@@ -237,18 +309,18 @@
 
 <aside class="ap-shell-side" aria-label="Rooms">
 	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={serverLook?.avatar} {returnTo} {onreturn} />
-	<div class="ap-shell-sidebody" bind:this={sidebody}>
+	<div class="ap-shell-sidebody">
 		<SidebarSection title="Rooms" folded={folds.has('rooms')} onfold={(shut) => fold('rooms', shut)} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
 			{#if rooms.length === 0}
 				<p class="ap-sect-note">{session.snapshot.status === 'connected' ? 'No rooms yet.' : 'Waiting for rooms…'}</p>
 			{:else}
-				{@render roomList(shown(rooms, 'rooms'), false)}
+				{@render roomList('rooms', shown(rooms, 'rooms'), false)}
 			{/if}
 		</SidebarSection>
 		<!-- Shown with private rooms in it, or empty, for its +, where you could start one. -->
 		{#if privateRooms.length > 0 || onnewprivate}
 			<SidebarSection title="Private" folded={folds.has('private')} onfold={(shut) => fold('private', shut)} onadd={onnewprivate} addLabel="New private conversation" bodyTestid="private-list">
-				{@render roomList(shown(privateRooms, 'private'), true)}
+				{@render roomList('private', shown(privateRooms, 'private'), true)}
 			</SidebarSection>
 		{/if}
 		{#if canBrowse && unjoined.length > 0}

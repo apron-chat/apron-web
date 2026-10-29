@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { flushSync, tick } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { capabilitiesOf, type ChatClient, type ClientSnapshot, type RoomSnapshot } from '$lib/protocol/client';
 import { createTimeline } from '$lib/protocol/reducer';
 import { blankSnapshot, SessionView } from '$lib/ui/session.svelte';
@@ -8,6 +8,11 @@ import Sidebar from './Sidebar.svelte';
 import { RoomOrder } from '$lib/ui/room-order.svelte';
 import { loadRoomOrder, saveRoomOrder } from '$lib/ui/storage';
 import * as dom from '$lib/test/dom';
+
+// jsdom has no Web Animations: the rooms' flip as they make way (svelte/animate) asks an element for its own.
+beforeAll(() => {
+	if (!('getAnimations' in Element.prototype)) Object.defineProperty(Element.prototype, 'getAnimations', { configurable: true, value: () => [] });
+});
 
 afterEach(() => {
 	localStorage.clear();
