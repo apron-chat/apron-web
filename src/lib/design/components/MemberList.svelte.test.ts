@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { flushSync, tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import MemberList from './MemberList.svelte';
 import type { MemberListSection } from './types';
@@ -47,14 +48,9 @@ describe('MemberList', () => {
 		expect(document.querySelectorAll('li.ap-member')).toHaveLength(2);
 	});
 
-	it('marks you, isolating each name, and offers removing everyone else', () => {
-		const onremove = vi.fn();
-		render({ sections, onremove });
-		const rows = [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
-		expect(rows.map((row) => dom.queryByRole('button', /^Remove /, row)?.getAttribute('aria-label') ?? '')).toEqual(['', 'Remove Bo', 'Remove Cy']);
-		expect(rows[0].textContent).toContain('(you)');
-		dom.button('Remove Bo').click();
-		expect(onremove).toHaveBeenCalledWith('bo');
+	it('marks you, isolating each name', () => {
+		render({ sections });
+		expect(document.querySelectorAll<HTMLLIElement>('li.ap-member')[0].textContent).toContain('(you)');
 		dom.unmount();
 		// Each name is isolated, so one written right to left can't carry the handle or (you) across it.
 		render({ sections: [{ key: 'members', label: 'Members', people: [{ user_id: 'mo', name: 'محمد', you: true }] }] });
@@ -63,21 +59,153 @@ describe('MemberList', () => {
 		expect(name.textContent).toBe('محمد(you)');
 	});
 
-	it('opens a card from anywhere on its row, anchored on the name, but Remove only removes', () => {
-		const onprofile = vi.fn(), onremove = vi.fn();
-		render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo', status: 'online', roles: ['admin'] }] }], onprofile, onremove, busy: false });
-		const row = document.querySelector<HTMLLIElement>('li.ap-member')!;
-		const who = row.querySelector<HTMLButtonElement>('.ap-member-who')!;
-		row.click();
-		row.querySelector<HTMLElement>('.ap-role')!.click();
-		expect(onprofile.mock.calls).toEqual([['bo', who], ['bo', who]]);
-		dom.button('Remove Bo').click();
-		expect([onremove.mock.calls, onprofile.mock.calls.length]).toEqual([[['bo']], 2]);
-		dom.unmount();
-		// Disabled while a change is in flight, it opens nothing either.
-		render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo' }] }], onprofile, onremove, busy: true });
-		dom.button('Remove Bo').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-		expect(onprofile).toHaveBeenCalledTimes(2);
+	describe('a row\'s menu', () => {
+		const rightClick = (target: Element, x = 40, y = 60) => {
+			const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y });
+			target.dispatchEvent(event);
+			flushSync();
+			return event;
+		};
+		const row = (id: string) => document.querySelector<HTMLLIElement>(`li.ap-member[data-user="${id}"]`)!;
+		const who = (id: string) => row(id).querySelector<HTMLButtonElement>('.ap-member-who')!;
+		const choices = () => [...dom.byRole('menu').querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+		/** A pointer's press (`detail` 1); `element.click()` is the keyboard's (0). */
+		const tap = (target: Element) => target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+
+		it('drops down from anywhere on the row: Profile, Direct message, Remove from room, each doing its part', async () => {
+			const onprofile = vi.fn(), onmessage = vi.fn(), onremove = vi.fn();
+			render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo', status: 'online', roles: ['admin'] }] }], onprofile, onmessage, onremove });
+			expect([who('bo').getAttribute('aria-haspopup'), who('bo').getAttribute('aria-expanded')]).toEqual(['menu', 'false']);
+			// A badge is the row too.
+			tap(row('bo').querySelector('.ap-role')!);
+			flushSync();
+			await tick();
+			expect([choices(), who('bo').getAttribute('aria-expanded'), row('bo').classList.contains('ap-member-menu')]).toEqual([['Profile', 'Direct message', 'Remove from room'], 'true', true]);
+			expect(dom.byRole('menuitem', 'Remove from room').classList.contains('ap-menu-item-danger')).toBe(true);
+			dom.byRole('menuitem', 'Profile').click();
+			flushSync();
+			expect([onprofile.mock.calls, dom.queryByRole('menu')]).toEqual([[['bo', who('bo')]], null]);
+			tap(row('bo'));
+			flushSync();
+			dom.byRole('menuitem', 'Direct message').click();
+			tap(row('bo'));
+			flushSync();
+			dom.byRole('menuitem', 'Remove from room').click();
+			expect([onmessage.mock.calls, onremove.mock.calls]).toEqual([[['bo']], [['bo']]]);
+		});
+
+		it('is put away by pressing the row again, or Escape, focus back on the name; from the keyboard, its first choice is focused', async () => {
+			render({ sections, onprofile: vi.fn(), onremove: vi.fn() });
+			tap(row('bo'));
+			flushSync();
+			await tick();
+			expect(document.activeElement).toBe(dom.byRole('menu', 'Bo'));
+			// The press that puts it away doesn't open it again.
+			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			tap(row('bo'));
+			flushSync();
+			expect(dom.queryByRole('menu')).toBeNull();
+			// Enter on the name, a click with no pointer.
+			who('bo').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+			flushSync();
+			await tick();
+			expect(document.activeElement?.textContent).toBe('Profile');
+			dom.press(dom.byRole('menu'), 'Escape');
+			flushSync();
+			expect([dom.queryByRole('menu'), document.activeElement]).toEqual([null, who('bo')]);
+		});
+
+		it('is skipped on your own row, and wherever Profile is all it would hold: pressing the row opens the card', () => {
+			const onprofile = vi.fn();
+			render({ sections, onprofile, onremove: vi.fn() });
+			expect(who('ada').getAttribute('aria-haspopup')).toBe('dialog');
+			tap(row('ada'));
+			expect([onprofile.mock.calls, dom.queryByRole('menu')]).toEqual([[['ada', who('ada')]], null]);
+			// Yours keeps the browser's own context menu.
+			expect(rightClick(row('ada')).defaultPrevented).toBe(false);
+			dom.unmount();
+			render({ sections, onprofile });
+			tap(row('bo'));
+			expect([onprofile.mock.calls.at(-1), dom.queryByRole('menu')]).toEqual([['bo', who('bo')], null]);
+		});
+
+		it('keeps a long press going while the list is redrawn under it (presence, the minute), and opens at its end', () => {
+			vi.useFakeTimers();
+			const state = $state({ sections, onremove: vi.fn(), onprofile: vi.fn() });
+			dom.render(MemberList, state as never);
+			flushSync();
+			dom.touch('pointerdown', row('bo').querySelector('.ap-member-text')!, 30, 40);
+			vi.advanceTimersByTime(300);
+			// The people rebuilt, as the sidebar does each minute: the same members, new objects.
+			state.sections = sections.map((section) => ({ ...section, people: section.people.map((person) => ({ ...person })) }));
+			flushSync();
+			vi.advanceTimersByTime(200);
+			flushSync();
+			expect(dom.byRole('menu', 'Bo')).toBeTruthy();
+			vi.useRealTimers();
+		});
+
+		it('gives focus back to the name when the row\'s press puts it away, and doesn\'t eat a tap after a press that came to nothing', async () => {
+			vi.useFakeTimers();
+			render({ sections, onprofile: vi.fn(), onremove: vi.fn() });
+			tap(row('bo'));
+			flushSync();
+			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			tap(row('bo').querySelector('.ap-role') ?? row('bo'));
+			flushSync();
+			expect([dom.queryByRole('menu'), document.activeElement]).toEqual([null, who('bo')]);
+			// Opened again, then a press on its row that ends without a click (a scroll): the next tap still opens it.
+			tap(row('bo'));
+			flushSync();
+			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			dispatchEvent(new MouseEvent('pointercancel'));
+			vi.advanceTimersByTime(0);
+			tap(row('bo'));
+			flushSync();
+			expect(dom.byRole('menu', 'Bo')).toBeTruthy();
+			vi.useRealTimers();
+		});
+
+		it('offers only Profile while a change is under way, no Direct message to a system identity, and opens from ↓ on the name', async () => {
+			const onprofile = vi.fn();
+			render({ sections, onprofile, onmessage: vi.fn(), onremove: vi.fn(), busy: true });
+			tap(row('bo'));
+			expect([onprofile.mock.calls.length, dom.queryByRole('menu')]).toEqual([1, null]);
+			dom.unmount();
+			render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: '~bot', name: 'Bot', system: true }] }], onprofile, onmessage: vi.fn(), onremove: vi.fn() });
+			dom.press(who('~bot'), 'ArrowDown');
+			flushSync();
+			await tick();
+			const menu = dom.byRole('menu', 'Bot');
+			expect([choices(), document.activeElement?.textContent, who('~bot').getAttribute('aria-controls')]).toEqual([['Profile', 'Remove from room'], 'Profile', menu.id]);
+		});
+
+		it('opens where it was right-clicked or held, and the long press then opens no card; no Remove while one is under way', async () => {
+			vi.useFakeTimers();
+			const onremove = vi.fn(), onprofile = vi.fn();
+			render({ sections, onremove, onprofile });
+			expect(rightClick(row('bo'), 40, 60).defaultPrevented).toBe(true);
+			expect([dom.byRole('menu', 'Bo').style.left, dom.byRole('menu').style.top]).toEqual(['40px', '60px']);
+			dom.press(dom.byRole('menu'), 'Escape');
+			const name = row('cy').querySelector('.ap-member-text')!;
+			dom.touch('pointerdown', name, 30, 40);
+			vi.advanceTimersByTime(500);
+			flushSync();
+			expect(choices()).toEqual(['Profile', 'Remove from room']);
+			dom.touch('pointerup', name, 30, 40);
+			tap(name);
+			expect(onprofile).not.toHaveBeenCalled();
+			vi.useRealTimers();
+			dom.unmount();
+			render({ sections, onremove, onprofile, busy: true });
+			// Profile alone left: the browser's own menu, and a press opens the card.
+			expect(rightClick(row('bo')).defaultPrevented).toBe(false);
+			tap(row('bo'));
+			expect(onprofile).toHaveBeenCalledOnce();
+		});
 	});
 
 	it('dims offline members only, saying each status in words on hover and to a screen reader; an unknown one is not offline (§4.5)', () => {

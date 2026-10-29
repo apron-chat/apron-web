@@ -97,22 +97,22 @@
 			"responsive.spec.ts:80"
 		],
 		"profile-card": [
-			"seen.spec.ts:47"
+			"seen.spec.ts:51"
 		],
 		"profile-seen": [
-			"seen.spec.ts:63",
-			"seen.spec.ts:113 (absent)",
-			"seen.spec.ts:138 (absent)",
-			"seen.spec.ts:177 (absent)"
+			"seen.spec.ts:70",
+			"seen.spec.ts:120 (absent)",
+			"seen.spec.ts:145 (absent)",
+			"seen.spec.ts:184 (absent)"
 		],
 		"profile-status": [
-			"seen.spec.ts:83",
-			"seen.spec.ts:112",
-			"seen.spec.ts:121",
-			"seen.spec.ts:137",
-			"seen.spec.ts:146",
-			"seen.spec.ts:169",
-			"seen.spec.ts:202"
+			"seen.spec.ts:90",
+			"seen.spec.ts:119",
+			"seen.spec.ts:128",
+			"seen.spec.ts:144",
+			"seen.spec.ts:153",
+			"seen.spec.ts:176",
+			"seen.spec.ts:209"
 		],
 		"reaction-chip": [
 			"chat.spec.ts:780 (absent)",
@@ -197,7 +197,7 @@
 			"reference.spec.ts:89"
 		],
 		"status-hint": [
-			"seen.spec.ts:99"
+			"seen.spec.ts:106"
 		],
 		"stream-embed": [
 			"reference.spec.ts:117"
@@ -661,7 +661,7 @@
 				"push.spec.ts:541",
 				"push.spec.ts:634",
 				"push.spec.ts:652",
-				"seen.spec.ts:95"
+				"seen.spec.ts:102"
 			]
 		},
 		"button /^Open preferences\\. Notifications paused/": {
@@ -701,7 +701,7 @@
 			},
 			"exact": false,
 			"at": [
-				"seen.spec.ts:97"
+				"seen.spec.ts:104"
 			]
 		},
 		"button /^Your profile on/": {
@@ -856,7 +856,7 @@
 				"push.spec.ts:521",
 				"push.spec.ts:541",
 				"push.spec.ts:635",
-				"seen.spec.ts:96"
+				"seen.spec.ts:103"
 			]
 		},
 		"dialog \"Start thread\"": {
@@ -917,6 +917,16 @@
 				"test-helpers.ts:10"
 			]
 		},
+		"menuitem \"Profile\"": {
+			"roles": [
+				"menuitem"
+			],
+			"name": "Profile",
+			"exact": true,
+			"at": [
+				"seen.spec.ts:59"
+			]
+		},
 		"menuitem /For 1 hour/": {
 			"roles": [
 				"menuitem"
@@ -953,7 +963,7 @@
 			},
 			"exact": false,
 			"at": [
-				"seen.spec.ts:142"
+				"seen.spec.ts:149"
 			]
 		},
 		"menuitemradio /^Online/": {
@@ -966,7 +976,7 @@
 			},
 			"exact": false,
 			"at": [
-				"seen.spec.ts:174"
+				"seen.spec.ts:181"
 			]
 		},
 		"option \"Move to room\"": {
@@ -1327,8 +1337,8 @@
 			"reference.spec.ts:269"
 		],
 		"button[data-user-id]": [
-			"seen.spec.ts:52",
-			"seen.spec.ts:123"
+			"seen.spec.ts:56",
+			"seen.spec.ts:130"
 		],
 		"code": [
 			"webauthn.spec.ts:14"

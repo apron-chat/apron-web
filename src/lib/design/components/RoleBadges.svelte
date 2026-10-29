@@ -83,7 +83,7 @@
 		return width - least(el, s, width);
 	}
 
-	/** A margin, unless it's `auto`: that one only takes up the room left over (a member row's remove button, pushed to the end), so it's free. */
+	/** A margin, unless it's `auto`: that one only takes up the room left over (something pushed to a row's end), so it's free. */
 	function margin(el: HTMLElement, s: CSSStyleDeclaration, side: 'left' | 'right'): number {
 		const typed = typeof el.computedStyleMap === 'function' ? el.computedStyleMap().get(`margin-${side}`) : undefined;
 		if (typed && typed.toString() === 'auto') return 0;

@@ -2999,7 +2999,7 @@
 		{/if}
 	{/snippet}
 	{#snippet members()}
-		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} canAdd={canAddMembers} />
+		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} canAdd={canAddMembers} canMessage={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,

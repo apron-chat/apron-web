@@ -19,7 +19,7 @@ test('a guest sees when an offline member was last seen, from the listing of a s
 	await expect(ada.locator('button[data-user-id="ada"]')).toHaveAttribute('title', '@ada · Offline · last seen 2h ago');
 	await expect(list.locator('button[data-user-id="bob"]')).toHaveAttribute('title', '@bob · Online');
 
-	await ada.locator('button[data-user-id="ada"]').click();
+	await preview.memberProfile(list, 'ada');
 	const card = page.getByRole('dialog', { name: 'Profile of Ada' });
 	await expect(card.getByTestId('profile-status')).toHaveText('Offline');
 	const seen = card.getByTestId('profile-seen');
@@ -30,7 +30,7 @@ test('a guest sees when an offline member was last seen, from the listing of a s
 
 	// Bob, online, and you: no last seen.
 	for (const [id, name] of [['bob', 'Bob'], ['guest_1', 'Guest 1']]) {
-		await list.locator(`button[data-user-id="${id}"]`).click();
+		await preview.memberProfile(list, id);
 		const other = page.getByRole('dialog', { name: `Profile of ${name}` });
 		await expect(other.getByTestId('profile-status')).toHaveText('Online');
 		await expect(other.getByTestId('profile-seen')).toHaveCount(0);
@@ -46,7 +46,7 @@ test.describe('live', () => {
 		const list = await preview.showMembers();
 		const linus = list.locator('button[data-user-id="linus"]');
 		await expect(linus).toHaveAttribute('title', '@linus · Offline · last seen 3h ago');
-		await linus.click();
+		await preview.memberProfile(list, 'linus');
 		const card = page.getByTestId('profile-card');
 		const seen = card.getByTestId('profile-seen');
 		await expect(seen).toHaveText('Last seen 3h ago');
@@ -71,7 +71,7 @@ test.describe('live', () => {
 		const list = await preview.showMembers();
 		const ada = list.locator('button[data-user-id="ada"]');
 		await expect(ada).toHaveAttribute('title', '@ada · Online');
-		await ada.click();
+		await preview.memberProfile(list, 'ada');
 		const card = page.getByTestId('profile-card');
 		const seen = card.getByTestId('profile-seen');
 		// A server that records seen coarsely, or keeps an earlier departure's, sends one from 25 minutes ago.

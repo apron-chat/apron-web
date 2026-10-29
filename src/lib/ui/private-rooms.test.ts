@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, OperationHandle, RoomSnapshot } from '$lib/protocol/client';
 import { roomSnapshot as room } from '$lib/test/builders';
-import { addRoomMembers, ArrivalWatch, directRoomWith, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
+import { addRoomMembers, ArrivalWatch, directRoomWith, messageUser, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
 
 const members = (...ids: string[]) => ids.map((user_id) => ({ user_id }));
 const dm = (id: string, ...ids: string[]) => room(id, [], { private: true, namedForMembers: true, members: members('ada', ...ids) });
@@ -66,6 +66,18 @@ function fakeClient(options: { record?: Partial<RoomSnapshot>; create?: Promise<
 		})
 	};
 }
+
+describe('messageUser', () => {
+	it('opens the conversation you already have with them, else starts one with them', async () => {
+		const client = fakeClient();
+		const withBob = dm('d1', 'bob');
+		expect(await messageUser(client, [withBob], 'ada', 'bob')).toEqual({ roomId: 'd1', failed: [] });
+		expect(client.createRoom).not.toHaveBeenCalled();
+		const named = vi.fn();
+		expect(await messageUser(client, [withBob], 'ada', 'carol', named)).toEqual({ roomId: 'p1', failed: [] });
+		expect([client.joinRoom.mock.calls, named.mock.calls]).toEqual([[['p1', 'carol']], [['p1']]]);
+	});
+});
 
 describe('startPrivateRoom', () => {
 	it('creates the room private, checks its record, then adds each person in turn, keeping the room when one fails', async () => {

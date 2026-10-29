@@ -1,12 +1,16 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import MessageCircle from '@lucide/svelte/icons/message-circle';
 	import Plus from '@lucide/svelte/icons/plus';
 	import UserMinus from '@lucide/svelte/icons/user-minus';
+	import UserRound from '@lucide/svelte/icons/user-round';
 	import Avatar from './Avatar.svelte';
+	import ContextMenu from './ContextMenu.svelte';
 	import FoldHeading from './FoldHeading.svelte';
+	import { hold } from './hold';
 	import RoleBadges from './RoleBadges.svelte';
-	import type { MemberListPerson, MemberListSection } from './types';
+	import type { ContextMenuChoice, MemberListPerson, MemberListSection } from './types';
 	import { presence, presenceLabel } from './util';
 
 	interface Props {
@@ -25,13 +29,18 @@
 		/** The keys of folded sections: each a FoldHeading, folded to no one (presence isn't news). */
 		shut?: string[];
 		ontogglesection?: (key: string) => void;
-		/** A row's name pressed: open their profile, from the row's button. */
+		/**
+		 * Open their profile, from the row's button: its menu's Profile, or pressing the row itself where Profile is all
+		 * its menu would hold (your own row, with nothing else offered).
+		 */
 		onprofile?: (userId: string, anchor: HTMLElement) => void;
-		/** Offer removing members (`room_leave` with `user_id`, §4.2.2): a button on every row but yours, on hover. */
+		/** Offer Direct message in every row's menu but yours: open or start a private conversation with them. */
+		onmessage?: (userId: string) => void;
+		/** Offer removing members (`room_leave` with `user_id`, §4.2.2): Remove from room, in every row's menu but yours. */
 		onremove?: (userId: string) => void;
 		/** Offer adding people (`room_join` with `user_id`): a + after the count, which opens an <AddMembersForm>. */
 		onadd?: () => void;
-		/** A remove is under way: the remove buttons wait. */
+		/** A change is under way (a remove, or a direct message being started): the rows' menus offer only Profile. */
 		busy?: boolean;
 		/** How the last change went: an error is announced at once. */
 		note?: { text: string; error?: boolean };
@@ -49,11 +58,97 @@
 		class?: ClassValue;
 	}
 	let {
-		open = true, room, count, sections, empty, placeholder = false, shut = [], ontogglesection, onprofile, onremove,
+		open = true, room, count, sections, empty, placeholder = false, shut = [], ontogglesection, onprofile, onmessage, onremove,
 		onadd, busy = false, note, remark, avatar, roles, countTestid, bodyTestid, truncatedTestid, class: className
 	}: Props = $props();
 
 	const listed = $derived((sections ?? []).reduce((total, section) => total + section.people.length, 0));
+
+	/**
+	 * A row's menu: Profile, then Direct message (not to a system identity) and Remove from room on everyone but you,
+	 * where offered, neither while a change is under way. Pressing the row drops it down beneath the row; a right-click,
+	 * the context menu key or a long press opens it where that was.
+	 */
+	let menu = $state<{ person: MemberListPerson; name: string; x: number; y: number; keyboard?: true; who: HTMLElement; choices: ContextMenuChoice[] } | undefined>();
+	let menuOpen = $state(false);
+	/**
+	 * A press on the row whose menu is open: it closes the menu, and the click that follows doesn't open it again. Gone
+	 * once that press is over, whether a click followed or not (a scroll, a drag off the row).
+	 */
+	let closing: string | undefined;
+	const menuId = $props.id();
+
+	function choicesFor(person: MemberListPerson): ContextMenuChoice[] {
+		const choices: ContextMenuChoice[] = [{ value: 'profile', label: 'Profile', icon: UserRound }];
+		if (person.you || busy) return choices;
+		if (onmessage && !person.system) choices.push({ value: 'message', label: 'Direct message', icon: MessageCircle });
+		if (onremove) choices.push({ value: 'remove', label: 'Remove from room', danger: true, icon: UserMinus });
+		return choices;
+	}
+
+	/** Who a row is, by its `data-user`: what a press on it reads, from the people as they are now. */
+	const byId = $derived(new Map((sections ?? []).flatMap((section) => section.people.map((person) => [person.user_id, person] as const))));
+	const nameOf = (person: MemberListPerson) => person.name || person.user_id;
+
+	function show(person: MemberListPerson, name: string, who: HTMLElement, at: { x: number; y: number; keyboard?: true }): boolean {
+		const choices = choicesFor(person);
+		if (choices.length < 2) return false;
+		closing = undefined;
+		menu = { person, name, ...at, who, choices };
+		menuOpen = true;
+		return true;
+	}
+
+	/**
+	 * The row pressed (its name, or anywhere on it): the menu dropped down beneath it, or straight to their profile where
+	 * that's all it holds. From the keyboard (Enter or Space on the name) its first choice is focused, as a menu button's.
+	 */
+	function press(who: HTMLElement, person: MemberListPerson, name: string, keyboard: boolean): void {
+		if (closing === person.user_id) {
+			// Put away by this press: focus back on the name, as Escape leaves it.
+			closing = undefined;
+			who.focus();
+			return;
+		}
+		const row = who.closest('li') ?? who;
+		const box = row.getBoundingClientRect(), start = who.getBoundingClientRect();
+		const rtl = getComputedStyle(row).direction === 'rtl';
+		if (!show(person, name, who, { x: rtl ? start.right : start.left, y: box.bottom + 2, ...(keyboard ? { keyboard: true as const } : {}) })) onprofile?.(person.user_id, who);
+	}
+
+	/**
+	 * One hold for every row, reading who the row is when it fires: the people are rebuilt on each presence change and
+	 * minute, and a hold made from them would be made anew mid-press, its timer lost.
+	 */
+	const rowMenu = hold((at, row) => {
+		const person = byId.get(row.dataset.user ?? '');
+		return person ? show(person, nameOf(person), row.querySelector<HTMLElement>('.ap-member-who') ?? row, at) : false;
+	});
+
+	/** A press on the row whose menu is open, noted until it's over. */
+	function pressing(userId: string): void {
+		if (!menuOpen || menu?.person.user_id !== userId) return;
+		closing = userId;
+		const done = () => setTimeout(() => (closing = undefined));
+		addEventListener('pointerup', done, { once: true, capture: true });
+		addEventListener('pointercancel', done, { once: true, capture: true });
+	}
+
+	/** ↓ or ↑ on the name opens its menu, as on a menu button. */
+	function namekey(event: KeyboardEvent, person: MemberListPerson, name: string): void {
+		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+		if (choicesFor(person).length < 2) return;
+		event.preventDefault();
+		press(event.currentTarget as HTMLElement, person, name, true);
+	}
+
+	function choose(value: string): void {
+		if (!menu) return;
+		const { person, who } = menu;
+		if (value === 'profile') onprofile?.(person.user_id, who);
+		else if (value === 'message') onmessage?.(person.user_id);
+		else if (value === 'remove') onremove?.(person.user_id);
+	}
 </script>
 
 <aside aria-label="Room member list" class={['ap-memberlist', open && 'ap-memberlist-open', className]}>
@@ -89,20 +184,21 @@
 									{@const name = person.name || person.user_id}
 									{@const shown = presence(person.status)}
 									{@const words = person.statusLabel ?? presenceLabel(person.status)}
-									<!-- The whole row opens their card, as its name does: a press anywhere but on a button of its own (Remove) presses the name, which keyboards reach. -->
+									{@const menued = choicesFor(person).length > 1}
+									{@const opened = menuOpen && menu?.person.user_id === person.user_id}
+									<!-- The whole row is its name's: a press anywhere else on it presses the name (which keyboards reach), dropping its menu down. Held or right-clicked, the menu opens there. -->
 									<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline']} data-user={person.user_id} data-status={shown}
-										onclick={(event) => { if (!(event.target as Element).closest('button')) event.currentTarget.querySelector<HTMLButtonElement>('.ap-member-who')?.click(); }}>
-										<button class="ap-member-who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => onprofile?.(person.user_id, event.currentTarget)}>
+									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline', opened && 'ap-member-menu']} data-user={person.user_id} data-status={shown}
+										{@attach rowMenu}
+										onpointerdown={() => pressing(person.user_id)}
+										onclick={(event) => { const who = event.currentTarget.querySelector<HTMLElement>('.ap-member-who'); if (who && !(event.target as Element).closest('button')) press(who, person, name, false); }}>
+										<button class="ap-member-who" type="button" data-user-id={person.user_id} aria-haspopup={menued ? 'menu' : 'dialog'} aria-expanded={menued ? opened : undefined} aria-controls={opened ? menuId : undefined} title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => press(event.currentTarget, person, name, event.detail === 0)} onkeydown={(event) => namekey(event, person, name)}>
 											{#if avatar}{@render avatar(person)}{:else}<Avatar {name} user_id={person.user_id} src={person.avatar} size="sm" status={person.status} statusLabel={words} />{/if}
 											<span class="ap-member-name">
 												<bdi class="ap-member-text">{name}</bdi>{#if person.handle}<small class="ap-member-handle">@{person.user_id}</small>{/if}{#if person.you}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.charAt(0).toLowerCase()}{words.slice(1)}</span>{/if}
 											</span>
 										</button>
 										{#if roles}{@render roles(person)}{:else}<RoleBadges roles={person.roles} />{/if}
-										{#if onremove && !person.you}
-											<button class="ap-iconbtn ap-member-remove" type="button" aria-label={`Remove ${name}`} title="Remove from room" disabled={busy} onclick={() => onremove?.(person.user_id)}><UserMinus size={14} aria-hidden="true" /></button>
-										{/if}
 									</li>
 								{/each}
 							</ul>
@@ -113,3 +209,6 @@
 		{/if}
 	</div>
 </aside>
+{#if menu}
+	<ContextMenu bind:open={menuOpen} id={menuId} x={menu.x} y={menu.y} keyboard={menu.keyboard} label={menu.name} returnFocus={menu.who} choices={menu.choices} onselect={choose} />
+{/if}

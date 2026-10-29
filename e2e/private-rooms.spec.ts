@@ -38,6 +38,24 @@ test.describe('signed in to an account', () => {
 		expect((await preview.sent('room_set')).filter((p) => p.private === true)).toHaveLength(1);
 	});
 
+	test('Direct message in a member\'s menu starts a private room with them, as Message on their card does', async ({ preview, page }) => {
+		await preview.open();
+		const list = await preview.showMembers();
+		// A press on their row drops its menu down beneath it.
+		await list.locator('li.ap-member[data-user="linus"]').click();
+		const menu = page.getByRole('menu', { name: 'Linus' });
+		await expect(menu.getByRole('menuitem')).toHaveText(['Profile', 'Direct message', 'Remove from room']);
+		await menu.getByRole('menuitem', { name: 'Direct message' }).click();
+		await preview.waitForSent('room_join', (p) => p.user_id === 'linus');
+		await expect(preview.heading()).toHaveText(/^Linus/);
+		await expect(page.getByTestId('private-list').locator('button[aria-current="page"]')).toHaveAccessibleName('Linus');
+		// Profile opens their card.
+		await preview.openRoom('general');
+		await list.locator('li.ap-member[data-user="linus"]').click();
+		await page.getByRole('menu', { name: 'Linus' }).getByRole('menuitem', { name: 'Profile' }).click();
+		await expect(page.getByTestId('profile-card')).toBeVisible();
+	});
+
 	test('the + beside Private starts a named room with the people picked, one at a time', async ({ preview, page }) => {
 		await preview.open();
 		await page.getByRole('button', { name: 'New private conversation', exact: true }).click();
