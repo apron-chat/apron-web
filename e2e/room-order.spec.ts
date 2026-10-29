@@ -79,6 +79,7 @@ test.describe('room order, with a mouse', () => {
 		await page.mouse.down();
 		await page.keyboard.up('Control');
 		await page.mouse.move(from.x, from.y - 30, { steps: 4 });
+		await nextFrame(page);
 		await expect(threadLists(page)).toHaveCount(1);
 		await page.mouse.up();
 		// A press let go somewhere the page didn't see: the next move has no button held.
@@ -125,6 +126,85 @@ test.describe('room order, with a mouse', () => {
 		await page.keyboard.press('Alt+ArrowUp');
 		await expect.poll(() => order(page)).toEqual(['general', 'engineering']);
 		await expect(row(page, 'general')).toBeFocused();
+	});
+});
+
+test.describe('room order, in a short window', () => {
+	// The sidebar's rooms scroll here, and a drag near its edge scrolls them, by where the pointer is.
+	test.use({ viewport: { width: 1280, height: 180 } });
+
+	test('a room carried to the edge of the scrolling sidebar stays over its list, and lands at its end', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		const scroller = await page.getByTestId('room-list').evaluate((list) => {
+			let node: HTMLElement | null = list;
+			while (node && !/(auto|scroll)/.test(getComputedStyle(node).overflowY)) node = node.parentElement;
+			return node!.getBoundingClientRect().toJSON() as DOMRect;
+		});
+		const from = await middle(page, 'general');
+		await page.mouse.move(from.x, from.y);
+		await page.mouse.down();
+		await page.mouse.move(from.x, from.y + 12, { steps: 3 });
+		// Held at the sidebar's bottom edge, which scrolls it, for a while.
+		for (let i = 0; i < 12; i++) {
+			await page.mouse.move(from.x + (i % 2), scroller.bottom - 4);
+			await page.waitForTimeout(100);
+		}
+		await expect.poll(async () => {
+			const carried = (await page.locator(`#${DRAGGED_ELEMENT_ID}`).boundingBox())!;
+			const list = (await page.getByTestId('room-list').boundingBox())!;
+			const middleY = carried.y + carried.height / 2;
+			return middleY >= list.y && middleY <= list.y + list.height;
+		}).toBe(true);
+		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
+		await page.mouse.up();
+		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
+	});
+});
+
+test.describe('room order, in a window too short for the list', () => {
+	// The list doesn't fit, so the sidebar scrolls while a room is carried; the room still lands where it's seen.
+	test.use({ viewport: { width: 1280, height: 140 } });
+
+	test('a room carried to the edge of the scrolling sidebar lands at the end it’s seen at', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		await row(page, 'general').scrollIntoViewIfNeeded();
+		const scroller = await page.getByTestId('room-list').evaluate((list) => {
+			let node: HTMLElement | null = list;
+			while (node && !/(auto|scroll)/.test(getComputedStyle(node).overflowY)) node = node.parentElement;
+			return node!.getBoundingClientRect().toJSON() as DOMRect;
+		});
+		const from = await middle(page, 'general');
+		await page.mouse.move(from.x, from.y);
+		await page.mouse.down();
+		await page.mouse.move(from.x, from.y + 12, { steps: 3 });
+		for (let i = 0; i < 12; i++) {
+			await page.mouse.move(from.x + (i % 2), scroller.bottom - 2);
+			await page.waitForTimeout(100);
+		}
+		await page.mouse.up();
+		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
+	});
+});
+
+test.describe('room order, with pointer moves out of step with frames', () => {
+	test.use(DEVICES.desktop);
+
+	test('a room carried away from the list lands where it’s seen, however often the pointer reports', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		const from = await middle(page, 'general');
+		await page.mouse.move(from.x, from.y);
+		await page.mouse.down();
+		await page.mouse.move(from.x, from.y + 12, { steps: 3 });
+		// Moves well off the list, more often than frames are drawn, as some browsers send them.
+		await page.evaluate(() => new Promise<void>((done) => {
+			let i = 0;
+			const timer = setInterval(() => dispatchEvent(new MouseEvent('mousemove', { clientX: 700 + (i++ % 30), clientY: 600, buttons: 1 })), 3);
+			setTimeout(() => (clearInterval(timer), done()), 1500);
+		}));
+		// The list has made way for it where it's seen, at the end, before it's let go.
+		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
+		await page.mouse.up();
+		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
 	});
 });
 

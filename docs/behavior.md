@@ -841,6 +841,9 @@ every room's threads fold away, so the list is just its rooms and the others
 make way for it, and they come back as they were once it's dropped. It keeps to
 its section's column, moving only up and down within the part of the section in
 view, so it lands where it's seen; carried past either end it goes to that end. A
+section that fits in the sidebar is brought whole into view and the sidebar holds
+still while a room is carried; a longer one scrolls as the room nears its edge,
+but not past the section's ends. A
 drag starts only from the room's own row, not its threads, its **+** or its **…**, and never opens the room. From the
 keyboard, Alt+↑ or Alt+↓ on a room moves it a place (as in the WAI-ARIA
 rearrangeable listbox; its row names the keys as `aria-keyshortcuts`), the keyboard staying on it and the move announced. In a

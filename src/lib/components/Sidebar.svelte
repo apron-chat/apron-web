@@ -131,7 +131,8 @@
 		refocus = focused instanceof HTMLElement && focused.matches('button[data-room]') ? focused.dataset.room : undefined;
 		const copy = document.getElementById(DRAGGED_ELEMENT_ID);
 		uncontain?.();
-		if (copy) uncontain = contain(copy, zone);
+		landing = undefined;
+		if (copy) uncontain = contain(copy, zone, info.id);
 	}
 	/** Dropped: next to the room shown before it in its section (or after it, at the top), so the ones a folded section hides keep their places. */
 	function finalize(section: Section, event: CustomEvent<DndEvent<RoomSnapshot>>): void {
@@ -149,37 +150,104 @@
 			});
 		}
 		refocus = undefined;
-		if (info.trigger !== TRIGGERS.DROPPED_INTO_ZONE) return;
+		const seen = landing;
+		landing = undefined;
+		if (info.trigger !== TRIGGERS.DROPPED_INTO_ZONE) {
+			if (seen) order.move(info.id, seen.target, seen.side);
+			return;
+		}
 		const ids = items.map((room) => room.id);
 		const at = ids.indexOf(info.id);
 		if (at > 0) order.move(info.id, ids[at - 1], 'after');
 		else if (ids.length > 1) order.move(info.id, ids[1], 'before');
 	}
 	/**
-	 * Keeps the carried room in its section's column, moving only up and down, within the part of the section in view:
-	 * the library moves its copy by its `transform` to follow the pointer (and slides it as it resizes it), which this
-	 * corrects each frame before it's drawn. The library finds where it lands by the copy, so it lands where it's seen.
+	 * Where the carried room was seen as it was let go: next to the room its copy's middle is nearest. A drop the library
+	 * loses as outside its section (it can, as it scrolls a long one) lands there, since `contain` keeps the copy over
+	 * the section; the library has already slid its copy back by the time it tells of the drop, so it's noted on release.
 	 */
-	function contain(copy: HTMLElement, zone: HTMLElement): () => void {
-		const view = zone.closest('.ap-shell-sidebody') ?? zone;
-		let frame = 0;
+	let landing: { target: string; side: 'before' | 'after' } | undefined;
+	function seenLanding(copy: HTMLElement, zone: HTMLElement, id: string): typeof landing {
+		const box = copy.getBoundingClientRect();
+		const middle = box.top + box.height / 2;
+		const others = [...zone.querySelectorAll<HTMLElement>('button[data-room]')].filter((button) => button.dataset.room !== id);
+		const next = others.find((button) => {
+			const row = button.getBoundingClientRect();
+			return middle < row.top + row.height / 2;
+		});
+		if (next) return { target: next.dataset.room!, side: 'before' };
+		return others.length ? { target: others[others.length - 1].dataset.room!, side: 'after' } : undefined;
+	}
+	/**
+	 * Keeps the carried room in its section's column, moving only up and down, over the part of its section in view, so
+	 * it lands where it's seen (the library finds where it lands by its copy's middle). The library moves its copy by its
+	 * `transform` to follow the pointer (and slides it as it resizes it), which this corrects right after each move,
+	 * before the library's timed check reads it, and each frame, before it's drawn. The library also scrolls the sidebar
+	 * by where the pointer is, and checks the room against the section as it was before it scrolled. So once the threads
+	 * have folded away (Svelte's next update, before the library's next frame, when it picks what it may scroll), a
+	 * section that fits is brought whole into view and the sidebar is held still while the room is carried; a longer one
+	 * scrolls, within its own ends, and a drop the library loses there still lands where it's seen (`landing`).
+	 */
+	function contain(copy: HTMLElement, zone: HTMLElement, id: string): () => void {
+		const view = (zone.closest('.ap-shell-sidebody') as HTMLElement | null) ?? zone;
+		const scrolling = view.style.overflow;
+		/** Whether the folded section fits in view; unknown until the threads have folded away. */
+		let fits: boolean | undefined;
+		let over = false;
+		void tick().then(() => {
+			if (over) return;
+			fits = zone.getBoundingClientRect().height <= view.getBoundingClientRect().height;
+			// Not scrollable, the library leaves it be (it reads `overflow`).
+			if (fits) view.style.overflow = 'hidden';
+			clamp();
+		});
 		const clamp = () => {
-			const at = /translate3d\((-?[\d.]+)px, (-?[\d.]+)px/.exec(copy.style.transform);
-			const [dx, dy] = at ? [Number(at[1]), Number(at[2])] : [0, 0];
+			const shift = copy.style.transform ? new DOMMatrixReadOnly(copy.style.transform) : new DOMMatrixReadOnly();
 			const box = copy.getBoundingClientRect();
-			const left = box.left - dx;
-			const top = box.top - dy;
-			const list = zone.getBoundingClientRect();
 			const shown = view.getBoundingClientRect();
-			const upper = Math.max(list.top, shown.top) - top;
-			const lower = Math.min(list.bottom, shown.bottom) - box.height - top;
-			const x = list.left - left;
-			const y = Math.min(Math.max(dy, upper), Math.max(lower, upper));
-			if (x !== dx || y !== dy) copy.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-			frame = requestAnimationFrame(clamp);
+			let list = zone.getBoundingClientRect();
+			const off =
+				fits === undefined ? 0
+				: fits ? (list.top < shown.top ? list.top - shown.top : list.bottom > shown.bottom ? list.bottom - shown.bottom : 0)
+				: list.top > shown.top ? list.top - shown.top : list.bottom < shown.bottom ? list.bottom - shown.bottom : 0;
+			if (off) {
+				view.scrollTop += off;
+				list = zone.getBoundingClientRect();
+			}
+			const upper = Math.max(list.top, shown.top);
+			const lower = Math.min(list.bottom, shown.bottom);
+			// The whole room where there's space for it, else its middle.
+			const [first, last] = lower - upper >= box.height ? [upper, lower - box.height] : [upper - box.height / 2 + 1, lower - box.height / 2 - 1];
+			const top = box.top - shift.m42;
+			const x = list.left - (box.left - shift.m41);
+			const y = Math.min(Math.max(shift.m42, first - top), Math.max(last - top, first - top));
+			if (Math.abs(x - shift.m41) > 0.01 || Math.abs(y - shift.m42) > 0.01) copy.style.transform = `translate3d(${x}px, ${y}px, 0)`;
 		};
-		clamp();
-		return () => cancelAnimationFrame(frame);
+		let frame = 0;
+		const each = () => {
+			clamp();
+			frame = requestAnimationFrame(each);
+		};
+		const release = () => {
+			clamp();
+			landing = seenLanding(copy, zone, id);
+		};
+		// Added after the library's own move listeners (the drag has begun), so these run after them; the release is
+		// caught on the way down, before the library's.
+		addEventListener('mousemove', clamp);
+		addEventListener('touchmove', clamp, { passive: true });
+		addEventListener('mouseup', release, true);
+		addEventListener('touchend', release, true);
+		each();
+		return () => {
+			over = true;
+			cancelAnimationFrame(frame);
+			removeEventListener('mousemove', clamp);
+			removeEventListener('touchmove', clamp);
+			removeEventListener('mouseup', release, true);
+			removeEventListener('touchend', release, true);
+			view.style.overflow = scrolling;
+		};
 	}
 	/** The room as it's carried: its threads left behind (the others' fold away too), raised off the list. */
 	function lift(element: HTMLElement | undefined): void {
