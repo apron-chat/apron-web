@@ -12,6 +12,7 @@
 	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
 	import DraftEditable from './DraftEditable.svelte';
 	import DraftPicker from './DraftPicker.svelte';
+	import type { MessageEditorField } from '$lib/design/components/types';
 
 	/**
 	 * Your message being edited, in place (the design system's
@@ -20,13 +21,16 @@
 	 * an upload's name can be changed (its `title`, §4.8.4); nothing is sent
 	 * until Save, and Cancel or Escape drops it all. An upload still being
 	 * written can't be removed. The text is written as in the composer, with
-	 * mentions as chips and the same autocomplete (`DraftField`).
+	 * mentions as chips and the same autocomplete (`DraftField`); who it
+	 * mentions is saved from its chips.
 	 */
 	interface Props {
 		text: string;
 		embeds: Embed[];
 		/** Files this client is writing to upload embeds, by `embed_id`. */
 		uploads: Record<string, UploadState>;
+		/** Who the message mentions now (`body.mentions`): their `@user_id`s in the text show as chips, known or not. */
+		mentions?: string[];
 		/** Who an `@` can name, as in the composer. */
 		people?: MentionPerson[];
 		/** Rooms and threads a `#` can name. */
@@ -37,7 +41,7 @@
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
 	}
-	let { text, embeds, uploads, people = [], rooms = [], onsave, oncancel, onmention }: Props = $props();
+	let { text, embeds, uploads, mentions: mentioned = [], people = [], rooms = [], onsave, oncancel, onmention }: Props = $props();
 
 	const onHandheld = handheld();
 	let value = $state(untrack(() => text));
@@ -51,6 +55,8 @@
 		set mentions(ids) { mentions = ids; },
 		get people() { return people; },
 		get rooms() { return rooms; },
+		get known() { return mentioned; },
+		written: true,
 		disabled: false,
 		submit: () => save(),
 		onmention: () => onmention?.()
@@ -88,7 +94,7 @@
 
 <DesignMessageEditor testid="message-editor" {value} {canSave} handheld={onHandheld} onsave={save} {oncancel} field={editable} {picker} attachments={shown.length > 0 ? tiles : undefined} />
 
-{#snippet editable()}<DraftEditable {draft} class="ap-msgedit-field" aria-label="Edit message" />{/snippet}
+{#snippet editable({ class: className, label }: MessageEditorField)}<DraftEditable {draft} class={className} aria-label={label} />{/snippet}
 {#snippet picker()}<DraftPicker {draft} />{/snippet}
 
 {#snippet tiles()}

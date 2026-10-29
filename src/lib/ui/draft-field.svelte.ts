@@ -31,6 +31,13 @@ export interface DraftHost {
 	readonly people: MentionPerson[];
 	/** Rooms and threads a `#` can name. */
 	readonly rooms: RoomSuggestion[];
+	/** More `user_id`s that are people, beyond `people` and the directory: an `@` of one is a mention. */
+	readonly known?: readonly string[];
+	/**
+	 * The draft is a message already written, such as one being edited: only `@user_id`s become chips (and picks),
+	 * the last one too, never a name in plain text, so the message's text changes only where it is edited.
+	 */
+	readonly written?: boolean;
 	readonly disabled: boolean;
 	/** Enter where it sends (or saves): `enterAction`, with no picker taking it. */
 	submit(): void;
@@ -114,7 +121,7 @@ export class DraftField {
 			if (!current || (this.shown?.field === current && this.shown.text === text)) return;
 			untrack(() => {
 				this.lastSelection = undefined;
-				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, isUser, rooms: this.roomIds });
+				const collapsed = collapseMentions([text], this.named, { caret: text.length, final: this.host.written ?? false, isUser: this.isUser, rooms: this.roomIds });
 				this.draw(current, collapsed.parts, document.activeElement === current ? collapsed.caret : undefined);
 				this.commit(current, collapsed.parts, false);
 			});
@@ -319,6 +326,13 @@ export class DraftField {
 		this.commit(field, inserted.parts, true);
 	}
 
+	/** The people whose names, typed out, become chips: none in a message already written (`written`). */
+	private get named(): MentionPerson[] {
+		return this.host.written ? [] : this.host.people;
+	}
+
+	private isUser = (id: string): boolean => this.host.people.some((person) => person.id === id) || (this.host.known?.includes(id) ?? false) || directory.resolve(id)?.kind === 'user';
+
 	/** People whose name or ID starts with the query; someone it names exactly comes first. */
 	private matching(text: string): MentionPerson[] {
 		const lower = text.toLowerCase();
@@ -370,7 +384,7 @@ export class DraftField {
 		const field = this.element;
 		if (!field) return;
 		const { parts, caret } = readDraft(field);
-		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser, rooms: this.roomIds });
+		const collapsed = collapseMentions(parts, this.named, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds });
 		if (collapsed.changed) this.draw(field, collapsed.parts, caret === undefined ? undefined : collapsed.caret);
 		this.commit(field, collapsed.parts, collapsed.changed || draftText(collapsed.parts) !== this.host.value);
 	}
@@ -419,8 +433,6 @@ export class DraftField {
 		return element;
 	}
 }
-
-const isUser = (id: string): boolean => directory.resolve(id)?.kind === 'user';
 
 /**
  * Reads the field back into draft parts, and the caret (the selection's

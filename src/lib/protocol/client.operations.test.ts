@@ -221,7 +221,7 @@ describe('saves', () => {
 		expect(socket.request('message').params.body).toEqual({ text: 'bare', format: 'markdown' });
 	});
 
-	it('replaces body.mentions with those an edit names, and keeps them when it names none', async () => {
+	it('replaces body.mentions with those an edit names, drops them for none, and keeps them when not given', async () => {
 		await connect();
 		socket.receive({ method: 'message', params: message('100', { body: { text: '@ada hi', mentions: ['ada'] } }) });
 		quiet(client.editMessage('100', '@ada hi again'));

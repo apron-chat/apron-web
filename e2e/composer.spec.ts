@@ -108,7 +108,8 @@ test.describe('mentions in the message editor', () => {
 		const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
 		await expect(editor).toBeFocused();
 		await expect(editor.locator('.ap-mention[data-user-id="ada"]')).toHaveText('@Ada Lovelace');
-		await page.keyboard.type(' and @');
+		// `x` is a letter here, not the row's Select.
+		await page.keyboard.type(' fixed and @');
 		const options = page.getByTestId('message-editor').getByRole('option');
 		await expect(options.first()).toBeVisible();
 		const other = (await options.nth(1).locator('.ap-mpick-id').textContent())!.trim().replace(/^@/, '');
@@ -125,7 +126,7 @@ test.describe('mentions in the message editor', () => {
 		await page.keyboard.press('Enter');
 
 		const edit = await preview.waitForSent('message', (p) => p.message_id !== undefined);
-		expect(edit.body).toMatchObject({ text: `@ada hello and @${other} `, mentions: ['ada', other] });
+		expect(edit.body).toMatchObject({ text: `@ada hello fixed and @${other} `, mentions: ['ada', other] });
 	});
 });
 

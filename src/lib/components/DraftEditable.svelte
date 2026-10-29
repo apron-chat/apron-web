@@ -8,7 +8,8 @@
 	 * `DraftField`: mentions as chips, and the keys and caret its autocomplete
 	 * follows. The composer's and the message editor's alike.
 	 */
-	interface Props extends Omit<ComponentProps<typeof ComposerEditable>, 'element' | 'empty'> {
+	/** The keys, input and focus are the `DraftField`'s: other attributes and handlers (`onpaste`) are the caller's. */
+	interface Props extends Omit<ComponentProps<typeof ComposerEditable>, 'element' | 'empty' | 'onbeforeinput' | 'oninput' | 'oncompositionend' | 'onkeydown' | 'onkeyup' | 'onclick' | 'onblur'> {
 		draft: DraftField;
 	}
 	let { draft, ...rest }: Props = $props();

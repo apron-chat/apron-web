@@ -95,6 +95,9 @@
 	 * select mode with it picked. The click that ends a long press does none of that, and a tap on the row while its
 	 * touch menu is open puts the menu away.
 	 */
+	/** Where text is written, whose keys and clicks are its own: `x` there is a letter. */
+	const FIELD = 'input, textarea, select, [contenteditable]';
+
 	function click(event: MouseEvent): void {
 		if (swallow) {
 			swallow = false;
@@ -102,6 +105,8 @@
 			return;
 		}
 		const target = event.target as HTMLElement | null;
+		// A field (the editor's, rich or not) keeps its clicks: a shift-click there extends its selection, a chip in it stays put.
+		if (target?.closest?.(FIELD)) return;
 		const room = target?.closest?.<HTMLElement>('[data-room-id]');
 		if (room?.dataset.roomId) {
 			on.openRoom?.(room.dataset.roomId);
@@ -144,7 +149,7 @@
 			return;
 		}
 		if (event.key !== 'x' || event.metaKey || event.ctrlKey || event.altKey || !view.caps?.select) return;
-		if ((event.target as HTMLElement | null)?.closest?.('input, textarea, select')) return;
+		if ((event.target as HTMLElement | null)?.closest?.(FIELD)) return;
 		event.preventDefault();
 		if (view.selecting) on.select?.(view, false);
 		else on.beginSelect?.(view);

@@ -161,6 +161,18 @@ describe('a message row', () => {
 		expect(dom.queryByRole('toolbar', 'Message actions')).toBeNull();
 	});
 
+	it('leaves the keys and clicks of an editor\u2019s rich field to it: `x` is a letter, a shift-click and a room chip stay there', () => {
+		const beginSelect = vi.fn();
+		const openRoom = vi.fn();
+		render({ editing: true, caps: ALL }, { beginSelect, openRoom }, { editor: dom.html('<div role="textbox" aria-label="Edit message" contenteditable="plaintext-only">hi <span contenteditable="false" data-room-id="ops">#ops</span></div>') });
+		const field = dom.byRole('textbox', 'Edit message');
+		expect(dom.press(field, 'x')).toBe(true);
+		field.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true }));
+		field.querySelector('[data-room-id]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		expect(beginSelect).not.toHaveBeenCalled();
+		expect(openRoom).not.toHaveBeenCalled();
+	});
+
 	it('decorates the code blocks of a body that has some, again when it changes', () => {
 		const cleanup = vi.fn();
 		const code = vi.fn(() => cleanup);

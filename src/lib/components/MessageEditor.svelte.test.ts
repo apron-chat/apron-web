@@ -111,4 +111,35 @@ describe('MessageEditor', () => {
 		dom.press(field(), 'Enter');
 		expect(onsave).toHaveBeenCalledWith('@ada see these cc @alan ', undefined, ['ada', 'alan']);
 	});
+
+	it('opens a message as written: a name in plain text stays text, and nothing changed cancels', () => {
+		const { onsave, oncancel } = render({ text: '@Ada Lovelace hi @ada', embeds: [], people: [{ id: 'ada', name: 'Ada Lovelace' }] });
+		// Only the `@user_id` is a chip, the last word as well.
+		expect([...field().querySelectorAll('[data-user-id]')].map((chip) => chip.textContent)).toEqual(['@Ada Lovelace']);
+		expect(field().textContent).toBe('@Ada Lovelace hi @Ada Lovelace');
+		dom.press(field(), 'Enter');
+		expect(onsave).not.toHaveBeenCalled();
+		expect(oncancel).toHaveBeenCalledOnce();
+	});
+
+	it('saves who its chips mention: one it can\u2019t name stays from the message, and a chip backspaced into text is no mention', () => {
+		// Bob isn't among the people here, but the message mentions him.
+		const { onsave } = render({ text: 'hi @bob and @ada', embeds: [photo], mentions: ['bob', 'ada'], people: [{ id: 'ada', name: 'Ada Lovelace' }] });
+		expect(field().querySelector('[data-user-id="bob"]')).not.toBeNull();
+		button('Remove image.png').click();
+		flushSync();
+		button('Save changes').click();
+		expect(onsave).toHaveBeenLastCalledWith('hi @bob and @ada', { removed: [photo] }, ['bob', 'ada']);
+
+		// Backspace right after Ada's chip turns it back into text.
+		const range = document.createRange();
+		range.setStart(field(), field().childNodes.length);
+		document.getSelection()!.removeAllRanges();
+		document.getSelection()!.addRange(range);
+		field().dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteContentBackward' }));
+		flushSync();
+		expect(field().querySelector('[data-user-id="ada"]')).toBeNull();
+		button('Save changes').click();
+		expect(onsave).toHaveBeenLastCalledWith('hi @bob and @Ada Lovelace', { removed: [photo] }, ['bob']);
+	});
 });

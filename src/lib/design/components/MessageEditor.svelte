@@ -10,15 +10,17 @@
 	import Attachments from './Attachments.svelte';
 	import Button from './Button.svelte';
 	import { enterAction } from './compose';
+	import type { MessageEditorField } from './types';
 
 	interface Props {
 		/** The text; `bind:value`. */
 		value?: string;
 		/**
-		 * Your own field in place of the textarea, such as a ComposerEditable that shows mentions as chips: it takes
-		 * the focus, Enter and the text itself. Escape it handles first (`preventDefault`) doesn't cancel.
+		 * Your own field in place of the textarea, such as a ComposerEditable that shows mentions as chips, given the
+		 * class and name to put on it. It is yours to fill and read (`value` then goes unused), to focus as the editor
+		 * opens and to save on Enter; Escape it handles first (`preventDefault`) doesn't cancel.
 		 */
-		field?: Snippet;
+		field?: Snippet<[MessageEditorField]>;
 		/** An autocomplete picker (a <MentionPicker>) for your `field`, anchored above it. */
 		picker?: Snippet;
 		/** The message's files over the text, usually AttachmentTiles, each removable and maybe renamable. */
@@ -70,7 +72,7 @@
 <div data-testid={testid} class={['ap-msgedit', className]} onkeydown={keydown}>
 	{#if attachments}<Attachments label="Attachments">{@render attachments()}</Attachments>{/if}
 	{#if ownField}
-		<div class="ap-msgedit-wrap">{@render picker?.()}{@render ownField()}</div>
+		<div class="ap-msgedit-wrap">{@render picker?.()}{@render ownField({ class: 'ap-msgedit-field', label: 'Edit message' })}</div>
 	{:else}
 		<textarea class="ap-msgedit-field" aria-label="Edit message" rows="1" dir="auto" bind:this={field} bind:value onkeydown={fieldKeydown}></textarea>
 	{/if}
