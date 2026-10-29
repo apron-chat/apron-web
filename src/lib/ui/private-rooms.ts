@@ -95,6 +95,21 @@ export function whenJoined(client: Pick<ChatClient, 'subscribe'>, roomId: string
 }
 
 /** A private room just started, and anyone who couldn't be added to it, with the server's words why. */
+/**
+ * Where a message to someone goes, as a profile card's Message and the member list's Direct message send it: the
+ * private conversation you already have with them (untitled, just the two of you), else one started with them
+ * (`startPrivateRoom`). One started that couldn't add them is kept, with `failed` saying why; a failure to start
+ * throws.
+ */
+export async function messageUser(
+	client: Pick<ChatClient, 'createRoom' | 'joinRoom' | 'subscribe'>, rooms: readonly RoomSnapshot[], you: string | undefined, userId: string,
+	named?: (roomId: string) => void
+): Promise<StartedRoom> {
+	const existing = directRoomWith(rooms, you, userId);
+	if (existing) return { roomId: existing.id, failed: [] };
+	return startPrivateRoom(client, [userId], { named });
+}
+
 export interface StartedRoom {
 	roomId: string;
 	failed: Refusal[];

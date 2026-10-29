@@ -59,16 +59,6 @@ describe('MemberList', () => {
 		expect(name.textContent).toBe('محمد(you)');
 	});
 
-	it('opens a card from anywhere on its row, anchored on the name', () => {
-		const onprofile = vi.fn();
-		render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo', status: 'online', roles: ['admin'] }] }], onprofile });
-		const row = document.querySelector<HTMLLIElement>('li.ap-member')!;
-		const who = row.querySelector<HTMLButtonElement>('.ap-member-who')!;
-		row.click();
-		row.querySelector<HTMLElement>('.ap-role')!.click();
-		expect(onprofile.mock.calls).toEqual([['bo', who], ['bo', who]]);
-	});
-
 	describe('a row\'s menu', () => {
 		const rightClick = (target: Element, x = 40, y = 60) => {
 			const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y });
@@ -77,52 +67,91 @@ describe('MemberList', () => {
 			return event;
 		};
 		const row = (id: string) => document.querySelector<HTMLLIElement>(`li.ap-member[data-user="${id}"]`)!;
+		const who = (id: string) => row(id).querySelector<HTMLButtonElement>('.ap-member-who')!;
+		const choices = () => [...dom.byRole('menu').querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+		/** A pointer's press (`detail` 1); `element.click()` is the keyboard's (0). */
+		const tap = (target: Element) => target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
 
-		it('offers Remove from room on everyone but you, from a right-click, focused, and gives focus back as it goes', async () => {
-			const onremove = vi.fn(), onprofile = vi.fn();
-			render({ sections, onremove, onprofile });
-			// Yours has nothing in it: the browser's own menu stays.
-			expect([rightClick(row('ada')).defaultPrevented, dom.queryByRole('menu')]).toEqual([false, null]);
-			expect(rightClick(row('bo')).defaultPrevented).toBe(true);
-			await tick();
-			const menu = dom.byRole('menu', 'Bo');
-			expect([...menu.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).toEqual(['Remove from room']);
-			expect(document.activeElement).toBe(menu);
-			expect(row('bo').classList.contains('ap-member-menu')).toBe(true);
-			dom.press(menu, 'Escape');
+		it('drops down from anywhere on the row: Profile, Direct message, Remove from room, each doing its part', async () => {
+			const onprofile = vi.fn(), onmessage = vi.fn(), onremove = vi.fn();
+			render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo', status: 'online', roles: ['admin'] }] }], onprofile, onmessage, onremove });
+			expect([who('bo').getAttribute('aria-haspopup'), who('bo').getAttribute('aria-expanded')]).toEqual(['menu', 'false']);
+			// A badge is the row too.
+			tap(row('bo').querySelector('.ap-role')!);
 			flushSync();
-			expect([dom.queryByRole('menu'), document.activeElement]).toEqual([null, row('bo').querySelector('.ap-member-who')]);
-			rightClick(row('cy'));
 			await tick();
+			expect([choices(), who('bo').getAttribute('aria-expanded'), row('bo').classList.contains('ap-member-menu')]).toEqual([['Profile', 'Direct message', 'Remove from room'], 'true', true]);
+			expect(dom.byRole('menuitem', 'Remove from room').classList.contains('ap-menu-item-danger')).toBe(true);
+			dom.byRole('menuitem', 'Profile').click();
+			flushSync();
+			expect([onprofile.mock.calls, dom.queryByRole('menu')]).toEqual([[['bo', who('bo')]], null]);
+			tap(row('bo'));
+			flushSync();
+			dom.byRole('menuitem', 'Direct message').click();
+			tap(row('bo'));
+			flushSync();
 			dom.byRole('menuitem', 'Remove from room').click();
-			flushSync();
-			expect([onremove.mock.calls, onprofile.mock.calls.length, dom.queryByRole('menu')]).toEqual([[['cy']], 0, null]);
+			expect([onmessage.mock.calls, onremove.mock.calls]).toEqual([[['bo']], [['bo']]]);
 		});
 
-		it('opens from a long touch press too, and the press then opens no card; not while a remove is under way', async () => {
+		it('is put away by pressing the row again, or Escape, focus back on the name; from the keyboard, its first choice is focused', async () => {
+			render({ sections, onprofile: vi.fn(), onremove: vi.fn() });
+			tap(row('bo'));
+			flushSync();
+			await tick();
+			expect(document.activeElement).toBe(dom.byRole('menu', 'Bo'));
+			// The press that puts it away doesn't open it again.
+			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			tap(row('bo'));
+			flushSync();
+			expect(dom.queryByRole('menu')).toBeNull();
+			// Enter on the name, a click with no pointer.
+			who('bo').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+			flushSync();
+			await tick();
+			expect(document.activeElement?.textContent).toBe('Profile');
+			dom.press(dom.byRole('menu'), 'Escape');
+			flushSync();
+			expect([dom.queryByRole('menu'), document.activeElement]).toEqual([null, who('bo')]);
+		});
+
+		it('is skipped on your own row, and wherever Profile is all it would hold: pressing the row opens the card', () => {
+			const onprofile = vi.fn();
+			render({ sections, onprofile, onremove: vi.fn() });
+			expect(who('ada').getAttribute('aria-haspopup')).toBe('dialog');
+			tap(row('ada'));
+			expect([onprofile.mock.calls, dom.queryByRole('menu')]).toEqual([[['ada', who('ada')]], null]);
+			// Yours keeps the browser's own context menu.
+			expect(rightClick(row('ada')).defaultPrevented).toBe(false);
+			dom.unmount();
+			render({ sections, onprofile });
+			tap(row('bo'));
+			expect([onprofile.mock.calls.at(-1), dom.queryByRole('menu')]).toEqual([['bo', who('bo')], null]);
+		});
+
+		it('opens where it was right-clicked or held, and the long press then opens no card; no Remove while one is under way', async () => {
 			vi.useFakeTimers();
 			const onremove = vi.fn(), onprofile = vi.fn();
 			render({ sections, onremove, onprofile });
-			const name = row('bo').querySelector('.ap-member-text')!;
+			expect(rightClick(row('bo'), 40, 60).defaultPrevented).toBe(true);
+			expect([dom.byRole('menu', 'Bo').style.left, dom.byRole('menu').style.top]).toEqual(['40px', '60px']);
+			dom.press(dom.byRole('menu'), 'Escape');
+			const name = row('cy').querySelector('.ap-member-text')!;
 			dom.touch('pointerdown', name, 30, 40);
 			vi.advanceTimersByTime(500);
 			flushSync();
-			expect(dom.byRole('menu', 'Bo')).toBeTruthy();
+			expect(choices()).toEqual(['Profile', 'Remove from room']);
 			dom.touch('pointerup', name, 30, 40);
-			(name as HTMLElement).click();
+			tap(name);
 			expect(onprofile).not.toHaveBeenCalled();
-			// A short tap is still a tap.
-			dom.press(dom.byRole('menu'), 'Escape');
-			dom.touch('pointerdown', name, 30, 40);
-			vi.advanceTimersByTime(200);
-			dom.touch('pointerup', name, 30, 40);
-			(name as HTMLElement).click();
-			expect(onprofile).toHaveBeenCalledOnce();
 			vi.useRealTimers();
 			dom.unmount();
 			render({ sections, onremove, onprofile, busy: true });
+			// Profile alone left: the browser's own menu, and a press opens the card.
 			expect(rightClick(row('bo')).defaultPrevented).toBe(false);
-			expect(dom.queryByRole('menu')).toBeNull();
+			tap(row('bo'));
+			expect(onprofile).toHaveBeenCalledOnce();
 		});
 	});
 

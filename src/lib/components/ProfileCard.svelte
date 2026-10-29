@@ -13,7 +13,7 @@
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
 	import { couldNotAdd } from '$lib/ui/members';
-	import { directRoomWith, startPrivateRoom } from '$lib/ui/private-rooms';
+	import { directRoomWith, messageUser } from '$lib/ui/private-rooms';
 
 	/**
 	 * Who a mention, a sender or a member is: the design system's ProfileCard,
@@ -164,9 +164,8 @@
 	}
 
 	/**
-	 * Opens the private conversation you already have with them (untitled, just the two of you), else starts one
-	 * (`startPrivateRoom`: created private, its record checked, then them added), and opens it. Progress and errors
-	 * show in the card's note; one that started but couldn't add them is kept, and the note says so.
+	 * Opens the private conversation you already have with them, else starts one (`messageUser`), and opens it. Progress
+	 * and errors show in the card's note; one that started but couldn't add them is kept, and the note says so.
 	 */
 	async function message(): Promise<void> {
 		if (!client || !onopenroom || messaging) return;
@@ -182,7 +181,7 @@
 		note = undefined;
 		const still = () => profileCard.current === asked;
 		try {
-			const started = await startPrivateRoom(client, [id], { named: onnamed });
+			const started = await messageUser(client, session.rooms, session.you?.user_id, id, onnamed);
 			if (started.failed.length) {
 				if (still()) note = { text: `${couldNotAdd(started.failed, (failed) => directory.name({ user_id: failed }))} The room is kept under Private.`, error: true };
 				return;

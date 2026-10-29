@@ -3,7 +3,8 @@
 	import type { Identity } from '$lib/protocol/types';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { memberSections } from '$lib/ui/members';
+	import { couldNotAdd, memberSections } from '$lib/ui/members';
+	import { messageUser } from '$lib/ui/private-rooms';
 	import { byName } from '$lib/ui/people';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { loadShutMemberSections, saveShutMemberSections } from '$lib/ui/storage';
@@ -32,8 +33,13 @@
 		canChange: boolean;
 		/** Offer adding others too: with `add_members` (`ext:permissions`) or without that extension, or in a private room you are a member of. */
 		canAdd: boolean;
+		/** Offer Direct message, as a profile card's Message: a private room can be started, and opened with `onopenroom`. */
+		canMessage?: boolean;
+		/** A private room was started here, for the page to open as yours rather than as one someone added you to. */
+		onnamed?: (roomId: string) => void;
+		onopenroom?: (roomId: string) => void;
 	}
-	let { client, session, room, open, canChange, canAdd }: Props = $props();
+	let { client, session, room, open, canChange, canAdd, canMessage = false, onnamed, onopenroom }: Props = $props();
 
 	/**
 	 * Each member's `status` (§4.5) as kept: yours is the one you chose, as the profile bar shows it. Resuming after a
@@ -107,6 +113,25 @@
 		addOpen = true;
 	}
 
+	/**
+	 * Direct message: the private conversation you have with them, else one started (`messageUser`), opened. A failure,
+	 * or one started that couldn't add them (kept under Private), says so in the panel.
+	 */
+	async function message(userId: string): Promise<void> {
+		if (!client || !onopenroom || busy) return;
+		busy = true;
+		note = undefined;
+		try {
+			const started = await messageUser(client, session.rooms, session.you?.user_id, userId, onnamed);
+			if (started.failed.length) note = { text: `${couldNotAdd(started.failed, (failed) => directory.name({ user_id: failed }))} The room is kept under Private.`, error: true };
+			else onopenroom(started.roomId);
+		} catch (cause) {
+			note = { text: cause instanceof Error ? cause.message : 'Unable to start a private room', error: true };
+		} finally {
+			busy = false;
+		}
+	}
+
 	async function remove(userId: string): Promise<void> {
 		if (!client || !room || busy) return;
 		const name = directory.name({ user_id: userId });
@@ -136,6 +161,7 @@
 	shut={[...shut]}
 	ontogglesection={toggleSection}
 	onprofile={(_, anchor) => openProfileFrom(anchor)}
+	onmessage={canMessage && client && onopenroom ? message : undefined}
 	onremove={changing ? remove : undefined}
 	onadd={changing && canAdd ? openAdd : undefined}
 	{busy}

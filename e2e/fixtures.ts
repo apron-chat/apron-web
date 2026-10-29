@@ -137,6 +137,17 @@ export class Preview {
 		return list;
 	}
 
+	/**
+	 * Opens a member's profile card from the member list: their row drops its menu down, whose Profile opens it; a row
+	 * whose menu would hold Profile alone (yours, or with nothing else offered) opens it at once.
+	 */
+	async memberProfile(list: Locator, userId: string): Promise<void> {
+		const who = list.locator(`button[data-user-id="${userId}"]`);
+		const menu = (await who.getAttribute('aria-haspopup')) === 'menu';
+		await who.click();
+		if (menu) await this.page.getByRole('menu').getByRole('menuitem', { name: 'Profile', exact: true }).click();
+	}
+
 	/** Taps on a touch device, clicks otherwise. */
 	async press(locator: Locator): Promise<void> {
 		if (await this.page.evaluate(() => matchMedia('(pointer: coarse)').matches)) await locator.tap();

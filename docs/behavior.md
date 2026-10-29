@@ -250,10 +250,13 @@ or `@user_id` typed; when none of them matches, the `@user_id` typed is offered
 to add by it. **Add** sends `room_join` with each picked `user_id` in turn; one
 the server refuses doesn't stop the rest, stays picked, and the dialog says
 why, while those added are said in the panel. Pressing a member's row
-anywhere opens their profile card. Each other member's row has a menu, opened by
-a right-click, the context menu key or a long press, whose **Remove from room**
-removes them (`room_leave` with their `user_id`, after a confirm): how members
-bring people into a private room. Who may is the server's
+anywhere drops down its menu beneath it (a right-click, the context menu key or a
+long press opens it where that was): **Profile** opens their profile card;
+**Direct message** opens the private conversation you have with them, or starts
+one, as a profile card's Message does; and **Remove from room** removes them
+(`room_leave` with their `user_id`, after a confirm): how members bring people
+into a private room. Your own row, or one where Profile is all the menu would
+hold, opens the profile card at once. Who may is the server's
 policy; its error shows in the panel. A server that answers `unsupported`
 gets no controls until its next `server` frame. A count kept from a truncated listing stays while later records
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
