@@ -65,6 +65,7 @@ describe('Sidebar', () => {
 		toggle.click();
 		flushSync();
 		expect([toggle.getAttribute('aria-expanded'), names('room-directory')]).toEqual(['false', []]);
+		expect(localStorage.getItem('apron.sidebarFolds')).toBe('["otherRooms"]');
 		// Its …, as the heading does, shows them all again, listed afresh.
 		const listed = listRooms.mock.calls.length;
 		dom.button('Show all Other Rooms').click();
@@ -98,6 +99,33 @@ describe('Sidebar', () => {
 		sidebar(client, session, { unread: { ops: 3, t1: 1 } });
 		flushSync();
 		expect(names('room-list')).toEqual(['General', 'Ops', 'Design', 'Deploy']);
+		session.dispose();
+	});
+
+	it('heads each section with an h2, and folds Private alone to those with mentions, to none at all, or to the open one', () => {
+		const client = fake();
+		const session = new SessionView();
+		const room = (id: string, title: string, fields: Partial<RoomSnapshot> = {}) => ({ ...general, id, title, timeline: createTimeline(id), ...fields }) as RoomSnapshot;
+		const rooms = [general, room('quiet', 'Quiet'), room('bo', 'Bo', { private: true }), room('cy', 'Cy', { private: true }), room('t1', 'Plans', { parentRoomId: 'cy', private: true })];
+		session.apply(live({ rooms }), client);
+		sidebar(client, session, { onnewprivate: vi.fn(), mentions: { t1: 1 } });
+		flushSync();
+		expect(dom.byRole('heading', 'Rooms').tagName).toBe('H2');
+		expect(dom.byRole('heading', 'Private').querySelector('button')?.getAttribute('aria-expanded')).toBe('true');
+		dom.button('Private').click();
+		flushSync();
+		// Cy's thread has a mention, and nothing else unread: Cy stays, with it; Bo goes. Rooms is left as it was.
+		expect([names('private-list'), names('room-list')]).toEqual([['Cy', 'Plans'], ['General', 'Quiet']]);
+		expect(localStorage.getItem('apron.sidebarFolds')).toBe('["private"]');
+		dom.button('Rooms').click();
+		flushSync();
+		// Nothing in Rooms has news but the open room.
+		expect(names('room-list')).toEqual(['General']);
+		dom.unmount();
+		sidebar(client, session, { onnewprivate: vi.fn(), mentions: {} });
+		flushSync();
+		// No news anywhere: a folded section with none of its rooms open shows its heading and … alone.
+		expect([names('private-list'), dom.button('Show all Private').isConnected]).toEqual([[], true]);
 		session.dispose();
 	});
 

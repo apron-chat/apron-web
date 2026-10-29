@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadFoldedSections, saveFoldedSections, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -59,11 +59,11 @@ describe('preference storage', () => {
 		expect(values.get('apron.memberSections')).toBe('["offline"]');
 		expect(loadShutMemberSections()).toEqual(['offline']);
 		// The sidebar's sections folded to what has news, the same way.
-		expect(loadFoldedSections()).toEqual([]);
-		saveFoldedSections(['rooms', 'other']);
-		expect(loadFoldedSections()).toEqual(['rooms', 'other']);
+		expect(loadSidebarFolds()).toEqual([]);
+		saveSidebarFolds(['rooms', 'otherRooms']);
+		expect(loadSidebarFolds()).toEqual(['rooms', 'otherRooms']);
 		values.set('apron.sidebarFolds', '{');
-		expect(loadFoldedSections()).toEqual([]);
+		expect(loadSidebarFolds()).toEqual([]);
 		values.set('apron.memberSections', '{"offline":true}');
 		expect(loadShutMemberSections()).toEqual([]);
 		values.set('apron.memberSections', 'not json');

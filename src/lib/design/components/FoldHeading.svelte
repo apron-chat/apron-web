@@ -15,10 +15,8 @@
 		/** Folded to what has news. `bind:folded` works too. */
 		folded?: boolean;
 		onfold?: (folded: boolean) => void;
-		/** Its level, where it's a heading in the page's outline (a member list's are h3s). */
-		level?: 2 | 3 | 4;
-		/** The FoldPill's name; "Show all <label>" by default. */
-		expandLabel?: string;
+		/** Its level in the page's outline: a SidebarSection's are h2s, a member list's h3s. None: a heading only by look (Other Threads, among a room's rows). */
+		level?: 2 | 3;
 		/** At its end, after the FoldPill: a SidebarSection's +. */
 		end?: Snippet;
 		/** A `data-testid` for the heading's button, and one for the FoldPill. */
@@ -27,7 +25,7 @@
 		/** Classes for its row, added to its own. */
 		class?: ClassValue;
 	}
-	let { label, count, folded = $bindable(false), onfold, level, expandLabel, end, toggleTestid, expandTestid, class: className }: Props = $props();
+	let { label, count, folded = $bindable(false), onfold, level, end, toggleTestid, expandTestid, class: className }: Props = $props();
 	let heading = $state<HTMLButtonElement | undefined>();
 
 	function fold(next: boolean): void {
@@ -50,7 +48,7 @@
 	{#if level}<svelte:element this={`h${level}`} class="ap-foldhead-title">{@render toggle()}</svelte:element>{:else}{@render toggle()}{/if}
 	{#if folded || end}
 		<span class="ap-foldhead-ends">
-			{#if folded}<FoldPill label={expandLabel ?? `Show all ${label}`} testid={expandTestid} onclick={expand} />{/if}
+			{#if folded}<FoldPill label="Show all {label}" testid={expandTestid} onclick={expand} />{/if}
 			{@render end?.()}
 		</span>
 	{/if}

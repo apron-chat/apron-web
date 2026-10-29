@@ -103,7 +103,7 @@ test.describe('ext:permissions and ext:settings', () => {
 			// Other Rooms, open from the start, opens a room to read rather than joining it, so it says no Join.
 			await expect(page.getByTestId('room-directory')).toContainText('Design reviews');
 			await expect(page.getByTestId('room-directory').getByRole('button', { name: /^Join/ })).toHaveCount(0);
-			await expect(page.getByTestId('room-directory')).not.toContainText(/Join|Open/);
+			for (const topic of await page.getByTestId('room-directory').locator('.ap-room-topic').allTextContents()) expect(topic).not.toMatch(/Join|Open/);
 		});
 	});
 

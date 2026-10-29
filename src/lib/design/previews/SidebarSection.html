@@ -1,4 +1,4 @@
-<!-- @dsCard group="Navigation" height=360 subtitle="A heading that folds its rows to those with news, with a +; folded, a … before the + shows them all again (Other Rooms has none, so shows nothing); a heading that doesn't fold; and one still loading" -->
+<!-- @dsCard group="Navigation" height=360 subtitle="A heading that folds its rows to those with news, with a +; folded, a … before the + shows them all again (Other Rooms has none, so shows nothing); and one still loading" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>SidebarSection</title></head>
@@ -14,7 +14,6 @@
   add(A.SidebarSection, { title: 'Other Rooms', children: rooms([{ room: 'random', name: 'Random', topic: '12 members · Join' }]) });
   add(A.SidebarSection, { title: 'Private', folded: true, onadd: noop, addLabel: 'New private conversation', children: rooms([{ room: 'bo', name: 'Bo', unread: 1 }]) });
   add(A.SidebarSection, { title: 'Other Rooms', folded: true });
-  add(A.SidebarSection, { title: 'Pinned', foldable: false, children: rooms([{ room: 'old', name: 'Old' }]) });
   add(A.SidebarSection, { title: 'Muted', loading: true });
 </script>
 </body>

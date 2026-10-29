@@ -5,8 +5,8 @@
 	import FoldHeading from './FoldHeading.svelte';
 
 	/**
-	 * A group of rows in the sidebar under a FoldHeading: folded, the caller shows only the rows with news, and the
-	 * heading's … shows them all again.
+	 * A group of rows in the sidebar under a FoldHeading (an h2): folded, the caller shows only the rows with news, and
+	 * the heading's … shows them all again.
 	 */
 	interface Props {
 		/** Its heading. */
@@ -14,8 +14,6 @@
 		/** Folded to the rows with news, which the caller picks out: `children` shows those alone. `bind:folded` works too. */
 		folded?: boolean;
 		onfold?: (folded: boolean) => void;
-		/** Off: the title is a plain heading, and the section never folds. */
-		foldable?: boolean;
 		/** A + at the end of the heading, such as Create room; `addLabel` is its name and tooltip. */
 		onadd?: () => void;
 		addLabel?: string;
@@ -29,7 +27,7 @@
 		/** Classes for its `<section>`, added to its own. */
 		class?: ClassValue;
 	}
-	let { title, folded = $bindable(false), onfold, foldable = true, onadd, addLabel, loading, toggleTestid, expandTestid, bodyTestid, children, class: className }: Props = $props();
+	let { title, folded = $bindable(false), onfold, onadd, addLabel, loading, toggleTestid, expandTestid, bodyTestid, children, class: className }: Props = $props();
 </script>
 
 {#snippet add()}
@@ -37,14 +35,7 @@
 {/snippet}
 
 <section class={['ap-sect', className]}>
-	{#if foldable}
-		<FoldHeading class="ap-sect-head" label={title} bind:folded {onfold} end={onadd ? add : undefined} {toggleTestid} {expandTestid} />
-	{:else}
-		<div class="ap-foldhead ap-sect-head">
-			<span class="ap-sect-toggle" role="heading" aria-level="2">{title}</span>
-			{#if onadd}<span class="ap-foldhead-ends">{@render add()}</span>{/if}
-		</div>
-	{/if}
+	<FoldHeading class="ap-sect-head" level={2} label={title} bind:folded {onfold} end={onadd ? add : undefined} {toggleTestid} {expandTestid} />
 	<div class="ap-sect-body" data-testid={bodyTestid}>
 		{#if loading}
 			<div class="ap-sect-skel" aria-hidden="true"><span class="ap-skel" style:width="70%"></span><span class="ap-skel" style:width="52%"></span><span class="ap-skel" style:width="61%"></span></div>
