@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { flushSync, tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import MemberList from './MemberList.svelte';
 import type { MemberListSection } from './types';
@@ -47,14 +48,9 @@ describe('MemberList', () => {
 		expect(document.querySelectorAll('li.ap-member')).toHaveLength(2);
 	});
 
-	it('marks you, isolating each name, and offers removing everyone else', () => {
-		const onremove = vi.fn();
-		render({ sections, onremove });
-		const rows = [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
-		expect(rows.map((row) => dom.queryByRole('button', /^Remove /, row)?.getAttribute('aria-label') ?? '')).toEqual(['', 'Remove Bo', 'Remove Cy']);
-		expect(rows[0].textContent).toContain('(you)');
-		dom.button('Remove Bo').click();
-		expect(onremove).toHaveBeenCalledWith('bo');
+	it('marks you, isolating each name', () => {
+		render({ sections });
+		expect(document.querySelectorAll<HTMLLIElement>('li.ap-member')[0].textContent).toContain('(you)');
 		dom.unmount();
 		// Each name is isolated, so one written right to left can't carry the handle or (you) across it.
 		render({ sections: [{ key: 'members', label: 'Members', people: [{ user_id: 'mo', name: 'محمد', you: true }] }] });
@@ -63,21 +59,71 @@ describe('MemberList', () => {
 		expect(name.textContent).toBe('محمد(you)');
 	});
 
-	it('opens a card from anywhere on its row, anchored on the name, but Remove only removes', () => {
-		const onprofile = vi.fn(), onremove = vi.fn();
-		render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo', status: 'online', roles: ['admin'] }] }], onprofile, onremove, busy: false });
+	it('opens a card from anywhere on its row, anchored on the name', () => {
+		const onprofile = vi.fn();
+		render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo', status: 'online', roles: ['admin'] }] }], onprofile });
 		const row = document.querySelector<HTMLLIElement>('li.ap-member')!;
 		const who = row.querySelector<HTMLButtonElement>('.ap-member-who')!;
 		row.click();
 		row.querySelector<HTMLElement>('.ap-role')!.click();
 		expect(onprofile.mock.calls).toEqual([['bo', who], ['bo', who]]);
-		dom.button('Remove Bo').click();
-		expect([onremove.mock.calls, onprofile.mock.calls.length]).toEqual([[['bo']], 2]);
-		dom.unmount();
-		// Disabled while a change is in flight, it opens nothing either.
-		render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo' }] }], onprofile, onremove, busy: true });
-		dom.button('Remove Bo').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-		expect(onprofile).toHaveBeenCalledTimes(2);
+	});
+
+	describe('a row\'s menu', () => {
+		const rightClick = (target: Element, x = 40, y = 60) => {
+			const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y });
+			target.dispatchEvent(event);
+			flushSync();
+			return event;
+		};
+		const row = (id: string) => document.querySelector<HTMLLIElement>(`li.ap-member[data-user="${id}"]`)!;
+
+		it('offers Remove from room on everyone but you, from a right-click, focused, and gives focus back as it goes', async () => {
+			const onremove = vi.fn(), onprofile = vi.fn();
+			render({ sections, onremove, onprofile });
+			// Yours has nothing in it: the browser's own menu stays.
+			expect([rightClick(row('ada')).defaultPrevented, dom.queryByRole('menu')]).toEqual([false, null]);
+			expect(rightClick(row('bo')).defaultPrevented).toBe(true);
+			await tick();
+			const menu = dom.byRole('menu', 'Bo');
+			expect([...menu.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).toEqual(['Remove from room']);
+			expect(document.activeElement).toBe(menu);
+			expect(row('bo').classList.contains('ap-member-menu')).toBe(true);
+			dom.press(menu, 'Escape');
+			flushSync();
+			expect([dom.queryByRole('menu'), document.activeElement]).toEqual([null, row('bo').querySelector('.ap-member-who')]);
+			rightClick(row('cy'));
+			await tick();
+			dom.byRole('menuitem', 'Remove from room').click();
+			flushSync();
+			expect([onremove.mock.calls, onprofile.mock.calls.length, dom.queryByRole('menu')]).toEqual([[['cy']], 0, null]);
+		});
+
+		it('opens from a long touch press too, and the press then opens no card; not while a remove is under way', async () => {
+			vi.useFakeTimers();
+			const onremove = vi.fn(), onprofile = vi.fn();
+			render({ sections, onremove, onprofile });
+			const name = row('bo').querySelector('.ap-member-text')!;
+			dom.touch('pointerdown', name, 30, 40);
+			vi.advanceTimersByTime(500);
+			flushSync();
+			expect(dom.byRole('menu', 'Bo')).toBeTruthy();
+			dom.touch('pointerup', name, 30, 40);
+			(name as HTMLElement).click();
+			expect(onprofile).not.toHaveBeenCalled();
+			// A short tap is still a tap.
+			dom.press(dom.byRole('menu'), 'Escape');
+			dom.touch('pointerdown', name, 30, 40);
+			vi.advanceTimersByTime(200);
+			dom.touch('pointerup', name, 30, 40);
+			(name as HTMLElement).click();
+			expect(onprofile).toHaveBeenCalledOnce();
+			vi.useRealTimers();
+			dom.unmount();
+			render({ sections, onremove, onprofile, busy: true });
+			expect(rightClick(row('bo')).defaultPrevented).toBe(false);
+			expect(dom.queryByRole('menu')).toBeNull();
+		});
 	});
 
 	it('dims offline members only, saying each status in words on hover and to a screen reader; an unknown one is not offline (§4.5)', () => {

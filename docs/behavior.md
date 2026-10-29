@@ -249,9 +249,11 @@ who aren't members yet, but you and the system identities, narrowed by a name
 or `@user_id` typed; when none of them matches, the `@user_id` typed is offered
 to add by it. **Add** sends `room_join` with each picked `user_id` in turn; one
 the server refuses doesn't stop the rest, stays picked, and the dialog says
-why, while those added are said in the panel. Each other
-member's remove button removes them (`room_leave` with their `user_id`, after
-a confirm): how members bring people into a private room. Who may is the server's
+why, while those added are said in the panel. Pressing a member's row
+anywhere opens their profile card. Each other member's row has a menu, opened by
+a right-click, the context menu key or a long press, whose **Remove from room**
+removes them (`room_leave` with their `user_id`, after a confirm): how members
+bring people into a private room. Who may is the server's
 policy; its error shows in the panel. A server that answers `unsupported`
 gets no controls until its next `server` frame. A count kept from a truncated listing stays while later records
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
@@ -753,8 +755,9 @@ mention of you (the row tinted too); a thread with nothing new shows no number
 and steps back, its title muted and its lines dimmed. A room shows the
 same bubble for its own unread messages (its threads count their own), with
 its name in bold, and none while you're reading it. The open room or thread has a neutral fill and an
-accent bar at its left (on the guide line, for a thread), so it never looks
-unread. A door on hover leaves the thread. Then **Other Threads · N**, a heading
+accent bar at its left (on the window's edge for a room, on the guide line for a thread), so it never looks
+unread. A row's fill, open or under the pointer, reaches the sidebar's outer edge and is square there, rounded
+inside; the member list's rows do the same at its far edge. A door on hover leaves the thread. Then **Other Threads · N**, a heading
 that folds as the sidebar's do, to the one you're reading if it's among them,
 with the **…** at its end (it stays as you left it, on this device): the
 threads you haven't joined, beside the guide line carried on dashed, their

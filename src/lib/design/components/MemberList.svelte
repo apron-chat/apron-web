@@ -2,9 +2,10 @@
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Plus from '@lucide/svelte/icons/plus';
-	import UserMinus from '@lucide/svelte/icons/user-minus';
 	import Avatar from './Avatar.svelte';
+	import ContextMenu from './ContextMenu.svelte';
 	import FoldHeading from './FoldHeading.svelte';
+	import { hold } from './hold';
 	import RoleBadges from './RoleBadges.svelte';
 	import type { MemberListPerson, MemberListSection } from './types';
 	import { presence, presenceLabel } from './util';
@@ -27,11 +28,14 @@
 		ontogglesection?: (key: string) => void;
 		/** A row's name pressed: open their profile, from the row's button. */
 		onprofile?: (userId: string, anchor: HTMLElement) => void;
-		/** Offer removing members (`room_leave` with `user_id`, §4.2.2): a button on every row but yours, on hover. */
+		/**
+		 * Offer removing members (`room_leave` with `user_id`, §4.2.2): Remove from room, in a menu on every row but yours,
+		 * opened by a right-click, the context menu key, or a long press.
+		 */
 		onremove?: (userId: string) => void;
 		/** Offer adding people (`room_join` with `user_id`): a + after the count, which opens an <AddMembersForm>. */
 		onadd?: () => void;
-		/** A remove is under way: the remove buttons wait. */
+		/** A remove is under way: the rows' menus wait. */
 		busy?: boolean;
 		/** How the last change went: an error is announced at once. */
 		note?: { text: string; error?: boolean };
@@ -54,6 +58,19 @@
 	}: Props = $props();
 
 	const listed = $derived((sections ?? []).reduce((total, section) => total + section.people.length, 0));
+
+	/** The row whose menu is open, and where. */
+	let menu = $state<{ person: MemberListPerson; name: string; x: number; y: number; keyboard?: true; row: HTMLElement } | undefined>();
+	let menuOpen = $state(false);
+
+	/** A row's menu, where there's something in it: never yours, nor while a remove is under way (the browser's own menu, then). */
+	function rowMenu(person: MemberListPerson, name: string) {
+		return hold((at, row) => {
+			if (!onremove || person.you || busy) return false;
+			menu = { person, name, ...at, row: row.querySelector<HTMLElement>('.ap-member-who') ?? row };
+			menuOpen = true;
+		});
+	}
 </script>
 
 <aside aria-label="Room member list" class={['ap-memberlist', open && 'ap-memberlist-open', className]}>
@@ -89,9 +106,10 @@
 									{@const name = person.name || person.user_id}
 									{@const shown = presence(person.status)}
 									{@const words = person.statusLabel ?? presenceLabel(person.status)}
-									<!-- The whole row opens their card, as its name does: a press anywhere but on a button of its own (Remove) presses the name, which keyboards reach. -->
+									<!-- The whole row opens their card, as its name does: a press anywhere else on it presses the name, which keyboards reach. Held or right-clicked, it opens its menu. -->
 									<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline']} data-user={person.user_id} data-status={shown}
+									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline', menuOpen && menu?.person.user_id === person.user_id && 'ap-member-menu']} data-user={person.user_id} data-status={shown}
+										{@attach rowMenu(person, name)}
 										onclick={(event) => { if (!(event.target as Element).closest('button')) event.currentTarget.querySelector<HTMLButtonElement>('.ap-member-who')?.click(); }}>
 										<button class="ap-member-who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => onprofile?.(person.user_id, event.currentTarget)}>
 											{#if avatar}{@render avatar(person)}{:else}<Avatar {name} user_id={person.user_id} src={person.avatar} size="sm" status={person.status} statusLabel={words} />{/if}
@@ -100,9 +118,6 @@
 											</span>
 										</button>
 										{#if roles}{@render roles(person)}{:else}<RoleBadges roles={person.roles} />{/if}
-										{#if onremove && !person.you}
-											<button class="ap-iconbtn ap-member-remove" type="button" aria-label={`Remove ${name}`} title="Remove from room" disabled={busy} onclick={() => onremove?.(person.user_id)}><UserMinus size={14} aria-hidden="true" /></button>
-										{/if}
 									</li>
 								{/each}
 							</ul>
@@ -113,3 +128,8 @@
 		{/if}
 	</div>
 </aside>
+{#if menu}
+	<ContextMenu bind:open={menuOpen} x={menu.x} y={menu.y} keyboard={menu.keyboard} label={menu.name} returnFocus={menu.row}
+		choices={[{ value: 'remove', label: 'Remove from room', danger: true }]}
+		onselect={() => menu && onremove?.(menu.person.user_id)} />
+{/if}
