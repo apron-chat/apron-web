@@ -182,10 +182,10 @@ describe('ProfileCard Message', () => {
 		expect(dom.queryByRole('button', 'Message', card('bob', { canMessage: false }).box)).toBeNull();
 	});
 
-	it('opens the conversation you already have with them', () => {
+	it('opens the conversation you already have with them', async () => {
 		const { box, client, onopenroom } = card('bob', { rooms: [withBob] });
 		dom.button('Message', box).click();
-		expect(onopenroom).toHaveBeenCalledWith('p1');
+		await vi.waitFor(() => expect(onopenroom).toHaveBeenCalledWith('p1'));
 		expect(client.createRoom).not.toHaveBeenCalled();
 	});
 

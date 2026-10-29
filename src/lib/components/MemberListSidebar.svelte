@@ -1,10 +1,10 @@
 <script lang="ts">
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
-	import type { Identity } from '$lib/protocol/types';
+	import { isSystemId, type Identity } from '$lib/protocol/types';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { couldNotAdd, memberSections } from '$lib/ui/members';
-	import { messageUser } from '$lib/ui/private-rooms';
+	import { memberSections } from '$lib/ui/members';
+	import { keptWithout, messageUser } from '$lib/ui/private-rooms';
 	import { byName } from '$lib/ui/people';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { loadShutMemberSections, saveShutMemberSections } from '$lib/ui/storage';
@@ -95,7 +95,8 @@
 			status,
 			statusLabel: (me ? ownStatusLabel(status) : undefined) ?? withLastSeen(presenceLabel(status), last),
 			handle: directory.sharesName(member),
-			you: me
+			you: me,
+			...(isSystemId(member.user_id) ? { system: true } : {})
 		};
 	}
 
@@ -123,7 +124,7 @@
 		note = undefined;
 		try {
 			const started = await messageUser(client, session.rooms, session.you?.user_id, userId, onnamed);
-			if (started.failed.length) note = { text: `${couldNotAdd(started.failed, (failed) => directory.name({ user_id: failed }))} The room is kept under Private.`, error: true };
+			if (started.failed.length) note = { text: keptWithout(started.failed, (failed) => directory.name({ user_id: failed })), error: true };
 			else onopenroom(started.roomId);
 		} catch (cause) {
 			note = { text: cause instanceof Error ? cause.message : 'Unable to start a private room', error: true };

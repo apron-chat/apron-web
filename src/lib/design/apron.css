@@ -702,8 +702,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-sectionhead .ap-sect-toggle { padding-inline-start: 0; }
 .ap-memberlist-people { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .ap-member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; margin-inline-end: calc(-1 * var(--space-2)); padding: 2px var(--space-1); padding-inline-end: calc(var(--space-1) + var(--space-2)); border-radius: var(--radius-md); border-start-end-radius: 0; border-end-end-radius: 0; color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); cursor: pointer; }
-/* The whole row opens their card (MemberList), so the pointer anywhere on it tints it, as a message under the pointer;
-   and it stays tinted while its menu (a right-click, the context menu key or a long press: Remove from room) is open. */
+/* The whole row is a press (MemberList: its menu, or their card), so the pointer anywhere on it tints it, as a message
+   under the pointer; and it stays tinted while its menu is open. */
 .ap-member:hover, .ap-member-menu { background: var(--hover-soft); }
 /* Role badges follow the name, as beside a message's sender. */
 .ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1e12 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
@@ -1200,9 +1200,10 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-menu { position: absolute; inset-inline-end: 0; bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); min-width: 200px; margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
 .ap-menu-item { font: inherit; display: block; width: 100%; padding: var(--space-1_5) var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: start; cursor: pointer; }
 .ap-menu-item:hover { background: var(--hover); }
-/* ContextMenu: a menu at a point, fixed to the viewport (its place set where it opens); a choice that takes something away
-   in the danger color. */
-.ap-menu-at { position: fixed; inset: auto; top: 0; left: 0; min-width: 160px; }
+/* ContextMenu: a menu at a point, fixed to the viewport (its place set where it opens) and over everything fixed there,
+   as a popover is: the member list's overlay on narrow screens too; a choice that takes something away in the danger
+   color. */
+.ap-menu-at { position: fixed; z-index: var(--z-sheet); inset: auto; top: 0; left: 0; min-width: 160px; }
 .ap-menu-at:focus { outline: none; }
 .ap-menu-item-danger { color: var(--danger); }
 .ap-selbar-denied { color: var(--danger); }

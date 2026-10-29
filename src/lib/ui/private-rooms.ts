@@ -2,7 +2,7 @@ import { UNSUPPORTED, type ChatClient, type ClientSnapshot, type RoomSnapshot } 
 import { compareLogIds } from '$lib/protocol/reducer';
 import type { Identity } from '$lib/protocol/types';
 import { notPrivate } from './created';
-import { addMembers, type Refusal } from './members';
+import { addMembers, couldNotAdd, type Refusal } from './members';
 
 /**
  * Private rooms (§4.2.4) as people use them to talk: the joined top-level ones the sidebar lists under Private, the
@@ -94,7 +94,6 @@ export function whenJoined(client: Pick<ChatClient, 'subscribe'>, roomId: string
 	});
 }
 
-/** A private room just started, and anyone who couldn't be added to it, with the server's words why. */
 /**
  * Where a message to someone goes, as a profile card's Message and the member list's Direct message send it: the
  * private conversation you already have with them (untitled, just the two of you), else one started with them
@@ -110,6 +109,12 @@ export async function messageUser(
 	return startPrivateRoom(client, [userId], { named });
 }
 
+/** What a started room that couldn't add some of its people says: who, why, and that the room is kept. */
+export function keptWithout(failed: readonly Refusal[], name: (userId: string) => string): string {
+	return `${couldNotAdd(failed, name)} The room is kept under Private.`;
+}
+
+/** A private room just started, and anyone who couldn't be added to it, with the server's words why. */
 export interface StartedRoom {
 	roomId: string;
 	failed: Refusal[];

@@ -24,11 +24,13 @@
 		onselect: (value: string) => void;
 		/** Where focus goes back to as it closes, such as the row it was opened on. */
 		returnFocus?: HTMLElement;
+		/** Its `id`, for what opened it to name in `aria-controls`. */
+		id?: string;
 		/** A `data-testid` for the menu. */
 		testid?: string;
 		class?: ClassValue;
 	}
-	let { open = $bindable(false), x, y, keyboard = false, label, choices, onselect, returnFocus, testid, class: className }: Props = $props();
+	let { open = $bindable(false), x, y, keyboard = false, label, choices, onselect, returnFocus, id, testid, class: className }: Props = $props();
 
 	let menu = $state<HTMLUListElement | undefined>();
 	/** Its place once measured: moved back inside the viewport where it would overflow it. */
@@ -64,35 +66,46 @@
 		onselect(value);
 	}
 
+	/** Its keys are its own: none goes on to the page (Escape there would also put a message selection away). */
 	function keydown(event: KeyboardEvent): void {
 		const list = items();
 		const now = list.indexOf(document.activeElement as HTMLButtonElement);
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			close(true);
-		} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-			event.preventDefault();
-			const step = event.key === 'ArrowDown' ? 1 : -1;
-			list[(now + step + list.length) % list.length]?.focus();
-		} else if (event.key === 'Home' || event.key === 'End') {
-			event.preventDefault();
-			list[event.key === 'Home' ? 0 : list.length - 1]?.focus();
-		} else if (event.key === 'Tab') {
-			event.preventDefault();
-			close(true);
-		}
+		if (event.key === 'Escape' || event.key === 'Tab') close(true);
+		else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			// From the menu itself (opened by a pointer), ↓ goes to the first choice and ↑ to the last.
+			const next = now < 0 ? (event.key === 'ArrowDown' ? 0 : list.length - 1) : (now + (event.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length;
+			list[next]?.focus();
+		} else if (event.key === 'Home' || event.key === 'End') list[event.key === 'Home' ? 0 : list.length - 1]?.focus();
+		else return;
+		event.preventDefault();
+		event.stopPropagation();
 	}
 
 	function outside(event: PointerEvent): void {
 		if (open && menu && !menu.contains(event.target as Node)) close(false);
 	}
+
+	/** Put away, focus back where it was if it was in the menu: on a resize, or a scroll that moves what it was opened on. */
+	function dismiss(): void {
+		if (open) close(Boolean(menu?.contains(document.activeElement)));
+	}
+
+	$effect(() => {
+		if (!open) return;
+		// Captured, for a scroll anywhere (the member list scrolls itself, not the window).
+		const scrolled = (event: Event) => {
+			if (!menu?.contains(event.target as Node)) dismiss();
+		};
+		addEventListener('scroll', scrolled, true);
+		return () => removeEventListener('scroll', scrolled, true);
+	});
 </script>
 
-<svelte:window onpointerdown={outside} onresize={() => open && close(false)} />
+<svelte:window onpointerdown={outside} onresize={dismiss} />
 
 {#if open}
 	<ul
-		bind:this={menu} class={['ap-menu', 'ap-menu-at', className]} role="menu" tabindex="-1" aria-label={label} data-testid={testid} onkeydown={keydown}
+		bind:this={menu} {id} class={['ap-menu', 'ap-menu-at', className]} role="menu" tabindex="-1" aria-label={label} data-testid={testid} onkeydown={keydown}
 		style:left={at ? `${at.left}px` : undefined} style:top={at ? `${at.top}px` : undefined} style:visibility={at ? undefined : 'hidden'}
 	>
 		{#each choices as choice (choice.value)}

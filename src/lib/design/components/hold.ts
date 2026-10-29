@@ -23,7 +23,6 @@ export function hold(onhold: (at: HoldAt, node: HTMLElement) => boolean | void):
 	return (node) => {
 		let press: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | undefined;
 		let swallow = false;
-		let touch = false;
 
 		const cancel = () => {
 			if (!press) return;
@@ -33,8 +32,7 @@ export function hold(onhold: (at: HoldAt, node: HTMLElement) => boolean | void):
 		const pointerdown = (event: PointerEvent) => {
 			cancel();
 			swallow = false;
-			touch = event.pointerType === 'touch';
-			if (!touch) return;
+			if (event.pointerType !== 'touch') return;
 			const { clientX: x, clientY: y } = event;
 			press = {
 				timer: setTimeout(() => {
@@ -52,13 +50,17 @@ export function hold(onhold: (at: HoldAt, node: HTMLElement) => boolean | void):
 			// A touch already held opened the menu; Android's own long press follows it.
 			if (swallow) return event.preventDefault();
 			cancel();
-			// The context menu key has no pointer: the element's own corner, as a menu button's would be.
-			const keyed = event.clientX === 0 && event.clientY === 0;
+			// The context menu key (or Shift+F10) has no pointer: Chromium says so with no `pointerType`, Firefox with a
+			// MouseEvent at 0, 0. It opens at the element's start corner, as a menu button's would.
+			const pointerType = (event as PointerEvent).pointerType;
+			const keyed = pointerType !== undefined ? pointerType === '' : event.clientX === 0 && event.clientY === 0;
 			const rect = node.getBoundingClientRect();
-			const at: HoldAt = keyed ? { x: rect.left + 8, y: rect.bottom, keyboard: true } : { x: event.clientX, y: event.clientY };
+			const rtl = getComputedStyle(node).direction === 'rtl';
+			const at: HoldAt = keyed ? { x: rtl ? rect.right - 8 : rect.left + 8, y: rect.bottom, keyboard: true } : { x: event.clientX, y: event.clientY };
 			if (onhold(at, node) === false) return;
 			event.preventDefault();
-			if (touch) swallow = true;
+			// Android's own long press: the click that ends it is swallowed, as one held here.
+			if (pointerType === 'touch') swallow = true;
 		};
 		const click = (event: MouseEvent) => {
 			if (!swallow) return;

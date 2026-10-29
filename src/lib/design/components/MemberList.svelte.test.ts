@@ -130,6 +130,59 @@ describe('MemberList', () => {
 			expect([onprofile.mock.calls.at(-1), dom.queryByRole('menu')]).toEqual([['bo', who('bo')], null]);
 		});
 
+		it('keeps a long press going while the list is redrawn under it (presence, the minute), and opens at its end', () => {
+			vi.useFakeTimers();
+			const state = $state({ sections, onremove: vi.fn(), onprofile: vi.fn() });
+			dom.render(MemberList, state as never);
+			flushSync();
+			dom.touch('pointerdown', row('bo').querySelector('.ap-member-text')!, 30, 40);
+			vi.advanceTimersByTime(300);
+			// The people rebuilt, as the sidebar does each minute: the same members, new objects.
+			state.sections = sections.map((section) => ({ ...section, people: section.people.map((person) => ({ ...person })) }));
+			flushSync();
+			vi.advanceTimersByTime(200);
+			flushSync();
+			expect(dom.byRole('menu', 'Bo')).toBeTruthy();
+			vi.useRealTimers();
+		});
+
+		it('gives focus back to the name when the row\'s press puts it away, and doesn\'t eat a tap after a press that came to nothing', async () => {
+			vi.useFakeTimers();
+			render({ sections, onprofile: vi.fn(), onremove: vi.fn() });
+			tap(row('bo'));
+			flushSync();
+			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			tap(row('bo').querySelector('.ap-role') ?? row('bo'));
+			flushSync();
+			expect([dom.queryByRole('menu'), document.activeElement]).toEqual([null, who('bo')]);
+			// Opened again, then a press on its row that ends without a click (a scroll): the next tap still opens it.
+			tap(row('bo'));
+			flushSync();
+			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+			dispatchEvent(new MouseEvent('pointercancel'));
+			vi.advanceTimersByTime(0);
+			tap(row('bo'));
+			flushSync();
+			expect(dom.byRole('menu', 'Bo')).toBeTruthy();
+			vi.useRealTimers();
+		});
+
+		it('offers only Profile while a change is under way, no Direct message to a system identity, and opens from ↓ on the name', async () => {
+			const onprofile = vi.fn();
+			render({ sections, onprofile, onmessage: vi.fn(), onremove: vi.fn(), busy: true });
+			tap(row('bo'));
+			expect([onprofile.mock.calls.length, dom.queryByRole('menu')]).toEqual([1, null]);
+			dom.unmount();
+			render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: '~bot', name: 'Bot', system: true }] }], onprofile, onmessage: vi.fn(), onremove: vi.fn() });
+			dom.press(who('~bot'), 'ArrowDown');
+			flushSync();
+			await tick();
+			const menu = dom.byRole('menu', 'Bot');
+			expect([choices(), document.activeElement?.textContent, who('~bot').getAttribute('aria-controls')]).toEqual([['Profile', 'Remove from room'], 'Profile', menu.id]);
+		});
+
 		it('opens where it was right-clicked or held, and the long press then opens no card; no Remove while one is under way', async () => {
 			vi.useFakeTimers();
 			const onremove = vi.fn(), onprofile = vi.fn();

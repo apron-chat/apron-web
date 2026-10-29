@@ -215,6 +215,8 @@ export interface MemberListPerson {
 	handle?: boolean;
 	/** You: marked "(you)", and never offered for removal. */
 	you?: boolean;
+	/** A system identity (`~`, Appendix A.1): nothing is sent to it, so its menu offers no Direct message. */
+	system?: boolean;
 }
 
 /** One group of a MemberList: Online, Offline, or with key `members` the one list of a server without status (§4.5), which has no heading and never folds. */

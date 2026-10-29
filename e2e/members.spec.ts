@@ -25,3 +25,22 @@ test('Add member adds everyone picked, and keeps who the server refused picked, 
 	await expect(page.getByRole('complementary', { name: 'Room member list' }).locator('li.ap-member[data-user="grace"]')).toBeVisible();
 	await expect(page.getByTestId('room-member-list').getByRole('status')).toHaveText('Added Grace Hopper.');
 });
+
+test.describe('on a phone, signed in to an account', () => {
+	test.use({ ...DEVICES.phone, knobs: { account: true } });
+
+	test('a member\'s menu opens over the member list, where its Remove from room asks, then removes them', async ({ preview, page }) => {
+		await preview.open();
+		const list = await preview.showMembers();
+		await preview.press(list.locator('li.ap-member[data-user="grace"]'));
+		const menu = page.getByRole('menu', { name: 'Grace Hopper' });
+		await expect(menu.getByRole('menuitem')).toHaveText(['Profile', 'Direct message', 'Remove from room']);
+		// Over the member list, which is an overlay here: what's at its middle is the menu.
+		const box = (await menu.boundingBox())!;
+		expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('[role="menu"]'), [box.x + box.width / 2, box.y + box.height / 2])).toBe(true);
+		page.once('dialog', (dialog) => dialog.accept());
+		await preview.press(menu.getByRole('menuitem', { name: 'Remove from room' }));
+		await preview.waitForSent('room_leave', (p) => p.user_id === 'grace');
+		await expect(list.locator('li.ap-member[data-user="grace"]')).toHaveCount(0);
+	});
+});

@@ -161,7 +161,7 @@
 	--z-toast: 10;    /* a toast */
 	--z-drop: 20;     /* the drop zone over the conversation while files are dragged */
 	--z-banner: 20;   /* a notice floating at the top: a new version */
-	--z-sheet: 40;    /* fixed popovers that turn into bottom sheets on phones: emoji, profile card, who reacted */
+	--z-sheet: 40;    /* fixed popovers that turn into bottom sheets on phones: emoji, profile card, who reacted; a menu at a point (ContextMenu) */
 
 	/* Motion: short and soft, all of it off when the viewer asks (prefers-reduced-motion). */
 	--duration-fast: 120ms;    /* hover and press: colors and fills */
