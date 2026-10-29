@@ -560,6 +560,10 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-sect-body { display: flex; flex-direction: column; gap: var(--space-0_5); }
 /* A list of rooms that can be put in another order, each room with its threads in a block that moves as one; they keep the body's spacing. */
 .ap-roomlist, .ap-roomblock, .ap-roomgrip { display: flex; flex-direction: column; gap: var(--space-0_5); }
+/* svelte-dnd-action listens on each room's block, so a phone would flash its tap highlight over the whole block (threads
+   and all) and the library gives it a grab cursor: the block shows neither, its row and threads keeping their own. */
+.ap-roomblock { -webkit-tap-highlight-color: transparent; cursor: auto !important; }
+.ap-roomblock :is(button, a) { -webkit-tap-highlight-color: initial; }
 /* A room's row is held to lift it on a touch screen: no callout or selection while it's held. */
 .ap-roomlist .ap-room { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 /* The room being carried, lifted off the list (svelte-dnd-action's copy of its block, in <body>). */
