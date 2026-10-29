@@ -24,7 +24,7 @@ export function moveNext(order: readonly string[], id: string, target: string, s
 /**
  * The order of the sidebar's top-level rooms, kept on this device per account (`notifyAccount`), so it doesn't change
  * with the order a server happens to send them in. A room is placed the first time it's listed, after the others;
- * dragging one (or Alt+↑/↓, or Move up/down in the room's ⋯ menu) moves it. Rooms and Private share the one order,
+ * dragging one (or Alt+↑/↓) moves it. Rooms and Private share the one order,
  * each section listing its own rooms in it.
  */
 export class RoomOrder {

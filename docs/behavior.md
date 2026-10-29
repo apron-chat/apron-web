@@ -834,14 +834,16 @@ account on each server, rather than the order a server happens to send them in,
 which may differ from one visit to the next. A room takes the next place the
 first time it's listed, so a new one goes last and nothing you arranged moves.
 Drag a room by its row to another place in its own section: with a mouse it
-lifts once the pointer moves; on a touch screen hold it for a moment and it
+lifts once the pointer has moved a few pixels (a click that drifts stays a
+click); on a touch screen hold it for a moment and it
 lifts (a tap still opens it, and a swipe still scrolls). While it's carried
 every room's threads fold away, so the list is just its rooms and the others
-make way for it, and they come back as they were once it's dropped. Let go
-outside the list and it goes back. A drag starts only from the room's own row,
-not its threads, its **+** or its **…**, and never opens the room. From the
+make way for it, and they come back as they were once it's dropped. It keeps to
+its section's column, moving only up and down within the part of the section in
+view, so it lands where it's seen; carried past either end it goes to that end. A
+drag starts only from the room's own row, not its threads, its **+** or its **…**, and never opens the room. From the
 keyboard, Alt+↑ or Alt+↓ on a room moves it a place (as in the WAI-ARIA
-rearrangeable listbox), the keyboard staying on it and the move announced. In a
+rearrangeable listbox; its row names the keys as `aria-keyshortcuts`), the keyboard staying on it and the move announced. In a
 folded section a room moves among the ones shown, the hidden ones keeping their
 places. Threads keep their own order, most recently active first.
 

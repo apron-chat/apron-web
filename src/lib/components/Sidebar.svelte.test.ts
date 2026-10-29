@@ -266,7 +266,7 @@ describe('Sidebar', () => {
 		expect(listed()).toEqual(['general', 'random', 'ops']);
 		expect(loadRoomOrder('acct')).toEqual(['general', 'random', 'ops']);
 		// Where the keyboard ends up is the browser's to show: e2e/room-order.spec.ts.
-		expect(document.querySelector('[aria-live]')!.textContent).toBe('Random moved down, 2 of 3');
+		expect(dom.byRole('status').textContent).toBe('Random moved down, 2 of 3');
 		// Not past the top; a plain arrow doesn't move it.
 		const general_ = document.querySelector<HTMLElement>('button[data-room="general"]')!;
 		general_.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true, cancelable: true }));

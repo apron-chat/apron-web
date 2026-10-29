@@ -13,7 +13,7 @@
 	import { loadSidebarFolds, loadThreadFolds, saveSidebarFolds, saveThreadFolds } from '$lib/ui/storage';
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import { flip } from 'svelte/animate';
-	import { dndzone, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
+	import { dndzone, DRAGGED_ELEMENT_ID, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
@@ -99,7 +99,8 @@
 	/**
 	 * Dragging a room to another place in its section (svelte-dnd-action): by its row, with a mouse once it moves, or
 	 * held on a touch screen for `HOLD_MS`, when it lifts; a shorter touch scrolls or picks it. While one is carried every
-	 * room's threads fold away, so the list is just its rooms, and come back as they were once it's dropped.
+	 * room's threads fold away, so the list is just its rooms, and come back as they were once it's dropped. It stays in
+	 * its section's column (`contain`), so it lands where it's seen: there's nowhere else to take it.
 	 */
 	const HOLD_MS = 350;
 	/** How long the other rooms take to make way, none for reduced motion. */
@@ -108,21 +109,77 @@
 	/** Each section's rooms while one is carried in it, as they'd land; none between drags. */
 	let carried = $state<Partial<Record<Section, RoomSnapshot[]>>>({});
 	let reordering = $derived(Object.keys(carried).length > 0);
+	/** Ends keeping the carried room in its section's column. */
+	let uncontain: (() => void) | undefined;
+	$effect(() => () => uncontain?.());
+	/** The room button that had the keyboard as a drag began: the drag takes its row out of the page, and with it the keyboard. */
+	let refocus: string | undefined;
 	function consider(section: Section, event: CustomEvent<DndEvent<RoomSnapshot>>): void {
-		carried = { ...carried, [section]: event.detail.items };
+		const { items, info } = event.detail;
+		// Only a pointer carries a room: the library's keyboard drag is kept off (`guard`), but should one start, its end (with no drop) ends it here too.
+		if (info.trigger === TRIGGERS.DRAG_STOPPED) {
+			const { [section]: _stopped, ...rest } = carried;
+			carried = rest;
+			return;
+		}
+		carried = { ...carried, [section]: items };
+		if (info.trigger !== TRIGGERS.DRAG_STARTED) return;
+		const zone = event.currentTarget as HTMLElement;
 		// The library holds the list at its height as the drag starts, before the threads fold away: let it close up.
-		if (event.detail.info.trigger === TRIGGERS.DRAG_STARTED) (event.currentTarget as HTMLElement).style.minHeight = '';
+		zone.style.minHeight = '';
+		const focused = document.activeElement;
+		refocus = focused instanceof HTMLElement && focused.matches('button[data-room]') ? focused.dataset.room : undefined;
+		const copy = document.getElementById(DRAGGED_ELEMENT_ID);
+		uncontain?.();
+		if (copy) uncontain = contain(copy, zone);
 	}
 	/** Dropped: next to the room shown before it in its section (or after it, at the top), so the ones a folded section hides keep their places. */
 	function finalize(section: Section, event: CustomEvent<DndEvent<RoomSnapshot>>): void {
 		const { items, info } = event.detail;
 		const { [section]: _done, ...rest } = carried;
 		carried = rest;
+		uncontain?.();
+		uncontain = undefined;
+		if (refocus !== undefined) {
+			const id = refocus;
+			// The library focuses its copy, and takes it away just after this: then the keyboard goes back to the room.
+			void tick().then(() => {
+				const now = document.activeElement;
+				if (!now || now === document.body || !now.isConnected) document.querySelector<HTMLElement>(`button[data-room="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+			});
+		}
+		refocus = undefined;
 		if (info.trigger !== TRIGGERS.DROPPED_INTO_ZONE) return;
 		const ids = items.map((room) => room.id);
 		const at = ids.indexOf(info.id);
 		if (at > 0) order.move(info.id, ids[at - 1], 'after');
 		else if (ids.length > 1) order.move(info.id, ids[1], 'before');
+	}
+	/**
+	 * Keeps the carried room in its section's column, moving only up and down, within the part of the section in view:
+	 * the library moves its copy by its `transform` to follow the pointer (and slides it as it resizes it), which this
+	 * corrects each frame before it's drawn. The library finds where it lands by the copy, so it lands where it's seen.
+	 */
+	function contain(copy: HTMLElement, zone: HTMLElement): () => void {
+		const view = zone.closest('.ap-shell-sidebody') ?? zone;
+		let frame = 0;
+		const clamp = () => {
+			const at = /translate3d\((-?[\d.]+)px, (-?[\d.]+)px/.exec(copy.style.transform);
+			const [dx, dy] = at ? [Number(at[1]), Number(at[2])] : [0, 0];
+			const box = copy.getBoundingClientRect();
+			const left = box.left - dx;
+			const top = box.top - dy;
+			const list = zone.getBoundingClientRect();
+			const shown = view.getBoundingClientRect();
+			const upper = Math.max(list.top, shown.top) - top;
+			const lower = Math.min(list.bottom, shown.bottom) - box.height - top;
+			const x = list.left - left;
+			const y = Math.min(Math.max(dy, upper), Math.max(lower, upper));
+			if (x !== dx || y !== dy) copy.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+			frame = requestAnimationFrame(clamp);
+		};
+		clamp();
+		return () => cancelAnimationFrame(frame);
 	}
 	/** The room as it's carried: its threads left behind (the others' fold away too), raised off the list. */
 	function lift(element: HTMLElement | undefined): void {
@@ -148,22 +205,27 @@
 			if (!onRow || event.type !== 'touchstart') event.stopPropagation();
 			if (!onRow) return;
 			if (event.type === 'touchstart') return void Object.defineProperty(event, 'target', { value: block });
-			const { button, clientX: x, clientY: y } = event as MouseEvent;
-			if (button !== 0) return;
+			// Ctrl+click is a Mac's right click: its menu takes the release, so it's no press to carry anything with.
+			const { button, ctrlKey, clientX: x, clientY: y } = event as MouseEvent;
+			if (button !== 0 || ctrlKey) return;
+			release?.();
 			const move = (e: MouseEvent) => {
+				// The button let go unseen (in another window, say): no drag.
+				if (!(e.buttons & 1)) return release?.();
 				if (Math.hypot(e.clientX - x, e.clientY - y) < MOUSE_SLOP) return;
 				release?.();
-				block.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
+				block.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: 1 }));
 				// The library now waits for the pointer to move from where the press began, which it already has.
-				dispatchEvent(new MouseEvent('mousemove', { clientX: e.clientX, clientY: e.clientY }));
+				dispatchEvent(new MouseEvent('mousemove', { clientX: e.clientX, clientY: e.clientY, buttons: 1 }));
 			};
+			const ends = ['mouseup', 'blur', 'contextmenu'] as const;
 			release = () => {
 				removeEventListener('mousemove', move);
-				removeEventListener('mouseup', release!);
+				for (const end of ends) removeEventListener(end, release!);
 				release = undefined;
 			};
 			addEventListener('mousemove', move);
-			addEventListener('mouseup', release);
+			for (const end of ends) addEventListener(end, release);
 		};
 		node.addEventListener('mousedown', press);
 		node.addEventListener('touchstart', press, { passive: true });
@@ -174,15 +236,28 @@
 		};
 	}
 	/**
-	 * A tap that doesn't become a drag gets a click from the library as well as the browser's own (with the hold before a
-	 * touch drag, the browser's always comes too): the library's, a plain Event, is dropped, so a tap picks once.
+	 * Two of the library's ways kept off the list. A tap that doesn't become a drag gets a click from the library as well
+	 * as the browser's own (with the hold before a touch drag, the browser's always comes too): the library's, a plain
+	 * Event, is dropped, so a tap picks once. And Space or Enter on a room's block (a click off its row's buttons focuses
+	 * it) would start the library's keyboard drag, kept off for Alt+↑/↓: they do nothing there.
 	 */
-	function oneClick(node: HTMLElement): () => void {
+	function guard(node: HTMLElement): () => void {
 		const click = (event: Event) => {
 			if (!(event instanceof MouseEvent)) event.stopImmediatePropagation();
 		};
+		const key = (event: KeyboardEvent) => {
+			const target = event.target;
+			if ((event.key === ' ' || event.key === 'Enter') && (target === node || (target instanceof Element && target.parentElement === node))) {
+				event.preventDefault();
+				event.stopPropagation();
+			}
+		};
 		node.addEventListener('click', click, true);
-		return () => node.removeEventListener('click', click, true);
+		node.addEventListener('keydown', key, true);
+		return () => {
+			node.removeEventListener('click', click, true);
+			node.removeEventListener('keydown', key, true);
+		};
 	}
 	/** What the last keyboard move did, for assistive tech. */
 	let moved = $state('');
@@ -293,7 +368,7 @@
 	<!-- What's new in the room itself (its threads show their own): none while you're reading it. The Private list says it's private: no lock there. -->
 	<RoomItem
 		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} muted={room.mutedUntil !== undefined} active={current}
-		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering && !session.reconnectQuiet}
+		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering && !session.reconnectQuiet} keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
 		onselect={() => pickRoom(room, current)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
 		onexpand={active && isFolded ? () => foldThreads(room.id, false) : undefined} expandTestid="expand-threads"
 	/>
@@ -322,8 +397,8 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="ap-roomlist"
-		use:dndzone={{ items, type: section, flipDurationMs: FLIP_MS, delayTouchStart: HOLD_MS, zoneTabIndex: -1, zoneItemTabIndex: -1, autoAriaDisabled: true, dropTargetStyle: {}, useCursorForDetection: true, transformDraggedElement: lift }}
-		onconsider={(event) => consider(section, event)} onfinalize={(event) => finalize(section, event)} onkeydown={(event) => reorderKey(event, list)} {@attach oneClick}
+		use:dndzone={{ items, type: section, flipDurationMs: FLIP_MS, delayTouchStart: HOLD_MS, zoneTabIndex: -1, zoneItemTabIndex: -1, autoAriaDisabled: true, dropTargetStyle: {}, transformDraggedElement: lift }}
+		onconsider={(event) => consider(section, event)} onfinalize={(event) => finalize(section, event)} onkeydown={(event) => reorderKey(event, list)} {@attach guard}
 	>
 		{#each items as room (room.id)}
 			<!-- The others make way for a carried room; a fold or a new room isn't animated. -->
@@ -366,7 +441,7 @@
 			</SidebarSection>
 		{/if}
 	</div>
-	<p class="ap-sr" aria-live="polite" aria-atomic="true">{moved}</p>
+	<p class="ap-sr" role="status" aria-atomic="true">{moved}</p>
 	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} {onconnect} />
 </aside>
 

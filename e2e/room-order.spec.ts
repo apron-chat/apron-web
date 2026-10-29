@@ -1,4 +1,5 @@
 import type { BrowserContext, Page } from '@playwright/test';
+import { DRAGGED_ELEMENT_ID } from 'svelte-dnd-action';
 import { DEVICES, expect, test } from './fixtures';
 
 /** The sidebar's top-level rooms in an order of your own: dragged by their rows, or moved with Alt+↑/↓. */
@@ -33,6 +34,8 @@ test.describe('room order, with a mouse', () => {
 		await expect(threadLists(page)).toHaveCount(0);
 		const to = await middle(page, 'general');
 		await page.mouse.move(to.x, to.top + 4, { steps: 10 });
+		// General makes way for it before it's let go.
+		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
 		await page.mouse.up();
 		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
 		// The threads come back, and the open room stays open: a drag isn't a pick.
@@ -40,17 +43,65 @@ test.describe('room order, with a mouse', () => {
 		await expect(preview.heading()).toHaveText('general');
 	});
 
-	test('a click still opens a room, and one let go outside the list goes back', async ({ preview, page }) => {
+	test('a room carried away from the list stays in its column, landing at the end it’s nearest, the keyboard back on it', async ({ preview, page }) => {
 		await preview.open('#room=general');
-		const from = await middle(page, 'engineering');
+		await row(page, 'general').focus();
+		const from = await middle(page, 'general');
 		await page.mouse.move(from.x, from.y);
 		await page.mouse.down();
-		await page.mouse.move(640, 400, { steps: 10 });
+		await page.mouse.move(from.x, from.y + 12, { steps: 3 });
+		// Far off to the right of the sidebar and below the list: the room keeps to the list's column and its end.
+		await page.mouse.move(700, 600, { steps: 10 });
+		await expect.poll(async () => {
+			const list = (await page.getByTestId('room-list').boundingBox())!;
+			const carried = (await page.locator(`#${DRAGGED_ELEMENT_ID}`).boundingBox())!;
+			return Math.abs(carried.x - list.x) <= 1 && carried.y + carried.height <= list.y + list.height + 1;
+		}).toBe(true);
+		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
 		await page.mouse.up();
+		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
 		await expect(threadLists(page)).toHaveCount(1);
-		expect(await order(page)).toEqual(['general', 'engineering']);
+		await expect(row(page, 'general')).toBeFocused();
+	});
+
+	test('a click still opens a room', async ({ preview, page }) => {
+		await preview.open('#room=general');
 		await row(page, 'engineering').click();
 		await expect(preview.heading()).toHaveText('engineering');
+	});
+
+	test('a press that isn’t a left-button drag never lifts a room: Ctrl+click, or one whose release went unseen', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		const from = await middle(page, 'engineering');
+		// Ctrl+click, a Mac's right click, whose menu would take the release.
+		await page.keyboard.down('Control');
+		await page.mouse.move(from.x, from.y);
+		await page.mouse.down();
+		await page.keyboard.up('Control');
+		await page.mouse.move(from.x, from.y - 30, { steps: 4 });
+		await expect(threadLists(page)).toHaveCount(1);
+		await page.mouse.up();
+		// A press let go somewhere the page didn't see: the next move has no button held.
+		await page.mouse.move(from.x, from.y);
+		await page.mouse.down();
+		await page.evaluate(([x, y]) => dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, buttons: 0 })), [from.x, from.y - 30]);
+		await page.evaluate(([x, y]) => dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, buttons: 1 })), [from.x, from.y - 40]);
+		await nextFrame(page);
+		await expect(threadLists(page)).toHaveCount(1);
+		await page.mouse.up();
+		expect(await order(page)).toEqual(['general', 'engineering']);
+	});
+
+	test('Space or Enter on a room’s block, focused by a click beside its buttons, leaves the threads as they are', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		// The block the library makes of each room (with its threads) takes focus from a click that lands off its buttons.
+		await row(page, 'general').evaluate((button) => (button.closest('.ap-roomblock') as HTMLElement).focus());
+		for (const key of ['Space', 'Enter']) {
+			await page.keyboard.press(key);
+			await nextFrame(page);
+			await expect(threadLists(page)).toHaveCount(1);
+		}
+		expect(await order(page)).toEqual(['general', 'engineering']);
 	});
 
 	test('pressing a thread and moving doesn’t carry its room', async ({ preview, page }) => {
@@ -66,6 +117,7 @@ test.describe('room order, with a mouse', () => {
 
 	test('Alt+↑ and Alt+↓ move the focused room, the keyboard staying on it', async ({ preview, page }) => {
 		await preview.open('#room=general');
+		await expect(row(page, 'general')).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
 		await row(page, 'general').focus();
 		await page.keyboard.press('Alt+ArrowDown');
 		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
@@ -127,6 +179,7 @@ test.describe('room order, by touch', () => {
 		await expect(threadLists(page)).toHaveCount(0);
 		const to = await middle(page, 'general');
 		for (let i = 1; i <= 12; i++) await touch('touchMove', from.x, from.y + (to.top + 4 - from.y) * (i / 12));
+		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
 		await touch('touchEnd');
 		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
 		await expect(threadLists(page)).toHaveCount(1);
@@ -140,6 +193,8 @@ test.describe('room order, by touch', () => {
 		await touch('touchStart', from.x, from.y);
 		for (let i = 1; i <= 6; i++) await touch('touchMove', from.x, from.y - i * 10);
 		await touch('touchEnd');
+		// Held past the time a hold takes, nothing lifts: the swipe let it go.
+		await page.waitForTimeout(500);
 		await expect(threadLists(page)).toHaveCount(1);
 		expect(await order(page)).toEqual(['general', 'engineering']);
 	});

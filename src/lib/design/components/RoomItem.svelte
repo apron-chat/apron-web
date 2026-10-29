@@ -46,6 +46,8 @@
 		listed?: boolean;
 		/** The row's tooltip, such as an untitled room's `room_id`. */
 		title?: string;
+		/** The keys that act on the row besides picking it (`aria-keyshortcuts`), such as the ones that move it. */
+		keyshortcuts?: string;
 		/** A `data-testid` for its unread bubble, one for its +, and one for its …. */
 		unreadTestid?: string;
 		newThreadTestid?: string;
@@ -53,7 +55,7 @@
 		/** Classes for the row's button, added to its own. */
 		class?: ClassValue;
 	}
-	let { room, name, topic, private: isPrivate, faces, muted = false, unread, mentions, active, loading, onselect, onleave, onnewthread, onexpand, listed, title, unreadTestid, newThreadTestid, expandTestid, class: className }: Props = $props();
+	let { room, name, topic, private: isPrivate, faces, muted = false, unread, mentions, active, loading, onselect, onleave, onnewthread, onexpand, listed, title, keyshortcuts, unreadTestid, newThreadTestid, expandTestid, class: className }: Props = $props();
 	const shown = $derived(roomName(name, room));
 
 	/** The … goes once it has unfolded the threads: keyboard focus moves to the row's button rather than dropping to the page. */
@@ -73,7 +75,7 @@
 {/snippet}
 
 <RoomRow
-	{room} noun="room" label={shown} private={isPrivate} {muted} {active} {listed} {title} {onselect} {onleave} lead={faces?.length ? lead : undefined} {lines} start={onnewthread || onexpand ? start : undefined}
+	{room} noun="room" label={shown} private={isPrivate} {muted} {active} {listed} {title} {onselect} {onleave} {keyshortcuts} lead={faces?.length ? lead : undefined} {lines} start={onnewthread || onexpand ? start : undefined}
 	class={[(unread || mentions) && !muted && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
 >
 	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} quiet={muted} noun="message" testid={unreadTestid} />
