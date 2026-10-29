@@ -76,6 +76,29 @@ test.describe('room order, with a mouse', () => {
 	});
 });
 
+test.describe('folding a room, with motion allowed', () => {
+	// The suite runs with reduced motion, which leaves the rooms nothing to animate: this checks they don't when they could.
+	test.use({ ...DEVICES.desktop, contextOptions: { reducedMotion: 'no-preference' } });
+
+	test('a click on the open room that drifts a little folds it, rather than lifting it, and nothing in the list animates', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		const from = await middle(page, 'general');
+		await page.mouse.move(from.x, from.y);
+		await page.mouse.down();
+		await page.mouse.move(from.x + 5, from.y + 1, { steps: 2 });
+		await page.mouse.up();
+		await expect(page.getByRole('button', { name: 'Show all threads in general' })).toBeVisible();
+		await expect(threadLists(page)).toHaveCount(0);
+		expect(await order(page)).toEqual(['general', 'engineering']);
+		// The rooms below close up at once: no animation in the list as it folds.
+		const moving = await page.getByTestId('room-list').evaluate((list) => document.getAnimations().filter((animation) => {
+			const target = (animation.effect as KeyframeEffect | null)?.target;
+			return target instanceof Element && list.contains(target);
+		}).length);
+		expect(moving).toBe(0);
+	});
+});
+
 test.describe('room order, by touch', () => {
 	test.use({ ...DEVICES.tablet, hasTouch: true });
 

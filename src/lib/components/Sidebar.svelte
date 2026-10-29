@@ -130,20 +130,45 @@
 		element.classList.add('ap-roomblock-lifted');
 		for (const threads of element.querySelectorAll('.ap-threads')) threads.remove();
 	}
+	/** How far the mouse moves with the button down before a room lifts: further than a click drifts (the library's is 3px). */
+	const MOUSE_SLOP = 8;
 	/**
 	 * Hands svelte-dnd-action, listening on the room's block, the presses on the room's own row, and only those: its
 	 * threads, its + and its … keep their presses. The library starts no drag from a nested button (it takes one for a
-	 * form control), and the row is one, so a press on it reaches the library as a press on the block. Native listeners:
-	 * Svelte delegates `onmousedown` and `ontouchstart` to the root, past the block.
+	 * form control), and the row is one, so a press on it reaches the library as a press on the block: a touch at once
+	 * (the library holds it for `HOLD_MS` before it lifts), a mouse press once it has moved `MOUSE_SLOP`, so a click
+	 * that drifts a little stays a click. Native listeners: Svelte delegates `onmousedown` and `ontouchstart` to the
+	 * root, past the block.
 	 */
 	function grip(node: HTMLElement): () => void {
+		const block = node.parentElement!;
+		let release: (() => void) | undefined;
 		const press = (event: Event) => {
-			if (!(event.target instanceof Element && event.target.closest('button[data-room]'))) event.stopPropagation();
-			else Object.defineProperty(event, 'target', { value: node.parentElement });
+			const onRow = event.target instanceof Element && event.target.closest('button[data-room]');
+			if (!onRow || event.type !== 'touchstart') event.stopPropagation();
+			if (!onRow) return;
+			if (event.type === 'touchstart') return void Object.defineProperty(event, 'target', { value: block });
+			const { button, clientX: x, clientY: y } = event as MouseEvent;
+			if (button !== 0) return;
+			const move = (e: MouseEvent) => {
+				if (Math.hypot(e.clientX - x, e.clientY - y) < MOUSE_SLOP) return;
+				release?.();
+				block.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
+				// The library now waits for the pointer to move from where the press began, which it already has.
+				dispatchEvent(new MouseEvent('mousemove', { clientX: e.clientX, clientY: e.clientY }));
+			};
+			release = () => {
+				removeEventListener('mousemove', move);
+				removeEventListener('mouseup', release!);
+				release = undefined;
+			};
+			addEventListener('mousemove', move);
+			addEventListener('mouseup', release);
 		};
 		node.addEventListener('mousedown', press);
 		node.addEventListener('touchstart', press, { passive: true });
 		return () => {
+			release?.();
 			node.removeEventListener('mousedown', press);
 			node.removeEventListener('touchstart', press);
 		};
@@ -301,7 +326,8 @@
 		onconsider={(event) => consider(section, event)} onfinalize={(event) => finalize(section, event)} onkeydown={(event) => reorderKey(event, list)} {@attach oneClick}
 	>
 		{#each items as room (room.id)}
-			<div class="ap-roomblock" animate:flip={{ duration: FLIP_MS }}>
+			<!-- The others make way for a carried room; a fold or a new room isn't animated. -->
+			<div class="ap-roomblock" animate:flip={{ duration: reordering ? FLIP_MS : 0 }}>
 				<div class="ap-roomgrip" {@attach grip}>{@render roomRow(room, withFaces ? roomFaces(room, session.you) : undefined)}</div>
 			</div>
 		{/each}
