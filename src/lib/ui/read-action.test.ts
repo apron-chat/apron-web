@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { notificationGroup } from './notifications';
-import { readAction, type ReadState } from './read-action';
+import { readAction, readElsewhere, readFurthest, type ReadState } from './read-action';
 
 const SERVER = 'wss://chat.example/';
 
@@ -40,5 +40,29 @@ describe('reading the latest message', () => {
 		// The same message read as another account, or a newer one, closes again.
 		expect(readAction(reading(), { pushId: 'a1', closedThrough: first.close!.key })?.close).toBeDefined();
 		expect(readAction(reading({ last: '121' }), { pushId: undefined, closedThrough: first.close!.key })?.close).toBeDefined();
+	});
+});
+
+describe('reading on another device', () => {
+	const rooms = (cursors: Record<string, string | undefined>) => Object.entries(cursors).map(([id, readMessageId]) => ({ id, ...(readMessageId !== undefined ? { readMessageId } : {}) }));
+
+	it('closes a room’s notifications here up to your read cursor, once a cursor, for rooms with one', () => {
+		expect(readElsewhere(rooms({ general: '120', dev: undefined }), new Map(), new Map())).toEqual([{ room: 'general', message: '120' }]);
+		// Closed through 120 already: only a cursor past it closes again.
+		const closed = new Map([['general', '120']]);
+		expect(readElsewhere(rooms({ general: '120' }), new Map(), closed)).toEqual([]);
+		expect(readElsewhere(rooms({ general: '130' }), new Map(), closed)).toEqual([{ room: 'general', message: '130' }]);
+	});
+
+	it('leaves what this page read itself to readAction, which keeps them for a window behind another', () => {
+		const own = new Map([['general', '120']]);
+		expect(readElsewhere(rooms({ general: '120' }), own, new Map())).toEqual([]);
+		// Compared as log IDs, not text: 1000 is past 999.
+		expect(readElsewhere(rooms({ general: '1000' }), new Map([['general', '999']]), new Map())).toEqual([{ room: 'general', message: '1000' }]);
+		// The page's own reads only move forward: a latest message deleted doesn't make an earlier read look like another device's.
+		readFurthest(own, 'general', '110');
+		expect(own.get('general')).toBe('120');
+		readFurthest(own, 'general', '130');
+		expect(own.get('general')).toBe('130');
 	});
 });

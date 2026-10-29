@@ -628,9 +628,14 @@ here (its latest message in view, as moves your read cursor, in a window
 that is focused, not only visible) closes that room's notifications on this
 device up to what you read, pushed or the page's own, as chat apps clear
 what you've seen; a window behind another, which notifies of what arrives,
-leaves its notifications until you come back to it. Notifications on your other
-devices stay: web push can't close them without showing something, which
-browsers require of every push. Browsers expect each push to
+leaves its notifications until you come back to it. Reading a room on another
+device closes its pushed notifications here too, up to where you read it, once
+this page learns of it: at once while it is open, from the read cursor the
+server relays, else when it next lists your rooms and gets your read cursors
+again (where the server keeps them). On Android, where the app icon's badge
+only shows that notifications are waiting, this is what clears it. Until the
+page runs, they stay: web push can't close them without showing something,
+which browsers require of every push. Browsers expect each push to
 show a notification, and WebKit revokes subscriptions whose pushes don't, so
 every push but a badge push shows one: a push with nothing new, one for an
 account push isn't on for here, or one that can't be read shows again, as it

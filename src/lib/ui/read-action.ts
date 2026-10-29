@@ -1,4 +1,5 @@
 import type { RoomSnapshot } from '$lib/protocol/client';
+import { compareLogIds } from '$lib/protocol/reducer';
 import { notificationGroup } from './notifications';
 
 /**
@@ -59,4 +60,28 @@ export function readAction(state: ReadState, notifications: ReadNotifications): 
 	if (key === notifications.closedThrough) return action;
 	const target = notifications.pushId ? { group: notificationGroup(notifications.pushId, room.id) } : { tag: `apron:${server}:${room.id}` };
 	return { ...action, close: { key, target } };
+}
+
+/**
+ * The rooms whose notifications to close on this device because you read
+ * them elsewhere: where your read cursor (`readMessageId`, which the server
+ * relays from your other devices and sends again after a listing, §4.6) is
+ * past what this page read itself (`own`), each cursor once (`closed`).
+ * What the page read itself is `readAction`'s to close, or to leave for a
+ * window behind another.
+ */
+export function readElsewhere(
+	rooms: ReadonlyArray<Pick<RoomSnapshot, 'id' | 'readMessageId'>>,
+	own: ReadonlyMap<string, string>,
+	closed: ReadonlyMap<string, string>
+): Array<{ room: string; message: string }> {
+	const past = (message: string, than: string | undefined) => than === undefined || compareLogIds(message, than) > 0;
+	return rooms.flatMap(({ id, readMessageId: message }) =>
+		message !== undefined && past(message, own.get(id)) && past(message, closed.get(id)) ? [{ room: id, message }] : []);
+}
+
+/** Keeps a room's furthest read in `reads`: `message` if it is past the one kept. */
+export function readFurthest(reads: Map<string, string>, room: string, message: string): void {
+	const kept = reads.get(room);
+	if (kept === undefined || compareLogIds(message, kept) > 0) reads.set(room, message);
 }
