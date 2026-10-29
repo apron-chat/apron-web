@@ -105,6 +105,14 @@ test.describe('ext:permissions and ext:settings', () => {
 			await expect(page.getByTestId('room-directory').getByRole('button', { name: /^Join/ })).toHaveCount(0);
 			for (const topic of await page.getByTestId('room-directory').locator('.ap-room-topic').allTextContents()) expect(topic).not.toMatch(/Join|Open/);
 		});
+
+		test('reads the messages of a room it hasn’t joined, opened by its link', async ({ preview, page }) => {
+			await preview.open();
+			await preview.post('design', 'ada', 'The new palette is up for review.');
+			await page.evaluate(() => { location.hash = '#room=design'; });
+			await expect(preview.message('The new palette is up for review.')).toBeVisible();
+			expect((await preview.sent('room_join')).filter((p) => p.room_id === 'design')).toEqual([]);
+		});
 	});
 
 	test.describe('an account that may not write', () => {

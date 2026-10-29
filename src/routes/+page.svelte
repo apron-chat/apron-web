@@ -908,10 +908,10 @@
 		});
 	});
 
-	// Threads don't recover with their parent: the open one loads its own history,
-	// again after a reconnect, which lists it afresh.
+	// Threads don't recover with their parent, nor does a room read without joining it: the open one loads its own
+	// history, again after a reconnect, which lists it afresh.
 	$effect(() => {
-		const room = threadRoom;
+		const room = activeThread ? threadRoom : olderSource?.joined === false ? olderSource : undefined;
 		// A held copy (from before a reconnect or a reload) isn't the live thread: that one loads once it's listed.
 		if (!client || !room || !session.ready || session.showingHeld || room.loaded || room.loading || room.recoveryError) return;
 		untrack(() => loadThread(room.id));
@@ -1792,14 +1792,14 @@
 	}
 
 	/**
-	 * Loads a thread's history (§4.3); a failure the client recorded is reported once. One the server refuses for a
+	 * Loads a thread's history, or a room's read without joining it (§4.3); a failure the client recorded is reported once. One the server refuses for a
 	 * while (`retry_after`) isn't a failure: the client waits it out and loads again, the timeline counting down
 	 * meanwhile. A load that succeeds takes the last failure's toast away.
 	 */
 	function loadThread(roomId: string): void {
 		client?.loadRoom(roomId).then(() => feedback.dismiss(threadError), (cause: unknown) => {
 			if (!session.rooms.find((room) => room.id === roomId)?.recoveryError) return;
-			threadError = feedback.error(cause, 'Unable to load thread');
+			threadError = feedback.error(cause, session.rooms.find((room) => room.id === roomId)?.parentRoomId === undefined ? 'Unable to load room' : 'Unable to load thread');
 		});
 	}
 
