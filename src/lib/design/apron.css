@@ -97,7 +97,9 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg:hover { background: var(--hover-soft); }
 .ap-msg-mention { background: var(--accent-soft); }
 .ap-msg-mention:hover { background: var(--accent-soft); }
-.ap-msg-mention::before { content: ""; position: absolute; inset-inline-start: 0; top: var(--space-1); bottom: var(--space-1); width: 3px; border-radius: var(--radius-full); background: var(--accent); }
+/* The accent bar at a row's start, on the open room or thread and on a message that mentions you: --bar-at is how far in
+   it sits, --bar-inset how far short of the row's top and bottom it stops. An edge row's sits on the edge (Edge rows). */
+:is(.ap-room-active, .ap-msg-mention)::before { content: ''; position: absolute; inset-inline-start: var(--bar-at, 0); top: var(--bar-inset, var(--space-1)); bottom: var(--bar-inset, var(--space-1)); width: 3px; border-radius: var(--radius-full); background: var(--accent); pointer-events: none; }
 .ap-msg-pinged { animation: ap-ping .9s ease-out 1; }
 @keyframes ap-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
 .ap-msg-highlighted, .ap-msg-highlighted:hover { background: var(--bg-300); }
@@ -394,9 +396,8 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-room:hover { background: var(--hover); }
 .ap-room-active, .ap-room-active:hover { background: var(--selected); color: var(--ink); }
 /* The open room or thread: a neutral fill, a semibold name and an accent bar at its left (on the guide line, for a thread), so it never reads as unread or a mention, which own the accent fills. */
-.ap-room-active { position: relative; }
+.ap-room-active { --bar-at: var(--space-1); --bar-inset: var(--space-1_5); position: relative; }
 .ap-room-active .ap-room-name { font-weight: 600; }
-.ap-room-active::before { content: ''; position: absolute; inset-inline-start: var(--space-1); top: var(--space-1_5); bottom: var(--space-1_5); width: 3px; border-radius: var(--radius-full); background: var(--accent); pointer-events: none; }
 .ap-room-unread { color: var(--ink); }
 
 /* A muted room (§4.5 `mute` with its `room_id`): a bell-off at the end of its row, next to its count, and what's new in it stays quiet. */
@@ -772,7 +773,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-room-nested .ap-count { margin-top: -1px; }
 /* Top-aligned, as a thread's row is: centred on its first line, with the name, the count and the time. */
 .ap-room-nested .ap-muted { margin-top: calc((var(--leading-ui) - 14px) / 2); }
-.ap-room-nested.ap-room-active::before { inset-inline-start: 20px; top: 4px; bottom: 4px; z-index: var(--z-raised); }
+.ap-room-nested.ap-room-active { --bar-at: 20px; --bar-inset: 4px; }
+.ap-room-nested.ap-room-active::before { z-index: var(--z-raised); }
 /* A thread with an unread mention: a light accent tint, set apart from the open thread's neutral fill. */
 .ap-room-nested.ap-room-mention { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); color: var(--ink); }
 .ap-room-nested.ap-room-mention:hover { background: var(--accent-soft); }
