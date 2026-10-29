@@ -140,6 +140,26 @@ describe('messageView', () => {
 		expect(messageView(messageRecord(7, 'ops', { body: { text } }), row(), context([], {}, [{ id: 'ops', description: 'Ops things' }])).linkCards).toHaveLength(1);
 	});
 
+	it('leaves out a preview another client sent for a place it shows a card for, and keeps one for a place it has none for', () => {
+		const loaded = messageRecord(1, 'ops', { body: { text: 'hi' } });
+		const og = { title: 'Apron' };
+		const text = 'apron:?room=ops&message=1 and apron:?room=ops&message=404';
+		const embeds = [
+			// Its server written, its keys in another order: the same place as the card's.
+			{ kind: 'link', url: `https://link.apron.chat/#message=1&room=ops&server=${SERVER}`, og },
+			{ kind: 'link', url: 'https://link.apron.chat/#room=ops&message=404', og },
+			{ kind: 'link', url: 'https://link.apron.chat/#server=wss://other.example/&room=ops&message=1', og },
+			{ kind: 'link', url: 'https://example.com/', og }
+		];
+		const view = messageView(messageRecord(7, 'ops', { body: { text, embeds } }), row(), context([loaded]));
+		expect(view.linkCards).toHaveLength(1);
+		expect(view.embeds?.map((item) => [item.key, (item.embed as { url?: string }).url])).toEqual([1, 2, 3].map((index) => [String(index), embeds[index].url]));
+		// Without the card, as before the message it links is loaded, the preview shows.
+		expect(messageView(messageRecord(8, 'ops', { body: { text, embeds } }), row(), context()).embeds).toHaveLength(4);
+		// Nothing left to show is no embeds.
+		expect(messageView(messageRecord(9, 'ops', { body: { text, embeds: embeds.slice(0, 1) } }), row(), context([loaded])).embeds).toBeUndefined();
+	});
+
 	it('shows no card for a link in code, which the body doesn’t link, and one for a link Markdown percent-encodes', () => {
 		const loaded = messageRecord(11, 'général', { body: { text: 'bonjour' } });
 		for (const text of ['    apron:?room=ops&message=11', '``apron:?room=ops&message=11``', '```\napron:?room=ops&message=11\n```']) {

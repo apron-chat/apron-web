@@ -4,7 +4,7 @@ import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { systemScope, type Embed, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
 import type { EmbedProps, MessageCaps, MessageEmbed, MessageUpload, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
-import { placeLinksIn, writeApronLink, type ApronLink } from './apron-link';
+import { placeLinksIn, readPlaceLink, writeApronLink, type ApronLink } from './apron-link';
 import { backendHost } from './connection';
 import { directory, samePieces } from './directory.svelte';
 import { embedsOf, hueOf, isSystem, messageSnippet, textOf } from './messages';
@@ -212,6 +212,22 @@ function linkCardsOf(event: MessageRecord, seen: Drawn, context: MessageContext)
 }
 
 /**
+ * Whether an embed previews a place one of `cards` already shows: an embed
+ * whose `url` is a link to the same message, room or thread, written the way
+ * the card's `href` is (`writeApronLink`), so the same place written with its
+ * server or without, or with its keys in another order, is the same. Another
+ * client may send its own preview of a link this one draws as a card; one of
+ * the two is enough. A link with no card here keeps its embed.
+ */
+function previewedByCard(embed: Embed, cards: readonly MessageLinkCard[] | undefined, server: string | undefined): boolean {
+	if (!cards || !server || typeof embed.url !== 'string') return false;
+	const link = readPlaceLink(embed.url);
+	if (!link || link.user !== undefined || (link.server !== undefined && link.server !== server)) return false;
+	const href = writeApronLink({ server, room: link.room, message: link.message });
+	return cards.some((card) => card.href === href);
+}
+
+/**
  * A room or thread a link names, as the page knows it: joined or opened
  * (`rooms`), else listed (`listed`, by `room_id`), else not at all.
  */
@@ -236,19 +252,21 @@ export const UPLOAD_STALE_MS = 10 * 60_000;
  * UPLOAD_STALE_MS as failed. Your own can be removed, but not the last thing in a message (§3.5: a message has text
  * or embeds; delete it instead), nor an upload still being written.
  */
-function embedsIn(event: MessageRecord, row: MessageRow, context: MessageContext, seen: Drawn, name: string): MessageEmbed[] | undefined {
+function embedsIn(event: MessageRecord, row: MessageRow, context: MessageContext, seen: Drawn, name: string, cards?: readonly MessageLinkCard[]): MessageEmbed[] | undefined {
 	const embeds = embedsOf(event);
 	if (!embeds.length) return undefined;
 	const uploads = context.uploads;
 	const removable = row.caps.edit && !row.selecting && (Boolean(seen.text.trim()) || embeds.length > 1);
 	const detail = seen.time ? `${name} · ${seen.time}` : name;
-	return embeds.map((embed, index) => {
+	const shown = embeds.flatMap((embed, index) => {
+		if (previewedByCard(embed, cards, context.server)) return [];
 		const upload = (embed.embed_id ? uploads[embed.embed_id] : undefined) ?? stalled(embed, seen.timestamp);
 		const item: MessageEmbed = { key: embed.embed_id ?? String(index), embed: embed as unknown as EmbedProps, detail };
 		if (upload) item.upload = upload;
 		if (removable && !(upload && !upload.failed)) item.removable = true;
-		return item;
+		return [item];
 	});
+	return shown.length ? shown : undefined;
 }
 
 /**
@@ -285,7 +303,7 @@ export function messageView(event: MessageRecord, row: MessageRow, context: Mess
 		if (cards) view.linkCards = cards;
 	}
 	if (!event.deleted) {
-		const embeds = embedsIn(event, row, context, seen, seen.sender.name);
+		const embeds = embedsIn(event, row, context, seen, seen.sender.name, view.linkCards);
 		if (embeds) view.embeds = embeds;
 		if (row.reactions.length) view.reactions = row.reactions;
 	}
