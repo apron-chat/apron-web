@@ -241,7 +241,8 @@ export interface HistoryWrite {
 	dropped: string[];
 	/** Every room to keep: any other kept for the server goes, rows and records. */
 	keepOnly?: string[];
-	meta: Omit<MetaRow, 'version' | 'savedAt'>;
+	/** Without `users`, the users (and aliases) kept stay as they are. */
+	meta: Omit<MetaRow, 'version' | 'savedAt' | 'users'> & { users?: Identity[] };
 	/** Everything kept for the server goes first: another account's, or nothing known of what is there. */
 	reset?: boolean;
 	/** Written on top of what is kept: when nothing is (another tab forgot it), nothing is written (`HistoryGone`). */
@@ -337,7 +338,9 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
 		rooms.delete([server, room]);
 	}
 	const version = (previous?.version ?? 0) + 1;
-	meta.put({ ...write.meta, server, version, savedAt: Date.now() } satisfies MetaRow);
+	const { users, aliases, ...fields } = write.meta;
+	const people = users ? { users, ...(aliases ? { aliases } : {}) } : { users: previous?.users ?? [], ...(previous?.aliases ? { aliases: previous.aliases } : {}) };
+	meta.put({ ...fields, ...people, server, version, savedAt: Date.now() } satisfies MetaRow);
 	await finished;
 	return version;
 }

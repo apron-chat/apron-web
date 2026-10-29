@@ -22,7 +22,9 @@ import { historyResult } from './log';
 export interface HistoryClient {
 	readonly url: string;
 	keptSessionFor(url: string): boolean;
-	keptState(): KeptState | undefined;
+	/** Without users (`withUsers` false) when only the rooms are wanted. */
+	keptState(withUsers?: boolean): KeptState | undefined;
+	usersRevision(): number;
 	storedRecords(roomId?: string): StoredRecords;
 	observeStore(listener: (change: StoreChange) => void): () => void;
 	subscribe(listener: (snapshot: ClientSnapshot) => void): () => void;
@@ -132,8 +134,12 @@ interface Writer {
 	skip: Set<string>;
 	reset: boolean;
 	swept: boolean;
-	rows: Map<string, string>;
-	users?: string;
+	/** Each room's row as last written: its record (the store's own, compared by reference) and its sync. */
+	rows: Map<string, { record: RoomRecord | undefined; sync: RoomSync }>;
+	/** The client's `usersRevision` when the users were last written. */
+	usersRevision?: number;
+	/** `complete` and `current` as last written. */
+	flags?: string;
 }
 
 /** Who a writer writes for, and what is known to be kept for them: `synced` rooms mirror the client as of `version`. */
@@ -334,7 +340,7 @@ export class HistoryKeeper {
 		if (!this.keeping || this.retentionMs === undefined || this.retentionMs === null) return;
 		const cutoff = this.now() - this.retentionMs;
 		// What is kept now starts no lower than the cutoff: older pages come from the server.
-		const syncs = new Map((this.client?.keptState()?.rooms ?? []).map((room) => [room.id, room.sync]));
+		const syncs = new Map((this.client?.keptState(false)?.rooms ?? []).map((room) => [room.id, room.sync]));
 		for (const [room, cover] of this.coverage) {
 			if (!timeLike(syncs.get(room))) continue;
 			if (cover.from === undefined || Number(cover.from) < cutoff) this.coverage.set(room, { from: String(cutoff), older: true });
@@ -502,7 +508,10 @@ export class HistoryKeeper {
 		const writer = this.writer;
 		const client = this.client;
 		if (!writer?.granted || !client || !this.keeping) return;
-		const state = client.keptState();
+		// The users only when they changed since they were written: copying thousands each write would cost.
+		const revision = client.usersRevision();
+		const withUsers = writer.reset || revision !== writer.usersRevision;
+		const state = client.keptState(withUsers);
 		if (!state || state.userId !== writer.userId || client.url !== writer.server) return;
 		const changes = this.queue.splice(0);
 		this.progressed = true;
@@ -532,15 +541,15 @@ export class HistoryKeeper {
 			budget -= messages.length + reactions.length + memberships.length;
 		}
 		const rows: RoomRow[] = [];
-		const written = new Map<string, string>();
+		const written = new Map<string, { record: RoomRecord | undefined; sync: RoomSync }>();
 		for (const room of state.rooms) {
 			if (!room.sync || !synced.has(room.id)) continue;
 			const record = client.roomRecord(room.id);
-			const row: RoomRow = { server: writer.server, room: room.id, ...(record ? { record } : {}), sync: this.keptSync(room.id, room.sync) };
-			const json = JSON.stringify(row);
-			if (writer.rows.get(room.id) === json) continue;
-			rows.push(row);
-			written.set(room.id, json);
+			const sync = this.keptSync(room.id, room.sync);
+			const last = writer.rows.get(room.id);
+			if (last && last.record === record && sameSync(last.sync, sync)) continue;
+			rows.push({ server: writer.server, room: room.id, ...(record ? { record } : {}), sync });
+			written.set(room.id, { record, sync });
 		}
 		// Once the joined set is complete, a room kept and no longer joined goes, and so, the first time, does
 		// anything kept from before that isn't joined now.
@@ -556,21 +565,22 @@ export class HistoryKeeper {
 		for (const room of dropped) withSync.delete(room);
 		const complete = state.complete && state.rooms.every((room) => withSync.has(room.id));
 		const current = state.rooms.every((room) => room.sync !== undefined);
-		const users = JSON.stringify([state.users, state.aliases, complete, current]);
-		if (!changes.length && !whole.length && !rows.length && !dropped.length && !sweep && !writer.reset && users === writer.users) return;
+		const flags = `${complete} ${current}`;
+		if (!changes.length && !whole.length && !rows.length && !dropped.length && !sweep && !withUsers && flags === writer.flags) return;
 		try {
 			const db = await this.open();
 			const version = await writeHistory(db, writer.server, {
 				changes, whole, rooms: rows, dropped, ...(sweep ? { keepOnly: sweep } : {}), reset: writer.reset, continues: !writer.reset,
-				meta: { server: writer.server, userId: writer.userId, complete, current, users: state.users, ...(state.aliases ? { aliases: state.aliases } : {}) }
+				meta: { server: writer.server, userId: writer.userId, complete, current, ...(withUsers ? { users: state.users, ...(state.aliases ? { aliases: state.aliases } : {}) } : {}) }
 			}, kept);
 			if (this.writer !== writer) return;
 			writer.reset = false;
 			if (sweep) writer.swept = true;
 			writer.synced = synced;
 			writer.withSync = withSync;
-			writer.users = users;
-			for (const [room, json] of written) writer.rows.set(room, json);
+			writer.usersRevision = revision;
+			writer.flags = flags;
+			for (const [room, row] of written) writer.rows.set(room, row);
 			for (const room of dropped) writer.rows.delete(room);
 			this.known = { server: writer.server, userId: writer.userId, version, synced: new Set(synced) };
 		} catch (cause) {
@@ -611,4 +621,10 @@ export function mergeOf(kept: RoomSync | undefined, sync: RoomSync): { from?: nu
 	const keptTop = kept.checkpoint ?? kept.loadCheckpoint;
 	if (keptTop === undefined || compareLogIds(keptTop, decrement(held)) < 0) return 'skip';
 	return { from: Number(held), cover: { ...(keptBottom !== undefined ? { from: keptBottom } : {}), older: kept.hasOlder ?? false } };
+}
+
+/** Whether two syncs of a room say the same (`RoomSync`'s fields, each a string or a boolean). */
+function sameSync(a: RoomSync, b: RoomSync): boolean {
+	const keys = Object.keys(a) as (keyof RoomSync)[];
+	return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
 }

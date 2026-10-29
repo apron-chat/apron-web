@@ -100,10 +100,12 @@ import {
 	absent,
 	pageHidden,
 	canonicalJson,
+	CountedMap,
 	decrement,
 	historyParams,
 	increment,
 	isEmbedded,
+	KeptUsers,
 	limitCategory,
 	limitHolds,
 	limitScope,
@@ -214,10 +216,10 @@ export class ChatClient {
 	/** Latest submitted client fields per room while an update is unconfirmed. */
 	private readonly pendingRoomSaves = new Map<string, PendingSave>();
 	/** One kept user object per `user_id` (§3.3), merged from current objects only. */
-	private readonly users = new Map<string, Identity>();
+	private readonly users = new KeptUsers();
 	/** The latest recorded object per `user_id` and the `log_id` of the record that carried it. */
 	private readonly recordedUsers = new Map<string, { identity: Identity; log_id: string }>();
-	private readonly userAliases = new Map<string, string>();
+	private readonly userAliases = new CountedMap<string, string>();
 	/** The greatest `log_id` this client has received: where a notice sits in its room's timeline. */
 	private greatestLogId?: string;
 	/** Read cursors per room, per user (§4.6). */
@@ -866,8 +868,9 @@ export class ChatClient {
 	/**
 	 * What this session keeps of its joined rooms, to go on from after a reload (`restore`): each room's sync,
 	 * which with its records is what a dropped connection keeps (`suspendProtocolView`). Undefined until signed in.
+	 * Without `withUsers`, its users (and aliases) are left out: `usersRevision` says whether they changed.
 	 */
-	keptState(): KeptState | undefined {
+	keptState(withUsers = true): KeptState | undefined {
 		const you = this.you?.user_id;
 		if (!this.authenticated || you === undefined) return undefined;
 		const rooms = [...this.rooms.values()].filter((room) => room.kind !== 'viewed').map((room) => ({
@@ -875,8 +878,16 @@ export class ChatClient {
 			// A recovery under way may have cleared the room for a rebuild, or not yet reached its checkpoint.
 			...(room.recovery ? {} : { sync: roomSync(room) })
 		}));
-		const users = [...this.users.values()].map(({ status: _status, seen: _seen, ...user }) => user as Identity);
-		return { userId: you, complete: this.joinedComplete && !this.joinedListing, rooms, users, ...(this.userAliases.size ? { aliases: Object.fromEntries(this.userAliases) } : {}) };
+		const users = withUsers ? [...this.users.values()].map(({ status: _status, seen: _seen, ...user }) => user as Identity) : [];
+		return { userId: you, complete: this.joinedComplete && !this.joinedListing, rooms, users, ...(withUsers && this.userAliases.size ? { aliases: Object.fromEntries(this.userAliases) } : {}) };
+	}
+
+	/**
+	 * Counts the changes to the users that `keptState` keeps, and their aliases: unchanged, they are as they
+	 * were, whatever their statuses did meanwhile.
+	 */
+	usersRevision(): number {
+		return this.users.revision + this.userAliases.revision;
 	}
 
 	/**

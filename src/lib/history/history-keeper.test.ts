@@ -27,7 +27,8 @@ function saved(client: ChatClient): HistoryClient {
 	return {
 		get url() { return client.url; },
 		keptSessionFor: () => true,
-		keptState: () => client.keptState(),
+		keptState: (withUsers) => client.keptState(withUsers),
+		usersRevision: () => client.usersRevision(),
 		storedRecords: (room) => client.storedRecords(room),
 		observeStore: (listener) => client.observeStore(listener),
 		subscribe: (listener) => client.subscribe(listener),
@@ -198,6 +199,35 @@ describe('HistoryKeeper', () => {
 		while (room(second.snapshot(), 'general')?.olderAvailable) await second.loadOlder('general');
 		expect(ids(second.snapshot(), 'general')).toEqual(all);
 		await again.stop();
+	});
+
+	it('writes nothing when nothing kept changed, and the users only when they did', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		const db = await openHistory(indexedDB);
+		const written = (await readKept(db, URL))!.meta;
+		const posted = server.post('general', 'grace', 'Something');
+		await waitFor(() => ids(client.snapshot(), 'general').includes(posted));
+		await keeper.flush();
+		const after = (await readKept(db, URL))!.meta;
+		expect(after.version).toBeGreaterThan(written.version);
+		// Nothing new since: no write goes.
+		await keeper.flush();
+		expect((await readKept(db, URL))!.meta.version).toBe(after.version);
+		// A name changes: the users are written again.
+		await client.updateProfile({ name: 'Ada Lovelace' });
+		await keeper.flush();
+		const renamed = (await readKept(db, URL))!.meta;
+		expect(renamed.version).toBeGreaterThan(after.version);
+		expect(renamed.users.find((user) => user.user_id === 'preview_guest')?.name).toBe('Ada Lovelace');
+		await keeper.stop();
 	});
 
 	it('writes nothing back once another tab has forgotten what is kept', async () => {

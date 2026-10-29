@@ -487,7 +487,11 @@ it); `log.test.ts` holds the two pagers to the same pages.
 what it had, a bound's eviction, a rebuild's clear), and `HistoryKeeper`
 (`history-keeper.ts`) mirrors those into the store in batches, one transaction
 each, with every settled room's sync (`ChatClient.keptState`), so a room's
-checkpoint is never kept without the records it covers. A room joined and
+checkpoint is never kept without the records it covers. A write puts down only
+the room rows whose record (by reference) or sync fields changed, and the users
+only when `usersRevision` moved: the client's `KeptUsers` counts changes to
+what is kept of a user, not to their `status` or `seen`, so presence alone
+writes nothing. A room joined and
 settled that isn't kept yet is written whole (`storedRecords(roomId)`), a few
 rooms a write (`WHOLE_BUDGET`) so writing many isn't one long task; one no
 longer joined goes once the joined set is complete, which is kept as complete

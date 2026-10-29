@@ -81,6 +81,16 @@ describe('writeHistory', () => {
 		expect(await readKept(db, SERVER)).toBeUndefined();
 	});
 
+	it('keeps the users as they are when a write leaves them out', async () => {
+		const db = await opened();
+		await writeHistory(db, SERVER, write({ meta: { ...meta, users: [ada], aliases: { guest_1: 'ada' } } }), new Set());
+		const { users: _users, ...withoutUsers } = meta;
+		await writeHistory(db, SERVER, write({ meta: { ...withoutUsers, complete: false } }), new Set());
+		expect((await readKept(db, SERVER))?.meta).toMatchObject({ users: [ada], aliases: { guest_1: 'ada' }, complete: false });
+		await writeHistory(db, SERVER, write({ meta: { ...meta, users: [] } }), new Set());
+		expect((await readKept(db, SERVER))?.meta).not.toHaveProperty('aliases');
+	});
+
 	it('keeps only the rooms named, and starts over on a reset', async () => {
 		const db = await opened();
 		const room = (id: string) => ({ room: id, messages: [message(at(1), at(1), id)], reactions: [], memberships: [] });
