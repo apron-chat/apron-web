@@ -173,3 +173,48 @@ export function snippet(text: string, terms: readonly string[], width = 140): Sn
 	if (end < line.length) push('…', false);
 	return parts;
 }
+
+/** A filter's value being typed, at the caret: whose (`users`) or which rooms', where it starts and ends, and what is typed. */
+export interface FilterAtCaret {
+	kind: 'users' | 'rooms';
+	/** Where its value starts, after `user:` or `room:`, and where it ends: at the next space, or the end. */
+	start: number;
+	end: number;
+	/** What is typed of it before the caret, without its `@` or `#`. */
+	typed: string;
+}
+
+/** The `user:` or `room:` value the caret is in, for suggesting one, or undefined anywhere else. */
+export function filterAtCaret(query: string, caret: number): FilterAtCaret | undefined {
+	const found = /(?:^|\s)(user|room):([@#]?)([^\s"]*)$/i.exec(query.slice(0, caret));
+	if (!found) return undefined;
+	let end = caret;
+	while (end < query.length && !/\s/.test(query[end])) end++;
+	return { kind: found[1].toLowerCase() === 'user' ? 'users' : 'rooms', start: caret - found[2].length - found[3].length, end, typed: found[3] };
+}
+
+/**
+ * `query` with the filter value at `at` replaced by `value` and a space after it, and where the caret goes: after
+ * that space, ready for the next word.
+ */
+export function withFilterValue(query: string, at: FilterAtCaret, value: string): { query: string; caret: number } {
+	const rest = query.slice(at.end);
+	const spaced = rest.startsWith(' ') ? rest : ` ${rest}`;
+	return { query: query.slice(0, at.start) + value + spaced, caret: at.start + value.length + 1 };
+}
+
+/** Of `people`, those whose name or `user_id` starts with `typed` (any case, with or without accents), one it names exactly first, then those holding it, at most `limit`. */
+export function searchPeople<T extends { id: string; name?: string }>(people: readonly T[], typed: string, limit = 8): T[] {
+	const wanted = folded(typed.trim());
+	return people
+		.map((person) => {
+			const name = folded(person.name?.trim() ?? '');
+			const id = folded(person.id);
+			const rank = !wanted ? 1 : name === wanted || id === wanted ? 0 : name.startsWith(wanted) || id.startsWith(wanted) ? 1 : name.includes(wanted) || id.includes(wanted) ? 2 : -1;
+			return rank < 0 ? undefined : { person, rank };
+		})
+		.filter((entry) => entry !== undefined)
+		.sort((a, b) => a.rank - b.rank || (a.person.name ?? a.person.id).localeCompare(b.person.name ?? b.person.id, undefined, { sensitivity: 'base' }))
+		.slice(0, limit)
+		.map(({ person }) => person);
+}

@@ -32,6 +32,41 @@ test('narrows by room and by person, and opens a result in its room', async ({ p
 	await expect(page.locator('article[data-message-id]', { hasText: 'Engineering room preview' })).toBeInViewport();
 });
 
+test('suggests people for user: and rooms for room:, as the composer does for @ and #', async ({ preview, page }) => {
+	await preview.open();
+	await page.keyboard.press('ControlOrMeta+k');
+	const search = page.getByRole('dialog', { name: 'Search local history' });
+	const field = search.getByRole('combobox');
+	const suggestions = search.getByTestId('search-suggestions');
+
+	await field.fill('thread user:@li');
+	await expect(suggestions.getByRole('option')).toHaveCount(1);
+	await expect(suggestions).toContainText('Linus');
+	await expect(field).toHaveAttribute('aria-controls', (await suggestions.getAttribute('id'))!);
+	await field.press('Enter');
+	await expect(field).toHaveValue('thread user:@linus ');
+	await expect(suggestions).toHaveCount(0);
+	await expect(search.getByTestId('search-results').getByRole('option')).toHaveCount(2);
+
+	await field.pressSequentially('room:eng');
+	await expect(suggestions).toContainText('engineering');
+	await field.press('Tab');
+	await expect(field).toHaveValue('thread user:@linus room:#engineering ');
+	await expect(search.getByTestId('search-results').getByRole('option')).toHaveCount(1);
+
+	// Escape puts the suggestions away first; then, as in any search field, it clears it, and then closes.
+	await field.pressSequentially('room:');
+	await expect(suggestions).toBeVisible();
+	await field.press('Escape');
+	await expect(suggestions).toHaveCount(0);
+	await expect(field).toHaveValue('thread user:@linus room:#engineering room:');
+	await field.press('Escape');
+	await expect(field).toHaveValue('');
+	await expect(search).toBeVisible();
+	await field.press('Escape');
+	await expect(search).toHaveCount(0);
+});
+
 /** Its title's "history" opens Preferences at History, where what this device keeps is chosen. */
 async function historyLink(page: Page): Promise<void> {
 	await page.getByRole('button', { name: 'Search local history' }).first().click();

@@ -696,7 +696,10 @@ in any case and with or without accents. `user:` keeps what someone sent, by
 `@user_id` or name (`user:@ada`, `user:"Ada Lovelace"`), and `room:` what is in
 a room and its threads, by `#room_id` or title (`room:#general`); several of
 one filter keep what matches any of them, and filters alone, without words,
-list everything they keep. The newest hundred matches are
+list everything they keep. Typing a filter's value suggests people for `user:`
+(everyone met) and rooms for `room:` (as the composer's `#` does), below the
+field: ↑ ↓ move, Enter or Tab puts in `@user_id` or `#room_id` and a space, and
+Escape puts the suggestions away. The newest hundred matches are
 listed, newest first, each with its room (a thread's with its room after it),
 sender, time and a line of it with the words marked; ↑ ↓ and Enter, or a click,
 open one where it is, paging back to it from this device as a link to it does.

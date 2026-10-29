@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '$lib/protocol/types';
-import { matchesTerms, newestMatches, parseQuery, queryMatcher, searchTerms, snippet, type SearchContext } from './search';
+import { filterAtCaret, matchesTerms, newestMatches, parseQuery, queryMatcher, searchPeople, searchTerms, snippet, withFilterValue, type SearchContext } from './search';
 
 const message = (id: string, text: string, log = id, fields: Partial<MessageRecord> = {}): MessageRecord => ({ message_id: id, log_id: log, room_id: 'general', from: { user_id: 'ada' }, body: { text }, ...fields });
 
@@ -97,5 +97,39 @@ describe('queryMatcher', () => {
 	it('asks for nothing without words or filters, and never keeps a deleted message', () => {
 		expect(queryMatcher(parseQuery('  '), context)).toBeUndefined();
 		expect(queryMatcher(parseQuery('user:@ada'), context)!(message('9', 'x', '10', { from: ada, deleted: true }))).toBe(false);
+	});
+});
+
+describe('filterAtCaret and withFilterValue', () => {
+	it('finds the user: or room: value the caret is in, with or without its @ or #', () => {
+		expect(filterAtCaret('deploy user:@ad', 15)).toEqual({ kind: 'users', start: 12, end: 15, typed: 'ad' });
+		expect(filterAtCaret('room:gen', 8)).toEqual({ kind: 'rooms', start: 5, end: 8, typed: 'gen' });
+		expect(filterAtCaret('ROOM:#', 6)).toEqual({ kind: 'rooms', start: 5, end: 6, typed: '' });
+		// The caret mid-value: what's typed is what is before it, and the value runs on to the next space.
+		expect(filterAtCaret('user:@adam late', 8)).toEqual({ kind: 'users', start: 5, end: 10, typed: 'ad' });
+	});
+
+	it('finds nothing in a word, past a space, or in a quoted name', () => {
+		expect(filterAtCaret('deploy', 6)).toBeUndefined();
+		expect(filterAtCaret('user:@ada ', 10)).toBeUndefined();
+		expect(filterAtCaret('nouser:ad', 9)).toBeUndefined();
+		expect(filterAtCaret('user:"Ada', 9)).toBeUndefined();
+	});
+
+	it('puts a value in with a space after it, and the caret after that', () => {
+		const at = filterAtCaret('deploy user:@ad late', 15)!;
+		expect(withFilterValue('deploy user:@ad late', at, '@ada')).toEqual({ query: 'deploy user:@ada late', caret: 17 });
+		const end = filterAtCaret('room:ge', 7)!;
+		expect(withFilterValue('room:ge', end, '#general')).toEqual({ query: 'room:#general ', caret: 14 });
+	});
+});
+
+describe('searchPeople', () => {
+	const people = [{ id: 'adam', name: 'Adam' }, { id: 'ada', name: 'Ada Lovelace' }, { id: 'zoe', name: 'Zoë Cadabra' }, { id: 'bob' }];
+	it('lists someone named exactly first, then by name or id starting with what is typed, then holding it', () => {
+		expect(searchPeople(people, 'ada').map((person) => person.id)).toEqual(['ada', 'adam', 'zoe']);
+		expect(searchPeople(people, 'zoe').map((person) => person.id)).toEqual(['zoe']);
+		expect(searchPeople(people, '').map((person) => person.id)).toEqual(['ada', 'adam', 'bob', 'zoe']);
+		expect(searchPeople(people, 'a', 2)).toHaveLength(2);
 	});
 });

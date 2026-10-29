@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, type Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Dialog from './Dialog.svelte';
 	import type { SearchResult } from './types';
@@ -23,6 +23,17 @@
 		note?: string;
 		/** In the empty field, such as how to narrow a search. */
 		placeholder?: string;
+		/** Where the caret is in the field: bindable, kept as it moves. */
+		caret?: number;
+		/**
+		 * Suggestions for what's typed at the caret, such as people for `user:`, below the field: while they show,
+		 * `onfieldkey` takes the field's keys first, and `suggesting` names their listbox and the option the keyboard is
+		 * on, for the field's `aria-controls` and `aria-activedescendant`.
+		 */
+		suggestions?: Snippet;
+		suggesting?: { list: string; option?: string };
+		/** A key in the field, before the results take it: true when it was taken. */
+		onfieldkey?: (event: KeyboardEvent) => boolean;
 		/** The title's "history" is a link, such as to the settings of what this device keeps; the panel closes. */
 		onhistory?: () => void;
 		/** A result picked, by press or Enter, by its `id`. */
@@ -34,7 +45,7 @@
 		/** A `data-testid` for the listbox of results. */
 		listTestid?: string;
 	}
-	let { open = $bindable(false), query = $bindable(''), results, searching = false, more = false, note, placeholder = 'Words in a message', onhistory, onpick, onclose, class: className, listTestid }: Props = $props();
+	let { open = $bindable(false), query = $bindable(''), caret = $bindable(0), suggestions, suggesting, onfieldkey, results, searching = false, more = false, note, placeholder = 'Words in a message', onhistory, onpick, onclose, class: className, listTestid }: Props = $props();
 	const uid = $props.id();
 	const listId = `${uid}-results`;
 	/** The result the keyboard is on: the first, once there are any. */
@@ -65,7 +76,20 @@
 		open = false;
 	}
 
+	/** Puts the caret at `at` in the field, such as after a suggestion is taken. */
+	export async function place(at: number): Promise<void> {
+		await tick();
+		input?.focus();
+		input?.setSelectionRange(at, at);
+		caret = at;
+	}
+
+	function moved(): void {
+		caret = input?.selectionStart ?? query.length;
+	}
+
 	function keydown(event: KeyboardEvent): void {
+		if (onfieldkey?.(event)) return;
 		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 			if (!results.length) return;
 			event.preventDefault();
@@ -81,11 +105,14 @@
 	{#snippet heading()}Search local {#if onhistory}<button type="button" class="ap-link" onclick={() => { open = false; onhistory(); }}>history</button>{:else}history{/if}{/snippet}
 	<div class="ap-fieldlabel">
 		<label class="ap-sr" for="{uid}-query">Search for</label>
-		<input
-			id="{uid}-query" class="ap-field ap-search-input" type="search" bind:this={input} bind:value={query} onkeydown={keydown}
-			role="combobox" aria-autocomplete="list" aria-expanded={results.length > 0} aria-controls={listId} aria-activedescendant={results.length ? `${listId}-${active}` : undefined}
-			{placeholder} autocomplete="off" spellcheck="false" dir="auto"
-		/>
+		<div class="ap-search-field">
+			<input
+				id="{uid}-query" class="ap-field ap-search-input" type="search" bind:this={input} bind:value={query} onkeydown={keydown} oninput={moved} onkeyup={moved} onclick={moved} onselect={moved}
+				role="combobox" aria-autocomplete="list" aria-expanded={suggesting !== undefined || results.length > 0} aria-controls={suggesting?.list ?? listId} aria-activedescendant={suggesting ? suggesting.option : results.length ? `${listId}-${active}` : undefined}
+				{placeholder} autocomplete="off" spellcheck="false" dir="auto"
+			/>
+			{#if suggestions}{@render suggestions()}{/if}
+		</div>
 		{#if note}<p class="ap-form-hint">{note}</p>{/if}
 	</div>
 	<ul class="ap-search-list" id={listId} role="listbox" aria-label="Messages found" aria-busy={searching} data-testid={listTestid} bind:this={list}>
