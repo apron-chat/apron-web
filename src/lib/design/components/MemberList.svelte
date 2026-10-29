@@ -4,6 +4,7 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import UserMinus from '@lucide/svelte/icons/user-minus';
 	import Avatar from './Avatar.svelte';
+	import FoldHeading from './FoldHeading.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 	import type { MemberListPerson, MemberListSection } from './types';
 	import { presence, presenceLabel } from './util';
@@ -21,7 +22,7 @@
 		empty?: string;
 		/** Placeholder rows, while the app is still coming up. */
 		placeholder?: boolean;
-		/** The keys of folded sections. */
+		/** The keys of folded sections: each a FoldHeading, folded to no one (presence isn't news). */
 		shut?: string[];
 		ontogglesection?: (key: string) => void;
 		/** A row's name pressed: open their profile, from the row's button. */
@@ -80,9 +81,7 @@
 					<section class="ap-memberlist-section" data-section={section.key}>
 						<!-- Without presence, one list under the panel's own header and count: a Members heading would repeat them. -->
 						{#if section.key !== 'members'}
-							<h3 class="ap-memberlist-sectionhead">
-								<button class={['ap-sect-toggle', !sectionOpen && 'ap-sect-closed']} type="button" aria-expanded={sectionOpen} onclick={() => ontogglesection?.(section.key)}><span class="ap-sect-caret" aria-hidden="true">▾</span>{section.label}<span class="ap-memberlist-sectioncount">· {section.people.length}</span></button>
-							</h3>
+							<FoldHeading class="ap-memberlist-sectionhead" level={3} label={section.label} count={section.people.length} folded={!sectionOpen} onfold={() => ontogglesection?.(section.key)} />
 						{/if}
 						{#if sectionOpen}
 							<ul class="ap-memberlist-people" aria-label={room ? `${section.label} in ${room}` : section.label}>

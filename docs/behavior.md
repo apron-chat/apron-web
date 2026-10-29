@@ -95,7 +95,7 @@ until the connection is back. Screen readers hear it as the pill shows it: not
 for those first moments, nor while a hidden tab waits (the status says nothing
 then, rather than "Connected"). A link opened meanwhile waits for the new
 connection's listings before deciding a room or thread isn't there. What was listed before
-the drop stays listed: Other Rooms, Other threads, and the room's thread cards,
+the drop stays listed: Other Rooms, Other Threads, and the room's thread cards,
 until the new connection's listings replace them, so the open room shows what
 came meanwhile without waiting on its thread listing again, and an open
 thread's reply count stays while it catches up.
@@ -233,8 +233,9 @@ before Members, or the end of the room's once it is shut), toggles a right-hand
 sidebar, **Members**, listing the open room's or thread's members from its `room_list`
 snapshot, with their role badges, in sections as Discord lists them, each
 headed with its count: **Online**, then **Offline** (offline, or your own
-invisible). Each heading folds its section away, as Other threads does, and
-which are folded is remembered for every room. Someone with no status isn't known to be offline, so stays under
+invisible). Each heading folds its section, as the sidebar's headings do, to
+no one (presence isn't news), with the **…** at its end that shows it again,
+and which are folded is remembered for every room. Someone with no status isn't known to be offline, so stays under
 Online. Without presence (a server without the `status` capability, or no
 member with a status) it is one list with no heading, since a Members heading
 would repeat the panel's own. Within a section, members sort by status, then
@@ -751,8 +752,9 @@ and steps back, its title muted and its lines dimmed. A room shows the
 same bubble for its own unread messages (its threads count their own), with
 its name in bold, and none while you're reading it. The open room or thread has a neutral fill and an
 accent bar at its left (on the guide line, for a thread), so it never looks
-unread. A door on hover leaves the thread. Then **Other threads · N**, a heading
-that folds (it stays as you left it, on this device): the
+unread. A door on hover leaves the thread. Then **Other Threads · N**, a heading
+that folds as the sidebar's do, to the one you're reading if it's among them,
+with the **…** at its end (it stays as you left it, on this device): the
 threads you haven't joined, beside the guide line carried on dashed, their
 titles muted, each with its Description line (from its listed `description`) and,
 at the end of the row, when it was last active (`2h`, `Tue`, from its listed
@@ -765,7 +767,7 @@ while the list is folded or past the first three), and **Join**, a door-in
 button on the row (on hover, where it takes the time's place, or always on
 touch, beside it) as Leave is a door out, joins it and opens it once its
 `room_update` arrives. Leaving is how a thread is put
-away: it stops counting unread and alerting, moves down to Other threads, and
+away: it stops counting unread and alerting, moves down to Other Threads, and
 does so on every device, since it's a membership; its card stays in the room.
 The protocol lets a client hide threads, so nothing here is a server limit.
 The room feed shows each thread as
@@ -1350,7 +1352,7 @@ button (it opens the sign-in panel on Passkey); signed in to an account, the
 bar only says so. Replying, reacting, editing, moving and deleting messages,
 starting threads, editing rooms and threads, adding or removing members, and
 Join and Leave are hidden; a room picked under Other Rooms (which says no
-Join) opens to read through its history without joining it, and Other threads
+Join) opens to read through its history without joining it, and Other Threads
 offers no Join, since picking one already reads it. Other
 servers' denials show as errors as usual.
 

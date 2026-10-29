@@ -1,0 +1,17 @@
+<!-- @dsCard group="Navigation" height=300 subtitle="A heading that folds its list to what has news: open with its count; folded, a FoldPill (…) at its end that shows it all again, as the heading does; with a + after it (a SidebarSection's); and the open room's row folded to its threads with news, the same pill before its +" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>FoldHeading</title></head>
+<body>
+<div id="root" style="background:var(--bg-000);width:248px;padding:12px 8px;box-sizing:border-box;display:grid;gap:12px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props, at) { return A.render(C, at || root, props || {}); }
+  var noop = function () {};
+  add(A.FoldHeading, { label: 'Online', count: 4 });
+  add(A.FoldHeading, { label: 'Offline', count: 12, folded: true });
+  add(A.SidebarSection, { title: 'Rooms', folded: true, onadd: noop, addLabel: 'Create room', children: A.part(A.RoomItem, { room: 'ops', name: 'Ops', unread: 3 }) });
+  add(A.RoomItem, { room: 'general', name: 'General', active: true, onnewthread: noop, onexpand: noop });
+</script>
+</body>
+</html>

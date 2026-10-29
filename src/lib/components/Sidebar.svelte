@@ -117,7 +117,7 @@
 	 */
 	const BACKGROUND_LISTING_MS = 60_000;
 
-	// Other Rooms and Other threads show only when there is something to join, so list both in the background:
+	// Other Rooms and Other Threads show only when there is something to join, so list both in the background:
 	// the rooms whenever the rooms you've joined change, and the active room's threads whenever it or what you've
 	// joined changes. Threads you haven't joined deliver nothing live (§3.4): this listing is also what brings their
 	// cards up to date. One refused for a while lists again once the wait is over.

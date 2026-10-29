@@ -337,7 +337,7 @@ test.describe('right to left', () => {
 				else expect(a.x - m.x).toBeCloseTo(8, 0);
 			});
 
-			test(`the member list keeps "(you)" apart from your name, and a folded section's caret points along the line (${dir})`, async ({ preview, page }) => {
+			test(`the member list keeps "(you)" apart from your name, and a folded section's … sits at its heading's end (${dir})`, async ({ preview, page }) => {
 				await preview.open();
 				if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
 				await showMembers(preview);
@@ -349,19 +349,21 @@ test.describe('right to left', () => {
 				const gap = dir === 'ltr' ? mark.x - (name.x + name.width) : name.x - (mark.x + mark.width);
 				expect(gap, '4px between the name and "(you)"').toBeCloseTo(4, 0);
 
-				// The caret sits in the gutter before the heading's words: on their left, or their right under rtl.
-				const toggle = list.locator('.ap-memberlist-sectionhead .ap-sect-toggle').first();
-				const caret = toggle.locator('.ap-sect-caret');
-				const t = (await toggle.boundingBox())!;
-				const c = (await caret.boundingBox())!;
-				if (dir === 'ltr') expect(c.x + c.width).toBeLessThanOrEqual(t.x + 0.5);
-				else expect(c.x).toBeGreaterThanOrEqual(t.x + t.width - 0.5);
-				// Folded, the ▾ turns to point along the line: right, or left under rtl. (Where its tip goes: the
-				// transform's image of "down".)
+				// Folded, the heading's … sits at its inline end, past its words: on their right, or their left under rtl.
+				const head = list.locator('.ap-memberlist-sectionhead').first();
+				const toggle = head.locator('.ap-sect-toggle');
 				await preview.press(toggle);
 				await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-				const pointsX = await caret.evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).transformPoint({ x: 0, y: 1 }).x);
-				expect(Math.round(pointsX)).toBe(dir === 'ltr' ? 1 : -1);
+				const pill = head.locator('.ap-foldpill');
+				const t = (await toggle.boundingBox())!;
+				const p = (await pill.boundingBox())!;
+				const h = (await head.boundingBox())!;
+				if (dir === 'ltr') expect(p.x).toBeGreaterThan(t.x + t.width);
+				else expect(p.x + p.width).toBeLessThan(t.x);
+				expect(dir === 'ltr' ? h.x + h.width - (p.x + p.width) : p.x - h.x, 'at the end, inside its padding').toBeLessThanOrEqual(8);
+				await preview.press(pill);
+				await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+				await expect(toggle).toBeFocused();
 			});
 		});
 

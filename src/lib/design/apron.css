@@ -7,7 +7,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-room-expand, .ap-sect-expand, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
@@ -519,20 +519,24 @@ a.ap-embed-card:hover { background: var(--hover); }
 	.ap-roomhead-back.ap-roomhead-back-tagged { display: flex; flex: none; align-items: center; width: auto; min-width: var(--control-lg); padding: 0 2px; padding-inline-start: 10px; }
 }
 
+/* FoldHeading: a heading that folds its list, with its count after it, and at its end, while folded, a FoldPill, then
+   anything else (a SidebarSection's +). FoldPill: the "…" of a list folded to what has news, here and on the open
+   room's row. */
+.ap-foldhead { display: flex; align-items: center; }
+.ap-foldhead-title { margin: 0; font: inherit; }
+.ap-foldhead-count { margin-inline-start: 2px; font-weight: 400; }
+.ap-foldhead-ends { display: flex; align-items: center; gap: var(--space-1); margin-inline-start: auto; }
+.ap-foldpill, .ap-roomstart { --foldpill-w: calc(14px + var(--space-2) * 2 + 2px); }
+.ap-foldpill { display: inline-grid; place-items: center; box-sizing: border-box; width: var(--foldpill-w); height: 18px; padding: 0 var(--space-2); border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, color var(--duration-fast) ease; }
+.ap-foldpill:hover { background: var(--hover); border-color: var(--ink-muted); color: var(--ink); }
+
 /* SidebarSection */
 .ap-sect + .ap-sect { margin-top: var(--space-3); }
-.ap-sect-head { display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-1) var(--space-1); }
+.ap-sect-head { padding: 0 var(--space-1) var(--space-1); }
 .ap-sect-toggle { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-1); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; cursor: pointer; }
 .ap-sect-toggle:hover { color: var(--ink); }
-.ap-sect-caret { display: inline-block; font-size: var(--text-caps); }
-/* Every heading that folds away turns its caret the same way: Other threads, a member list's section. */
-.ap-sect-closed .ap-sect-caret { transform: rotate(-90deg); }
-/* Mirrored, a shut section's caret points along the line the other way, to the left. */
-:where([dir='rtl']) .ap-sect-closed .ap-sect-caret { transform: rotate(90deg); }
 .ap-sect-body { display: flex; flex-direction: column; gap: var(--space-0_5); }
 .ap-sect-head .ap-sect-add { width: var(--control-md); padding: 0; justify-content: center; }
-/* Its heading's end: while it's folded to the rows with news, the room row's "…" pill, then its +. */
-.ap-sect-ends { display: flex; align-items: center; gap: var(--space-1); margin-inline-start: auto; }
 /* While the list loads: a few lines where its rows will be. */
 .ap-sect-skel { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 .ap-sect-skel .ap-skel { height: 12px; }
@@ -684,12 +688,10 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-placeholder .ap-skel { height: 12px; }
 .ap-memberlist-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-memberlist-section + .ap-memberlist-section { margin-top: var(--space-4); }
-/* As the rooms list's section headings; the caret sits out in the gutter, as Other threads' does, so the words line up with the avatars. */
+/* As the rooms list's section headings; the caret sits out in the gutter, as Other Threads' does, so the words line up with the avatars. */
 .ap-memberlist-sectionhead { margin: 0; padding: 0 var(--space-1) var(--space-1); font: inherit; }
 .ap-memberlist-sectionhead .ap-sect-toggle { position: relative; padding-inline-start: 0; }
-.ap-memberlist-sectionhead .ap-sect-caret { position: absolute; inset-inline-start: -11px; width: 10px; text-align: center; }
-/* The count after a dot and lighter than the words, as Other threads writes its own. */
-.ap-memberlist-sectioncount { margin-inline-start: 2px; font-weight: 400; }
+/* The count after a dot and lighter than the words, as Other Threads writes its own. */
 .ap-memberlist-people { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .ap-member { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 2px var(--space-1); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 /* Role badges follow the name, as beside a message's sender; the remove button floats over the row's far end. */
@@ -791,12 +793,10 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-room-active .ap-room-count { color: var(--ink); }
 .ap-room-loading { flex: none; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 /* The open room's row: a + that starts a thread in it, always shown, and while its threads are folded to those with news a "…" pill before it that shows them all; the row makes room for them. */
-.ap-roomstart { position: relative; --expand-w: calc(14px + var(--space-2) * 2 + 2px); }
+.ap-roomstart { position: relative; }
 .ap-roomstart .ap-room { padding-inline-end: calc(var(--control-md) + var(--space-1) + var(--space-2)); }
-.ap-roomstart:has(.ap-room-expand) .ap-room { padding-inline-end: calc(var(--control-md) + var(--expand-w) + var(--space-1) * 2 + var(--space-2)); }
+.ap-roomstart:has(.ap-foldpill) .ap-room { padding-inline-end: calc(var(--control-md) + var(--foldpill-w) + var(--space-1) * 2 + var(--space-2)); }
 .ap-room-ends { position: absolute; top: 50%; inset-inline-end: var(--space-1); transform: translateY(-50%); display: flex; align-items: center; gap: var(--space-1); }
-.ap-room-expand, .ap-sect-expand { display: inline-grid; place-items: center; box-sizing: border-box; width: var(--expand-w, calc(14px + var(--space-2) * 2 + 2px)); height: 18px; padding: 0 var(--space-2); border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, color var(--duration-fast) ease; }
-.ap-room-expand:hover, .ap-sect-expand:hover { background: var(--hover); border-color: var(--ink-muted); color: var(--ink); }
 .ap-roomhead-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .ap-roomhead-crumb { font: inherit; padding: 0; border: 0; background: none; color: var(--ink-muted); cursor: pointer; }
 .ap-roomhead-crumb:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
@@ -815,10 +815,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-threads-joined .ap-room.ap-room-active .ap-room-name { font-weight: 600; }
 .ap-threads-joined .ap-room.ap-room-unread .ap-room-name { font-weight: 600; }
 /* The heading's text lines up with the titles under it; its caret hangs to the left, on the guide's line. */
-.ap-threads-head { display: flex; margin: var(--space-2) 0 1px; padding-inline-start: calc(var(--space-3) + var(--space-4)); }
+.ap-threads-head { margin: var(--space-2) 0 1px; padding-inline: calc(var(--space-3) + var(--space-4)) var(--space-1); }
 .ap-threads-head .ap-sect-toggle { position: relative; padding-inline-start: 0; }
-.ap-threads-head .ap-sect-caret { position: absolute; inset-inline-start: -12px; width: 10px; text-align: center; }
-.ap-threads-count { margin-inline-start: 2px; font-weight: 400; }
 .ap-threads-more .ap-room-name { color: var(--denim); font-size: var(--text-sm); }
 /* The guide from the room carries on beside the threads you haven't joined, dashed, as they aren't yours yet. */
 .ap-threads-others { position: relative; display: flex; flex-direction: column; gap: 1px; }

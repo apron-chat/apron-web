@@ -54,7 +54,7 @@
 	let members = $derived(byStatus([...(roomMembers ?? [])].sort(byName), statusOf));
 	/** Online, then offline, each in the order above; with no `status` capability (§4.5), one list. */
 	let sections = $derived(memberSections(members, statusOf, hasStatus));
-	/** Sections folded away, as the rooms list folds Other threads: a long Offline needn't push the rest out of view. */
+	/** Sections folded away, as the rooms list folds Other Threads: a long Offline needn't push the rest out of view. */
 	let shut = $state(new Set(loadShutMemberSections()));
 
 	function toggleSection(key: string): void {

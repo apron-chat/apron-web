@@ -21,7 +21,7 @@ const KEY = {
 	memberList: 'apron.memberList',
 	/** The member list's sections folded away (`online`, `offline`), on every room. */
 	memberSections: 'apron.memberSections',
-	/** Whether Other threads, the threads you haven't joined under the open room, is folded away. */
+	/** Whether Other Threads, the threads you haven't joined under the open room, is folded away. */
 	otherThreads: 'apron.otherThreads',
 	/** The sidebar's sections folded to their rows with news (`rooms`, `private`, `other`). */
 	sidebarFolds: 'apron.sidebarFolds',
@@ -204,7 +204,7 @@ export function saveFoldedSections(folded: readonly string[]): void {
 	write(KEY.sidebarFolds, JSON.stringify(folded));
 }
 
-/** Other threads is open until it's folded, and stays as it was left. */
+/** Other Threads is open until it's folded, and stays as it was left. */
 export function loadOtherThreadsOpen(): boolean {
 	return read(KEY.otherThreads) !== 'shut';
 }

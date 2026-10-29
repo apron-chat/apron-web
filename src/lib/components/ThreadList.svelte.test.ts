@@ -50,7 +50,7 @@ describe('ThreadList', () => {
 		expect(titles('button[data-thread]')).toEqual(['Deploy', 'Expired cert']);
 		expect(titles('button[data-other-thread]')).toEqual(['Offsite', 'Logo']);
 		const heading = one('[data-testid="other-threads"]')!;
-		expect(heading.textContent).toContain('Other threads');
+		expect(heading.textContent).toContain('Other Threads');
 		expect(heading.textContent).toContain('2');
 		expect(heading.getAttribute('aria-expanded')).toBe('true');
 
@@ -69,6 +69,7 @@ describe('ThreadList', () => {
 		flushSync();
 		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
 		expect(one('button[data-other-thread]')).toBeNull();
+		expect(dom.button('Show all Other Threads')).toBeTruthy();
 		dom.unmount();
 		render();
 		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
