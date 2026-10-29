@@ -1183,7 +1183,11 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   server) has none: its chip says as much. A card is the link, as a chip is.
   The cards follow what the text links, so a link inside code (inline,
   indented or fenced) has none, nor has one to the message itself, and a
-  place written twice, with its server and without, has one.
+  place written twice, with its server and without, has one. A link preview
+  another client sent with the message (a `link` embed, or any embed, whose
+  `url` is a link to the same place, with or without its server, its keys in
+  any order) doesn't show under a card for that place, so the link isn't
+  previewed twice; where there's no card, the preview shows.
 
 With the `edit` capability, **Edit** on your own message opens it in place, in
 a box like the composer: its text, with its embeds above it as tiles like a
