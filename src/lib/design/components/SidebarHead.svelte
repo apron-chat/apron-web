@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import type { ClassValue } from 'svelte/elements';
 	import { initials } from './util';
 
@@ -40,6 +41,6 @@
 		</span>
 	</div>
 	{#if returnTo !== undefined && onreturn}
-		<button class="ap-iconbtn ap-iconbtn-lg ap-shell-sidehead-return" type="button" aria-label="Back to {returnTo}" title="Back to {returnTo}" onclick={onreturn}>›</button>
+		<button class="ap-iconbtn ap-iconbtn-lg ap-shell-sidehead-return" type="button" aria-label="Back to {returnTo}" title="Back to {returnTo}" onclick={onreturn}><ChevronRight size={20} aria-hidden="true" /></button>
 	{/if}
 </div>
