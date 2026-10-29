@@ -351,6 +351,15 @@ export const SCENES: Scene[] = [
 		}
 	},
 	{
+		// A server with a title and an avatar (§3.1): the sidebar head shows them over its host.
+		name: 'server-look',
+		knobs: { server: { title: 'Northwind Ops', avatar: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' } },
+		steps: async (preview, look) => {
+			await expect(preview.page.locator('img.ap-shell-sidehead-avatar')).toBeVisible();
+			await look();
+		}
+	},
+	{
 		// An offline member's profile card, which says when they were last seen (§4.5.2).
 		name: 'last-seen',
 		knobs: { capabilities: ['status'] },
