@@ -59,6 +59,7 @@
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
 	import { ReadPositions } from '$lib/ui/read-positions';
+	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
@@ -75,7 +76,7 @@
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
-	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, sidebarSections, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
@@ -576,6 +577,17 @@
 	const arrivals = new ArrivalWatch();
 	/** Whose added rooms, and the sidebar's folded rooms, are kept: each account on each server. */
 	let addedAccount = $derived(notifyAccount(serverUrl, session.you?.user_id));
+	/** The order of the sidebar's top-level rooms, kept on this device for the account. */
+	const roomOrder = new RoomOrder();
+	$effect(() => roomOrder.load(addedAccount));
+	/** The open room's section (Rooms or Private) in that order, for its ⋯ menu's Move up and Move down. */
+	let orderedSection = $derived.by(() => {
+		const room = activeRoom;
+		if (!room || room.parentRoomId !== undefined) return [];
+		const { rooms, private: privateRooms } = sidebarSections(session.rooms);
+		const section = privateRooms.some((other) => other.id === room.id) ? privateRooms : rooms;
+		return section.some((other) => other.id === room.id) ? roomOrder.sort(section).map((other) => other.id) : [];
+	});
 	/** The private rooms someone else added you to whose "You were added" banner still shows, kept on this device. */
 	let addedRooms = $state<string[]>([]);
 	$effect(() => {
@@ -2850,7 +2862,7 @@
 	{#snippet sideToggle()}<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />{/snippet}
 	{#snippet side()}
 		<Sidebar
-			client={client!} {session} {backendLabel} serverLook={currentLook} serverAddress={client?.url} account={addedAccount} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
+			client={client!} {session} {backendLabel} serverLook={currentLook} serverAddress={client?.url} account={addedAccount} order={roomOrder} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
@@ -2887,7 +2899,9 @@
 				memberListToggle={!memberListWide}
 				{unreadElsewhere}
 				{mentionsElsewhere}
-				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
+				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane}
+				onmoveup={activeRoom && orderedSection.indexOf(activeRoom.id) > 0 ? () => roomOrder.step(activeRoom!.id, orderedSection, -1) : undefined}
+				onmovedown={activeRoom && orderedSection.indexOf(activeRoom.id) >= 0 && orderedSection.indexOf(activeRoom.id) < orderedSection.length - 1 ? () => roomOrder.step(activeRoom!.id, orderedSection, 1) : undefined} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
 				onmute={canMuteRoom ? mutePane : undefined}
 			/>
 			{#if roomEditorOpen && editTarget && roomEditor.component}

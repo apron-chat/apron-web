@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { newRoomDialog } from './lazy';
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import type { ChatClient, RoomSnapshot, ServerLook } from '$lib/protocol/client';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
@@ -12,6 +12,8 @@
 	import { listInBackground } from '$lib/ui/background-listing';
 	import { loadSidebarFolds, loadThreadFolds, saveSidebarFolds, saveThreadFolds } from '$lib/ui/storage';
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
+	import { ListDrag } from '$lib/ui/list-drag.svelte';
+	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
@@ -29,6 +31,8 @@
 		serverAddress?: string;
 		/** Whose folded rooms are kept on this device (`notifyAccount`); without one they're kept for this page only. */
 		account?: string;
+		/** The top-level rooms' order, kept by the page for the account (the room's ⋯ menu moves them too); its own, for this page only, without one. */
+		order?: RoomOrder;
 		/** The active room's threads (rooms whose parent it is) to list under it: joined ones, and the open one. */
 		threads: ThreadEntry[];
 		activeThread?: string;
@@ -78,11 +82,40 @@
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
-	let { client, session, backendLabel, serverLook, serverAddress, account, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
 	let sections = $derived(sidebarSections(session.rooms));
-	let rooms = $derived(sections.rooms);
-	let privateRooms = $derived(sections.private);
+	/** Each in the order kept on this device: the order rooms arrive in is the server's, and may differ on each visit. */
+	let rooms = $derived(order.sort(sections.rooms));
+	let privateRooms = $derived(order.sort(sections.private));
+	// A room listed for the first time takes the next place, so the order holds from then on.
+	$effect(() => {
+		void order.order;
+		const listed = [...sections.rooms, ...sections.private].map((room) => room.id);
+		untrack(() => order.adopt(listed));
+	});
+
+	/** Dragging a room (with its threads) to another place in its list: Rooms or Private. */
+	let sidebody = $state<HTMLElement>();
+	const drag = new ListDrag({ handle: 'button[data-room]', onmove: (id, drop) => order.move(id, drop.target, drop.side), scroller: () => sidebody });
+	/** What the last keyboard move did, for assistive tech. */
+	let moved = $state('');
+	/** Alt+↑ or Alt+↓ on a room moves it a place up or down among those `shown` with it, and keeps the keyboard on it. */
+	function reorderKey(event: KeyboardEvent, shownRooms: RoomSnapshot[]): void {
+		if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+		const button = event.target as HTMLElement;
+		const id = button.matches('button[data-room]') ? button.dataset.room : undefined;
+		if (id === undefined) return;
+		event.preventDefault();
+		const ids = shownRooms.map((room) => room.id);
+		const up = event.key === 'ArrowUp';
+		if (!order.step(id, ids, up ? -1 : 1)) return;
+		const room = shownRooms.find((other) => other.id === id)!;
+		const place = ids.indexOf(id) + (up ? 0 : 2);
+		moved = `${room.title} moved ${up ? 'up' : 'down'}, ${place} of ${ids.length}`;
+		// Moving its row in the page takes the keyboard off it: put it back.
+		void tick().then(() => document.querySelector<HTMLElement>(`button[data-room="${CSS.escape(id)}"]`)?.focus());
+	}
 
 	let canBrowse = $derived(session.canManageRooms && session.steady);
 	/**
@@ -189,20 +222,33 @@
 	{/if}
 {/snippet}
 
+<!-- A list of rooms that can be put in another order: dragged by their rows (with their threads), or moved with Alt+↑/↓. -->
+{#snippet roomList(list: RoomSnapshot[], withFaces: boolean)}
+	<!-- The rows inside are the controls; the list takes their presses and keys to reorder them. -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class={['ap-roomlist', drag.dragging !== undefined && list.some((room) => room.id === drag.dragging) && 'ap-roomlist-dragging']} onpointerdown={(event) => drag.press(event)} onkeydown={(event) => reorderKey(event, list)}>
+		{#each list as room (room.id)}
+			<div class={['ap-roomblock', drag.dragging === room.id && 'ap-roomblock-dragged', drag.drop?.target === room.id && `ap-roomblock-drop-${drag.drop.side}`]} data-drag-id={room.id}>
+				{@render roomRow(room, withFaces ? roomFaces(room, session.you) : undefined)}
+			</div>
+		{/each}
+	</div>
+{/snippet}
+
 <aside class="ap-shell-side" aria-label="Rooms">
 	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={serverLook?.avatar} {returnTo} {onreturn} />
-	<div class="ap-shell-sidebody">
+	<div class="ap-shell-sidebody" bind:this={sidebody}>
 		<SidebarSection title="Rooms" folded={folds.has('rooms')} onfold={(shut) => fold('rooms', shut)} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
 			{#if rooms.length === 0}
 				<p class="ap-sect-note">{session.snapshot.status === 'connected' ? 'No rooms yet.' : 'Waiting for rooms…'}</p>
 			{:else}
-				{#each shown(rooms, 'rooms') as room (room.id)}{@render roomRow(room)}{/each}
+				{@render roomList(shown(rooms, 'rooms'), false)}
 			{/if}
 		</SidebarSection>
 		<!-- Shown with private rooms in it, or empty, for its +, where you could start one. -->
 		{#if privateRooms.length > 0 || onnewprivate}
 			<SidebarSection title="Private" folded={folds.has('private')} onfold={(shut) => fold('private', shut)} onadd={onnewprivate} addLabel="New private conversation" bodyTestid="private-list">
-				{#each shown(privateRooms, 'private') as room (room.id)}{@render roomRow(room, roomFaces(room, session.you))}{/each}
+				{@render roomList(shown(privateRooms, 'private'), true)}
 			</SidebarSection>
 		{/if}
 		{#if canBrowse && unjoined.length > 0}
@@ -221,6 +267,7 @@
 			</SidebarSection>
 		{/if}
 	</div>
+	<p class="ap-sr" aria-live="polite" aria-atomic="true">{moved}</p>
 	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} {onconnect} />
 </aside>
 

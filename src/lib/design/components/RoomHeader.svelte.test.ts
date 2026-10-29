@@ -63,6 +63,23 @@ describe('RoomHeader', () => {
 		expect(document.querySelector('.ap-menu-item')?.textContent?.trim()).toBe('Copy link to thread');
 	});
 
+	it('offers Move up and Move down in the ⋯ menu, each only where the room can go that way', () => {
+		const onmoveup = vi.fn();
+		const onmovedown = vi.fn();
+		render({ onmoveup, onmovedown, onleave: () => {} });
+		dom.button('Room actions').click();
+		flushSync();
+		const items = [...document.querySelectorAll<HTMLButtonElement>('.ap-menu-item')];
+		expect(items.map((item) => item.textContent?.trim())).toEqual(['Move up in sidebar', 'Move down in sidebar', 'Leave room']);
+		items[1].click();
+		expect(onmovedown).toHaveBeenCalledOnce();
+		dom.unmount();
+		render({ onmoveup });
+		dom.button('Room actions').click();
+		flushSync();
+		expect([...document.querySelectorAll('.ap-menu-item')].map((item) => item.textContent?.trim())).toEqual(['Move up in sidebar']);
+	});
+
 	it('offers Mute in the ⋯ menu with how long, worked out as it opens, and while muted offers Unmute, as a bell-off button left of it and in it', async () => {
 		const onmute = vi.fn();
 		const onunmute = vi.fn();

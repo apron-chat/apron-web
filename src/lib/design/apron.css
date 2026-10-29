@@ -558,6 +558,16 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-sect-toggle { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-1); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; cursor: pointer; }
 .ap-sect-toggle:hover { color: var(--ink); }
 .ap-sect-body { display: flex; flex-direction: column; gap: var(--space-0_5); }
+/* A list of rooms that can be put in another order, each room with its threads in a block that moves as one; they keep the body's spacing. */
+.ap-roomlist, .ap-roomblock { display: flex; flex-direction: column; gap: var(--space-0_5); }
+.ap-roomblock { position: relative; }
+.ap-roomlist-dragging { cursor: grabbing; user-select: none; }
+.ap-roomlist-dragging .ap-room { cursor: grabbing; }
+.ap-roomblock-dragged { opacity: var(--opacity-dim); }
+/* Where a dragged room would land: a line in the gap above or below the room it would go next to. */
+:is(.ap-roomblock-drop-before, .ap-roomblock-drop-after)::before { content: ''; position: absolute; inset-inline: var(--space-2); height: 2px; border-radius: var(--radius-full); background: var(--accent); pointer-events: none; z-index: var(--z-raised); }
+.ap-roomblock-drop-before::before { top: calc(-1px - var(--space-0_5) / 2); }
+.ap-roomblock-drop-after::before { bottom: calc(-1px - var(--space-0_5) / 2); }
 .ap-sect-head .ap-sect-add { width: var(--control-md); padding: 0; justify-content: center; }
 /* While the list loads: a few lines where its rows will be. */
 .ap-sect-skel { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }

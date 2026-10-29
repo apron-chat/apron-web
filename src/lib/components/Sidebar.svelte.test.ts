@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-import { flushSync } from 'svelte';
+import { flushSync, tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilitiesOf, type ChatClient, type ClientSnapshot, type RoomSnapshot } from '$lib/protocol/client';
 import { createTimeline } from '$lib/protocol/reducer';
 import { blankSnapshot, SessionView } from '$lib/ui/session.svelte';
 import Sidebar from './Sidebar.svelte';
+import { RoomOrder } from '$lib/ui/room-order.svelte';
+import { loadRoomOrder, saveRoomOrder } from '$lib/ui/storage';
 import * as dom from '$lib/test/dom';
 
 afterEach(() => {
@@ -234,6 +236,39 @@ describe('Sidebar', () => {
 		dom.render(Sidebar, props as never);
 		flushSync();
 		expect(listed()).toEqual(['deploy', 'cert']);
+		session.dispose();
+	});
+
+	it('lists the rooms in the order kept for the account, new ones last, and moves one with Alt+↑/↓, keeping the keyboard on it', async () => {
+		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
+		const room = (id: string, title: string): RoomSnapshot => ({ ...general, id, title, timeline: createTimeline(id) }) as RoomSnapshot;
+		saveRoomOrder('acct', ['random', 'general']);
+		const order = new RoomOrder();
+		order.load('acct');
+		const session = new SessionView();
+		// The server lists them in another order, with one it hasn't before.
+		session.apply(live({ rooms: [general, room('ops', 'Ops'), room('random', 'Random')] }), client);
+		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', account: 'acct', order, threads: [], mentions: {}, unread: {}, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() } as never);
+		flushSync();
+		const listed = () => [...document.querySelectorAll<HTMLElement>('[data-testid="room-list"] button[data-room]')].map((button) => button.dataset.room);
+		expect(listed()).toEqual(['random', 'general', 'ops']);
+		expect(loadRoomOrder('acct')).toEqual(['random', 'general', 'ops']);
+
+		const random = document.querySelector<HTMLElement>('button[data-room="random"]')!;
+		random.focus();
+		random.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }));
+		flushSync();
+		await tick();
+		expect(listed()).toEqual(['general', 'random', 'ops']);
+		expect(loadRoomOrder('acct')).toEqual(['general', 'random', 'ops']);
+		expect(document.activeElement).toBe(document.querySelector('button[data-room="random"]'));
+		expect(document.querySelector('.ap-shell-side [aria-live]')!.textContent).toBe('Random moved down, 2 of 3');
+		// Not past the top; a plain arrow doesn't move it.
+		const general_ = document.querySelector<HTMLElement>('button[data-room="general"]')!;
+		general_.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true, cancelable: true }));
+		general_.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+		flushSync();
+		expect(listed()).toEqual(['general', 'random', 'ops']);
 		session.dispose();
 	});
 });

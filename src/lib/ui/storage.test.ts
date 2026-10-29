@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -142,6 +142,17 @@ describe('preference storage', () => {
 		expect(loadThreadFolds(ada)[0]).toBe('r50');
 		saveThreadFolds(ada, []);
 		expect(JSON.parse(values.get('apron.threadFolds')!)).toEqual({ [bob]: ['random'] });
+	});
+
+	it('keeps each account’s room order, dropping an account’s when it has none', () => {
+		const ada = notifyAccount('wss://a.example/', 'ada');
+		const bob = notifyAccount('wss://b.example/', 'ada');
+		expect(loadRoomOrder(ada)).toEqual([]);
+		saveRoomOrder(ada, ['b', 'a']);
+		saveRoomOrder(bob, ['x']);
+		expect([loadRoomOrder(ada), loadRoomOrder(bob)]).toEqual([['b', 'a'], ['x']]);
+		saveRoomOrder(ada, []);
+		expect(JSON.parse(values.get('apron.roomOrder')!)).toEqual({ [bob]: ['x'] });
 	});
 
 	it('makes each account a random push_id once, and keeps it', () => {

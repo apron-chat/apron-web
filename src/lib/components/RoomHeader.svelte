@@ -48,6 +48,9 @@
 		onroom: () => void;
 		onedit: () => void;
 		onleave: () => void;
+		/** Moves the open room a place up or down in the rooms list, where it can go that way (not for a thread). */
+		onmoveup?: () => void;
+		onmovedown?: () => void;
 		/** Copies a link to the open room or thread that any Apron app opens (Appendix A.4); resolves with whether it did. */
 		oncopylink?: () => Promise<boolean>;
 		onjoin?: () => void;
@@ -62,7 +65,7 @@
 	}
 	let {
 		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription
+		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, onmoveup, onmovedown, oncopylink, onjoin, onmute, onmemberlist, ondescription
 	}: Props = $props();
 
 	/** Mutes the pane for the chosen while, from when it's chosen. */
@@ -121,6 +124,8 @@
 	{memberListOpen}
 	onedit={canEdit ? onedit : undefined}
 	onleave={canLeave ? onleave : undefined}
+	onmoveup={thread ? undefined : onmoveup}
+	onmovedown={thread ? undefined : onmovedown}
 	oncopylink={oncopylink ? copyLink : undefined}
 	muteChoices={onmute ? roomMuteChoices : undefined}
 	onmute={onmute ? mute : undefined}

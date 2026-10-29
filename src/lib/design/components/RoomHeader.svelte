@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ArrowDown from '@lucide/svelte/icons/arrow-down';
+	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import Bell from '@lucide/svelte/icons/bell';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
@@ -52,6 +54,9 @@
 		onedit?: () => void;
 		/** Cap `rooms`: Leave room (or thread) in the ⋯ actions menu (`room_leave`, §4.2.2). */
 		onleave?: () => void;
+		/** Move up, Move down in the ⋯ actions menu: the room's place in the rooms list, one step, where it can go that way. */
+		onmoveup?: () => void;
+		onmovedown?: () => void;
 		/** Copy link to room (or thread) in the ⋯ actions menu: a link that any Apron app opens (Appendix A.4). */
 		oncopylink?: () => void;
 		/**
@@ -91,7 +96,7 @@
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
-		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false,
+		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, onmoveup, onmovedown, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false,
 		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, muteTestid, unmuteTestid,
 		unmuteButtonTestid, class: className
 	}: Props = $props();
@@ -115,6 +120,8 @@
 		...(muted !== undefined && onunmute ? [{ value: 'unmute', label: `Unmute ${unmuteNoun}`, hint: muted, testid: unmuteTestid }] : []),
 		...(muted === undefined && muteMenu && onmute ? [{ value: 'mute', label: `Mute ${noun}`, testid: muteTestid, choices: muteMenu }] : []),
 		...(onedit ? [{ value: 'edit', label: `Edit ${noun}`, testid: editTestid }] : []),
+		...(onmoveup ? [{ value: 'up', label: 'Move up in sidebar' }] : []),
+		...(onmovedown ? [{ value: 'down', label: 'Move down in sidebar' }] : []),
 		...(onleave ? [{ value: 'leave', label: `Leave ${noun}`, testid: leaveTestid }] : [])
 	]);
 	const memberLabel = $derived(memberListOpen ? 'Hide member list' : 'Show member list');
@@ -123,6 +130,8 @@
 		if (value === 'link') oncopylink?.();
 		else if (value === 'edit') onedit?.();
 		else if (value === 'leave') onleave?.();
+		else if (value === 'up') onmoveup?.();
+		else if (value === 'down') onmovedown?.();
 		else if (value === 'unmute') onunmute?.();
 		else if (value.startsWith('mute:')) onmute?.(value.slice('mute:'.length));
 	}
@@ -176,7 +185,7 @@
 	{#if actions.length > 0}
 		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} buttonTestid={actionsTestid} choices={actions} disabled={busy} onselect={act} bind:open={actionsOpen}>
 			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
-			{#snippet lead(value)}{#if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else if value === 'mute'}<BellOff size={15} aria-hidden="true" />{:else if value === 'unmute'}<Bell size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
+			{#snippet lead(value)}{#if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else if value === 'mute'}<BellOff size={15} aria-hidden="true" />{:else if value === 'unmute'}<Bell size={15} aria-hidden="true" />{:else if value === 'up'}<ArrowUp size={15} aria-hidden="true" />{:else if value === 'down'}<ArrowDown size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
 		</MenuButton>
 	{/if}
 </header>

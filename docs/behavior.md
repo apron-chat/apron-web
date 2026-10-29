@@ -829,6 +829,20 @@ the **…** before its **+**; the **…**, or the heading again, shows them all.
 **Other Rooms** folds alike, to nothing, as its rooms have no news. Each starts
 open and stays as you left it, on this device.
 
+**Rooms** and **Private** list their rooms in an order kept on this device, per
+account on each server, rather than the order a server happens to send them in,
+which may differ from one visit to the next. A room takes the next place the
+first time it's listed, so a new one goes last and nothing you arranged moves.
+Drag a room by its row (with a mouse or pen; its threads move with it, and a line
+shows where it will land) to another place in its own section; Escape puts it
+back, and a press that doesn't move stays a click. From the keyboard, Alt+↑ or
+Alt+↓ on a room moves it a place, the keyboard staying on it and the move
+announced. In a folded section a room moves past the next one shown, the hidden
+ones keeping their places. A room's ⋯ menu has **Move up in sidebar** and
+**Move down in sidebar**, where it can go that way: on a phone, where a touch
+scrolls rather than drags, that's how to reorder. Threads keep their own order,
+most recently active first.
+
 The sidebar's **Private** section, right below Rooms and above Other Rooms,
 lists every joined top-level private room (`private: true` and no
 `parent_room_id`, [PROTOCOL.md §4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)):
