@@ -149,7 +149,7 @@ describe('Sidebar', () => {
 		session.dispose();
 	});
 
-	it('folds the open room’s threads to those with news when it is picked again, and unfolds them when picked once more, from the … on its row, or on leaving it', () => {
+	it('folds the open room’s threads to those with news when it is picked again, and unfolds them when picked once more or from the … on its row', () => {
 		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
 		const thread = (id: string, title: string): RoomSnapshot => ({ ...general, id, title, parentRoomId: 'general', timeline: createTimeline(id) }) as RoomSnapshot;
 		const random: RoomSnapshot = { ...general, id: 'random', title: 'Random', timeline: createTimeline('random') } as RoomSnapshot;
@@ -157,13 +157,13 @@ describe('Sidebar', () => {
 		session.apply(live({ rooms: [general, random, thread('deploy', 'Deploy'), thread('cert', 'Expired cert')] }), client);
 		const onroom = vi.fn();
 		const threads = [thread('deploy', 'Deploy'), thread('cert', 'Expired cert')].map((room) => ({ id: room.id, parentRoomId: 'general', title: room.title, loaded: true, participants: [], joined: true }));
-		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', threads, mentions: {}, unread: { cert: 2 }, displayName: 'Ada', onroom, onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() } as never);
+		const props = $state({ client, session, backendLabel: 'fake.test', account: 'acct', threads, activeThread: undefined as string | undefined, mentions: {}, unread: { cert: 2 }, displayName: 'Ada', onroom, onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() });
+		dom.render(Sidebar, props as never);
 		flushSync();
 		const listed = () => [...document.querySelectorAll<HTMLElement>('button[data-thread]')].map((button) => button.dataset.thread);
 		const room = (id: string) => document.querySelector<HTMLElement>(`button[data-room="${id}"]`)!;
-		expect(listed()).toEqual(['deploy', 'cert']);
-
 		const expand = () => document.querySelector<HTMLElement>('[data-testid="expand-threads"]');
+		expect(listed()).toEqual(['deploy', 'cert']);
 		expect(expand()).toBeNull();
 
 		room('general').click();
@@ -178,20 +178,60 @@ describe('Sidebar', () => {
 		expect(listed()).toEqual(['deploy', 'cert']);
 		expect(expand()).toBeNull();
 
-		// The … after the folded list unfolds it too.
+		// The … on its row unfolds it too.
 		room('general').click();
 		flushSync();
 		expand()!.click();
 		flushSync();
 		expect(listed()).toEqual(['deploy', 'cert']);
 		expect(onroom).toHaveBeenCalledTimes(3);
+		session.dispose();
+	});
 
-		// Folded, then another room opened and this one again: it opens unfolded.
+	it('keeps a room folded as you come and go, lists the thread you open in it while you read it, and remembers it on this device', () => {
+		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
+		const thread = (id: string, title: string): RoomSnapshot => ({ ...general, id, title, parentRoomId: 'general', timeline: createTimeline(id) }) as RoomSnapshot;
+		const random: RoomSnapshot = { ...general, id: 'random', title: 'Random', timeline: createTimeline('random') } as RoomSnapshot;
+		const session = new SessionView();
+		session.apply(live({ rooms: [general, random, thread('deploy', 'Deploy'), thread('cert', 'Expired cert')] }), client);
+		const threads = [thread('deploy', 'Deploy'), thread('cert', 'Expired cert')].map((room) => ({ id: room.id, parentRoomId: 'general', title: room.title, loaded: true, participants: [], joined: true }));
+		const props = $state({ client, session, backendLabel: 'fake.test', account: 'acct', threads, activeThread: undefined as string | undefined, mentions: {}, unread: { cert: 2 }, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() });
+		const listed = () => [...document.querySelectorAll<HTMLElement>('button[data-thread]')].map((button) => button.dataset.thread);
+		const room = (id: string) => document.querySelector<HTMLElement>(`button[data-room="${id}"]`)!;
+		const expand = () => document.querySelector<HTMLElement>('[data-testid="expand-threads"]');
+		dom.render(Sidebar, props as never);
+		flushSync();
 		room('general').click();
 		flushSync();
+		expect(listed()).toEqual(['cert']);
+
+		// Another room opened, then this one again: still folded.
 		session.apply(live({ rooms: session.rooms, activeRoom: 'random' }), client);
 		flushSync();
 		session.apply(live({ rooms: session.rooms, activeRoom: 'general' }), client);
+		flushSync();
+		expect(listed()).toEqual(['cert']);
+		expect(expand()).not.toBeNull();
+
+		// A quiet thread opened in it shows, picked out, while it's open, and goes when you're back in the room.
+		props.activeThread = 'deploy';
+		flushSync();
+		expect(listed()).toEqual(['deploy', 'cert']);
+		expect(document.querySelector('button[data-thread="deploy"]')!.getAttribute('aria-current')).toBe('page');
+		expect(expand()).not.toBeNull();
+		props.activeThread = undefined;
+		flushSync();
+		expect(listed()).toEqual(['cert']);
+
+		// Kept for the account: a new page starts folded, and unfolding is kept too.
+		dom.unmount();
+		dom.render(Sidebar, props as never);
+		flushSync();
+		expect(listed()).toEqual(['cert']);
+		expand()!.click();
+		flushSync();
+		dom.unmount();
+		dom.render(Sidebar, props as never);
 		flushSync();
 		expect(listed()).toEqual(['deploy', 'cert']);
 		session.dispose();

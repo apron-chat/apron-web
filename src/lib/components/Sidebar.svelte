@@ -10,7 +10,7 @@
 	import { roomFaces } from '$lib/ui/faces';
 	import type { Face } from '$lib/design/components/types';
 	import { listInBackground } from '$lib/ui/background-listing';
-	import { loadSidebarFolds, saveSidebarFolds } from '$lib/ui/storage';
+	import { loadSidebarFolds, loadThreadFolds, saveSidebarFolds, saveThreadFolds } from '$lib/ui/storage';
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
@@ -27,6 +27,8 @@
 		serverLook?: ServerLook;
 		/** The server's address (§1), the head's tooltip. */
 		serverAddress?: string;
+		/** Whose folded rooms are kept on this device (`notifyAccount`); without one they're kept for this page only. */
+		account?: string;
 		/** The active room's threads (rooms whose parent it is) to list under it: joined ones, and the open one. */
 		threads: ThreadEntry[];
 		activeThread?: string;
@@ -76,7 +78,7 @@
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
-	let { client, session, backendLabel, serverLook, serverAddress, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, serverLook, serverAddress, account, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
 	let sections = $derived(sidebarSections(session.rooms));
 	let rooms = $derived(sections.rooms);
@@ -137,18 +139,22 @@
 	});
 
 	/**
-	 * The open room whose threads are folded to those with news, as under a room that isn't open: picking the room
-	 * again while reading it folds them, and once more unfolds them. Going anywhere else unfolds them.
+	 * The rooms whose threads are folded to those with news, as under a room that isn't open: picking the open room
+	 * again while reading it folds them, and once more (or its …) unfolds them. They stay folded as you come and go,
+	 * kept on this device for the account.
 	 */
-	let threadsFoldedFor = $state<string | undefined>();
+	let threadsFolded = $state<string[]>([]);
 	$effect(() => {
-		void session.activeRoomId;
-		void activeThread;
-		threadsFoldedFor = undefined;
+		threadsFolded = account === undefined ? [] : loadThreadFolds(account);
 	});
+	function foldThreads(roomId: string, shut: boolean): void {
+		const others = threadsFolded.filter((id) => id !== roomId);
+		threadsFolded = shut ? [...others, roomId] : others;
+		if (account !== undefined) saveThreadFolds(account, threadsFolded);
+	}
 	function pickRoom(room: RoomSnapshot, current: boolean): void {
 		// One pane at a time on a phone: picking the open room there goes back to it, out of the list.
-		if (current && innerWidth >= NARROW_MAX) threadsFoldedFor = threadsFoldedFor === room.id ? undefined : room.id;
+		if (current && innerWidth >= NARROW_MAX) foldThreads(room.id, !threadsFolded.includes(room.id));
 		onroom(room);
 	}
 
@@ -163,20 +169,22 @@
 {#snippet roomRow(room: RoomSnapshot, faces?: Face[])}
 	{@const active = room.id === session.activeRoomId}
 	{@const current = active && !activeThread}
+	{@const isFolded = threadsFolded.includes(room.id)}
 	<!-- What's new in the room itself (its threads show their own): none while you're reading it. The Private list says it's private: no lock there. -->
 	<RoomItem
 		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} muted={room.mutedUntil !== undefined} active={current}
 		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering && !session.reconnectQuiet}
 		onselect={() => pickRoom(room, current)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
-		onexpand={active && threadsFoldedFor === room.id ? () => (threadsFoldedFor = undefined) : undefined} expandTestid="expand-threads"
+		onexpand={active && isFolded ? () => foldThreads(room.id, false) : undefined} expandTestid="expand-threads"
 	/>
-	{#if active && threadsFoldedFor !== room.id}
+	{#if active && !isFolded}
 		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
-		<!-- Under a room that isn't open (or is folded, when its row has a … that unfolds it), only its joined threads with news, so activity there isn't missed. -->
+		<!-- Under a room that isn't open (or is folded, when its row has a … that unfolds it), only its joined threads with news, so activity there isn't missed; and the one open in it, which stays while you read it. -->
 		{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
-		{#if news.length > 0}
-			<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+		{@const kept = active ? threads.filter((entry) => entry.id === activeThread || news.some((other) => other.id === entry.id)) : news}
+		{#if kept.length > 0}
+			<ThreadList roomId={room.id} roomTitle={room.title} threads={kept} others={[]} activeThread={active ? activeThread : undefined} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 		{/if}
 	{/if}
 {/snippet}

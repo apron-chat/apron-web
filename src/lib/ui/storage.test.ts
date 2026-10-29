@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -128,6 +128,20 @@ describe('preference storage', () => {
 		saveAddedRooms(ada, []);
 		expect(loadAddedRooms(ada)).toEqual([]);
 		expect(JSON.parse(values.get('apron.addedRooms')!)).toEqual({ [bob]: ['p3'] });
+	});
+
+	it('keeps the rooms each account folded, the most recent ones when there are too many', () => {
+		const ada = notifyAccount('wss://a.example/', 'ada');
+		const bob = notifyAccount('wss://b.example/', 'ada');
+		expect(loadThreadFolds(ada)).toEqual([]);
+		saveThreadFolds(ada, ['general']);
+		saveThreadFolds(bob, ['random']);
+		expect([loadThreadFolds(ada), loadThreadFolds(bob)]).toEqual([['general'], ['random']]);
+		saveThreadFolds(ada, Array.from({ length: 250 }, (_, i) => `r${i}`));
+		expect(loadThreadFolds(ada)).toHaveLength(200);
+		expect(loadThreadFolds(ada)[0]).toBe('r50');
+		saveThreadFolds(ada, []);
+		expect(JSON.parse(values.get('apron.threadFolds')!)).toEqual({ [bob]: ['random'] });
 	});
 
 	it('makes each account a random push_id once, and keeps it', () => {
