@@ -40,6 +40,28 @@ describe('Sidebar', () => {
 		session.dispose();
 	});
 
+	it('shows More rooms open from the start, each with its member count and Join, and folds it', () => {
+		const listRooms = vi.fn((_parent?: string) => Promise.resolve());
+		const client = new Proxy({ listRooms, url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
+		const session = new SessionView();
+		const listing = (id: string, title: string, memberCount?: number) => ({ id, title, joined: false, record: { room_id: id }, members: [], memberCount });
+		session.apply(live({ directory: [listing('design', 'Design', 12), listing('quiet', 'Quiet')] as never }), client);
+		const onjoin = vi.fn();
+		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', threads: [], mentions: {}, unread: {}, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin, onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() } as never);
+		flushSync();
+		const toggle = document.querySelector<HTMLButtonElement>('[data-testid="browse-rooms"]')!;
+		expect([toggle.textContent?.trim(), toggle.getAttribute('aria-expanded')]).toEqual(['▾More rooms', 'true']);
+		const directory = document.querySelector('[data-testid="room-directory"]')!;
+		expect([...directory.querySelectorAll('.ap-room-topic')].map((topic) => topic.textContent)).toEqual(['12 members · Join', 'Join']);
+		expect(directory.querySelector('.ap-sect-note')).toBeNull();
+		directory.querySelector<HTMLButtonElement>('[data-join="design"]')!.click();
+		expect(onjoin).toHaveBeenCalledWith('design');
+		toggle.click();
+		flushSync();
+		expect(document.querySelector('[data-testid="room-directory"]')).toBeNull();
+		session.dispose();
+	});
+
 	it('names the server in its head, and reaches the connect screen from the profile, closing it', () => {
 		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'wss://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
 		const session = new SessionView();

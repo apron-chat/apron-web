@@ -83,8 +83,8 @@
 
 	let canBrowse = $derived(session.canManageRooms && session.steady);
 	/** What picking a listed room does: join it, or open it without joining where guests only read. */
-	let action = $derived(session.readOnly ? 'Open' : 'Join');
-	let browseOpen = $state(false);
+	/** Open from the start, so what else there is to join is seen without looking for it. */
+	let browseOpen = $state(true);
 	let listError = $state('');
 	let createOpen = $state(false);
 	let canCreateRoom = $derived(session.canManageRooms && session.steady && !session.readOnly);
@@ -99,11 +99,11 @@
 	let roomsKey = $derived([...rooms, ...privateRooms].filter((room) => room.joined).map((room) => room.id).join('\u0000'));
 	/**
 	 * How long a listing made in the background is reused, a client choice: switching between rooms shouldn't list
-	 * again each time, and any server may rate-limit `room_list`. Joining or leaving lists afresh (the client drops what it changed), and so does opening Browse.
+	 * again each time, and any server may rate-limit `room_list`. Joining or leaving lists afresh (the client drops what it changed), and so does opening More rooms.
 	 */
 	const BACKGROUND_LISTING_MS = 60_000;
 
-	// Browse rooms and Other threads show only when there is something to join, so list both in the background:
+	// More rooms and Other threads show only when there is something to join, so list both in the background:
 	// the rooms whenever the rooms you've joined change, and the active room's threads whenever it or what you've
 	// joined changes. Threads you haven't joined deliver nothing live (§3.4): this listing is also what brings their
 	// cards up to date. One refused for a while lists again once the wait is over.
@@ -183,13 +183,14 @@
 			</SidebarSection>
 		{/if}
 		{#if canBrowse && unjoined.length > 0}
-			<SidebarSection title="Browse rooms" bind:open={browseOpen} ontoggle={(open) => { if (open) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
-				<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
-				<p class="ap-sect-note">Most active rooms</p>
+			<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
+			<SidebarSection title="More rooms" bind:open={browseOpen} ontoggle={(open) => { if (open) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
 				{#each unjoined as listing (listing.id)}
 					<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
 					{@const members = listing.memberCount ?? listing.members.length}
-					<RoomItem room={listing.id} name={listing.title} topic={`${members > 0 ? `${members} ${members === 1 ? 'member' : 'members'} · ` : ''}${action}`} listed onselect={() => onjoin(listing.id)} />
+					{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
+					<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word. -->
+					<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed onselect={() => onjoin(listing.id)} />
 				{/each}
 				{#if listError}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
 			</SidebarSection>

@@ -11,7 +11,7 @@
   var rooms = function (list) { return A.parts.apply(null, list.map(function (p) { return p.thread ? A.part(A.ThreadItem, p) : A.part(A.RoomItem, p); })); };
   add(A.SidebarSection, { title: 'Rooms', collapsible: false, onadd: noop, addLabel: 'Create room',
     children: rooms([{ room: 'general', name: 'General', active: true, onnewthread: noop }, { room: 'ops', name: 'Ops', unread: 12 }, { thread: 'deploy', name: 'Deploy', unread: 2 }, { room: 'design', name: 'Design' }]) });
-  add(A.SidebarSection, { title: 'Browse rooms', children: A.parts(A.html('<p class="ap-sect-note">Most active rooms</p>'), rooms([{ room: 'random', name: 'Random', topic: '12 members · Join' }])) });
+  add(A.SidebarSection, { title: 'More rooms', children: rooms([{ room: 'random', name: 'Random', topic: '12 members · Join' }]) });
   add(A.SidebarSection, { title: 'Archive', open: false, children: rooms([{ room: 'old', name: 'Old' }]) });
   add(A.SidebarSection, { title: 'Muted', loading: true });
 </script>

@@ -95,7 +95,7 @@ until the connection is back. Screen readers hear it as the pill shows it: not
 for those first moments, nor while a hidden tab waits (the status says nothing
 then, rather than "Connected"). A link opened meanwhile waits for the new
 connection's listings before deciding a room or thread isn't there. What was listed before
-the drop stays listed: Browse rooms, Other threads, and the room's thread cards,
+the drop stays listed: More rooms, Other threads, and the room's thread cards,
 until the new connection's listings replace them, so the open room shows what
 came meanwhile without waiting on its thread listing again, and an open
 thread's reply count stays while it catches up.
@@ -752,7 +752,7 @@ same bubble for its own unread messages (its threads count their own), with
 its name in bold, and none while you're reading it. The open room or thread has a neutral fill and an
 accent bar at its left (on the guide line, for a thread), so it never looks
 unread. A door on hover leaves the thread. Then **Other threads · N**, a heading
-that folds like Browse rooms (it stays as you left it, on this device): the
+that folds (it stays as you left it, on this device): the
 threads you haven't joined, beside the guide line carried on dashed, their
 titles muted, each with its Description line (from its listed `description`) and,
 at the end of the row, when it was last active (`2h`, `Tue`, from its listed
@@ -806,7 +806,7 @@ comes back without `private: true` gets the same error, and neither the reply
 composer opens on it nor do selected messages move into it. Private rooms and
 threads show a lock beside their name.
 
-The sidebar's **Private** section, right below Rooms and above Browse rooms,
+The sidebar's **Private** section, right below Rooms and above More rooms,
 lists every joined top-level private room (`private: true` and no
 `parent_room_id`, [PROTOCOL.md §4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)):
 conversations started with people and titled private rooms alike. Nothing is
@@ -938,9 +938,11 @@ asking, since Join brings it back from the same list. A thread is a room of its
 own, so leaving its parent keeps it. A
 server that keeps you in a room answers `denied`, and its message shows as
 the error.
-**Browse rooms** in the sidebar lists, via `room_list` with
-`filter: "not_joined"`, the most active visible rooms you haven't joined;
-picking one joins it and opens it once its `room_update` arrives.
+**More rooms** in the sidebar lists, via `room_list` with
+`filter: "not_joined"`, the most active visible rooms you haven't joined, each
+with its member count and **Join**. It starts open, so a newcomer sees what
+else there is without looking for it, and folds; opening it again lists afresh.
+Picking one joins it and opens it once its `room_update` arrives.
 
 With the `edit` capability, several messages move at a time: shift-click a
 message (or press `x` on it, or pick **Select** from its More menu) to enter select mode, shift-click another to fill the range, and the
@@ -1339,8 +1341,8 @@ as a guest there, the composer gives way to a bar saying so with a **Sign in**
 button (it opens the sign-in panel on Passkey); signed in to an account, the
 bar only says so. Replying, reacting, editing, moving and deleting messages,
 starting threads, editing rooms and threads, adding or removing members, and
-Join and Leave are hidden; Browse rooms offers **Open** instead of
-**Join**, which reads the room through its history without joining it, and Other threads
+Join and Leave are hidden; a room picked under More rooms (which says no
+Join) opens to read through its history without joining it, and Other threads
 offers no Join, since picking one already reads it. Other
 servers' denials show as errors as usual.
 
