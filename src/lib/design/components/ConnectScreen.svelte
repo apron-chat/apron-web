@@ -4,6 +4,7 @@
 	import ConnectHeader from './ConnectHeader.svelte';
 	import ConnectPage from './ConnectPage.svelte';
 	import SignInForm from './SignInForm.svelte';
+	import type { ConnectServer, RecentBackend } from './types';
 
 	const HINTS: Record<string, string> = {
 		guest: 'No token needed; the server picks a guest identity.',
@@ -53,8 +54,11 @@
 		oncancel?: () => void;
 		/** Something is under way: the Server field and the recent backends wait. Defaults to whether `status` is connecting or authing. */
 		busy?: boolean;
-		recent?: Array<{ url: string; label?: string }>;
-		onpickrecent?: (r: { url: string; label?: string }) => void;
+		recent?: RecentBackend[];
+		onpickrecent?: (r: RecentBackend) => void;
+		/** The server in the field, once it has answered (§3.1), and its rendered `description`. */
+		server?: ConnectServer;
+		description?: Snippet;
 		/** Fills the viewport, as the app's whole page. */
 		page?: boolean;
 		/** Classes for the page, added to its own. */
@@ -63,7 +67,7 @@
 	let {
 		status = 'idle', url = $bindable(''), name = $bindable(''), schemes = ['guest', 'token', 'webauthn'], scheme = $bindable(), token = $bindable(''),
 		welcome, email = $bindable(''), code = $bindable(''), codeSent = false, onrestart, onconnect, passkey = {}, passkeyMode = $bindable('login'), onpasskey, notice, error, oncancel,
-		busy: waiting, recent, onpickrecent, page = false, class: className
+		busy: waiting, recent, onpickrecent, server, description, page = false, class: className
 	}: Props = $props();
 	const busy = $derived(waiting ?? (status === 'connecting' || status === 'authing'));
 	const current = $derived(scheme || schemes[0]);
@@ -93,6 +97,6 @@
 		{hint} hintStatus={Boolean(notice)} {error} {busy} secondary={oncancel && { label: 'Cancel', onclick: oncancel }} onsubmit={submit}
 		submit={status === 'connecting' ? 'Connecting…' : status === 'authing' ? 'Signing in…' : current === 'email' ? (codeSent ? 'Sign in' : 'Email me a code') : current === 'webauthn' ? (passkeyAction === 'login' ? 'Sign in with passkey' : 'Create account with passkey') : 'Connect'}
 	>
-		{#snippet header()}<ConnectHeader bind:url {welcome} {busy} />{/snippet}
+		{#snippet header()}<ConnectHeader bind:url {welcome} {busy} {server} {description} />{/snippet}
 	</SignInForm>
 </ConnectPage>

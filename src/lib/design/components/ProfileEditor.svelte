@@ -50,6 +50,8 @@
 		 * buttons for the schemes the server offers with a line saying how it stands.
 		 */
 		signin?: Snippet;
+		/** A Server group at the foot: Connect to a server…, the way to the connect screen, for another server or another way to sign in. */
+		onconnect?: () => void;
 		/** The form is the dialog (the default); off inside a <ProfileBar>, whose popover is. */
 		dialog?: boolean;
 		/** `data-testid` on the Change avatar button, its Remove, the file picker and the Handle field. */
@@ -64,7 +66,7 @@
 	}
 	let {
 		userId, name = $bindable(''), oninput, avatar, face, canUpload, onavatarfile, onremoveavatar, avatarBusy, avatarError, offline,
-		bio = $bindable(''), maxBio, bioError, status = 'idle', serverName, declinedNote, onsave, oncancel, signin, dialog = true,
+		bio = $bindable(''), maxBio, bioError, status = 'idle', serverName, declinedNote, onsave, oncancel, signin, onconnect, dialog = true,
 		changeAvatarTestid, removeAvatarTestid, avatarFileTestid, nameTestid, bioTestid, class: className
 	}: Props = $props();
 	const saving = $derived(status === 'saving');
@@ -123,6 +125,14 @@
 		<div class="ap-profedit-signin" role="group" aria-label="Sign-in">
 			<span class="ap-fieldlabel">Sign-in</span>
 			{@render signin()}
+		</div>
+	{/if}
+	{#if onconnect}
+		<div class="ap-profedit-server" role="group" aria-label="Server">
+			<span class="ap-fieldlabel">Server</span>
+			<span class="ap-profedit-buttons">
+				<button class="ap-btn ap-btn-sm" type="button" onclick={onconnect}>Connect to a server…</button>
+			</span>
 		</div>
 	{/if}
 	<div class="ap-profedit-actions">

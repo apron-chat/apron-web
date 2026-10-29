@@ -1,5 +1,6 @@
 import { TEXT_ID, textId } from '$lib/protocol/markdown';
 import { isCommand } from '$lib/design/components/compose';
+import type { MediaTypes, ServerMedia } from '$lib/protocol/client';
 
 /**
  * What the composer does with its text (PROTOCOL.md §4.1). With capability `command`,
@@ -57,4 +58,14 @@ export function composerAction(text: string, caps: { command: boolean; rooms: bo
 		}
 	}
 	return { kind: 'command', text };
+}
+
+/**
+ * The server's limits for files sent with `action` (`ext:media`, EXT.md §6):
+ * `emoji` for a `/emoji add` command (`ext:emoji`) where the server states
+ * them, else `upload`.
+ */
+export function attachmentLimits(action: ComposerAction, media: Pick<ServerMedia, 'upload' | 'emoji'>): MediaTypes | undefined {
+	if (action.kind === 'command' && media.emoji && /^\/emoji\s+add(\s|$)/i.test(action.text)) return media.emoji;
+	return media.upload;
 }

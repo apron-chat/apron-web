@@ -186,6 +186,18 @@ describe('reactions', () => {
 		expect(store.reactions('1')).toBeUndefined();
 	});
 
+	it('counts entries that differ only in U+FE0F as one, shown fully qualified (§4.7)', () => {
+		const store = new ProtocolStore();
+		install(store, snapshot(1));
+		react(store, 2, '1', 'bob', ['\u2764']);
+		react(store, 3, '1', 'carol', ['\u2764\uFE0F', ':partyparrot:']);
+		react(store, 4, '1', 'dave', ['\u2764', '\u2764\uFE0F']);
+		expect(store.reactions('1', 'bob')?.map(({ emoji, user_ids, mine }) => [emoji, user_ids, mine])).toEqual([
+			[':partyparrot:', ['carol'], false],
+			['\u2764\uFE0F', ['bob', 'carol', 'dave'], true]
+		]);
+	});
+
 	it('hides reactions on tombstones and sorts emoji by code point', () => {
 		const store = new ProtocolStore();
 		install(store, snapshot(1));

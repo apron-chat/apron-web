@@ -162,7 +162,7 @@ export class SessionView {
 	readonly canEdit = $derived(canEdit(this.server));
 	/** Create and update rooms and threads (capability `rooms`). */
 	readonly canManageRooms = $derived(canManageRooms(this.server));
-	/** A guest on a server whose guests only read: no composer, reactions, or new threads until sign-in. */
+	/** You only read (`ext:permissions` with `write: false`): no composer, reactions, joins, or new threads. */
 	readonly readOnly = $derived(Boolean(this.snapshot.readOnly) || (this.reconnectingQuietly && Boolean(this.lastReady?.readOnly)));
 	/** Reaction chips and the React action (capability `reactions`). */
 	readonly canReact = $derived(canReact(this.server));

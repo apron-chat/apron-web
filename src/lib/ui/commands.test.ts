@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composerAction, isCommand } from './commands';
+import { attachmentLimits, composerAction, isCommand } from './commands';
 
 const both = { command: true, rooms: true };
 
@@ -42,5 +42,27 @@ describe('composer commands', () => {
 		// Email and federated forms are one ID.
 		expect(composerAction('/kick @ada@example.com', both)).toEqual({ kind: 'kick', user: 'ada@example.com' });
 		expect(composerAction('/invite carol:b.example.', both)).toEqual({ kind: 'invite', user: 'carol:b.example' });
+	});
+});
+
+describe('attachmentLimits (ext:media)', () => {
+	const upload = { 'image/*': { max_bytes: 5_242_880, max_side: 2048 } };
+	const emoji = { 'image/png': { max_bytes: 262_144 }, 'image/gif': { max_bytes: 262_144 } };
+
+	it('fits the files of `/emoji add` to the emoji category, and every other send to upload', () => {
+		expect(attachmentLimits(composerAction('/emoji add :party:', both), { upload, emoji })).toBe(emoji);
+		expect(attachmentLimits(composerAction('/EMOJI  Add\n:party:', both), { upload, emoji })).toBe(emoji);
+		expect(attachmentLimits(composerAction('/emoji remove :party:', both), { upload, emoji })).toBe(upload);
+		expect(attachmentLimits(composerAction('/emoji addendum', both), { upload, emoji })).toBe(upload);
+		expect(attachmentLimits(composerAction('/avatar', both), { upload, emoji })).toBe(upload);
+		expect(attachmentLimits(composerAction('//emoji add :party:', both), { upload, emoji })).toBe(upload);
+		expect(attachmentLimits(composerAction('look: /emoji add', both), { upload, emoji })).toBe(upload);
+		// Without cap command it is a message.
+		expect(attachmentLimits(composerAction('/emoji add :party:', { command: false, rooms: true }), { upload, emoji })).toBe(upload);
+	});
+
+	it('keeps to upload, or to no limits, without an emoji category', () => {
+		expect(attachmentLimits(composerAction('/emoji add :party:', both), { upload })).toBe(upload);
+		expect(attachmentLimits(composerAction('/emoji add :party:', both), {})).toBeUndefined();
 	});
 });

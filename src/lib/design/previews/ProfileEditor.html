@@ -1,4 +1,4 @@
-<!-- @dsCard group="Identity" height=900 subtitle="Handle, avatar and bio, and a bio over its limit; the Sign-in group, which the client fills (adding a passkey, at each step); an upload in flight and one that failed; a declined handle, and one worded with the server's reason" -->
+<!-- @dsCard group="Identity" height=900 subtitle="Handle, avatar and bio, and a bio over its limit; the Sign-in group, which the client fills (adding a passkey, at each step), and the Server group's Connect to a server…; an upload in flight and one that failed; a declined handle, and one worded with the server's reason" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ProfileEditor</title></head>
@@ -13,7 +13,8 @@
   }
   var waiting = A.html('<span class="ap-form-hint" role="status"><span class="ap-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span> Confirm on your device…</span>');
   var saved = A.html('<span class="ap-form-hint ap-tone-ok" role="status">Passkey saved · this backend will ask your device next time</span>');
-  add(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, maxBio: 250, bio: 'Design systems, mostly. Ask me about color tokens.', signin: passkey('Signed in with a token') });
+  var noop = function () {};
+  add(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, maxBio: 250, bio: 'Design systems, mostly. Ask me about color tokens.', signin: passkey('Signed in with a token'), onconnect: noop });
   add(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', maxBio: 250, bio: 'Design systems, mostly. '.repeat(11) });
   add(A.ProfileEditor, { userId: 'alice', name: 'alice', canUpload: true, status: 'altered', serverName: 'alice_2' });
   add(A.ProfileEditor, { userId: 'guest_7', name: 'Admin', status: 'declined' });

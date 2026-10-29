@@ -223,15 +223,19 @@ never count as unread or mention you, and a message after one starts a new
 sender group.
 
 On wide screens the rooms list is a column beside the conversation: drag its
-right border to resize it, and click the border, or the panel button in the
-window's top-left corner, to collapse or expand it. The button stays in that
-corner, over the list's header while it is open and over the room's once it
-is shut, so the same spot opens and shuts it, with or without a room open. Its width and whether
+inner border (its right one, or its left under a right-to-left layout, where
+both lists mirror) to resize it, or move it with the arrow keys, the one
+pointing toward the conversation widening it; and click the border, or the panel button at its
+inner edge, to collapse or expand it. The button sits at the end of the list's
+header, after the server, while it is open, and rides the border as the list
+slides or is dragged; once it is shut, at the start of the room's header, beside
+the window edge the list went to, with or without a room open. Its width and whether
 it is collapsed are remembered. On
 phones it is a pane of its own instead, which the title bar's back button
 returns to.
 
-The member list's panel button, in the window's top-right corner, toggles a right-hand
+The member list's panel button, at its inner edge (the start of its header,
+before Members, or the end of the room's once it is shut), toggles a right-hand
 sidebar, **Members**, listing the open room's or thread's members from its `room_list`
 snapshot, with their role badges, in sections as Discord lists them, each
 headed with its count: **Online**, then **Offline** (offline, or your own
@@ -256,14 +260,15 @@ a confirm): how members bring people into a private room. Who may is the server'
 policy; its error shows in the panel. A server that answers `unsupported`
 gets no controls until its next `server` frame. A count kept from a truncated listing stays while later records
 of the room carry no `members`. On wide screens it is a column that resizes like the rooms list:
-drag its left border, or click the border to collapse it (the corner button
+drag its inner border (its left one, or its right under right-to-left), or click the border to collapse it (the panel button
 brings it back, and takes focus when the border collapsed it from the keyboard), and its width and whether it is collapsed are remembered.
 Dragging either list shut restores its earlier width when it reopens.
 
 Both lists open and shut the same way, in 240ms: the column slides, its
 contents keep their width against the edge facing the conversation (so they
 ride the moving border rather than squeeze), and fade; below 960px the member
-list's overlay slides in from the right edge instead. Each frame moves the
+list's overlay slides in from the window's end instead (the right edge, or the
+left under right-to-left, below its button). Each frame moves the
 grid's columns only, nothing else's style; the timeline takes its final width
 when the slide starts and keeps it until the slide ends, so its messages are
 laid out once rather than re-wrapped on every frame (it stays at the latest
@@ -390,7 +395,15 @@ goes in `body.mentions` ([PROTOCOL.md §3.5](https://github.com/shazow/apron/blo
 and an edit resubmits the message's mentions. A `markdown` body renders as CommonMark
 ([PROTOCOL.md §3.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#35-messages)) with three extensions beyond it: GitHub tables,
 strikethrough, and a typed line break kept as a break; raw HTML shows as
-text. A rendered body (plain or CommonMark, never inside
+text. What users write shows without the bidi embeddings and overrides U+202A
+to U+202E, and isolated in its own direction ([PROTOCOL.md §3.5.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#352-rendering)):
+message text, names, roles, bios, room and thread titles and descriptions,
+embed titles and previews, notifications, and the server's title and
+description. Only what shows drops them: the client keeps and sends what was
+written, so an edited message or room goes back with every character its
+author typed, and IDs, tokens and URLs are never changed. Times and days, as
+the browser's locale writes them, keep their own direction too, so under a
+right-to-left layout an English time still reads "3:42 PM". A rendered body (plain or CommonMark, never inside
 code) shows a known user's `@user_id` as a chip with their current name, a known room's
 `#room_id` as a link showing its title that opens the room (or joins it), and unknown
 IDs as written ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)): `@` names only users. The ID after
@@ -723,7 +736,11 @@ private ones under **Private**, below)
 and, under the open room, its threads in two groups. Under a room that isn't
 open, it lists only that room's joined threads with news (unread replies or
 mentions), in the same rows, so activity there isn't missed; picking one opens
-its room with the thread open, and quiet threads wait until the room is opened. First the ones you've joined,
+its room with the thread open, and quiet threads wait until the room is opened.
+Picking the open room again while reading it folds its threads the same way, to
+those with news (not on a phone, where it returns to the room), followed by a
+small **…** button that says the list is cut short; the **…**, or picking the room
+once more, unfolds them, as does opening anything else. First the ones you've joined,
 on a guide line from the room, most recently active first (by their newest
 message, else the newest `log_id` the server reported, else their creation).
 While the pointer or keyboard focus is on the list its rows hold still, a
@@ -843,7 +860,7 @@ they join the chips instead, for a group. With two or more picked, an optional
 one person, else "Start conversation". It creates the room as Message does,
 then adds each person in turn; an add that fails doesn't stop the rest, the
 room is kept and opens, and a toast says who couldn't be added and why. Where
-the server states a limit (`ext.settings.private_rooms`, [EXT.md §3.4](../EXT.md#34-private_rooms)),
+the server states a limit (`ext.settings.private_rooms`, [EXT.md §3.1](../EXT.md#31-apron-web)),
 the dialog's foot says how many private rooms you're in of it ("2 of 5"), and
 at the limit a warning takes the people's place, with your private rooms, the
 quietest first (five, and "and N more"), each with **Leave**, and the primary
@@ -869,10 +886,12 @@ shows "You were added to this private room." under its header, with
 has the `status` capability and you're signed in to an account; **Unmute**
 once muted), **Leave** and the ×. Which rooms still show it is kept on this
 device, per account, until it's put away or you leave. In a private room the
-member list's **+** and a profile card's **Add to room** are offered as in any
-room, and moving messages into one of its threads adds their authors, whatever
-`ext.settings.add_members` says, since members of a private room add people
-to it. Leaving a private room asks first and says it can't be
+member list's **+** and a profile card's **Add to room** are offered even
+without `add_members` ([EXT.md §7](../EXT.md#7-extpermissions)), and moving
+messages into one of its threads adds their authors, since members of a
+private room add people to it. Elsewhere they are offered where the
+server grants you `add_members`, or on a server without `ext:permissions`,
+which decides each add itself (a refusal shows its reason). Leaving a private room asks first and says it can't be
 joined again (only someone in it can add you back), or, as its last member,
 that it ends when you leave: the server removes it then.
 
@@ -951,9 +970,8 @@ dialog closes and the error says so, as for any move. Messages refused after the
 stay selected and the bar says how many didn't move. A thread delivers to its
 members only, so once messages move into one (new or existing, but not back to
 the room), each of their authors who isn't in it yet is added to it (`room_join`
-with their `user_id`, §4.2.2), where you may add people: while
-`server.ext.settings.add_members` isn't `false`, or where the server grants
-`add_members`. The server
+with their `user_id`, §4.2.2), where you may add people: in a private room's
+thread, or where the server grants you `add_members` (or lacks `ext:permissions`). The server
 decides each (it adds no guests); the moves stand either way, and the toast says
 how many authors weren't added and why. Escape leaves select mode.
 
@@ -988,11 +1006,23 @@ popover beside the chip (a bottom sheet on narrow screens) that follows
 reactions as they change, and closes with Escape, a press outside, tabbing out,
 or once nobody is left on it. The list opens even where you can't react. A long
 press on a chip doesn't toggle it or enter select mode. Tombstones show no reactions.
+Entries that differ only in U+FE0F, such as ❤ and ❤️, are one chip, shown in
+the fully-qualified form; the picker sends that form, and a toggle takes away
+whichever form your set has ([PROTOCOL.md §4.7](https://github.com/shazow/apron/blob/main/PROTOCOL.md#47-reactions)).
+An entry that isn't an emoji sequence is a key, such as `:partyparrot:`: a
+chip shows its custom emoji's image where the server's catalog has it
+([EXT.md §9](../EXT.md#9-extemoji)), with its `alt` in the tooltip, and
+otherwise a dashed placeholder with the key in the tooltip. Clicking either
+toggles your reaction with that key.
 
 Typing `:shortcode` in the composer opens an emoji autocomplete; arrows move,
 Tab or Enter inserts the highlighted native emoji in place of the shortcode,
 and Escape dismisses it. Suggestions search emoji shortcodes, names, aliases and
-keywords. The composer's emoji button (always there: emoji are text) opens the
+keywords, and with `ext:emoji` the server's custom emoji first, by key, `alt`
+and tags, which insert their key. A key in a message, a description, a
+welcome or the server's description shows as its image, at the height of the
+line, once the catalog has arrived (it is fetched the first time a key shows
+or a picker opens); keys in code stay text. The composer's emoji button (always there: emoji are text) opens the
 same full picker and inserts the emoji at the caret, over any selection,
 leaving mention chips and command mode as they were. The picker is
 [emoji-mart](https://github.com/missive/emoji-mart), drawn by `EmojiPopover`
@@ -1002,7 +1032,9 @@ or a press outside closes it. The emoji data loads with a dynamic `import()`
 when shortcode autocomplete is first used; emoji-mart itself loads dynamically
 the first time the full picker opens. Both stay out of the main bundle, and the
 picker gets its data, English strings and native glyphs passed in, so it never
-fetches from a CDN.
+fetches from a CDN. With `ext:emoji` it lists the server's custom emoji too,
+without hidden ones, each under its category after the standard emoji; a
+pick reacts with or inserts its key.
 
 Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](https://github.com/shazow/apron/blob/main/PROTOCOL.md#48-embeds-and-avatars)):
 
@@ -1159,18 +1191,31 @@ Media in `og` loads only from the chat server's own origin and the origins it
 names with `ext:media`, and stream URLs only from its own origin; links may
 point anywhere `http(s)`.
 
-**Connect** in the
-sidebar header opens the connect screen: a WebSocket URL or an HTTP(S) server
+**Connect to a server…** in the profile editor (the profile bar at the foot of
+the sidebar, for guests and accounts alike) opens the connect screen: a WebSocket URL or an HTTP(S) server
 base URL, a display name, and a sign-in choice among the schemes the server
 advertises (Guest by default; Passkey, below; Email, External and Token, further down). Once the server in the field
-has answered, its `server.welcome`
-([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication))
-shows at the top of the form, rendered as CommonMark and sanitized like a message.
+has answered, the top of the form shows it as it shows itself
+([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame)):
+its `avatar` (or its initials) and its `title` (or its host), always above
+its address, which a server can't copy as it can a title and an avatar, then
+its `description`, and its `server.welcome`
+([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)),
+both rendered as CommonMark and sanitized like a message.
 A server without the `guest` scheme opens this screen by itself once, since
 nothing works before signing in, and so does a session held for a sign-in
 (below) with nothing on screen yet. The server and name
 are stored in local storage, and the last few backends are listed under the
-form. The profile bar at the foot of the sidebar edits your handle, which is
+form, each once by its address normalized by RFC 3986 (lowercase scheme and
+host, no default port, `/` for an empty path, percent-encoding normalized,
+no fragment, which a WebSocket URL can't carry; `ws:` and `wss:` are two servers), with the title and avatar its last
+`server` frame sent, and always its address. A server is never found by its
+title or avatar, and a session token kept under an address written another
+way moves to its normalized one. The sidebar's head shows the connected
+server, and is not a control: its avatar (or its initials), its title over its
+host (with a port that isn't the default), or its host alone without a title,
+both cut short with an ellipsis, the host always left to right; its address is
+the tooltip. The profile bar at the foot of the sidebar edits your handle, which is
 sent with the protocol `me` request after authentication; the editor shows
 what the server actually kept. The kept name is the one asked for from then
 on, and the one remembered for the next visit, so a server that normalizes
@@ -1292,22 +1337,24 @@ verification failure alike (§4.10 `denied`), so this is where the reason
 shows. The connection's own sign-in, as a guest or by a saved session,
 warns too when refused, without the token.
 
-A server may keep guests read-only, and says so with `guest_posting: false`
-in its settings (below). Signed in as a guest there, the composer gives
-way to a bar saying so with a **Sign in** button (it opens the sign-in panel
-on Passkey). Replying, reacting, starting threads, editing rooms and threads,
-adding or removing members, and Join and Leave are hidden; Browse rooms offers **Open** instead of
+A server may let someone only read, such as its guests, and says so in their
+`you` with `write: false` ([EXT.md §7](../EXT.md#7-extpermissions)). Signed in
+as a guest there, the composer gives way to a bar saying so with a **Sign in**
+button (it opens the sign-in panel on Passkey); signed in to an account, the
+bar only says so. Replying, reacting, editing, moving and deleting messages,
+starting threads, editing rooms and threads, adding or removing members, and
+Join and Leave are hidden; Browse rooms offers **Open** instead of
 **Join**, which reads the room through its history without joining it, and Other threads
 offers no Join, since picking one already reads it. Other
 servers' denials show as errors as usual.
 
-The client understands `ext:settings`, an extension that the Cloudflare demo
-server defines: a server that advertises it in `capabilities` describes how it runs in its `server`
-frame's `ext.settings`, `{guest_posting?, read_cursors?}`. Both are booleans,
-and a setting left out is `true`; without the capability the client reads
-none of them. `guest_posting: false` keeps guests read-only, as above, and
-the connect screen's Guest hint says so. `read_cursors: false` says the server
-keeps no read cursors, so the client doesn't send `read_message_id`. Other
+The client understands `ext:settings` ([EXT.md §3](../EXT.md#3-extsettings)):
+a server that advertises it in `capabilities` describes how it runs in its
+`server` frame's `ext.settings`, `{read_cursors?, private_rooms?}`; without
+the capability the client reads none of them. `read_cursors: false` says the
+server keeps no read cursors, so the client doesn't send `read_message_id`.
+A guest who only reads (`write: false`, above) sees it in the connect screen's
+Guest hint too. Other
 extension data (`ext`, [PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext))
 on users, messages and rooms is kept as the server sends it, and the client
 writes `ext` (with `me`, a message, or `room_set`) only to a server with the

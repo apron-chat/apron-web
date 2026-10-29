@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { newRoomDialog } from './lazy';
 	import { untrack } from 'svelte';
-	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
+	import type { ChatClient, RoomSnapshot, ServerLook } from '$lib/protocol/client';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import type { WebPushPreference } from '$lib/ui/web-push';
@@ -10,6 +10,7 @@
 	import { roomFaces } from '$lib/ui/faces';
 	import type { Face } from '$lib/design/components/types';
 	import { listInBackground } from '$lib/ui/background-listing';
+	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
@@ -21,6 +22,10 @@
 		client: ChatClient;
 		session: SessionView;
 		backendLabel: string;
+		/** How the server shows itself (§3.1): its title in place of `backendLabel`, and its avatar. */
+		serverLook?: ServerLook;
+		/** The server's address (§1), the head's tooltip. */
+		serverAddress?: string;
 		/** The active room's threads (rooms whose parent it is) to list under it: joined ones, and the open one. */
 		threads: ThreadEntry[];
 		activeThread?: string;
@@ -47,6 +52,7 @@
 		pause?: { until?: PausedUntil };
 		onpause: (until: PausedUntil) => Promise<void> | void;
 		onresume: () => Promise<void> | void;
+		/** The connect screen, from the profile editor's Connect to a server… button. */
 		onconnect: () => void;
 		/** The room or thread the phone's rooms list opened over, and the › back to it. */
 		returnTo?: string;
@@ -69,7 +75,7 @@
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
-	let { client, session, backendLabel, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, serverLook, serverAddress, threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
 	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
 	let sections = $derived(sidebarSections(session.rooms));
 	let rooms = $derived(sections.rooms);
@@ -115,6 +121,22 @@
 		return untrack(() => listInBackground(() => client.listRooms(roomId, BACKGROUND_LISTING_MS)));
 	});
 
+	/**
+	 * The open room whose threads are folded to those with news, as under a room that isn't open: picking the room
+	 * again while reading it folds them, and once more unfolds them. Going anywhere else unfolds them.
+	 */
+	let folded = $state<string | undefined>();
+	$effect(() => {
+		void session.activeRoomId;
+		void activeThread;
+		folded = undefined;
+	});
+	function pickRoom(room: RoomSnapshot, current: boolean): void {
+		// One pane at a time on a phone: picking the open room there goes back to it, out of the list.
+		if (current && innerWidth >= NARROW_MAX) folded = folded === room.id ? undefined : room.id;
+		onroom(room);
+	}
+
 	function list(parentRoomId?: string): void {
 		listError = '';
 		client.listRooms(parentRoomId).catch((cause: unknown) => (listError = cause instanceof Error ? cause.message : 'Unable to list rooms'));
@@ -122,7 +144,7 @@
 
 </script>
 
-<!-- A room's row, with its threads under it while it's open (and those with news while it isn't); a private room's with its faces. -->
+<!-- A room's row, with its threads under it while it's open (and only those with news while it isn't, or is folded); a private room's with its faces. -->
 {#snippet roomRow(room: RoomSnapshot, faces?: Face[])}
 	{@const active = room.id === session.activeRoomId}
 	{@const current = active && !activeThread}
@@ -130,21 +152,21 @@
 	<RoomItem
 		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} muted={room.mutedUntil !== undefined} active={current}
 		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering && !session.reconnectQuiet}
-		onselect={() => onroom(room)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
+		onselect={() => pickRoom(room, current)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
 	/>
-	{#if active}
+	{#if active && folded !== room.id}
 		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
-		<!-- Under a room that isn't open, only its joined threads with news, so activity there isn't missed. -->
+		<!-- Under a room that isn't open (or is folded), only its joined threads with news, so activity there isn't missed. Folded, a … after them unfolds it. -->
 		{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
-		{#if news.length > 0}
-			<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+		{#if news.length > 0 || active}
+			<ThreadList roomId={room.id} roomTitle={room.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} onexpand={active ? () => (folded = undefined) : undefined} />
 		{/if}
 	{/if}
 {/snippet}
 
 <aside class="ap-shell-side" aria-label="Rooms">
-	<SidebarHead name={backendLabel} {onconnect} {returnTo} {onreturn} />
+	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={serverLook?.avatar} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
 		<SidebarSection title="Rooms" collapsible={false} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
 			{#if rooms.length === 0}
@@ -172,7 +194,7 @@
 			</SidebarSection>
 		{/if}
 	</div>
-	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} />
+	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} {onconnect} />
 </aside>
 
 {#if createOpen && newRoomDialog.component}{@const NewRoomDialog = newRoomDialog.component}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}

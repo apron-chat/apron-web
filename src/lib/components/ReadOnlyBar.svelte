@@ -2,23 +2,29 @@
 	import Button from '$lib/design/components/Button.svelte';
 
 	/**
-	 * Stands in for the composer while a guest only reads (`ext:settings`
-	 * with `guest_posting: false`): says why, and offers the passkey
-	 * sign-in that lifts it. Rooms can still be listed and read, without joining.
+	 * Stands in for the composer while you only read (`ext:permissions` with
+	 * `write: false`): says why, and offers a guest the passkey sign-in that
+	 * may lift it. Rooms can still be listed and read, without joining.
 	 */
 	interface Props {
+		/** You read as a guest: signing in may let you post. */
+		guest: boolean;
 		/** Why passkeys can't be used in this browser, when they can't. */
 		passkeyUnavailable?: string;
 		onsignin: () => void;
 	}
-	let { passkeyUnavailable, onsignin }: Props = $props();
+	let { guest, passkeyUnavailable, onsignin }: Props = $props();
 </script>
 
 <div class="ap-composer ap-composer-readonly" role="note">
 	<p class="ap-composer-readonly-text">
-		You’re reading as a guest. {passkeyUnavailable ? `Posting needs a passkey sign-in. ${passkeyUnavailable}` : 'Sign in to post, react, join rooms, and start threads.'}
+		{#if guest}
+			You’re reading as a guest. {passkeyUnavailable ? `Posting needs a passkey sign-in. ${passkeyUnavailable}` : 'Sign in to post, react, join rooms, and start threads.'}
+		{:else}
+			You can read here, but this server doesn’t let you post, react, or join rooms.
+		{/if}
 	</p>
-	{#if !passkeyUnavailable}
+	{#if guest && !passkeyUnavailable}
 		<Button variant="primary" size="sm" onclick={onsignin} label="Sign in" />
 	{/if}
 </div>

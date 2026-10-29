@@ -157,3 +157,245 @@ test.describe('the member list under 960px', () => {
 		});
 	});
 });
+
+/**
+ * Each panel's toggle sits at its inner edge, the edge facing the conversation: the rooms list's after the server in
+ * its header, the member list's before Members; shut, each at the room header's end nearest the edge its panel went to.
+ * Under `dir="rtl"` the panels and their inner edges mirror. Measured along the line, from its start.
+ */
+test.describe('the panel toggles', () => {
+	test.use(DEVICES.desktop);
+
+	for (const dir of ['ltr', 'rtl'] as const) {
+		test(`sit at their panels' inner edges, and at the room header's ends once shut (${dir})`, async ({ preview, page }) => {
+			await preview.open();
+			if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+			await showMembers(preview);
+			const width = page.viewportSize()!.width;
+			/** A box's start and end along the line: from the left, or from the right under rtl. */
+			const span = (box: { x: number; width: number }) =>
+				dir === 'ltr' ? { start: box.x, end: box.x + box.width } : { start: width - box.x - box.width, end: width - box.x };
+			const at = async (locator: ReturnType<typeof page.locator>) => span((await locator.boundingBox())!);
+			const near = (actual: number, expected: number, what: string) => expect(Math.abs(actual - expected), `${what}: ${actual} ≈ ${expected}`).toBeLessThan(1.5);
+			const button = (name: string) => page.getByRole('button', { name, exact: true });
+
+			const side = await at(page.locator('.ap-shell-side'));
+			const server = await at(page.locator('.ap-shell-sidehead-server'));
+			const hideRooms = await at(button('Hide rooms'));
+			near(hideRooms.end, side.end - 12, 'the rooms toggle ends a --space-3 inside the list');
+			expect(server.end, 'the server stops before the toggle').toBeLessThanOrEqual(hideRooms.start);
+			near(server.start, side.start + 16, 'the server starts at the list\'s outer edge');
+
+			const list = page.getByRole('complementary', { name: 'Room member list', exact: true });
+			const members = await at(list);
+			const heading = await at(list.getByRole('heading', { name: 'Members', exact: true }));
+			const hideMembers = await at(button('Hide member list'));
+			near(hideMembers.start, members.start + 12, 'the member list toggle starts a --space-3 inside the list');
+			expect(hideMembers.end, 'Members follows the toggle').toBeLessThanOrEqual(heading.start);
+
+			await preview.press(button('Hide rooms'));
+			await preview.press(button('Hide member list'));
+			await expect(list).toBeHidden();
+			const showRooms = await at(button('Show rooms'));
+			const showMembersToggle = await at(button('Show member list'));
+			near(showRooms.start, 12, 'shut, the rooms toggle starts the room header');
+			near(showMembersToggle.end, width - 12, 'shut, the member list toggle ends the room header');
+			// The header's own contents keep clear of both.
+			const header = await page.locator('.ap-roomhead > *').evaluateAll((children) =>
+				children.map((child) => child.getBoundingClientRect()).filter((rect) => rect.width > 0).map((rect) => ({ x: rect.x, width: rect.width })));
+			expect(header.length).toBeGreaterThan(0);
+			for (const box of header.map(span)) {
+				expect(box.start).toBeGreaterThanOrEqual(showRooms.end);
+				expect(box.end).toBeLessThanOrEqual(showMembersToggle.start);
+			}
+		});
+	}
+});
+
+/**
+ * Each panel's border handle sits on its inner border, the one facing the conversation, in either direction: the rooms
+ * list's straddling its end, the member list's just inside its start. A drag toward the conversation widens the panel
+ * and one away narrows it, so under `dir="rtl"`, where the panels mirror, the pointer moves the other way.
+ */
+test.describe('the panel handles', () => {
+	test.use(DEVICES.desktop);
+
+	for (const dir of ['ltr', 'rtl'] as const) {
+		test(`sit on their panels' inner borders, and a drag toward the conversation widens the panel (${dir})`, async ({ preview, page }) => {
+			await preview.open();
+			if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+			await showMembers(preview);
+			const width = page.viewportSize()!.width;
+			/** A box's start and end along the line: from the left, or from the right under rtl. */
+			const span = (box: { x: number; width: number }) =>
+				dir === 'ltr' ? { start: box.x, end: box.x + box.width } : { start: width - box.x - box.width, end: width - box.x };
+			const at = async (locator: ReturnType<typeof page.locator>) => span((await locator.boundingBox())!);
+			const near = (actual: number, expected: number, what: string) => expect(Math.abs(actual - expected), `${what}: ${actual} ≈ ${expected}`).toBeLessThan(1.5);
+			/** Toward the conversation, along the screen's x axis, from a panel at the line's start (rooms) or end (members). */
+			const inward = (panel: 'rooms' | 'members') => ((panel === 'rooms') === (dir === 'ltr') ? 1 : -1);
+
+			const side = page.locator('.ap-shell-side');
+			const list = page.getByRole('complementary', { name: 'Room member list', exact: true });
+			const roomsHandle = page.getByRole('button', { name: 'Collapse sidebar', exact: true });
+			const membersHandle = page.getByRole('button', { name: 'Collapse member list', exact: true });
+
+			const rooms = await at(side);
+			const roomsBorder = await at(roomsHandle);
+			near(roomsBorder.start, rooms.end - 4, 'the rooms handle straddles the list\'s inner border');
+			expect(roomsBorder.end, 'it reaches past the border into the conversation').toBeGreaterThan(rooms.end);
+			const members = await at(list);
+			const membersBorder = await at(membersHandle);
+			near(membersBorder.start, members.start, 'the member list handle starts at its inner border');
+			expect(membersBorder.end, 'inside the list').toBeLessThanOrEqual(members.start + 9 + 0.5);
+
+			/** Drags a handle from its middle by `dx` px along the screen's x axis, in steps as a hand would. */
+			const dragBy = async (handle: typeof roomsHandle, dx: number) => {
+				const box = (await handle.boundingBox())!;
+				const x = box.x + box.width / 2;
+				const y = box.y + box.height / 2;
+				await page.mouse.move(x, y);
+				await page.mouse.down();
+				await page.mouse.move(x + dx, y, { steps: 6 });
+				await page.mouse.up();
+			};
+			const widthOf = async (locator: typeof side) => (await locator.boundingBox())!.width;
+
+			for (const [panel, locator, handle] of [['rooms', side, roomsHandle], ['members', list, membersHandle]] as const) {
+				const before = await widthOf(locator);
+				await dragBy(handle, 60 * inward(panel));
+				await expect.poll(() => widthOf(locator), { message: `${panel}: dragged toward the conversation, wider` }).toBeCloseTo(before + 60, 0);
+				await dragBy(handle, -40 * inward(panel));
+				await expect.poll(() => widthOf(locator), { message: `${panel}: dragged away from it, narrower` }).toBeCloseTo(before + 20, 0);
+				// The handle stays on the border it moved.
+				const after = await at(locator);
+				const border = await at(handle);
+				if (panel === 'rooms') near(border.start, after.end - 4, 'the rooms handle follows its border');
+				else near(border.start, after.start, 'the member list handle follows its border');
+			}
+
+			// From the keyboard, the arrow pointing toward the conversation widens.
+			const toward = (panel: 'rooms' | 'members') => (inward(panel) === 1 ? 'ArrowRight' : 'ArrowLeft');
+			for (const [panel, locator, handle] of [['rooms', side, roomsHandle], ['members', list, membersHandle]] as const) {
+				const before = await widthOf(locator);
+				await handle.focus();
+				await page.keyboard.press(toward(panel));
+				await expect.poll(() => widthOf(locator), { message: `${panel}: ${toward(panel)} widens` }).toBeCloseTo(before + 16, 0);
+			}
+		});
+	}
+});
+
+/**
+ * Under `dir="rtl"` the rest of the layout mirrors too, and left to right nothing moves: each case runs in both
+ * directions and measures the same distances along the line, from its start (the left, or the right under rtl).
+ */
+test.describe('right to left', () => {
+	for (const dir of ['ltr', 'rtl'] as const) {
+		test.describe(dir, () => {
+			// With presence, so the member list has sections (Online, Offline) to fold.
+			test.use({ ...DEVICES.desktop, knobs: { seed: 'rich', capabilities: ['status'] } });
+
+			test(`a message header keeps its name and time apart, the time reads as written, and the toolbar sits at the end (${dir})`, async ({ preview, page }) => {
+				await preview.open();
+				if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+				await page.evaluate(() => document.fonts.ready.then(() => undefined));
+				// The first header with just a name and a time (no badges or handle between them).
+				const head = await page.evaluate(() => {
+					for (const head of document.querySelectorAll('[data-testid=message-list] .ap-msg-head')) {
+						const name = head.querySelector('.ap-msg-sender');
+						const time = head.querySelector('.ap-msg-meta time');
+						if (head.children.length !== 2 || !name || !time?.firstChild || !name.getBoundingClientRect().width) continue;
+						const text = time.textContent ?? '';
+						/** Where a character of the time is drawn, from the left. */
+						const at = (index: number) => {
+							const range = document.createRange();
+							range.setStart(time.firstChild!, index);
+							range.setEnd(time.firstChild!, index + 1);
+							return range.getBoundingClientRect().left;
+						};
+						const box = (el: Element) => ({ left: el.getBoundingClientRect().left, right: el.getBoundingClientRect().right });
+						return { id: head.closest('article')!.getAttribute('data-message-id')!, text, name: box(name), time: box(time), digit: at(text.search(/\d/)), letter: at(text.search(/[AP]M/)) };
+					}
+					return undefined;
+				});
+				expect(head, 'a header with a name and a time').toBeDefined();
+				expect(head!.text).toMatch(/^\d{1,2}:\d{2}\s?[AP]M$/);
+				// The time follows the name a --space-2 along the line: to its right, or to its left under rtl.
+				const gap = dir === 'ltr' ? head!.time.left - head!.name.right : head!.name.left - head!.time.right;
+				expect(gap, 'a --space-2 between the name and the time').toBeCloseTo(8, 0);
+				// "3:42 PM" reads as the locale writes it in either direction, not "PM 3:42".
+				expect(head!.digit, 'the hour before the AM/PM').toBeLessThan(head!.letter);
+
+				// Hovered, its toolbar floats over the message's end, a --space-2 in.
+				const article = page.locator(`article[data-message-id="${head!.id}"]`);
+				await article.hover();
+				const actions = article.locator('.ap-msg-actions');
+				await expect(actions).toBeVisible();
+				const a = (await actions.boundingBox())!;
+				const m = (await article.boundingBox())!;
+				if (dir === 'ltr') expect(m.x + m.width - (a.x + a.width)).toBeCloseTo(8, 0);
+				else expect(a.x - m.x).toBeCloseTo(8, 0);
+			});
+
+			test(`the member list keeps "(you)" apart from your name, and a folded section's caret points along the line (${dir})`, async ({ preview, page }) => {
+				await preview.open();
+				if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+				await showMembers(preview);
+				const list = page.getByTestId('room-member-list');
+				const you = list.locator('.ap-member-name small', { hasText: '(you)' });
+				await expect(you).toBeVisible();
+				const name = (await you.locator('xpath=preceding-sibling::*[contains(@class, "ap-member-text")]').boundingBox())!;
+				const mark = (await you.boundingBox())!;
+				const gap = dir === 'ltr' ? mark.x - (name.x + name.width) : name.x - (mark.x + mark.width);
+				expect(gap, '4px between the name and "(you)"').toBeCloseTo(4, 0);
+
+				// The caret sits in the gutter before the heading's words: on their left, or their right under rtl.
+				const toggle = list.locator('.ap-memberlist-sectionhead .ap-sect-toggle').first();
+				const caret = toggle.locator('.ap-sect-caret');
+				const t = (await toggle.boundingBox())!;
+				const c = (await caret.boundingBox())!;
+				if (dir === 'ltr') expect(c.x + c.width).toBeLessThanOrEqual(t.x + 0.5);
+				else expect(c.x).toBeGreaterThanOrEqual(t.x + t.width - 0.5);
+				// Folded, the ▾ turns to point along the line: right, or left under rtl. (Where its tip goes: the
+				// transform's image of "down".)
+				await preview.press(toggle);
+				await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+				const pointsX = await caret.evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).transformPoint({ x: 0, y: 1 }).x);
+				expect(Math.round(pointsX)).toBe(dir === 'ltr' ? 1 : -1);
+			});
+		});
+
+		test.describe(`${dir}, under 960px`, () => {
+			test.use(DEVICES.tablet);
+
+			test(`the member list overlays from the window's inline end, below its toggle, its border on its inner edge (${dir})`, async ({ preview, page }) => {
+				await preview.open();
+				if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+				const width = page.viewportSize()!.width;
+				// The panel itself: shut, it is hidden from everyone, so not found by role unless asked.
+				const list = page.getByRole('complementary', { name: 'Room member list', exact: true, includeHidden: true });
+				const rect = () => list.evaluate((el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right }; });
+				// Shut, it waits past that edge, and the page doesn't scroll sideways for it.
+				const shut = await rect();
+				if (dir === 'ltr') expect(shut.left).toBeGreaterThanOrEqual(width);
+				else expect(shut.right).toBeLessThanOrEqual(0);
+				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+				const toggle = page.getByRole('button', { name: /member list/i }).first();
+				const button = (await toggle.boundingBox())!;
+				await showMembers(preview);
+				await expect.poll(async () => Math.round(dir === 'ltr' ? (await rect()).right : (await rect()).left), { message: 'it ends at the inline end' }).toBe(dir === 'ltr' ? width : 0);
+				const open = await rect();
+				expect(open.right - open.left).toBeLessThan(width);
+				// Below the button that opened it, at the same end of the room's header.
+				const middle = button.x + button.width / 2;
+				expect(middle).toBeGreaterThan(open.left);
+				expect(middle).toBeLessThan(open.right);
+				// Its border faces the conversation: its left one, or its right under rtl.
+				const borders = await list.evaluate((el) => ({ left: getComputedStyle(el).borderLeftWidth, right: getComputedStyle(el).borderRightWidth }));
+				expect(borders).toEqual(dir === 'ltr' ? { left: '1px', right: '0px' } : { left: '0px', right: '1px' });
+				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+			});
+		});
+	}
+});

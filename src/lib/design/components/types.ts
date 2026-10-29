@@ -67,7 +67,12 @@ export type EmbedComponentProps = EmbedProps & EmbedAttributes;
 
 /** One chip per emoji, aggregated by you from the reaction sets (§4.7). */
 export interface ReactionChip {
+	/** The entry (§4.7): an emoji sequence, or a key such as `:partyparrot:`. Toggling sends it as it is. */
 	emoji: string;
+	/** A key shown as its image, such as a custom emoji's (`ext:emoji`). */
+	image?: { src: string; alt: string; width?: number; height?: number };
+	/** A key the client can't show: a placeholder shape, the key its tooltip. */
+	placeholder?: boolean;
 	count: number;
 	mine?: boolean;
 	/** "You, Ada and Bob" for the tooltip */
@@ -188,9 +193,11 @@ export interface PickerRoom {
 export interface PickerEmoji {
 	/** The shortcode, without its colons. */
 	id: string;
-	/** The emoji itself. */
+	/** The emoji itself, or what picking it inserts. */
 	native: string;
 	name: string;
+	/** A custom emoji's image, shown in place of `native`. */
+	image?: string;
 }
 
 /** Someone in a MemberList (§4.2.1). */
@@ -477,4 +484,23 @@ export interface PickRoom {
 	detail?: string;
 	/** Leaving it is in flight. */
 	leaving?: boolean;
+}
+
+/** A backend signed in to before, as the connect screen offers it again (ConnectPage `recent`). */
+export interface RecentBackend {
+	/** Its address (§1): what it is known by, always shown. */
+	url: string;
+	/** What to call it: its `title` (§3.1), else its host. */
+	label?: string;
+	/** Its `avatar` (§3.1), loaded as a user's is (§4.8.6); initials without one. */
+	avatar?: string;
+}
+
+/** The server in the connect screen's Server field, once it has answered: how it shows itself (§3.1), beside its address. */
+export interface ConnectServer {
+	/** Its `title`, else its host. */
+	name: string;
+	/** Its address (§1), always shown with the name, since a title and an avatar can be copied (§5.3). */
+	address: string;
+	avatar?: string;
 }

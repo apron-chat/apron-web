@@ -15,8 +15,7 @@
 			"impact": "serious",
 			"help": "Elements must have their visible text as part of their accessible name",
 			"targets": [
-				".ap-profile-me",
-				"button[aria-label=\"Connection settings\"]"
+				".ap-profile-me"
 			]
 		}
 	},
@@ -27,8 +26,7 @@
 			"help": "Elements must have their visible text as part of their accessible name",
 			"targets": [
 				".ap-profile-me",
-				".ap-roomhead-crumb",
-				"button[aria-label=\"Connection settings\"]"
+				".ap-roomhead-crumb"
 			]
 		}
 	},

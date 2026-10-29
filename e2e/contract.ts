@@ -351,6 +351,15 @@ export const SCENES: Scene[] = [
 		}
 	},
 	{
+		// A server with a title and an avatar (§3.1): the sidebar head shows them over its host.
+		name: 'server-look',
+		knobs: { server: { title: 'Northwind Ops', avatar: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' } },
+		steps: async (preview, look) => {
+			await expect(preview.page.locator('img.ap-shell-sidehead-avatar')).toBeVisible();
+			await look();
+		}
+	},
+	{
 		// An offline member's profile card, which says when they were last seen (§4.5.2).
 		name: 'last-seen',
 		knobs: { capabilities: ['status'] },
@@ -388,7 +397,9 @@ export const SCENES: Scene[] = [
 			await look();
 			await card.getByRole('button', { name: 'Cancel', exact: true }).click();
 			await expect(card).toBeHidden();
-			await page.getByRole('button', { name: 'Connection settings', exact: true }).click();
+			// The connect screen as it is, from the profile.
+			await page.getByRole('button', { name: /^Your profile on/ }).click();
+			await page.getByRole('dialog', { name: 'Edit profile' }).getByRole('button', { name: 'Connect to a server…', exact: true }).click();
 			await expect(card).toBeVisible();
 			// Another server: Done becomes Connect.
 			await page.getByTestId('server-url-input').fill('ws://127.0.0.1:9/ws');

@@ -114,10 +114,11 @@ describe('in-memory preview protocol', () => {
 		await waitFor(() => room()?.title === 'General');
 		expect(room()?.ext).toEqual({ irc: { channel: '#general' } });
 
+		// The complete you carries your permissions too (ext:permissions), which a `me` doesn't change.
 		const you = await client.updateProfile({ ext: { theme: 'dark', lang: 'en' } });
-		expect(you.ext).toEqual({ theme: 'dark', lang: 'en' });
+		expect(you.ext).toEqual({ theme: 'dark', lang: 'en', permissions: { add_members: true } });
 		const after = await client.updateProfile({ ext: { lang: '' } });
-		expect(after).toEqual({ user_id: 'preview_guest', name: 'Preview User', ext: { theme: 'dark' } });
+		expect(after).toEqual({ user_id: 'preview_guest', name: 'Preview User', ext: { theme: 'dark', permissions: { add_members: true } } });
 	});
 
 	it('moves messages with their author and resolves reactions in the latest room', async () => {

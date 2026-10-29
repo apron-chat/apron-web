@@ -1,5 +1,6 @@
 import type { Notice, RoomListing, RoomSnapshot, UploadState } from '$lib/protocol/client';
 import { markdownText, mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
+import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { systemScope, type Embed, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
 import type { EmbedProps, MessageCaps, MessageEmbed, MessageUpload, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
@@ -62,13 +63,14 @@ export interface MessageContext {
 function bodyOf(body: MessageBody | undefined): NonNullable<MessageView['body']> {
 	const text = typeof body?.text === 'string' ? body.text : '';
 	const markdown = body?.format === 'markdown';
-	const html = markdown ? renderMarkdown(text, directory.resolve, directory.resolveRoom, directory.resolveLink) : renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink);
+	const html = markdown ? renderMarkdown(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji) : renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji);
 	return { html, markdown, code: html.includes('<pre') };
 }
 
-/** A scoped notice's title: its sender as the server names it (§3.3), `Name (~id)`. */
+/** A scoped notice's title: its sender as the server names it (§3.3), `Name (~id)`, the name as shown (§3.5.2). */
 function noticeTitle(from: Identity): string {
-	return from.name && from.name !== from.user_id ? `${from.name} (${from.user_id})` : from.user_id;
+	const name = withoutBidiOverrides(from.name ?? '');
+	return name && name !== from.user_id ? `${name} (${from.user_id})` : from.user_id;
 }
 
 /** What a record's row shows that depends only on the record and the directory: kept per record, rendered again only when either changes. */
@@ -329,7 +331,8 @@ function sameList<T>(a: readonly T[] | undefined, b: readonly T[] | undefined, s
 	return a.every((item, index) => same(item, b[index]));
 }
 
-const sameChip = (a: Chip, b: Chip) => a.emoji === b.emoji && a.count === b.count && a.mine === b.mine && a.title === b.title && a.label === b.label;
+const sameChip = (a: Chip, b: Chip) => a.emoji === b.emoji && a.count === b.count && a.mine === b.mine && a.title === b.title && a.label === b.label
+	&& a.placeholder === b.placeholder && a.image?.src === b.image?.src && a.image?.width === b.image?.width && a.image?.height === b.image?.height;
 const samePart = (a: string | MessageMention, b: string | MessageMention) => (typeof a === 'string' || typeof b === 'string' ? a === b : sameFields(a, b));
 
 const sameSender = (a: MessageSender, b: MessageSender) =>

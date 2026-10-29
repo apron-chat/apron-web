@@ -9,7 +9,7 @@ function render(props: { side: 'left' | 'right'; panel: string; open: boolean; o
 }
 
 describe('PanelToggle', () => {
-	it('offers to hide its panel while it shows, and to show it once it is shut, in its corner, asking to toggle it when pressed', () => {
+	it('offers to hide its panel while it shows, and to show it once it is shut, on its side, asking to toggle it when pressed', () => {
 		const toggle = render({ side: 'left', panel: 'rooms', open: true });
 		expect(toggle.getAttribute('aria-label')).toBe('Hide rooms');
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');

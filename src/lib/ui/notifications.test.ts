@@ -152,6 +152,13 @@ describe('push notifications', () => {
 		expect(pushNotification({ message_id: '1', room_id: 'ops', body: { text: 'hi' } }, 'a1')?.title).toBe('Someone · ops');
 	});
 
+	it('shows the sender and body without bidi embeddings and overrides (§3.5.2)', () => {
+		expect(notificationBody('evil\u202Egnp.exe')).toBe('evilgnp.exe');
+		const shown = pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'mallory', name: 'Mal\u202Elory' }, body: { text: 'see\u202A this' } }, 'a1');
+		expect(shown?.title).toBe('Mallory · ops');
+		expect(shown?.options.body).toBe('see this');
+	});
+
 	it('shortens a long body', () => {
 		expect(notificationBody('x'.repeat(200))).toBe(`${'x'.repeat(179)}…`);
 		expect(pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'bob' }, body: { text: 'y'.repeat(181) } }, 'a1')?.options.body).toHaveLength(180);

@@ -2,6 +2,8 @@
 import { roomName, titled, UNTITLED } from '../naming';
 import { punctuated, retryAfterLabel } from '../words';
 import { compareLogIds, createTimeline, type TimelineState } from './reducer';
+import { reactionKey } from './custom-emoji';
+import { withoutBidiOverrides } from './plain-text';
 import {
 	isJsonObject,
 	isLogId,
@@ -324,12 +326,23 @@ export function untitledPrivate(record: RoomRecord | undefined): boolean {
  * A room's or thread's display title by the one naming rule (`roomName`, which the design system applies to names it
  * is given): its record's `title`, else its `room_id` (§3.4), or for a thread "Untitled", whose `room_id` the design
  * system shows on hover (`untitled` on the snapshot says so). A title of only spaces counts as none. The default room,
- * before a server names it, is the "Default room".
+ * before a server names it, is the "Default room". Shown, so without bidi embeddings and overrides (§3.5.2); an editor
+ * starts from the record's own `title` (`editableTitle`).
  */
 export function roomTitle(roomId: string, record: RoomRecord | undefined): string {
 	const thread = typeof record?.parent_room_id === 'string';
 	if (roomId === DEFAULT_ROOM_ID && !thread && !titled(record?.title)) return 'Default room';
-	return roomName(record?.title, roomId, { thread });
+	return roomName(typeof record?.title === 'string' ? withoutBidiOverrides(record.title) : record?.title, roomId, { thread });
+}
+
+/**
+ * The title an editor starts from: the record's `title` as written, every
+ * character kept, so saving another field sends nothing back changed; else
+ * the shown title (`title`), as before.
+ */
+export function editableTitle(room: { title: string; record?: RoomRecord }): string {
+	const title = room.record?.title;
+	return titled(title) ? title : room.title;
 }
 
 /** An empty value (§3.3): `""`, `[]`, or `{}`, which clears what it replaces. */
@@ -425,8 +438,9 @@ export function replaceIdentity(current: Identity | undefined, incoming: Identit
 	return next as Identity;
 }
 
+/** Whether two emoji sets are the same, entries that differ only in U+FE0F being one (§4.7). */
 export function sameEmojiSet(left: readonly string[], right: readonly string[]): boolean {
-	const a = new Set(left), b = new Set(right);
+	const a = new Set(left.map(reactionKey)), b = new Set(right.map(reactionKey));
 	return a.size === b.size && [...a].every((emoji) => b.has(emoji));
 }
 

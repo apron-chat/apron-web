@@ -15,8 +15,8 @@
 		actions?: Snippet;
 		/**
 		 * Points at what it's about (the control that changes it later) from
-		 * its bottom edge, `--ap-nudge-tip` from its left; none when that isn't
-		 * on screen.
+		 * its bottom edge, `--ap-nudge-tip` from its start (its left, or its
+		 * right under `dir="rtl"`); none when that isn't on screen.
 		 */
 		pointer?: boolean;
 		/** Classes for the nudge, added to its own. */

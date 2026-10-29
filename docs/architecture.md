@@ -169,11 +169,15 @@ kept on this device: where the New divider goes and the pane opens), `MessageSel
 beside pure, unit-tested
 helpers: `timeline.ts` groups threads under their rooms and builds the room and
 thread views, `membership.ts` nets runs of joins and leaves and words their
-lines, `reactions.ts` turns reaction summaries into chips, `emoji.ts`
+lines, `reactions.ts` turns reaction summaries into chips (a key as its custom emoji's
+image, or a placeholder), `custom-emoji.svelte.ts` keeps the server's custom
+emoji catalog (`ext:emoji`), fetched the first time a key shows or a picker
+opens, which `directory.resolveEmoji` draws keys in text with
+(`renderMarkdown`'s scan in `protocol/custom-emoji.ts`), `emoji.ts`
 places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
 picker and loads emoji-mart), `draft.ts` edits the composer's draft, `link-previews.ts` finds a draft's links and fetches previews for those on a site `link-sites.ts` maps (GitHub, YouTube, X, Bluesky, Wikipedia), `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
-`commands.ts` maps the composer's `/` commands to requests,
+`commands.ts` maps the composer's `/` commands to requests (and picks the `ext:media` category a send's files fit: `emoji` for `/emoji add`),
 `sign-in-link.ts` reads and scrubs a sign-in link (emailed, or the return from an external sign-in page) from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,
 `members.ts` reads the `user_id` typed to add a member, adds people to a room in turn (`addMembers`, whose refusals `couldNotAdd` words) and splits the member list into Online and Offline (`memberSections`), `people.ts` sorts people by name (`byName`) and narrows who could be picked by what's typed (`pickable`, `matching`) for both people pickers, and
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
@@ -232,8 +236,9 @@ that names a room names it the same way; a room's `members` from a listing come 
 `member_count` when the server truncated them, kept until a complete list
 replaces it. `types.ts` also knows the system identities (`~server`, `~room`,
 `~private`). Reactions aggregate
-per message (counts per emoji, who reacted, whether you did) and are hidden on
-tombstones.
+per message (counts per emoji, who reacted, whether you did), entries that
+differ only in U+FE0F as one, shown in their fully-qualified form, and are
+hidden on tombstones.
 
 Recovery is per room and uses `latest_log_id` and `history_log_id`. For each
 top-level room the client tracks the monotonic effective lower bound and a
@@ -267,12 +272,17 @@ authentication on; a ping that goes a whole interval without the
 `{"method":"pong"}` answer marks the socket dead, and it is replaced through
 the usual reconnect. `serverSettings` reads extension `ext:settings`
 (`server.ext.settings`, only where `capabilities` lists it): with
-`guest_posting: false` a guest's snapshot is `readOnly`, and with
 `read_cursors: false` the client moves your read cursor locally without
 sending it; elsewhere `markRead` sends each room's at most every
 `READ_CURSOR_SEND_MS` (10 s), the latest of those that came sooner at the
 end of the interval, and flushes those waiting when the page is hidden and
-after the next sign-in. A `retry_after` refusal's `data.ext.limits` counts only where
+after the next sign-in. `yourPermissions` reads extension `ext:permissions`
+(`you.ext.permissions`, an object, only where `capabilities` lists it; a key
+that is absent or not a boolean takes its default, and so does every key
+when `permissions` isn't an object; without the extension it offers what
+PROTOCOL.md allows: writing, adding members anywhere, moving your own
+messages): with `write: false` the snapshot is
+`readOnly`, whoever you are. A `retry_after` refusal's `data.ext.limits` counts only where
 `capabilities` lists `ext:limits`: `limitScope` turns it, with the refused
 request, into the wait's `LimitScope`, and `heldBack` refuses what
 `limitHolds` says that wait covers before it is sent.
@@ -416,6 +426,19 @@ as `signedInWith`, and ways added to the account since beside it
 passkey accept a scheme listed in `auth` or `signup`, and adding an email or an external sign-in needs it in `auth`; a passkey login and a
 token resume need it in `auth`. The `server` frame ([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame))
 is kept on the snapshot's `server` as sent: `apron` (the version), `capabilities`,
-`agent` (the implementation, for debugging; the UI labels a server by its host,
-never by `agent`), `welcome`, `signup`, `ping`, `push`, `status` and `ext`. Every `auth` the client sends carries `agent: "apron-web/0.4"`
+`agent` (the implementation, for debugging; the UI labels a server by its
+`title` or else its host, never by `agent`), `welcome`, `title`,
+`description`, `avatar` (which `serverLook` reads, the avatar only where a
+user's would load), `signup`, `ping`, `push`, `status` and `ext`. A server is
+known by its address, `serverAddress` (RFC 3986 §6.2.2–6.2.3, without a
+fragment, which `new WebSocket()` refuses), which the client's URL, its kept
+session's keys, link servers and Recent all use.
+Frames are kept as sent. What users write loses the bidi embeddings and
+overrides U+202A to U+202E (§3.5.2) only where it is shown, through
+`withoutBidiOverrides` (`plain-text.ts`): in `roomTitle` and `peopleTitle`,
+`serverLook`, every render in `markdown.ts`, the directory's `person` and
+`name` (`shownPerson`, so names that look alike once they are dropped share
+a name), an embed's text (`shownEmbed`), thread previews, renames and
+notifications. Editors start from the records, so an edit sends back every
+character, and IDs, tokens, write URLs and `ext` are never touched. Every `auth` the client sends carries `agent: "apron-web/0.4"`
 (§3.2).

@@ -105,8 +105,8 @@ const rows: Row[] = [
 	}, {
 		card: () => dom.button(/^Deploy/), unread: () => labelled('2 unread replies'), 'last-reply': () => byText('9h'), description: () => around('Lock held'), latest: () => around('Ada done')
 	}],
-	['ThreadList', ThreadList, { room: 'General', others: 4, otherRows: dom.html('<div>Offsite</div>'), more: 3, onmore: vi.fn(), othersToggleTestid: 'others', moreTestid: 'more', testid: 'list' }, {
-		list: () => dom.byRole('group', 'Threads in General'), others: () => dom.button(/Other threads/), more: () => dom.button('3 more…')
+	['ThreadList', ThreadList, { room: 'General', others: 4, otherRows: dom.html('<div>Offsite</div>'), more: 3, onmore: vi.fn(), onexpand: vi.fn(), othersToggleTestid: 'others', moreTestid: 'more', expandTestid: 'expand', testid: 'list' }, {
+		list: () => dom.byRole('group', 'Threads in General'), others: () => dom.button(/Other threads/), more: () => dom.button('3 more…'), expand: () => dom.button('Show all threads in General')
 	}],
 	['SelectionBar', SelectionBar, { count: 2, onnewthread: vi.fn(), newThreadTestid: 'new-thread', testid: 'bar' }, {
 		bar: () => dom.byRole('toolbar', 'Selected messages'), 'new-thread': () => dom.button('New thread')

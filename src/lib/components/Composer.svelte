@@ -3,7 +3,8 @@
 	import { mentionClass, mentionLabel, type Mention, type MentionPerson } from '$lib/protocol/markdown';
 	import { collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, unchip, type DraftChip, type DraftPart } from '$lib/ui/draft';
 	import { isAutocompleteDismissed, type DismissedAutocomplete } from '$lib/ui/autocomplete-dismiss';
-	import { emojiQuery as findEmojiQuery, searchEmoji, type EmojiQuery, type EmojiSuggestion } from '$lib/ui/emoji-autocomplete';
+	import { emojiQuery as findEmojiQuery, searchEmoji, withCustomEmoji, type EmojiQuery, type EmojiSuggestion } from '$lib/ui/emoji-autocomplete';
+	import { customEmoji } from '$lib/ui/custom-emoji.svelte';
 	import { roomQuery as findRoomQuery, searchRooms, type RoomQuery, type RoomSuggestion } from '$lib/ui/room-autocomplete';
 	import type { EmojiMartData } from '@emoji-mart/data';
 	import { emojiAnchor, emojiPicker, loadEmojiData } from '$lib/ui/emoji-picker.svelte';
@@ -141,7 +142,8 @@
 	/** Voice messages need uploads, a type the server takes, and a browser that can record. */
 	let canRecord = $derived(canUpload && voice !== undefined && Boolean(navigator.mediaDevices?.getUserMedia));
 	let matches = $derived(query === undefined ? [] : matching(query));
-	let emojiMatches = $derived(emojiFound && emojiData ? searchEmoji(emojiData, emojiFound.query) : []);
+	/** The server's custom emoji first (`ext:emoji`, once their catalog has arrived), then the standard ones. */
+	let emojiMatches = $derived(emojiFound && emojiData ? withCustomEmoji(customEmoji.catalog, emojiFound.query, searchEmoji(emojiData, emojiFound.query), (emoji) => customEmoji.image(emoji).src) : []);
 	/** The IDs a typed `#room_id` collapses into a chip for. */
 	let roomIds = $derived(rooms.map((room) => room.id));
 	let roomMatches = $derived(roomFound ? searchRooms(rooms, roomFound.query) : []);
@@ -488,6 +490,7 @@
 			if (emojiFound?.start !== foundEmoji.start) active = 0;
 			closeCompletions();
 			emojiFound = foundEmoji;
+			customEmoji.need();
 			void loadEmojiData().then((data) => { emojiData = data; }).catch(() => { emojiFound = undefined; });
 			return;
 		}

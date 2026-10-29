@@ -11,7 +11,7 @@
   var noop = function () {};
   add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work', status: 'online', note: 'add a sign-in', onpreferences: noop, paused: 'until 14:30' }, col());
   add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work', open: true, onpreferences: noop,
-    editor: A.part(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, dialog: false }) }, col());
+    editor: A.part(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, dialog: false, onconnect: noop }) }, col());
   add(A.ProfileBar, { placeholder: 'Signing in…', backend: 'Work', onpreferences: noop }, col());
 </script>
 </body>

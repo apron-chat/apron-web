@@ -28,7 +28,7 @@
 	let placement = $derived.by(() => {
 		void reflowed;
 		if (!request) return undefined;
-		return placePicker(request.anchor.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, { width: WIDTH, height: measured || 120 });
+		return placePicker(request.anchor.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, { width: WIDTH, height: measured || 120, rtl: getComputedStyle(request.anchor).direction === 'rtl' });
 	});
 	/** Each by the name they show as, with `@user_id` under it only where another user shares the name. */
 	let rows = $derived(

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { renderBio, renderMarkdown, renderPlain, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
+import { markdownText, renderBio, renderMarkdown, renderPlain, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
 
 const resolve: MentionResolver = (id) => {
 	if (id === 'alice') return { kind: 'user', id, name: 'Alice Chen' };
@@ -8,6 +8,18 @@ const resolve: MentionResolver = (id) => {
 	if (id === 'ops') return { kind: 'room', id, title: 'Ops & Co' };
 	return undefined;
 };
+
+describe('bidi embeddings and overrides (§3.5.2)', () => {
+	it('are dropped from text as it renders, in every form, the text itself left as written', () => {
+		const text = 'evil\u202Egnp.exe \u202A**bold**\u202C';
+		expect(renderMarkdown(text)).toBe('<p>evilgnp.exe <strong>bold</strong></p>\n');
+		expect(renderPlain(text)).toBe('evilgnp.exe **bold**');
+		expect(renderBio('bio\u202Etxt')).toBe('biotxt');
+		expect(markdownText('a\u202Db')).toBe('ab');
+		expect(mentionSegments('hi\u202E @alice', resolve)).toEqual(['hi ', { target: { kind: 'user', id: 'alice', name: 'Alice Chen' }, hash: false }]);
+		expect(text).toContain('\u202E');
+	});
+});
 
 describe('mentions (Appendix A.3)', () => {
 	it('renders a known user_id with the latest name, marking the viewer’s own chip', () => {
@@ -346,5 +358,53 @@ describe('emoji', () => {
 
 	it('keeps mentions working beside emoji', () => {
 		expect(renderPlain('🎉@alice', resolve)).toBe(`${emoji('🎉')}<button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>`);
+	});
+});
+
+describe('custom emoji in text (ext:emoji)', () => {
+	const images: Record<string, { src: string; alt: string; width?: number; height?: number }> = {
+		':partyparrot:': { src: 'https://chat.example/e/parrot.gif', alt: ':partyparrot:' },
+		':shipit:': { src: 'https://chat.example/e/shipit.png', alt: 'Squirrel in a hat', width: 64, height: 32 },
+		':a:': { src: 'https://chat.example/e/a.png', alt: ':a:' },
+		':b:': { src: 'https://chat.example/e/b.png', alt: ':b:' }
+	};
+	const emoji = (key: string) => images[key];
+	const img = (key: string) => {
+		const { src, alt, width, height } = images[key];
+		return `<img class="ap-cemoji" src="${src}" alt="${alt}" title="${alt}" style="aspect-ratio: ${width && height ? `${width} / ${height}` : '1 / 1'}">`;
+	};
+
+	it('renders a key the catalog has as its image, with its alt as hover text and its aspect ratio, square without one', () => {
+		expect(renderMarkdown('Shipped :partyparrot:', undefined, undefined, undefined, emoji)).toBe(`<p>Shipped ${img(':partyparrot:')}</p>\n`);
+		expect(renderMarkdown(':shipit:', undefined, undefined, undefined, emoji)).toBe(`<p>${img(':shipit:')}</p>\n`);
+		expect(renderPlain('plain :shipit:', undefined, undefined, undefined, emoji)).toBe(`plain ${img(':shipit:')}`);
+	});
+
+	it('scans left to right: adjacent keys, a time before a key, unknown keys as text', () => {
+		expect(renderPlain(':a::b:', undefined, undefined, undefined, emoji)).toBe(img(':a:') + img(':b:'));
+		expect(renderPlain('12:30:partyparrot:', undefined, undefined, undefined, emoji)).toBe(`12:30${img(':partyparrot:')}`);
+		expect(renderPlain(':nope: :a: :Partyparrot:', undefined, undefined, undefined, emoji)).toBe(`:nope: ${img(':a:')} :Partyparrot:`);
+		expect(renderPlain(':a:b:', undefined, undefined, undefined, emoji)).toBe(`${img(':a:')}b:`);
+	});
+
+	it('leaves keys in code spans and code blocks as text, and doesn\'t look without a catalog', () => {
+		expect(renderMarkdown('`:a:` and\n\n```\n:b:\n```', undefined, undefined, undefined, emoji)).toBe('<p><code>:a:</code> and</p>\n<pre><code>:b:\n</code></pre>\n');
+		expect(renderMarkdown('Shipped :partyparrot:')).toBe('<p>Shipped :partyparrot:</p>\n');
+	});
+
+	it('keeps a mention that runs into a key a mention, and the key after a space an image', () => {
+		const people: MentionResolver = (id) => (id === 'ada' ? { kind: 'user', id, name: 'Ada' } : undefined);
+		expect(renderPlain('@ada :a:', people, undefined, undefined, emoji)).toBe(`<button type="button" class="ap-mention" data-user-id="ada" title="@ada">@Ada</button> ${img(':a:')}`);
+	});
+
+	it('lets no other style through the sanitizer', () => {
+		const sneaky = (key: string) => (key === ':a:' ? { src: 'https://chat.example/a.png', alt: 'x" onerror="alert(1)' } : undefined);
+		const html = renderMarkdown(':a:', undefined, undefined, undefined, sneaky);
+		expect(html).not.toContain(' onerror="');
+		expect(html).toContain('style="aspect-ratio: 1 / 1"');
+		// Raw HTML stays text; an image of another class, or another style, keeps no style.
+		expect(renderMarkdown('<img class="ap-cemoji" style="color: red">')).not.toContain('<img');
+		const odd = (key: string) => (key === ':a:' ? { src: 'https://chat.example/a.png', alt: 'a', width: 1, height: Number.NaN } : undefined);
+		expect(renderMarkdown(':a:', undefined, undefined, undefined, odd)).toContain('style="aspect-ratio: 1 / 1"');
 	});
 });

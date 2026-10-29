@@ -2,22 +2,25 @@
 	"from": "apron-server-go/tests/interop",
 	"testIds": {
 		"attach-input": [
-			"reference.spec.ts:73",
-			"reference.spec.ts:87"
+			"reference.spec.ts:74",
+			"reference.spec.ts:88"
 		],
 		"avatar-input": [
-			"reference.spec.ts:180"
+			"reference.spec.ts:181"
 		],
 		"browse-rooms": [
 			"perf.spec.ts:136",
-			"reference.spec.ts:269"
+			"reference.spec.ts:270"
 		],
 		"command-tag": [
-			"reference.spec.ts:203",
-			"reference.spec.ts:222 (absent)"
+			"reference.spec.ts:204",
+			"reference.spec.ts:223 (absent)"
 		],
 		"connect-name-input": [
 			"webauthn.spec.ts:154"
+		],
+		"connect-server": [
+			"reference.spec.ts:328"
 		],
 		"connection-status": [
 			"chat.spec.ts:574",
@@ -27,7 +30,7 @@
 			"webauthn.spec.ts:96",
 			"webauthn.spec.ts:103",
 			"webauthn.spec.ts:109",
-			"webauthn.spec.ts:181"
+			"webauthn.spec.ts:183"
 		],
 		"display-name-input": [
 			"test-helpers.ts:80",
@@ -57,8 +60,8 @@
 		"leave-room": [
 			"chat.spec.ts:703",
 			"chat.spec.ts:721",
-			"reference.spec.ts:252",
-			"reference.spec.ts:266",
+			"reference.spec.ts:253",
+			"reference.spec.ts:267",
 			"test-helpers.ts:203"
 		],
 		"membership-line": [
@@ -74,17 +77,17 @@
 			"chat.spec.ts:974"
 		],
 		"more-threads": [
-			"reference.spec.ts:256"
+			"reference.spec.ts:257"
 		],
 		"new-divider": [
-			"reference.spec.ts:297"
+			"reference.spec.ts:298"
 		],
 		"new-thread": [
 			"chat.spec.ts:1028"
 		],
 		"notice": [
-			"reference.spec.ts:207",
-			"reference.spec.ts:216"
+			"reference.spec.ts:208",
+			"reference.spec.ts:217"
 		],
 		"pane-description": [
 			"chat.spec.ts:45",
@@ -117,6 +120,8 @@
 			"chat.spec.ts:781 (absent)",
 			"chat.spec.ts:782 (absent)",
 			"chat.spec.ts:1145",
+			"reference.spec.ts:348",
+			"reference.spec.ts:356",
 			"responsive.spec.ts:106",
 			"test-helpers.ts:149"
 		],
@@ -124,8 +129,8 @@
 			"responsive.spec.ts:107"
 		],
 		"remove-avatar": [
-			"reference.spec.ts:183",
-			"reference.spec.ts:190"
+			"reference.spec.ts:184",
+			"reference.spec.ts:191"
 		],
 		"reply-draft": [
 			"chat.spec.ts:47",
@@ -166,14 +171,14 @@
 		],
 		"room-directory": [
 			"perf.spec.ts:137",
-			"reference.spec.ts:270",
-			"reference.spec.ts:271"
+			"reference.spec.ts:271",
+			"reference.spec.ts:272"
 		],
 		"room-list": [
 			"perf.spec.ts:138",
 			"perf.spec.ts:140",
-			"reference.spec.ts:267 (absent)",
-			"reference.spec.ts:268"
+			"reference.spec.ts:268 (absent)",
+			"reference.spec.ts:269"
 		],
 		"room-member-list": [
 			"seen.spec.ts:36"
@@ -184,21 +189,21 @@
 			"test-helpers.ts:129"
 		],
 		"send-button": [
-			"reference.spec.ts:75",
-			"reference.spec.ts:89"
+			"reference.spec.ts:76",
+			"reference.spec.ts:90"
 		],
 		"server-url-input": [
-			"webauthn.spec.ts:179"
+			"webauthn.spec.ts:181"
 		],
 		"staged-files": [
-			"reference.spec.ts:74",
-			"reference.spec.ts:88"
+			"reference.spec.ts:75",
+			"reference.spec.ts:89"
 		],
 		"status-hint": [
 			"seen.spec.ts:99"
 		],
 		"stream-embed": [
-			"reference.spec.ts:116"
+			"reference.spec.ts:117"
 		],
 		"thread-card": [
 			"chat.spec.ts:48",
@@ -209,7 +214,7 @@
 			"chat.spec.ts:609",
 			"chat.spec.ts:669",
 			"chat.spec.ts:1044",
-			"reference.spec.ts:248",
+			"reference.spec.ts:249",
 			"responsive.spec.ts:37",
 			"responsive.spec.ts:73",
 			"test-helpers.ts:191"
@@ -225,8 +230,8 @@
 			"chat.spec.ts:934",
 			"chat.spec.ts:1033",
 			"chat.spec.ts:1046",
-			"reference.spec.ts:247",
-			"reference.spec.ts:262",
+			"reference.spec.ts:248",
+			"reference.spec.ts:263",
 			"responsive.spec.ts:58",
 			"responsive.spec.ts:59",
 			"responsive.spec.ts:77",
@@ -287,9 +292,9 @@
 				"chat.spec.ts:712",
 				"chat.spec.ts:933",
 				"chat.spec.ts:1042",
-				"reference.spec.ts:263",
-				"reference.spec.ts:293",
-				"reference.spec.ts:295",
+				"reference.spec.ts:264",
+				"reference.spec.ts:294",
+				"reference.spec.ts:296",
 				"responsive.spec.ts:36",
 				"responsive.spec.ts:69",
 				"test-helpers.ts:162"
@@ -324,10 +329,21 @@
 			"exact": true,
 			"at": [
 				"chat.spec.ts:85",
-				"reference.spec.ts:184",
+				"reference.spec.ts:185",
 				"test-helpers.ts:90",
 				"webauthn.spec.ts:133",
 				"webauthn.spec.ts:177"
+			]
+		},
+		"button \"Connect to a server…\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Connect to a server…",
+			"exact": true,
+			"at": [
+				"reference.spec.ts:326",
+				"webauthn.spec.ts:180"
 			]
 		},
 		"button \"Connect\"": {
@@ -337,17 +353,7 @@
 			"name": "Connect",
 			"exact": true,
 			"at": [
-				"webauthn.spec.ts:180"
-			]
-		},
-		"button \"Connection settings\"": {
-			"roles": [
-				"button"
-			],
-			"name": "Connection settings",
-			"exact": true,
-			"at": [
-				"webauthn.spec.ts:178"
+				"webauthn.spec.ts:182"
 			]
 		},
 		"button \"Create account with passkey\"": {
@@ -402,7 +408,7 @@
 			"name": "Load live view",
 			"exact": true,
 			"at": [
-				"reference.spec.ts:151"
+				"reference.spec.ts:152"
 			]
 		},
 		"button \"More actions\"": {
@@ -476,7 +482,7 @@
 				"chat.spec.ts:319",
 				"chat.spec.ts:376",
 				"chat.spec.ts:379",
-				"reference.spec.ts:309",
+				"reference.spec.ts:310",
 				"responsive.spec.ts:122"
 			]
 		},
@@ -498,7 +504,7 @@
 			"name": "Run command",
 			"exact": true,
 			"at": [
-				"reference.spec.ts:201"
+				"reference.spec.ts:202"
 			]
 		},
 		"button \"Save changes\"": {
@@ -537,7 +543,7 @@
 				"chat.spec.ts:394",
 				"chat.spec.ts:825",
 				"chat.spec.ts:1107",
-				"reference.spec.ts:223",
+				"reference.spec.ts:224",
 				"test-helpers.ts:18"
 			]
 		},
@@ -714,8 +720,9 @@
 				"push.spec.ts:153",
 				"push.spec.ts:480",
 				"push.spec.ts:540",
-				"reference.spec.ts:178",
-				"reference.spec.ts:189",
+				"reference.spec.ts:179",
+				"reference.spec.ts:190",
+				"reference.spec.ts:325",
 				"test-helpers.ts:78",
 				"test-helpers.ts:87",
 				"test-helpers.ts:117",
@@ -771,6 +778,16 @@
 				"push.spec.ts:591"
 			]
 		},
+		"complementary \"Rooms\"": {
+			"roles": [
+				"complementary"
+			],
+			"name": "Rooms",
+			"exact": true,
+			"at": [
+				"reference.spec.ts:319"
+			]
+		},
 		"dialog \"Edit profile\"": {
 			"roles": [
 				"dialog"
@@ -778,7 +795,8 @@
 			"name": "Edit profile",
 			"exact": true,
 			"at": [
-				"reference.spec.ts:179",
+				"reference.spec.ts:180",
+				"reference.spec.ts:326",
 				"test-helpers.ts:79",
 				"test-helpers.ts:88"
 			]
@@ -862,6 +880,7 @@
 			"exact": false,
 			"at": [
 				"push.spec.ts:155",
+				"reference.spec.ts:327",
 				"test-helpers.ts:119",
 				"webauthn.spec.ts:8"
 			]
@@ -874,7 +893,7 @@
 			"exact": true,
 			"at": [
 				"chat.spec.ts:1104",
-				"reference.spec.ts:272",
+				"reference.spec.ts:273",
 				"test-helpers.ts:10"
 			]
 		},
@@ -897,7 +916,7 @@
 			"at": [
 				"chat.spec.ts:611",
 				"chat.spec.ts:1104",
-				"reference.spec.ts:272",
+				"reference.spec.ts:273",
 				"test-helpers.ts:10"
 			]
 		},
@@ -1104,19 +1123,19 @@
 			"chat.spec.ts:255"
 		],
 		".ap-embed-fallback .ap-embed-kind": [
-			"reference.spec.ts:160"
-		],
-		".ap-embed-fallback a": [
 			"reference.spec.ts:161"
 		],
+		".ap-embed-fallback a": [
+			"reference.spec.ts:162"
+		],
 		".ap-embed-html b": [
-			"reference.spec.ts:156"
+			"reference.spec.ts:157"
 		],
 		".ap-embed-livebadge": [
-			"reference.spec.ts:120"
+			"reference.spec.ts:121"
 		],
 		".ap-embed-streamhead": [
-			"reference.spec.ts:131"
+			"reference.spec.ts:132"
 		],
 		".ap-jumpbar-at": [
 			"chat.spec.ts:984"
@@ -1137,7 +1156,7 @@
 		".ap-mention-me": [
 			"chat.spec.ts:830 (absent)",
 			"chat.spec.ts:833",
-			"reference.spec.ts:308"
+			"reference.spec.ts:309"
 		],
 		".ap-mention[data-user-id]": [
 			"chat.spec.ts:819",
@@ -1147,20 +1166,20 @@
 			"chat.spec.ts:808"
 		],
 		".ap-msg-embeds": [
-			"reference.spec.ts:59"
+			"reference.spec.ts:60"
 		],
 		".ap-msg-gutter img.ap-avatar": [
-			"reference.spec.ts:182",
-			"reference.spec.ts:191 (absent)"
+			"reference.spec.ts:183",
+			"reference.spec.ts:192 (absent)"
 		],
 		".ap-msg-gutter span.ap-avatar": [
-			"reference.spec.ts:192"
+			"reference.spec.ts:193"
 		],
 		".ap-msg-meta time": [
 			"chat.spec.ts:867"
 		],
 		".ap-msg-sender": [
-			"reference.spec.ts:187"
+			"reference.spec.ts:188"
 		],
 		".ap-msg-system-body": [
 			"chat.spec.ts:437",
@@ -1173,13 +1192,19 @@
 			"chat.spec.ts:1109"
 		],
 		".ap-notice-title": [
-			"reference.spec.ts:210"
+			"reference.spec.ts:211"
 		],
 		".ap-profedit-hint code": [
 			"test-helpers.ts:89"
 		],
 		".ap-roomhead-sub": [
 			"chat.spec.ts:203"
+		],
+		".ap-shell-sidehead-host": [
+			"reference.spec.ts:321"
+		],
+		".ap-shell-sidehead-name": [
+			"reference.spec.ts:320"
 		],
 		".ap-tline-text": [
 			"chat.spec.ts:58",
@@ -1189,14 +1214,14 @@
 			"responsive.spec.ts:39"
 		],
 		"[data-join=\"general\"]": [
-			"reference.spec.ts:271"
+			"reference.spec.ts:272"
 		],
 		"[data-join]": [
 			"perf.spec.ts:137",
-			"reference.spec.ts:255"
+			"reference.spec.ts:256"
 		],
 		"[data-other-thread]": [
-			"reference.spec.ts:260"
+			"reference.spec.ts:261"
 		],
 		"[data-testid=\"reaction-chip\"][data-emoji]": [
 			"test-helpers.ts:149"
@@ -1216,7 +1241,7 @@
 			"chat.spec.ts:609",
 			"chat.spec.ts:669",
 			"chat.spec.ts:1044",
-			"reference.spec.ts:248",
+			"reference.spec.ts:249",
 			"responsive.spec.ts:73",
 			"test-helpers.ts:191"
 		],
@@ -1226,7 +1251,7 @@
 			"chat.spec.ts:631",
 			"chat.spec.ts:934",
 			"chat.spec.ts:1046",
-			"reference.spec.ts:247",
+			"reference.spec.ts:248",
 			"responsive.spec.ts:58",
 			"responsive.spec.ts:59",
 			"responsive.spec.ts:77",
@@ -1235,7 +1260,7 @@
 		"[data-testid=\"thread-list\"] button[data-thread][aria-current=\"page\"]": [
 			"chat.spec.ts:340 (absent)",
 			"chat.spec.ts:1033",
-			"reference.spec.ts:262",
+			"reference.spec.ts:263",
 			"test-helpers.ts:164",
 			"test-helpers.ts:195"
 		],
@@ -1243,7 +1268,7 @@
 			"push.spec.ts:591"
 		],
 		"a.ap-embed-file": [
-			"reference.spec.ts:90"
+			"reference.spec.ts:91"
 		],
 		"article.ap-msg-selected": [
 			"chat.spec.ts:1016"
@@ -1283,7 +1308,9 @@
 			"chat.spec.ts:1120",
 			"perf.spec.ts:139",
 			"perf.spec.ts:141",
-			"reference.spec.ts:59",
+			"reference.spec.ts:60",
+			"reference.spec.ts:337",
+			"reference.spec.ts:355",
 			"responsive.spec.ts:70",
 			"responsive.spec.ts:74 (absent)",
 			"responsive.spec.ts:79",
@@ -1300,10 +1327,10 @@
 			"push.spec.ts:564"
 		],
 		"button.ap-mention-room[data-room-id=\"general\"]": [
-			"reference.spec.ts:301"
+			"reference.spec.ts:302"
 		],
 		"button[data-room]": [
-			"reference.spec.ts:268"
+			"reference.spec.ts:269"
 		],
 		"button[data-user-id]": [
 			"seen.spec.ts:52",
@@ -1320,13 +1347,16 @@
 			"test-helpers.ts:216"
 		],
 		"figcaption": [
-			"reference.spec.ts:82"
+			"reference.spec.ts:83"
 		],
 		"figure.ap-embed-figure img.ap-embed-media": [
-			"reference.spec.ts:79"
+			"reference.spec.ts:80"
 		],
 		"iframe.ap-embed-frame": [
-			"reference.spec.ts:152"
+			"reference.spec.ts:153"
+		],
+		"img.ap-shell-sidehead-avatar": [
+			"reference.spec.ts:322"
 		],
 		"li[data-user]": [
 			"seen.spec.ts:43"
@@ -1335,14 +1365,14 @@
 			"push.spec.ts:558"
 		],
 		"pre": [
-			"reference.spec.ts:119",
-			"reference.spec.ts:122",
-			"reference.spec.ts:132"
+			"reference.spec.ts:120",
+			"reference.spec.ts:123",
+			"reference.spec.ts:133"
 		],
 		"pre .ap-term-fg2": [
-			"reference.spec.ts:125",
-			"reference.spec.ts:127",
-			"reference.spec.ts:133"
+			"reference.spec.ts:126",
+			"reference.spec.ts:128",
+			"reference.spec.ts:134"
 		],
 		"small": [
 			"chat.spec.ts:636",
@@ -1396,10 +1426,10 @@
 				"chat.spec.ts:439 (absent)"
 			],
 			".ap-embed-html script": [
-				"reference.spec.ts:157 (absent)"
+				"reference.spec.ts:158 (absent)"
 			],
 			"button[data-room=\"general\"]": [
-				"reference.spec.ts:267 (absent)"
+				"reference.spec.ts:268 (absent)"
 			],
 			"em": [
 				"chat.spec.ts:150 (absent)",
@@ -1409,10 +1439,10 @@
 	},
 	"dynamic": {
 		"button named handle": [
-			"reference.spec.ts:236"
+			"reference.spec.ts:237"
 		],
 		"button named new RegExp(`^Your profile on .*: ${handle}[,.]`)": [
-			"reference.spec.ts:231"
+			"reference.spec.ts:232"
 		],
 		"button named new RegExp(`^Your profile on .*: ${name}[,.]`)": [
 			"test-helpers.ts:82"
