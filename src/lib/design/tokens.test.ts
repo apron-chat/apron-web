@@ -162,8 +162,10 @@ describe('apron.css', () => {
 		expect(toned.length).toBeGreaterThan(5);
 		const named = (part: string) => !untoned.includes(part) && /^\.ap-[a-z-]+-(note|hint|help|status)$/.test(part);
 		/** A rule for a note itself: a selector that ends at a note's class, or at a class a component tones. */
-		const colors = declarations.filter((d) => d.property === 'color' && d.selector.split(/,(?![^(]*\))/).some((part) => named(part.trim()) || toned.flat().includes(part.trim())));
-		expect(colors.length).toBeGreaterThanOrEqual(10);
+		const noted = (selector: string) => selector.split(/,(?![^(]*\))/).map((part) => part.trim()).filter((part) => named(part) || toned.flat().includes(part));
+		const colors = declarations.filter((d) => d.property === 'color' && noted(d.selector).length > 0);
+		// Counted by note, not by rule: notes that look alike share one.
+		expect(colors.flatMap((d) => noted(d.selector)).length).toBeGreaterThanOrEqual(10);
 		expect(colors.filter((d) => !/^var\(--ap-tone, /.test(d.value)).map(where)).toEqual([]);
 		// Every element a component tones has a class colored so.
 		expect(toned.filter((classes) => !colors.some((d) => d.selector.split(',').some((part) => classes.includes(part.trim()))))).toEqual([]);

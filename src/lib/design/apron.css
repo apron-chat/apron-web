@@ -55,8 +55,16 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 
 /* A form's small print, wherever the form is (ProfileEditor, SignInForm, SettingRow, …): a hint beside or under a field
    or button, and a note on how the form went. */
-.ap-form-hint, .ap-form-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
+.ap-form-hint, .ap-form-note, .ap-nudge-note, .ap-addedbar-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
 .ap-form-hint code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
+
+/* Shared looks — what several components draw alike, said once; each component's own rule adds where it sits and its size. */
+/* A pane's header: the room's, the rooms sidebar's and the member list's, one height and one rule under each. */
+.ap-roomhead, .ap-shell-sidehead, .ap-memberlist-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); box-sizing: border-box; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); }
+/* A menu's surface: a message's or member's menu, the mention picker, the font picker. */
+.ap-menu, .ap-mpick, .ap-font-options { margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
+/* A floating card's surface: a profile card, the profile editor, a nudge. */
+.ap-popover, .ap-profedit, .ap-nudge { background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
 
 /* Avatar */
 .ap-avatar { display: inline-grid; place-items: center; flex: none; border-radius: var(--radius-full); background: var(--denim-soft); color: var(--denim); font-weight: 600; object-fit: cover; overflow: hidden; user-select: none; }
@@ -444,7 +452,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 @media (prefers-reduced-motion: reduce) { .ap-wait-fill { transition: none; } }
 /* ActionBanner — a floating notice that offers one thing to do (a new version: Reload), on the accent */
 .ap-banner { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
-.ap-banner-icon { flex: none; display: grid; place-items: center; width: var(--control-md); height: var(--control-md); border-radius: var(--radius-full); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.ap-banner-icon, .ap-nudge-icon { flex: none; display: grid; place-items: center; width: var(--control-md); height: var(--control-md); border-radius: var(--radius-full); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
 .ap-banner-text { flex: 1; min-width: 0; display: grid; }
 .ap-banner-title { font-weight: 600; }
 .ap-banner-detail { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
@@ -455,17 +463,15 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-banner-float { position: fixed; z-index: var(--z-banner); top: var(--space-4); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(var(--toast-max-w), calc(100% - var(--space-8))); }
 @media (max-width: 719px) { .ap-banner-float { left: var(--space-4); right: var(--space-4); transform: none; width: auto; max-width: none; } }
 /* Nudge — a small offer made once, when it's useful (turning on notifications at your first mention); it can point at the control that changes it later */
-.ap-nudge { position: relative; display: grid; gap: var(--space-3); width: var(--nudge-w); max-width: 100%; box-sizing: border-box; padding: var(--space-3); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-nudge { position: relative; display: grid; gap: var(--space-3); width: var(--nudge-w); max-width: 100%; box-sizing: border-box; padding: var(--space-3); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-nudge-pointer::after { content: ''; position: absolute; inset-inline-start: var(--ap-nudge-tip, var(--space-6)); bottom: -6px; width: 10px; height: 10px; background: var(--bg-200); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
 .ap-nudge-top { display: flex; align-items: flex-start; gap: var(--space-3); }
-.ap-nudge-icon { flex: none; display: grid; place-items: center; width: var(--control-md); height: var(--control-md); border-radius: var(--radius-full); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
 .ap-nudge-text { flex: 1; min-width: 0; display: grid; gap: var(--space-0_5); }
 .ap-nudge-title { font-weight: 600; }
 .ap-nudge-detail { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-nudge-actions { display: flex; justify-content: flex-end; gap: var(--space-1); }
 .ap-nudge-actions .ap-btn-ghost { color: var(--ink-muted); }
 .ap-nudge-actions .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
-.ap-nudge-note { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ap-tone, var(--ink-muted)); }
 
 /* MessageActions — floating toolbar on message hover/focus */
 .ap-actions { display: inline-flex; gap: var(--space-0_5); padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); box-shadow: var(--shadow-float); }
@@ -493,7 +499,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-jump-dock-fab .ap-jumpfab { position: absolute; inset-inline-end: var(--space-4); bottom: var(--space-3); }
 
 /* RoomHeader */
-.ap-roomhead { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); box-sizing: border-box; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); background: var(--bg-100); }
+.ap-roomhead { background: var(--bg-100); }
 /* A private room's or thread's header: washed with its cards' plum, its lock in the hue. */
 .ap-roomhead-private { background: color-mix(in srgb, var(--private-soft) 60%, var(--bg-100)); }
 .ap-roomhead-private .ap-lock { color: var(--private); }
@@ -545,7 +551,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-sect-skel { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 .ap-sect-skel .ap-skel { height: 12px; }
 /* A line of text among the rows: a caption, an empty list, an error. */
-.ap-sect-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-sect-note, .ap-memberlist-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
 
 /* A backend's tile: BackendRail's (rail.css, the design bundle's alone), and ConnectPage's recent backends'. */
 .ap-rail-tile { display: grid; place-items: center; width: var(--rail-tile); height: var(--rail-tile); border-radius: var(--radius-lg); background: var(--bg-200); color: var(--ink); font-size: var(--text-field); font-weight: 600; object-fit: cover; }
@@ -554,7 +560,7 @@ a.ap-embed-card:hover { background: var(--hover); }
    --toggle-clear: how far a header's content keeps clear of a PanelToggle at its panel's inner edge. */
 .ap-shell { --toggle-clear: calc(var(--space-3) + var(--control-md) + var(--space-2)); position: relative; display: grid; grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr); height: 100%; min-height: 0; overflow: clip; background: var(--bg-100); }
 .ap-shell-side { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--bg-000); border-inline-end: 1px solid var(--line); }
-.ap-shell-sidehead { display: flex; align-items: center; height: var(--header-h); padding: 0 var(--space-4); border-bottom: 1px solid var(--line); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; box-sizing: border-box; }
+.ap-shell-sidehead { font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; }
 .ap-shell-sidebody { --edge: var(--space-2); flex: 1; overflow: auto; padding: var(--space-3) var(--edge); }
 /* Its rows are edge rows (below) on its start side; a button doesn't stretch, so a room's is widened by hand. */
 .ap-shell-sidebody .ap-room { width: calc(100% + var(--edge)); }
@@ -684,7 +690,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-000); border-inline-start: 1px solid var(--line); }
 /* Shut, it stays in the layout (hidden from everyone) so it can slide: AppShell moves its column, or below 960px its overlay. */
 .ap-memberlist:not(.ap-memberlist-open) { visibility: hidden; }
-.ap-memberlist-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); box-sizing: border-box; flex: none; padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; }
+.ap-memberlist-head { flex: none; color: var(--ink); font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; }
 .ap-memberlist-count { color: var(--ink-muted); font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
 /* Small, after the count, as the rooms list's header buttons: most visits are to see who is here. */
 .ap-memberlist-head .ap-memberlist-addtoggle { width: var(--control-sm); height: var(--control-sm); }
@@ -692,7 +698,6 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-memberlist-body { --edge: var(--space-2); flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--edge); padding-inline-start: var(--space-3); }
 .ap-memberlist-placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 .ap-memberlist-placeholder .ap-skel { height: 12px; }
-.ap-memberlist-note { margin: 0; padding: var(--space-1) var(--space-3); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-memberlist-section + .ap-memberlist-section { margin-top: var(--space-4); }
 /* A FoldHeading, as the rooms list's sections have, its words lined up with the avatars. */
 .ap-memberlist-sectionhead { padding: 0 var(--space-1) var(--space-1); }
@@ -840,8 +845,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-threads-others .ap-roomrow-active .ap-room-join { opacity: 1; pointer-events: auto; }
 .ap-threads-others .ap-roomrow-active .ap-room { padding-inline-end: calc(var(--control-sm) + var(--space-2)); }
 
-/* SidebarHead — the rooms list's header: the server you're on, and on phones a › back to the pane */
-.ap-shell-sidehead { gap: var(--space-2); }
+/* SidebarHead — the rooms list's header (a pane header, in Shared looks): the server you're on, and on phones a › back to the pane */
 /* The server: its avatar (or initials), and its title over its host; who you're connected to, not a control. */
 .ap-shell-sidehead-server { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-2); }
 .ap-shell-sidehead-avatar { flex: none; width: var(--control-lg); height: var(--control-lg); border-radius: var(--radius-inner); object-fit: cover; }
@@ -891,7 +895,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profile-paused { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: var(--radius-full); background: var(--bg-100); color: var(--warn); box-shadow: 0 0 0 1px var(--line); }
 
 /* ProfileEditor — the popover above the ProfileBar */
-.ap-profedit { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
+.ap-profedit { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); }
 .ap-profedit-top { display: flex; align-items: center; gap: var(--space-3); }
 .ap-profedit-av { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); min-width: 0; }
 .ap-profedit-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
@@ -908,7 +912,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 }
 
 /* Popover — fixed to the viewport, so the timeline never clips it: raised ground, hairline, popover shadow, large radius */
-.ap-popover { position: fixed; z-index: var(--z-sheet); box-sizing: border-box; display: flex; flex-direction: column; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); font-family: var(--font-sans); color: var(--ink); }
+.ap-popover { position: fixed; z-index: var(--z-sheet); box-sizing: border-box; display: flex; flex-direction: column; font-family: var(--font-sans); color: var(--ink); }
 .ap-popover:focus { outline: none; }
 /* Narrow screens: a bottom sheet, full width, rounded only where it meets the page. */
 .ap-popover-sheet { left: 0; right: 0; bottom: 0; border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: env(safe-area-inset-bottom); }
@@ -1209,7 +1213,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-selbar-actions { display: inline-flex; align-items: center; gap: var(--space-2); margin-inline-start: auto; white-space: nowrap; }
 .ap-selbar-status { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--ink-muted); }
 .ap-selbar-pick { position: relative; }
-.ap-menu { position: absolute; inset-inline-end: 0; bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); min-width: 200px; margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
+.ap-menu { position: absolute; inset-inline-end: 0; bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); min-width: 200px; }
 .ap-menu-item { font: inherit; display: block; width: 100%; padding: var(--space-1_5) var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: start; cursor: pointer; }
 .ap-menu-item:hover { background: var(--hover); }
 /* ContextMenu: a menu at a point, fixed to the viewport (its place set where it opens) and over everything fixed there,
@@ -1292,7 +1296,7 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-font-hint { margin-top: var(--space-1); }
 .ap-font-combobox { position: relative; }
 .ap-font-combobox > input.ap-field { width: min(100%, var(--pref-note-w)); }
-.ap-font-options { position: absolute; z-index: var(--z-menu); top: calc(100% + var(--space-1)); inset-inline-start: 0; width: min(100%, var(--pref-note-w)); max-height: 210px; overflow-y: auto; padding: var(--space-1); background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
+.ap-font-options { position: absolute; z-index: var(--z-menu); top: calc(100% + var(--space-1)); inset-inline-start: 0; width: min(100%, var(--pref-note-w)); max-height: 210px; overflow-y: auto; border-color: var(--line-strong); }
 .ap-font-load { margin: 0 var(--space-2) var(--space-2); padding: var(--space-1_5) var(--space-2); color: var(--ink); background: var(--bg-300); border: 0; border-radius: var(--radius-sm); cursor: pointer; }
 .ap-font-option { display: block; width: 100%; padding: var(--space-1_5) var(--space-2); color: var(--ink); text-align: start; background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
 .ap-font-option:hover, .ap-font-option-active { background: var(--hover); }
@@ -1311,7 +1315,7 @@ button.ap-mention { font-family: inherit; font-size: inherit; line-height: inher
 button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 
 /* Shared autocomplete picker — above the composer while typing @…, #… or :… */
-.ap-mpick { position: absolute; inset-inline-start: var(--space-4); bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); width: min(320px, calc(100% - 2 * var(--space-4))); max-height: 240px; overflow: auto; margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
+.ap-mpick { position: absolute; inset-inline-start: var(--space-4); bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); width: min(320px, calc(100% - 2 * var(--space-4))); max-height: 240px; overflow: auto; }
 .ap-mpick-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1_5) var(--space-2); border-radius: var(--radius-sm); font-size: var(--text-field); line-height: var(--leading-field); cursor: pointer; }
 .ap-mpick-active { background: var(--hover); }
 .ap-mpick-name { font-weight: 600; }
@@ -1527,7 +1531,6 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 /* AddedBanner — under a private room's header when someone else added you: what happened, Mute, Leave and its ×. */
 .ap-addedbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); border: 1px solid color-mix(in srgb, var(--private) 30%, transparent); border-radius: var(--radius-md); background: color-mix(in srgb, var(--private-soft) 70%, var(--bg-100)); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-addedbar-text { flex: 1 1 200px; min-width: 0; margin: 0; }
-.ap-addedbar-note { margin: 0; color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-addedbar-error { flex-basis: 100%; }
 .ap-addedbar-close { flex: none; }
 /* PeoplePicker (PrivateRoomForm, AddMembersForm) — the people picked, as chips in a field, then everyone who matches, as a listbox; at the limit, your
