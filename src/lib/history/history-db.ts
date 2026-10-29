@@ -387,6 +387,24 @@ export class HistoryGone extends Error {
 	}
 }
 
+/** How many rows one read of a scan takes: enough that a scan is few reads, few enough that each is quick. */
+const SCAN_BATCH = 500;
+
+/**
+ * Calls `visit` with every message kept for `server` (its latest snapshot), room by room, a batch of rows a read:
+ * what a search of this device looks through. `stop` ends it early, between batches.
+ */
+export async function scanMessages(db: IDBDatabase, server: string, visit: (message: MessageRecord) => void, stop: () => boolean = () => false): Promise<void> {
+	let range = serverRange(server);
+	for (;;) {
+		const rows = await done(db.transaction('records').objectStore('records').getAll(range, SCAN_BATCH)) as RecordRow[];
+		for (const row of rows) if (row.kind === 'm') visit(row.value as MessageRecord);
+		if (rows.length < SCAN_BATCH || stop()) return;
+		const last = rows.at(-1)!;
+		range = IDBKeyRange.bound([server, last.room, last.log, last.kind, last.id], [server, []], true, false);
+	}
+}
+
 /** Removes what is kept for `server`, or for every server. */
 export async function forgetHistory(db: IDBDatabase, server?: string): Promise<void> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readwrite');

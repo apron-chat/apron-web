@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { messageEditor, newPrivateDialog, newThreadDialog, roomEditor, signInLinkDialog } from '$lib/components/lazy';
+	import { messageEditor, newPrivateDialog, newThreadDialog, roomEditor, searchDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -239,7 +239,8 @@
 	/** A pushed room to open once it is listed, if its `push_id` is this account's. */
 	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
 	/** A room, thread or message the page's URL named when it opened, to open once its server lists its rooms. */
-	let linked = $state<(Destination & { server: string; room: string }) | undefined>();
+	/** A destination to open: a link's, or a search result's (`searched`). */
+	let linked = $state<(Destination & { server: string; room: string; searched?: boolean }) | undefined>();
 	/**
 	 * What a link's `room` was found to be, by server and room: the parent of a
 	 * thread, `null` for a room that isn't one, or `undefined` while it is looked up.
@@ -285,6 +286,8 @@
 	let editingId = $state<string | undefined>();
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
+	/** Search messages is open (`SearchDialog`). */
+	let searchOpen = $state(false);
 	/**
 	 * Sign-in links (§4.11.2): one of no proposal this browser made waits for the viewer's answer (`asked`), one
 	 * for an addition proposed here for its account's session (`addition`), and why one didn't sign in (`failure`).
@@ -438,7 +441,7 @@
 	 * The history kept on this device (`$lib/history`), for a session saved here: restored before the client
 	 * connects, so a reload goes on as a reconnect does. None against an in-memory server.
 	 */
-	let historyKeeper: HistoryKeeper | undefined;
+	let historyKeeper = $state.raw<HistoryKeeper | undefined>();
 	/** The retention the keeper was last told: Preferences changes it. */
 	let keptRetention: string | undefined;
 	$effect(() => {
@@ -1473,7 +1476,7 @@
 	 * history entry rather than adding one; the effect calls it again as each
 	 * step lands.
 	 */
-	function openLinked(target: Destination & { server: string; room: string }): void {
+	function openLinked(target: Destination & { server: string; room: string; searched?: boolean }): void {
 		if (!client) return;
 		const listed = (id: string) => session.rooms.some((room) => room.id === id);
 		// A link names a thread by its room_id alone (Appendix A.4): it opens under the parent its record names.
@@ -1516,7 +1519,7 @@
 			return;
 		}
 		linked = undefined;
-		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message);
+		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message, target.searched);
 		if (target.user) void revealLinkedUser(target.thread ?? target.room, target.user);
 	}
 
@@ -1540,10 +1543,31 @@
 		return undefined;
 	}
 
+	// --- Search ---
+
+	/** Search messages can be opened: signed in, with rooms listed. */
+	let canSearch = $derived(Boolean(client) && session.ready);
+	/** Search's shortcut, as this platform writes it. */
+	const searchHint = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘K' : 'Ctrl+K';
+
+	/** What Search looks through, in words: history kept on this device for this session, and what is loaded. */
+	function searchNote(): string {
+		const kept = historyKeeper && client?.keptSessionFor(client.url) && historySettings.retention !== 'off';
+		if (!kept) return 'Messages loaded on this page.';
+		const span = { '1': 'the last day', '7': 'the last week', '30': 'the last 30 days', '365': 'the last year' }[historySettings.retention as string];
+		return `Messages kept on this device${span ? ` from ${span}` : ''}, and those loaded now.`;
+	}
+
+	/** A search result picked: it opens where it is, as a link to it would, paging back to it. */
+	function openFound(message: MessageRecord): void {
+		if (!client) return;
+		linked = { server: client.url, room: message.room_id, message: message.message_id, searched: true };
+	}
+
 	/** Part of a link isn't here: the URL says where the page is instead, and a toast says what wasn't found. */
-	function abandonLink(missing: 'room' | 'thread' | 'message'): void {
+	function abandonLink(missing: 'room' | 'thread' | 'message', searched = linked?.searched): void {
 		linked = undefined;
-		feedback.error(`The linked ${missing} isn’t available here.`);
+		feedback.error(!searched ? `The linked ${missing} isn’t available here.` : missing === 'message' ? 'That message is too far back to open here.' : `That message’s ${missing} isn’t available here.`);
 		scrubUrl(addressOf(selectedRoomId, activeThread));
 	}
 
@@ -1572,7 +1596,7 @@
 	 * was created at (§2), so once what's loaded reaches back past that, it
 	 * isn't here. Only the linked room or thread is searched.
 	 */
-	async function revealLinkedMessage(roomId: string, thread: string | undefined, id: string): Promise<void> {
+	async function revealLinkedMessage(roomId: string, thread: string | undefined, id: string, searched = false): Promise<void> {
 		const paneId = thread ?? roomId;
 		const pane = () => session.rooms.find((room) => room.id === paneId);
 		const isOpen = () => activeRoom?.id === roomId && activeThread === thread;
@@ -1590,7 +1614,7 @@
 		}
 		if (!isOpen()) return;
 		if (!found()) {
-			abandonLink('message');
+			abandonLink('message', searched);
 			return;
 		}
 		await jumpToMessage(id);
@@ -2806,6 +2830,12 @@
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
+		// Ctrl+K (⌘K on a Mac) searches messages, from anywhere on the page.
+		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k' && canSearch) {
+			event.preventDefault();
+			searchOpen = true;
+			return;
+		}
 		// Escape in the NewThreadDialog closes it and keeps the selection it was asked for.
 		if (event.key !== 'Escape' || !selection.active || newThread) return;
 		if (selection.menuOpen) {
@@ -2928,6 +2958,7 @@
 				memberListToggle={!memberListWide}
 				{unreadElsewhere}
 				{mentionsElsewhere}
+				onsearch={canSearch ? () => (searchOpen = true) : undefined} {searchHint}
 				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
 				onmute={canMuteRoom ? mutePane : undefined}
 			/>
@@ -3083,6 +3114,10 @@
 				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
 				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
 		{/key}
+	{/if}
+	{#if searchOpen && client && searchDialog.component}
+		{@const SearchDialog = searchDialog.component}
+		<SearchDialog {client} keeper={historyKeeper} rooms={session.rooms} note={searchNote()} onopen={openFound} onclose={() => (searchOpen = false)} />
 	{/if}
 	{#if newPrivateOpen && newPrivateDialog.component}
 		{@const NewPrivateDialog = newPrivateDialog.component}

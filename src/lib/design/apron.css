@@ -1575,6 +1575,19 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-pick-group { margin: 0; padding: 0 var(--space-3); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; }
 .ap-pick-more { font-weight: 400; }
 .ap-pick-empty { padding: var(--space-2) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
+
+/* SearchPanel: a field, and the messages found below it, newest first, each a line of where and a line of what. */
+.ap-search-input { width: 100%; }
+.ap-search-list { display: flex; flex-direction: column; gap: var(--space-0_5); max-height: 360px; overflow-y: auto; margin: var(--space-3) calc(-1 * var(--space-3)) 0; padding: 0; list-style: none; }
+.ap-search-row { display: flex; flex-direction: column; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-3); border-radius: var(--radius-md); color: var(--ink); cursor: pointer; }
+.ap-search-row-active { background: var(--hover); }
+.ap-search-meta { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-search-room { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 600; }
+.ap-search-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-search-when { flex: none; margin-inline-start: auto; }
+.ap-search-text { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; }
+.ap-search-text mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
+.ap-search-empty { padding: var(--space-2) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
 /* How many private rooms you're in, of the most the server allows: a quiet line at the dialog's foot, until it runs out. */
 .ap-quota { display: flex; align-self: center; align-items: center; gap: var(--space-2); margin-inline-end: auto; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; }
 .ap-quota-full { color: var(--ink); }

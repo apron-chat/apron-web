@@ -15,7 +15,7 @@ import type { ClientSnapshot, KeptState, RestoredState, RoomSync } from '$lib/pr
 import { compareLogIds, type StoreChange, type StoredRecords } from '$lib/protocol/reducer';
 import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types';
 import { decrement } from '$lib/protocol/client-internals';
-import { forgetHistory, HistoryGone, historyVersion, openHistory, pageHistory, pruneHistory, readHistory, readRoomRows, timeLike, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
+import { forgetHistory, HistoryGone, historyVersion, openHistory, pageHistory, pruneHistory, readHistory, readRoomRows, scanMessages, timeLike, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -267,6 +267,22 @@ export class HistoryKeeper {
 		} catch {
 			return undefined;
 		}
+	}
+
+	/**
+	 * The messages kept here for `server` that `test` takes (`$lib/ui/search`), from every room kept, whatever the
+	 * page holds of them. Empty where nothing is kept, or there is no IndexedDB. `stop` ends the scan early.
+	 */
+	async searchKept(server: string, test: (message: MessageRecord) => boolean, stop?: () => boolean): Promise<MessageRecord[]> {
+		const found: MessageRecord[] = [];
+		try {
+			await scanMessages(await this.open(), server, (message) => {
+				if (test(message)) found.push(message);
+			}, stop);
+		} catch {
+			// Nothing kept to search.
+		}
+		return found;
 	}
 
 	/**

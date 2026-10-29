@@ -109,3 +109,41 @@ test('a reload shows what it kept, and asks only for what came since', async ({ 
 	await retention.selectOption('off');
 	await expect.poll(() => keptServers(page)).toBe(0);
 });
+
+test('search finds a message only this device still has, and opens it where it is', async ({ page }) => {
+	const base = process.env.E2E_URL;
+	await page.clock.setFixedTime(NOW);
+	const start = NOW.getTime() - 2 * DAY;
+	const message = (n: number, text = `Message ${n}`) => ({ message_id: String(start + n * 1000), log_id: String(start + n * 1000), room_id: 'general', from: ada, body: { text } });
+	const messages = Array.from({ length: 150 }, (_, n) => message(n, n === 3 ? 'The needle in the haystack' : `Message ${n}`));
+	const frames: Frame[] = [];
+	await keptServer(page, messages, frames);
+
+	await page.goto(`${base}/`);
+	await expect(page.getByText('Message 149', { exact: true })).toBeVisible();
+	// Scrolled back to the start, so all of it is kept.
+	const list = page.getByTestId('message-list');
+	await expect(async () => {
+		await list.evaluate((el) => (el.scrollTop = 0));
+		await expect(page.getByText('Message 0', { exact: true })).toBeVisible({ timeout: 500 });
+	}).toPass();
+	await expect.poll(() => keptMessages(page), { timeout: 10_000 }).toBe(150);
+
+	// A reload holds only the newest of it: the needle is on this device alone.
+	await page.reload();
+	await expect(page.getByText('Message 149', { exact: true })).toBeVisible();
+	await expect(page.getByText('The needle in the haystack')).toHaveCount(0);
+	frames.length = 0;
+	await page.keyboard.press('ControlOrMeta+k');
+	const search = page.getByRole('dialog', { name: 'Search messages' });
+	await search.getByRole('combobox').fill('NEEDLE hay');
+	const results = search.getByTestId('search-results');
+	await expect(results.getByRole('option')).toHaveCount(1);
+	await expect(results.getByRole('option')).toContainText('General');
+	await expect(results.locator('mark')).toHaveText(['needle', 'hay']);
+	await page.keyboard.press('Enter');
+	await expect(search).toHaveCount(0);
+	await expect(page.locator(`article[data-message-id="${start + 3000}"]`)).toBeInViewport();
+	// Paged back from this device, not the server.
+	expect(frames.filter((frame) => frame.method === 'history' && frame.params?.before !== undefined)).toEqual([]);
+});

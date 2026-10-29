@@ -1,0 +1,22 @@
+<!-- @dsCard group="Input" height=560 subtitle="Searching messages kept on this device: the field, and what matched below it, newest first, each with its room, sender, time and a line of it with the words marked" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SearchPanel</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.SearchPanel, root, {
+    open: true,
+    query: 'deploy',
+    note: 'Messages kept on this device for the last 30 days, and those loaded now.',
+    results: [
+      { id: '3', room: 'Deploy checklist · engineering', who: 'Grace', when: 'Today 14:02', exact: '2026-10-29 14:02:11', parts: [{ text: 'The ', match: false }, { text: 'deploy', match: true }, { text: ' went out at 4pm, all green.', match: false }] },
+      { id: '2', room: 'general', who: 'Ada', when: 'Mon 09:41', parts: [{ text: '…before we ', match: false }, { text: 'deploy', match: true }, { text: ', run the migrations on staging and check the dashboards for anything odd.', match: false }] },
+      { id: '1', room: 'engineering', who: 'Linus', when: 'Oct 12', parts: [{ text: 'Deploy', match: true }, { text: ' freeze starts Friday.', match: false }] }
+    ],
+    onpick: function () {}
+  });
+</script>
+</body>
+</html>

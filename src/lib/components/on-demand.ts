@@ -8,4 +8,5 @@ export { default as NewRoomDialog } from './NewRoomDialog.svelte';
 export { default as NewThreadDialog } from './NewThreadDialog.svelte';
 export { default as PreferencesDialog } from './PreferencesDialog.svelte';
 export { default as RoomEditor } from './RoomEditor.svelte';
+export { default as SearchDialog } from './SearchDialog.svelte';
 export { default as SignInLinkDialog } from './SignInLinkDialog.svelte';

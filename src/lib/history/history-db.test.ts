@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { StoreChange } from '$lib/protocol/reducer';
 import type { MessageRecord } from '$lib/protocol/types';
 import { readKept } from '$lib/test/kept-history';
-import { HistoryGone, openHistory, pruneHistory, writeHistory, type HistoryWrite } from './history-db';
+import { HistoryGone, openHistory, pruneHistory, scanMessages, writeHistory, type HistoryWrite } from './history-db';
 
 const SERVER = 'wss://chat.example/';
 const day = 24 * 60 * 60 * 1000;
@@ -130,5 +130,25 @@ describe('pruneHistory', () => {
 		// Even a reaction set on a message edited since: a page from here, which starts at the cutoff, never holds it.
 		expect(kept?.reactions).toEqual([]);
 		expect(kept?.memberships).toEqual([]);
+	});
+});
+
+describe('scanMessages', () => {
+	it('visits every message kept for the server, room by room, past one read’s worth, and nothing else', async () => {
+		const db = await opened();
+		const many = Array.from({ length: 1234 }, (_, n) => message(String(1000 + n), String(1000 + n), n % 2 ? 'a' : 'b'));
+		const reactions = [{ log_id: '5000', message_id: '1000', room_id: 'b', from: ada, emojis: ['👍'] }];
+		await writeHistory(db, SERVER, write({ whole: [
+			{ room: 'a', messages: many.filter((record) => record.room_id === 'a'), reactions: [], memberships: [{ log_id: '999', room_id: 'a', user: ada, joined: true }] },
+			{ room: 'b', messages: many.filter((record) => record.room_id === 'b'), reactions, memberships: [] }
+		] }), new Set());
+		await writeHistory(db, 'wss://other.example/', write({ whole: [{ room: 'a', messages: [message('1', '1', 'a')], reactions: [], memberships: [] }] }), new Set());
+		const seen: string[] = [];
+		await scanMessages(db, SERVER, (record) => seen.push(record.message_id));
+		expect(seen.sort()).toEqual(many.map((record) => record.message_id).sort());
+		// Stopped after its first read: 500 rows, one of them a membership.
+		let visits = 0;
+		await scanMessages(db, SERVER, () => visits++, () => true);
+		expect(visits).toBe(499);
 	});
 });

@@ -6,6 +6,7 @@
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Pencil from '@lucide/svelte/icons/pencil';
+	import Search from '@lucide/svelte/icons/search';
 	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import Users from '@lucide/svelte/icons/users';
 	import type { ClassValue } from 'svelte/elements';
@@ -72,6 +73,9 @@
 		mutedWithRoom?: boolean;
 		/** A request in flight: Join and the actions menu can't be used. */
 		busy?: boolean;
+		/** Search messages: a magnifier before the member list's toggle opens a <SearchPanel>. `searchHint` names its shortcut, for the tooltip. */
+		onsearch?: () => void;
+		searchHint?: string;
 		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
 		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the bell-off Unmute button, the ⋯ menu and its Edit, Leave, Copy link, Mute and Unmute. */
@@ -91,7 +95,7 @@
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
-		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false,
+		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false, onsearch, searchHint,
 		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, muteTestid, unmuteTestid,
 		unmuteButtonTestid, class: className
 	}: Props = $props();
@@ -157,6 +161,11 @@
 	{#if note}<span class="ap-roomhead-sub" role="status">{note}</span>{/if}
 	{#if canJoin}
 		<button type="button" class="ap-btn ap-btn-sm" data-testid={joinTestid} aria-label="Join {noun}" title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={busy} onclick={onjoin}>Join</button>
+	{/if}
+	{#if onsearch}
+		<button type="button" class="ap-iconbtn ap-roomhead-search" aria-label="Search messages" title={searchHint ? `Search messages (${searchHint})` : 'Search messages'} onclick={onsearch}>
+			<Search size={18} strokeWidth={1.8} aria-hidden="true" />
+		</button>
 	{/if}
 	{#if onmemberlist}
 		<button type="button" class={['ap-iconbtn', 'ap-roomhead-members', memberListOpen && 'ap-iconbtn-on']} aria-label={memberLabel} aria-expanded={memberListOpen} title={memberLabel} onclick={onmemberlist}>
