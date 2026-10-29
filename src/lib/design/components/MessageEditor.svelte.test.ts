@@ -36,12 +36,11 @@ describe('MessageEditor', () => {
 		expect(oncancel).toHaveBeenCalledOnce();
 	});
 
-	it('takes your own field and picker in place of the textarea, and Escape a field handles first doesn\u2019t cancel', () => {
+	it('takes your own field, its picker anchored with it, in place of the textarea, and Escape a field handles first doesn\u2019t cancel', () => {
 		const oncancel = vi.fn();
 		const root = render({
 			oncancel,
-			field: dom.html('<div role="textbox" aria-label="Edit message" tabindex="0"></div>'),
-			picker: dom.html('<ul class="ap-mpick" role="listbox"></ul>')
+			field: dom.html('<div><ul class="ap-mpick" role="listbox"></ul><div role="textbox" aria-label="Edit message" tabindex="0"></div></div>')
 		});
 		expect(root.querySelector('textarea')).toBeNull();
 		const wrap = root.querySelector('.ap-msgedit-wrap')!;

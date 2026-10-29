@@ -16,7 +16,7 @@ function typed(text: string, caret = text.length, final = false) {
 describe('composer mentions', () => {
 	it('chips a finished @user_id or @name and sends @user_id, keeping existing chips and moving the caret across new ones', () => {
 		expect(typed('hi @bob ').parts).toEqual(['hi ', { id: 'bob' }, ' ']);
-		expect(typed('hi @Bob, there').parts).toEqual(['hi ', { id: 'bob' }, ', there']);
+		expect(typed('hi @Bob, there', 8).parts).toEqual(['hi ', { id: 'bob' }, ', there']);
 		expect(draftText(typed('hi @BOB and').parts)).toBe('hi @bob and');
 		// A multi-word name, case-insensitive.
 		const both = typed('ask @ada lovelace now');
@@ -42,6 +42,19 @@ describe('composer mentions', () => {
 		expect(typed('hi @Ada', 7, true).parts).toEqual(['hi ', { id: 'ada_1' }]);
 	});
 
+	it('chips a name only as it is typed, at the caret, and an ID anywhere', () => {
+		// Typed out and finished, at the caret: a chip. The same name elsewhere in the text is text.
+		expect(typed('hi @Bob,', 8).parts).toEqual(['hi ', { id: 'bob' }, ',']);
+		expect(typed('hi @Bob, there').changed).toBe(false);
+		expect(typed('hi @Bob there', 0, true).changed).toBe(false);
+		expect(typed('hi @bob there', 0, true).parts).toEqual(['hi ', { id: 'bob' }, ' there']);
+		// A draft set from outside: IDs only.
+		expect(collapseMentions(['@Bob and @bob'], people, { caret: 13, final: true, names: false }).parts).toEqual(['@Bob and ', { id: 'bob' }]);
+		// A chip turned back into text stays text as typing goes on after it.
+		expect(collapseMentions(['hi @Bob '], people, { caret: 8, keep: 3 }).changed).toBe(false);
+		expect(collapseMentions(['hi @Bob'], people, { caret: 7, final: true, keep: 3 }).changed).toBe(false);
+	});
+
 	it('leaves ambiguous names, unknown handles, emails, system IDs and code as text', () => {
 		expect(typed('hi @sam there').changed).toBe(false);
 		expect(typed('hi @sam_a there').parts).toEqual(['hi ', { id: 'sam_a' }, ' there']);
@@ -59,7 +72,7 @@ describe('composer mentions', () => {
 		// Sent as `@bob`, "@Bob.x" would read as `@bob.x` (Appendix A.3).
 		expect(typed('hi @Bob.x there').changed).toBe(false);
 		expect(typed('hi @Bob@example.com there').changed).toBe(false);
-		expect(typed('hi @Bob. there').parts).toEqual(['hi ', { id: 'bob' }, '. there']);
+		expect(typed('hi @Bob. there', 8).parts).toEqual(['hi ', { id: 'bob' }, '. there']);
 		// Any ID the directory knows, beyond the room.
 		const known = collapseMentions(['cc @carol_9 '], people, { caret: 12, isUser: (id) => id === 'carol_9' });
 		expect(known.parts).toEqual(['cc ', { id: 'carol_9' }, ' ']);

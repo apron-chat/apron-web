@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { MentionPerson } from '$lib/protocol/markdown';
-	import { DraftField } from '$lib/ui/draft-field.svelte';
 	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
 	import { emojiAnchor, emojiPicker } from '$lib/ui/emoji-picker.svelte';
 	import { isCommand } from '$lib/ui/commands';
@@ -14,8 +13,7 @@
 	import Embed from './embeds/Embed.svelte';
 	import StagedFile from './StagedFile.svelte';
 	import DesignComposer from '$lib/design/components/Composer.svelte';
-	import DraftEditable from './DraftEditable.svelte';
-	import DraftPicker from './DraftPicker.svelte';
+	import MessageField from './MessageField.svelte';
 	import type { ComposerField } from '$lib/design/components/types';
 
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
@@ -93,20 +91,7 @@
 	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
-	/** Unique per field, for its picker's ID. */
-	const uid = $props.id();
-	const draft = new DraftField({
-		get value() { return value; },
-		set value(text) { value = text; },
-		get mentions() { return mentions; },
-		set mentions(ids) { mentions = ids; },
-		get people() { return people; },
-		get rooms() { return rooms; },
-		get disabled() { return disabled; },
-		submit: () => send(),
-		oninput: () => oninput(),
-		onmention: () => onmention?.()
-	}, `${uid}-suggestions`);
+	let field = $state<MessageField | undefined>();
 	let emojiButton = $state<HTMLButtonElement | undefined>();
 	let recordSeconds = $state<number | undefined>();
 	let recorder: MediaRecorder | undefined;
@@ -155,17 +140,17 @@
 	});
 
 	export function focus(): void {
-		draft.focus();
+		field?.focus();
 	}
 
 	/** Puts a mention chip for this user where the caret was (else at the end), as picking them would, and focuses the field. */
 	export function mention(userId: string): void {
-		draft.mention(userId);
+		field?.mention(userId);
 	}
 
 	/** Closes the picker and stops any recording without sending: the pane is changing under it. */
 	export function reset(): void {
-		draft.reset();
+		field?.reset();
 		dismissed = [];
 		emojiPicker.release(emojiButton);
 		stopRecording(false);
@@ -178,13 +163,13 @@
 	function send(): void {
 		// Enter while sending waits: the draft stays as it is.
 		if (holdSend || (waitUntil !== undefined && waitUntil > Date.now())) return;
-		draft.finish();
+		field?.finish();
 		onsend();
 	}
 
 	/** The emoji button: the full picker, whose pick lands where the caret was. Emoji are text, so no capability gates it. */
 	function openEmoji(): void {
-		if (emojiButton) emojiPicker.toggle({ anchor: emojiButton, onpick: (emoji) => draft.insert(emoji) });
+		if (emojiButton) emojiPicker.toggle({ anchor: emojiButton, onpick: (emoji) => field?.insert(emoji) });
 	}
 
 	/** Drops a link's preview from this draft; typing carries on in the field. */
@@ -281,7 +266,6 @@
 	{previews}
 	{preview}
 	onremovepreview={(index) => dismissPreview(previews[index]?.url ?? '')}
-	{picker}
 	replyTestid="reply-draft"
 	attachmentsTestid="staged-files"
 	previewsTestid="link-previews"
@@ -292,7 +276,7 @@
 />
 
 {#snippet editable({ placeholder, disabled }: ComposerField)}
-	<DraftEditable {draft} {placeholder} {disabled} id="message-input" data-testid="message-input" onpaste={paste} />
+	<MessageField bind:this={field} bind:value bind:mentions {people} {rooms} {placeholder} {disabled} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} {oninput} {onmention} onpaste={paste} />
 {/snippet}
 {#snippet replyText()}<MentionText text={reply?.text ?? ''} />{/snippet}
 {#snippet staged()}
@@ -301,4 +285,3 @@
 	{/each}
 {/snippet}
 {#snippet preview(index: number)}<Embed embed={previews[index]} />{/snippet}
-{#snippet picker()}<DraftPicker {draft} testid="mention-picker" />{/snippet}

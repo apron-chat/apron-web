@@ -15,8 +15,8 @@ import { enterAction, handheld } from './handheld';
  * alike: a plain-text editable (`ComposerEditable`) whose mentions are
  * non-editable name chips, `@user_id` in the text (Appendix A.3), and the
  * autocomplete for `@` people, `#` rooms and `:` emoji. One of these per
- * field, made as its component starts; `DraftEditable` and `DraftPicker`
- * draw the field and the picker from it.
+ * field, made as its component (`MessageField`) starts, which draws the
+ * field and the picker from it.
  */
 
 const MENTION_MATCHES_MAX = 8;
@@ -33,11 +33,6 @@ export interface DraftHost {
 	readonly rooms: RoomSuggestion[];
 	/** More `user_id`s that are people, beyond `people` and the directory: an `@` of one is a mention. */
 	readonly known?: readonly string[];
-	/**
-	 * The draft is a message already written, such as one being edited: only `@user_id`s become chips (and picks),
-	 * the last one too, never a name in plain text, so the message's text changes only where it is edited.
-	 */
-	readonly written?: boolean;
 	readonly disabled: boolean;
 	/** Enter where it sends (or saves): `enterAction`, with no picker taking it. */
 	submit(): void;
@@ -49,7 +44,7 @@ export interface DraftHost {
 
 export class DraftField {
 	private readonly host: DraftHost;
-	/** The open picker's ID, which the field names in `aria-controls`; `DraftPicker` gives it to the picker. */
+	/** The open picker's ID, which the field names in `aria-controls`. */
 	readonly pickerId: string;
 	/** The field; `bind:element` on its `ComposerEditable`. */
 	element = $state<HTMLDivElement | undefined>();
@@ -67,6 +62,8 @@ export class DraftField {
 	private anchor = 0;
 	/** The draft text the field shows, and the field showing it. */
 	private shown: { field: HTMLElement; text: string } | undefined;
+	/** Where the `@` of the last chip turned back into text stands: its name stays text as typing goes on. */
+	private kept: number | undefined;
 	/** The selection in the draft text when the field last lost focus: where a picked emoji or a mention goes. */
 	private lastSelection: { start: number; end: number } | undefined;
 	/** A phone or tablet, where Enter starts a new line (`enterAction`). */
@@ -121,7 +118,9 @@ export class DraftField {
 			if (!current || (this.shown?.field === current && this.shown.text === text)) return;
 			untrack(() => {
 				this.lastSelection = undefined;
-				const collapsed = collapseMentions([text], this.named, { caret: text.length, final: this.host.written ?? false, isUser: this.isUser, rooms: this.roomIds });
+				// Nobody typed it: its `@user_id`s become chips, the last one too, and a name in plain text stays text.
+				this.kept = undefined;
+				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, final: true, names: false, isUser: this.isUser, rooms: this.roomIds });
 				this.draw(current, collapsed.parts, document.activeElement === current ? collapsed.caret : undefined);
 				this.commit(current, collapsed.parts, false);
 			});
@@ -172,6 +171,7 @@ export class DraftField {
 
 	/** Closes the picker and forgets where the caret was: the field is changing under it. */
 	reset(): void {
+		this.kept = undefined;
 		this.closeCompletions();
 		this.dismissedAutocomplete = undefined;
 		this.lastSelection = undefined;
@@ -182,6 +182,7 @@ export class DraftField {
 		this.closeCompletions();
 		this.dismissedAutocomplete = undefined;
 		this.collapse(true);
+		this.kept = undefined;
 	}
 
 	// --- The field's handlers, named rather than arrows in its markup: the field keeps one listener as its attributes change while typing ---
@@ -318,17 +319,13 @@ export class DraftField {
 	}
 
 	private picked(field: HTMLElement, inserted: { parts: DraftPart[]; caret: number }): void {
+		this.kept = undefined;
 		this.closeCompletions();
 		this.dismissedAutocomplete = undefined;
 		this.active = 0;
 		field.focus();
 		this.draw(field, inserted.parts, inserted.caret);
 		this.commit(field, inserted.parts, true);
-	}
-
-	/** The people whose names, typed out, become chips: none in a message already written (`written`). */
-	private get named(): MentionPerson[] {
-		return this.host.written ? [] : this.host.people;
 	}
 
 	private isUser = (id: string): boolean => this.host.people.some((person) => person.id === id) || (this.host.known?.includes(id) ?? false) || directory.resolve(id)?.kind === 'user';
@@ -373,6 +370,7 @@ export class DraftField {
 		if (caret === undefined || (anchor !== undefined && anchor !== caret)) return false;
 		const reverted = unchip(parts, caret, (part) => mentionLabel(this.chipMention(part)));
 		if (!reverted) return false;
+		this.kept = chipStart(parts, caret);
 		this.draw(field, reverted.parts, reverted.caret);
 		this.commit(field, reverted.parts, true);
 		this.refreshQuery();
@@ -384,7 +382,7 @@ export class DraftField {
 		const field = this.element;
 		if (!field) return;
 		const { parts, caret } = readDraft(field);
-		const collapsed = collapseMentions(parts, this.named, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds });
+		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds, keep: this.kept });
 		if (collapsed.changed) this.draw(field, collapsed.parts, caret === undefined ? undefined : collapsed.caret);
 		this.commit(field, collapsed.parts, collapsed.changed || draftText(collapsed.parts) !== this.host.value);
 	}
@@ -432,6 +430,17 @@ export class DraftField {
 		element.textContent = label;
 		return element;
 	}
+}
+
+/** Where the chip ending at `caret` starts, in the draft text. */
+function chipStart(parts: DraftPart[], caret: number): number | undefined {
+	let at = 0;
+	for (const part of parts) {
+		const length = typeof part === 'string' ? part.length : part.id.length + 1;
+		if (typeof part !== 'string' && at + length === caret) return at;
+		at += length;
+	}
+	return undefined;
 }
 
 /**

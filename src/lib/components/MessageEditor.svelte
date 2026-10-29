@@ -7,11 +7,9 @@
 	import type { Embed } from '$lib/protocol/types';
 	import { embedTile } from '$lib/ui/attachments';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { DraftField } from '$lib/ui/draft-field.svelte';
 	import { handheld } from '$lib/ui/handheld';
 	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
-	import DraftEditable from './DraftEditable.svelte';
-	import DraftPicker from './DraftPicker.svelte';
+	import MessageField from './MessageField.svelte';
 	import type { MessageEditorField } from '$lib/design/components/types';
 
 	/**
@@ -21,7 +19,7 @@
 	 * an upload's name can be changed (its `title`, §4.8.4); nothing is sent
 	 * until Save, and Cancel or Escape drops it all. An upload still being
 	 * written can't be removed. The text is written as in the composer, with
-	 * mentions as chips and the same autocomplete (`DraftField`); who it
+	 * mentions as chips and the same autocomplete (`MessageField`); who it
 	 * mentions is saved from its chips.
 	 */
 	interface Props {
@@ -46,23 +44,9 @@
 	const onHandheld = handheld();
 	let value = $state(untrack(() => text));
 	let mentions = $state<string[]>([]);
-	/** Unique per field, for its picker's ID. */
-	const uid = $props.id();
-	const draft = new DraftField({
-		get value() { return value; },
-		set value(text) { value = text; },
-		get mentions() { return mentions; },
-		set mentions(ids) { mentions = ids; },
-		get people() { return people; },
-		get rooms() { return rooms; },
-		get known() { return mentioned; },
-		written: true,
-		disabled: false,
-		submit: () => save(),
-		onmention: () => onmention?.()
-	}, `${uid}-suggestions`);
+	let field = $state<MessageField | undefined>();
 	// It opens with the focus, the caret at the end.
-	onMount(() => draft.focus(true));
+	onMount(() => field?.focus(true));
 	/** Embeds removed and renamed so far, by `embedKey`; applied to the message as it is now when saved. */
 	let removed = $state<string[]>([]);
 	let titles = $state<Record<string, string>>({});
@@ -80,7 +64,7 @@
 	const writing = (embed: Embed): boolean => Boolean(embed.embed_id && uploads[embed.embed_id] && !uploads[embed.embed_id].failed);
 
 	function save(): void {
-		draft.finish();
+		field?.finish();
 		if (!canSave) return;
 		if (!changed) {
 			oncancel();
@@ -92,10 +76,11 @@
 	}
 </script>
 
-<DesignMessageEditor testid="message-editor" {value} {canSave} handheld={onHandheld} onsave={save} {oncancel} field={editable} {picker} attachments={shown.length > 0 ? tiles : undefined} />
+<DesignMessageEditor testid="message-editor" {value} {canSave} handheld={onHandheld} onsave={save} {oncancel} field={editable} attachments={shown.length > 0 ? tiles : undefined} />
 
-{#snippet editable({ class: className, label }: MessageEditorField)}<DraftEditable {draft} class={className} aria-label={label} />{/snippet}
-{#snippet picker()}<DraftPicker {draft} />{/snippet}
+{#snippet editable({ class: className, label }: MessageEditorField)}
+	<MessageField bind:this={field} bind:value bind:mentions {people} {rooms} known={mentioned} class={className} aria-label={label} onsubmit={save} {onmention} />
+{/snippet}
 
 {#snippet tiles()}
 	{#each shown as embed, index (embed.embed_id ?? index)}

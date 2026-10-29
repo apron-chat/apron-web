@@ -84,6 +84,12 @@ test.describe('mentions in the composer', () => {
 		await page.keyboard.press('Escape');
 		await page.keyboard.type('!');
 		await expect(preview.composer()).toHaveText('@Ada Lovelace!');
+		// Text it stays, as typing goes on and when it is sent: no mention.
+		await page.keyboard.type(' see you');
+		await expect(chip(preview)).toHaveCount(0);
+		await page.keyboard.press('Enter');
+		const sent = await preview.waitForSent('message', (p) => p.body?.text === '@Ada Lovelace! see you');
+		expect(sent.body.mentions ?? []).toEqual([]);
 	});
 });
 
