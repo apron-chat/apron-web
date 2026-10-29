@@ -1,12 +1,17 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import AttachmentTile from '$lib/design/components/AttachmentTile.svelte';
 	import DesignMessageEditor from '$lib/design/components/MessageEditor.svelte';
 	import type { EmbedEdits, UploadState } from '$lib/protocol/client';
+	import type { MentionPerson } from '$lib/protocol/markdown';
 	import type { Embed } from '$lib/protocol/types';
 	import { embedTile } from '$lib/ui/attachments';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { DraftField } from '$lib/ui/draft-field.svelte';
 	import { handheld } from '$lib/ui/handheld';
+	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
+	import DraftEditable from './DraftEditable.svelte';
+	import DraftPicker from './DraftPicker.svelte';
 
 	/**
 	 * Your message being edited, in place (the design system's
@@ -14,21 +19,44 @@
 	 * draft. A tile's (x) leaves that embed out of the save and
 	 * an upload's name can be changed (its `title`, §4.8.4); nothing is sent
 	 * until Save, and Cancel or Escape drops it all. An upload still being
-	 * written can't be removed.
+	 * written can't be removed. The text is written as in the composer, with
+	 * mentions as chips and the same autocomplete (`DraftField`).
 	 */
 	interface Props {
 		text: string;
 		embeds: Embed[];
 		/** Files this client is writing to upload embeds, by `embed_id`. */
 		uploads: Record<string, UploadState>;
-		/** The new text, and the embed changes if there are any. */
-		onsave: (text: string, edits?: EmbedEdits) => void;
+		/** Who an `@` can name, as in the composer. */
+		people?: MentionPerson[];
+		/** Rooms and threads a `#` can name. */
+		rooms?: RoomSuggestion[];
+		/** The new text, the embed changes if there are any, and who the new text mentions (`body.mentions`, §3.5). */
+		onsave: (text: string, edits: EmbedEdits | undefined, mentions: string[]) => void;
 		oncancel: () => void;
+		/** The mention picker opened: a moment to refresh who can be named. */
+		onmention?: () => void;
 	}
-	let { text, embeds, uploads, onsave, oncancel }: Props = $props();
+	let { text, embeds, uploads, people = [], rooms = [], onsave, oncancel, onmention }: Props = $props();
 
 	const onHandheld = handheld();
-	let draft = $state(untrack(() => text));
+	let value = $state(untrack(() => text));
+	let mentions = $state<string[]>([]);
+	/** Unique per field, for its picker's ID. */
+	const uid = $props.id();
+	const draft = new DraftField({
+		get value() { return value; },
+		set value(text) { value = text; },
+		get mentions() { return mentions; },
+		set mentions(ids) { mentions = ids; },
+		get people() { return people; },
+		get rooms() { return rooms; },
+		disabled: false,
+		submit: () => save(),
+		onmention: () => onmention?.()
+	}, `${uid}-suggestions`);
+	// It opens with the focus, the caret at the end.
+	onMount(() => draft.focus(true));
 	/** Embeds removed and renamed so far, by `embedKey`; applied to the message as it is now when saved. */
 	let removed = $state<string[]>([]);
 	let titles = $state<Record<string, string>>({});
@@ -40,12 +68,13 @@
 		const title = titles[embedKey(embed)];
 		return title !== undefined && title !== embedTile(embed, directory.origin, directory.mediaOrigins).name ? [{ embed, title }] : [];
 	}));
-	let changed = $derived(draft !== text || shown.length !== embeds.length || renamed.length > 0);
+	let changed = $derived(value !== text || shown.length !== embeds.length || renamed.length > 0);
 	/** A message keeps text or an embed (§3.5); emptied, it's deleted instead. */
-	let canSave = $derived(Boolean(draft.trim()) || shown.length > 0);
+	let canSave = $derived(Boolean(value.trim()) || shown.length > 0);
 	const writing = (embed: Embed): boolean => Boolean(embed.embed_id && uploads[embed.embed_id] && !uploads[embed.embed_id].failed);
 
 	function save(): void {
+		draft.finish();
 		if (!canSave) return;
 		if (!changed) {
 			oncancel();
@@ -53,11 +82,14 @@
 		}
 		const dropped = embeds.filter((embed) => removed.includes(embedKey(embed)));
 		const edits: EmbedEdits = { ...(dropped.length ? { removed: dropped } : {}), ...(renamed.length ? { renamed } : {}) };
-		onsave(draft, dropped.length || renamed.length ? edits : undefined);
+		onsave(value, dropped.length || renamed.length ? edits : undefined, mentions);
 	}
 </script>
 
-<DesignMessageEditor testid="message-editor" bind:value={draft} {canSave} handheld={onHandheld} onsave={save} {oncancel} attachments={shown.length > 0 ? tiles : undefined} />
+<DesignMessageEditor testid="message-editor" {value} {canSave} handheld={onHandheld} onsave={save} {oncancel} field={editable} {picker} attachments={shown.length > 0 ? tiles : undefined} />
+
+{#snippet editable()}<DraftEditable {draft} class="ap-msgedit-field" aria-label="Edit message" />{/snippet}
+{#snippet picker()}<DraftPicker {draft} />{/snippet}
 
 {#snippet tiles()}
 	{#each shown as embed, index (embed.embed_id ?? index)}

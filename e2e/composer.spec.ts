@@ -87,6 +87,48 @@ test.describe('mentions in the composer', () => {
 	});
 });
 
+test.describe('mentions in the message editor', () => {
+	test.use(DEVICES.desktop);
+
+	test('an edit shows its mentions as chips, autocompletes @ as the composer does, and saves body.mentions', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('@ad');
+		await page.keyboard.press('Tab');
+		await page.keyboard.type('hello');
+		await page.keyboard.press('Enter');
+		const mine = preview.message('@Ada Lovelace hello');
+		await expect(mine).toBeVisible();
+		await expect(async () => {
+			await mine.hover();
+			await expect(mine.getByRole('button', { name: 'Edit message', exact: true })).toBeVisible({ timeout: 1000 });
+		}).toPass();
+		await mine.getByRole('button', { name: 'Edit message', exact: true }).click();
+
+		const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
+		await expect(editor).toBeFocused();
+		await expect(editor.locator('.ap-mention[data-user-id="ada"]')).toHaveText('@Ada Lovelace');
+		await page.keyboard.type(' and @');
+		const options = page.getByTestId('message-editor').getByRole('option');
+		await expect(options.first()).toBeVisible();
+		const other = (await options.nth(1).locator('.ap-mpick-id').textContent())!.trim().replace(/^@/, '');
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('Tab');
+		await expect(editor.locator(`.ap-mention[data-user-id="${other}"]`)).toHaveCount(1);
+		// Escape with no picker open cancels; with one open, it only closes the picker.
+		await page.keyboard.type('@');
+		await expect(options.first()).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(options).toHaveCount(0);
+		await expect(editor).toBeVisible();
+		await page.keyboard.press('Backspace');
+		await page.keyboard.press('Enter');
+
+		const edit = await preview.waitForSent('message', (p) => p.message_id !== undefined);
+		expect(edit.body).toMatchObject({ text: `@ada hello and @${other} `, mentions: ['ada', other] });
+	});
+});
+
 test.describe('Enter on a handheld device', () => {
 	test.use(DEVICES.phone);
 

@@ -16,7 +16,18 @@ function render(props: Record<string, unknown> = {}) {
 }
 
 const button = (name: string) => [...document.querySelectorAll('button')].find((node) => (node.getAttribute('aria-label') ?? node.textContent?.trim()) === name)!;
-const field = () => document.querySelector<HTMLTextAreaElement>('textarea')!;
+const field = () => document.querySelector<HTMLElement>('[role="textbox"][aria-label="Edit message"]')!;
+
+/** Types `text` at the end of the field, as one `input` event, the caret after it. */
+function typeAtEnd(text: string) {
+	field().append(text);
+	const range = document.createRange();
+	range.setStart(field(), field().childNodes.length);
+	document.getSelection()!.removeAllRanges();
+	document.getSelection()!.addRange(range);
+	field().dispatchEvent(new InputEvent('input', { bubbles: true }));
+	flushSync();
+}
 
 function rename(from: string, to: string, commit = 'Enter') {
 	button(`Rename ${from}`).click();
@@ -31,7 +42,7 @@ function rename(from: string, to: string, commit = 'Enter') {
 describe('MessageEditor', () => {
 	it('shows the text and every embed, uploads renamable, and saves text and embed changes together', () => {
 		const { onsave, oncancel } = render();
-		expect(field().value).toBe('see these');
+		expect(field().textContent).toBe('see these');
 		expect(document.activeElement).toBe(field());
 		expect([...document.querySelectorAll('[data-testid="edit-attachment"]')].map((tile) => tile.querySelector('.ap-attachment-name, .ap-embed-title')?.textContent)).toEqual(['image.png', 'notes.txt', 'Fix the cert']);
 		expect(button('Rename Fix the cert')).toBeUndefined();
@@ -44,7 +55,7 @@ describe('MessageEditor', () => {
 		button('Remove Fix the cert').click();
 		flushSync();
 		button('Save changes').click();
-		expect(onsave).toHaveBeenCalledWith('see these', { removed: [link], renamed: [{ embed: photo, title: 'dusk over the ridge' }] });
+		expect(onsave).toHaveBeenCalledWith('see these', { removed: [link], renamed: [{ embed: photo, title: 'dusk over the ridge' }] }, []);
 	});
 
 	it('closes without saving when nothing changed, cancels on Escape, and saves text alone without embed edits', () => {
@@ -56,10 +67,10 @@ describe('MessageEditor', () => {
 		expect(oncancel).toHaveBeenCalledTimes(2);
 		dom.unmount();
 		({ onsave, oncancel } = render());
-		field().value = 'new words';
-		field().dispatchEvent(new Event('input', { bubbles: true }));
+		field().textContent = 'new words';
+		field().dispatchEvent(new InputEvent('input', { bubbles: true }));
 		dom.press(field(), 'Enter');
-		expect(onsave).toHaveBeenCalledWith('new words', undefined);
+		expect(onsave).toHaveBeenCalledWith('new words', undefined, []);
 	});
 
 	it('needs text or an embed to save, and keeps an upload being written', () => {
@@ -73,5 +84,31 @@ describe('MessageEditor', () => {
 		button('Remove image.png').click();
 		flushSync();
 		expect(button('Save changes').disabled).toBe(true);
+	});
+
+	it('writes as the composer does: mentions as chips, and @ autocompletes people, whose Escape keeps the editor open', () => {
+		const people = [{ id: 'ada', name: 'Ada Lovelace' }, { id: 'alan', name: 'Alan Turing' }];
+		const { onsave, oncancel } = render({ text: '@ada see these', embeds: [], people });
+		expect(field().querySelector('[data-user-id="ada"]')?.textContent).toBe('@Ada Lovelace');
+
+		typeAtEnd(' cc @al');
+		const options = () => [...document.querySelectorAll('[role="option"]')].map((option) => option.textContent);
+		expect(options()).toEqual([expect.stringContaining('Alan Turing')]);
+		expect(field().getAttribute('aria-controls')).toBeTruthy();
+		// Escape closes the picker, not the editor.
+		dom.press(field(), 'Escape');
+		flushSync();
+		expect(options()).toEqual([]);
+		expect(oncancel).not.toHaveBeenCalled();
+
+		// Typing on opens it again.
+		typeAtEnd('a');
+		expect(options()).toEqual([expect.stringContaining('Alan Turing')]);
+		dom.press(field(), 'Tab');
+		flushSync();
+		expect(field().querySelector('[data-user-id="alan"]')?.textContent).toBe('@Alan Turing');
+
+		dom.press(field(), 'Enter');
+		expect(onsave).toHaveBeenCalledWith('@ada see these cc @alan ', undefined, ['ada', 'alan']);
 	});
 });

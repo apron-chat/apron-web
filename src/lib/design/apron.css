@@ -1420,6 +1420,8 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-msgedit:focus-within { border-color: var(--focus); }
 .ap-msgedit .ap-attachments { padding: var(--space-3) var(--space-3) var(--space-1); }
 .ap-msgedit-field { display: block; width: 100%; box-sizing: border-box; min-height: calc(var(--leading-body) + 2 * var(--space-2)); max-height: 40vh; field-sizing: content; padding: var(--space-2) var(--space-3); border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--text-body); line-height: var(--leading-body); resize: none; outline: none; }
+/* Your own field (`field`), such as a ComposerEditable with `ap-msgedit-field`: its autocomplete picker anchors above it. */
+.ap-msgedit-wrap { position: relative; }
 .ap-msgedit-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); padding: 0 var(--space-2) var(--space-2) var(--space-3); }
 .ap-msgedit-hint { margin-inline-end: auto; font-size: var(--text-xs); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-msgedit-hint kbd { font: inherit; font-weight: 600; color: var(--ink); }
