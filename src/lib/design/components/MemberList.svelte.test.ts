@@ -34,10 +34,13 @@ describe('MemberList', () => {
 		render({ sections, shut: ['offline'], ontogglesection });
 		const offline = document.querySelector<HTMLButtonElement>('[data-section="offline"] h3 button')!;
 		expect(offline.getAttribute('aria-expanded')).toBe('false');
-		expect(offline.textContent).toBe('▾Offline· 1');
+		expect(offline.textContent).toBe('Offline· 1');
 		expect(document.querySelector('[data-section="offline"] ul')).toBeNull();
 		offline.click();
 		expect(ontogglesection).toHaveBeenCalledWith('offline');
+		// Folded, its … at the heading's end unfolds it too.
+		dom.button('Show all Offline').click();
+		expect(ontogglesection).toHaveBeenCalledTimes(2);
 		dom.unmount();
 		render({ sections: [{ key: 'members', label: 'Members', people: sections[0].people }], shut: ['members'] });
 		expect(document.querySelector('h3')).toBeNull();

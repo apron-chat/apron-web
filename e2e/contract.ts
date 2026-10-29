@@ -140,7 +140,8 @@ export const SCENES: Scene[] = [
 			await expect(embeds.locator('.ap-embed-html script')).toHaveCount(0);
 			expect(await page.evaluate(() => (window as { __embedRan?: boolean }).__embedRan)).toBeUndefined();
 			await embeds.getByRole('button', { name: 'Load live view', exact: true }).click();
-			await page.getByTestId('browse-rooms').click();
+			// Other Rooms starts open.
+			await expect(page.getByTestId('browse-rooms')).toHaveAttribute('aria-expanded', 'true');
 			await expect(page.getByTestId('room-directory')).toBeVisible();
 			await look();
 		}
@@ -327,7 +328,6 @@ export const SCENES: Scene[] = [
 			page.once('dialog', (dialog) => dialog.accept());
 			await page.getByTestId('leave-room').click();
 			await expect(page.locator('[data-testid="room-list"] button[data-room="general"]')).toHaveCount(0);
-			await page.getByTestId('browse-rooms').click();
 			await expect(page.locator('[data-join="general"]')).toBeVisible();
 			await look();
 		}

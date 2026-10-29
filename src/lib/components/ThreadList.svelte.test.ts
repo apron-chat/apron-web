@@ -50,7 +50,7 @@ describe('ThreadList', () => {
 		expect(titles('button[data-thread]')).toEqual(['Deploy', 'Expired cert']);
 		expect(titles('button[data-other-thread]')).toEqual(['Offsite', 'Logo']);
 		const heading = one('[data-testid="other-threads"]')!;
-		expect(heading.textContent).toContain('Other threads');
+		expect(heading.textContent).toContain('Other Threads');
 		expect(heading.textContent).toContain('2');
 		expect(heading.getAttribute('aria-expanded')).toBe('true');
 
@@ -69,10 +69,20 @@ describe('ThreadList', () => {
 		flushSync();
 		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
 		expect(one('button[data-other-thread]')).toBeNull();
+		expect(dom.button('Show all Other Threads')).toBeTruthy();
 		dom.unmount();
 		render();
 		expect(one('[data-testid="other-threads"]')!.getAttribute('aria-expanded')).toBe('false');
 		expect(one('button[data-other-thread]')).toBeNull();
+		dom.unmount();
+		// Folded, the one being read stays; its … shows the rest, handing focus to the heading, and stays unfolded.
+		render({ activeThread: 'logo' });
+		expect(titles('button[data-other-thread]')).toEqual(['Logo']);
+		dom.button('Show all Other Threads').click();
+		flushSync();
+		expect([titles('button[data-other-thread]'), document.activeElement]).toEqual([['Offsite', 'Logo'], one('[data-testid="other-threads"]')]);
+		expect(dom.queryByRole('button', 'Show all Other Threads')).toBeNull();
+		expect(localStorage.getItem('apron.otherThreads')).toBe('open');
 	});
 
 	it('sets apart what’s new: unread replies counted, unread mentions tinted, the open thread marked, the rest stepping back', () => {

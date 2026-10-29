@@ -40,6 +40,95 @@ describe('Sidebar', () => {
 		session.dispose();
 	});
 
+	const fake = (listRooms = vi.fn((_parent?: string) => Promise.resolve())) =>
+		new Proxy({ listRooms, url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
+	const sidebar = (client: ChatClient, session: SessionView, props: Record<string, unknown> = {}) =>
+		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', threads: [], mentions: {}, unread: {}, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn(), ...props } as never);
+	const names = (testid: string) => [...document.querySelectorAll(`[data-testid="${testid}"] .ap-room-name`)].map((name) => name.textContent);
+
+	it('shows Other Rooms open from the start, each with its member count and Join, and folds it to nothing, there being no news there', () => {
+		const listRooms = vi.fn((_parent?: string) => Promise.resolve());
+		const client = fake(listRooms);
+		const session = new SessionView();
+		const listing = (id: string, title: string, memberCount?: number) => ({ id, title, joined: false, record: { room_id: id }, members: [], memberCount });
+		session.apply(live({ directory: [listing('design', 'Design', 12), listing('quiet', 'Quiet')] as never }), client);
+		const onjoin = vi.fn();
+		sidebar(client, session, { onjoin });
+		flushSync();
+		const toggle = document.querySelector<HTMLButtonElement>('[data-testid="browse-rooms"]')!;
+		expect([toggle.textContent, toggle.getAttribute('aria-expanded')]).toEqual(['Other Rooms', 'true']);
+		const directory = document.querySelector('[data-testid="room-directory"]')!;
+		expect([...directory.querySelectorAll('.ap-room-topic')].map((topic) => topic.textContent)).toEqual(['12 members · Join', 'Join']);
+		expect(directory.querySelector('.ap-sect-note')).toBeNull();
+		directory.querySelector<HTMLButtonElement>('[data-join="design"]')!.click();
+		expect(onjoin).toHaveBeenCalledWith('design');
+		toggle.click();
+		flushSync();
+		expect([toggle.getAttribute('aria-expanded'), names('room-directory')]).toEqual(['false', []]);
+		expect(localStorage.getItem('apron.sidebarFolds')).toBe('["otherRooms"]');
+		// Its …, as the heading does, shows them all again, listed afresh.
+		const listed = listRooms.mock.calls.length;
+		dom.button('Show all Other Rooms').click();
+		flushSync();
+		expect([toggle.getAttribute('aria-expanded'), names('room-directory'), listRooms.mock.calls.length]).toEqual(['true', ['Design', 'Quiet'], listed + 1]);
+		expect(dom.queryByRole('button', 'Show all Other Rooms')).toBeNull();
+		session.dispose();
+	});
+
+	it('folds Rooms to those with news, in them or their threads, and the open one, until the heading or its … unfolds it, kept as left', () => {
+		const client = fake();
+		const session = new SessionView();
+		const room = (id: string, title: string, fields: Partial<RoomSnapshot> = {}) => ({ ...general, id, title, timeline: createTimeline(id), ...fields }) as RoomSnapshot;
+		const rooms = [general, room('ops', 'Ops'), room('design', 'Design'), room('quiet', 'Quiet'), room('t1', 'Deploy', { parentRoomId: 'design' })];
+		session.apply(live({ rooms }), client);
+		sidebar(client, session, { unread: { ops: 3, t1: 1 } });
+		flushSync();
+		expect(names('room-list')).toEqual(['General', 'Ops', 'Design', 'Deploy', 'Quiet']);
+		dom.button('Rooms').click();
+		flushSync();
+		// General is open; Ops has unread, Design a thread with news; Quiet has none.
+		expect([names('room-list'), dom.button('Rooms').getAttribute('aria-expanded')]).toEqual([['General', 'Ops', 'Design', 'Deploy'], 'false']);
+		expect(localStorage.getItem('apron.sidebarFolds')).toBe('["rooms"]');
+		dom.button('Show all Rooms').click();
+		flushSync();
+		expect([names('room-list'), document.activeElement]).toEqual([['General', 'Ops', 'Design', 'Deploy', 'Quiet'], dom.button('Rooms')]);
+		expect(localStorage.getItem('apron.sidebarFolds')).toBe('[]');
+		dom.button('Rooms').click();
+		dom.unmount();
+		// Folded the next time the page opens, too.
+		sidebar(client, session, { unread: { ops: 3, t1: 1 } });
+		flushSync();
+		expect(names('room-list')).toEqual(['General', 'Ops', 'Design', 'Deploy']);
+		session.dispose();
+	});
+
+	it('heads each section with an h2, and folds Private alone to those with mentions, to none at all, or to the open one', () => {
+		const client = fake();
+		const session = new SessionView();
+		const room = (id: string, title: string, fields: Partial<RoomSnapshot> = {}) => ({ ...general, id, title, timeline: createTimeline(id), ...fields }) as RoomSnapshot;
+		const rooms = [general, room('quiet', 'Quiet'), room('bo', 'Bo', { private: true }), room('cy', 'Cy', { private: true }), room('t1', 'Plans', { parentRoomId: 'cy', private: true })];
+		session.apply(live({ rooms }), client);
+		sidebar(client, session, { onnewprivate: vi.fn(), mentions: { t1: 1 } });
+		flushSync();
+		expect(dom.byRole('heading', 'Rooms').tagName).toBe('H2');
+		expect(dom.byRole('heading', 'Private').querySelector('button')?.getAttribute('aria-expanded')).toBe('true');
+		dom.button('Private').click();
+		flushSync();
+		// Cy's thread has a mention, and nothing else unread: Cy stays, with it; Bo goes. Rooms is left as it was.
+		expect([names('private-list'), names('room-list')]).toEqual([['Cy', 'Plans'], ['General', 'Quiet']]);
+		expect(localStorage.getItem('apron.sidebarFolds')).toBe('["private"]');
+		dom.button('Rooms').click();
+		flushSync();
+		// Nothing in Rooms has news but the open room.
+		expect(names('room-list')).toEqual(['General']);
+		dom.unmount();
+		sidebar(client, session, { onnewprivate: vi.fn(), mentions: {} });
+		flushSync();
+		// No news anywhere: a folded section with none of its rooms open shows its heading and … alone.
+		expect([names('private-list'), dom.button('Show all Private').isConnected]).toEqual([[], true]);
+		session.dispose();
+	});
+
 	it('names the server in its head, and reaches the connect screen from the profile, closing it', () => {
 		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'wss://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
 		const session = new SessionView();

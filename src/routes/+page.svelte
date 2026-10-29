@@ -2144,8 +2144,8 @@
 		if (!client || !paneRoom) return;
 		const leaving = paneRoom;
 		// A private room isn't listed to join again: only a member can add you back, and the last to leave ends it.
-		const again = leaving.parentRoomId !== undefined ? 'You can join it again from Other threads under its room.'
-			: !leaving.private ? 'You can join it again from Browse rooms.'
+		const again = leaving.parentRoomId !== undefined ? 'You can join it again from Other Threads under its room.'
+			: !leaving.private ? 'You can join it again from Other Rooms.'
 			: othersIn(leaving, session.you?.user_id).length ? 'It’s private: only someone in it can add you back.'
 			: 'No one else is in it, so it ends when you leave.';
 		if (!confirm(`Leave ${leaving.title}? ${again}`)) return;
@@ -2154,7 +2154,7 @@
 	}
 
 	/**
-	 * Leaves a thread from its row in the sidebar, without asking: it only moves down to Other threads, where
+	 * Leaves a thread from its row in the sidebar, without asking: it only moves down to Other Threads, where
 	 * Join brings it back. Its card stays in the room.
 	 */
 	function leaveThread(thread: string): void {

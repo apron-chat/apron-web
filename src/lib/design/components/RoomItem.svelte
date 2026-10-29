@@ -1,15 +1,15 @@
 <script lang="ts">
-	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import Plus from '@lucide/svelte/icons/plus';
 	import type { ClassValue } from 'svelte/elements';
 	import Faces from './Faces.svelte';
+	import FoldPill from './FoldPill.svelte';
 	import RoomRow from './RoomRow.svelte';
 	import type { Face } from './types';
 	import UnreadCount from './UnreadCount.svelte';
 	import { roomName } from './util';
 
 	/**
-	 * A room's row in the rooms list, or a listed room's under Browse rooms (with its `topic`, joined by picking it).
+	 * A room's row in the rooms list, or a listed room's under Other Rooms (with its `topic`, joined by picking it).
 	 * A thread's row is a <ThreadItem>. The row's button names the room in `data-room`, or in `data-join` while `listed`.
 	 */
 	interface Props {
@@ -40,9 +40,9 @@
 		onleave?: (e: MouseEvent) => void;
 		/** A + at the end of the open room's row, always shown, that starts a thread in it (where there is no `onleave`). */
 		onnewthread?: () => void;
-		/** The open room folded to its threads with news: a "…" pill at the end of its row, before its +, that shows them all. */
+		/** The open room folded to its threads with news: a FoldPill at the end of its row, before its +, that shows them all. */
 		onexpand?: () => void;
-		/** Listed under Browse rooms, and joined by picking it, rather than one of your rooms. */
+		/** Listed under Other Rooms, and joined by picking it, rather than one of your rooms. */
 		listed?: boolean;
 		/** The row's tooltip, such as an untitled room's `room_id`. */
 		title?: string;
@@ -67,7 +67,7 @@
 {#snippet lines()}{#if topic}<span class="ap-room-topic">{topic}</span>{/if}{/snippet}
 {#snippet start()}
 	<span class="ap-room-ends">
-		{#if onexpand}<button type="button" class="ap-room-expand" data-testid={expandTestid} aria-label="Show all threads in {shown}" title="Show all threads" onclick={expand}><Ellipsis size={14} aria-hidden="true" /></button>{/if}
+		{#if onexpand}<FoldPill label="Show all threads in {shown}" title="Show all threads" testid={expandTestid} onclick={expand} />{/if}
 		{#if onnewthread}<button type="button" class="ap-iconbtn ap-room-new" data-testid={newThreadTestid} aria-label="New thread in {shown}" title="New thread" onclick={onnewthread}><Plus size={16} aria-hidden="true" /></button>{/if}
 	</span>
 {/snippet}

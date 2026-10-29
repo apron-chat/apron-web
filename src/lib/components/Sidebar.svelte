@@ -10,6 +10,7 @@
 	import { roomFaces } from '$lib/ui/faces';
 	import type { Face } from '$lib/design/components/types';
 	import { listInBackground } from '$lib/ui/background-listing';
+	import { loadSidebarFolds, saveSidebarFolds } from '$lib/ui/storage';
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
@@ -82,9 +83,23 @@
 	let privateRooms = $derived(sections.private);
 
 	let canBrowse = $derived(session.canManageRooms && session.steady);
-	/** What picking a listed room does: join it, or open it without joining where guests only read. */
-	let action = $derived(session.readOnly ? 'Open' : 'Join');
-	let browseOpen = $state(false);
+	/**
+	 * The sections folded to their rows with news, as picking the open room folds its threads: Rooms and Private keep the
+	 * rooms with unread messages or mentions, in them or their threads, and the open one, which reading would otherwise
+	 * take away; Other Rooms, whose rooms have none, keeps nothing. All open from the start, and kept as left, on this device.
+	 */
+	let folds = $state(new Set(loadSidebarFolds()));
+	function fold(key: string, shut: boolean): void {
+		const next = new Set(folds);
+		if (shut) next.add(key);
+		else next.delete(key);
+		folds = next;
+		saveSidebarFolds([...next]);
+	}
+	const newsIn = (id: string) => (unread[id] ?? 0) > 0 || (mentions[id] ?? 0) > 0;
+	/** News in the room, or in a thread of it you've joined (as `threadsWithNews` counts them, without building their entries). */
+	const hasNews = (room: RoomSnapshot) => newsIn(room.id) || session.rooms.some((thread) => thread.parentRoomId === room.id && thread.joined && newsIn(thread.id));
+	const shown = (list: RoomSnapshot[], key: string) => (folds.has(key) ? list.filter((room) => room.id === session.activeRoomId || hasNews(room)) : list);
 	let listError = $state('');
 	let createOpen = $state(false);
 	let canCreateRoom = $derived(session.canManageRooms && session.steady && !session.readOnly);
@@ -99,11 +114,11 @@
 	let roomsKey = $derived([...rooms, ...privateRooms].filter((room) => room.joined).map((room) => room.id).join('\u0000'));
 	/**
 	 * How long a listing made in the background is reused, a client choice: switching between rooms shouldn't list
-	 * again each time, and any server may rate-limit `room_list`. Joining or leaving lists afresh (the client drops what it changed), and so does opening Browse.
+	 * again each time, and any server may rate-limit `room_list`. Joining or leaving lists afresh (the client drops what it changed), and so does opening Other Rooms.
 	 */
 	const BACKGROUND_LISTING_MS = 60_000;
 
-	// Browse rooms and Other threads show only when there is something to join, so list both in the background:
+	// Other Rooms and Other Threads show only when there is something to join, so list both in the background:
 	// the rooms whenever the rooms you've joined change, and the active room's threads whenever it or what you've
 	// joined changes. Threads you haven't joined deliver nothing live (§3.4): this listing is also what brings their
 	// cards up to date. One refused for a while lists again once the wait is over.
@@ -125,15 +140,15 @@
 	 * The open room whose threads are folded to those with news, as under a room that isn't open: picking the room
 	 * again while reading it folds them, and once more unfolds them. Going anywhere else unfolds them.
 	 */
-	let folded = $state<string | undefined>();
+	let threadsFoldedFor = $state<string | undefined>();
 	$effect(() => {
 		void session.activeRoomId;
 		void activeThread;
-		folded = undefined;
+		threadsFoldedFor = undefined;
 	});
 	function pickRoom(room: RoomSnapshot, current: boolean): void {
 		// One pane at a time on a phone: picking the open room there goes back to it, out of the list.
-		if (current && innerWidth >= NARROW_MAX) folded = folded === room.id ? undefined : room.id;
+		if (current && innerWidth >= NARROW_MAX) threadsFoldedFor = threadsFoldedFor === room.id ? undefined : room.id;
 		onroom(room);
 	}
 
@@ -153,9 +168,9 @@
 		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} muted={room.mutedUntil !== undefined} active={current}
 		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering && !session.reconnectQuiet}
 		onselect={() => pickRoom(room, current)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
-		onexpand={active && folded === room.id ? () => (folded = undefined) : undefined} expandTestid="expand-threads"
+		onexpand={active && threadsFoldedFor === room.id ? () => (threadsFoldedFor = undefined) : undefined} expandTestid="expand-threads"
 	/>
-	{#if active && folded !== room.id}
+	{#if active && threadsFoldedFor !== room.id}
 		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
 		<!-- Under a room that isn't open (or is folded, when its row has a … that unfolds it), only its joined threads with news, so activity there isn't missed. -->
@@ -169,29 +184,32 @@
 <aside class="ap-shell-side" aria-label="Rooms">
 	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={serverLook?.avatar} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
-		<SidebarSection title="Rooms" collapsible={false} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
+		<SidebarSection title="Rooms" folded={folds.has('rooms')} onfold={(shut) => fold('rooms', shut)} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
 			{#if rooms.length === 0}
 				<p class="ap-sect-note">{session.snapshot.status === 'connected' ? 'No rooms yet.' : 'Waiting for rooms…'}</p>
 			{:else}
-				{#each rooms as room (room.id)}{@render roomRow(room)}{/each}
+				{#each shown(rooms, 'rooms') as room (room.id)}{@render roomRow(room)}{/each}
 			{/if}
 		</SidebarSection>
 		<!-- Shown with private rooms in it, or empty, for its +, where you could start one. -->
 		{#if privateRooms.length > 0 || onnewprivate}
-			<SidebarSection title="Private" collapsible={false} onadd={onnewprivate} addLabel="New private conversation" bodyTestid="private-list">
-				{#each privateRooms as room (room.id)}{@render roomRow(room, roomFaces(room, session.you))}{/each}
+			<SidebarSection title="Private" folded={folds.has('private')} onfold={(shut) => fold('private', shut)} onadd={onnewprivate} addLabel="New private conversation" bodyTestid="private-list">
+				{#each shown(privateRooms, 'private') as room (room.id)}{@render roomRow(room, roomFaces(room, session.you))}{/each}
 			</SidebarSection>
 		{/if}
 		{#if canBrowse && unjoined.length > 0}
-			<SidebarSection title="Browse rooms" bind:open={browseOpen} ontoggle={(open) => { if (open) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
-				<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
-				<p class="ap-sect-note">Most active rooms</p>
-				{#each unjoined as listing (listing.id)}
-					<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
-					{@const members = listing.memberCount ?? listing.members.length}
-					<RoomItem room={listing.id} name={listing.title} topic={`${members > 0 ? `${members} ${members === 1 ? 'member' : 'members'} · ` : ''}${action}`} listed onselect={() => onjoin(listing.id)} />
-				{/each}
-				{#if listError}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
+			<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
+			<SidebarSection title="Other Rooms" folded={folds.has('otherRooms')} onfold={(shut) => { fold('otherRooms', shut); if (!shut) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
+				{#if !folds.has('otherRooms')}
+					{#each unjoined as listing (listing.id)}
+						<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
+						{@const members = listing.memberCount ?? listing.members.length}
+						{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
+						<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word. -->
+						<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed onselect={() => onjoin(listing.id)} />
+					{/each}
+					{#if listError}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
+				{/if}
 			</SidebarSection>
 		{/if}
 	</div>

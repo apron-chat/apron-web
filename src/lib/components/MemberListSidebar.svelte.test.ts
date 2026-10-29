@@ -112,13 +112,14 @@ describe('MemberListSidebar', () => {
 		toggle().click();
 		flushSync();
 		expect(toggle().getAttribute('aria-expanded')).toBe('false');
-		expect(toggle().textContent).toBe('▾Offline· 2');
+		expect(toggle().textContent).toBe('Offline· 2');
 		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', []]]);
 		expect(localStorage.getItem('apron.memberSections')).toBe('["offline"]');
 		dom.unmount();
 		render(people);
 		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', []]]);
-		toggle().click();
+		// Its …, as the heading does, shows them again.
+		dom.button('Show all Offline').click();
 		flushSync();
 		expect(sections()).toEqual([['Online· 1', ['ada']], ['Offline· 2', ['bo', 'cy']]]);
 	});

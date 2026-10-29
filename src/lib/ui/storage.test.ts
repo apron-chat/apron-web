@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -53,11 +53,17 @@ describe('recent servers', () => {
 });
 
 describe('preference storage', () => {
-	it('keeps the member list\'s folded sections, open until folded, and ignores what isn\'t a list of keys', () => {
+	it('keeps the member list\'s and the sidebar\'s folded sections, open until folded, and ignores what isn\'t a list of keys', () => {
 		expect(loadShutMemberSections()).toEqual([]);
 		saveShutMemberSections(['offline']);
 		expect(values.get('apron.memberSections')).toBe('["offline"]');
 		expect(loadShutMemberSections()).toEqual(['offline']);
+		// The sidebar's sections folded to what has news, the same way.
+		expect(loadSidebarFolds()).toEqual([]);
+		saveSidebarFolds(['rooms', 'otherRooms']);
+		expect(loadSidebarFolds()).toEqual(['rooms', 'otherRooms']);
+		values.set('apron.sidebarFolds', '{');
+		expect(loadSidebarFolds()).toEqual([]);
 		values.set('apron.memberSections', '{"offline":true}');
 		expect(loadShutMemberSections()).toEqual([]);
 		values.set('apron.memberSections', 'not json');

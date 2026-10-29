@@ -21,8 +21,10 @@ const KEY = {
 	memberList: 'apron.memberList',
 	/** The member list's sections folded away (`online`, `offline`), on every room. */
 	memberSections: 'apron.memberSections',
-	/** Whether Other threads, the threads you haven't joined under the open room, is folded away. */
+	/** Whether Other Threads, the threads you haven't joined under the open room, is folded away. */
 	otherThreads: 'apron.otherThreads',
+	/** The sidebar's sections folded to their rows with news (`rooms`, `private`, `otherRooms`). */
+	sidebarFolds: 'apron.sidebarFolds',
 	/** The room and thread descriptions put away with their ×, each kept as the fingerprint of the text put away. Still stored under its old name, so what's put away stays put away. */
 	hiddenDescriptions: 'apron.hiddenSummaries',
 	/** Private rooms someone else added you to, per account (`notifyAccount`), until their banner is put away or you leave. */
@@ -175,20 +177,34 @@ export function saveMemberListPrefs(prefs: SidebarPrefs): void {
 }
 
 /** The member list's sections are open until folded, and stay as they were left. */
-export function loadShutMemberSections(): string[] {
+/** A list of keys kept as JSON under `key`: none if it isn't one, keeping only the strings. */
+function readKeyList(key: string): string[] {
 	try {
-		const shut: unknown = JSON.parse(read(KEY.memberSections) ?? '[]');
-		return Array.isArray(shut) ? shut.filter((key): key is string => typeof key === 'string') : [];
+		const list: unknown = JSON.parse(read(key) ?? '[]');
+		return Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : [];
 	} catch {
 		return [];
 	}
+}
+
+export function loadShutMemberSections(): string[] {
+	return readKeyList(KEY.memberSections);
 }
 
 export function saveShutMemberSections(shut: readonly string[]): void {
 	write(KEY.memberSections, JSON.stringify(shut));
 }
 
-/** Other threads is open until it's folded, and stays as it was left. */
+/** The sidebar's sections folded to their rows with news, by key; none until one is, and they stay as they were left. */
+export function loadSidebarFolds(): string[] {
+	return readKeyList(KEY.sidebarFolds);
+}
+
+export function saveSidebarFolds(folded: readonly string[]): void {
+	write(KEY.sidebarFolds, JSON.stringify(folded));
+}
+
+/** Other Threads is open until it's folded, and stays as it was left. */
 export function loadOtherThreadsOpen(): boolean {
 	return read(KEY.otherThreads) !== 'shut';
 }

@@ -39,7 +39,7 @@
 	/** Whether a thread is muted, by its own mute or its room's. */
 	const isMuted = (thread: string) => muted[thread] !== undefined || muted[roomId] !== undefined;
 
-	let othersOpen = $state(loadOtherThreadsOpen());
+	let othersFolded = $state(!loadOtherThreadsOpen());
 	/** The room whose other threads are all showing, past the first few; another room starts short again. */
 	let allFor = $state<string | undefined>();
 	/**
@@ -82,11 +82,11 @@
 	/** The first few (or all, after N more…), and always the open one, also while folded. */
 	let shownOthers = $derived.by(() => {
 		const open = allOthers.find((other) => other.id === activeThread);
-		if (!othersOpen) return open ? [open] : [];
+		if (othersFolded) return open ? [open] : [];
 		const shown = allFor === roomId ? allOthers : allOthers.slice(0, OTHERS_SHOWN);
 		return open && !shown.includes(open) ? [...shown, open] : shown;
 	});
-	let hiddenOthers = $derived(othersOpen ? allOthers.length - shownOthers.length : 0);
+	let hiddenOthers = $derived(othersFolded ? 0 : allOthers.length - shownOthers.length);
 </script>
 
 <!-- The design system's ThreadList holds the rows, each a ThreadItem; the app says which threads, and what picking one does. -->
@@ -94,7 +94,7 @@
 	{#each joined as entry (entry.id)}
 		{@const open = activeThread === entry.id}
 		<!-- Its description, then its latest message: both when it has both, each marked so either reads alone, as on its card. One bubble for what's new: unread replies in grey, orange with an @ when they include a mention. A thread with nothing new shows none, and steps back. -->
-		<!-- Leaving is the archive: the thread stops alerting and moves down to Other threads, on every device. -->
+		<!-- Leaving is the archive: the thread stops alerting and moves down to Other Threads, on every device. -->
 		<ThreadItem
 			thread={entry.id} name={designTitle(entry)} private={entry.private} muted={isMuted(entry.id)} active={open}
 			unread={open ? 0 : (unread[entry.id] ?? 0)} mentions={open ? 0 : (mentions[entry.id] ?? 0)}
@@ -127,8 +127,8 @@
 		joined={joined.length > 0 ? joinedRows : undefined}
 		others={allOthers.length}
 		{otherRows}
-		bind:othersOpen
-		ontoggleothers={saveOtherThreadsOpen}
+		bind:othersFolded
+		onfoldothers={(folded) => saveOtherThreadsOpen(!folded)}
 		more={hiddenOthers}
 		onmore={() => (allFor = roomId)}
 		othersToggleTestid="other-threads"

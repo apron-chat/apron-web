@@ -28,7 +28,7 @@
 		nested?: boolean;
 		/** Always in a `.ap-roomrow`, which makes room for its door on hover, whether or not it has one. */
 		framed?: boolean;
-		/** Not yours yet: a room listed under Browse rooms, a thread you haven't joined. */
+		/** Not yours yet: a room listed under Other Rooms, a thread you haven't joined. */
 		listed?: boolean;
 		/** The button's tooltip. */
 		title?: string;

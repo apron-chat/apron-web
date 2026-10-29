@@ -95,7 +95,7 @@ until the connection is back. Screen readers hear it as the pill shows it: not
 for those first moments, nor while a hidden tab waits (the status says nothing
 then, rather than "Connected"). A link opened meanwhile waits for the new
 connection's listings before deciding a room or thread isn't there. What was listed before
-the drop stays listed: Browse rooms, Other threads, and the room's thread cards,
+the drop stays listed: Other Rooms, Other Threads, and the room's thread cards,
 until the new connection's listings replace them, so the open room shows what
 came meanwhile without waiting on its thread listing again, and an open
 thread's reply count stays while it catches up.
@@ -233,8 +233,9 @@ before Members, or the end of the room's once it is shut), toggles a right-hand
 sidebar, **Members**, listing the open room's or thread's members from its `room_list`
 snapshot, with their role badges, in sections as Discord lists them, each
 headed with its count: **Online**, then **Offline** (offline, or your own
-invisible). Each heading folds its section away, as Other threads does, and
-which are folded is remembered for every room. Someone with no status isn't known to be offline, so stays under
+invisible). Each heading folds its section, as the sidebar's headings do, to
+no one (presence isn't news), with the **…** at its end that shows it again,
+and which are folded is remembered for every room. Someone with no status isn't known to be offline, so stays under
 Online. Without presence (a server without the `status` capability, or no
 member with a status) it is one list with no heading, since a Members heading
 would repeat the panel's own. Within a section, members sort by status, then
@@ -751,8 +752,9 @@ and steps back, its title muted and its lines dimmed. A room shows the
 same bubble for its own unread messages (its threads count their own), with
 its name in bold, and none while you're reading it. The open room or thread has a neutral fill and an
 accent bar at its left (on the guide line, for a thread), so it never looks
-unread. A door on hover leaves the thread. Then **Other threads · N**, a heading
-that folds like Browse rooms (it stays as you left it, on this device): the
+unread. A door on hover leaves the thread. Then **Other Threads · N**, a heading
+that folds as the sidebar's do, to the one you're reading if it's among them,
+with the **…** at its end (it stays as you left it, on this device): the
 threads you haven't joined, beside the guide line carried on dashed, their
 titles muted, each with its Description line (from its listed `description`) and,
 at the end of the row, when it was last active (`2h`, `Tue`, from its listed
@@ -765,7 +767,7 @@ while the list is folded or past the first three), and **Join**, a door-in
 button on the row (on hover, where it takes the time's place, or always on
 touch, beside it) as Leave is a door out, joins it and opens it once its
 `room_update` arrives. Leaving is how a thread is put
-away: it stops counting unread and alerting, moves down to Other threads, and
+away: it stops counting unread and alerting, moves down to Other Threads, and
 does so on every device, since it's a membership; its card stays in the room.
 The protocol lets a client hide threads, so nothing here is a server limit.
 The room feed shows each thread as
@@ -806,7 +808,14 @@ comes back without `private: true` gets the same error, and neither the reply
 composer opens on it nor do selected messages move into it. Private rooms and
 threads show a lock beside their name.
 
-The sidebar's **Private** section, right below Rooms and above Browse rooms,
+The sidebar's section headings fold as picking the open room does: **Rooms** or
+**Private** folds to the rooms with news, in them or in their threads, and
+the open room (which reading would otherwise take away), and the heading shows
+the **…** before its **+**; the **…**, or the heading again, shows them all.
+**Other Rooms** folds alike, to nothing, as its rooms have no news. Each starts
+open and stays as you left it, on this device.
+
+The sidebar's **Private** section, right below Rooms and above Other Rooms,
 lists every joined top-level private room (`private: true` and no
 `parent_room_id`, [PROTOCOL.md §4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)):
 conversations started with people and titled private rooms alike. Nothing is
@@ -938,9 +947,12 @@ asking, since Join brings it back from the same list. A thread is a room of its
 own, so leaving its parent keeps it. A
 server that keeps you in a room answers `denied`, and its message shows as
 the error.
-**Browse rooms** in the sidebar lists, via `room_list` with
-`filter: "not_joined"`, the most active visible rooms you haven't joined;
-picking one joins it and opens it once its `room_update` arrives.
+**Other Rooms** in the sidebar lists, via `room_list` with
+`filter: "not_joined"`, the most active visible rooms you haven't joined, each
+with its member count and **Join**. It starts open, so a newcomer sees what
+else there is without looking for it, and folds as the other sections do;
+unfolding it lists afresh.
+Picking one joins it and opens it once its `room_update` arrives.
 
 With the `edit` capability, several messages move at a time: shift-click a
 message (or press `x` on it, or pick **Select** from its More menu) to enter select mode, shift-click another to fill the range, and the
@@ -1339,8 +1351,8 @@ as a guest there, the composer gives way to a bar saying so with a **Sign in**
 button (it opens the sign-in panel on Passkey); signed in to an account, the
 bar only says so. Replying, reacting, editing, moving and deleting messages,
 starting threads, editing rooms and threads, adding or removing members, and
-Join and Leave are hidden; Browse rooms offers **Open** instead of
-**Join**, which reads the room through its history without joining it, and Other threads
+Join and Leave are hidden; a room picked under Other Rooms (which says no
+Join) opens to read through its history without joining it, and Other Threads
 offers no Join, since picking one already reads it. Other
 servers' denials show as errors as usual.
 

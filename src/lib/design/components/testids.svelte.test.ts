@@ -24,6 +24,8 @@ import RoomItem from './RoomItem.svelte';
 import SelectionBar from './SelectionBar.svelte';
 import SettingRow from './SettingRow.svelte';
 import SidebarSection from './SidebarSection.svelte';
+import FoldHeading from './FoldHeading.svelte';
+import FoldPill from './FoldPill.svelte';
 import SignInForm from './SignInForm.svelte';
 import StatusBanner from './StatusBanner.svelte';
 import SystemLine from './SystemLine.svelte';
@@ -106,7 +108,10 @@ const rows: Row[] = [
 		card: () => dom.button(/^Deploy/), unread: () => labelled('2 unread replies'), 'last-reply': () => byText('9h'), description: () => around('Lock held'), latest: () => around('Ada done')
 	}],
 	['ThreadList', ThreadList, { room: 'General', others: 4, otherRows: dom.html('<div>Offsite</div>'), more: 3, onmore: vi.fn(), othersToggleTestid: 'others', moreTestid: 'more', testid: 'list' }, {
-		list: () => dom.byRole('group', 'Threads in General'), others: () => dom.button(/Other threads/), more: () => dom.button('3 more…')
+		list: () => dom.byRole('group', 'Threads in General'), others: () => dom.button(/Other Threads/), more: () => dom.button('3 more…')
+	}],
+	['ThreadList, folded', ThreadList, { room: 'General', others: 4, othersFolded: true, othersExpandTestid: 'others-expand' }, {
+		'others-expand': () => dom.button('Show all Other Threads')
 	}],
 	['SelectionBar', SelectionBar, { count: 2, onnewthread: vi.fn(), newThreadTestid: 'new-thread', testid: 'bar' }, {
 		bar: () => dom.byRole('toolbar', 'Selected messages'), 'new-thread': () => dom.button('New thread')
@@ -142,9 +147,13 @@ const rows: Row[] = [
 	}],
 	['ConnectHeader', ConnectHeader, { urlTestid: 'url' }, { url: () => byLabel('Server') }],
 	['SettingRow', SettingRow, { title: 'Status', hint: 'Online.', hintTestid: 'hint' }, { hint: () => byText('Online.') }],
-	['SidebarSection', SidebarSection, { title: 'Rooms', children: dom.html('<p>General</p>'), toggleTestid: 'toggle', bodyTestid: 'body' }, {
-		toggle: () => dom.button(/Rooms$/), body: () => around('General')
+	['SidebarSection', SidebarSection, { title: 'Rooms', children: dom.html('<p>General</p>'), folded: true, toggleTestid: 'toggle', expandTestid: 'expand', bodyTestid: 'body' }, {
+		toggle: () => dom.button(/Rooms$/), expand: () => dom.button('Show all Rooms'), body: () => around('General')
 	}],
+	['FoldHeading', FoldHeading, { label: 'Offline', count: 3, folded: true, toggleTestid: 'toggle', expandTestid: 'expand' }, {
+		toggle: () => dom.button(/^Offline/), expand: () => dom.button('Show all Offline')
+	}],
+	['FoldPill', FoldPill, { label: 'Show all threads in general', testid: 'pill' }, { pill: () => dom.button('Show all threads in general') }],
 	['StatusBanner', StatusBanner, { state: 'offline', textTestid: 'text' }, { text: () => byText('Offline') }],
 	['JumpBar', JumpBar, { count: 3, onjump: vi.fn(), buttonTestid: 'jump' }, { jump: () => dom.button('3 new messages, jump to latest') }],
 	['AttachmentTile, renamable', AttachmentTile, { name: 'a.png', onrename: vi.fn(), labelTestid: 'label' }, { label: () => dom.button('Rename a.png') }],

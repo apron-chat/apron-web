@@ -32,6 +32,8 @@ export { default as Nudge } from './Nudge.svelte';
 export { default as MessageActions } from './MessageActions.svelte';
 export { default as JumpBar } from './JumpBar.svelte';
 export { default as RoomHeader } from './RoomHeader.svelte';
+export { default as FoldHeading } from './FoldHeading.svelte';
+export { default as FoldPill } from './FoldPill.svelte';
 export { default as SidebarSection } from './SidebarSection.svelte';
 export { default as SidebarHead } from './SidebarHead.svelte';
 export { default as ThreadList } from './ThreadList.svelte';

@@ -1,47 +1,40 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import FoldHeading from './FoldHeading.svelte';
 
 	interface Props {
 		/** The room's title, for the group's label: "Threads in <room>". */
 		room: string;
 		/** The rows of its threads you've joined (<ThreadItem>s), along a solid guide down from the room. */
 		joined?: Snippet;
-		/** How many threads of the room you haven't joined there are (§4.2.1 `not_joined`): "Other threads · N", a heading that folds. None hides it. */
+		/** How many threads of the room you haven't joined there are (§4.2.1 `not_joined`): "Other Threads · N", a FoldHeading. None hides it. */
 		others?: number;
 		/** Their rows (<ThreadItem>s, `unjoined`), along a dashed guide, as they aren't yours yet. */
 		otherRows?: Snippet;
-		/** Whether the other threads show; bindable. Folded, show only the open one, if it's among them. */
-		othersOpen?: boolean;
-		ontoggleothers?: (open: boolean) => void;
+		/** Folded: show only the open one, if it's among them (they have no news, §3.4), and the heading's …. Bindable. */
+		othersFolded?: boolean;
+		onfoldothers?: (folded: boolean) => void;
 		/** How many other threads aren't shown: a "N more…" row after them. */
 		more?: number;
 		onmore?: () => void;
-		/** A `data-testid` for the Other threads heading's toggle, and one for the "N more…" row. */
+		/** A `data-testid` for the Other Threads heading, one for its …, and one for the "N more…" row. */
 		othersToggleTestid?: string;
+		othersExpandTestid?: string;
 		moreTestid?: string;
 		/** Classes for the group, added to its own. */
 		class?: ClassValue;
 		/** A `data-testid` for the group. */
 		testid?: string;
 	}
-	let { room, joined, others = 0, otherRows, othersOpen = $bindable(true), ontoggleothers, more = 0, onmore, othersToggleTestid, moreTestid, class: className, testid }: Props = $props();
-
-	function toggle(): void {
-		othersOpen = !othersOpen;
-		ontoggleothers?.(othersOpen);
-	}
+	let { room, joined, others = 0, otherRows, othersFolded = $bindable(false), onfoldothers, more = 0, onmore, othersToggleTestid, othersExpandTestid, moreTestid, class: className, testid }: Props = $props();
 </script>
 
 <div role="group" aria-label="Threads in {room}" data-testid={testid} class={['ap-threads', className]}>
 	{#if joined}<div class="ap-threads-joined">{@render joined()}</div>{/if}
 	{#if others > 0}
-		<!-- A heading that folds, like a SidebarSection: these deliver nothing live (§3.4), so they have no counts or previews. -->
-		<div class="ap-threads-head">
-			<button class={['ap-sect-toggle', !othersOpen && 'ap-sect-closed']} type="button" aria-expanded={othersOpen} data-testid={othersToggleTestid} onclick={toggle}>
-				<span class="ap-sect-caret" aria-hidden="true">▾</span>Other threads<span class="ap-threads-count">· {others}</span>
-			</button>
-		</div>
+		<!-- These deliver nothing live (§3.4), so they have no counts or previews, and fold to none but the open one. -->
+		<FoldHeading class="ap-threads-head" label="Other Threads" count={others} bind:folded={othersFolded} onfold={onfoldothers} toggleTestid={othersToggleTestid} expandTestid={othersExpandTestid} />
 		<div class="ap-threads-others">
 			{@render otherRows?.()}
 			{#if more > 0}
