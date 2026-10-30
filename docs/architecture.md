@@ -75,7 +75,7 @@ The wrappers: `ConnectScreen` and `SignIn` (the pieces the design system's
 which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, whose + mounts `AddMembersDialog`: the design system's `AddMembersForm`, the same `PeoplePicker` in a `Dialog` as `PrivateRoomForm`, adding the people picked), `ProfileBar` (`ProfileBar` with its
 `ProfileEditor`), `RoomHeader` (`RoomHeader`, with its ⋯ `MenuButton`) with
 `SearchDialog` (the design system's `SearchPanel`, a field and a listbox of results in a `Dialog`, which the page owns and opens from the room header's ⋯ menu or Ctrl/⌘F: it reads the query's text and `user:`/`room:` filters (`parseQuery`; the text matches as one run, `matchesText`), suggests a filter's value at the caret with the composer's `AutocompletePicker` (`filterAtCaret`, `searchPeople`, `searchRooms`, put in by `withFilterValue`) in the panel's `suggestions`, and matches (`queryMatcher`, resolving names against the users met and the rooms shown) with `$lib/ui/search` what `HistoryKeeper.searchKept` scans of this device's kept history (`scanMessages`, a few hundred rows a read) and what `storedRecords()` holds, and the page opens a result as a link to it, `linked` with `searched`), `RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `NewPrivateDialog` (the design system's `PrivateRoomForm`, a `PeoplePicker` in a `Dialog`, which the page owns: it starts a private room with the people picked, or opens the one you already have with someone, and at the server's limit offers yours to leave), the private room's intro and "You were added" banner (the design system's `PrivateIntro` and `AddedBanner`, which the page renders), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
-`ThreadDescription` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `RoleBadges`, `MentionText` (`Mention`), the embeds (`Embed*`; the trusted-origin gate stays in `embeds/og.ts`), `MessageEditor` (`MessageEditor`, whose `field` the app supplies, the Composer's `MessageField`), `NoticeLine` (a scoped `Message`, from `noticeView`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: `MessageField`, a `ComposerEditable` it fills and edits, with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`)) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
+`ThreadDescription` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `RoleBadges`, `MentionText` (`Mention`), the embeds (`Embed*`; the trusted-origin gate stays in `embeds/og.ts`; `EmbedTerminal` below), `MessageEditor` (`MessageEditor`, whose `field` the app supplies, the Composer's `MessageField`), `NoticeLine` (a scoped `Message`, from `noticeView`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: `MessageField`, a `ComposerEditable` it fills and edits, with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`)) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
 `ProfileCard` (whose Message opens or starts a private conversation), `ReactorsPopover` and `EmojiPopover` (the full emoji picker, which the design system leaves to the client; all three in the design system's `Popover`, a bottom sheet on phones),
 `PreferencesDialog` (`SettingsSections` and `SettingRow`) with its `FontFamilyField` (`FontField`), `StatusPicker`, `PauseNotifications` and `NotifyPrompt` (`Nudge`), `SignInLinkDialog` (both
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
@@ -149,6 +149,34 @@ the pause. Its status notes are read through one
 live region, and switches and checkboxes that can't change stay focusable with
 `aria-disabled`, referring to the note that says why.
 
+Live text (`terminal` and `append` embeds, §4.8.3) is read by
+`src/lib/protocol/live-text.ts`: `followLiveText` makes the streaming `GET`,
+hands each chunk on as bytes, and after a drop or a failure tries again with
+a growing pause, its sink's `start` marking that the new response replaces
+what was shown. It fetches through `setLiveFetch`'s fetcher, which
+`/__preview` points at its in-memory server for that server's own URLs. A
+`terminal` embed is the app's `EmbedTerminal`, the design system's
+`EmbedTerminal` (a header with the title and Live, Ended or Finished, over a
+screen box it hands to `attach`) with a `TerminalScreen`
+(`src/lib/ui/terminal-screen.ts`) in that box: xterm.js, imported by
+`src/lib/ui/xterm.ts` the first time a terminal is shown, so it and its
+stylesheet are a chunk of their own, made read-only (`terminalOptions`; no
+listener for input, replies, titles or the bell; OSC 0, 1, 2 and 52
+swallowed; a link handler that opens nothing; scroll gestures kept for the
+page), its font fitted to the box's width (`terminalFontSize`) and its height
+cut to the rows written (`shownRows`), themed from the design tokens and
+again when the theme changes. Writes made before xterm loaded wait in order,
+and a reset is RIS written in the same queue, so a reconnect can't show the
+old response's tail. An `append` embed has no component: `messageView` reads
+`liveAppend(url)` (`src/lib/ui/live-append.svelte.ts`, one per `url`, a
+`createSubscriber` that reads while some row shows it and tells readers at
+most once a frame, decoding with a streaming `TextDecoder`) and renders the
+body's text and the streamed text as one body, Markdown still arriving first
+settled by `settleMarkdown` (`src/lib/ui/live-markdown.ts`), with `writing`
+on the view while it arrives; the embed is left out of the row's embeds. The
+record itself never changes, so editing, quoting and copying use the
+snapshot's text, and a save sends the embed back by `embed_id`.
+
 `src/routes/+page.svelte` owns the session and the navigation (which room or
 thread is open, per-room drafts) and composes the components. The
 reactive state behind it lives in `src/lib/ui` as small classes — `SessionView`
@@ -219,7 +247,7 @@ the active server: the server's `ext:media` origins, the sites added, or
 change redraws every row.
 
 Protocol types, replay reduction, and the WebSocket session live under
-`src/lib/protocol` and speak Apron protocol v9. `client.ts` holds the session,
+`src/lib/protocol` and speak Apron protocol v10. `client.ts` holds the session,
 `ChatClient`, and re-exports the rest of its API: `client-types.ts` has the
 snapshot and option types, `client-views.ts` the pure helpers over snapshots,
 capabilities and server URLs, and `client-internals.ts` the per-room state,

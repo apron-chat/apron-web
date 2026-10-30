@@ -12,7 +12,8 @@ The default connection is `VITE_DEFAULT_SERVER_URL` from the build, which
 Embed media (`og` images, video and audio) loads from the chat server's origin
 and from the origins that server names for its media, such as its upload bucket
 (`ext.media.origins`, [EXT.md §6](../EXT.md#6-extmedia)).
-Streams load from the chat server's origin only. Every link in chat, from
+Live text (`terminal` and `append` embeds) loads from the chat server's origin
+only. Every link in chat, from
 message text, link cards, uploads and HTML embeds, opens in a new tab.
 
 `/__preview` (in development builds only: `vite dev`, or `APRON_PREVIEW=1 vite build`, which the QA tools and
@@ -24,7 +25,15 @@ requests (auth, room listings/history, messages, reactions, room changes,
 profile updates, activity, commands, and ping). Changes last only for the page
 lifetime, as do settings changed there (display name, sidebar, appearance),
 so previewing never replaces the real ones; the preview does not advertise
-upload or streaming capabilities. The in-memory server loads only with that
+uploads. It does advertise live text (`embed:terminal`, `embed:append`), which
+it serves itself at `http://apron-preview.invalid/` (the page routes those
+URLs to it; there is no network): `/embed-terminal [title]` and
+`/embed-append [markdown]` answer as the servers do, with a write URL and a
+`curl` recipe in a notice to you, and since nothing can `PUT` to it, a moment
+later play a canned demo into a new message (a test run with colors, a
+progress bar, box drawing and cursor movement; a Markdown reply cut at
+arbitrary bytes). A `message` with a new `terminal` or `append` embed gets its
+write URL too. The in-memory server loads only with that
 route, never with the app itself.
 Local development and builds with an empty `VITE_DEFAULT_SERVER_URL` retain the
 same-origin default.
@@ -1203,12 +1212,54 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   room or thread, oldest first. Escape, Close, or a click beside the image
   closes it, with focus back on the image last shown. A Cmd, Ctrl, Shift, Alt
   or middle click keeps the link's own behavior: the file in a new tab or window.
-- **Streams** (capability `embed:stream`): while the embed has a `url` the client reads
-  it with a streaming `GET` and shows the text growing under a Live badge;
-  when a snapshot carries `text` instead it shows the kept text as Finished.
-  `terminal` output is monospace with ANSI colors and emphasis, carriage
-  returns overwrite the line (progress bars), and other escape sequences are
-  dropped; `markdown` renders, the rest is plain.
+- **Terminals** (`terminal` embeds, capability `embed:terminal`,
+  [PROTOCOL.md §4.8.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#486-embedterminal)):
+  a card titled by the embed's `title` (else "Terminal") over a real terminal
+  emulator, xterm.js, loaded the first time a terminal is shown, 80 columns by
+  40 rows: colors (16, 256 and true color), emphasis, carriage returns
+  (progress bars), cursor movement, erasing, box drawing and the alternate
+  screen of full-screen programs all show as a terminal would show them. A
+  bare line feed starts a new line, as a terminal's driver would make it. The
+  font is scaled so the 80 columns fit the message's width, at most 13px on a
+  wide screen (about 6px on a 390px phone, 5.5px at 360px; the page never
+  scrolls sideways), and only the rows down to the last one written show,
+  unless a program is on the alternate screen, which shows all 40; nothing
+  scrolls inside it (no scrollback: what scrolls off the top is gone, as on
+  the terminal), and a wheel or swipe over it scrolls the page. It only reads:
+  nothing typed reaches it, its cursor isn't drawn, and nothing a program
+  prints acts outside it: no window title, bell or clipboard (OSC 52), its
+  answers to queries go nowhere, and OSC 8 links show but open nothing.
+  While the embed has no `output` it is live, under a Live badge: the client
+  reads `url` with a streaming `GET` and writes each chunk as it arrives. A
+  drop or a failure keeps what it shows and tries again (after 1 s, then
+  longer, up to 15 s), and the new response replaces it, from a fresh
+  terminal. Once `GET` ends it says Ended, and when a snapshot carries
+  `output`, it shows that, from a fresh terminal, as Finished.
+- **Live text in the body** (`append` embeds, capability `embed:append`,
+  [§4.8.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#485-embedappend)),
+  such as a model's reply as it writes: no card. The message shows its
+  `body.text` and right after it the text `GET url` has streamed so far, as
+  one text in the body's format (Markdown rendered as any message is), with
+  a quiet "Writing…" under it while the text arrives. The bytes are decoded
+  as UTF-8 as they come (a character split between chunks shows once whole),
+  and the body is redrawn at most once an animation frame. While it is still
+  arriving, Markdown cut off mid-construct is settled for display only: an
+  open code fence or code span is closed, an odd `**` or `~~` in the last
+  paragraph is closed after the text so far (or held back with nothing after
+  it), a link whose destination hasn't closed shows as its label, and a last
+  line that is only a list marker, or a `-` or `=` that would make the line
+  above a heading, waits for more. When `GET` ends (Writing… goes) or fails,
+  what it shows stays until the snapshot without the embed arrives, with the
+  text in the body; a failure tries again, and the new response replaces what
+  was streamed. Edit, Copy text, a reply's quote and a thread's preview use
+  the message as recorded (`body.text`), never the streamed text, and a save
+  sends the embed back by its `embed_id`, so editing doesn't end it; leaving
+  it out of a save (its tile's (x) in the editor) ends it there, dropping what
+  had arrived. A message with only live text and none yet shows as "Live
+  text" in previews and notifications, and one with only a terminal as
+  "Terminal" or "Terminal: its title".
+- A `stream` embed (protocol v9 and before) is a kind like any other the
+  client doesn't know: it shows the fallback card.
 - **`iframe`** embeds stay a paused placeholder until **Load live view**, then
   load sandboxed (`allow-scripts`, never same-origin, no referrer), clamped to
   480px. **`html`** embeds are sanitized with DOMPurify before insertion.
@@ -1291,9 +1342,10 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
 With the `edit` capability, **Edit** on your own message opens it in place, in
 a box like the composer: its text, with its embeds above it as tiles like a
 draft's files (an upload as its picture, audio with a player, or a file card;
-a link preview, stream or other embed as a card named by its title or
-address; a file card says what kind of file it is from its name, such as
-"PDF file"). The message's toolbar hides while it is edited. Each tile's (x) leaves that embed out, and an upload's name can be
+a terminal as a card with its title, saying "Live terminal" or "Terminal
+output"; live text in the body as "Live text", "Still arriving"; a link
+preview or other embed as a card named by its title or address; a file card
+says what kind of file it is from its name, such as "PDF file"). The message's toolbar hides while it is edited. Each tile's (x) leaves that embed out, and an upload's name can be
 changed as on a draft; nothing is sent until **Save changes** (or Enter; on a
 phone or tablet Enter starts a new line), which saves the new text and the
 embed changes in one save: the embeds left out are dropped, and a renamed
@@ -1307,8 +1359,9 @@ still being written has no (x).
 Outside the editor, each embed on your own messages shows an **(x)** on its
 corner while hovered (always on touch screens), which saves the message without
 that embed ([PROTOCOL.md §4.8.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#482-embed-identity)): it is identified by `embed_id`, or by
-value on servers that store embeds as given. Removing an upload or stream asks
-first, since the server deletes its content. A message's last embed has no (x)
+value on servers that store embeds as given. Removing an upload or a terminal
+asks first, since the server deletes its content (a live terminal stops
+showing its output). A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
@@ -1320,8 +1373,8 @@ add** also from the sites listed under it (hosts or URLs, one per line, kept as
 `https:` origins); **Any site** from anywhere. Where an image in a message may
 not load, it shows as a link to it (its alt text, else its URL), an avatar as
 initials, and a card without its picture. Small `data:` images always show.
-The choice is kept on this device, and another tab's applies at once. Stream
-URLs load only from the server's own origin, whatever the choice; links may
+The choice is kept on this device, and another tab's applies at once. Live
+text URLs load only from the server's own origin, whatever the choice; links may
 point anywhere `http(s)`.
 
 **Connect to a server…** in the profile editor (the profile bar at the foot of
