@@ -217,6 +217,7 @@ export class SessionView {
 		client.selectRoom(roomId);
 		if (this.holding && this.held) this.held = { ...this.held, activeRoom: roomId };
 		this.pendingActiveRoom = this.holding ? roomId : undefined;
+		client.awaitRoom(this.pendingActiveRoom);
 	}
 
 	/** Drops the held view: the next connection is a different session (a new server, or a sign-out). */

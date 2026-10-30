@@ -61,8 +61,8 @@ room with its messages from the last day (the newest 150 per room), its thread
 cards and members, and who you are. While it checks for new messages, a pill
 says so (below), and each room is replaced by the live one once it has
 recovered, the open room's first (its history goes ahead of the others', also
-while the server hasn't listed it again yet): what arrived meanwhile comes in under the New divider, and edits,
-deletions and reactions update in place. The kept view is only for showing: it
+while the server hasn't listed it again yet): what arrived meanwhile comes in
+under the New divider, and edits, deletions and reactions update in place. The kept view is only for showing: it
 never sends a read cursor, notifies, or counts as unread, and the live session
 recovers every room as it would without it. It is kept per server in IndexedDB
 for the account signed in there, dropped after a week, removed on sign-out, and
