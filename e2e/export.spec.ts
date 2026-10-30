@@ -87,7 +87,9 @@ test('an export opened with its images loads them from the sites it names, and n
 	await page.getByRole('button', { name: /^Open preferences/ }).click();
 	const preferences = page.getByRole('dialog', { name: 'Preferences' });
 	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
-	await expect(preferences.getByTestId('media-note')).toHaveText('Files on this server and on media.example. Elsewhere, an image shows as a link and an avatar as initials.');
+	// Held to the sites it was agreed to load from, whatever Media said.
+	await expect(preferences.getByTestId('media-policy')).toHaveValue('server');
+	await expect(preferences.getByTestId('media-note')).toHaveText('Files on this server and media.example. Elsewhere, an image shows as a link and an avatar as initials.');
 	await preferences.getByTestId('media-policy').selectOption('all');
 	await expect(preferences.getByTestId('media-note')).toHaveText('Images and avatars from any site.');
 	await page.keyboard.press('Escape');
@@ -100,7 +102,9 @@ test('Preferences, Media: sites added load besides the server’s', async ({ pre
 	await page.getByRole('button', { name: /^Open preferences/ }).click();
 	const preferences = page.getByRole('dialog', { name: 'Preferences' });
 	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
-	await expect(preferences.getByTestId('media-policy')).toHaveValue('server');
+	// As ever by default: previews from the server, avatars and images in messages from anywhere.
+	await expect(preferences.getByTestId('media-policy')).toHaveValue('standard');
+	await expect(preferences.getByTestId('media-note')).toHaveText('Link previews and attachments from this server; avatars and images in messages from any site.');
 	await expect(preferences.getByTestId('media-sites')).toHaveCount(0);
 	await preferences.getByTestId('media-policy').selectOption('custom');
 	const sites = preferences.getByTestId('media-sites');

@@ -233,9 +233,8 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
   note, and offers no reactions, edits, moves, deletions, joins, leaves, room
   or thread changes, or member changes. Other Rooms lists rooms without Join:
   picking one reads it through its history. For a guest, the note offers to
-  sign in, where the server's `auth` offers a scheme besides `guest`. Without
-  one, nothing lifts `write: false`, as on a server that serves an archive
-  ([ARCHIVE.md §4](ARCHIVE.md#4-serving)).
+  sign in; reading an archive (`ext:archive`), it says whose archive it is
+  instead ([ARCHIVE.md §4](ARCHIVE.md#4-serving)).
 - With `add_members`, the member list's + and a profile card's Add to room
   are offered in any room. With `add_members: false` or absent, they are
   offered only in a private room that the user is a member of.

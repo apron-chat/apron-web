@@ -210,12 +210,13 @@ account and shares the one subscription between accounts and tabs, and
 `sw-handlers.ts` holds the service worker's push and click handlers, apart
 from the worker so tests can run them. `media-settings.svelte.ts`
 (`MediaSettings`) keeps where media loads from (Preferences, Media), and
-`directory.mediaOrigins` is what it trusts on the active server: the server's
-`ext:media` origins, the sites added, or `ANY_ORIGIN`. `embedMedia` checks
-`og` media, avatars (`directory.avatar`) and images in markdown
-(`directory.resolveImage`, which `renderMarkdown` turns into a link where it
-says no) against it, and `directory.pieces` includes it, so a change redraws
-every row.
+`directory.mediaOrigins` (for `og` media) and `directory.imageOrigins` (for
+avatars, `directory.avatar`, and images in markdown, `directory.resolveImage`,
+which `renderMarkdown` turns into a link where it says no) are what it trusts on
+the active server: the server's `ext:media` origins, the sites added, or
+`ANY_ORIGIN`; Standard, the default, trusts any for images only, as before.
+`embedMedia` checks against them, and `directory.pieces` includes them, so a
+change redraws every row.
 
 Protocol types, replay reduction, and the WebSocket session live under
 `src/lib/protocol` and speak Apron protocol v9. `client.ts` holds the session,

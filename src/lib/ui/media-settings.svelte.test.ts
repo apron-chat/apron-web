@@ -22,7 +22,13 @@ describe('media settings', () => {
 	it('trusts the server’s origins, those and the sites added, or any', () => {
 		const settings = new MediaSettings();
 		const server = ['https://media.example'];
+		// Standard, as ever: previews from the server's, avatars and images from any.
+		expect(settings.policy).toBe('standard');
 		expect(settings.trusted(server)).toEqual(server);
+		expect(settings.trustedImages(server)).toEqual([...server, ANY_ORIGIN]);
+		settings.update('server');
+		expect(settings.trusted(server)).toEqual(server);
+		expect(settings.trustedImages(server)).toEqual(server);
 		settings.update('custom', ['https://cdn.example', 'https://media.example']);
 		expect(settings.trusted(server)).toEqual(['https://media.example', 'https://cdn.example']);
 		settings.update('all');
@@ -40,7 +46,7 @@ describe('media settings', () => {
 		expect(again.origins).toEqual(['https://cdn.example']);
 		localStorage.setItem('apron.media', JSON.stringify({ policy: 'everything', origins: ['http://x.example', 7] }));
 		again.load();
-		expect(again.policy).toBe('server');
+		expect(again.policy).toBe('standard');
 		expect(again.origins).toEqual([]);
 	});
 });

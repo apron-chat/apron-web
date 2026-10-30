@@ -1,5 +1,5 @@
 import { bioOf, serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
-import { embedMedia } from '$lib/protocol/embeds';
+import { embedMedia, sameOriginMedia } from '$lib/protocol/embeds';
 import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
 import type { EmojiResolver, ImageResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
@@ -29,10 +29,12 @@ class Directory {
 	/** The origins the server names for its media (`ext.media.origins`, EXT.md §6); replaced only when they change. */
 	private serverMedia = $state.raw<readonly string[]>([]);
 	/**
-	 * The origins besides the server's own that media, avatars and images in messages load from: the server's, and
-	 * as the viewer chose (`mediaSettings`), the sites they added, or any (`ANY_ORIGIN`).
+	 * The origins besides the server's own that link previews and attachments load from: the server's, and as the
+	 * viewer chose (`mediaSettings`), the sites they added, or any (`ANY_ORIGIN`).
 	 */
 	readonly mediaOrigins = $derived(mediaSettings.trusted(this.serverMedia));
+	/** The same for avatars and images in messages: any site, unless the viewer chose otherwise. */
+	readonly imageOrigins = $derived(mediaSettings.trustedImages(this.serverMedia));
 	you = $state.raw<Identity | undefined>();
 	private users = $state.raw<Users>({ users: {}, recordedUsers: {}, userAliases: {} });
 	/** When this client saw each user go offline (`ClientSnapshot.sawOffline`): a floor under their `seen`. */
@@ -108,11 +110,11 @@ class Directory {
 	 * pieces is still current (`samePieces`).
 	 */
 	get pieces(): readonly unknown[] {
-		return [this.origin, this.mediaOrigins, this.server, this.you, this.users, this.rooms, this.untitled, this.parents, customEmoji.catalog, customEmoji.reducedMotion];
+		return [this.origin, this.mediaOrigins, this.imageOrigins, this.server, this.you, this.users, this.rooms, this.untitled, this.parents, customEmoji.catalog, customEmoji.reducedMotion];
 	}
 
 	/** An image in a message, where it may load from here (`embedMedia`); elsewhere it shows as a link. */
-	readonly resolveImage: ImageResolver = (src) => embedMedia(src, this.origin, this.mediaOrigins);
+	readonly resolveImage: ImageResolver = (src) => embedMedia(src, this.origin, this.imageOrigins);
 
 	/** Draws a custom emoji's key (`ext:emoji`) as its image, once the catalog has it; asks for the catalog the first time one is seen. */
 	readonly resolveEmoji: EmojiResolver = (key) => customEmoji.resolve(key);
@@ -142,9 +144,14 @@ class Directory {
 		return person?.name || person?.user_id || 'Unknown sender';
 	}
 
-	/** An avatar this client will load, if the user has one where media may load from (`mediaOrigins`, §4.8.6). */
+	/**
+	 * An avatar this client will load, if the user has one where avatars may load from (`imageOrigins`, §4.8.6):
+	 * from anywhere else, only `https:`, as ever.
+	 */
 	avatar(from: Identity | undefined): string | undefined {
-		return embedMedia(this.person(from)?.avatar, this.origin, this.mediaOrigins);
+		const value = this.person(from)?.avatar;
+		const src = embedMedia(value, this.origin, this.imageOrigins);
+		return src?.startsWith('http:') && !sameOriginMedia(value, this.origin) && !this.imageOrigins.includes(new URL(src).origin) ? undefined : src;
 	}
 
 	/**

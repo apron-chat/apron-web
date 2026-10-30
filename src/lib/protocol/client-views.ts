@@ -104,11 +104,6 @@ export function serverArchive(server: ServerParams | undefined): { server?: stri
 	return { ...(typeof from === 'string' ? { server: from } : {}), ...(typeof at === 'string' ? { exportedAt: at } : {}) };
 }
 
-/** Whether `server` offers a way to sign in other than as a guest (§3.2): with none, nothing lifts `ext:permissions` `write: false`. */
-export function offersSignIn(server: ServerParams | undefined): boolean {
-	return Boolean(server?.auth.some((scheme) => scheme !== 'guest'));
-}
-
 /** What an untitled private room is called while its members aren't known (§4.2.4: its `room_id` is no name, §2.4). */
 export const PRIVATE_ROOM = 'Private room';
 

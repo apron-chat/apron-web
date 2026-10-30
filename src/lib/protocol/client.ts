@@ -159,7 +159,6 @@ export {
 	MAX_BIO_CHARS,
 	mediaLimit,
 	normalizeWebSocketUrl,
-	offersSignIn,
 	sameServer,
 	serverAddress,
 	serverArchive,

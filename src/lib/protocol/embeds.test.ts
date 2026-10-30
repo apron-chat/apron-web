@@ -23,9 +23,10 @@ describe('embed URL policy', () => {
 		expect(embedMedia('https://media.apron.chat/f/abc', 'https://server.apron.chat', trusted)).toBe('https://media.apron.chat/f/abc');
 		expect(embedMedia('https://server.apron.chat/files/x', 'https://server.apron.chat', trusted)).toBe('https://server.apron.chat/files/x');
 		expect(embedMedia('https://tracker.example/pixel.gif', 'https://server.apron.chat', trusted)).toBeUndefined();
-		// Anywhere, chosen: any https file, still no http one.
+		// Anywhere, chosen: any http(s) file, still no other scheme.
 		expect(embedMedia('https://tracker.example/pixel.gif', 'https://server.apron.chat', [ANY_ORIGIN])).toBe('https://tracker.example/pixel.gif');
-		expect(embedMedia('http://tracker.example/pixel.gif', 'https://server.apron.chat', [ANY_ORIGIN])).toBeUndefined();
+		expect(embedMedia('http://tracker.example/pixel.gif', 'https://server.apron.chat', [ANY_ORIGIN])).toBe('http://tracker.example/pixel.gif');
+		expect(embedMedia('ftp://tracker.example/pixel.gif', 'https://server.apron.chat', [ANY_ORIGIN])).toBeUndefined();
 		// Streams stay on the chat server.
 		expect(sameOriginMedia('https://media.apron.chat/f/abc', 'https://server.apron.chat')).toBeUndefined();
 	});

@@ -96,9 +96,12 @@
 	let exporting = $state(false);
 
 	/** What the chosen media policy loads, under it. */
-	let mediaNote = $derived(mediaSettings.policy === 'all'
-		? 'Images and avatars from any site.'
-		: `Files on this server${mediaHosts.length ? ` and on ${mediaHosts.join(', ')}` : ''}${mediaSettings.policy === 'custom' ? ', and on the sites below' : ''}. Elsewhere, an image shows as a link and an avatar as initials.`);
+	let mediaNote = $derived.by(() => {
+		const server = `this server${mediaHosts.length ? ` and ${mediaHosts.join(', ')}` : ''}`;
+		if (mediaSettings.policy === 'all') return 'Images and avatars from any site.';
+		if (mediaSettings.policy === 'standard') return `Link previews and attachments from ${server}; avatars and images in messages from any site.`;
+		return `Files on ${server}${mediaSettings.policy === 'custom' ? ', and on the sites below' : ''}. Elsewhere, an image shows as a link and an avatar as initials.`;
+	});
 	/** The sites added, one per line as hosts, as the field shows them. */
 	let addedSites = $derived(mediaSettings.origins.map((origin) => new URL(origin).host).join('\n'));
 

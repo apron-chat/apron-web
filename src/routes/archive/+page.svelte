@@ -48,12 +48,13 @@
 	}
 
 	/**
-	 * Opens `archive`, its images loading from the sites it names only `withImages`. Without, nothing loads from
-	 * anywhere else either, whatever Preferences say, until the reader chooses otherwise there.
+	 * Opens `archive`, its images loading from the sites it names only `withImages`. Nothing loads from anywhere
+	 * else (avatars and images in messages included), whatever Preferences say, until the reader chooses
+	 * otherwise there: the file says what it likes, and only the sites asked about were agreed to.
 	 */
 	function open(archive: Archive, withImages: boolean): void {
 		asking = undefined;
-		if (!withImages) mediaSettings.limit();
+		mediaSettings.limit();
 		reading = { archive, server: new ArchiveServer(withImages ? archive : { ...archive, media: [] }) };
 	}
 
@@ -78,7 +79,7 @@
 			<div class="ap-connect-card" role="group" aria-label="Load images">
 				<h1 class="ap-connect-title">Apron</h1>
 				<p class="ap-connect-tag">Load its images?</p>
-				<p class="ap-form-hint" data-testid="archive-hosts">This export’s images load from {asking.hosts.join(', ')}. Loading them lets {asking.hosts.length === 1 ? 'that site' : 'those sites'} see that you’re reading it. Without them, nothing loads from any other site: images show as links and avatars as initials.</p>
+				<p class="ap-form-hint" data-testid="archive-hosts">This export’s images load from {asking.hosts.join(', ')}. Loading them lets {asking.hosts.length === 1 ? 'that site' : 'those sites'} see that you’re reading it. Nothing loads from any other site: without them, images show as links and avatars as initials.</p>
 				<div class="ap-connect-actions">
 					<Button variant="ghost" label="Open without images" onclick={() => open(archive, false)} />
 					<Button variant="primary" label="Load images" onclick={() => open(archive, true)} />

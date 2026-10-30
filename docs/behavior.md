@@ -672,7 +672,7 @@ all), and with it how far each joined room is caught up. The next visit shows it
 at once and goes on as a reconnect does: each room asks the server only for what
 came after its checkpoint (§4.3.5), and the joined listing only for rooms that
 changed since (`latest_log_id`, §4.2.1); a thread opened again goes on from
-where its last load got to. Each room opens with the newest hundred entries of its
+where its last load got to. Each room opens with the newest fifty entries of its
 log (messages, reaction sets and joins and leaves); as
 you scroll back, older pages come from this device first, then from the server
 once what is kept runs out, as messages older than the retention do. The retention counts by when a message
@@ -735,11 +735,11 @@ anything that would change them. The read-only bar says where and when the
 export was saved, and offers no sign-in: the server offers only guests'. Nothing is sent to the exported server and nothing is
 remembered, as in `/__preview`. An export names the sites its images load from
 (the server's origin and those it named for its media), and since a file can
-name any, `/archive` lists them and asks first: **Load images**, which loads
-from those sites and otherwise as Preferences' **Media** says, or **Open
-without images**, which holds this page to **This server** whatever Media says
-(until it's changed there): with no site named, nothing loads from anywhere,
-so images show as links, avatars as initials, and cards without pictures.
+name any, `/archive` lists them and asks first: **Load images**, or **Open
+without images**. Either way the page is held to **This server only**, whatever
+Media says (until it's changed there): with images, media loads from the sites
+it named and nowhere else; without, from nowhere, so images show as links,
+avatars as initials, and cards without pictures.
 
 With the `command` capability, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#41-command)): the composer shows a **Command** tag, sets the line in
@@ -1309,16 +1309,18 @@ first, since the server deletes its content. A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
-Media loads from where Preferences, under **Media**, says: **This server** (the
-default) loads `og` media, avatars and images in markdown messages only from
-the chat server's own origin and the origins it names with `ext:media`; **This
-server and sites I add** also from the sites listed under it (hosts or URLs,
-one per line, kept as `https:` origins); **Any site** from any `https:` site.
-Elsewhere, an image in a message shows as a link to it (its alt text, else its
-URL), an avatar as initials, and a card without its picture. Small `data:`
-images always show. The choice is kept on this device, and another tab's
-applies at once. Stream URLs load only from the server's own origin, whatever
-the choice; links may point anywhere `http(s)`.
+Media loads from where Preferences, under **Media**, says. **Standard** (the
+default) is as Apron always has: `og` media only from the chat server's own
+origin and the origins it names with `ext:media`, avatars from any `https:`
+site, and images in markdown messages from any site. **This server only**
+loads all of them only from the server's origins; **This server and sites I
+add** also from the sites listed under it (hosts or URLs, one per line, kept as
+`https:` origins); **Any site** from anywhere. Where an image in a message may
+not load, it shows as a link to it (its alt text, else its URL), an avatar as
+initials, and a card without its picture. Small `data:` images always show.
+The choice is kept on this device, and another tab's applies at once. Stream
+URLs load only from the server's own origin, whatever the choice; links may
+point anywhere `http(s)`.
 
 **Connect to a server…** in the profile editor (the profile bar at the foot of
 the sidebar, for guests and accounts alike) opens the connect screen: a WebSocket URL or an HTTP(S) server
