@@ -75,6 +75,25 @@ describe('messageLog', () => {
 		expect(messageLog([upload, gone, starry], { nameOf })).toBe('> **Ada Lovelace**\n>\n> _(attachment)_\n\n> **Ben**\n>\n> _(deleted)_\n\n> **\\*star\\***\n>\n> hi');
 	});
 
+	it('lists a message’s reactions after its sender’s name, heading it and the message after on their own', () => {
+		const first = at(0, 'ada', 'One.');
+		const second = at(1, 'ada', 'Two.');
+		const third = at(2, 'ada', 'Three.');
+		const fourth = at(3, 'ada', 'Four.');
+		const user = (id: string) => ({ user_id: id });
+		const summary = (emoji: string, users: string[], count = users.length) => ({ emoji, count, user_ids: users, users: users.map(user), mine: false });
+		const reactions = (event: MessageRecord) => event === second
+			? [summary('👍', ['ben', 'cy']), summary('👎', ['ada']), summary('🎉', [], 0), summary(':party_parrot:', ['ben'], 3)]
+			: event === third ? [summary('👀', [], 2)] : undefined;
+		const time = (event: MessageRecord) => idTime(event.message_id);
+		expect(messageLog([first, second, third, fourth], { nameOf, now, reactions, reactorName: (who) => names[who.user_id] })).toBe([
+			`> **Ada Lovelace** · Friday, Oct 30, 2026 at ${time(first)}`, '>', '> One.', '',
+			`> **Ada Lovelace** · ${time(second)} (👍 from Ben, Cy; 👎 from Ada Lovelace; :party\\_parrot: from Ben, 2 more)`, '>', '> Two.', '',
+			`> **Ada Lovelace** · ${time(third)} (👀 from 2 people)`, '>', '> Three.', '',
+			`> **Ada Lovelace** · ${time(fourth)}`, '>', '> Four.',
+		].join('\n'));
+	});
+
 	it('keeps a sender’s messages a few minutes apart in one quote', () => {
 		const first = at(0, 'ada', 'One.');
 		const second = at(2, 'ada', 'Two,\nstill two.');

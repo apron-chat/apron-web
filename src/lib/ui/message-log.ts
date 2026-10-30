@@ -1,7 +1,8 @@
 import { ANY_ORIGIN, safeLink } from '$lib/protocol/embeds';
 import { renderMarkdown } from '$lib/protocol/markdown';
-import { compareLogIds } from '$lib/protocol/reducer';
-import type { Embed, MessageRecord } from '$lib/protocol/types';
+import { compareLogIds, type ReactionSummary } from '$lib/protocol/reducer';
+import type { Embed, Identity, MessageRecord } from '$lib/protocol/types';
+import { directory } from './directory.svelte';
 import { mediaGate, type MediaGate } from './media-gate';
 import { embedsOf, messageSnippet, senderName, textOf } from './messages';
 import { dayKeyOf, idMillis, idTime, isGrouped } from './time';
@@ -13,6 +14,10 @@ export interface MessageLogOptions {
 	lookup?: (id: string) => MessageRecord | undefined;
 	/** Which year is "this year", so a date leaves it out. */
 	now?: Date;
+	/** A message's reactions, to list after its sender's name; none without it. */
+	reactions?: (event: MessageRecord) => readonly ReactionSummary[] | undefined;
+	/** The name shown for someone who reacted; the directory's by default. */
+	reactorName?: (user: Identity) => string;
 }
 
 const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
@@ -30,7 +35,9 @@ const inline = (text: string) => text.replace(INLINE_SYNTAX, '\\$&');
  * 2026 at 6:51 PM`) as an anchor, and the day again wherever it changes.
  * Consecutive messages from one sender a few minutes apart share a quote, as
  * the timeline groups them. A reply opens with one italic line naming what it
- * answers (`↪ Ada: Deploy is green…`). Bodies are copied as written, Markdown
+ * answers (`↪ Ada: Deploy is green…`). A message with reactions opens a
+ * quote of its own, its header listing them (`(👍 from Bob, Andy; 👎 from
+ * Alice)`), so they can't be taken for another message's. Bodies are copied as written, Markdown
  * and all, with each uploaded image after as a Markdown image; other
  * attachments and link previews are left out, and a message with nothing else
  * shows reads "(attachment)". `messages` are taken in the order given, each
@@ -39,6 +46,7 @@ const inline = (text: string) => text.replace(INLINE_SYNTAX, '\\$&');
  */
 export function messageLog(messages: readonly MessageRecord[], options: MessageLogOptions = {}): string {
 	const nameOf = options.nameOf ?? senderName;
+	const reactorName = options.reactorName ?? ((user: Identity) => directory.name(user));
 	const now = options.now ?? new Date();
 	const byId = new Map<string, MessageRecord>();
 	for (const event of messages) {
@@ -48,23 +56,38 @@ export function messageLog(messages: readonly MessageRecord[], options: MessageL
 	// Each run's paragraphs: its header, then each message's reply line and body.
 	const runs: string[][] = [];
 	let previous: MessageRecord | undefined;
+	let previousReacted = false;
 	let lastDay: string | undefined;
 	for (const event of byId.values()) {
 		const day = dayKeyOf(event.message_id);
 		const newDay = Boolean(day) && day !== lastDay;
-		if (!runs.length || !isGrouped(previous, event) || newDay) {
+		const reacted = event.deleted ? '' : reactionsOf(options.reactions?.(event), reactorName);
+		// A message after a reacted one heads its own quote too, so the reactions read as that one's alone.
+		if (!runs.length || !isGrouped(previous, event) || newDay || reacted || previousReacted) {
 			// The first date carries its year whenever it is; later ones only when it isn't `now`'s.
 			const date = newDay ? dayOf(event.message_id, lastDay === undefined ? undefined : now) : '';
 			const when = [date, idTime(event.message_id)].filter(Boolean).join(' at ');
-			runs.push([`**${inline(nameOf(event))}**${when ? ` · ${when}` : ''}`]);
+			runs.push([`**${inline(nameOf(event))}**${when ? ` · ${when}` : ''}${reacted ? ` (${reacted})` : ''}`]);
 		}
 		if (day) lastDay = day;
 		const run = runs[runs.length - 1];
 		if (event.reply_to && !event.deleted) run.push(replyLine(event.reply_to.message_id, byId, options.lookup, nameOf));
 		run.push(bodyOf(event));
 		previous = event;
+		previousReacted = Boolean(reacted);
 	}
 	return runs.map((run) => quoted(run.join('\n\n'))).join('\n\n');
+}
+
+/** Reactions as a header lists them, `👍 from Bob, Andy; 👎 from Alice`, or empty for none. */
+function reactionsOf(summaries: readonly ReactionSummary[] | undefined, nameOf: (user: Identity) => string): string {
+	return (summaries ?? []).filter((summary) => summary.count > 0).map((summary) => {
+		const names = summary.users.map((user) => inline(nameOf(user)));
+		// Reactors this client has no identity for are counted, not named.
+		const unnamed = summary.count - names.length;
+		if (unnamed > 0) names.push(names.length ? `${unnamed} more` : `${unnamed} ${unnamed === 1 ? 'person' : 'people'}`);
+		return `${inline(summary.emoji)} from ${names.join(', ')}`;
+	}).join('; ');
 }
 
 /** Text as a block quote: each line behind `> `, and a bare `>` for a blank one so the quote runs on. */

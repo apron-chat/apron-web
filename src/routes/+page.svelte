@@ -2881,7 +2881,8 @@
 		const picked = messages.filter((event) => selection.has(event.message_id));
 		if (!picked.length) return false;
 		try {
-			await copyRich(messageLog(picked, { lookup: resolveMessage }));
+			const reactions = (event: MessageRecord) => session.rooms.find((room) => room.id === event.room_id)?.timeline.reactions[event.message_id];
+			await copyRich(messageLog(picked, { lookup: resolveMessage, reactions }));
 			return true;
 		} catch {
 			feedback.error('Unable to copy the messages');
