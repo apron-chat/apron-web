@@ -1276,6 +1276,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-preferences-content > h3 { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); }
 .ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
 /* On a phone the sections are tabs across the top, so a section has the dialog's whole width. */
+/* Media's choice is long (This server and trusted sites): kept at its full width, not squeezed by the note beside it. */
+.ap-pref-media-setting > .ap-pref-select { flex: none; }
 @media (max-width: 560px) {
 	.ap-preferences-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
 	.ap-preferences-nav { display: flex; gap: 0; overflow-x: auto; padding: var(--space-2); border-inline-end: 0; border-bottom: 1px solid var(--line); scrollbar-width: none; scroll-padding-inline: var(--space-2); }
@@ -1479,6 +1481,15 @@ pre.ap-embed-streambody { font-family: var(--font-mono); }
 .ap-embed-caret { display: inline-block; width: .55em; height: 1.1em; margin-inline-start: 1px; vertical-align: text-bottom; background: var(--ink-muted); animation: ap-blink 1s steps(1) infinite; }
 .ap-embed-ogcard { display: flex; flex-direction: column; overflow: hidden; width: min(100%, var(--embed-card-w)); border: 1px solid var(--line); background: var(--bg-200); color: var(--ink); text-decoration: none; }
 a.ap-embed-ogcard:hover { background: var(--hover); }
+/* Media that waits for a click (MediaAsk, and the sanitizer's copy of it in message bodies): a dashed box where it would be. */
+.ap-media-ask { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-0_5) var(--space-2); max-width: 100%; padding: var(--space-1) var(--space-2); border: 1px dashed var(--line-strong); border-radius: var(--radius-md); background: var(--bg-200); color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-sm); vertical-align: middle; box-sizing: border-box; }
+.ap-media-ask-what { font-weight: 600; overflow-wrap: anywhere; }
+.ap-media-ask-host { color: var(--ink-muted); overflow-wrap: anywhere; }
+.ap-media-ask-btn { padding: 0; border: 0; background: none; color: var(--denim); font: inherit; font-weight: 600; cursor: pointer; }
+.ap-media-ask-btn:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ap-media-ask-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-radius: var(--radius-sm); }
+/* An embed whose media waits: the embed without it, and the ask under it. */
+.ap-embed-held { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); max-width: min(100%, var(--embed-max-w)); }
 .ap-embed-ogimg { display: block; width: 100%; aspect-ratio: 1.91 / 1; object-fit: cover; background: var(--bg-300); }
 .ap-embed-ogcard .ap-embed-cardtext { padding: var(--space-3) var(--space-4); }
 .ap-embed-site { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }

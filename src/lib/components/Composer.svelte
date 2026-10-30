@@ -128,7 +128,7 @@
 		return command || disabled ? [] : linkPreviews.embeds(value, dismissed);
 	});
 	/** Those as the design system's Composer takes them: their pictures only from where link previews may load from (each is drawn by `preview` below, which asks the same). */
-	let previewCards = $derived(previews.map((embed) => ({ ...embed, og: loadableOg(embed.og, directory.previewGate) })));
+	let previewCards = $derived(previews.map((embed) => ({ ...embed, og: loadableOg(embed.og, directory.mediaGate) })));
 
 	$effect(() => linkPreviews.subscribe(() => previewsArrived++));
 	// Typed links are looked up once typing pauses, so a half-typed URL isn't.

@@ -7,10 +7,10 @@
 
 	/**
 	 * Server-relayed HTML (§4.8), inserted only after the sanitizer, every link opening in a new tab like the rest of
-	 * the chat's, and its media only from where images may load from (`directory.imageGate`).
+	 * the chat's, and its media only from where images may load from (`directory.mediaGate`).
 	 */
 	let { embed }: { embed: Embed } = $props();
-	let html = $derived(typeof embed.html === 'string' && canSanitize ? sanitizeHtml(embed.html, 'embed', directory.imageGate) : undefined);
+	let html = $derived(typeof embed.html === 'string' && canSanitize ? sanitizeHtml(embed.html, 'embed', directory.mediaGate) : undefined);
 </script>
 
 {#if html !== undefined}

@@ -52,6 +52,13 @@ describe('media loads only through the gate', () => {
 	});
 });
 
+describe('media loads on a click only where the viewer clicks', () => {
+	it('writes Load and Always load into markup only in the sanitizer, and answers them only in media-ask', () => {
+		expect(using(/data-media-(?:load|trust)/)).toEqual(['lib/protocol/sanitize.ts', 'lib/ui/media-ask.ts']);
+		expect(using(/\bloadOnce\(|\.trust\(/)).toEqual(['lib/ui/directory.svelte.ts', 'lib/ui/media-ask.ts']);
+	});
+});
+
 describe('markup from anyone else goes through the one sanitizer', () => {
 	it('sanitizes only there (and in code highlighting, which keeps nothing but spans)', () => {
 		expect(using(/from 'dompurify'/)).toEqual(['lib/protocol/sanitize.ts', 'lib/ui/highlight.ts']);

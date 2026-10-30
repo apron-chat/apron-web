@@ -17,7 +17,7 @@
 	 */
 	let { embed, upload, detail }: { embed: Embed; upload?: MessageUpload; detail?: string } = $props();
 	let url = $derived(safeLink(embed.url));
-	let og = $derived(loadableOg(embed.og, directory.previewGate));
+	let og = $derived(loadableOg(embed.og, directory.mediaGate));
 	let title = $derived(embed.title || og.title || 'File');
 	/** An image's size as sent, until the server's `og` arrives with the finished upload. */
 	let size = $derived(upload?.width && upload.height ? `${upload.width} × ${upload.height}` : undefined);

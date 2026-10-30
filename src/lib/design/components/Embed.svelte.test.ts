@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
+import EmbedCard from './EmbedCard.svelte';
 import EmbedFrame from './EmbedFrame.svelte';
 import EmbedStream from './EmbedStream.svelte';
 import EmbedUpload from './EmbedUpload.svelte';
@@ -33,6 +34,26 @@ describe('EmbedUpload', () => {
 		link.dispatchEvent(click);
 		expect(click.defaultPrevented).toBe(true);
 		expect(onview).toHaveBeenCalledOnce();
+	});
+});
+
+describe('media that waits for a click', () => {
+	it('shows a card without its picture, and under it Load and Always load, each doing its own', () => {
+		const onload = vi.fn();
+		const ontrust = vi.fn();
+		render(EmbedCard, { kind: 'link', url: 'https://news.example/story', testid: 'card', og: { title: 'A story', image: { alt: 'Chart', ask: { host: 'cdn.example', onload, ontrust } } } });
+		expect(document.querySelector('[data-testid="card"]')?.classList.contains('ap-embed-held')).toBe(true);
+		expect(document.querySelector('img')).toBeNull();
+		expect(document.querySelector('.ap-media-ask')?.textContent).toBe('Chart cdn.example Load Always load');
+		document.querySelector<HTMLButtonElement>('[aria-label="Load Chart from cdn.example"]')!.click();
+		expect(onload).toHaveBeenCalledOnce();
+		document.querySelector<HTMLButtonElement>('[aria-label="Always load from cdn.example"]')!.click();
+		expect(ontrust).toHaveBeenCalledOnce();
+		unmount();
+		// An upload's preview: its file card, and the one that would show first; no Always load where it can't be.
+		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.mp4', title: 'a.mp4', og: { video: { ask: { host: 'plain.example', onload } }, image: { ask: { host: 'plain.example', onload } } } });
+		expect(document.querySelector('.ap-embed-file')).not.toBeNull();
+		expect(document.querySelector('.ap-media-ask')?.textContent).toBe('Video plain.example Load');
 	});
 });
 

@@ -55,12 +55,14 @@
 		 * while nothing is loaded. Absent where there is nothing to export from.
 		 */
 		onexport?: () => Promise<{ name: string; rooms: number; messages: number } | undefined>;
-		/** The sites this server names for its media (`ext:media`), as hosts: what This server loads from besides it. */
+		/** The host of the server connected to, which media always loads from. */
+		serverHost?: string;
+		/** The sites this server names for its media (`ext:media`), as hosts: trusted with it. */
 		mediaHosts?: readonly string[];
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), section: preferencesSection = $bindable('notifications'), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, mediaHosts = [], onclosed }: Props = $props();
+	let { open = $bindable(false), section: preferencesSection = $bindable('notifications'), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
 
 	const SECTIONS = [
 		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
@@ -95,14 +97,14 @@
 		: historySettings.retention !== 'off' && used ? { text: `Using about ${used}.` } : undefined);
 	let exporting = $state(false);
 
-	/** What the chosen media policy loads, under it. */
+	/** What the chosen media policy loads, under it: the server, and the sites it trusts, by name. */
 	let mediaNote = $derived.by(() => {
-		const server = `this server${mediaHosts.length ? ` and ${mediaHosts.join(', ')}` : ''}`;
-		if (mediaSettings.policy === 'all') return 'Everything, from any site.';
-		if (mediaSettings.policy === 'default') return `Previews from ${server}. Avatars and images from any site.`;
-		return `Only from ${server}${mediaSettings.policy === 'custom' ? ' and the sites below' : ''}.`;
+		if (mediaSettings.policy === 'any') return 'Everything, from any site.';
+		const server = serverHost ?? 'this server';
+		const trusted = mediaHosts.length ? `, ${mediaHosts.join(', ')} (trusted by the server)` : '';
+		return `From ${server}${trusted} and the origins below. Other images wait for a click.`;
 	});
-	/** The sites added, one per line as hosts, as the field shows them. */
+	/** The trusted origins, one per line as hosts, as the field shows them. */
 	let addedSites = $derived(mediaSettings.origins.map((origin) => new URL(origin).host).join('\n'));
 
 	type Note = { text: string; tone?: 'ok' | 'err' };
@@ -312,13 +314,11 @@
 					</select>
 				{/snippet}
 			</SettingRow>
-			{#if mediaSettings.policy === 'custom'}
-				<SettingRow title="Sites" for="ap-media-sites" hint="One per line, such as cdn.example.com." stacked class="ap-pref-media-sites">
-					{#snippet control()}
-						<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update('custom', parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
-					{/snippet}
-				</SettingRow>
-			{/if}
+			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com. Always load adds one." stacked class="ap-pref-media-sites">
+				{#snippet control()}
+					<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update(mediaSettings.policy, parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
+				{/snippet}
+			</SettingRow>
 		{:else if preferencesSection === 'history'}
 			<SettingRow title="Keep history" for="ap-history-retention" hint="Your rooms open at once after a reload. Accounts only; signing out removes it." class="ap-pref-history-setting">
 				{#if historyNote}<p class={['ap-pref-note', historyNote.tone === 'err' && 'ap-tone-danger']}>{historyNote.text}</p>{/if}

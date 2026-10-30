@@ -12,7 +12,7 @@ import type { MediaGate } from './media-gate';
  * What a link that opens the viewer says about its image, where it may load from (`gate`): what the page says is
  * asked again, as anything read back from it is.
  */
-export function mediaItemOf(link: HTMLElement, gate: MediaGate = directory.previewGate): MediaItem | undefined {
+export function mediaItemOf(link: HTMLElement, gate: MediaGate = directory.mediaGate): MediaItem | undefined {
 	const { viewerTitle: title, viewerAlt: alt, viewerDetail: detail, viewerWidth: width, viewerHeight: height } = link.dataset;
 	const src = gate.src(link.dataset.viewerSrc);
 	if (!src || !title) return undefined;

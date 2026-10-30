@@ -8,9 +8,20 @@ export interface OG {
 	title?: string;
 	description?: string;
 	site_name?: string;
-	image?: { url?: MediaSrc; type?: string; width?: number; height?: number; alt?: string };
-	video?: { url?: MediaSrc; type?: string; width?: number; height?: number };
-	audio?: { url?: MediaSrc; type?: string };
+	/** Each medium: its `url` where it may load, else what a click may load (`ask`), else neither. */
+	image?: { url?: MediaSrc; type?: string; width?: number; height?: number; alt?: string; ask?: MediaAskProps };
+	video?: { url?: MediaSrc; type?: string; width?: number; height?: number; ask?: MediaAskProps };
+	audio?: { url?: MediaSrc; type?: string; ask?: MediaAskProps };
+}
+
+/** Media that waits for a click (MediaAsk): its site, and what Load and Always load do. */
+export interface MediaAskProps {
+	/** The site it is on, as its host. */
+	host: string;
+	/** Loads it, this once. */
+	onload: () => void;
+	/** Trusts its site from now on; absent where it can't be (not `https:`). */
+	ontrust?: () => void;
 }
 
 /** One entry of `body.embeds` (§4.8). `kind` picks the renderer; unknown kinds render from `og`, else EmbedFallback (§3.5). */

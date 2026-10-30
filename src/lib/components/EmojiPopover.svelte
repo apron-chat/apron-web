@@ -50,7 +50,7 @@
 	});
 
 	/** The custom emoji the picker offers (none `hidden`), in emoji-mart's categories, and the key each of its IDs picks. */
-	let custom = $derived(pickerCategories(customEmoji.catalog, (emoji) => directory.imageGate.src(customEmoji.image(emoji).src)));
+	let custom = $derived(pickerCategories(customEmoji.catalog, (emoji) => directory.mediaGate.src(customEmoji.image(emoji).src)));
 
 	// Builds the picker for each request, once emoji-mart has loaded, and again when the custom emoji arrive.
 	$effect(() => {

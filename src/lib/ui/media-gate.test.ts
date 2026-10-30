@@ -25,6 +25,21 @@ describe('mediaGate', () => {
 		expect(avatars.src('http://localhost:8080/a.png')).toBe('http://localhost:8080/a.png');
 	});
 
+	it('asks for what may not load, where asked to, and lets through what was clicked to load', () => {
+		const strict = mediaGate('https://chat.example', ['https://media.example']);
+		expect(strict.ask('https://tracker.example/t.gif')).toBeUndefined();
+		const asking = mediaGate('https://chat.example', ['https://media.example'], { asks: true, once: ['https://tracker.example/t.gif'] });
+		expect(asking.src('https://tracker.example/t.gif')).toBe('https://tracker.example/t.gif');
+		expect(asking.ask('https://tracker.example/t.gif')).toBeUndefined();
+		expect(asking.ask('https://tracker.example/u.gif')).toEqual({ url: 'https://tracker.example/u.gif', host: 'tracker.example', origin: 'https://tracker.example' });
+		// Plain http can load on a click, but its site can't be trusted from now on.
+		expect(asking.ask('http://plain.example/u.gif')).toEqual({ url: 'http://plain.example/u.gif', host: 'plain.example' });
+		expect(asking.ask('https://media.example/a.png')).toBeUndefined();
+		expect(asking.ask('javascript:alert(1)')).toBeUndefined();
+		expect(asking.ask(PIXEL)).toBeUndefined();
+		expect(asking.key).not.toBe(mediaGate('https://chat.example', ['https://media.example'], { asks: true }).key);
+	});
+
 	it('keys each gate by what it lets through', () => {
 		expect(mediaGate('https://chat.example', []).key).not.toBe(mediaGate('https://chat.example', ['https://media.example']).key);
 		expect(mediaGate('https://chat.example', [ANY_ORIGIN]).key).not.toBe(mediaGate('https://chat.example', [ANY_ORIGIN], { httpsElsewhere: true }).key);

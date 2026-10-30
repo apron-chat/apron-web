@@ -86,6 +86,8 @@
 	/** While notifications are paused, when that ends in words ("until 14:30"). */
 	let paused = $derived(pause?.until !== undefined ? pausedUntilLabel(pause.until) : undefined);
 	let avatar = $derived(directory.avatar(you));
+	/** The server's host, as Preferences' Media names it: none for the page's own stand-in (an export read, the preview), never a real site (`.invalid`). */
+	let serverHost = $derived(directory.origin && !new URL(directory.origin).hostname.endsWith('.invalid') ? new URL(directory.origin).host : undefined);
 	/** You as the bar shows you: your avatar only where avatars may load from. */
 	let barYou = $derived(shownYou && { ...shownYou, avatar });
 	/** Your `status` as you chose it (§4.5), from `you`: no dot without one. */
@@ -525,6 +527,7 @@
 			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
 			onexport={exportChats}
 			mediaHosts={serverMedia(session.server).origins.map((origin) => new URL(origin).host)}
+			serverHost={serverHost}
 			onclosed={() => preferencesTrigger?.focus()}
 		/>
 	{/if}

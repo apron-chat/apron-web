@@ -1,6 +1,6 @@
 import { bioOf, serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
-import { serverOrigin } from '$lib/protocol/embeds';
-import { mediaGate, type MediaGate, type MediaSrc } from './media-gate';
+import { safeLink, serverOrigin } from '$lib/protocol/embeds';
+import { mediaGate as gateFor, type MediaGate, type MediaSrc } from './media-gate';
 import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
 import type { EmojiResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
@@ -31,23 +31,32 @@ class Directory {
 	/** The origins the server names for its media (`ext.media.origins`, EXT.md §6); replaced only when they change. */
 	private serverMedia = $state.raw<readonly string[]>([]);
 	/**
-	 * The origins besides the server's own that link previews and attachments load from: the server's, and as the
-	 * viewer chose (`mediaSettings`), the sites they added, or any (`ANY_ORIGIN`).
+	 * The origins besides the server's own that media loads from: the server's, and as the viewer chose
+	 * (`mediaSettings`), their trusted origins, or any (`ANY_ORIGIN`).
 	 */
 	readonly mediaOrigins = $derived(mediaSettings.trusted(this.serverMedia));
-	/** The same for avatars and images in messages: any site, unless the viewer chose otherwise. */
-	readonly imageOrigins = $derived(mediaSettings.trustedImages(this.serverMedia));
-	/** What link previews, attachments and their viewer load (`mediaOrigins`): every such URL asks it (`$lib/ui/media-gate`). */
-	readonly previewGate = $derived(mediaGate(this.origin, this.mediaOrigins));
-	/** What images and custom emoji in messages, and HTML embeds, load (`imageOrigins`). */
-	readonly imageGate = $derived(mediaGate(this.origin, this.imageOrigins));
-	/** What avatars load (`imageOrigins`): from anywhere but the server, only `https:` (§4.8.6). */
-	readonly avatarGate = $derived(mediaGate(this.origin, this.imageOrigins, { httpsElsewhere: true }));
+	/** URLs the viewer clicked to load, on this page: each loads wherever it is. */
+	private loadedOnce = $state.raw<readonly string[]>([]);
+	/**
+	 * What media loads (`mediaOrigins`, and what was clicked to load): link previews, attachments and their viewer,
+	 * images and custom emoji in messages, HTML embeds. Every such URL asks it (`$lib/ui/media-gate`); what it won't
+	 * load, the timeline offers to (`ask`).
+	 */
+	readonly mediaGate = $derived(gateFor(this.origin, this.mediaOrigins, { once: this.loadedOnce, asks: mediaSettings.asks }));
+	/** What avatars load (`mediaOrigins`): from anywhere but the server, only `https:` (§4.8.6). */
+	readonly avatarGate = $derived(gateFor(this.origin, this.mediaOrigins, { httpsElsewhere: true }));
 
 	/** What the avatar of another server, such as one signed in to before, loads: as its own would, from it. */
 	avatarGateFor(server: string): MediaGate {
-		return mediaGate(serverOrigin(server), mediaSettings.trustedImages([]), { httpsElsewhere: true });
+		return gateFor(serverOrigin(server), mediaSettings.trusted([]), { httpsElsewhere: true });
 	}
+
+	/** Loads the media at `url` wherever it is, on this page, as a click on Load asks. */
+	loadOnce(url: string): void {
+		const link = safeLink(url);
+		if (link && !this.loadedOnce.includes(link)) this.loadedOnce = [...this.loadedOnce, link];
+	}
+
 	you = $state.raw<Identity | undefined>();
 	private users = $state.raw<Users>({ users: {}, recordedUsers: {}, userAliases: {} });
 	/** When this client saw each user go offline (`ClientSnapshot.sawOffline`): a floor under their `seen`. */
@@ -92,7 +101,7 @@ class Directory {
 		const { origins } = serverMedia(snapshot.server);
 		if (origins.join(' ') !== this.serverMedia.join(' ')) this.serverMedia = origins;
 		// Its custom emoji (`ext:emoji`), kept through a reconnect until the next server frame says otherwise.
-		if (snapshot.server) customEmoji.apply(snapshot.server, server, (url) => this.imageGate.src(url) !== undefined);
+		if (snapshot.server) customEmoji.apply(snapshot.server, server, (url) => this.mediaGate.src(url) !== undefined);
 		if (!snapshot.authenticated) return;
 		this.you = snapshot.you;
 		const current = this.users;
@@ -123,19 +132,19 @@ class Directory {
 	 * pieces is still current (`samePieces`).
 	 */
 	get pieces(): readonly unknown[] {
-		return [this.origin, this.previewGate, this.imageGate, this.server, this.you, this.users, this.rooms, this.untitled, this.parents, customEmoji.catalog, customEmoji.reducedMotion];
+		return [this.origin, this.mediaGate, this.server, this.you, this.users, this.rooms, this.untitled, this.parents, customEmoji.catalog, customEmoji.reducedMotion];
 	}
 
 	/** Draws a custom emoji's key (`ext:emoji`) as its image, once the catalog has it; asks for the catalog the first time one is seen. */
 	readonly resolveEmoji: EmojiResolver = (key) => {
 		const image = customEmoji.resolve(key);
-		return image && this.imageGate.src(image.src) ? image : undefined;
+		return image && this.mediaGate.src(image.src) ? image : undefined;
 	};
 
 	/** A custom emoji's image as a reaction chip shows it, where it may load from; else nothing, for a placeholder. */
 	readonly emojiImage: KeyImage = (key) => {
 		const image = customEmoji.resolve(key);
-		const src = image && this.imageGate.src(image.src);
+		const src = image && this.mediaGate.src(image.src);
 		return image && src ? { ...image, src } : undefined;
 	};
 
@@ -165,7 +174,7 @@ class Directory {
 	}
 
 	/**
-	 * An avatar this client will load, if the user has one where avatars may load from (`imageOrigins`, §4.8.6):
+	 * An avatar this client will load, if the user has one where avatars may load from (`mediaOrigins`, §4.8.6):
 	 * from anywhere else, only `https:`, as ever.
 	 */
 	avatar(from: Identity | undefined): MediaSrc | undefined {

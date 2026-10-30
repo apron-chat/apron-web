@@ -65,7 +65,7 @@ export interface MessageContext {
 function bodyOf(body: MessageBody | undefined): NonNullable<MessageView['body']> {
 	const text = typeof body?.text === 'string' ? body.text : '';
 	const markdown = body?.format === 'markdown';
-	const html = markdown ? renderMarkdown(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.imageGate) : renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.imageGate);
+	const html = markdown ? renderMarkdown(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.mediaGate) : renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.mediaGate);
 	return { html, markdown, code: html.includes('<pre') };
 }
 
@@ -260,7 +260,7 @@ const madeProps = new WeakMap<Embed, { gate: MediaGate; props: EmbedProps }>();
  * it draws nothing a gate hasn't seen.
  */
 function embedProps(embed: Embed): EmbedProps {
-	const gate = directory.previewGate;
+	const gate = directory.mediaGate;
 	const made = madeProps.get(embed);
 	if (made?.gate === gate) return made.props;
 	const { embed_id, kind, url, title, text, format, height, og } = embed;

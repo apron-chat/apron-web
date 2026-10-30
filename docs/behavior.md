@@ -736,10 +736,11 @@ export was saved, and offers no sign-in: the server offers only guests'. Nothing
 remembered, as in `/__preview`. An export names the sites its images load from
 (the server's origin and those it named for its media), and since a file can
 name any, `/archive` lists them and asks first: **Load images**, or **Open
-without images**. Either way the page is held to **This server only**, whatever
-Media says (until it's changed there): with images, media loads from the sites
-it named and nowhere else; without, from nowhere, so images show as links,
-avatars as initials, and cards without pictures.
+without images**. Either way the page is held to the server's own sites,
+whatever Media says (until it's changed there, or Always load is clicked): with
+images, media loads from the sites it named and nowhere else; without, from
+nowhere, so images wait for a click, avatars show as initials, and cards as
+cards without pictures.
 
 With the `command` capability, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#41-command)): the composer shows a **Command** tag, sets the line in
@@ -1312,20 +1313,26 @@ first, since the server deletes its content. A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
-Media loads from where Preferences, under **Media**, says. **Default** is as Apron always has: `og` media only from the chat server's own
-origin and the origins it names with `ext:media`, avatars (users' and servers')
-from any `https:` site, and images in messages, custom emoji and the media of
-HTML embeds from any site. **This server only** loads all of them only from the
-server's origins (a server signed in to before, its avatar only from its own); **This server and sites I
-add** also from the sites listed under it (hosts or URLs, one per line, kept as
-`https:` origins); **Any site** from anywhere. Where an image in a message may
-not load, it shows as a link to it (its alt text, else its URL), as does an
-HTML embed's image, video or audio; a custom emoji shows as its key (and isn't
-offered in the emoji picker), an avatar as initials, and a card without its
-picture. An HTML embed never loads a `srcset`, a `background` or a `ping`.
-Images in a message or embed itself (`data:`) always show: they load from
-nowhere. Under This server only, a custom emoji catalog on another site isn't
-fetched either, so its emoji show as their keys.
+Media loads from where Preferences, under **Media**, says. **This server and
+trusted sites**, the default, loads it from the chat server's own origin, the
+origins the server names with `ext:media` (Preferences names them, such as
+`media.apron.chat (trusted by the server)`), and the **Trusted origins** listed
+under it (hosts or URLs, one per line, kept as `https:` origins). **Any site**
+loads it from anywhere; the trusted origins stay listed for when the default is
+chosen again. Earlier versions' choices carry over: Default, This server only and
+This server and sites I add become the default, their sites kept as trusted
+origins, and Any site stays.
+
+Under the default, an image, video or audio from anywhere else in the timeline
+(in a message, an HTML embed, a link preview's card or an upload) waits for a
+click where it would be: its alt text or kind, its site, **Load**, which loads
+that one on this page, and, for an `https:` site, **Always load**, which adds the
+site to the trusted origins. An image in a link waits after the link. A custom
+emoji from anywhere else shows as its key (and isn't offered in the emoji
+picker), an avatar as initials (a server signed in to before, its avatar only
+from its own origin), and a custom emoji catalog on another site isn't fetched.
+An HTML embed never loads a `srcset`, a `background` or a `ping`. Images in a
+message or embed itself (`data:`) always show: they load from nowhere.
 The choice is kept on this device, and another tab's applies at once. Stream
 URLs load only from the server's own origin, whatever the choice; links may
 point anywhere `http(s)`.

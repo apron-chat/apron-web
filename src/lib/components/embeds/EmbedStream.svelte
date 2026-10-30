@@ -54,7 +54,7 @@
 	});
 </script>
 
-{#snippet body()}{#if format === 'markdown'}{@html renderMarkdown(text, undefined, undefined, undefined, undefined, directory.imageGate)}{:else}{#each terminal as span, index (index)}{#if span.className || span.style}<span class={span.className || undefined} style={span.style || undefined}>{span.text}</span>{:else}{span.text}{/if}{/each}{/if}{/snippet}
+{#snippet body()}{#if format === 'markdown'}{@html renderMarkdown(text, undefined, undefined, undefined, undefined, directory.mediaGate)}{:else}{#each terminal as span, index (index)}{#if span.className || span.style}<span class={span.className || undefined} style={span.style || undefined}>{span.text}</span>{:else}{span.text}{/if}{/each}{/if}{/snippet}
 
 <DesignEmbedStream kind="stream" {url} done={!live} title={embed.title} {format} {text} status={embed.text !== undefined ? 'Finished' : url ? 'Ended' : 'Unavailable'}
 	children={format === 'plain' ? undefined : body} attach={format === 'markdown' ? highlight : undefined} testid="stream-embed" />
