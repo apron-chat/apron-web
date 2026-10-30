@@ -61,7 +61,7 @@
 	import { ReadPositions } from '$lib/ui/read-positions';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
-	import { messageLog } from '$lib/ui/message-log';
+	import { messageLog, messageLogHtml } from '$lib/ui/message-log';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
@@ -573,6 +573,8 @@
 	let readingLatest = $derived(latestVisible && latestVisibleIn === paneRoom?.id && newDivider.room === paneRoom?.id && newDivider.landed);
 	/** The pane's messages this viewer may pick, in order: what shift-click ranges run along. */
 	let selectableOrder = $derived(messages.filter(canSelect).map((event) => event.message_id));
+	/** Picked messages move with `message` requests (capability `edit`), which a reader who may not write makes none of. */
+	let canMoveSelection = $derived(session.canEdit && !session.readOnly);
 	let selectThreads = $derived(joinedThreads.filter((entry) => entry.id !== activeThread));
 	/** New threads hang off a top-level room; this client keeps threads one level deep. */
 	let canStartThreads = $derived(session.canManageRooms && !session.readOnly && Boolean(activeRoom) && activeRoom?.parentRoomId === undefined);
@@ -2617,8 +2619,9 @@
 	 * Any message in the open pane can be picked for a move (capability `edit`), anyone's:
 	 * the server decides whose it lets you move, and a refusal moves none (MessageSelection.move).
 	 */
+	/** Anyone who can read may pick messages, to copy them as a log; moving them is offered only to who may edit. */
 	function canSelect(event: MessageRecord): boolean {
-		return session.canEdit && !session.readOnly && !event.deleted && event.room_id === paneRoom?.id;
+		return !event.deleted && event.room_id === paneRoom?.id;
 	}
 
 	/** Whether a picked message is yours, which the server always lets you move. */
@@ -2801,12 +2804,29 @@
 		else if (result.unadded) feedback.error(unaddedNote(result.unadded));
 	}
 
+	/**
+	 * Copies Markdown as plain text and, where the browser takes it, as HTML too
+	 * (`messageLogHtml`), so a rich editor pastes it formatted, images and all.
+	 */
+	async function copyRich(markdown: string): Promise<void> {
+		if (typeof ClipboardItem === 'undefined' || !navigator.clipboard.write) return navigator.clipboard.writeText(markdown);
+		const item = new ClipboardItem({
+			'text/plain': new Blob([markdown], { type: 'text/plain' }),
+			'text/html': new Blob([messageLogHtml(markdown)], { type: 'text/html' })
+		});
+		try {
+			await navigator.clipboard.write([item]);
+		} catch {
+			await navigator.clipboard.writeText(markdown);
+		}
+	}
+
 	/** "Copy log" in select mode: the picked messages, in timeline order, as Markdown (`messageLog`). The selection stays. */
 	async function copySelectionLog(): Promise<boolean> {
 		const picked = messages.filter((event) => selection.has(event.message_id));
 		if (!picked.length) return false;
 		try {
-			await navigator.clipboard.writeText(messageLog(picked, { lookup: resolveMessage }));
+			await copyRich(messageLog(picked, { lookup: resolveMessage }));
 			return true;
 		} catch {
 			feedback.error('Unable to copy the messages');
@@ -3111,7 +3131,7 @@
 
 			{#if selection.active}
 				<SelectionBar
-					{selection} threads={selectThreads} parentRoom={activeThread ? activeRoom.id : undefined} canCreateThread={canStartThreads}
+					{selection} threads={canMoveSelection ? selectThreads : []} parentRoom={canMoveSelection && activeThread ? activeRoom.id : undefined} canCreateThread={canMoveSelection && canStartThreads}
 					onmove={(room) => moveSelection(room)} onnewthread={newThreadFromSelection} onfill={() => selection.fillBetween(selectableOrder)} oncopy={copySelectionLog}
 					oncancel={() => { selection.cancel(); composer?.focus(); }}
 				/>

@@ -1,6 +1,7 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '$lib/protocol/types';
-import { messageLog } from './message-log';
+import { messageLog, messageLogHtml } from './message-log';
 import { idTime } from './time';
 
 const names: Record<string, string> = { ada: 'Ada Lovelace', ben: 'Ben', cy: 'Cy' };
@@ -75,6 +76,34 @@ describe('messageLog', () => {
 		expect(thisYear).not.toContain('Oct 31, 2026');
 		const lastYear = messageLog([late, next], { nameOf, now: new Date(2027, 0, 1) });
 		expect(lastYear).toContain('**Ada Lovelace** · Sat, Oct 31, 2026, ');
+	});
+
+	it('shows each message once, as its latest snapshot, where it first came', () => {
+		const first = at(0, 'ada', 'Deploy is gren', { message_id: 'm1', log_id: '10' });
+		const other = at(1, 'ben', 'On it.', { message_id: 'm2', log_id: '11' });
+		const edited = { ...first, log_id: '12', body: { text: 'Deploy is green' } };
+		const stale = { ...first, log_id: '9', body: { text: 'Deploy' } };
+		expect(messageLog([first, other, edited, stale], { nameOf })).toBe('**Ada Lovelace**\nDeploy is green\n\n**Ben**\nOn it.');
+	});
+
+	it('adds uploaded images as Markdown images, and leaves out uploads still going, other files and link previews', () => {
+		const image = (url: string, title = 'image.webp') => ({ kind: 'upload', title, url, og: { title, image: { url, type: 'image/webp' } } });
+		const shot = at(0, 'cy', 'stateless components ftw', { message_id: 'i', log_id: 'i', body: { text: 'stateless components ftw', embeds: [image('https://media.example/f/a'), { kind: 'og', url: 'https://example.com', og: { title: 'Example', image: { url: 'https://example.com/card.png' } } }] } });
+		const alone = at(0, 'cy', '', { message_id: 'j', log_id: 'j', body: { embeds: [image('https://media.example/f/(b)', 'a [b]\nc')] } });
+		const pending = at(0, 'cy', '', { message_id: 'k', log_id: 'k', body: { embeds: [{ kind: 'upload', title: 'image.webp' }, { kind: 'upload', title: 'notes.pdf', url: 'https://media.example/f/c' }] } });
+		expect(messageLog([shot, alone, pending], { nameOf })).toBe([
+			'**Cy**', 'stateless components ftw', '', '![image.webp](https://media.example/f/a)', '',
+			'**Cy**', '![a \\[b\\] c](https://media.example/f/%28b%29)', '',
+			'**Cy**',
+			'_(attachment)_',
+		].join('\n'));
+	});
+
+	it('renders as HTML for a rich paste, its images shown', () => {
+		const html = messageLogHtml('**Cy**\n> **Ben**: hi\n\nok\n\n![shot](https://media.example/f/a)');
+		expect(html).toContain('<strong>Cy</strong>');
+		expect(html).toContain('<blockquote>');
+		expect(html).toContain('<img src="https://media.example/f/a" alt="shot"');
 	});
 
 	it('is empty for no messages', () => {
