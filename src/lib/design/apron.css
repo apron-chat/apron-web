@@ -1149,9 +1149,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-dialog-heading { flex: 1; min-width: 0; display: grid; gap: var(--space-0_5); padding-top: 2px; }
 /* A title with a control beside it (titleEnd), on its line. */
 .ap-dialog-titlerow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--space-1); min-width: 0; }
-/* That control as a word of the title: its size and weight, in the link's blue, tinted under the pointer. */
-.ap-dialog-titlebtn { margin: 0; padding: 0 var(--space-1_5); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--denim); font: inherit; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; white-space: nowrap; cursor: pointer; }
-.ap-dialog-titlebtn:hover { background: var(--hover); }
+/* That control as a word of the title: its size and weight, in the link's blue on its soft ground (as a mention chip), deeper under the pointer. */
+.ap-dialog-titlebtn { margin: 0; padding: 0 var(--space-1_5); border: 0; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font: inherit; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; white-space: nowrap; cursor: pointer; }
+.ap-dialog-titlebtn:hover { background: color-mix(in srgb, var(--denim) 22%, var(--denim-soft)); }
 .ap-dialog-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; overflow-wrap: anywhere; }
 .ap-dialog-sub { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-dialog-close { flex: none; }
