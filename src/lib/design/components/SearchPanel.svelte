@@ -34,7 +34,9 @@
 		suggesting?: { list: string; option?: string };
 		/** A key in the field, before the results take it: true when it was taken. */
 		onfieldkey?: (event: KeyboardEvent) => boolean;
-		/** The title's "history" is a link, such as to the settings of what this device keeps; the panel closes. */
+		/** How far back history is kept, such as "30 Days": a button beside the title, which `onhistory` takes. */
+		kept?: string;
+		/** The `kept` button pressed, such as to open the settings of what this device keeps; the panel closes. */
 		onhistory?: () => void;
 		/** A result picked, by press or Enter, by its `id`. */
 		onpick?: (id: string) => void;
@@ -45,7 +47,7 @@
 		/** A `data-testid` for the listbox of results. */
 		listTestid?: string;
 	}
-	let { open = $bindable(false), query = $bindable(''), caret = $bindable(0), suggestions, suggesting, onfieldkey, results, searching = false, more = false, note, placeholder = 'Words in a message', onhistory, onpick, onclose, class: className, listTestid }: Props = $props();
+	let { open = $bindable(false), query = $bindable(''), caret = $bindable(0), suggestions, suggesting, onfieldkey, results, searching = false, more = false, note, placeholder = 'Words in a message', kept, onhistory, onpick, onclose, class: className, listTestid }: Props = $props();
 	const uid = $props.id();
 	const listId = `${uid}-results`;
 	/** The result the keyboard is on: the first, once there are any. */
@@ -103,8 +105,9 @@
 	}
 </script>
 
-<Dialog class={['ap-search', className]} bind:open size="md" title="Search local history" backdropCloses {onclose}>
-	{#snippet heading()}Search local {#if onhistory}<button type="button" class="ap-link" onclick={() => { open = false; onhistory(); }}>history</button>{:else}history{/if}{/snippet}
+<!-- How far back history is kept, beside the title: it goes to where that's set. -->
+{#snippet keptButton()}<button type="button" class="ap-dialog-titlebtn" aria-label="{kept} of history kept, in Preferences" title="How long history is kept on this device" onclick={() => { open = false; onhistory?.(); }}>{kept}</button>{/snippet}
+<Dialog class={['ap-search', className]} bind:open size="md" title="Search Local History" titleEnd={kept && onhistory ? keptButton : undefined} backdropCloses {onclose}>
 	<div class="ap-fieldlabel">
 		<label class="ap-sr" for="{uid}-query">Search for</label>
 		<div class="ap-search-field">
