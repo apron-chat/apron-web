@@ -15,6 +15,8 @@
 		/** Shows New thread; leave out when you can't create threads (capability `rooms`). */
 		onnewthread?: () => void;
 		oncancel?: () => void;
+		/** Shows Copy log; resolves whether the log was copied, which the button then says for a moment. */
+		oncopy?: () => boolean | Promise<boolean>;
 		/** Shows Select between, which fills the gap between the outermost picks; leave out when there's no gap to fill. */
 		onselectrange?: () => void;
 		status?: 'idle' | 'saving';
@@ -29,9 +31,21 @@
 		/** A `data-testid` for the bar. */
 		testid?: string;
 	}
-	let { count, threads = [], room, onmove, onnewthread, oncancel, onselectrange, status = 'idle', denied, open = $bindable(false), newThreadTestid, class: className, testid }: Props = $props();
+	let { count, threads = [], room, onmove, onnewthread, oncancel, oncopy, onselectrange, status = 'idle', denied, open = $bindable(false), newThreadTestid, class: className, testid }: Props = $props();
 	const saving = $derived(status === 'saving');
 	const hasMenu = $derived(threads.length > 0 || room !== undefined);
+
+	/** Whether Copy log just worked, so it reads Copied until the timer clears it. */
+	let copied = $state(false);
+	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => () => clearTimeout(copiedTimer));
+
+	async function copy() {
+		if (!(await oncopy?.())) return;
+		copied = true;
+		clearTimeout(copiedTimer);
+		copiedTimer = setTimeout(() => (copied = false), 1500);
+	}
 
 	function move(target: string) {
 		open = false;
@@ -50,6 +64,7 @@
 			<span class="ap-selbar-status" role="status"><TypingDots />{` Moving ${count}…`}</span>
 		{:else}
 			<Button size="sm" variant="ghost" onclick={oncancel} label="Cancel" />
+			{#if oncopy}<Button size="sm" onclick={copy} disabled={!count} label={copied ? 'Copied' : 'Copy log'} />{/if}
 			{#if hasMenu}
 				<span class="ap-selbar-pick">
 					<Button size="sm" onclick={() => (open = !open)} aria-haspopup="listbox" aria-expanded={open} disabled={!count} label="Move to thread ▾" />

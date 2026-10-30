@@ -61,6 +61,7 @@
 	import { ReadPositions } from '$lib/ui/read-positions';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
+	import { messageLog } from '$lib/ui/message-log';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
@@ -2800,6 +2801,19 @@
 		else if (result.unadded) feedback.error(unaddedNote(result.unadded));
 	}
 
+	/** "Copy log" in select mode: the picked messages, in timeline order, as Markdown (`messageLog`). The selection stays. */
+	async function copySelectionLog(): Promise<boolean> {
+		const picked = messages.filter((event) => selection.has(event.message_id));
+		if (!picked.length) return false;
+		try {
+			await navigator.clipboard.writeText(messageLog(picked, { lookup: resolveMessage }));
+			return true;
+		} catch {
+			feedback.error('Unable to copy the messages');
+			return false;
+		}
+	}
+
 	/** The messages moved, but some of their authors weren't added to the thread: how many, and the server's first reason. */
 	function unaddedNote(unadded: { failed: number; total: number; error: unknown }): string {
 		const who = unadded.failed === unadded.total ? (unadded.total === 1 ? 'the author' : 'the authors') : `${unadded.failed} of ${unadded.total} authors`;
@@ -3098,7 +3112,7 @@
 			{#if selection.active}
 				<SelectionBar
 					{selection} threads={selectThreads} parentRoom={activeThread ? activeRoom.id : undefined} canCreateThread={canStartThreads}
-					onmove={(room) => moveSelection(room)} onnewthread={newThreadFromSelection} onfill={() => selection.fillBetween(selectableOrder)}
+					onmove={(room) => moveSelection(room)} onnewthread={newThreadFromSelection} onfill={() => selection.fillBetween(selectableOrder)} oncopy={copySelectionLog}
 					oncancel={() => { selection.cancel(); composer?.focus(); }}
 				/>
 			{:else if session.readOnly}
