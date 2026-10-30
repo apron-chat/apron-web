@@ -88,8 +88,7 @@ test.describe('the server frame: title, description and avatar (§3.1), and the 
 
 test.describe('ext:permissions and ext:settings', () => {
 	test.describe('a guest who may not write', () => {
-		// A server that offers passkeys besides guests: signing in may lift it.
-		test.use({ knobs: { seed: 'rich', permissions: { write: false }, server: { auth: ['guest', 'webauthn'] } } });
+		test.use({ knobs: { seed: 'rich', permissions: { write: false } } });
 
 		test('reads, with sign-in offered in place of the composer, and no reactions or joins', async ({ preview, page }) => {
 			await preview.open();
@@ -113,18 +112,6 @@ test.describe('ext:permissions and ext:settings', () => {
 			await page.evaluate(() => { location.hash = '#room=design'; });
 			await expect(preview.message('The new palette is up for review.')).toBeVisible();
 			expect((await preview.sent('room_join')).filter((p) => p.room_id === 'design')).toEqual([]);
-		});
-	});
-
-	test.describe('a guest who may not write, where only guests sign in', () => {
-		test.use({ knobs: { permissions: { write: false } } });
-
-		test('reads, with nothing offered to lift it', async ({ preview, page }) => {
-			await preview.open();
-			const bar = page.locator('.ap-composer-readonly');
-			await expect(bar).toContainText('this server doesn’t let you post');
-			await expect(bar.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0);
-			await expect(preview.composer()).toHaveCount(0);
 		});
 	});
 

@@ -46,7 +46,7 @@ export const WHOLE_BUDGET = 1000;
 type Locks = Pick<LockManager, 'request'>;
 
 /** How many of a room's newest entries a restore reads back: what opens it; older ones page in as it scrolls back. */
-export const RESTORE_WINDOW = 100;
+export const RESTORE_WINDOW = 50;
 
 /**
  * Where a room's kept log reaches down to (`from`, its start when undefined), and whether the server has older
