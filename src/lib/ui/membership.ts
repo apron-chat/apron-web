@@ -27,6 +27,8 @@ export function isBaseline(record: MembershipRecord): boolean {
 export interface MembershipNet {
 	joined: Identity[];
 	left: Identity[];
+	/** Of those who joined, the ones you added (see `MembershipRun.add`), apart from `joined`. */
+	added: Identity[];
 }
 
 /**
@@ -38,28 +40,34 @@ export interface MembershipNet {
  * recorded object in the run.
  */
 export class MembershipRun {
-	/** Per `user_id`: the first entry's `joined`, then the latest entry. Map order is first appearance. */
-	private readonly users = new Map<string, { first: boolean; last: boolean; user: Identity }>();
+	/**
+	 * Per `user_id`: the first entry's `joined`, then the latest entry, and whether that entry is a join you added.
+	 * Map order is first appearance.
+	 */
+	private readonly users = new Map<string, { first: boolean; last: boolean; added: boolean; user: Identity }>();
 	/** The first record's `log_id`: what keys the line, so it stays put as later records join the run. */
 	readonly firstLogId: string;
 	/** The last record's `log_id`: the time the line shows. */
 	lastLogId: string;
 
-	constructor(first: MembershipRecord) {
+	constructor(first: MembershipRecord, addedByYou?: ReadonlySet<string>) {
 		this.firstLogId = first.log_id;
 		this.lastLogId = first.log_id;
-		this.add(first);
+		this.add(first, addedByYou);
 	}
 
-	add(record: MembershipRecord): void {
+	/** `addedByYou` holds the `user_id`s whose join in this record you added. */
+	add(record: MembershipRecord, addedByYou?: ReadonlySet<string>): void {
 		this.lastLogId = record.log_id;
 		for (const { user, joined } of record.entries) {
+			const added = joined && addedByYou?.has(user.user_id) === true;
 			const current = this.users.get(user.user_id);
 			if (current) {
 				current.last = joined;
+				current.added = added;
 				current.user = user;
 			} else {
-				this.users.set(user.user_id, { first: joined, last: joined, user });
+				this.users.set(user.user_id, { first: joined, last: joined, added, user });
 			}
 		}
 	}
@@ -67,17 +75,18 @@ export class MembershipRun {
 	net(): MembershipNet {
 		const joined: Identity[] = [];
 		const left: Identity[] = [];
-		for (const { first, last, user } of this.users.values()) {
+		const added: Identity[] = [];
+		for (const { first, last, added: byYou, user } of this.users.values()) {
 			if (first !== last) continue;
-			(last ? joined : left).push(user);
+			(!last ? left : byYou ? added : joined).push(user);
 		}
-		return { joined, left };
+		return { joined, left, added };
 	}
 }
 
 /** Nets out records as one run (see `MembershipRun`). */
 export function netMemberships(records: readonly MembershipRecord[]): MembershipNet {
-	if (!records.length) return { joined: [], left: [] };
+	if (!records.length) return { joined: [], left: [], added: [] };
 	const run = new MembershipRun(records[0]);
 	for (const record of records.slice(1)) run.add(record);
 	return run.net();
@@ -95,17 +104,19 @@ export function listNames(names: readonly string[]): string {
 }
 
 /**
- * A run's line: "Ada joined", "Ada and Bob joined · Carol left". Empty when
- * the run netted out to nothing. `title` spells out every name, for the
- * tooltip, when the line had to count some of them.
+ * A run's line: "Ada joined", "You added Dee · Ada and Bob joined · Carol
+ * left". Empty when the run netted out to nothing. `title` spells out every
+ * name, for the tooltip, when the line had to count some of them.
  */
-export function membershipSummary(joined: readonly string[], left: readonly string[]): { text: string; title?: string } {
+export function membershipSummary(joined: readonly string[], left: readonly string[], added: readonly string[] = []): { text: string; title?: string } {
 	const parts: string[] = [];
+	if (added.length) parts.push(`You added ${listNames(added)}`);
 	if (joined.length) parts.push(`${listNames(joined)} joined`);
 	if (left.length) parts.push(`${listNames(left)} left`);
 	const text = parts.join(' · ');
-	if (joined.length <= LISTED_NAMES && left.length <= LISTED_NAMES) return { text };
+	if (added.length <= LISTED_NAMES && joined.length <= LISTED_NAMES && left.length <= LISTED_NAMES) return { text };
 	const full: string[] = [];
+	if (added.length) full.push(`You added: ${added.join(', ')}`);
 	if (joined.length) full.push(`Joined: ${joined.join(', ')}`);
 	if (left.length) full.push(`Left: ${left.join(', ')}`);
 	return { text, title: full.join('\n') };

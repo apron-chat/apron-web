@@ -3,6 +3,7 @@ import { flushSync } from 'svelte';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, RoomSnapshot } from '$lib/protocol/client';
 import type { Identity } from '$lib/protocol/types';
+import { addedTo } from '$lib/ui/added.svelte';
 import { directory } from '$lib/ui/directory.svelte';
 import { blankSnapshot, type SessionView } from '$lib/ui/session.svelte';
 import MemberListSidebar from './MemberListSidebar.svelte';
@@ -32,7 +33,7 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChan
 		...fields
 	};
 	directory.apply(snapshot, undefined);
-	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })) } as unknown as RoomSnapshot;
+	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })), timeline: { memberships: [] } } as unknown as RoomSnapshot;
 	const session = { snapshot, capabilities: snapshot.capabilities, canManageRooms: true } as unknown as SessionView;
 	dom.render(MemberListSidebar, { client: canChange ? (client as never) : undefined, session, room, open: true, canChange, canAdd: canChange });
 	return [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
@@ -240,9 +241,10 @@ describe('MemberListSidebar', () => {
 		await dom.submit(document.querySelector<HTMLFormElement>('dialog form')!);
 		await vi.waitFor(() => expect(dom.byRole('alert').textContent).toBe('Couldn’t add Cy: Denied.'));
 		expect(joinRoom.mock.calls).toEqual([['general', 'grace'], ['general', 'cy']]);
-		// Who couldn't be added stays picked, to try again; who was added is said in the list.
+		// Who couldn't be added stays picked, to try again; who was added is left for the timeline to say.
 		expect([...document.querySelectorAll('.ap-pick-chip-name')].map((chip) => chip.textContent)).toEqual(['Cy']);
-		expect(dom.byRole('status').textContent).toBe('Added grace.');
+		expect(dom.queryByRole('status')).toBeNull();
+		expect([...addedTo('general')!.keys()]).toEqual(['grace']);
 		dom.unmount();
 		render([ada]);
 		expect(dom.queryByRole('button', 'Add member')).toBeNull();
