@@ -609,9 +609,25 @@ On iPhone and iPad Safari outside a Home Screen app, push isn't offered: under
 the Notifications switch, a callout gives the steps to add Apron to the Home
 Screen. Where the browser offers to install Apron (Chromium's
 `beforeinstallprompt`), the client holds that offer back and shows **Install
-app** under the Notifications switch only, never elsewhere, and not once Apron runs installed. The web manifest
+app** under the Notifications switch, and in the install offer below, and not once Apron runs installed. The web manifest
 (`static/manifest.webmanifest`) names Apron, its icons, `start_url` and
 `display: standalone`.
+
+On a phone or tablet not running Apron installed, 20 seconds after the session
+is up, the same kind of prompt as the notifications offer asks "Add Apron to
+your Home Screen?": it opens full screen, like an app, and, on an iPhone or
+iPad on a server that pushes, can alert you when it's closed. Where the browser
+offers to install Apron, its **Install** asks the browser. Elsewhere **Show me
+how** lists the steps for this browser: Safari's Share, then Add to Home
+Screen, then Add (Share sits in Safari's ⋯ menu when it isn't in the
+toolbar); another iPhone browser's Share by the address, likewise; an Android
+browser's menu, Install app or Add to Home screen; and in an app's own browser
+(Instagram, Facebook and the like), which can't, to open the page in the
+browser first. **Not now**, **Got it** once the steps are read, Escape, or
+installing answers it, so it isn't offered again on this device. It never
+shows with the notifications offer: that one goes first, and this one waits
+until it's answered. Computers aren't offered it: their browsers offer
+installing in the address bar.
 
 `push_id` names the account: 12 random bytes in base64url (16 characters),
 made once per account on each server and kept in `apron.pushIds`, so it
