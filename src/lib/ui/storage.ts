@@ -31,6 +31,8 @@ const KEY = {
 	addedRooms: 'apron.addedRooms',
 	/** The rooms whose threads you folded to those with news, per account (`notifyAccount`), until you unfold them. */
 	threadFolds: 'apron.threadFolds',
+	/** The order of the sidebar's top-level rooms, per account (`notifyAccount`): as they were first listed, then as you dragged them. */
+	roomOrder: 'apron.roomOrder',
 	/** How far you have read each room and thread, by `readPositionKey`: the `message_id` read through. */
 	readPositions: 'apron.readPositions',
 	/** app.html reads this one too, to apply the theme before the app loads. */
@@ -419,6 +421,16 @@ export function saveThreadFolds(account: string, rooms: readonly string[]): void
 	const kept = rooms.slice(-THREAD_FOLDS_MAX);
 	const { [account]: _previous, ...others } = readScopeChoices(KEY.threadFolds);
 	write(KEY.threadFolds, JSON.stringify(kept.length ? { ...others, [account]: kept } : others));
+}
+
+/** The account's top-level rooms in the order the sidebar lists them, by `room_id`. */
+export function loadRoomOrder(account: string): string[] {
+	return readScopeChoices(KEY.roomOrder)[account] ?? [];
+}
+
+export function saveRoomOrder(account: string, rooms: readonly string[]): void {
+	const { [account]: _previous, ...others } = readScopeChoices(KEY.roomOrder);
+	write(KEY.roomOrder, JSON.stringify(rooms.length ? { ...others, [account]: [...rooms] } : others));
 }
 
 /**

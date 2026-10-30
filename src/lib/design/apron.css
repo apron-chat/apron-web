@@ -558,6 +558,17 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-sect-toggle { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-1); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; cursor: pointer; }
 .ap-sect-toggle:hover { color: var(--ink); }
 .ap-sect-body { display: flex; flex-direction: column; gap: var(--space-0_5); }
+/* A list of rooms that can be put in another order, each room with its threads in a block that moves as one; they keep the body's spacing. */
+.ap-roomlist, .ap-roomblock, .ap-roomgrip { display: flex; flex-direction: column; gap: var(--space-0_5); }
+/* svelte-dnd-action listens on each room's block, so a phone would flash its tap highlight over the whole block (threads
+   and all) and the library gives it a grab cursor: the block shows neither, its row and threads keeping their own. */
+.ap-roomblock { -webkit-tap-highlight-color: transparent; cursor: auto !important; }
+.ap-roomblock :is(button, a) { -webkit-tap-highlight-color: initial; }
+/* A room's row is held to lift it on a touch screen: no callout or selection while it's held. */
+.ap-roomlist .ap-room { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+/* The room being carried, lifted off the list (svelte-dnd-action's copy of its block, in <body>). */
+.ap-roomblock-lifted { outline: none; }
+.ap-roomblock-lifted .ap-roomgrip { border-radius: var(--radius-md); background: var(--bg-000); box-shadow: var(--shadow-float); transform: scale(1.02); }
 .ap-sect-head .ap-sect-add { width: var(--control-md); padding: 0; justify-content: center; }
 /* While the list loads: a few lines where its rows will be. */
 .ap-sect-skel { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }

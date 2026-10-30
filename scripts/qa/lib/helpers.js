@@ -145,10 +145,17 @@ export async function roomsPane(page) {
 	await wait(page, 300);
 }
 
-/** Opens a room or thread from the sidebar (going to the rooms pane first on a narrow viewport). */
+/**
+ * Opens a room or thread from the sidebar (going to the rooms pane first on a narrow viewport). The open room is
+ * already open: picking it would fold its threads (on a phone, staying in the list), so there the list's › goes back.
+ */
 export async function openRoom(page, name, settle = 500) {
 	await roomsPane(page);
-	await press(roomList(page).getByText(name, { exact: true }).first());
+	const target = roomList(page).getByText(name, { exact: true }).first();
+	const open = await target.evaluate((el) => el.closest('button[data-room]')?.getAttribute('aria-current') === 'page');
+	if (open) {
+		if (isNarrow(page)) await press(page.getByRole('complementary', { name: 'Rooms' }).getByRole('button', { name: /^Back to / }));
+	} else await press(target);
 	await wait(page, settle);
 }
 

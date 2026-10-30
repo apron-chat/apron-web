@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
 import { flushSync } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { capabilitiesOf, type ChatClient, type ClientSnapshot, type RoomSnapshot } from '$lib/protocol/client';
 import { createTimeline } from '$lib/protocol/reducer';
 import { blankSnapshot, SessionView } from '$lib/ui/session.svelte';
 import Sidebar from './Sidebar.svelte';
+import { RoomOrder } from '$lib/ui/room-order.svelte';
+import { loadRoomOrder, saveRoomOrder } from '$lib/ui/storage';
 import * as dom from '$lib/test/dom';
+
+// jsdom has no Web Animations: the rooms' flip as they make way (svelte/animate) asks an element for its own.
+beforeAll(() => {
+	if (!('getAnimations' in Element.prototype)) Object.defineProperty(Element.prototype, 'getAnimations', { configurable: true, value: () => [] });
+});
 
 afterEach(() => {
 	localStorage.clear();
@@ -235,5 +242,69 @@ describe('Sidebar', () => {
 		flushSync();
 		expect(listed()).toEqual(['deploy', 'cert']);
 		session.dispose();
+	});
+
+	it('lists the rooms in the order kept for the account, new ones last, and moves one with Alt+↑/↓, saying so', () => {
+		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
+		const room = (id: string, title: string): RoomSnapshot => ({ ...general, id, title, timeline: createTimeline(id) }) as RoomSnapshot;
+		saveRoomOrder('acct', ['random', 'general']);
+		const order = new RoomOrder();
+		order.load('acct');
+		const session = new SessionView();
+		// The server lists them in another order, with one it hasn't before.
+		session.apply(live({ rooms: [general, room('ops', 'Ops'), room('random', 'Random')] }), client);
+		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', account: 'acct', order, threads: [], mentions: {}, unread: {}, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() } as never);
+		flushSync();
+		const listed = () => [...document.querySelectorAll<HTMLElement>('[data-testid="room-list"] button[data-room]')].map((button) => button.dataset.room);
+		expect(listed()).toEqual(['random', 'general', 'ops']);
+		expect(loadRoomOrder('acct')).toEqual(['random', 'general', 'ops']);
+
+		const random = document.querySelector<HTMLElement>('button[data-room="random"]')!;
+		random.focus();
+		random.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }));
+		flushSync();
+		expect(listed()).toEqual(['general', 'random', 'ops']);
+		expect(loadRoomOrder('acct')).toEqual(['general', 'random', 'ops']);
+		// Where the keyboard ends up is the browser's to show: e2e/room-order.spec.ts.
+		expect(dom.byRole('status').textContent).toBe('Random moved down, 2 of 3');
+		// Not past the top; a plain arrow doesn't move it.
+		const general_ = document.querySelector<HTMLElement>('button[data-room="general"]')!;
+		general_.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true, cancelable: true }));
+		general_.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+		flushSync();
+		expect(listed()).toEqual(['general', 'random', 'ops']);
+		session.dispose();
+	});
+
+	it('on a phone, folds the open room’s threads when it’s picked, staying in the list rather than going back to the room', () => {
+		const width = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+		Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+		try {
+			const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'ws://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
+			const thread = (id: string, title: string): RoomSnapshot => ({ ...general, id, title, parentRoomId: 'general', timeline: createTimeline(id) }) as RoomSnapshot;
+			const random: RoomSnapshot = { ...general, id: 'random', title: 'Random', timeline: createTimeline('random') } as RoomSnapshot;
+			const session = new SessionView();
+			session.apply(live({ rooms: [general, random, thread('deploy', 'Deploy'), thread('cert', 'Expired cert')] }), client);
+			const onroom = vi.fn();
+			const threads = [thread('deploy', 'Deploy'), thread('cert', 'Expired cert')].map((room) => ({ id: room.id, parentRoomId: 'general', title: room.title, loaded: true, participants: [], joined: true }));
+			dom.render(Sidebar, { client, session, backendLabel: 'fake.test', threads, mentions: {}, unread: { cert: 2 }, displayName: 'Ada', onroom, onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() } as never);
+			flushSync();
+			const listed = () => [...document.querySelectorAll<HTMLElement>('button[data-thread]')].map((button) => button.dataset.thread);
+			const room = (id: string) => document.querySelector<HTMLElement>(`button[data-room="${id}"]`)!;
+			room('general').click();
+			flushSync();
+			expect(listed()).toEqual(['cert']);
+			expect(onroom).not.toHaveBeenCalled();
+			room('general').click();
+			flushSync();
+			expect(listed()).toEqual(['deploy', 'cert']);
+			expect(onroom).not.toHaveBeenCalled();
+			// Another room is picked as ever, out of the list.
+			room('random').click();
+			expect(onroom).toHaveBeenCalledOnce();
+			session.dispose();
+		} finally {
+			if (width) Object.defineProperty(window, 'innerWidth', width);
+		}
 	});
 });

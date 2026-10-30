@@ -47,14 +47,16 @@
 		children?: Snippet;
 		/** After the button, where it has no door: the open room's +. */
 		start?: Snippet;
+		/** The keys that act on the row besides picking it, for assistive tech (`aria-keyshortcuts`), such as moving it. */
+		keyshortcuts?: string;
 	}
-	let { room, noun, label, tip, private: isPrivate, muted, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, class: className }: Props = $props();
+	let { room, noun, label, tip, private: isPrivate, muted, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, keyshortcuts, class: className }: Props = $props();
 	const thread = $derived(noun === 'thread');
 </script>
 
 {#snippet row()}
 	<button
-		type="button" aria-current={active ? 'page' : undefined} {title}
+		type="button" aria-current={active ? 'page' : undefined} aria-keyshortcuts={keyshortcuts} {title}
 		data-room={thread || listed ? undefined : room} data-join={!thread && listed ? room : undefined}
 		data-thread={thread && (!listed || active) ? room : undefined} data-other-thread={thread && listed ? room : undefined}
 		class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', className]} onclick={onselect}

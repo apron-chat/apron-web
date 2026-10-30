@@ -744,7 +744,7 @@ open, it lists only that room's joined threads with news (unread replies or
 mentions), in the same rows, so activity there isn't missed; picking one opens
 its room with the thread open, and quiet threads wait until the room is opened.
 Picking the open room again while reading it folds its threads the same way, to
-those with news (not on a phone, where it returns to the room), and its row
+those with news (on a phone the rooms list stays, its › going back to the room), and its row
 shows a small **…** button before its **+** that says the list is cut short; the
 **…**, or picking the room once more, unfolds them. A folded room stays folded as
 you go to other rooms and come back (kept on this device, per account on each
@@ -828,6 +828,27 @@ the open room (which reading would otherwise take away), and the heading shows
 the **…** before its **+**; the **…**, or the heading again, shows them all.
 **Other Rooms** folds alike, to nothing, as its rooms have no news. Each starts
 open and stays as you left it, on this device.
+
+**Rooms** and **Private** list their rooms in an order kept on this device, per
+account on each server, rather than the order a server happens to send them in,
+which may differ from one visit to the next. A room takes the next place the
+first time it's listed, so a new one goes last and nothing you arranged moves.
+Drag a room by its row to another place in its own section: with a mouse it
+lifts once the pointer has moved a few pixels (a click that drifts stays a
+click); on a touch screen hold it for a moment and it
+lifts (a tap still opens it, and a swipe still scrolls). While it's carried
+every room's threads fold away, so the list is just its rooms and the others
+make way for it, and they come back as they were once it's dropped. It keeps to
+its section's column, moving only up and down within the part of the section in
+view, so it lands where it's seen; carried past either end it goes to that end. While a
+room is carried the sidebar scrolls only to bring more of its section into view,
+as the pointer nears the sidebar's top or bottom, never past the section, and
+nothing scrolls under a pointer that isn't near either. A
+drag starts only from the room's own row, not its threads, its **+** or its **…**, and never opens the room. From the
+keyboard, Alt+↑ or Alt+↓ on a room moves it a place (as in the WAI-ARIA
+rearrangeable listbox; its row names the keys as `aria-keyshortcuts`), the keyboard staying on it and the move announced. In a
+folded section a room moves among the ones shown, the hidden ones keeping their
+places. Threads keep their own order, most recently active first.
 
 The sidebar's **Private** section, right below Rooms and above Other Rooms,
 lists every joined top-level private room (`private: true` and no
