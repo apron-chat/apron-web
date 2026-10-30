@@ -65,8 +65,9 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* Sticky, on a plain ground (the room header's is RoomHeader's), though nothing scrolls them: iOS (26 on) blurs and fades
    the top edge of a page added to the Home Screen, its status bar with it, unless a fixed or sticky box with a plain
    background spans that edge; with one there, the status bar takes its color, a private room's plum too. No
-   backdrop-filter on them, which would make that edge glass again. */
-.ap-roomhead, .ap-shell-sidehead, .ap-memberlist-head { position: sticky; top: 0; }
+   backdrop-filter on them, which would make that edge glass again. Sticky makes each its own layer, so it's raised, or
+   the menus it opens would go under what follows it. */
+.ap-roomhead, .ap-shell-sidehead, .ap-memberlist-head { position: sticky; top: 0; z-index: var(--z-head); }
 .ap-shell-sidehead, .ap-memberlist-head { background: var(--bg-000); }
 /* A menu's surface: a message's or member's menu, the mention picker, the font picker. */
 .ap-menu, .ap-mpick, .ap-font-options { margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
