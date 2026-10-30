@@ -3,7 +3,7 @@
 | Archive Version  | 1          |
 |------------------|------------|
 | Protocol Version | 9          |
-| Last Updated     | 2026-10-29 |
+| Last Updated     | 2026-10-30 |
 
 An archive is a chat saved as one file: what a client or a server had of one
 Apron server, as JSON Lines. Each line holds the results of requests that a
@@ -123,20 +123,24 @@ knows nothing of archives. The server in the page that apron-web opens an
 archive with does this.
 
 - Its `server` frame offers only `auth: ["guest"]`, and advertises
-  `history`, `rooms`, `reactions`, and `ext:permissions`.
+  `history`, `rooms`, `reactions`, `ext:permissions`, and `ext:settings` with
+  `read_cursors: false` (EXT.md §3), since nothing can be saved there.
 - `auth` signs in with `write: false` in `you.ext.permissions`
   ([EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extpermissions)).
   Without a scheme besides `guest`, nothing lifts it: a client knows that no
   one can write here ([EXT.md §7.1](EXT.md#71-apron-web)).
 - It advertises `ext:media` with the archive's `media` only when the reader
   allows it ([§5](#5-media)), and `ext:archive` ([§4.1](#41-extarchive)).
-- `auth` signs in as the header's `you`, or as a guest of its choice without
-  one, allowed only to read.
+- `auth` with scheme `guest` signs in as the header's `you`, or as a guest of
+  its choice without one, allowed only to read. Any other scheme is
+  `unsupported`.
 - `room_list` lists the archive's rooms, as `you` had joined them.
 - `history` with `room_id` pages the room's stretch: its effective lower bound
   ([§4.3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#433-availability-and-retention))
   is the room's `history_log_id`. Each message carries the snapshot that it
-  replies to, a reference or not.
+  replies to, a reference or not. A reaction record is served in the room that
+  its message is in, as compaction leaves it: a message moved since the
+  reaction takes it along.
 - `history` without `room_id` pages the joined rooms' stretches as one log,
   from the greatest of their `history_log_id`s. Below it, one room's stretch
   might start while another's has not, and one log cannot say so.

@@ -168,6 +168,26 @@ describe('ArchiveServer', () => {
 		expect(await connection.request('message', { room_id: 'general', body: { text: 'hi' } })).toMatchObject({ error: { code: -32001 } });
 		expect(await connection.request('rtc_join', {})).toMatchObject({ error: { code: -32601 } });
 	});
+
+	it('signs in only as a guest, who may only read', async () => {
+		const connection = wire(new ArchiveServer(archive()));
+		expect(await connection.request('auth', { scheme: 'token', token: 'x' })).toMatchObject({ error: { code: -32601 } });
+		expect(await connection.request('auth', {})).toMatchObject({ error: { code: -32601 } });
+		expect(await connection.request('auth', { scheme: 'guest' })).toMatchObject({ you: { user_id: 'archive_viewer', ext: { permissions: { write: false } } } });
+	});
+
+	it('advertises its media only when it may load', async () => {
+		const greeting = (media: string[]) => new Promise<JsonObject>((resolve) => {
+			const socket = new ArchiveServer({ ...archive(), media }).factory('ws://archive.invalid');
+			socket.onmessage = (event: MessageEvent) => resolve((JSON.parse(String(event.data)) as WireFrame).params as JsonObject);
+		});
+		const without = await greeting([]);
+		expect(without.capabilities).not.toContain('ext:media');
+		expect(without.ext).not.toHaveProperty('media');
+		const withMedia = await greeting(['https://media.example']);
+		expect(withMedia.capabilities).toContain('ext:media');
+		expect(withMedia.ext).toMatchObject({ media: { origins: ['https://media.example'] } });
+	});
 });
 
 describe('parseArchive', () => {

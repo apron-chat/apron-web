@@ -5,8 +5,11 @@ import { compareLogIds } from '$lib/protocol/reducer';
 import { cloneJson, isJsonObject, type Identity, type JsonObject, type MessageRecord, type RoomRecord, type WireFrame } from '$lib/protocol/types';
 import type { Archive, ArchiveRoom } from './archive';
 
-/** What it advertises (ARCHIVE.md §4): enough to list and read, nothing to write with. */
-export const ARCHIVE_CAPABILITIES = ['history', 'rooms', 'reactions', 'ext', 'ext:settings', 'ext:permissions', 'ext:media', 'ext:archive'];
+/**
+ * What it advertises (ARCHIVE.md §4): enough to list and read, nothing to write with; `ext:media` too when the
+ * archive's media may load.
+ */
+export const ARCHIVE_CAPABILITIES = ['history', 'rooms', 'reactions', 'ext:settings', 'ext:permissions', 'ext:archive'];
 
 /** Requests that would change something (§3–§4): refused, where any other unknown request is `unsupported`. */
 const WRITES = new Set(['message', 'reactions', 'room_set', 'room_join', 'room_leave', 'me', 'status', 'command', 'push_register', 'push_unregister']);
@@ -92,7 +95,9 @@ export class ArchiveServer {
 		opened: (socket) => {
 			const settings = { read_cursors: false };
 			const archive = { ...(this.archive.server ? { server: this.archive.server } : {}), ...(this.archive.exportedAt ? { exported_at: this.archive.exportedAt } : {}) };
-			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-archive', auth: ['guest'], capabilities: ARCHIVE_CAPABILITIES, ext: { settings, media: { origins: this.archive.media }, archive } } });
+			const media = this.archive.media.length > 0;
+			const capabilities = media ? [...ARCHIVE_CAPABILITIES, 'ext:media'] : ARCHIVE_CAPABILITIES;
+			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-archive', auth: ['guest'], capabilities, ext: { settings, ...(media ? { media: { origins: this.archive.media } } : {}), archive } } });
 		},
 		received: (socket, frame) => this.receive(socket, frame),
 		closed: () => undefined
@@ -110,8 +115,9 @@ export class ArchiveServer {
 		const params = frame.params ?? {};
 		switch (frame.method) {
 			case 'auth':
-				// A guest, never a token: the client reads it as a guest who only reads.
-				reply({ you: readOnly(this.archive.you ?? VIEWER) });
+				// A guest, never a token: the client reads it as a guest who only reads. Any other scheme isn't offered (§3.2).
+				if (params.scheme === 'guest') reply({ you: readOnly(this.archive.you ?? VIEWER) });
+				else fail(-32601, 'This archive offers only guest sign-in.');
 				return;
 			case 'room_list':
 				reply(this.listRooms(params));
