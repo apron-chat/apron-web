@@ -23,7 +23,7 @@ describe('messageLog', () => {
 		const thanks = at(31, 'ada', 'Thanks both — retro at 16:00.', { body: { text: 'Thanks both — retro at 16:00.', embeds: [{ kind: 'og', url: 'https://meet.example/retro', og: { title: 'Retro' } }] } });
 		const time = (event: MessageRecord) => idTime(event.message_id);
 		expect(messageLog([deploy, pods, crash, rollback, thanks], { nameOf, now })).toBe([
-			`**Ada Lovelace** · Fri, Oct 30, ${time(deploy)}`,
+			`**Ada Lovelace** · Fri, Oct 30, 2026, ${time(deploy)}`,
 			'Deploy is green, rolling to **prod** now.',
 			'',
 			`**Ben** · ${time(pods)}`,
@@ -66,12 +66,15 @@ describe('messageLog', () => {
 		expect(messageLog([upload, gone, starry], { nameOf })).toBe('**Ada Lovelace**\n_(attachment)_\n\n**Ben**\n_(deleted)_\n\n**\\*star\\***\nhi');
 	});
 
-	it('dates the first message of each new day, with the year when it isn’t this one', () => {
+	it('dates the first message in full, and each new day after with the year only when it isn’t this one', () => {
 		const late = at(0, 'ada', 'Night.');
 		const next = { ...late, message_id: String(new Date(2026, 9, 31, 9).getTime()), body: { text: 'Morning.' } };
-		const log = messageLog([late, next], { nameOf, now: new Date(2027, 0, 1) });
-		expect(log).toContain('**Ada Lovelace** · Fri, Oct 30, 2026, ');
-		expect(log).toContain('**Ada Lovelace** · Sat, Oct 31, 2026, ');
+		const thisYear = messageLog([late, next], { nameOf, now });
+		expect(thisYear).toContain('**Ada Lovelace** · Fri, Oct 30, 2026, ');
+		expect(thisYear).toContain('**Ada Lovelace** · Sat, Oct 31, ');
+		expect(thisYear).not.toContain('Oct 31, 2026');
+		const lastYear = messageLog([late, next], { nameOf, now: new Date(2027, 0, 1) });
+		expect(lastYear).toContain('**Ada Lovelace** · Sat, Oct 31, 2026, ');
 	});
 
 	it('is empty for no messages', () => {

@@ -1,6 +1,6 @@
 import type { MessageRecord } from '$lib/protocol/types';
 import { embedsOf, messageSnippet, senderName, textOf } from './messages';
-import { idMillis, idTime, isGrouped } from './time';
+import { dayKeyOf, idMillis, idTime, isGrouped } from './time';
 
 export interface MessageLogOptions {
 	/** The name shown for a message's sender; the directory's by default (`senderName`). */
@@ -20,7 +20,8 @@ const NAME_SYNTAX = /[\\`*_[\]<>]/g;
 /**
  * Messages as a readable Markdown log, for the clipboard ("Copy log"): one
  * block per sender's run, headed by their name in bold and the time, with the
- * date on the first message and wherever the day changes. Consecutive
+ * full date on the first message, as an anchor, and the day wherever it
+ * changes after. Consecutive
  * messages from one sender a few minutes apart share a header, as the
  * timeline groups them. A reply opens with a one-line quote of what it
  * answers. Bodies are copied as written, Markdown and all; embeds and link
@@ -36,9 +37,11 @@ export function messageLog(messages: readonly MessageRecord[], options: MessageL
 	let lastDay: string | undefined;
 	for (const event of messages) {
 		const lines: string[] = [];
-		const day = dayOf(event.message_id, now);
-		if (!isGrouped(previous, event) || (day && day !== lastDay)) {
-			const when = [day && day !== lastDay ? day : '', idTime(event.message_id)].filter(Boolean).join(', ');
+		const day = dayKeyOf(event.message_id);
+		const newDay = Boolean(day) && day !== lastDay;
+		if (!isGrouped(previous, event) || newDay) {
+			// The first date carries its year whenever it is; later ones only when it isn't `now`'s.
+			const when = [newDay ? dayOf(event.message_id, lastDay === undefined ? undefined : now) : '', idTime(event.message_id)].filter(Boolean).join(', ');
 			lines.push(`**${nameOf(event).replace(NAME_SYNTAX, '\\$&')}**${when ? ` · ${when}` : ''}`);
 		}
 		if (day) lastDay = day;
@@ -51,11 +54,11 @@ export function messageLog(messages: readonly MessageRecord[], options: MessageL
 	return blocks.join('\n\n');
 }
 
-/** The date a message ID falls on (`Thu, Oct 30`, with the year when it isn't `now`'s), or empty when it carries no time. */
-function dayOf(id: string, now: Date): string {
+/** The date a message ID falls on (`Thu, Oct 30`, with the year when it isn't `now`'s, or always without `now`), or empty when it carries no time. */
+function dayOf(id: string, now: Date | undefined): string {
 	const millis = idMillis(id);
 	if (!millis) return '';
-	return (new Date(millis).getFullYear() === now.getFullYear() ? dayFormat : dayYearFormat).format(millis);
+	return (now && new Date(millis).getFullYear() === now.getFullYear() ? dayFormat : dayYearFormat).format(millis);
 }
 
 /** What a log shows for a message's body: its text as written, or a note when it has none to show. */
