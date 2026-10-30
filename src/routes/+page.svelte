@@ -2547,7 +2547,10 @@
 
 	function scrollToLatest(): void {
 		if (!messageScroll) return;
-		messageScroll.scrollTop = messageScroll.scrollHeight;
+		// Not when already at the end, or past it in iOS's rubber band: pulling past the latest scrolls down, which
+		// pins again, and setting the scroll top there would snap the bounce back under the finger every frame.
+		const end = messageScroll.scrollHeight - messageScroll.clientHeight;
+		if (messageScroll.scrollTop < end - 1) messageScroll.scrollTop = messageScroll.scrollHeight;
 		lastScrollTop = messageScroll.scrollTop;
 	}
 
