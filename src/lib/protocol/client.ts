@@ -9,7 +9,8 @@ import {
 	createTimeline,
 	decodeHistoryRecords,
 	type DecodedRecords,
-	type ReactionSummary
+	type ReactionSummary,
+	type StoredRecords
 } from './reducer';
 import {
 	isJsonObject,
@@ -133,7 +134,7 @@ import { reactionKey } from './custom-emoji';
 import { HistoryQueue } from './history-queue';
 
 export * from './client-types';
-export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
+export type { ReactionSummary, RoomRename, StoredRecords, TimelineState } from './reducer';
 export { editableTitle, IDLE_RETRY_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
 export type { MediaLimit, MediaTypes, Permissions, ServerLook, ServerMedia } from './client-views';
 export {
@@ -809,6 +810,11 @@ export class ChatClient {
 	/** Aggregated reactions for a message (undefined for tombstones or none). */
 	reactions(messageId: string): ReactionSummary[] | undefined {
 		return this.store.reactions(messageId, this.you?.user_id);
+	}
+
+	/** Every record this client has stored, in every room, compacted: what an export keeps (`$lib/archive`). */
+	storedRecords(): StoredRecords {
+		return this.store.records();
 	}
 
 	/** Your own emoji set on a message, including a requested change not yet confirmed. */

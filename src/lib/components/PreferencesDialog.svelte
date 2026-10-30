@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import Button from '$lib/design/components/Button.svelte';
@@ -45,14 +46,20 @@
 		 * something else for.
 		 */
 		status?: { value?: string; accepted?: readonly string[]; unsupported: readonly string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void; disabled?: boolean };
+		/**
+		 * Saves what this page has loaded as an export (`$lib/archive`), and says what it saved: none of it
+		 * while nothing is loaded. Absent where there is nothing to export from.
+		 */
+		onexport?: () => Promise<{ name: string; rooms: number; messages: number } | undefined>;
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onclosed }: Props = $props();
+	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, onclosed }: Props = $props();
 
 	const SECTIONS = [
 		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
-		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' }
+		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
+		{ value: 'export', label: 'Export', hint: 'Save the chats this page has loaded, and read saved ones.', id: 'ap-pref-export' }
 	];
 	let preferencesSection = $state('notifications');
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
@@ -66,6 +73,9 @@
 	let fontBrowserState = $state<FontBrowserState>('idle');
 	let fontError = $state('');
 	let testNotificationStatus = $state<'idle' | 'sending' | NotificationTestResult>('idle');
+	/** What the last export saved. */
+	let exportNote = $state<string | undefined>();
+	let exporting = $state(false);
 
 	type Note = { text: string; tone?: 'ok' | 'err' };
 	/**
@@ -108,7 +118,7 @@
 	let statusAnswer = $state<string | undefined>();
 	let announced: Record<string, string | undefined> | undefined;
 	$effect(() => {
-		const now: Record<string, string | undefined> = { notifications: notificationsNote.text, test: testNote?.text, pause: pauseNote, status: statusAnswer };
+		const now: Record<string, string | undefined> = { notifications: notificationsNote.text, test: testNote?.text, pause: pauseNote, status: statusAnswer, exported: exportNote };
 		const before = announced;
 		announced = now;
 		if (!before) return;
@@ -126,8 +136,30 @@
 			fontBrowserState = typeof window !== 'undefined' && typeof (window as LocalFontAccessWindow).queryLocalFonts === 'function' ? 'idle' : 'unsupported';
 			fontError = '';
 			testNotificationStatus = 'idle';
+			exportNote = undefined;
 		});
 	});
+
+	async function exportChats(): Promise<void> {
+		if (!onexport || exporting) return;
+		exporting = true;
+		let saved: Awaited<ReturnType<typeof onexport>>;
+		try {
+			saved = await onexport();
+		} catch {
+			exportNote = 'The export couldn’t be saved. Try again, or free up memory by closing other tabs.';
+			return;
+		} finally {
+			exporting = false;
+		}
+		const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+		exportNote = saved ? `Saved ${saved.name}: ${count(saved.messages, 'message')} in ${count(saved.rooms, 'room')}.` : 'Nothing is loaded to export yet.';
+	}
+
+	/** The export reader, in a tab of its own, so this page's session carries on. */
+	function openExport(): void {
+		window.open(resolve('/archive'), '_blank', 'noopener');
+	}
 
 	async function sendTestNotification(): Promise<void> {
 		testNotificationStatus = 'sending';
@@ -197,8 +229,8 @@
 
 <Dialog bind:open title="Preferences" size="lg" closeLabel="Close preferences" backdropCloses flush onclose={preferencesClosed}>
 	<SettingsSections sections={SECTIONS} bind:current={preferencesSection}>
+		<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
 		{#if preferencesSection === 'notifications'}
-			<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
 			{#if status}
 				<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} onannounce={(text) => (statusAnswer = text)} disabled={status.disabled} />
 			{/if}
@@ -244,6 +276,18 @@
 					</Callout>
 				</div>
 			{/if}
+		{:else if preferencesSection === 'export'}
+			<SettingRow title="Export chats" hint="Saves the rooms, threads and messages this page has loaded as a .jsonl file. Scroll back in a room first to include its older messages.">
+				{#if exportNote}<p class="ap-pref-note">{exportNote}</p>{/if}
+				{#snippet control()}
+					<Button size="sm" variant="ghost" label={exporting ? 'Exporting…' : 'Export'} disabled={!onexport} aria-disabled={exporting ? 'true' : undefined} aria-busy={exporting ? 'true' : undefined} onclick={exportChats} data-testid="export-chats" />
+				{/snippet}
+			</SettingRow>
+			<SettingRow title="Open an export" hint="Reads a saved export in a new tab, read-only. Its images still load from the server they were posted to.">
+				{#snippet control()}
+					<Button size="sm" variant="ghost" label="Open…" onclick={openExport} />
+				{/snippet}
+			</SettingRow>
 		{:else}
 			<SettingRow title="Theme" for="ap-theme-mode" hint="System follows your operating system’s light or dark preference." class="ap-pref-theme-setting">
 				{#snippet control()}

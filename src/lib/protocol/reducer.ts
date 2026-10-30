@@ -421,6 +421,26 @@ export class ProtocolStore {
 		this.membershipLogs.clear();
 	}
 
+	/**
+	 * Everything stored, compacted (§4.3.4) as the store already is: each room's
+	 * record, each message's latest snapshot, each user's latest reaction set
+	 * per message, and every membership logged, ascending by `log_id` within a
+	 * kind. What an export keeps (`$lib/archive`).
+	 */
+	records(): StoredRecords {
+		const byLog = <T extends { log_id?: string }>(a: T, b: T) => compareLogIds(a.log_id ?? '0', b.log_id ?? '0');
+		const memberships: MembershipEntry[] = [];
+		for (const [room_id, log] of this.membershipLogs) {
+			for (const record of log.records) for (const entry of record.entries) memberships.push({ log_id: record.log_id, room_id, user: entry.user, joined: entry.joined });
+		}
+		return {
+			rooms: [...this.roomRecords.values()].sort(byLog),
+			messages: [...this.messageRecords.values()].sort(byLog),
+			reactions: [...this.reactionSets.values()].flatMap((sets) => [...sets.values()]).sort(byLog),
+			memberships: memberships.sort(byLog)
+		};
+	}
+
 	/** Rooms whose projection changed since the last call. */
 	takeTouched(): Set<string> {
 		const touched = this.touched;
@@ -455,6 +475,14 @@ export class ProtocolStore {
 		if (!messages.size) this.homes.delete(roomId);
 		this.touched.add(roomId);
 	}
+}
+
+/** A store's records by kind (`ProtocolStore.records`). */
+export interface StoredRecords {
+	rooms: RoomRecord[];
+	messages: MessageRecord[];
+	reactions: ReactionSet[];
+	memberships: MembershipEntry[];
 }
 
 /** Records decoded from one frame or history result, partitioned by kind. */

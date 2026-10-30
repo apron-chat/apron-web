@@ -20,6 +20,7 @@
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
 	import TypingDots from '$lib/design/components/TypingDots.svelte';
+	import { exportArchive } from '$lib/archive/archive';
 
 	type Status = 'idle' | 'saving' | 'altered' | 'declined';
 
@@ -94,6 +95,23 @@
 	/** Optional statuses this server answered something else for anyway (§4.5), per server: not offered again. */
 	let unsupportedStatuses = $state<{ server: string; values: string[] }>({ server: '', values: [] });
 	let unsupported = $derived(unsupportedStatuses.server === client.url ? unsupportedStatuses.values : []);
+
+	/**
+	 * Preferences' Export: what the client has stored, saved as a file, unless there is nothing yet. The threads
+	 * listed but never opened load their newest messages first, so none of them is saved empty.
+	 */
+	async function exportChats(): Promise<{ name: string; rooms: number; messages: number } | undefined> {
+		const unopened = client.snapshot().rooms.filter((room) => room.parentRoomId !== undefined && !room.loaded && !room.resumed);
+		await Promise.allSettled(unopened.map((room) => client.loadRoom(room.id)));
+		const file = exportArchive(client.url, client.snapshot(), client.storedRecords());
+		if (file.rooms === 0) return undefined;
+		const url = URL.createObjectURL(new Blob([file.text], { type: 'application/jsonl' }));
+		const link = Object.assign(document.createElement('a'), { href: url, download: file.name });
+		link.click();
+		// Kept a while: a browser may still be reading it after the click returns.
+		setTimeout(() => URL.revokeObjectURL(url), 60_000);
+		return file;
+	}
 
 	async function chooseStatus(status: string): Promise<string | undefined> {
 		const kept = await client.setStatus(status);
@@ -486,6 +504,7 @@
 			{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
 			{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
+			onexport={exportChats}
 			onclosed={() => preferencesTrigger?.focus()}
 		/>
 	{/if}

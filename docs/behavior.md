@@ -666,6 +666,24 @@ over the system's, and an installed font for the interface, messages and code
 font choice is marked experimental, to be replaced by a choice of themes. All
 of these stay on this device; settings aren't synced.
 
+**Export** saves what this page has loaded from the server as a `.jsonl` file
+(`apron-<host>-<day>.jsonl`): the rooms and threads the rooms list shows, any
+other room a loaded message is in (such as a quoted message's), the rooms those
+are threads of, and every loaded record of theirs, compacted as the client keeps
+them (§4.3.4): each room's record, each message's latest snapshot, each
+message's reactions, and the join and leave records, with who you are and the
+users as they were, without their statuses. Threads listed but never opened load
+their newest page first; older messages of a room are in the export only once
+scrolled back to. **Open an export** opens `/archive` in a new tab, where a
+chosen or dropped export opens in this same app, read-only, against a server in
+the page that serves only that file: it signs in as the export's `you`, as a
+guest who may only read (`ext:permissions` `write: false`), lists its
+rooms and threads as they were joined, pages their history, and refuses
+anything that would change them. The read-only bar says where and when the
+export was saved. Nothing is sent to the exported server and nothing is
+remembered, as in `/__preview`, but its images load from the origins that
+server named for its media, kept in the export.
+
 With the `command` capability, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#41-command)): the composer shows a **Command** tag, sets the line in
 monospace, and **Run** replaces **Send**. `/nick` (a `me` request), `/join`,
