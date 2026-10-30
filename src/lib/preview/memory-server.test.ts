@@ -380,9 +380,9 @@ describe('in-memory live text (§4.8.3, §4.8.5, §4.8.6)', () => {
 		const client = await connect(server);
 		const result = await client.command('general', '/embed-append Here is **the plan**:').promise;
 		const [written] = result.embeds as { embed_id: string; write_url: string }[];
-		const put = server.fetchLive(written.write_url, { method: 'PUT', body: '\n\n1. Roll back.\n2. Renew the cert. @ada' });
+		const put = server.fetchLive(written.write_url, { method: 'PUT', body: '1. Roll back.\n2. Renew the cert. @ada' });
 		expect((await put).status).toBe(204);
-		await waitFor(() => !embedOf(client) && latest(client).body?.text !== 'Here is **the plan**:');
+		await waitFor(() => !embedOf(client) && latest(client).body?.text !== 'Here is **the plan**:\n\n');
 		expect(latest(client).body).toEqual({ text: 'Here is **the plan**:\n\n1. Roll back.\n2. Renew the cert. @ada', format: 'markdown' });
 	});
 

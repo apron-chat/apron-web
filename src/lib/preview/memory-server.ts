@@ -903,7 +903,9 @@ export class MemoryProtocolServer {
 			if (!this.rooms.has(room)) return fail('Unknown room');
 			const kind = name === 'embed-terminal' ? 'terminal' : 'append';
 			const live = this.newLive(kind, kind === 'terminal' ? rest.trim() || undefined : undefined);
-			live.command = { room, text: kind === 'append' ? rest.trim() : '', ...(isJsonObject(p.reply_to) ? { reply_to: structuredClone(p.reply_to) } : {}) };
+			// A paragraph break after opening text starts the streamed text on a paragraph of its own.
+			const opening = kind === 'append' ? rest.trim() : '';
+			live.command = { room, text: opening ? `${opening}\n\n` : '', ...(isJsonObject(p.reply_to) ? { reply_to: structuredClone(p.reply_to) } : {}) };
 			const writeUrl = `${PREVIEW_ORIGIN}/write/${live.write}`;
 			// Its write URL stops working if no PUT comes in time (§4.8.3).
 			live.timers.push(setTimeout(() => {
