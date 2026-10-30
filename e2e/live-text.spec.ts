@@ -87,6 +87,103 @@ test.describe('a terminal embed on a phone', () => {
 	});
 });
 
+test.describe('a terminal embed, expanded', () => {
+	test.use(DEVICES.desktop);
+
+	test('opens full screen from Expand, larger, live from the same read of the text, and closes on Escape and Back', async ({ preview, page }) => {
+		await preview.open();
+		const heading = await preview.heading().textContent();
+		const id = await preview.startLive('general', 'ada', 'terminal', { title: 'make test' });
+		const terminal = terminalOf(preview);
+		await preview.liveWrite(id, BUILD);
+		await expect(terminal.locator('.xterm-rows')).toContainText('$ make test');
+		const expand = terminal.getByRole('button', { name: 'Expand terminal' });
+		await expand.click();
+		const viewer = page.getByRole('dialog', { name: 'make test' });
+		await expect(viewer).toBeVisible();
+		await expect(viewer.locator('.ap-embed-livebadge')).toHaveText('Live');
+		await expect(viewer.getByRole('button', { name: 'Close' })).toBeFocused();
+		const screen = viewer.locator('.ap-termviewer-screen');
+		await expect(screen.locator('.xterm-rows')).toContainText('ok  store');
+		// Larger than in the message, and the whole 80 by 40 screen fits the viewer.
+		await expect(screen).toHaveAttribute('data-font-size', /./);
+		const inline = Number(await terminal.locator('.ap-embed-termscreen').getAttribute('data-font-size'));
+		const full = Number(await screen.getAttribute('data-font-size'));
+		expect(full).toBeGreaterThan(inline);
+		const fit = await viewer.locator('.ap-termviewer-stage').evaluate((stage) => {
+			const drawn = stage.querySelector('.xterm-screen')!.getBoundingClientRect();
+			return { width: drawn.width <= stage.clientWidth, height: drawn.height <= stage.clientHeight, scrolls: stage.scrollWidth > stage.clientWidth };
+		});
+		expect(fit).toEqual({ width: true, height: true, scrolls: false });
+		// What arrives reaches the viewer too, from the one GET the embed made.
+		await preview.liveWrite(id, 'coverage 100%\r\n');
+		await expect(screen.locator('.xterm-rows')).toContainText('coverage 100%');
+		await expect(terminal.locator('.xterm-rows')).toContainText('coverage 100%');
+		expect(await preview.liveReads(id)).toBe(1);
+
+		await page.keyboard.press('Escape');
+		await expect(viewer).toBeHidden();
+		await expect(expand).toBeFocused();
+		await expect(preview.heading()).toHaveText(heading!);
+
+		// Back closes it too, leaving the room as it was.
+		await expand.click();
+		await expect(viewer).toBeVisible();
+		await page.goBack();
+		await expect(viewer).toBeHidden();
+		await expect(preview.heading()).toHaveText(heading!);
+		await expect(terminal).toBeVisible();
+
+		// Finished while open: the viewer shows the output, as Finished.
+		await expand.click();
+		await preview.liveEnd(id);
+		await expect(viewer.locator('.ap-viewer-detail')).toHaveText('Finished');
+		await expect(screen.locator('.xterm-rows')).toContainText('coverage 100%');
+		expect(await preview.liveReads(id)).toBe(1);
+	});
+});
+
+test.describe('a terminal embed, expanded on a phone', () => {
+	test.use(DEVICES.phone);
+
+	test('opens on a tap on its screen, at a readable size that scrolls sideways inside the viewer, never the page', async ({ preview, page }) => {
+		await preview.open();
+		const id = await preview.startLive('general', 'ada', 'terminal', { title: 'make test' });
+		const terminal = terminalOf(preview);
+		await preview.liveWrite(id, `${'0123456789'.repeat(8)}\r\n${BUILD}`);
+		await expect(terminal.locator('.xterm-rows')).toContainText('$ make test');
+		await terminal.locator('.ap-embed-termscreen').tap();
+		const viewer = page.getByRole('dialog', { name: 'make test' });
+		await expect(viewer).toBeVisible();
+		const screen = viewer.locator('.ap-termviewer-screen');
+		await expect(screen.locator('.xterm-rows')).toContainText('0123456789');
+		await expect(screen).toHaveAttribute('data-font-size', '9');
+		const stage = await viewer.locator('.ap-termviewer-stage').evaluate((box) => ({ scrolls: box.scrollWidth > box.clientWidth }));
+		expect(stage.scrolls).toBe(true);
+		expect(await page.evaluate(() => document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth)).toBeLessThanOrEqual(0);
+		await viewer.getByRole('button', { name: 'Close' }).tap();
+		await expect(viewer).toBeHidden();
+		expect(await preview.liveReads(id)).toBe(1);
+	});
+
+	test('on its side, fits the 80 columns at a size larger than the message’s, without scrolling sideways', async ({ preview, page }) => {
+		await page.setViewportSize({ width: 844, height: 390 });
+		await preview.open();
+		const id = await preview.startLive('general', 'ada', 'terminal', { title: 'make test' });
+		const terminal = terminalOf(preview);
+		await preview.liveWrite(id, BUILD);
+		await expect(terminal.locator('.xterm-rows')).toContainText('$ make test');
+		await terminal.getByRole('button', { name: 'Expand terminal' }).tap();
+		const screen = page.getByRole('dialog', { name: 'make test' }).locator('.ap-termviewer-screen');
+		await expect(screen.locator('.xterm-rows')).toContainText('ok  store');
+		const inline = Number(await terminal.locator('.ap-embed-termscreen').getAttribute('data-font-size'));
+		await expect(screen).toHaveAttribute('data-font-size', '13');
+		expect(inline).toBeLessThan(13);
+		const scrolls = await page.locator('.ap-termviewer-stage').evaluate((box) => box.scrollWidth > box.clientWidth);
+		expect(scrolls).toBe(false);
+	});
+});
+
 test.describe('an append embed', () => {
 	test.use(DEVICES.desktop);
 

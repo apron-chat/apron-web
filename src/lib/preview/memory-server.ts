@@ -63,6 +63,8 @@ interface LiveWrite {
 	message_id?: string;
 	chunks: Uint8Array[];
 	readers: Set<ReadableStreamDefaultController<Uint8Array>>;
+	/** Every `GET url` served, as a server that caps a live text's reads counts them. */
+	reads: number;
 	timers: ReturnType<typeof setTimeout>[];
 }
 
@@ -422,6 +424,11 @@ export class MemoryProtocolServer {
 		for (const reader of live.readers) reader.enqueue(bytes);
 	}
 
+	/** How many times its `url` was read (`GET`), from the first. */
+	liveReads(embedId: string): number {
+		return this.lives.get(embedId)?.reads ?? 0;
+	}
+
 	/**
 	 * Ends a live text, as the end of its `PUT` body does: its readers' responses end, and a snapshot finishes the
 	 * message: a terminal's embed with its `output`, an append's text moved into the body and the embed gone.
@@ -486,6 +493,7 @@ export class MemoryProtocolServer {
 		if (area === 'write' && method === 'PUT') return this.receiveWrite(live, init.body);
 		// A command's live text has no message, so no url anyone knows of, until its write starts.
 		if (area !== 'live' || method !== 'GET' || (live.command && live.state === 'pending')) return new Response('Not found', { status: 404 });
+		live.reads++;
 		const signal = init.signal ?? undefined;
 		let reader: ReadableStreamDefaultController<Uint8Array> | undefined;
 		const body = new ReadableStream<Uint8Array>({
@@ -528,7 +536,7 @@ export class MemoryProtocolServer {
 	private newLive(kind: 'append' | 'terminal', title?: string): LiveWrite {
 		const serial = this.liveSerial++;
 		const token = () => `${serial}${Math.random().toString(36).slice(2, 10)}`;
-		const live: LiveWrite = { kind, embed_id: `preview-live-${serial}`, write: token(), read: token(), state: 'pending', chunks: [], readers: new Set(), timers: [], ...(title ? { title } : {}) };
+		const live: LiveWrite = { kind, embed_id: `preview-live-${serial}`, write: token(), read: token(), state: 'pending', chunks: [], readers: new Set(), reads: 0, timers: [], ...(title ? { title } : {}) };
 		this.lives.set(live.embed_id, live);
 		return live;
 	}

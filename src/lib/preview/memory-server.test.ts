@@ -413,7 +413,7 @@ describe('in-memory live text (§4.8.3, §4.8.5, §4.8.6)', () => {
 		await expect(client.send('general', 'Two', 'markdown', { embeds: [{ kind: 'append' }, { kind: 'append' }] }).promise).rejects.toThrow('at most one append');
 	});
 
-	it('plays a demo into a live text, and a dropped reader that reconnects gets it all again', async () => {
+	it('plays a demo into a live text, and a dropped reader that reconnects gets it all again, each read counted', async () => {
 		const server = new MemoryProtocolServer({});
 		const client = await connect(server);
 		const id = server.startLive('general', 'ada', 'append', { body: { text: 'Plan:' } });
@@ -426,6 +426,8 @@ describe('in-memory live text (§4.8.3, §4.8.5, §4.8.6)', () => {
 		server.playDemo(id, [{ wait: 1, data: ' two' }, { wait: 1, data: new TextEncoder().encode(' three') }]);
 		const again = await server.fetchLive(url, {});
 		expect(await again.text()).toBe(' one two three');
+		// Each GET counted, as a server that caps reads counts them.
+		expect(server.liveReads(id)).toBe(2);
 		await waitFor(() => !embedOf(client));
 		expect(latest(client).body).toMatchObject({ text: 'Plan: one two three', format: 'markdown' });
 	});

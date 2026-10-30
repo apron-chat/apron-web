@@ -125,6 +125,11 @@ export class Preview {
 		return this.page.evaluate(([embedId, data]) => (window as any).__apronPreview.liveWrite(embedId, data), [embedId, data] as const);
 	}
 
+	/** How many times the client has read (`GET`) a live text's url. */
+	liveReads(embedId: string): Promise<number> {
+		return this.page.evaluate((embedId) => (window as any).__apronPreview.liveReads(embedId) as number, embedId);
+	}
+
 	/** Ends a live text: the snapshot that finishes it follows. */
 	liveEnd(embedId: string): Promise<void> {
 		return this.page.evaluate((embedId) => (window as any).__apronPreview.liveEnd(embedId), embedId);
