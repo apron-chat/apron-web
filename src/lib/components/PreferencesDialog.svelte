@@ -65,8 +65,8 @@
 	const SECTIONS = [
 		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
 		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
-		{ value: 'media', label: 'Media', hint: 'Choose where images and avatars load from.', id: 'ap-pref-media' },
-		{ value: 'history', label: 'History', hint: 'What this device keeps of your chats, and exports of them.', id: 'ap-pref-history' }
+		{ value: 'media', label: 'Media', hint: 'Where images and avatars load from. Each site sees what you load.', id: 'ap-pref-media' },
+		{ value: 'history', label: 'History', hint: 'What this device keeps of your chats.', id: 'ap-pref-history' }
 	];
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
@@ -92,15 +92,15 @@
 	/** Under the retention: why nothing more is kept, or how much is. */
 	let historyNote = $derived<Note | undefined>(historySettings.failure
 		? { text: historySettings.failure, tone: 'err' }
-		: historySettings.retention !== 'off' && used ? { text: `Apron uses about ${used} on this device.` } : undefined);
+		: historySettings.retention !== 'off' && used ? { text: `Using about ${used}.` } : undefined);
 	let exporting = $state(false);
 
 	/** What the chosen media policy loads, under it. */
 	let mediaNote = $derived.by(() => {
 		const server = `this server${mediaHosts.length ? ` and ${mediaHosts.join(', ')}` : ''}`;
-		if (mediaSettings.policy === 'all') return 'Images and avatars from any site.';
-		if (mediaSettings.policy === 'standard') return `Link previews and attachments from ${server}; avatars and images in messages from any site.`;
-		return `Files on ${server}${mediaSettings.policy === 'custom' ? ', and on the sites below' : ''}. Elsewhere, an image shows as a link and an avatar as initials.`;
+		if (mediaSettings.policy === 'all') return 'Everything, from any site.';
+		if (mediaSettings.policy === 'standard') return `Previews from ${server}. Avatars and images from any site.`;
+		return `Only from ${server}${mediaSettings.policy === 'custom' ? ' and the sites below' : ''}.`;
 	});
 	/** The sites added, one per line as hosts, as the field shows them. */
 	let addedSites = $derived(mediaSettings.origins.map((origin) => new URL(origin).host).join('\n'));
@@ -305,8 +305,7 @@
 				</div>
 			{/if}
 		{:else if preferencesSection === 'media'}
-			<SettingRow title="Load images from" for="ap-media-policy" hint="Loading an image or avatar tells the site it’s on that you’re reading, and from where. Small images sent with a message always show." class="ap-pref-media-setting">
-				<p class="ap-pref-note" data-testid="media-note">{mediaNote}</p>
+			<SettingRow title="Load images from" for="ap-media-policy" hint={mediaNote} hintTestid="media-note" class="ap-pref-media-setting">
 				{#snippet control()}
 					<select id="ap-media-policy" class="ap-field ap-pref-select" value={mediaSettings.policy} onchange={(event) => mediaSettings.update(event.currentTarget.value)} data-testid="media-policy">
 						{#each MEDIA_POLICIES as policy (policy.value)}<option value={policy.value}>{policy.label}</option>{/each}
@@ -314,14 +313,14 @@
 				{/snippet}
 			</SettingRow>
 			{#if mediaSettings.policy === 'custom'}
-				<SettingRow title="Sites" for="ap-media-sites" hint="One per line, such as cdn.example.com. Only https." stacked class="ap-pref-media-sites">
+				<SettingRow title="Sites" for="ap-media-sites" hint="One per line, such as cdn.example.com." stacked class="ap-pref-media-sites">
 					{#snippet control()}
 						<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update('custom', parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
 					{/snippet}
 				</SettingRow>
 			{/if}
 		{:else if preferencesSection === 'history'}
-			<SettingRow title="Keep history on this device" for="ap-history-retention" hint="Signed in to an account, the rooms you’ve joined open from here at once, then catch up with the server. Never as a guest; signing out removes it." class="ap-pref-history-setting">
+			<SettingRow title="Keep history" for="ap-history-retention" hint="Your rooms open at once after a reload. Accounts only; signing out removes it." class="ap-pref-history-setting">
 				{#if historyNote}<p class={['ap-pref-note', historyNote.tone === 'err' && 'ap-tone-danger']}>{historyNote.text}</p>{/if}
 				{#snippet control()}
 					<select id="ap-history-retention" class="ap-field ap-pref-select" value={historySettings.retention} onchange={(event) => historySettings.update(event.currentTarget.value)} data-testid="history-retention">
@@ -329,13 +328,13 @@
 					</select>
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Export chats" hint="Saves the rooms, threads and messages this page has loaded as a .jsonl file. Scroll back in a room first to include its older messages.">
+			<SettingRow title="Export chats" hint="Saves what this page has loaded as a .jsonl file.">
 				{#if exportNote}<p class="ap-pref-note">{exportNote}</p>{/if}
 				{#snippet control()}
 					<Button size="sm" variant="ghost" label={exporting ? 'Exporting…' : 'Export'} disabled={!onexport} aria-disabled={exporting ? 'true' : undefined} aria-busy={exporting ? 'true' : undefined} onclick={exportChats} data-testid="export-chats" />
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Open an export" hint="Reads a saved export in a new tab, read-only, and asks before loading its images from the sites it names.">
+			<SettingRow title="Open an export" hint="Reads one in a new tab, read-only.">
 				{#snippet control()}
 					<Button size="sm" variant="ghost" label="Open…" onclick={openExport} />
 				{/snippet}
