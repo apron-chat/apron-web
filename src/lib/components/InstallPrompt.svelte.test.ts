@@ -32,11 +32,16 @@ describe('InstallPrompt', () => {
 		const prompt = render('ios-safari', { alerts: true, ondecline });
 		expect(prompt.textContent).toContain('like an app, and can alert you when it’s closed.');
 		expect(prompt.querySelector('[data-testid="install-steps"]')).toBeNull();
-		button('Show me how')!.click();
+		const shown = button('Show me how')!;
+		shown.click();
 		flushSync();
 		const steps = [...prompt.querySelectorAll('[data-testid="install-steps"] li')].map((step) => step.textContent);
-		expect(steps).toEqual(['Tap Share (in Safari’s  menu, if it isn’t in the toolbar)', 'Choose Add to Home Screen', 'Tap Add']);
+		expect(steps).toEqual(['Tap Share, in the toolbar or Safari’s  menu', 'Choose Add to Home Screen (under View More, if it isn’t listed)', 'Tap Add']);
+		expect(prompt.querySelector('[aria-label="More"]')?.getAttribute('role')).toBe('img');
+		expect(prompt.textContent).toContain('Not there? Open this page in Safari first.');
 		expect(button('Not now')).toBeUndefined();
+		// The same button, so focus stays on it.
+		expect(button('Got it')).toBe(shown);
 		button('Got it')!.click();
 		expect(ondecline).toHaveBeenCalledOnce();
 	});
@@ -47,8 +52,23 @@ describe('InstallPrompt', () => {
 		expect(prompt.textContent).toContain('This app’s browser can’t, so open Apron in your browser first.');
 		button('Show me how')!.click();
 		flushSync();
-		expect(prompt.textContent).toContain('Open in browser');
+		expect(prompt.textContent).toContain('choose to open the page in your browser');
 		prompt.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		expect(ondecline).toHaveBeenCalledOnce();
+	});
+});
+
+describe('InstallPrompt, once the browser offers to install', () => {
+	it('drops the steps shown before for its Install', () => {
+		const props = $state<{ way: InstallWay; oninstall: () => void; ondecline: () => void }>({ way: 'android', oninstall: () => {}, ondecline: () => {} });
+		dom.render(InstallPrompt, props);
+		button('Show me how')!.click();
+		flushSync();
+		expect(document.querySelector('[data-testid="install-steps"]')).not.toBeNull();
+		props.way = 'prompt';
+		flushSync();
+		expect(document.querySelector('[data-testid="install-steps"]')).toBeNull();
+		expect(button('Install')).toBeDefined();
+		expect(button('Not now')).toBeDefined();
 	});
 });

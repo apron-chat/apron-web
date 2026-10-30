@@ -34,7 +34,7 @@
 	import MemberListSidebar from '$lib/components/MemberListSidebar.svelte';
 	import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
-	import { INSTALL_OFFER_AFTER_MS, installWay } from '$lib/ui/install';
+	import { INSTALL_OFFER_AFTER_MS, installWay, installedAlready } from '$lib/ui/install';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
 	import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
 	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
@@ -68,7 +68,7 @@
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -244,9 +244,9 @@
 	let installOfferDue = $state(false);
 	/** How this phone puts Apron on its Home Screen, while it's not running from there. */
 	let installHow = $derived(runsInstalled ? undefined : installWay(Boolean(installPrompt)));
+	/** Installed, Apron could alert this device while it's closed, as it can't before: an iPhone or iPad, signed in where push works. */
+	let installAlerts = $derived(needsHomeScreen() && Boolean(webPushServerKey));
 	/** The install offer, while it waits for an answer: one offer at a time, so not while notifications are offered. */
-	/** Installed, Apron could alert this device while it's closed, as it can't before: an iPhone or iPad, on a server with push. */
-	let installAlerts = $derived(needsHomeScreen() && Boolean(webPushKey(session.server)));
 	let installOffer = $derived(installOfferDue && !installAnswered && !notifyOffer ? installHow : undefined);
 	/** The account's `push_id` (§4.9): it names the account in pushed payloads and in message notifications. */
 	let accountPushId = $derived(pushSettings.accountPushId);
@@ -680,7 +680,7 @@
 			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible, readThrough: syncsReads ? (room) => readPositions.through(room, session.you) : () => undefined },
 			{ mentions, messages: incomingMessages },
 			{
-				offerable: untrack(() => !notifyOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
+				offerable: untrack(() => !notifyOffer && !installOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
 				active: notificationsActive, away: presence.away, silenced, scopes: notifyScopes
 			}
 		);
@@ -703,11 +703,22 @@
 		unread.observe(session.rooms, me, paneRoom?.id, readingLatest && presence.visible, (room) => readPositions.through(room, me), syncsReads);
 	});
 
-	// On a phone, a while after the session is up, offer to add Apron to the Home Screen: once, until answered.
+	// On a phone, a while after the session is up, offer to add Apron to the Home Screen: once, until answered. Not
+	// while reading an archive, whose answer wouldn't be kept, nor where Chrome says Apron is installed already.
 	$effect(() => {
-		if (!session.ready || installOfferDue || untrack(() => installAnswered || !installHow)) return;
-		const due = setTimeout(() => (installOfferDue = true), INSTALL_OFFER_AFTER_MS);
-		return () => clearTimeout(due);
+		if (!session.ready || archive || installOfferDue || untrack(() => installAnswered || !installHow)) return;
+		let current = true;
+		const due = setTimeout(() => {
+			void installedAlready().then((installed) => {
+				if (!current) return;
+				if (installed) installAnswered = true;
+				else installOfferDue = true;
+			});
+		}, INSTALL_OFFER_AFTER_MS);
+		return () => {
+			current = false;
+			clearTimeout(due);
+		};
 	});
 
 	// Signed in to an installed app where push works: offer notifications now, not at the first mention.
@@ -1126,6 +1137,8 @@
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 			// A description put away or brought back in another tab is here too.
 			if (event.key === HIDDEN_DESCRIPTIONS_KEY) hiddenDescriptions = loadHiddenDescriptions();
+			// The install offer answered in another tab is answered here too.
+			if (event.key === INSTALL_OFFER_KEY) installAnswered = installOfferAnswered();
 		};
 		window.addEventListener('storage', storageChanged);
 		// Any input on the page means someone is attending it (§4.5 `idle`). Captured, so a
@@ -1143,7 +1156,7 @@
 		const installed = () => {
 			installPrompt = undefined;
 			installAnswered = true;
-			answerInstallOffer('installed');
+			answerInstallOffer();
 		};
 		window.addEventListener('beforeinstallprompt', installOffered);
 		window.addEventListener('appinstalled', installed);
@@ -1440,26 +1453,22 @@
 		notifyScopesSaved += 1;
 	}
 
-	/** Chromium's install prompt, from the push setting's Install app button: offered once. */
+	/**
+	 * Chromium's install prompt, from the push setting's Install app button or the install offer's Install: offered
+	 * once, and either answers the install offer, so it doesn't come back with the steps once the prompt is gone.
+	 */
 	async function installApp(): Promise<void> {
 		const prompt = installPrompt;
 		installPrompt = undefined;
-		await prompt?.prompt().catch(() => undefined);
-	}
-
-	/** The install offer's Install: the browser's own prompt, from this tap. Answered either way, so it isn't made again. */
-	async function acceptInstallOffer(): Promise<void> {
-		const prompt = installPrompt;
 		installAnswered = true;
-		await installApp();
-		const choice = await prompt?.userChoice.catch(() => undefined);
-		answerInstallOffer(choice?.outcome === 'accepted' ? 'installed' : 'declined');
+		answerInstallOffer();
+		await prompt?.prompt().catch(() => undefined);
 	}
 
 	/** The install offer's Not now, or Got it once its steps are read: not made again. */
 	function declineInstallOffer(): void {
 		installAnswered = true;
-		answerInstallOffer('declined');
+		answerInstallOffer();
 	}
 
 	/**
@@ -3006,7 +3015,7 @@
 	<!-- The first-mention offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->
 	{#snippet nudge()}
 		{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} pointer onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />
-		{:else if installOffer}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={acceptInstallOffer} ondecline={declineInstallOffer} />{/if}
+		{:else if installOffer}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
 	{/snippet}
 
 	{#snippet main()}
@@ -3120,7 +3129,7 @@
 
 			<div class="ap-shell-nudge-inline" aria-live="polite">
 				{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />
-				{:else if installOffer}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={acceptInstallOffer} ondecline={declineInstallOffer} />{/if}
+				{:else if installOffer}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
 			</div>
 			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->

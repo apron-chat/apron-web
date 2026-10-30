@@ -30,7 +30,7 @@ test.describe('iPhone Safari', () => {
 		const prompt = await offered(page, () => preview.open());
 		await expect(prompt).toContainText('Add Apron to your Home Screen?');
 		await prompt.getByRole('button', { name: 'Show me how' }).click();
-		await expect(prompt.getByTestId('install-steps').locator('li')).toHaveText([/^Tap Share/, 'Choose Add to Home Screen', 'Tap Add']);
+		await expect(prompt.getByTestId('install-steps').locator('li')).toHaveText([/^Tap Share/, /^Choose Add to Home Screen/, 'Tap Add']);
 		await prompt.getByRole('button', { name: 'Got it' }).click();
 		await expect(prompt).toHaveCount(0);
 	});

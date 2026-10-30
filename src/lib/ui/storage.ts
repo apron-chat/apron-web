@@ -322,9 +322,11 @@ export function installOfferAnswered(): boolean {
 	return read(KEY.installOffer) !== null;
 }
 
-export function answerInstallOffer(answer: 'installed' | 'declined'): void {
-	write(KEY.installOffer, answer);
+export function answerInstallOffer(): void {
+	write(KEY.installOffer, 'answered');
 }
+
+export const INSTALL_OFFER_KEY = KEY.installOffer;
 
 /** `push_id`s made here and not saved (no storage, or `/__preview`). */
 const unsavedPushIds = new Map<string, string>();

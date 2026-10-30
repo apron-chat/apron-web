@@ -616,18 +616,23 @@ app** under the Notifications switch, and in the install offer below, and not on
 On a phone or tablet not running Apron installed, 20 seconds after the session
 is up, the same kind of prompt as the notifications offer asks "Add Apron to
 your Home Screen?": it opens full screen, like an app, and, on an iPhone or
-iPad on a server that pushes, can alert you when it's closed. Where the browser
-offers to install Apron, its **Install** asks the browser. Elsewhere **Show me
-how** lists the steps for this browser: Safari's Share, then Add to Home
-Screen, then Add (Share sits in Safari's ⋯ menu when it isn't in the
-toolbar); another iPhone browser's Share by the address, likewise; an Android
-browser's menu, Install app or Add to Home screen; and in an app's own browser
+iPad signed in where push works, can alert you when it's closed. Where the
+browser offers to install Apron, its **Install** asks the browser (as
+Preferences' **Install app** does, which answers this offer too). Elsewhere
+**Show me how** lists the steps for this browser: Share (in Safari's toolbar or
+its ⋯ menu), Add to Home Screen (under View More if it isn't listed), then Add;
+another iPhone browser's Share by the address, likewise; an Android browser's
+menu, Install app or Add to Home screen; and in an app's own browser
 (Instagram, Facebook and the like), which can't, to open the page in the
-browser first. **Not now**, **Got it** once the steps are read, Escape, or
-installing answers it, so it isn't offered again on this device. It never
-shows with the notifications offer: that one goes first, and this one waits
-until it's answered. Computers aren't offered it: their browsers offer
-installing in the address bar.
+browser first. Under the steps, "Not there? Open this page in Safari first"
+(in your browser, on Android) covers the browsers apps open pages in, which look like
+the browser but have no such menu. **Not now**, **Got it** once the steps
+are read, Escape, or installing answers it, so it isn't offered again on this
+device, in any tab. It never shows with the notifications offer: whichever
+comes first holds the other back until it's answered. It isn't offered where
+Chrome says Apron is installed already (`getInstalledRelatedApps`, the
+manifest naming it in `related_applications`), nor while reading an archive,
+nor on a computer, whose browser offers installing in the address bar.
 
 `push_id` names the account: 12 random bytes in base64url (16 characters),
 made once per account on each server and kept in `apron.pushIds`, so it
