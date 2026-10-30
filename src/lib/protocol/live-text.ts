@@ -26,6 +26,17 @@ export interface LiveTextSink {
 	end(): void;
 }
 
+/**
+ * A decoder for live text's bytes, as the server converts the text it keeps
+ * (§4.8.3): WHATWG's UTF-8 decode without BOM, so each invalid sequence reads
+ * as one U+FFFD and a leading BOM stays. Decode each response with
+ * `{stream: true}`, which carries a character cut between chunks, and call
+ * `decode()` at its end, so that what was shown matches the finished text.
+ */
+export function liveTextDecoder(): TextDecoder {
+	return new TextDecoder('utf-8', { ignoreBOM: true });
+}
+
 /** The pauses before trying again after a failure or a drop, the last repeated: a live text's url may not serve yet, or its connection may drop. */
 export const LIVE_RETRY_MS = [1000, 2000, 4000, 8000, 15000] as const;
 

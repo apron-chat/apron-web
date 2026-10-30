@@ -1,5 +1,5 @@
 import { createSubscriber } from 'svelte/reactivity';
-import { followLiveText } from '$lib/protocol/live-text';
+import { followLiveText, liveTextDecoder } from '$lib/protocol/live-text';
 
 /**
  * The text of an `append` embed (§4.8.5) while it is live: what `GET url`
@@ -24,11 +24,11 @@ export class LiveAppend {
 					update();
 				});
 			};
-			let decoder = new TextDecoder();
+			let decoder = liveTextDecoder();
 			this.#live = true;
 			void followLiveText(url, {
 				start: () => {
-					decoder = new TextDecoder();
+					decoder = liveTextDecoder();
 					this.#text = '';
 					this.#live = true;
 					changed();

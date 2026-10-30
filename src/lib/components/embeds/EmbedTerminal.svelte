@@ -1,7 +1,7 @@
 <script lang="ts">
 	import DesignEmbedTerminal from '$lib/design/components/EmbedTerminal.svelte';
 	import { sameOriginMedia } from '$lib/protocol/embeds';
-	import { followLiveText } from '$lib/protocol/live-text';
+	import { followLiveText, liveTextDecoder } from '$lib/protocol/live-text';
 	import type { Embed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { TerminalScreen } from '$lib/ui/terminal-screen';
@@ -43,7 +43,20 @@
 		ended = false;
 		if (!source) return;
 		const controller = new AbortController();
-		void followLiveText(source, { start: () => target.reset(), chunk: (bytes) => target.write(bytes), end: () => (ended = true) }, controller.signal);
+		// Decoded here, as the server decodes `output`: xterm would skip invalid bytes that `output` shows as U+FFFD.
+		let decoder = liveTextDecoder();
+		void followLiveText(source, {
+			start: () => {
+				decoder = liveTextDecoder();
+				target.reset();
+			},
+			chunk: (bytes) => target.write(decoder.decode(bytes, { stream: true })),
+			end: () => {
+				const tail = decoder.decode();
+				if (tail) target.write(tail);
+				ended = true;
+			}
+		}, controller.signal);
 		return () => controller.abort();
 	});
 </script>

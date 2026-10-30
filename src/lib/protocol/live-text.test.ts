@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { followLiveText, readLiveText, setLiveFetch, type LiveTextSink } from './live-text';
+import { followLiveText, liveTextDecoder, readLiveText, setLiveFetch, type LiveTextSink } from './live-text';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
@@ -103,5 +103,15 @@ describe('live text (§4.8.3)', () => {
 		} finally {
 			vi.unstubAllGlobals();
 		}
+	});
+});
+
+describe('liveTextDecoder (§4.8.3)', () => {
+	it("decodes as the server converts kept text: WHATWG's UTF-8 decode without BOM, carried across chunks", () => {
+		const decoder = liveTextDecoder();
+		const parts = [[0xef, 0xbb, 0xbf, 0x24, 0xe2, 0x82], [0xac, 0x20, 0xc0, 0xaf], [0x20, 0xe2]].map((b) => new Uint8Array(b));
+		const text = parts.map((part) => decoder.decode(part, { stream: true })).join('') + decoder.decode();
+		// The BOM stays, "€" cut between chunks is whole, C0 AF is two U+FFFD, and the cut-off E2 at the end is one.
+		expect(text).toBe('\ufeff$\u20ac \ufffd\ufffd \ufffd');
 	});
 });
