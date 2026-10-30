@@ -20,7 +20,7 @@ const kept: HeldSession = {
 	threadDirectory: { general: [{ id: 'thread_9', title: 'Older thread', joined: false } as never] }
 };
 
-const client = () => ({ selectRoom: vi.fn() }) as unknown as ChatClient & { selectRoom: ReturnType<typeof vi.fn> };
+const client = () => ({ selectRoom: vi.fn(), awaitRoom: vi.fn() }) as unknown as ChatClient & { selectRoom: ReturnType<typeof vi.fn>; awaitRoom: ReturnType<typeof vi.fn> };
 const ready = (fields: Partial<ClientSnapshot> = {}): ClientSnapshot => ({ ...blankSnapshot(), status: 'connected', authenticated: true, you: ada, roomsListed: true, ...fields });
 
 describe('SessionView, primed with a view kept on this device', () => {
@@ -68,8 +68,12 @@ describe('SessionView, primed with a view kept on this device', () => {
 		const session = new SessionView();
 		const chat = client();
 		session.prime({ ...kept, activeRoom: 'thread_1' });
+		// Until then, its history goes first.
+		session.apply({ ...blankSnapshot(), status: 'connecting' }, chat);
+		expect(chat.awaitRoom).toHaveBeenLastCalledWith('thread_1');
 		session.apply(ready({ rooms: [room('general', []), room('thread_1', [])], activeRoom: 'general' }), chat);
 		expect(chat.selectRoom).toHaveBeenCalledWith('thread_1');
+		expect(chat.awaitRoom).toHaveBeenLastCalledWith(undefined);
 	});
 
 	it('drops it when the session signs in as someone else, and comes too late once the session is ready', () => {
@@ -256,7 +260,7 @@ describe('SessionView after a reconnect', () => {
 
 	it('shows Try Again under way at once: no quiet moment for the attempt it asked for', () => {
 		const session = new SessionView();
-		const chat = { selectRoom: vi.fn(), retryNow: vi.fn(() => session.apply(dropped(Date.now() - 20_000, { retryingSince: Date.now() }), chat)) } as unknown as ChatClient;
+		const chat = { selectRoom: vi.fn(), awaitRoom: vi.fn(), retryNow: vi.fn(() => session.apply(dropped(Date.now() - 20_000, { retryingSince: Date.now() }), chat)) } as unknown as ChatClient;
 		session.apply(live(), chat);
 		session.apply(dropped(Date.now() - 20_000), chat);
 		expect(session.reconnectQuiet).toBe(false);

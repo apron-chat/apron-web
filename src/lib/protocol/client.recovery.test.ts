@@ -245,6 +245,20 @@ describe('history per room', () => {
 		expect(snapshot.limits).toBeUndefined();
 	});
 
+	it('sends the history of the room the page waits to show before the other rooms\', in place of the order they came', async () => {
+		const general = socket.request('history');
+		for (const id of ['ops', 'eng']) socket.receive({ method: 'room_update', params: { joined: [{ room_id: id, log_id: '30', title: id, latest_log_id: '31', history_log_id: '30' }] } });
+		// A reload or reconnect shows eng from before: it will open eng once it's listed.
+		client.awaitRoom('eng');
+		socket.receive({ id: general.id, result: { messages: [message('11')], more: false, latest_log_id: '12', history_log_id: '10' } });
+		await settle();
+		const history = () => socket.sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params).room_id);
+		expect(history()).toEqual(['general', 'eng']);
+		client.awaitRoom(undefined);
+		await socket.reply('history', { messages: [], more: false, latest_log_id: '31', history_log_id: '30' });
+		expect(history()).toEqual(['general', 'eng', 'ops']);
+	});
+
 	it('sends the next history request after one that timed out once its late answer comes', async () => {
 		const general = socket.request('history');
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '31', history_log_id: '30' }] } });
