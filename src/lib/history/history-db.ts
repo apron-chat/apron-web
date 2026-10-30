@@ -450,6 +450,11 @@ const EARLIEST_TIME = Date.UTC(2000, 0, 1);
 
 /** A room whose positions read as times (epoch milliseconds), so that a retention in days applies to it. */
 export function timeLike(sync: RoomSync | undefined): boolean {
-	const position = Number(sync?.checkpoint ?? sync?.loadCheckpoint ?? sync?.latestLogId);
+	return timeLikeLog(sync?.checkpoint ?? sync?.loadCheckpoint ?? sync?.latestLogId);
+}
+
+/** A `log_id` that reads as a time (epoch milliseconds). */
+export function timeLikeLog(log: string | undefined): boolean {
+	const position = Number(log);
 	return Number.isSafeInteger(position) && position >= EARLIEST_TIME;
 }

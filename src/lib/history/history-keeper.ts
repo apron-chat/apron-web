@@ -17,7 +17,7 @@ import type { ClientSnapshot, KeptState, RestoredState, RoomSync } from '$lib/pr
 import { compareLogIds, type StoreChange, type StoredRecords } from '$lib/protocol/reducer';
 import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types';
 import { decrement } from '$lib/protocol/client-internals';
-import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
+import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, timeLikeLog, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -289,7 +289,9 @@ export class HistoryKeeper {
 	 * the server pages instead. Its `more` goes on to the server's older ones once what is kept runs out.
 	 */
 	async olderPage(server: string, roomId: string, before: string, limit: number): Promise<JsonObject | undefined> {
-		const cover = this.coverage.get(roomId);
+		const kept = this.coverage.get(roomId);
+		const cover = kept && this.reach(kept, before);
+		if (cover && cover !== kept) this.coverage.set(roomId, cover);
 		const known = this.known;
 		if (!cover || known?.server !== server || (cover.from !== undefined && compareLogIds(before, cover.from) < 0)) return undefined;
 		try {
@@ -307,6 +309,17 @@ export class HistoryKeeper {
 		} catch {
 			return undefined;
 		}
+	}
+
+	/**
+	 * How far down a room's kept log reaches now: no lower than the retention's cutoff, in a room whose positions
+	 * are times. What is below it goes at the next prune, here or in any other tab (one opened later prunes up to a
+	 * later cutoff than this one did), so it comes from the server, and the server may have older.
+	 */
+	private reach(cover: Coverage, before: string): Coverage {
+		if (this.retentionMs === undefined || this.retentionMs === null || !timeLikeLog(before)) return cover;
+		const cutoff = this.now() - this.retentionMs;
+		return cover.from !== undefined && Number(cover.from) >= cutoff ? cover : { from: String(cutoff), older: true };
 	}
 
 	/**

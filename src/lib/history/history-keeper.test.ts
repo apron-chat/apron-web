@@ -206,6 +206,38 @@ describe('HistoryKeeper', () => {
 		await again.stop();
 	});
 
+	it('pages from the server what another tab pruned since this one restored', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		for (let n = 0; n < 400; n++) server.post('general', 'ada', `#${n}`);
+		const indexedDB = new IDBFactory();
+		const first = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(first);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(first));
+		first.start();
+		await waitFor(() => Boolean(room(first.snapshot(), 'general')?.loaded));
+		while (room(first.snapshot(), 'general')?.olderAvailable) await first.loadOlder('general');
+		const all = ids(first.snapshot(), 'general');
+		await keeper.stop();
+		first.stop();
+
+		// Everything is within the retention as this tab restores, the room down to its start.
+		let now = Number(all.at(-1)) + 1;
+		const retentionMs = now - Number(all[0]) + 1;
+		const second = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(second);
+		const writer = new HistoryKeeper({ indexedDB, locks: null, retentionMs, now: () => now });
+		writer.watch(saved(second));
+		second.start();
+		await waitFor(() => Boolean(room(second.snapshot(), 'general')?.loaded));
+		// Later, a tab opened then prunes up to its cutoff: the older half goes from this device.
+		now += Number(all[200]) - Number(all[0]);
+		await new HistoryKeeper({ indexedDB, locks: null, retentionMs, now: () => now }).setRetention(retentionMs);
+		while (room(second.snapshot(), 'general')?.olderAvailable) await second.loadOlder('general');
+		expect(ids(second.snapshot(), 'general')).toEqual(all);
+		await writer.stop();
+	});
+
 	it('writes nothing when nothing kept changed, and the users only when they did', async () => {
 		const server = new MemoryProtocolServer({ account: true });
 		const indexedDB = new IDBFactory();
