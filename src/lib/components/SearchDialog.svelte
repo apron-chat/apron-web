@@ -31,11 +31,12 @@
 		/** What the field starts with, the caret after it: such as the open room's filter, `room:#general `. */
 		initial?: string;
 		onopen: (message: MessageRecord) => void;
-		/** The title's "history" link: Preferences, at History. */
+		/** How far back history is kept, beside the title ("30 Days"), and pressing it: Preferences, at History. */
+		kept?: string;
 		onhistory?: () => void;
 		onclose: () => void;
 	}
-	let { client, keeper, rooms, roomSuggestions, note, initial = '', onopen, onhistory, onclose }: Props = $props();
+	let { client, keeper, rooms, roomSuggestions, note, initial = '', onopen, kept, onhistory, onclose }: Props = $props();
 
 	/** How long typing pauses before a search starts. */
 	const SEARCH_DELAY_MS = 150;
@@ -163,7 +164,7 @@
 	}
 </script>
 
-<SearchPanel bind:this={panel} bind:open bind:query bind:caret onfieldkey={fieldKey} suggesting={suggesting ? { list: pickerId, option: `${pickerId}-${picking}` } : undefined} {results} {searching} {more} {note} placeholder="Words, user:@name, room:#name" {onhistory} onpick={pick} {onclose} listTestid="search-results" >
+<SearchPanel bind:this={panel} bind:open bind:query bind:caret onfieldkey={fieldKey} suggesting={suggesting ? { list: pickerId, option: `${pickerId}-${picking}` } : undefined} {results} {searching} {more} {note} placeholder="Words, user:@name, room:#name" {kept} {onhistory} onpick={pick} {onclose} listTestid="search-results" >
 	{#snippet suggestions()}
 		{#if suggesting && at?.kind === 'users'}
 			<AutocompletePicker id={pickerId} query={at.typed} people={peopleFound} active={picking} testid="search-suggestions" onpick={take} onhover={(index) => (picking = index)} />
