@@ -7,8 +7,10 @@ import { loadXterm, type Xterm } from './xterm';
  * and nothing a program prints acts outside it. It never sends xterm's
  * replies anywhere, ignores title changes, the bell and the clipboard
  * (OSC 52), and opens no links (OSC 8). The font is scaled so the 80 columns
- * fit the space it has, up to TERMINAL_FONT_MAX; rows below the last one
- * written are hidden, unless a program is using the alternate screen.
+ * fit the space it has (`TerminalFit`): in a message, up to TERMINAL_FONT_MAX;
+ * in the full-screen viewer, the 40 rows too where the screen is tall enough,
+ * and never below a readable size. Rows below the last one written are
+ * hidden, unless a program is using the alternate screen.
  */
 
 export const TERMINAL_COLS = 80;
@@ -17,6 +19,29 @@ export const TERMINAL_ROWS = 40;
 export const TERMINAL_FONT_MAX = 13;
 /** The smallest it goes, however narrow the space. */
 export const TERMINAL_FONT_MIN = 4;
+/** The full-screen viewer's smallest: readable on a phone. A narrower space scrolls sideways, inside the viewer. */
+export const TERMINAL_VIEWER_FONT_MIN = 9;
+/** The viewer's largest, for a big screen. */
+export const TERMINAL_VIEWER_FONT_MAX = 24;
+
+/** How a screen's font fits its space: between `min` and `max`, its 80 columns in the width, and with `rows` its 40 rows in the height too. */
+export interface TerminalFit {
+	min: number;
+	max: number;
+	/**
+	 * Fit the 40 rows in the height as well, down to this size: a shorter space (a phone on its side) keeps this
+	 * size and scrolls, rather than shrink the text further.
+	 */
+	rows?: number;
+}
+
+/** In a message: the columns in the message's width, small as that is on a phone (the page never scrolls sideways). */
+export const INLINE_FIT: TerminalFit = { min: TERMINAL_FONT_MIN, max: TERMINAL_FONT_MAX };
+/**
+ * Full screen: the whole screen, 80 by 40, as large as fits, but never too small to read. The rows fit the height
+ * down to the size a message shows on a desktop; on a shorter screen it scrolls up and down instead.
+ */
+export const VIEWER_FIT: TerminalFit = { min: TERMINAL_VIEWER_FONT_MIN, max: TERMINAL_VIEWER_FONT_MAX, rows: TERMINAL_FONT_MAX };
 
 /** The options every terminal embed's xterm is made with. */
 export function terminalOptions(theme: ITheme, fontFamily: string, fontSize: number): ITerminalOptions & ITerminalInitOnlyOptions {
@@ -77,21 +102,36 @@ function monoFont(element: Element): string {
 	return getComputedStyle(element).getPropertyValue('--font-mono').trim() || 'monospace';
 }
 
-/** A face's advance width per pixel of size, measured on the page. */
-function advanceRatio(host: HTMLElement, fontFamily: string): number {
+/** A face's advance width and line height per pixel of size, measured on the page. */
+function faceRatios(host: HTMLElement, fontFamily: string): { advance: number; line: number } {
 	const probe = document.createElement('span');
 	probe.textContent = 'W'.repeat(40);
-	probe.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font-family:${fontFamily};font-size:100px;line-height:1`;
+	probe.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font-family:${fontFamily};font-size:100px;line-height:normal`;
 	host.append(probe);
-	const width = probe.getBoundingClientRect().width;
+	const { width, height } = probe.getBoundingClientRect();
 	probe.remove();
-	return width > 0 ? width / 40 / 100 : 0.6;
+	return { advance: width > 0 ? width / 40 / 100 : 0.6, line: height > 0 ? height / 100 : 1.2 };
 }
 
-/** The size that fits the 80 columns in `width` pixels, in quarter pixels, between the smallest and largest. */
-export function terminalFontSize(width: number, ratio: number): number {
-	const fit = Math.floor((width / (TERMINAL_COLS * ratio)) * 4) / 4;
-	return Math.max(TERMINAL_FONT_MIN, Math.min(TERMINAL_FONT_MAX, fit));
+/**
+ * The size that fits the 80 columns in `width` pixels (and, for a fit with `rows`, the 40 rows in `height`, down
+ * to that size), in quarter pixels, between the fit's smallest and largest. `ratio` is the face's advance and
+ * `line` its row height, per pixel of size.
+ */
+export function terminalFontSize(width: number, ratio: number, fit: TerminalFit = INLINE_FIT, height = Infinity, line = 1.2): number {
+	let size = width / (TERMINAL_COLS * ratio);
+	if (fit.rows !== undefined) size = Math.min(size, Math.max(fit.rows, height / (TERMINAL_ROWS * line)));
+	return Math.max(fit.min, Math.min(fit.max, Math.floor(size * 4) / 4));
+}
+
+/** How a `TerminalScreen` is made. */
+export interface TerminalScreenOptions {
+	/** How its font fits its space; INLINE_FIT unless said. */
+	fit?: TerminalFit;
+	/** The box whose content area is the space to fit, such as the viewer's stage around it; the host unless said. */
+	space?: HTMLElement;
+	/** Stands in for loading xterm, in tests. */
+	load?: () => Promise<Xterm>;
 }
 
 /** The rows to show: all 40 on the alternate screen, else down to the last one written, at least one. */
@@ -123,11 +163,16 @@ export class TerminalScreen {
 	#observer: ResizeObserver | undefined;
 	#themeWatch: (() => void) | undefined;
 	#ratio = 0.6;
+	#line = 1.2;
+	readonly #fitting: TerminalFit;
+	readonly #space: HTMLElement;
 	readonly #keep = (event: Event) => event.stopPropagation();
 
-	/** Mounts a terminal in `host`, a box the page sizes; `load` stands in for loading xterm, in tests. */
-	constructor(host: HTMLElement, load: () => Promise<Xterm> = loadXterm) {
+	/** Mounts a terminal in `host`, a box the page sizes, fitted to `options.space` (the host itself unless said). */
+	constructor(host: HTMLElement, { fit = INLINE_FIT, space = host, load = loadXterm }: TerminalScreenOptions = {}) {
 		this.#host = host;
+		this.#fitting = fit;
+		this.#space = space;
 		for (const type of SCROLLS) host.addEventListener(type, this.#keep, { capture: true, passive: true });
 		load().then((xterm) => this.#open(xterm), () => {
 			if (!this.#disposed) host.dataset.failed = '';
@@ -172,8 +217,9 @@ export class TerminalScreen {
 		if (this.#disposed) return;
 		const host = this.#host;
 		const fontFamily = monoFont(host);
-		this.#ratio = advanceRatio(host, fontFamily);
-		const terminal = new xterm.Terminal(terminalOptions(terminalTheme(host), fontFamily, terminalFontSize(host.clientWidth, this.#ratio)));
+		({ advance: this.#ratio, line: this.#line } = faceRatios(host, fontFamily));
+		const space = this.#room();
+		const terminal = new xterm.Terminal(terminalOptions(terminalTheme(host), fontFamily, terminalFontSize(space.width, this.#ratio, this.#fitting, space.height, this.#line)));
 		// Swallowed, not acted on: window titles (OSC 0, 1, 2) and the clipboard (OSC 52).
 		for (const osc of [0, 1, 2, 52]) terminal.parser.registerOscHandler(osc, () => true);
 		const screen = document.createElement('div');
@@ -189,7 +235,7 @@ export class TerminalScreen {
 		this.#terminal = terminal;
 		if (typeof ResizeObserver === 'function') {
 			this.#observer = new ResizeObserver(() => this.#fit());
-			this.#observer.observe(host);
+			this.#observer.observe(this.#space);
 		}
 		this.#themeWatch = watchTheme(() => {
 			terminal.options.theme = terminalTheme(host);
@@ -198,18 +244,33 @@ export class TerminalScreen {
 		this.#fit();
 	}
 
-	/** The font that fits the columns in the host's width; checked against what xterm drew, as faces round. */
+	/** The space to fit: the content area of the space box. */
+	#room(): { width: number; height: number } {
+		const space = this.#space;
+		const style = getComputedStyle(space);
+		const padding = (a: string, b: string) => (parseFloat(style.getPropertyValue(a)) || 0) + (parseFloat(style.getPropertyValue(b)) || 0);
+		return {
+			width: Math.max(0, space.clientWidth - padding('padding-left', 'padding-right')),
+			height: Math.max(0, space.clientHeight - padding('padding-top', 'padding-bottom'))
+		};
+	}
+
+	/** The font that fits the space (`TerminalFit`); checked against what xterm drew, as faces round. */
 	#fit(): void {
 		const terminal = this.#terminal;
 		if (!terminal) return;
-		const width = this.#host.clientWidth;
+		const fit = this.#fitting;
+		const { width, height } = this.#room();
 		if (!width) return;
-		let size = terminalFontSize(width, this.#ratio);
+		let size = terminalFontSize(width, this.#ratio, fit, height, this.#line);
 		if (terminal.options.fontSize !== size) terminal.options.fontSize = size;
-		const drawn = this.#screenElement()?.getBoundingClientRect().width ?? 0;
-		if (drawn > width && size > TERMINAL_FONT_MIN) {
-			size = Math.max(TERMINAL_FONT_MIN, Math.floor(size * (width / drawn) * 4) / 4);
-			terminal.options.fontSize = size;
+		const drawn = this.#screenElement()?.getBoundingClientRect();
+		if (drawn) {
+			let fits = size;
+			if (drawn.width > width) fits = size * (width / drawn.width);
+			if (fit.rows !== undefined && height && drawn.height > height) fits = Math.min(fits, Math.max(fit.rows, size * (height / drawn.height)));
+			fits = Math.max(fit.min, Math.floor(fits * 4) / 4);
+			if (fits < size) terminal.options.fontSize = size = fits;
 		}
 		this.#host.dataset.fontSize = String(terminal.options.fontSize);
 		this.#schedule();
@@ -232,6 +293,52 @@ export class TerminalScreen {
 			this.#host.style.height = `${Math.ceil(rows * rowHeight)}px`;
 			this.#host.dataset.rows = String(rows);
 		});
+	}
+}
+
+/** What a `TerminalFeed` writes to: a `TerminalScreen`. */
+export type TerminalSink = Pick<TerminalScreen, 'reset' | 'write' | 'show'>;
+
+/**
+ * One terminal embed's text, decoded, for every screen that shows it: the one
+ * in its message and, while it is open, the full-screen viewer's. It keeps
+ * what was written since the last reset, so a screen attached later starts
+ * from the same text (all 80 by 40 of a terminal's state follows from it) and
+ * then gets what arrives, without reading the live text a second time.
+ */
+export class TerminalFeed {
+	#text = '';
+	readonly #screens = new Set<TerminalSink>();
+
+	/** The text since the last reset, as written. */
+	get text(): string {
+		return this.#text;
+	}
+
+	/** Starts afresh, such as for a reconnect's new response. */
+	reset(): void {
+		this.#text = '';
+		for (const screen of this.#screens) screen.reset();
+	}
+
+	/** The next of the text. */
+	write(text: string): void {
+		if (!text) return;
+		this.#text += text;
+		for (const screen of this.#screens) screen.write(text);
+	}
+
+	/** Replaces it with `output`, such as a finished embed's, from a fresh terminal. */
+	show(output: string): void {
+		this.#text = output;
+		for (const screen of this.#screens) screen.show(output);
+	}
+
+	/** Shows the text so far on `screen`, a fresh one, then all that follows, until the function returned is called. */
+	attach(screen: TerminalSink): () => void {
+		if (this.#text) screen.show(this.#text);
+		this.#screens.add(screen);
+		return () => this.#screens.delete(screen);
 	}
 }
 
