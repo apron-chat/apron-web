@@ -72,42 +72,44 @@ describe('MemberList', () => {
 		/** A pointer's press (`detail` 1); `element.click()` is the keyboard's (0). */
 		const tap = (target: Element) => target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
 
-		it('drops down from anywhere on the row: Profile, Direct message, Remove from room, each doing its part', async () => {
+		it('opens their profile from a click anywhere on the row; a right-click opens Profile, Direct message, Remove from room, each doing its part', async () => {
 			const onprofile = vi.fn(), onmessage = vi.fn(), onremove = vi.fn();
 			render({ sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'bo', name: 'Bo', status: 'online', roles: ['admin'] }] }], onprofile, onmessage, onremove });
-			expect([who('bo').getAttribute('aria-haspopup'), who('bo').getAttribute('aria-expanded')]).toEqual(['menu', 'false']);
+			expect(who('bo').getAttribute('aria-haspopup')).toBe('dialog');
 			// A badge is the row too.
 			tap(row('bo').querySelector('.ap-role')!);
 			flushSync();
+			expect([onprofile.mock.calls, dom.queryByRole('menu')]).toEqual([[['bo', who('bo')]], null]);
+			expect(rightClick(row('bo').querySelector('.ap-role')!).defaultPrevented).toBe(true);
 			await tick();
-			expect([choices(), who('bo').getAttribute('aria-expanded'), row('bo').classList.contains('ap-member-menu')]).toEqual([['Profile', 'Direct message', 'Remove from room'], 'true', true]);
+			expect([choices(), who('bo').getAttribute('aria-controls'), row('bo').classList.contains('ap-member-menu')]).toEqual([['Profile', 'Direct message', 'Remove from room'], dom.byRole('menu').id, true]);
 			expect(dom.byRole('menuitem', 'Remove from room').classList.contains('ap-menu-item-danger')).toBe(true);
 			dom.byRole('menuitem', 'Profile').click();
 			flushSync();
-			expect([onprofile.mock.calls, dom.queryByRole('menu')]).toEqual([[['bo', who('bo')]], null]);
-			tap(row('bo'));
-			flushSync();
+			expect([onprofile.mock.calls.length, dom.queryByRole('menu')]).toEqual([2, null]);
+			rightClick(row('bo'));
 			dom.byRole('menuitem', 'Direct message').click();
-			tap(row('bo'));
-			flushSync();
+			rightClick(row('bo'));
 			dom.byRole('menuitem', 'Remove from room').click();
 			expect([onmessage.mock.calls, onremove.mock.calls]).toEqual([[['bo']], [['bo']]]);
 		});
 
-		it('is put away by pressing the row again, or Escape, focus back on the name; from the keyboard, its first choice is focused', async () => {
-			render({ sections, onprofile: vi.fn(), onremove: vi.fn() });
-			tap(row('bo'));
-			flushSync();
+		it('is put away by a press on its row, which opens no card, or Escape, focus back on the name; ↓ on the name drops it down, its first choice focused', async () => {
+			const onprofile = vi.fn();
+			render({ sections, onprofile, onremove: vi.fn() });
+			rightClick(row('bo'));
 			await tick();
 			expect(document.activeElement).toBe(dom.byRole('menu', 'Bo'));
-			// The press that puts it away doesn't open it again.
+			// The press that puts it away opens no card.
 			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
 			document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
 			tap(row('bo'));
 			flushSync();
-			expect(dom.queryByRole('menu')).toBeNull();
-			// Enter on the name, a click with no pointer.
+			expect([dom.queryByRole('menu'), onprofile.mock.calls.length]).toEqual([null, 0]);
+			// Enter on the name (a click with no pointer) is a press too: the card.
 			who('bo').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+			expect(onprofile.mock.calls).toEqual([['bo', who('bo')]]);
+			expect(dom.press(who('bo'), 'ArrowDown')).toBe(false);
 			flushSync();
 			await tick();
 			expect(document.activeElement?.textContent).toBe('Profile');
@@ -130,7 +132,7 @@ describe('MemberList', () => {
 			expect([onprofile.mock.calls.at(-1), dom.queryByRole('menu')]).toEqual([['bo', who('bo')], null]);
 		});
 
-		it('opens the profile for a tap, the menu staying for a long press; a tap with the menu open only puts it away', () => {
+		it('opens the profile for a tap, and the menu for a long press, whose lift opens no card; a tap with the menu open only puts it away', () => {
 			vi.useFakeTimers();
 			const onprofile = vi.fn();
 			render({ sections, onprofile, onremove: vi.fn() });
@@ -154,11 +156,6 @@ describe('MemberList', () => {
 			tap(name);
 			flushSync();
 			expect([onprofile.mock.calls.length, dom.queryByRole('menu')]).toEqual([1, null]);
-			// A mouse's click after a finger's still drops the menu down.
-			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-			tap(name);
-			flushSync();
-			expect(dom.byRole('menu', 'Bo')).toBeTruthy();
 			vi.useRealTimers();
 		});
 
@@ -178,26 +175,25 @@ describe('MemberList', () => {
 			vi.useRealTimers();
 		});
 
-		it('gives focus back to the name when the row\'s press puts it away, and doesn\'t eat a tap after a press that came to nothing', async () => {
+		it('gives focus back to the name when the row\'s press puts it away, and doesn\'t eat a click after a press that came to nothing', async () => {
 			vi.useFakeTimers();
-			render({ sections, onprofile: vi.fn(), onremove: vi.fn() });
-			tap(row('bo'));
-			flushSync();
+			const onprofile = vi.fn();
+			render({ sections, onprofile, onremove: vi.fn() });
+			rightClick(row('bo'));
 			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
 			document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
 			tap(row('bo').querySelector('.ap-role') ?? row('bo'));
 			flushSync();
-			expect([dom.queryByRole('menu'), document.activeElement]).toEqual([null, who('bo')]);
-			// Opened again, then a press on its row that ends without a click (a scroll): the next tap still opens it.
-			tap(row('bo'));
-			flushSync();
+			expect([dom.queryByRole('menu'), document.activeElement, onprofile.mock.calls.length]).toEqual([null, who('bo'), 0]);
+			// Opened again, then a press on its row that ends without a click (a scroll): the next click opens the card.
+			rightClick(row('bo'));
 			row('bo').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
 			document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
 			dispatchEvent(new MouseEvent('pointercancel'));
 			vi.advanceTimersByTime(0);
 			tap(row('bo'));
 			flushSync();
-			expect(dom.byRole('menu', 'Bo')).toBeTruthy();
+			expect(onprofile.mock.calls).toEqual([['bo', who('bo')]]);
 			vi.useRealTimers();
 		});
 
