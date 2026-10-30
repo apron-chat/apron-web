@@ -42,17 +42,17 @@ test.describe('signed in to an account', () => {
 		await preview.open();
 		const list = await preview.showMembers();
 		// A press on their row drops its menu down beneath it.
-		await list.locator('li.ap-member[data-user="linus"]').click();
+		await list.locator('li.ap-member[data-user="linus"]').click({ button: 'right' });
 		const menu = page.getByRole('menu', { name: 'Linus' });
 		await expect(menu.getByRole('menuitem')).toHaveText(['Profile', 'Direct message', 'Remove from room']);
 		await menu.getByRole('menuitem', { name: 'Direct message' }).click();
 		await preview.waitForSent('room_join', (p) => p.user_id === 'linus');
 		await expect(preview.heading()).toHaveText(/^Linus/);
 		await expect(page.getByTestId('private-list').locator('button[aria-current="page"]')).toHaveAccessibleName('Linus');
-		// Profile opens their card.
+		// A click on their row opens their card, as the menu's Profile does.
 		await preview.openRoom('general');
 		await list.locator('li.ap-member[data-user="linus"]').click();
-		await page.getByRole('menu', { name: 'Linus' }).getByRole('menuitem', { name: 'Profile' }).click();
+		await expect(page.getByRole('menu')).toHaveCount(0);
 		await expect(page.getByTestId('profile-card')).toBeVisible();
 	});
 
