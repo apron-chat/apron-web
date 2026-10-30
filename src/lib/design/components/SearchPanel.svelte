@@ -53,6 +53,8 @@
 	let input = $state<HTMLInputElement | undefined>();
 	let list = $state<HTMLUListElement | undefined>();
 	const typed = $derived(query.trim() !== '');
+	/** What a screen reader hears as results change: the list itself isn't read as it fills. */
+	const status = $derived(!typed ? '' : searching ? 'Searching…' : results.length ? `${results.length === 1 ? '1 message' : `${results.length} messages`} found${more ? ', the newest' : ''}.` : `No messages match “${query.trim()}”.`);
 
 	$effect(() => {
 		if (!open) return;
@@ -114,6 +116,7 @@
 			{#if suggestions}{@render suggestions()}{/if}
 		</div>
 		{#if note}<p class="ap-form-hint">{note}</p>{/if}
+		<p class="ap-sr" role="status" aria-live="polite" aria-atomic="true">{status}</p>
 	</div>
 	<ul class="ap-search-list" id={listId} role="listbox" aria-label="Messages found" aria-busy={searching} data-testid={listTestid} bind:this={list}>
 		{#each results as result, i (result.id)}

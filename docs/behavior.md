@@ -696,17 +696,18 @@ keeping more if the device ran out of space.
 starts narrowed to the open room or thread (`room:#general `, the caret after
 it; Backspace widens it to everywhere), and looks through this server's history kept on this device for the
 account signed in (none as a guest, or while keeping is off) and what the page has
-loaded, as you type: a message matches when its text holds every word typed,
-in any case and with or without accents. `user:` keeps what someone sent, by
+loaded, as you type: a message matches when its text holds what is typed, as
+one run (in any case, with or without accents, any spaces as one; quotes around
+all of it are dropped). `user:` keeps what someone sent, by
 `@user_id` or name (`user:@ada`, `user:"Ada Lovelace"`), and `room:` what is in
 a room and its threads, by `#room_id` or title (`room:#general`); several of
-one filter keep what matches any of them, and filters alone, without words,
+one filter keep what matches any of them, and filters alone, without text,
 list everything they keep. Typing a filter's value suggests people for `user:`
 (everyone met) and rooms for `room:` (as the composer's `#` does), below the
 field: ↑ ↓ move, Enter or Tab puts in `@user_id` or `#room_id` and a space, and
 Escape puts the suggestions away. The newest hundred matches are
 listed, newest first, each with its room (a thread's with its room after it),
-sender, time and a line of it with the words marked; ↑ ↓ and Enter, or a click,
+sender, time and a line of it with what was found marked; ↑ ↓ and Enter, or a click,
 open one where it is, paging back to it from this device as a link to it does.
 One too far back to reach that way says so. The field's note says what is
 searched: what is kept here, and for how long, or only what is loaded, for a

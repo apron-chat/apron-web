@@ -30,7 +30,29 @@ describe('SearchPanel', () => {
 		expect(queryByText('No messages match “deploy”.')).not.toBeNull();
 	});
 
-	it('marks the words found, and opens the result the keyboard is on with Enter', () => {
+	it('says as results change what they came to, for a screen reader', () => {
+		const { state } = render();
+		const status = () => document.querySelector('[role="status"]')!.textContent;
+		expect(status()).toBe('');
+		state.query = 'deploy';
+		state.searching = true;
+		flushSync();
+		expect(status()).toBe('Searching…');
+		state.searching = false;
+		state.results = [result('2', 'deploy'), result('1', 'deploys')];
+		flushSync();
+		expect(status()).toBe('2 messages found.');
+		state.results = [result('1', 'deploys')];
+		state.more = true;
+		flushSync();
+		expect(status()).toBe('1 message found, the newest.');
+		state.results = [];
+		state.more = false;
+		flushSync();
+		expect(status()).toBe('No messages match “deploy”.');
+	});
+
+	it('marks what was found, and opens the result the keyboard is on with Enter', () => {
 		const { state, field, list } = render({ query: 'deploy', results: [result('2', 'deploy'), result('1', 'deploys')] });
 		expect([...list.querySelectorAll('mark')].map((mark) => mark.textContent)).toEqual(['deploy', 'deploys']);
 		expect(field.getAttribute('aria-activedescendant')).toBe(list.querySelector('[role="option"]')!.id);

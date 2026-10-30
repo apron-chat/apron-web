@@ -134,11 +134,12 @@ test('search finds a message only this device still has, and opens it where it i
 	frames.length = 0;
 	await page.keyboard.press('ControlOrMeta+k');
 	const search = page.getByRole('dialog', { name: 'Search local history' });
-	await search.getByRole('combobox').fill('NEEDLE hay');
+	await search.getByRole('combobox').fill('NEEDLE in  the hay');
 	const results = search.getByTestId('search-results');
 	await expect(results.getByRole('option')).toHaveCount(1);
 	await expect(results.getByRole('option')).toContainText('General');
-	await expect(results.locator('mark')).toHaveText(['needle', 'hay']);
+	await expect(results.locator('mark')).toHaveText(['needle in the hay']);
+	await expect(search.getByRole('status')).toHaveText('1 message found.');
 	await page.keyboard.press('Enter');
 	await expect(search).toHaveCount(0);
 	await expect(page.locator(`article[data-message-id="${start + 3000}"]`)).toBeInViewport();

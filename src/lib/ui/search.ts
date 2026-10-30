@@ -1,9 +1,10 @@
 /**
  * Searching messages on this device: what this server's history keeps here
- * (`HistoryKeeper.searchKept`) and what the page holds, by the words of a
- * query. A message matches when its text has every word, in any case and
- * with or without accents, anywhere in it. `user:` and `room:` narrow it to
- * whoever sent it and where it is (`parseQuery`). Results go newest first.
+ * (`HistoryKeeper.searchKept`) and what the page holds, by the text of a
+ * query. A message matches when its text holds what was typed, as typed, in
+ * any case and with or without accents, any run of spaces as one. `user:` and
+ * `room:` narrow it to whoever sent it and where it is (`parseQuery`). Results
+ * go newest first.
  */
 import { compareLogIds } from '$lib/protocol/reducer';
 import type { Identity, MessageRecord } from '$lib/protocol/types';
@@ -16,43 +17,40 @@ export function folded(text: string): string {
 	return text.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase();
 }
 
-/** A query's words, folded, each once. None for a query of only spaces. */
-export function searchTerms(query: string): string[] {
-	return [...new Set(folded(query).split(/\s+/).filter(Boolean))];
+/** Text as a search compares it: folded, each run of spaces one space, trimmed. */
+function searchable(text: string): string {
+	return folded(text).replace(/\s+/g, ' ').trim();
 }
 
 /**
- * A query: its words, and its filters, each folded. `user:@ada` (or `user:ada`, or `user:"Ada Lovelace"` by name)
- * keeps what someone sent; `room:#general` (or `room:general`, or a room's title) keeps what is in a room and its
- * threads. Several of one filter keep what matches any of them.
+ * A query: the text to find, and its filters, each folded. `user:@ada` (or `user:ada`, or `user:"Ada Lovelace"` by
+ * name) keeps what someone sent; `room:#general` (or `room:general`, or a room's title) keeps what is in a room and
+ * its threads. Several of one filter keep what matches any of them.
  */
 export interface SearchQuery {
-	terms: string[];
+	/** What a message's text must hold, as one run (`searchable`); empty with only filters. */
+	text: string;
 	users: string[];
 	rooms: string[];
 }
 
-/** The filters a query takes, as written before the colon. */
-const FILTERS = { user: 'users', room: 'rooms' } as const;
+/** A filter: `user:` or `room:` after a space or at the start, and its value, `"quoted"` or up to the next space. */
+const FILTER = /(^|\s)(user|room):(?:"([^"]*)"?|(\S*))/gi;
 
-/** Reads a query: `key:value` and `key:"a value"` for the filters, every other run of non-spaces a word. */
+/**
+ * Reads a query: its `user:` and `room:` filters, and the rest as the text to find, quotes around all of it
+ * dropped. Anything else with a colon, such as a time like 14:30, is text.
+ */
 export function parseQuery(query: string): SearchQuery {
-	const parsed: SearchQuery = { terms: [], users: [], rooms: [] };
-	for (const [, key, quoted, bare, word] of query.matchAll(/(?:^|\s)(\w+):(?:"([^"]*)"?|(\S*))|(\S+)/g)) {
-		const filter = key === undefined ? undefined : FILTERS[key.toLowerCase() as keyof typeof FILTERS];
-		if (key !== undefined && !filter) {
-			// Not a filter, such as a time like 14:30: words.
-			parsed.terms.push(...searchTerms(`${key}:${quoted ?? bare ?? ''}`));
-			continue;
-		}
-		if (filter) {
-			const value = folded((quoted ?? bare ?? '').trim()).replace(filter === 'users' ? /^@/ : /^#/, '');
-			if (value && !parsed[filter].includes(value)) parsed[filter].push(value);
-			continue;
-		}
-		parsed.terms.push(...searchTerms(word!));
-	}
-	parsed.terms = [...new Set(parsed.terms)];
+	const parsed: SearchQuery = { text: '', users: [], rooms: [] };
+	const rest = query.replace(FILTER, (_filter, space: string, key: string, quoted: string | undefined, bare: string | undefined) => {
+		const filter = key.toLowerCase() === 'user' ? 'users' : 'rooms';
+		const value = folded((quoted ?? bare ?? '').trim()).replace(filter === 'users' ? /^@/ : /^#/, '');
+		if (value && !parsed[filter].includes(value)) parsed[filter].push(value);
+		return `${space} `;
+	});
+	const text = searchable(rest);
+	parsed.text = /^"[^"]*"$/.test(text) ? text.slice(1, -1).trim() : text;
 	return parsed;
 }
 
@@ -70,7 +68,7 @@ export interface SearchContext {
  * sender's name as the message carries it.
  */
 export function queryMatcher(query: SearchQuery, context: SearchContext): ((message: MessageRecord) => boolean) | undefined {
-	if (!query.terms.length && !query.users.length && !query.rooms.length) return undefined;
+	if (!query.text && !query.users.length && !query.rooms.length) return undefined;
 	const userIds = new Set(context.users.filter((user) => query.users.some((value) => folded(user.user_id) === value || (user.name !== undefined && folded(user.name) === value))).map((user) => user.user_id));
 	const roomIds = new Set(context.rooms.filter((room) => query.rooms.some((value) => folded(room.id) === value || folded(room.title) === value)).map((room) => room.id));
 	for (const room of context.rooms) if (room.parentRoomId !== undefined && roomIds.has(room.parentRoomId)) roomIds.add(room.id);
@@ -85,17 +83,15 @@ export function queryMatcher(query: SearchQuery, context: SearchContext): ((mess
 		if (message.deleted) return false;
 		if (query.users.length && !byUser(message)) return false;
 		if (query.rooms.length && !byRoom(message)) return false;
-		return !query.terms.length || matchesTerms(message, query.terms);
+		return !query.text || matchesText(message, query.text);
 	};
 }
 
-/** Whether `message` has text holding every one of `terms`; a deleted message has none. */
-export function matchesTerms(message: MessageRecord, terms: readonly string[]): boolean {
-	if (!terms.length || message.deleted) return false;
-	const text = message.body?.text;
-	if (typeof text !== 'string' || !text) return false;
-	const haystack = folded(text);
-	return terms.every((term) => haystack.includes(term));
+/** Whether `message` has text holding `text` (`searchable`); a deleted message has none. */
+export function matchesText(message: MessageRecord, text: string): boolean {
+	if (!text || message.deleted) return false;
+	const body = message.body?.text;
+	return typeof body === 'string' && searchable(body).includes(text);
 }
 
 /**
@@ -121,10 +117,10 @@ export interface SnippetPart {
 }
 
 /**
- * About `width` characters of `text` from a little before the first of `terms` it holds, on one line, with each of
- * the terms marked where they occur in it: "…the deploy failed at 4pm…".
+ * About `width` characters of `text` from a little before where it first holds `found` (`searchable`), on one line,
+ * with each place it does marked: "…the deploy failed at 4pm…".
  */
-export function snippet(text: string, terms: readonly string[], width = 140): SnippetPart[] {
+export function snippet(text: string, found: string, width = 140): SnippetPart[] {
 	const line = text.replace(/\s+/g, ' ').trim();
 	// Where each character of the folded text came from, so a match found there marks the text as written.
 	let fold = '';
@@ -138,13 +134,10 @@ export function snippet(text: string, terms: readonly string[], width = 140): Sn
 		i += char.length;
 	}
 	const ranges: Array<[number, number]> = [];
-	for (const term of terms) {
-		for (let at = fold.indexOf(term); at >= 0; at = fold.indexOf(term, at + term.length)) {
-			const end = at + term.length;
-			ranges.push([from[at], end < from.length ? from[end] : line.length]);
-		}
+	for (let at = found ? fold.indexOf(found) : -1; at >= 0; at = fold.indexOf(found, at + found.length)) {
+		const end = at + found.length;
+		ranges.push([from[at], end < from.length ? from[end] : line.length]);
 	}
-	ranges.sort((a, b) => a[0] - b[0]);
 	const first = ranges[0]?.[0] ?? 0;
 	// A little before it, so the match shows even where only two narrow lines of it do.
 	let start = Math.max(0, first - Math.min(30, Math.floor(width / 3)));

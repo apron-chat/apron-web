@@ -58,9 +58,11 @@
 
 	/** The `user:` or `room:` value the caret is in. */
 	let at = $derived(filterAtCaret(query, caret));
+	/** The users met, as they change while it is open. */
+	let users = $state.raw(untrack(() => client.snapshot().users));
+	onMount(() => client.subscribe((snapshot) => (users = snapshot.users)));
 	/** Everyone met, but the system identities, as the composer's `@` lists them. */
-	let people = $derived(Object.values(client.snapshot().users).filter((user) => !isSystemId(user.user_id)).map((user) => ({ id: user.user_id, name: user.name, avatar: directory.avatar(user) })));
-	let peopleFound = $derived(at?.kind === 'users' ? searchPeople(people, at.typed) : []);
+	let peopleFound = $derived(at?.kind === 'users' ? searchPeople(Object.values(users).filter((user) => !isSystemId(user.user_id)).map((user) => ({ id: user.user_id, name: user.name, avatar: directory.avatar(user) })), at.typed) : []);
 	let roomsFound = $derived(at?.kind === 'rooms' ? searchRooms(roomSuggestions, at.typed) : []);
 	let suggested = $derived(at?.kind === 'users' ? peopleFound.length : roomsFound.length);
 	/** The query as it was when Escape put the suggestions away: they come back once it changes. */
@@ -108,7 +110,7 @@
 	$effect(() => {
 		const asked = parsed;
 		const run = ++generation;
-		if (!asked.terms.length && !asked.users.length && !asked.rooms.length) {
+		if (!asked.text && !asked.users.length && !asked.rooms.length) {
 			found = [];
 			more = false;
 			searching = false;
@@ -140,7 +142,7 @@
 	}
 
 	let results = $derived.by((): SearchResult[] => {
-		const terms = parsed.terms;
+		const text = parsed.text;
 		return found.map((message) => {
 			const at = times(Number(message.message_id));
 			const day = dayLabelOf(message.message_id);
@@ -150,7 +152,7 @@
 				who: senderName(message),
 				...(day ? { when: `${day} ${at.short ?? ''}`.trim() } : {}),
 				...(at.exact ? { exact: at.exact } : {}),
-				parts: snippet(plainTextOf(message), terms)
+				parts: snippet(plainTextOf(message), text)
 			};
 		});
 	});

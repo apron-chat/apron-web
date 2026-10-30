@@ -2847,11 +2847,21 @@
 		if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 	}
 
+	/** A modal dialog is open, such as Preferences or a form: a shortcut opens no other over it. */
+	function modalOpen(): boolean {
+		try {
+			return document.querySelector('dialog:modal') !== null;
+		} catch {
+			// A browser without `:modal`.
+			return false;
+		}
+	}
+
 	function windowKeydown(event: KeyboardEvent): void {
-		// Ctrl+K (⌘K on a Mac) searches local history, from anywhere on the page.
+		// Ctrl+K (⌘K on a Mac) searches local history, from anywhere on the page but another dialog.
 		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k' && canSearch) {
 			event.preventDefault();
-			searchOpen = true;
+			if (!modalOpen()) searchOpen = true;
 			return;
 		}
 		// Escape in the NewThreadDialog closes it and keeps the selection it was asked for.

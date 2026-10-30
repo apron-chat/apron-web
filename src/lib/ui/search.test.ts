@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '$lib/protocol/types';
-import { filterAtCaret, matchesTerms, newestMatches, parseQuery, queryMatcher, searchPeople, searchTerms, snippet, withFilterValue, type SearchContext } from './search';
+import { filterAtCaret, matchesText, newestMatches, parseQuery, queryMatcher, searchPeople, snippet, withFilterValue, type SearchContext } from './search';
 
 const message = (id: string, text: string, log = id, fields: Partial<MessageRecord> = {}): MessageRecord => ({ message_id: id, log_id: log, room_id: 'general', from: { user_id: 'ada' }, body: { text }, ...fields });
 
-describe('searchTerms and matchesTerms', () => {
-	it('matches a message holding every word, in any case and with or without accents', () => {
-		const terms = searchTerms('  Café   DEPLOY café ');
-		expect(terms).toEqual(['cafe', 'deploy']);
-		expect(matchesTerms(message('1', 'The deploy is at the CAFÉ'), terms)).toBe(true);
-		expect(matchesTerms(message('2', 'The deploy is at noon'), terms)).toBe(false);
-		expect(matchesTerms(message('3', 'deploying from the cafeteria'), terms)).toBe(true);
+describe('matchesText', () => {
+	it('matches a message holding the text as typed, in any case, with or without accents, any spaces as one', () => {
+		const { text } = parseQuery('  Café   DEPLOY ');
+		expect(text).toBe('cafe deploy');
+		expect(matchesText(message('1', 'Meet at the CAFÉ\n  deploy first'), text)).toBe(true);
+		expect(matchesText(message('2', 'The deploy is at the café'), text)).toBe(false);
+		expect(matchesText(message('3', 'cafe deploying'), text)).toBe(true);
 	});
 
 	it('never matches a deleted message, one without text, or an empty query', () => {
-		expect(matchesTerms(message('1', 'deploy', '2', { deleted: true }), ['deploy'])).toBe(false);
-		expect(matchesTerms({ ...message('1', ''), body: {} }, ['deploy'])).toBe(false);
-		expect(matchesTerms(message('1', 'deploy'), searchTerms('   '))).toBe(false);
+		expect(matchesText(message('1', 'deploy', '2', { deleted: true }), 'deploy')).toBe(false);
+		expect(matchesText({ ...message('1', ''), body: {} }, 'deploy')).toBe(false);
+		expect(matchesText(message('1', 'deploy'), parseQuery('   ').text)).toBe(false);
 	});
 });
 
@@ -34,13 +34,13 @@ describe('newestMatches', () => {
 describe('snippet', () => {
 	const text = (parts: { text: string; match: boolean }[]) => parts.map((part) => (part.match ? `[${part.text}]` : part.text)).join('');
 
-	it('marks each word searched for, as written, accents and all', () => {
-		expect(text(snippet('Meet at the Café, then deploy.', ['cafe', 'deploy']))).toBe('Meet at the [Café], then [deploy].');
+	it('marks each place it holds the text, as written, accents and spaces and all', () => {
+		expect(text(snippet('Meet at the Café, then  the café.', 'the cafe'))).toBe('Meet at [the Café], then [the café].');
 	});
 
 	it('shows about `width` characters around the first match on one line, cut at words', () => {
 		const long = `${'lorem ipsum '.repeat(20)}the deploy\nfailed ${'dolor sit '.repeat(20)}`;
-		const shown = text(snippet(long, ['deploy'], 60));
+		const shown = text(snippet(long, 'deploy', 60));
 		expect(shown.startsWith('…')).toBe(true);
 		expect(shown.endsWith('…')).toBe(true);
 		expect(shown).toContain('the [deploy] failed');
@@ -49,20 +49,22 @@ describe('snippet', () => {
 	});
 
 	it('starts at the beginning when the match is near it', () => {
-		expect(text(snippet('deploy now', ['deploy']))).toBe('[deploy] now');
+		expect(text(snippet('deploy now', 'deploy'))).toBe('[deploy] now');
 	});
 });
 
 describe('parseQuery', () => {
-	it('takes user: and room: as filters, by id or name, quoted with spaces, and the rest as words', () => {
-		expect(parseQuery('deploy user:@Ada room:#General')).toEqual({ terms: ['deploy'], users: ['ada'], rooms: ['general'] });
-		expect(parseQuery('USER:"Ada Lovelace" user:bob room:"Deploy checklist" late')).toEqual({ terms: ['late'], users: ['ada lovelace', 'bob'], rooms: ['deploy checklist'] });
-		expect(parseQuery('room:ops room:#OPS')).toMatchObject({ rooms: ['ops'] });
+	it('takes user: and room: as filters, by id or name, quoted with spaces, and the rest as the text', () => {
+		expect(parseQuery('deploy user:@Ada room:#General')).toEqual({ text: 'deploy', users: ['ada'], rooms: ['general'] });
+		expect(parseQuery('the USER:"Ada Lovelace" user:bob room:"Deploy checklist" late one')).toEqual({ text: 'the late one', users: ['ada lovelace', 'bob'], rooms: ['deploy checklist'] });
+		expect(parseQuery('room:ops room:#OPS')).toEqual({ text: '', users: [], rooms: ['ops'] });
 	});
 
-	it('keeps anything else with a colon as words, and drops an empty filter', () => {
-		expect(parseQuery('at 14:30 https://example.com user:')).toEqual({ terms: ['at', '14:30', 'https://example.com'], users: [], rooms: [] });
-		expect(parseQuery('nouser:ada')).toMatchObject({ terms: ['nouser:ada'], users: [] });
+	it('keeps anything else with a colon as text, drops an empty filter, and quotes around all of the text', () => {
+		expect(parseQuery('at 14:30 https://example.com user:')).toEqual({ text: 'at 14:30 https://example.com', users: [], rooms: [] });
+		expect(parseQuery('nouser:ada')).toMatchObject({ text: 'nouser:ada', users: [] });
+		expect(parseQuery(' "Hello  world" ')).toMatchObject({ text: 'hello world' });
+		expect(parseQuery('say "hi" now')).toMatchObject({ text: 'say "hi" now' });
 	});
 });
 
