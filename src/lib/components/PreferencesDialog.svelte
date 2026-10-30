@@ -54,7 +54,7 @@
 		 * Saves what this page has loaded as an export (`$lib/archive`), and says what it saved: none of it
 		 * while nothing is loaded. Absent where there is nothing to export from.
 		 */
-		onexport?: () => Promise<{ name: string; rooms: number; messages: number } | undefined>;
+		onexport?: (options: { privateRooms: boolean }) => Promise<{ name: string; rooms: number; messages: number; privateLeftOut: number } | undefined>;
 		/** The host of the server connected to, which media always loads from. */
 		serverHost?: string;
 		/** The sites this server names for its media (`ext:media`), as hosts: trusted with it. */
@@ -96,6 +96,8 @@
 		? { text: historySettings.failure, tone: 'err' }
 		: historySettings.retention !== 'off' && used ? { text: `Using about ${used}.` } : undefined);
 	let exporting = $state(false);
+	/** Export's Include private rooms: off each time Preferences opens, so private rooms go only when asked for. */
+	let exportPrivate = $state(false);
 
 	/** What the chosen media policy loads, under it: the server, and the sites it trusts, by name. */
 	let mediaNote = $derived.by(() => {
@@ -175,7 +177,7 @@
 		exporting = true;
 		let saved: Awaited<ReturnType<typeof onexport>>;
 		try {
-			saved = await onexport();
+			saved = await onexport({ privateRooms: exportPrivate });
 		} catch {
 			exportNote = 'The export couldn’t be saved. Try again, or free up memory by closing other tabs.';
 			return;
@@ -183,7 +185,8 @@
 			exporting = false;
 		}
 		const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
-		exportNote = saved ? `Saved ${saved.name}: ${count(saved.messages, 'message')} in ${count(saved.rooms, 'room')}.` : 'Nothing is loaded to export yet.';
+		const leftOut = saved?.privateLeftOut ? `; ${count(saved.privateLeftOut, 'private room')} left out` : '';
+		exportNote = saved ? `Saved ${saved.name}: ${count(saved.messages, 'message')} in ${count(saved.rooms, 'room')}${leftOut}.` : 'Nothing is loaded to export yet.';
 	}
 
 	/** The export reader, in a tab of its own, so this page's session carries on. */
@@ -330,6 +333,7 @@
 				{/snippet}
 			</SettingRow>
 			<SettingRow title="Export chats" hint="Saves what this page has loaded as a .jsonl file.">
+				<label class="ap-pref-check"><input class="ap-checklist-box" type="checkbox" bind:checked={exportPrivate} disabled={exporting} data-testid="export-private" /> Include private rooms</label>
 				{#if exportNote}<p class="ap-pref-note">{exportNote}</p>{/if}
 				{#snippet control()}
 					<Button size="sm" variant="ghost" label={exporting ? 'Exporting…' : 'Export'} disabled={!onexport} aria-disabled={exporting ? 'true' : undefined} aria-busy={exporting ? 'true' : undefined} onclick={exportChats} data-testid="export-chats" />

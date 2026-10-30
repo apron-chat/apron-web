@@ -747,7 +747,12 @@ each message's reactions, and the join and leave records, with who you are and
 the users as they were, without their statuses. A quoted message from before
 that, or from another room, goes along only as the quote. Threads listed but
 never opened load their newest page first; older messages of a room are in the
-export only once scrolled back to (or restored on this device). **Open an export** opens `/archive` in a new tab, where a
+export only once scrolled back to (or restored on this device). Private rooms
+(§4.2.4) and the threads in them go only with **Include private rooms**
+checked, which is off each time Preferences opens: without it they, their
+records and anyone known only from them are left out, the threads in them
+aren't loaded first, and the note under Export says how many private rooms
+were left out. **Open an export** opens `/archive` in a new tab, where a
 chosen or dropped export opens in this same app, read-only, against a server in
 the page that serves only that file: it signs in as the export's `you`, as a
 guest who may only read (`ext:permissions` `write: false`), lists its
