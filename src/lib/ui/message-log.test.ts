@@ -75,6 +75,44 @@ describe('messageLog', () => {
 		expect(messageLog([upload, gone, starry], { nameOf })).toBe('> **Ada Lovelace**\n>\n> _(attachment)_\n\n> **Ben**\n>\n> _(deleted)_\n\n> **\\*star\\***\n>\n> hi');
 	});
 
+	it('lists a message’s reactions after its sender’s name, heading it and the message after on their own', () => {
+		const first = at(0, 'ada', 'One.');
+		const second = at(1, 'ada', 'Two.');
+		const third = at(2, 'ada', 'Three.');
+		const fourth = at(3, 'ada', 'Four.');
+		const user = (id: string) => ({ user_id: id });
+		const summary = (emoji: string, users: string[], count = users.length) => ({ emoji, count, user_ids: users, users: users.map(user), mine: false });
+		const reactions = (event: MessageRecord) => event === second
+			? [summary('👍', ['ben', 'cy']), summary('👎', ['ada']), summary('🎉', [], 0), summary(':party_parrot:', ['ben'], 3)]
+			: event === third ? [summary('👀', [], 2)] : undefined;
+		const time = (event: MessageRecord) => idTime(event.message_id);
+		expect(messageLog([first, second, third, fourth], { nameOf, now, reactions, reactorName: (who) => names[who.user_id] })).toBe([
+			`> **Ada Lovelace** · Friday, Oct 30, 2026 at ${time(first)}`, '>', '> One.', '',
+			`> **Ada Lovelace** · ${time(second)} (👍 from Ben, Cy; 👎 from Ada Lovelace; :party\\_parrot: from Ben, 2 more)`, '>', '> Two.', '',
+			`> **Ada Lovelace** · ${time(third)} (👀 from 2 people)`, '>', '> Three.', '',
+			`> **Ada Lovelace** · ${time(fourth)}`, '>', '> Four.',
+		].join('\n'));
+	});
+
+	it('says how many messages a gap leaves out, and heads the message after it', () => {
+		const ids = ['1', '2', '3', '4', '5', '6'];
+		const message = (id: string, text: string) => ({ ...at(Number(id), 'ada', text), message_id: id, log_id: id });
+		const order = ids.map((id) => String(new Date(2026, 9, 30, 14, Number(id)).getTime()));
+		const [one, three, four, six] = [message('1', 'One.'), message('3', 'Three.'), message('4', 'Four.'), message('6', 'Six.')].map((event, index) => ({ ...event, message_id: order[[0, 2, 3, 5][index]] }));
+		const time = (event: MessageRecord) => idTime(event.message_id);
+		expect(messageLog([one, three, four, six], { nameOf, now, order })).toBe([
+			`> **Ada Lovelace** · Friday, Oct 30, 2026 at ${time(one)}`, '>', '> One.', '',
+			'_(1 message omitted)_', '',
+			`> **Ada Lovelace** · ${time(three)}`, '>', '> Three.', '>', '> Four.', '',
+			'_(1 message omitted)_', '',
+			`> **Ada Lovelace** · ${time(six)}`, '>', '> Six.',
+		].join('\n'));
+		expect(messageLog([one, four], { nameOf, now, order })).toContain('\n\n_(2 messages omitted)_\n\n');
+		// Without `order`, or for a message it doesn't list, nothing is said to be left out.
+		expect(messageLog([one, six], { nameOf, now })).not.toContain('omitted');
+		expect(messageLog([one, message('x', 'Elsewhere.')], { nameOf, now, order })).not.toContain('omitted');
+	});
+
 	it('keeps a sender’s messages a few minutes apart in one quote', () => {
 		const first = at(0, 'ada', 'One.');
 		const second = at(2, 'ada', 'Two,\nstill two.');
