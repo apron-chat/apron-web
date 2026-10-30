@@ -48,6 +48,11 @@ export class HistorySettings {
 		if (value === '365' || value === 'all') void globalThis.navigator?.storage?.persist?.().catch(() => false);
 	}
 
+	/** The retention in words, title-cased, as a title shows it: "30 Days", "Don’t Keep". */
+	get title(): string {
+		return RETENTIONS.find((retention) => retention.value === this.retention)!.label.replace(/(^|\s)\S/g, (first) => first.toUpperCase());
+	}
+
 	/** The retention in milliseconds, as `HistoryKeeper` takes it. */
 	get ms(): number | null | undefined {
 		return RETENTIONS.find((retention) => retention.value === this.retention)!.ms;

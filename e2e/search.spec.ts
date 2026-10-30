@@ -13,7 +13,7 @@ test('narrows by room and by person, and opens a result in its room', async ({ p
 	await preview.open();
 	await page.getByTestId('room-actions').click();
 	await page.getByTestId('search-history').click();
-	const search = page.getByRole('dialog', { name: 'Search local history' });
+	const search = page.getByRole('dialog', { name: 'Search Local History' });
 	await expect(search).toContainText('Messages loaded on this page.');
 	const field = search.getByRole('combobox');
 	const results = search.getByTestId('search-results').getByRole('option');
@@ -43,7 +43,7 @@ test('narrows by room and by person, and opens a result in its room', async ({ p
 test('suggests people for user: and rooms for room:, as the composer does for @ and #', async ({ preview, page }) => {
 	await preview.open();
 	await page.keyboard.press('ControlOrMeta+f');
-	const search = page.getByRole('dialog', { name: 'Search local history' });
+	const search = page.getByRole('dialog', { name: 'Search Local History' });
 	const field = search.getByRole('combobox');
 	const suggestions = search.getByTestId('search-suggestions');
 
@@ -79,22 +79,22 @@ test('opened from a thread, it starts narrowed to that thread', async ({ preview
 	await preview.open();
 	await preview.openThread('thread_deploy');
 	await page.keyboard.press('ControlOrMeta+f');
-	await expect(page.getByRole('dialog', { name: 'Search local history' }).getByRole('combobox')).toHaveValue('room:#thread_deploy ');
+	await expect(page.getByRole('dialog', { name: 'Search Local History' }).getByRole('combobox')).toHaveValue('room:#thread_deploy ');
 });
 
-/** Its title's "history" opens Preferences at History, where what this device keeps is chosen. */
+/** The button beside its title, how far back history is kept, opens Preferences at History, where that is chosen. */
 async function historyLink(page: Page): Promise<void> {
 	await page.getByTestId('room-actions').first().click();
 	await page.getByTestId('search-history').click();
-	const search = page.getByRole('dialog', { name: 'Search local history' });
-	await search.getByRole('button', { name: 'history', exact: true }).click();
+	const search = page.getByRole('dialog', { name: 'Search Local History' });
+	await search.getByRole('button', { name: '30 Days of history kept, in Preferences' }).click();
 	await expect(search).toHaveCount(0);
 	const preferences = page.getByRole('dialog', { name: 'Preferences' });
 	await expect(preferences).toBeVisible();
 	await expect(preferences.getByTestId('history-retention')).toBeVisible();
 }
 
-test('the title links to the history preferences', async ({ preview, page }) => {
+test('the history kept, beside the title, opens the history preferences', async ({ preview, page }) => {
 	await preview.open();
 	await historyLink(page);
 });
@@ -112,13 +112,13 @@ test('Ctrl/⌘F opens no search over another dialog, and Ctrl/⌘K none at all',
 	await preview.open();
 	// Kept for a quick switcher.
 	await page.keyboard.press('ControlOrMeta+k');
-	await expect(page.getByRole('dialog', { name: 'Search local history' })).toHaveCount(0);
+	await expect(page.getByRole('dialog', { name: 'Search Local History' })).toHaveCount(0);
 	await page.getByRole('button', { name: /^Open preferences/ }).click();
 	await expect(page.getByRole('dialog', { name: 'Preferences' })).toBeVisible();
 	await page.keyboard.press('ControlOrMeta+f');
-	await expect(page.getByRole('dialog', { name: 'Search local history' })).toHaveCount(0);
+	await expect(page.getByRole('dialog', { name: 'Search Local History' })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog', { name: 'Preferences' })).toHaveCount(0);
 	await page.keyboard.press('ControlOrMeta+f');
-	await expect(page.getByRole('dialog', { name: 'Search local history' })).toBeVisible();
+	await expect(page.getByRole('dialog', { name: 'Search Local History' })).toBeVisible();
 });
