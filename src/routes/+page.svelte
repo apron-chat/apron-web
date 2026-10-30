@@ -22,7 +22,7 @@
 	import Message from '$lib/design/components/Message.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
 	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
-	import { linkedRoomIn, messageView, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
+	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
 	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
@@ -2431,7 +2431,10 @@
 		},
 		beginSelect: onRow(beginSelect),
 		removeReply: onRow(removeReply),
-		removeEmbed: (view, embed) => onRow((event) => removeEmbed(event, embed as unknown as Embed))(view),
+		removeEmbed: (view, props) => {
+			const embed = sourceEmbed(props);
+			if (embed) onRow((event) => removeEmbed(event, embed))(view);
+		},
 		openRoom: openMentionedRoom,
 		// A user mention, or the sender's name or avatar, opens their profile card.
 		openProfile: openProfileFrom,
@@ -2920,7 +2923,7 @@
 	/>
 {:else}
 <!-- A message row's embed, through the app's media gates; and the row being edited, in the editor loaded for it. -->
-{#snippet messageEmbed(item: MessageEmbed)}<EmbedItem embed={item.embed as unknown as Embed} upload={item.upload} detail={item.detail} />{/snippet}
+{#snippet messageEmbed(item: MessageEmbed)}{@const embed = sourceEmbed(item.embed)}{#if embed}<EmbedItem {embed} upload={item.upload} detail={item.detail} />{/if}{/snippet}
 {#snippet editMessage(view: MessageView)}
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}

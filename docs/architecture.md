@@ -222,18 +222,28 @@ props take (an avatar, an attachment tile, a card's or upload's image, video or
 audio, the viewer's image, a custom emoji, a server's avatar): a `MediaGate`
 (`directory.previewGate`, `imageGate`, `avatarGate`, `avatarGateFor` a recent
 server, `localMedia` for this page's own object URLs) answers each URL with a
-`MediaSrc` or nothing, so a plain string can't reach one, and `npm run check`
-says where one tries. Markup from anyone else reaches the page only through
+`MediaSrc` or nothing, so a plain string can't reach one without a cast, and
+`npm run check` says where one tries. An embed reaches the design system's
+`Embed` only as `message-view`'s `embedProps` makes it (its `og` media gated, no
+HTML); the page draws it from the embed it was made from (`sourceEmbed`). The
+custom emoji catalog is fetched only where `imageGate` lets its emoji load, since
+a fetch tells a site as much as an image does. A live view (`iframe`) loads only
+on a click, as a link would. Markup from anyone else reaches the page only through
 `$lib/protocol/sanitize` (`sanitizeHtml`, which `renderMarkdown`, `renderPlain`,
 `renderBio` and HTML embeds use): after DOMPurify, every URL that would load is
-asked of the gate it is given (none: nothing loads), in an inert `<template>`
+asked of the gate it is given (none: nothing loads; `data:` media, in the
+markup itself, loads from nowhere and stays), in an inert `<template>`
 so nothing is fetched meanwhile; an image, video or audio that may not load
 becomes a link to it (a custom emoji, its key), and `srcset`, `background`,
 `data` and `ping` never stay. `media-guard.test.ts` reads the source and fails
 on anything else that makes a `MediaSrc`, imports DOMPurify, inserts markup, or
 renders media outside the components that take a `MediaSrc`, and
 `e2e/media-gate.spec.ts` names media on another site every way a server or a
-sender can and checks that none of it is requested under This server only.
+sender can (and a custom emoji catalog on another site) and checks that none of
+it is requested under This server only. What stays outside the gate:
+the previews the viewer's own pasted links get from the sites `link-previews`
+knows, a live view on a click, and the casts `media-guard.test.ts` lists, none
+of them media.
 Each gate is part of `directory.pieces`, so a change redraws every row, and
 sanitized markup is kept by the gate it was made with.
 

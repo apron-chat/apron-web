@@ -3,7 +3,8 @@
  * server's welcome, an HTML embed. DOMPurify keeps only what each allows, then every URL that would load
  * (an image's, a video's, its poster's) is asked of `media`, the page's media gate (`$lib/ui/media-gate`): one
  * that may not load becomes a link to it, so media loads from where the viewer chose and from nowhere else,
- * whatever the markup is. Nothing is fetched while that is decided: the check works in an inert document.
+ * whatever the markup is; media inline in the markup (`data:`) loads from nowhere, so it stays. Nothing is fetched
+ * while that is decided: the check works in an inert document.
  */
 import DOMPurify, { type Config } from 'dompurify';
 
@@ -13,8 +14,8 @@ export interface MediaCheck {
 	src(value: unknown): string | undefined;
 }
 
-/** Lets no media load: where nothing is known of where it may. */
-export const NO_MEDIA: MediaCheck = { key: 'none', src: () => undefined };
+/** Lets no media load from anywhere (`data:` aside, which loads from nowhere): where nothing is known of where it may. */
+export const NOWHERE: MediaCheck = { key: 'none', src: () => undefined };
 
 /**
  * `message`: what a body holds once rendered, what CommonMark produces plus the links, mention chips and custom
@@ -90,12 +91,13 @@ function gateMedia(clean: string, media: MediaCheck, newTab: boolean): string {
 		for (const name of DROPPED) element.removeAttribute(name);
 		const poster = element.getAttribute('poster');
 		if (poster !== null) {
-			const allowed = media.src(poster);
+			const allowed = inline(poster) ?? media.src(poster);
 			if (allowed === undefined) element.removeAttribute('poster');
+			else element.setAttribute('poster', allowed);
 		}
 		const src = element.getAttribute('src');
 		if (src === null) continue;
-		const allowed = media.src(src);
+		const allowed = inline(src) ?? media.src(src);
 		if (allowed !== undefined) element.setAttribute('src', allowed);
 		// One of a video's or audio's sources, or its captions: the rest of it stands or goes on its own.
 		else if (element.localName === 'source' || element.localName === 'track') element.remove();
@@ -110,12 +112,22 @@ function gateMedia(clean: string, media: MediaCheck, newTab: boolean): string {
 	return template.innerHTML;
 }
 
+/**
+ * Media in the markup itself (`data:`, which DOMPurify lets only media elements have): it loads from nowhere, so it
+ * tells no one anything, whatever the viewer chose.
+ */
+function inline(url: string): string | undefined {
+	return /^\s*data:/i.test(url) ? url : undefined;
+}
+
 /** What shows in place of media that may not load: a custom emoji's key, else a link to it named by its alt text. */
 function stand(element: HTMLElement, src: string, doc: Document): Node {
 	const alt = element.getAttribute('alt') ?? '';
 	if (element.classList.contains('ap-cemoji')) return doc.createTextNode(alt);
-	// In a link already, or not one a click may open: its words alone.
-	if (!/^https?:/i.test(src) || element.closest('a')) return doc.createTextNode(alt || src);
+	// Not one a click may open: its words alone, never what it pointed at.
+	if (!/^https?:/i.test(src)) return doc.createTextNode(alt);
+	// In a link already: its words, else where it was.
+	if (element.closest('a')) return doc.createTextNode(alt || src);
 	const link = doc.createElement('a');
 	link.setAttribute('href', src);
 	link.setAttribute('target', '_blank');

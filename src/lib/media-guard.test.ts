@@ -41,6 +41,15 @@ describe('media loads only through the gate', () => {
 			'lib/protocol/markdown.ts'
 		]);
 	});
+
+	it('frames a page only where the viewer clicks to load it, as they would follow a link', () => {
+		expect(using(/<iframe\b/)).toEqual(['lib/design/components/EmbedFrame.svelte']);
+	});
+
+	it('casts nothing around the types, where a URL could slip into a MediaSrc unasked', () => {
+		// None of these is media: a service worker's scope, the emoji picker's element, WebAuthn's options, a test socket.
+		expect(using(/\bas unknown as\b/)).toEqual(['lib/components/EmojiPopover.svelte', 'lib/preview/memory-socket.ts', 'lib/protocol/webauthn.ts', 'service-worker.ts']);
+	});
 });
 
 describe('markup from anyone else goes through the one sanitizer', () => {

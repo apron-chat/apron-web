@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { NO_MEDIA, sanitizeHtml, type MediaCheck } from './sanitize';
+import { NOWHERE, sanitizeHtml, type MediaCheck } from './sanitize';
 
 const fromServer: MediaCheck = { key: 'chat.example', src: (src) => (typeof src === 'string' && src.startsWith('https://chat.example/') ? src : undefined) };
 const embed = (html: string, media = fromServer) => sanitizeHtml(html, 'embed', media);
@@ -23,10 +23,17 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 	});
 
 	it('loads nothing with no gate, and keeps no SVG, MathML, style or script', () => {
-		expect(embed('<img src="https://chat.example/a.png" alt="A">', NO_MEDIA)).not.toContain('<img');
+		expect(embed('<img src="https://chat.example/a.png" alt="A">', NOWHERE)).not.toContain('<img');
 		const html = embed('<svg><image href="https://tracker.example/s.png"></image></svg><math><mi>x</mi></math><style>p{background:url(https://tracker.example/s)}</style><p style="background:url(https://tracker.example/s)">x</p><script>1</script>');
 		expect(html).not.toContain('tracker.example');
 		expect(html).not.toMatch(/<svg|<math|<style|<script/);
+	});
+
+	it('keeps media inline in the markup, which loads from nowhere, and never shows where a hidden image pointed', () => {
+		const svg = 'data:image/svg+xml;base64,PHN2Zy8+';
+		expect(embed(`<img src="${svg}" alt="Logo">`, NOWHERE)).toBe(`<img src="${svg}" alt="Logo">`);
+		expect(embed('<p><img src="/relative.png"></p>', NOWHERE)).toBe('<p></p>');
+		expect(embed('<p><img src="/relative.png" alt="Chart"></p>', NOWHERE)).toBe('<p>Chart</p>');
 	});
 
 	it('opens an embed’s links in a new tab, without a referrer', () => {
@@ -36,7 +43,7 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 	it('remembers each result by its markup and its gate', () => {
 		const html = '<img src="https://chat.example/a.png" alt="A">';
 		expect(embed(html)).toContain('<img');
-		expect(embed(html, NO_MEDIA)).not.toContain('<img');
+		expect(embed(html, NOWHERE)).not.toContain('<img');
 		expect(embed(html)).toContain('<img');
 	});
 });

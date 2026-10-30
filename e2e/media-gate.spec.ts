@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { DEVICES, expect, test } from './fixtures';
+import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /**
  * Media loads only where Preferences' Media lets it (`$lib/ui/media-gate`, `$lib/protocol/sanitize`): every kind
@@ -47,31 +47,77 @@ const HTML = [
 	`<a href="https://example.com" ping="${TRACKER}/ping">a link</a>`
 ].join('');
 
-/** Messages that name media on the tracker every way a body can. */
-async function postEverything(preview: { post(room: string, from: string, body: string | Record<string, unknown>): Promise<string>; reactAs(from: string, id: string, emojis: string[]): Promise<void> }): Promise<void> {
+/** Messages that name media on the tracker every way a body can; resolves to the first's id. */
+async function postEverything(preview: Preview): Promise<string> {
 	const markdown = await preview.post('general', 'grace', `Look: ![a pixel](${TRACKER}/markdown.png) and :tracked:`);
 	await preview.post('general', 'grace', { text: 'Plain :tracked:' });
 	await preview.post('general', 'grace', { text: 'An embed', embeds: [{ kind: 'html', html: HTML }] });
 	await preview.post('general', 'grace', { text: 'A card', embeds: [{ kind: 'link', url: 'https://news.example/story', og: { title: 'A story', image: { url: `${TRACKER}/og.png` }, video: { url: `${TRACKER}/og.mp4` } } }] });
 	await preview.post('general', 'grace', { text: 'A file', embeds: [{ kind: 'upload', embed_id: 'e1', url: `${TRACKER}/file.png`, title: 'file.png', og: { image: { url: `${TRACKER}/upload.png` } } }] });
 	await preview.reactAs('grace', markdown, [':tracked:']);
+	return markdown;
+}
+
+/** Opens the reaction picker on a message, from its toolbar, shown on hover; resolves once the picker is ready. */
+async function openPicker(preview: Preview, id: string): Promise<void> {
+	const message = preview.page.locator(`article[data-message-id="${id}"]`);
+	const button = message.getByRole('button', { name: 'React', exact: true });
+	await expect(async () => {
+		await message.hover();
+		await expect(button).toBeVisible({ timeout: 1000 });
+	}).toPass();
+	await button.click();
+	await expect(preview.page.getByRole('dialog', { name: 'Emoji picker', exact: true })).toHaveAttribute('data-state', 'ready');
 }
 
 test('with This server only, nothing loads from anywhere else, whatever names it', async ({ preview, page }) => {
 	const asked = watchTracker(page);
 	await chooseMedia(page, 'server');
 	await preview.open();
-	await postEverything(preview);
+	const markdown = await postEverything(preview);
 	await expect(page.getByText('A file')).toBeVisible();
+	// The catalog has arrived: its emoji is offered, without its picture.
+	await preview.composer().pressSequentially(':track');
+	const suggestion = page.getByRole('listbox', { name: 'Emoji suggestions' }).getByRole('option').first();
+	await expect(suggestion).toContainText(':tracked:');
+	await expect(suggestion.locator('img')).toHaveCount(0);
 	// What may not load shows another way: the image a link, the emoji its key, the avatar initials.
 	await expect(page.getByRole('link', { name: 'a pixel' })).toHaveAttribute('href', `${TRACKER}/markdown.png`);
 	await expect(page.getByText('Plain :tracked:')).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Chart' })).toBeVisible();
-	// Suggestions for a custom emoji key, and the sidebar's server, ask too.
-	await preview.composer().pressSequentially(':track');
+	await page.keyboard.press('Escape');
+	// The picker leaves out an emoji it may not show.
+	await openPicker(preview, markdown);
+	await page.getByRole('dialog', { name: 'Emoji picker', exact: true }).locator('em-emoji-picker input[type="search"]').fill('tracked');
+	await expect(page.getByRole('button', { name: ':tracked:', exact: true })).toHaveCount(0);
 	await expect(page.locator('img[src^="https://tracker.example"]')).toHaveCount(0);
 	await page.waitForTimeout(500);
 	expect(asked).toEqual([]);
+});
+
+test.describe('a catalog of custom emoji on another site', () => {
+	test.use({ knobs: { capabilities: ['ext:emoji'], server: { ext: { emoji: { catalog_url: `${TRACKER}/catalog.json` } } } } });
+
+	test('with This server only, is never asked for, whatever asks for it', async ({ preview, page }) => {
+		const asked = watchTracker(page);
+		await chooseMedia(page, 'server');
+		await preview.open();
+		const id = await preview.post('general', 'grace', 'Party :tracked:');
+		await expect(page.getByText('Party :tracked:')).toBeVisible();
+		await preview.reactAs('grace', id, [':tracked:']);
+		await preview.composer().pressSequentially(':track');
+		await page.keyboard.press('Escape');
+		await openPicker(preview, id);
+		await page.waitForTimeout(500);
+		expect(asked).toEqual([]);
+	});
+
+	test('with Default, is asked for as before', async ({ preview, page }) => {
+		const asked = watchTracker(page);
+		await preview.open();
+		await preview.post('general', 'grace', 'Party :tracked:');
+		await expect.poll(() => asked).toContain('/catalog.json');
+	});
 });
 
 test('with Default, avatars, images in messages and emoji load from anywhere, as before, and previews only from the server', async ({ preview, page }) => {

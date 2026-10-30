@@ -1,3 +1,4 @@
+import { loadableOg } from '$lib/components/embeds/og';
 import type { Notice, RoomListing, RoomSnapshot, UploadState } from '$lib/protocol/client';
 import { markdownText, mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
@@ -7,6 +8,7 @@ import type { ReactionChip } from './reactions';
 import { placeLinksIn, readPlaceLink, writeApronLink, type ApronLink } from './apron-link';
 import { backendHost } from './connection';
 import { directory, samePieces } from './directory.svelte';
+import type { MediaGate } from './media-gate';
 import { embedsOf, hueOf, isSystem, messageSnippet, textOf } from './messages';
 import { minuteNow } from './clock.svelte';
 import { eventTime, idMillis, idWhen } from './time';
@@ -247,6 +249,32 @@ export function linkedRoomIn(rooms: readonly RoomSnapshot[], listed: ReadonlyMap
  */
 export const UPLOAD_STALE_MS = 10 * 60_000;
 
+/** The embeds `embedProps` made, each with the embed it was made from. */
+const embedSources = new WeakMap<EmbedProps, Embed>();
+/** What `embedProps` made of each embed, and with which gate: the same embed under the same gate is the same props, so an unchanged row stays (`sameEmbed`). */
+const madeProps = new WeakMap<Embed, { gate: MediaGate; props: EmbedProps }>();
+
+/**
+ * What the design system's Embed may draw of an embed: its media only where link previews may load from, and no
+ * HTML, which only a sanitizer may hand it. The page draws each embed itself (`sourceEmbed`), but whatever draws it,
+ * it draws nothing a gate hasn't seen.
+ */
+function embedProps(embed: Embed): EmbedProps {
+	const gate = directory.previewGate;
+	const made = madeProps.get(embed);
+	if (made?.gate === gate) return made.props;
+	const { embed_id, kind, url, title, text, format, height, og } = embed;
+	const props: EmbedProps = { embed_id, kind, url, title, text, format, height, ...(og ? { og: loadableOg(og, gate) } : {}) };
+	embedSources.set(props, embed);
+	madeProps.set(embed, { gate, props });
+	return props;
+}
+
+/** The embed, as its message holds it, that a MessageView's embed was made from. */
+export function sourceEmbed(props: EmbedProps): Embed | undefined {
+	return embedSources.get(props);
+}
+
 /**
  * Its embeds with what each upload is doing: this client's own writes as they go, and one pending past
  * UPLOAD_STALE_MS as failed. Your own can be removed, but not the last thing in a message (§3.5: a message has text
@@ -261,7 +289,7 @@ function embedsIn(event: MessageRecord, row: MessageRow, context: MessageContext
 	const shown = embeds.flatMap((embed, index) => {
 		if (previewedByCard(embed, cards, context.server)) return [];
 		const upload = (embed.embed_id ? uploads[embed.embed_id] : undefined) ?? stalled(embed, seen.timestamp);
-		const item: MessageEmbed = { key: embed.embed_id ?? String(index), embed: embed as unknown as EmbedProps, detail };
+		const item: MessageEmbed = { key: embed.embed_id ?? String(index), embed: embedProps(embed), detail };
 		if (upload) item.upload = upload;
 		if (removable && !(upload && !upload.failed)) item.removable = true;
 		return [item];

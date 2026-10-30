@@ -1323,7 +1323,9 @@ not load, it shows as a link to it (its alt text, else its URL), as does an
 HTML embed's image, video or audio; a custom emoji shows as its key (and isn't
 offered in the emoji picker), an avatar as initials, and a card without its
 picture. An HTML embed never loads a `srcset`, a `background` or a `ping`.
-Small `data:` images always show.
+Images in a message or embed itself (`data:`) always show: they load from
+nowhere. Under This server only, a custom emoji catalog on another site isn't
+fetched either, so its emoji show as their keys.
 The choice is kept on this device, and another tab's applies at once. Stream
 URLs load only from the server's own origin, whatever the choice; links may
 point anywhere `http(s)`.

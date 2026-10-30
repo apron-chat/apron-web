@@ -92,7 +92,7 @@ class Directory {
 		const { origins } = serverMedia(snapshot.server);
 		if (origins.join(' ') !== this.serverMedia.join(' ')) this.serverMedia = origins;
 		// Its custom emoji (`ext:emoji`), kept through a reconnect until the next server frame says otherwise.
-		if (snapshot.server) customEmoji.apply(snapshot.server, server);
+		if (snapshot.server) customEmoji.apply(snapshot.server, server, (url) => this.imageGate.src(url) !== undefined);
 		if (!snapshot.authenticated) return;
 		this.you = snapshot.you;
 		const current = this.users;

@@ -1,7 +1,7 @@
 import MarkdownIt from 'markdown-it';
 import { emojiKeySegments } from './custom-emoji';
 import { withoutBidiOverrides } from './plain-text';
-import { canSanitize, NO_MEDIA, sanitizeHtml, type MediaCheck } from './sanitize';
+import { canSanitize, NOWHERE, sanitizeHtml, type MediaCheck } from './sanitize';
 
 /**
  * A body's `markdown` format is CommonMark (§3.5). This renders CommonMark
@@ -144,14 +144,14 @@ function markdown(source: string): string {
  * every render here, it shows the text without bidi embeddings and overrides
  * (§3.5.2); the text itself stays as written.
  */
-export function renderMarkdown(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver, media: MediaCheck = NO_MEDIA): string {
+export function renderMarkdown(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver, media: MediaCheck = NOWHERE): string {
 	const source = withoutBidiOverrides(text);
 	if (!canSanitize) return linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink, resolveEmoji);
 	return sanitizeHtml(linkText(markdown(source), resolve, resolveRoom, resolveLink, resolveEmoji), 'message', media);
 }
 
 /** A plain body as HTML: escaped, with bare links and mentions linked. Line breaks are kept by CSS (`pre-wrap`). */
-export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver, media: MediaCheck = NO_MEDIA): string {
+export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver, media: MediaCheck = NOWHERE): string {
 	const html = linkifyText(escapeHtml(withoutBidiOverrides(source)), resolve, resolveRoom, false, resolveLink, resolveEmoji);
 	return canSanitize ? sanitizeHtml(html, 'message', media) : html;
 }
@@ -164,7 +164,7 @@ export function renderPlain(source: string, resolve?: MentionResolver, resolveRo
  */
 export function renderBio(source: string): string {
 	const html = linkifyText(escapeHtml(withoutBidiOverrides(source)), undefined, undefined, true);
-	return canSanitize ? sanitizeHtml(html, 'message', NO_MEDIA) : html;
+	return canSanitize ? sanitizeHtml(html, 'message', NOWHERE) : html;
 }
 
 /**
