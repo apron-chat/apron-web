@@ -43,9 +43,10 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 			ask: (src) => (typeof src === 'string' && /^https?:/.test(src) ? { url: src, host: new URL(src).host, ...(src.startsWith('https:') ? { origin: new URL(src).origin } : {}) } : undefined)
 		};
 		const box = (what: string, url: string, host: string, origin?: string) =>
-			`<span class="ap-media-ask"><span class="ap-media-ask-what">${what}</span> <span class="ap-media-ask-host">${host}</span> <button class="ap-media-ask-btn" type="button" aria-label="Load ${what} from ${host}" data-media-load="${url}">Load</button>` +
-			(origin ? ` <button class="ap-media-ask-btn" type="button" aria-label="Always load from ${host}" title="Always load from ${host}: adds it to Trusted origins" data-media-trust="${origin}">Always load</button>` : '') +
-			'</span>';
+			`<span class="ap-media-ask"><span class="ap-media-ask-label"><span class="ap-media-ask-what">${what}</span> <span class="ap-media-ask-host">${host}</span></span>` +
+			`<span class="ap-media-ask-actions"><button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-load="${url}" aria-label="Load ${what} from ${host}">Load</button>` +
+			(origin ? `<button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-trust="${origin}" title="Adds ${host} to Trusted origins">Always load from ${host}</button>` : '') +
+			'</span></span>';
 		expect(embed('<p><img src="https://tracker.example/t.gif" alt="Chart"></p>', asking)).toBe(`<p>${box('Chart', 'https://tracker.example/t.gif', 'tracker.example', 'https://tracker.example')}</p>`);
 		expect(embed('<img src="http://plain.example/t.gif">', asking)).toBe(box('Image', 'http://plain.example/t.gif', 'plain.example'));
 		// A video whose every source may not load asks for the first.

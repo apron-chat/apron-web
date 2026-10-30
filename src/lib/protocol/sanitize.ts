@@ -175,27 +175,32 @@ function stand(element: Element, src: string, media: MediaCheck, doc: Document):
 	return made;
 }
 
-/** Media that waits for a click, as the design system's MediaAsk draws it: what and where it is, Load, and Always load. */
+/** Media that waits for a click, as the design system's MediaAsk draws it: what and where it is, then Load and Always load. */
 function askBox(what: string, asked: MediaAskAt, doc: Document): HTMLElement {
-	const part = (tag: string, className: string, text: string) => {
+	const part = (tag: string, className: string, text = '') => {
 		const node = doc.createElement(tag);
 		node.className = className;
 		node.textContent = text;
 		return node;
 	};
-	const box = part('span', 'ap-media-ask', '');
-	const load = part('button', 'ap-media-ask-btn', 'Load');
-	load.setAttribute('type', 'button');
+	const button = (text: string, name: string, value: string) => {
+		const node = part('button', 'ap-btn ap-btn-quiet ap-btn-sm', text);
+		node.setAttribute('type', 'button');
+		node.setAttribute(name, value);
+		return node;
+	};
+	const label = part('span', 'ap-media-ask-label');
+	label.append(part('span', 'ap-media-ask-what', what), ' ', part('span', 'ap-media-ask-host', asked.host));
+	const load = button('Load', 'data-media-load', asked.url);
 	load.setAttribute('aria-label', `Load ${what} from ${asked.host}`);
-	load.setAttribute('data-media-load', asked.url);
-	box.append(part('span', 'ap-media-ask-what', what), ' ', part('span', 'ap-media-ask-host', asked.host), ' ', load);
+	const actions = part('span', 'ap-media-ask-actions');
+	actions.append(load);
 	if (asked.origin) {
-		const trust = part('button', 'ap-media-ask-btn', 'Always load');
-		trust.setAttribute('type', 'button');
-		trust.setAttribute('aria-label', `Always load from ${asked.host}`);
-		trust.setAttribute('title', `Always load from ${asked.host}: adds it to Trusted origins`);
-		trust.setAttribute('data-media-trust', asked.origin);
-		box.append(' ', trust);
+		const trust = button(`Always load from ${asked.host}`, 'data-media-trust', asked.origin);
+		trust.setAttribute('title', `Adds ${asked.host} to Trusted origins`);
+		actions.append(trust);
 	}
+	const box = part('span', 'ap-media-ask');
+	box.append(label, actions);
 	return box;
 }

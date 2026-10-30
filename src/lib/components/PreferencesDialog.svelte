@@ -307,11 +307,12 @@
 				</div>
 			{/if}
 		{:else if preferencesSection === 'media'}
-			<SettingRow title="Load images from" for="ap-media-policy" hint={mediaNote} hintTestid="media-note" class="ap-pref-media-setting">
+			<SettingRow title="Load images from" for="ap-media-policy" stacked class="ap-pref-media-setting">
 				{#snippet control()}
 					<select id="ap-media-policy" class="ap-field ap-pref-select" value={mediaSettings.policy} onchange={(event) => mediaSettings.update(event.currentTarget.value)} data-testid="media-policy">
 						{#each MEDIA_POLICIES as policy (policy.value)}<option value={policy.value}>{policy.label}</option>{/each}
 					</select>
+					<p class="ap-form-hint ap-pref-media-note" data-testid="media-note">{mediaNote}</p>
 				{/snippet}
 			</SettingRow>
 			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com. Always load adds one." stacked class="ap-pref-media-sites">

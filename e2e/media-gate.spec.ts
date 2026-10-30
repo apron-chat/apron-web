@@ -114,6 +114,8 @@ test('Always load trusts the site from now on, in Preferences too', async ({ pre
 	await page.getByRole('button', { name: 'Always load from tracker.example' }).first().click();
 	await expect(page.locator(`img[src="${TRACKER}/markdown.png"]`)).toHaveCount(1);
 	await expect(page.getByRole('button', { name: /^Load .* from tracker\.example$/ })).toHaveCount(0);
+	// A card's and an upload's pictures load lazily: in view.
+	await page.locator(`img[src="${TRACKER}/upload.png"]`).scrollIntoViewIfNeeded();
 	// Avatars, images, emoji, embeds, cards and uploads. (The emoji's still copy: a headless browser prefers reduced motion.)
 	await expect.poll(() => [...new Set(asked)].sort()).toEqual(expect.arrayContaining(['/grace.png', '/markdown.png', '/emoji-still.png', '/html.png', '/poster.jpg', '/sound.mp3', '/server.png', '/og.png', '/upload.png']));
 	// A srcset, a background and a ping never stay.
@@ -157,6 +159,7 @@ test('with Any site, everything loads from anywhere, but a srcset, a background 
 	await expect(page.getByText('A file')).toBeVisible();
 	await expect(page.locator(`img[src="${TRACKER}/markdown.png"]`)).toHaveCount(1);
 	await expect(page.locator('.ap-media-ask')).toHaveCount(0);
+	await page.locator(`img[src="${TRACKER}/upload.png"]`).scrollIntoViewIfNeeded();
 	await expect.poll(() => [...new Set(asked)].sort()).toEqual(expect.arrayContaining(['/grace.png', '/markdown.png', '/emoji-still.png', '/html.png', '/poster.jpg', '/sound.mp3', '/server.png', '/og.png', '/upload.png']));
 	for (const never of ['/html-2x.png', '/bg.png', '/ping']) expect(asked).not.toContain(never);
 });
