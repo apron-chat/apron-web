@@ -352,6 +352,34 @@ test.describe('folding a room, with motion allowed', () => {
 		}).length);
 		expect(moving).toBe(0);
 	});
+
+	test('the open room, in the middle of its section, lifted and let go where it was stays where it was', async ({ preview, page }) => {
+		await openGeneral(preview);
+		// A third room, and general moved between the other two.
+		await page.getByRole('button', { name: 'Create room', exact: true }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByRole('textbox', { name: 'Room title', exact: true }).fill('Zeta');
+		await dialog.getByRole('button', { name: 'Create room', exact: true }).click();
+		await expect(dialog).toBeHidden();
+		await expect(rows(page)).toHaveCount(3);
+		await row(page, 'general').click();
+		await expect(preview.heading()).toHaveText('general');
+		await row(page, 'general').focus();
+		await page.keyboard.press('Alt+ArrowDown');
+		await expect.poll(async () => (await order(page))[1]).toBe('general');
+		await expect(threadLists(page)).toHaveCount(1);
+		const before = await order(page);
+		// Its own threads fold away as it lifts, and its copy shrinks to a row: it stays over its slot as it does.
+		const from = await middle(page, 'general');
+		await page.mouse.move(from.x, from.y);
+		await page.mouse.down();
+		await page.mouse.move(from.x, from.y + 10, { steps: 3 });
+		await expect(threadLists(page)).toHaveCount(0);
+		await page.waitForTimeout(400);
+		await page.mouse.up();
+		await expect(threadLists(page)).toHaveCount(1);
+		expect(await order(page)).toEqual(before);
+	});
 });
 
 test.describe('room order, by touch', () => {

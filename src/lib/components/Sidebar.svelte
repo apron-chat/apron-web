@@ -200,9 +200,11 @@
 	 */
 	function contain(copy: HTMLElement, zone: HTMLElement, id: string): () => void {
 		const view = (zone.closest('.ap-shell-sidebody') as HTMLElement | null) ?? zone;
-		// The library slides its copy's `top` and `left` as it resizes it; corrected here as they slid, it could end up off
-		// the page altogether for a moment, which the library takes for a drop. They move at once instead.
-		copy.style.transition = copy.style.transition.split(/,(?![^(]*\))/).filter((part) => !/^\s*(top|left)\b/.test(part)).join(',');
+		// The library slides its copy's `top` and `left`, and its size, as it resizes it (from the room with its threads to
+		// its row, as they fold away). Corrected here as they slid, it could end up off the page altogether for a moment,
+		// which the library takes for a drop; and resizing it again partway, it moves its `top` off the room's slot. They
+		// change at once instead (with `width` and `height` named, the library doesn't add their slides back).
+		copy.style.transition = [...copy.style.transition.split(/,(?![^(]*\))/).filter((part) => !/^\s*(top|left|width|height)\b/.test(part)), 'width 0s', 'height 0s'].join(',');
 		const scrolling = view.style.overflow;
 		view.style.overflow = 'hidden';
 		requestAnimationFrame(() => requestAnimationFrame(() => {
