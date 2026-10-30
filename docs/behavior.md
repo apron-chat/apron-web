@@ -693,7 +693,7 @@ the one before. One tab
 writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped
 keeping more if the device ran out of space.
 
-**Search local history** (first in the room header's ⋯ menu, or Ctrl+K, ⌘K on a Mac)
+**Search local history** (first in the room header's ⋯ menu, or Ctrl+F, ⌘F on a Mac, in place of the browser's find while signed in and no other dialog is open)
 starts narrowed to the open room or thread (`room:#general `, the caret after
 it; Backspace widens it to everywhere), and looks through this server's history kept on this device for the
 account signed in (none as a guest, or while keeping is off) and what the page has

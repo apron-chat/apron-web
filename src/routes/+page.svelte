@@ -1553,7 +1553,7 @@
 	/** Search can be opened: signed in, with rooms listed. */
 	let canSearch = $derived(Boolean(client) && session.ready);
 	/** Search's shortcut, as this platform writes it; none on a touch screen, which has no keys for it. */
-	const searchHint = globalThis.matchMedia?.('(pointer: coarse)').matches ? undefined : /Mac/.test(globalThis.navigator?.platform ?? '') ? '⌘K' : 'Ctrl+K';
+	const searchHint = globalThis.matchMedia?.('(pointer: coarse)').matches ? undefined : /Mac/.test(globalThis.navigator?.platform ?? '') ? '⌘F' : 'Ctrl+F';
 
 	/** What keeps this session's history on this device, if anything does: a session saved here, while keeping is on. */
 	function sessionKeeper(): HistoryKeeper | undefined {
@@ -2858,10 +2858,11 @@
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
-		// Ctrl+K (⌘K on a Mac) searches local history, from anywhere on the page but another dialog.
-		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k' && canSearch) {
+		// Ctrl+F (⌘F on a Mac) searches local history, from anywhere on the page but another dialog; there, and
+		// before signing in, the browser finds in the page as usual. (Ctrl+K is kept for a quick switcher.)
+		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f' && canSearch && !modalOpen()) {
 			event.preventDefault();
-			if (!modalOpen()) searchOpen = true;
+			searchOpen = true;
 			return;
 		}
 		// Escape in the NewThreadDialog closes it and keeps the selection it was asked for.

@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { DEVICES, expect, test } from './fixtures';
 
 /**
- * Search local history (`SearchDialog`): Ctrl/⌘K or the room header's ⋯ menu, text, and `user:` and `room:`
+ * Search local history (`SearchDialog`): Ctrl/⌘F or the room header's ⋯ menu, text, and `user:` and `room:`
  * filters. On `/__preview`, which keeps nothing on the device, it searches what the page holds; history.spec.ts
  * searches what a reload kept.
  */
@@ -42,7 +42,7 @@ test('narrows by room and by person, and opens a result in its room', async ({ p
 
 test('suggests people for user: and rooms for room:, as the composer does for @ and #', async ({ preview, page }) => {
 	await preview.open();
-	await page.keyboard.press('ControlOrMeta+k');
+	await page.keyboard.press('ControlOrMeta+f');
 	const search = page.getByRole('dialog', { name: 'Search local history' });
 	const field = search.getByRole('combobox');
 	const suggestions = search.getByTestId('search-suggestions');
@@ -78,7 +78,7 @@ test('suggests people for user: and rooms for room:, as the composer does for @ 
 test('opened from a thread, it starts narrowed to that thread', async ({ preview, page }) => {
 	await preview.open();
 	await preview.openThread('thread_deploy');
-	await page.keyboard.press('ControlOrMeta+k');
+	await page.keyboard.press('ControlOrMeta+f');
 	await expect(page.getByRole('dialog', { name: 'Search local history' }).getByRole('combobox')).toHaveValue('room:#thread_deploy ');
 });
 
@@ -108,14 +108,17 @@ test.describe('on a phone', () => {
 	});
 });
 
-test('Ctrl/⌘K opens no search over another dialog', async ({ preview, page }) => {
+test('Ctrl/⌘F opens no search over another dialog, and Ctrl/⌘K none at all', async ({ preview, page }) => {
 	await preview.open();
+	// Kept for a quick switcher.
+	await page.keyboard.press('ControlOrMeta+k');
+	await expect(page.getByRole('dialog', { name: 'Search local history' })).toHaveCount(0);
 	await page.getByRole('button', { name: /^Open preferences/ }).click();
 	await expect(page.getByRole('dialog', { name: 'Preferences' })).toBeVisible();
-	await page.keyboard.press('ControlOrMeta+k');
+	await page.keyboard.press('ControlOrMeta+f');
 	await expect(page.getByRole('dialog', { name: 'Search local history' })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog', { name: 'Preferences' })).toHaveCount(0);
-	await page.keyboard.press('ControlOrMeta+k');
+	await page.keyboard.press('ControlOrMeta+f');
 	await expect(page.getByRole('dialog', { name: 'Search local history' })).toBeVisible();
 });

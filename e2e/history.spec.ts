@@ -132,7 +132,7 @@ test('search finds a message only this device still has, and opens it where it i
 	await expect(page.getByText('Message 149', { exact: true })).toBeVisible();
 	await expect(page.getByText('The needle in the haystack')).toHaveCount(0);
 	frames.length = 0;
-	await page.keyboard.press('ControlOrMeta+k');
+	await page.keyboard.press('ControlOrMeta+f');
 	const search = page.getByRole('dialog', { name: 'Search local history' });
 	await search.getByRole('combobox').fill('NEEDLE in  the hay');
 	const results = search.getByTestId('search-results');
