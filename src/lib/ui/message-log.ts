@@ -1,7 +1,8 @@
-import { safeLink } from '$lib/protocol/embeds';
+import { ANY_ORIGIN, safeLink } from '$lib/protocol/embeds';
 import { renderMarkdown } from '$lib/protocol/markdown';
 import { compareLogIds } from '$lib/protocol/reducer';
 import type { Embed, MessageRecord } from '$lib/protocol/types';
+import { mediaGate, type MediaGate } from './media-gate';
 import { embedsOf, messageSnippet, senderName, textOf } from './messages';
 import { dayKeyOf, idMillis, idTime, isGrouped } from './time';
 
@@ -79,12 +80,18 @@ function dayOf(id: string, now: Date | undefined): string {
 }
 
 /**
+ * Where a pasted log's images load from: anywhere, since it goes only to the clipboard, never into this page, and
+ * whatever it is pasted into loads it, or not, as that app chooses.
+ */
+const PASTED: MediaGate = mediaGate(undefined, [ANY_ORIGIN]);
+
+/**
  * The log as HTML, for a rich paste: the Markdown rendered as a message is,
  * except that its images show (a paste is the reader's to load), with
  * mentions left as written.
  */
 export function messageLogHtml(log: string): string {
-	return renderMarkdown(log, undefined, undefined, undefined, undefined, (src) => src);
+	return renderMarkdown(log, undefined, undefined, undefined, undefined, PASTED);
 }
 
 /** What a log shows for a message's body: its text as written and its images, or a note when it has neither. */

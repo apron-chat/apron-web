@@ -62,8 +62,8 @@ test('an export opened without images loads nothing from anywhere else', async (
 	await expect(page.getByTestId('archive-hosts')).toContainText('media.example');
 	await page.getByRole('button', { name: 'Open without images' }).click();
 	await page.locator('[data-room="general"]').first().click();
-	// The image is a link, the avatar initials, the card without its picture.
-	await expect(page.getByRole('link', { name: 'a pixel' })).toHaveAttribute('href', 'https://tracker.example/pixel.png');
+	// The image waits for a click, the avatar is initials, the card without its picture.
+	await expect(page.getByRole('button', { name: 'Load a pixel from tracker.example' })).toBeVisible();
 	await expect(page.getByText('A story')).toBeVisible();
 	await expect(page.locator('img[src^="https://"]')).toHaveCount(0);
 	expect(asked).toEqual([]);
@@ -80,37 +80,36 @@ test('an export opened with its images loads them from the sites it names, and n
 	await page.getByRole('button', { name: 'Load images' }).click();
 	await page.locator('[data-room="general"]').first().click();
 	await expect(page.locator('img[src="https://media.example/story.png"]')).toHaveCount(1);
-	await expect(page.getByRole('link', { name: 'a pixel' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Load a pixel from tracker.example' })).toBeVisible();
 	expect([...asked]).toEqual(['media.example']);
 
 	// Preferences, Media: any site, and the image and avatar on the other one load too.
 	await page.getByRole('button', { name: /^Open preferences/ }).click();
 	const preferences = page.getByRole('dialog', { name: 'Preferences' });
 	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
-	// Held to the sites it was agreed to load from, whatever Media said.
-	await expect(preferences.getByTestId('media-policy')).toHaveValue('server');
-	await expect(preferences.getByTestId('media-note')).toHaveText('Only from this server and media.example.');
-	await preferences.getByTestId('media-policy').selectOption('all');
+	// Held to the sites it was agreed to load from, whatever Media said, which it names.
+	await expect(preferences.getByTestId('media-policy')).toHaveValue('trusted');
+	await expect(preferences.getByTestId('media-note')).toHaveText('From this server, media.example (trusted by the server) and the origins below. Other images wait for a click.');
+	await preferences.getByTestId('media-policy').selectOption('any');
 	await expect(preferences.getByTestId('media-note')).toHaveText('Everything, from any site.');
 	await page.keyboard.press('Escape');
 	await expect(page.locator('img[src="https://tracker.example/pixel.png"]')).toHaveCount(1);
 	await expect.poll(() => asked.has('tracker.example')).toBe(true);
 });
 
-test('Preferences, Media: sites added load besides the server’s', async ({ preview, page }) => {
+test('Preferences, Media: the server, and the origins the viewer trusts, kept as hosts', async ({ preview, page }) => {
 	await preview.open();
 	await page.getByRole('button', { name: /^Open preferences/ }).click();
 	const preferences = page.getByRole('dialog', { name: 'Preferences' });
 	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
-	// As ever by default: previews from the server, avatars and images in messages from anywhere.
-	await expect(preferences.getByTestId('media-policy')).toHaveValue('default');
-	await expect(preferences.getByTestId('media-note')).toHaveText('Previews from this server. Avatars and images from any site.');
-	await expect(preferences.getByTestId('media-sites')).toHaveCount(0);
-	await preferences.getByTestId('media-policy').selectOption('custom');
+	await expect(preferences.getByTestId('media-policy')).toHaveValue('trusted');
+	await expect(preferences.getByTestId('media-note')).toHaveText('From this server and the origins below. Other images wait for a click.');
 	const sites = preferences.getByTestId('media-sites');
 	await sites.fill('cdn.example\nhttps://img.example/a.png\nhttp://plain.example');
 	await sites.blur();
-	// Kept as hosts, https only.
+	// Kept as hosts, https only; and kept under Any site, for when it's chosen again.
 	await expect(sites).toHaveValue('cdn.example\nimg.example');
-	await expect(preferences.getByTestId('media-note')).toHaveText('Only from this server and the sites below.');
+	await preferences.getByTestId('media-policy').selectOption('any');
+	await expect(preferences.getByTestId('media-note')).toHaveText('Everything, from any site.');
+	await expect(sites).toHaveValue('cdn.example\nimg.example');
 });

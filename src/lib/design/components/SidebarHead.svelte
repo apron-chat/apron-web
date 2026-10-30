@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { MediaSrc } from './types';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import type { ClassValue } from 'svelte/elements';
 	import { initials } from './util';
@@ -9,7 +10,7 @@
 		/** Its address (§1): its host shows under the name, and the whole address is the tooltip. */
 		address?: string;
 		/** Its `avatar` (§3.1), loaded as a user's is (§4.8.6); its initials without one. */
-		avatar?: string;
+		avatar?: MediaSrc;
 		/** Phones: the room or thread the rooms list opened over, and a › back to it, mirroring the room header's ‹. */
 		returnTo?: string;
 		onreturn?: () => void;

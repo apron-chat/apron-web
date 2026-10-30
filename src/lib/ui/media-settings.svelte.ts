@@ -5,24 +5,26 @@ import { loadMediaSettings, MEDIA_KEY, saveMediaSettings } from './storage';
 /**
  * Where images, avatars and other media load from. Loading one tells the site
  * that hosts it that someone is reading, and from where (PROTOCOL.md §5.5).
- * - `default`: as Apron always has: link previews and attachments from the
- *   chat server's own origin and those it names for its media (`ext:media`,
- *   EXT.md §6), avatars and images in messages from any site.
- * - `server`: all of it from the server's origins only.
- * - `custom`: those, and the sites the viewer adds (`origins`).
- * - `all`: any site.
- * Small inline images (`data:`) always show.
+ * - `trusted`: the chat server's own origin, those it names for its media
+ *   (`ext:media`, EXT.md §6), and the origins the viewer trusts (`origins`).
+ *   Media in the timeline from anywhere else waits for a click; avatars and
+ *   custom emoji from anywhere else don't show.
+ * - `any`: any site.
+ * Inline images (`data:`) always show.
  */
 export const MEDIA_POLICIES = [
-	{ value: 'default', label: 'Default' },
-	{ value: 'server', label: 'This server only' },
-	{ value: 'custom', label: 'This server and sites I add' },
-	{ value: 'all', label: 'Any site' }
+	{ value: 'trusted', label: 'This server and trusted sites' },
+	{ value: 'any', label: 'Any site' }
 ] as const;
 
 export type MediaPolicy = (typeof MEDIA_POLICIES)[number]['value'];
 
-export const DEFAULT_MEDIA_POLICY: MediaPolicy = 'default';
+export const DEFAULT_MEDIA_POLICY: MediaPolicy = 'trusted';
+
+/** What was saved, as a policy: those of earlier versions too (`all` is `any`; the rest, with their sites, `trusted`). */
+function policyOf(value: unknown): MediaPolicy {
+	return value === 'any' || value === 'all' ? 'any' : DEFAULT_MEDIA_POLICY;
+}
 
 function known(value: unknown): value is MediaPolicy {
 	return MEDIA_POLICIES.some((policy) => policy.value === value);
@@ -48,16 +50,15 @@ export function parseMediaOrigins(text: string): string[] {
 /** Where media loads from, shared by the page and Preferences. */
 export class MediaSettings {
 	policy = $state<MediaPolicy>(DEFAULT_MEDIA_POLICY);
-	/** The sites added, as origins: what `custom` trusts besides the server's. */
+	/** The origins the viewer trusts besides the server's, Preferences' Trusted origins. */
 	origins = $state.raw<string[]>([]);
 	/** Held to the server's origins on this page (`limit`), until something is chosen. */
-	private limited = false;
+	private limited = $state(false);
 
 	load(): void {
 		const saved = loadMediaSettings();
-		const policy = isJsonObject(saved) ? saved.policy : undefined;
 		const origins = isJsonObject(saved) && Array.isArray(saved.origins) ? saved.origins : [];
-		this.policy = this.limited ? 'server' : known(policy) ? policy : DEFAULT_MEDIA_POLICY;
+		this.policy = this.limited ? DEFAULT_MEDIA_POLICY : policyOf(isJsonObject(saved) ? saved.policy : undefined);
 		this.origins = parseMediaOrigins(origins.filter((origin) => typeof origin === 'string').join(' '));
 	}
 
@@ -74,28 +75,32 @@ export class MediaSettings {
 		saveMediaSettings({ policy, origins });
 	}
 
+	/** Trusts `origin` from now on, as Always load does: it joins the Trusted origins, whatever the policy. */
+	trust(origin: string): void {
+		const [parsed] = parseMediaOrigins(origin);
+		if (parsed && !this.origins.includes(parsed)) this.update(this.policy, [...this.origins, parsed]);
+	}
+
 	/**
-	 * Only this page, and not saved: media loads from the server's origins alone, whatever was chosen. An export
-	 * read here keeps to the sites it was agreed to load from until the viewer chooses otherwise.
+	 * Only this page, and not saved: media loads from the server's origins alone, whatever was chosen, and the rest
+	 * waits for a click. An export read here keeps to the sites it was agreed to load from until the viewer chooses
+	 * otherwise.
 	 */
 	limit(): void {
 		this.limited = true;
-		this.policy = 'server';
+		this.policy = DEFAULT_MEDIA_POLICY;
 	}
 
-	/**
-	 * The origins link previews and attachments load from besides the server's own (`embedMedia`'s `trusted`),
-	 * given those it names.
-	 */
+	/** The origins media loads from besides the server's own (`embedMedia`'s `trusted`), given those it names. */
 	trusted(server: readonly string[]): readonly string[] {
-		if (this.policy === 'all') return [...server, ANY_ORIGIN];
-		if (this.policy === 'custom') return [...new Set([...server, ...this.origins])];
-		return server;
+		if (this.policy === 'any') return [...server, ANY_ORIGIN];
+		if (this.limited) return server;
+		return [...new Set([...server, ...this.origins])];
 	}
 
-	/** The origins avatars and images in messages load from besides the server's own: any, as ever, by default. */
-	trustedImages(server: readonly string[]): readonly string[] {
-		return this.policy === 'default' ? [...server, ANY_ORIGIN] : this.trusted(server);
+	/** Whether media from anywhere else waits for a click, rather than loading. */
+	get asks(): boolean {
+		return this.policy !== 'any';
 	}
 }
 

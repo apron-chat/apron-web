@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { localMedia } from '$lib/ui/media-gate';
 	import type { UploadFile } from '$lib/protocol/client';
 	import AttachmentTile from '$lib/design/components/AttachmentTile.svelte';
 	import { fileSize } from '$lib/ui/images';
@@ -42,4 +43,4 @@
 	});
 </script>
 
-<AttachmentTile {name} {detail} {kind} {src} {onrename} {onremove} removeLabel={`Remove ${name}`} />
+<AttachmentTile {name} {detail} {kind} src={localMedia(src)} {onrename} {onremove} removeLabel={`Remove ${name}`} />

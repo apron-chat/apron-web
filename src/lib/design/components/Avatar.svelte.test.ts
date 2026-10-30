@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import Avatar from './Avatar.svelte';
 import * as dom from '$lib/test/dom';
 import { byText } from '$lib/test/queries';
+import { media } from '$lib/test/media';
 
 describe('Avatar', () => {
 	it('tints initials by their hue, which apron.css reads from --avatar-hue', () => {
@@ -20,7 +21,7 @@ describe('Avatar', () => {
 		expect(byText('B').style.getPropertyValue('--avatar-hue')).toBe('');
 		dom.unmount();
 		document.body.innerHTML = '';
-		dom.render(Avatar, { name: 'Bob', hue: 30, src: 'https://chat.example/bob.png' });
+		dom.render(Avatar, { name: 'Bob', hue: 30, src: media('https://chat.example/bob.png') });
 		const image = document.querySelector('img')!;
 		expect([image.getAttribute('src'), image.alt]).toEqual(['https://chat.example/bob.png', '']);
 		expect(document.body.textContent).toBe('');

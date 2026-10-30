@@ -2,13 +2,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import SidebarHead from './SidebarHead.svelte';
 import * as dom from '$lib/test/dom';
+import { media } from '$lib/test/media';
 
 const head = () => document.querySelector<HTMLElement>('.ap-shell-sidehead')!;
 const text = (selector: string) => head().querySelector(selector)?.textContent ?? null;
 
 describe('SidebarHead', () => {
 	it('shows the server’s avatar and title over its host, the whole address its tooltip, and is no control', () => {
-		dom.render(SidebarHead, { name: 'Northwind Ops', address: 'wss://chat.northwind.dev/', avatar: 'data:image/png;base64,AAAA' });
+		dom.render(SidebarHead, { name: 'Northwind Ops', address: 'wss://chat.northwind.dev/', avatar: media('data:image/png;base64,AAAA') });
 		const avatar = head().querySelector<HTMLImageElement>('img.ap-shell-sidehead-avatar')!;
 		expect(avatar.getAttribute('src')).toBe('data:image/png;base64,AAAA');
 		expect(avatar.alt).toBe('');

@@ -6,6 +6,7 @@
  */
 
 import type { CustomEmoji, EmojiCatalog } from '$lib/protocol/custom-emoji';
+import type { MediaSrc } from './media-gate';
 import { NARROW_MAX } from './breakpoints';
 
 /** A custom emoji category as emoji-mart's `custom` option takes it. */
@@ -21,11 +22,13 @@ export interface PickerCategory {
  * leaving out `hidden` ones; and the key each emoji-mart ID picks. Search
  * finds each by its key's name, its `alt`, and its tags.
  */
-export function pickerCategories(catalog: EmojiCatalog | undefined, src: (emoji: CustomEmoji) => string): { categories: PickerCategory[]; keys: Map<string, string> } {
+export function pickerCategories(catalog: EmojiCatalog | undefined, src: (emoji: CustomEmoji) => MediaSrc | undefined): { categories: PickerCategory[]; keys: Map<string, string> } {
 	const categories = new Map<string, PickerCategory>();
 	const keys = new Map<string, string>();
 	for (const emoji of catalog?.values() ?? []) {
-		if (emoji.hidden) continue;
+		// One whose image may not load can't be shown to pick: it can still be typed by its key.
+		const image = emoji.hidden ? undefined : src(emoji);
+		if (!image) continue;
 		const name = emoji.category ?? 'This server';
 		let category = categories.get(name);
 		if (!category) categories.set(name, (category = { id: `apron-custom-${categories.size}`, name, emojis: [] }));
@@ -33,7 +36,7 @@ export function pickerCategories(catalog: EmojiCatalog | undefined, src: (emoji:
 		const id = `apron-${emoji.key.slice(1, -1)}`;
 		keys.set(id, emoji.key);
 		// `native` is what emoji-mart names its button and image by: the key, which a screen reader then reads.
-		category.emojis.push({ id, name: emoji.alt ?? emoji.key, keywords: [emoji.key.slice(1, -1), ...(emoji.alt ? [emoji.alt] : []), ...emoji.tags], skins: [{ src: src(emoji), native: emoji.key }] });
+		category.emojis.push({ id, name: emoji.alt ?? emoji.key, keywords: [emoji.key.slice(1, -1), ...(emoji.alt ? [emoji.alt] : []), ...emoji.tags], skins: [{ src: image, native: emoji.key }] });
 	}
 	return { categories: [...categories.values()], keys };
 }

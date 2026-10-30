@@ -22,7 +22,7 @@
 	import Message from '$lib/design/components/Message.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
 	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
-	import { linkedRoomIn, messageView, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
+	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
 	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
@@ -81,6 +81,7 @@
 	import { ViewKeeper } from '$lib/ui/view-keeper';
 	import { HistoryKeeper } from '$lib/history/history-keeper';
 	import { historySettings } from '$lib/history/settings.svelte';
+	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
 	import { preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
@@ -2400,7 +2401,7 @@
 	/** A message's reaction chips, from the timeline of the room it lives in. */
 	function reactionsFor(event: MessageRecord): ReactionChip[] {
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
-		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.resolveEmoji);
+		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.emojiImage);
 	}
 
 	function react(event: MessageRecord, emoji: string): void {
@@ -2482,7 +2483,10 @@
 		},
 		beginSelect: onRow(beginSelect),
 		removeReply: onRow(removeReply),
-		removeEmbed: (view, embed) => onRow((event) => removeEmbed(event, embed as unknown as Embed))(view),
+		removeEmbed: (view, props) => {
+			const embed = sourceEmbed(props);
+			if (embed) onRow((event) => removeEmbed(event, embed))(view);
+		},
 		openRoom: openMentionedRoom,
 		// A user mention, or the sender's name or avatar, opens their profile card.
 		openProfile: openProfileFrom,
@@ -2962,7 +2966,7 @@
 </script>
 
 <svelte:window onkeydown={windowKeydown} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
-<svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
+<svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
 
 <svelte:head>
 	<title>{tabTitle(unread.total, presence.titleFlash)}</title>
@@ -3005,7 +3009,7 @@
 	/>
 {:else}
 <!-- A message row's embed, through the app's media gates; and the row being edited, in the editor loaded for it. -->
-{#snippet messageEmbed(item: MessageEmbed)}<EmbedItem embed={item.embed as unknown as Embed} upload={item.upload} detail={item.detail} />{/snippet}
+{#snippet messageEmbed(item: MessageEmbed)}{@const embed = sourceEmbed(item.embed)}{#if embed}<EmbedItem {embed} upload={item.upload} detail={item.detail} />{/if}{/snippet}
 {#snippet editMessage(view: MessageView)}
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}

@@ -33,6 +33,12 @@ export class CustomEmojiCatalog {
 	reducedMotion = $state(false);
 	/** The chat server's origin, which emoji images may also load from (§4.8.6). */
 	private origin: string | undefined;
+	/**
+	 * Whether the catalog may be fetched from where it is: from where Preferences' Media lets images load, as its
+	 * emoji's do, since a fetch tells a site as much as an image does. Asked each time, so a catalog not allowed
+	 * comes once the viewer allows it.
+	 */
+	private allows: (url: string) => boolean = () => false;
 	/** Catalogs fetched, by URL: a catalog stays as long as its URL does. */
 	private readonly fetched = new Map<string, EmojiCatalog>();
 	/** The URLs being fetched, and those that failed (not tried again until the server sends another). */
@@ -46,10 +52,14 @@ export class CustomEmojiCatalog {
 		}
 	}
 
-	/** Follows the server frame of the server at `serverUrl`: its catalog, fetched already or not yet. */
-	apply(server: ServerParams | undefined, serverUrl: string | undefined): void {
+	/**
+	 * Follows the server frame of the server at `serverUrl`: its catalog, fetched already or not yet, and fetched
+	 * only where `allows` says it may be.
+	 */
+	apply(server: ServerParams | undefined, serverUrl: string | undefined, allows: (url: string) => boolean): void {
 		const url = catalogUrlOf(server);
 		this.origin = serverUrl ? serverOrigin(serverUrl) : undefined;
+		this.allows = allows;
 		if (url === this.url) return;
 		this.url = url;
 		this.catalog = url ? this.fetched.get(url) : undefined;
@@ -62,6 +72,8 @@ export class CustomEmojiCatalog {
 	need(): void {
 		const url = this.url;
 		if (!url || this.catalog || this.asked.has(url)) return;
+		// Inline, it is fetched from nowhere.
+		if (!url.startsWith('data:') && !this.allows(url)) return;
 		this.asked.add(url);
 		const origin = this.origin;
 		this.load(url).then(
