@@ -37,6 +37,34 @@ async function middle(page: Page, room: string): Promise<{ x: number; y: number;
 	return { x: box.x + box.width / 2, y: box.y + box.height / 2, top: box.y };
 }
 
+/**
+ * Lifts engineering, just below general's threads, held in the middle of the sidebar (scrolled there if it scrolls) and
+ * let go where it was: the threads fold away above it as it lifts, and come back as it's dropped.
+ */
+async function liftBelowThreads(preview: Preview): Promise<void> {
+	const page = preview.page;
+	await openGeneral(preview);
+	await row(page, 'engineering').evaluate((button) => button.scrollIntoView({ block: 'center' }));
+	const from = await middle(page, 'engineering');
+	const held = page.locator(`#${DRAGGED_ELEMENT_ID} button[data-room]`);
+	await page.mouse.move(from.x, from.y);
+	await page.mouse.down();
+	await page.mouse.move(from.x, from.y - 10, { steps: 3 });
+	await expect(threadLists(page)).toHaveCount(0);
+	// Upwards: it's the list's last room, which it keeps over.
+	await page.mouse.move(from.x, from.y - 12);
+	// It stays under the pointer as general's threads fold away above it, and so does its place.
+	const underPointer = async () => Math.abs((await held.boundingBox())!.y - (from.top - 12)) <= 2;
+	await expect.poll(underPointer).toBe(true);
+	await page.waitForTimeout(300);
+	expect(await underPointer()).toBe(true);
+	await page.mouse.up();
+	await expect(threadLists(page)).toHaveCount(1);
+	expect(await order(page)).toEqual(['general', 'engineering']);
+	// And where it was let go as they come back.
+	await expect.poll(async () => Math.abs((await middle(page, 'engineering')).top - from.top) <= 2).toBe(true);
+}
+
 test.describe('room order, with a mouse', () => {
 	test.use(DEVICES.desktop);
 
@@ -96,6 +124,10 @@ test.describe('room order, with a mouse', () => {
 		await page.mouse.up();
 		await expect(threadLists(page)).toHaveCount(1);
 		expect(await privateRooms.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.room))).toEqual(before);
+	});
+
+	test('a room just below the open room’s threads stays under the pointer as they fold away, and where it’s let go as they come back', async ({ preview }) => {
+		await liftBelowThreads(preview);
 	});
 
 	test('a click still opens a room', async ({ preview, page }) => {
@@ -210,6 +242,14 @@ test.describe('room order, in a short window, lifted without moving', () => {
 		await page.mouse.up();
 		await expect(threadLists(page)).toHaveCount(1);
 		expect(await order(page)).toEqual(['general', 'engineering']);
+	});
+});
+
+test.describe('room order, in a window with the sidebar scrolled past the open room’s threads', () => {
+	test.use({ viewport: { width: 1280, height: 260 } });
+
+	test('a room just below them stays under the pointer as they fold away, and where it’s let go as they come back', async ({ preview, page }) => {
+		await liftBelowThreads(preview);
 	});
 });
 

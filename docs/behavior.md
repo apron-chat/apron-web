@@ -838,7 +838,10 @@ lifts once the pointer has moved a few pixels (a click that drifts stays a
 click); on a touch screen hold it for a moment and it
 lifts (a tap still opens it, and a swipe still scrolls). While it's carried
 every room's threads fold away, so the list is just its rooms and the others
-make way for it, and they come back as they were once it's dropped. It keeps to
+make way for it, and they come back as they were once it's dropped. They fold
+around the room in hand, which stays under the pointer: threads above it fold
+toward it (the sidebar scrolling back, and a gap left above the section for
+whatever it can't), and the room let go stays where it was as they come back. It keeps to
 its section's column, moving only up and down within the part of the section in
 view, so it lands where it's seen; carried past either end it goes to that end. While a
 room is carried the sidebar scrolls only to bring more of its section into view,

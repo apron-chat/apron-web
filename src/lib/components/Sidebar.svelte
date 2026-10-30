@@ -210,17 +210,31 @@
 		requestAnimationFrame(() => requestAnimationFrame(() => {
 			if (!over) view.style.overflow = scrolling;
 		}));
-		/** The sidebar's scroll as the threads folded away (Svelte's next update): it may only come nearer the section. */
+		// The threads fold away (Svelte's next update) around the room in hand, not from under it: the browser's own
+		// scroll anchoring is left out of that, and of their coming back.
+		view.style.overflowAnchor = 'none';
+		const slotTop = () => [...zone.children].find((block) => roomOf(block, id) === id)?.getBoundingClientRect().top;
+		const lifted = slotTop();
+		/** The sidebar's scroll as the threads folded away: it may only come nearer the section. */
 		let start: number | undefined;
 		let pointer: number | undefined;
 		let over = false;
 		void tick().then(() => {
 			if (over) return;
+			const folded = slotTop();
+			if (lifted !== undefined && folded !== undefined && lifted - folded >= 1) {
+				// The threads above it folding away took its slot (and the rooms around it) up: the sidebar scrolls back
+				// as far as it can, and a gap above the section makes up the rest, so its slot stays under the pointer.
+				const back = Math.min(lifted - folded, view.scrollTop);
+				view.scrollTop -= back;
+				if (lifted - folded - back >= 1) zone.style.marginTop = `${lifted - folded - back}px`;
+			}
 			start = view.scrollTop;
-			// The threads folding away moved its slot (and the rows around it) from under the copy: it follows its slot,
-			// so letting it go where it was leaves it there. The library places it by `top`, then moves it by `transform`.
-			const slot = [...zone.children].find((block) => roomOf(block, id) === id);
-			if (slot) copy.style.top = `${parseFloat(getComputedStyle(copy).top) + slot.getBoundingClientRect().top - (copy.getBoundingClientRect().top - new DOMMatrixReadOnly(copy.style.transform || 'none').m42)}px`;
+			// Its copy shrinks to a row with the threads (the library keeping the pointer as far down it), which can move
+			// it off its slot by up to a row: it's put back over it, so letting it go where it was leaves it there. The
+			// library places it by `top`, then moves it by `transform`.
+			const slot = slotTop();
+			if (slot !== undefined) copy.style.top = `${parseFloat(getComputedStyle(copy).top) + slot - (copy.getBoundingClientRect().top - new DOMMatrixReadOnly(copy.style.transform || 'none').m42)}px`;
 			clamp();
 		});
 		/** Brings more of the section into view while the pointer is near the sidebar's edge on that side. */
@@ -296,6 +310,20 @@
 			over = true;
 			stop();
 			view.style.overflow = scrolling;
+			// The threads come back (Svelte's next update) and the gap goes: the room let go stays where it was, the
+			// sidebar scrolling as far as it can for that, and whatever's left of the gap closing up after.
+			const dropped = slotTop();
+			void tick().then(() => {
+				const gap = parseFloat(zone.style.marginTop) || 0;
+				zone.style.marginTop = '';
+				const shown = slotTop();
+				if (dropped !== undefined && shown !== undefined) view.scrollTop += shown - dropped;
+				const left = dropped !== undefined ? Math.min(dropped - (slotTop() ?? dropped), gap) : 0;
+				if (left >= 1 && FLIP_MS) {
+					zone.animate([{ marginTop: `${left}px` }, { marginTop: '0px' }], { duration: FLIP_MS, easing: 'ease-out' });
+				}
+				view.style.overflowAnchor = '';
+			});
 		};
 	}
 	/** The room as it's carried: its threads left behind (the others' fold away too), raised off the list. */
