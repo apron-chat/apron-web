@@ -4,7 +4,7 @@ import EmbedFrame from './EmbedFrame.svelte';
 import Embed from './Embed.svelte';
 import EmbedTerminal from './EmbedTerminal.svelte';
 import EmbedUpload from './EmbedUpload.svelte';
-import { render, unmount } from '$lib/test/dom';
+import { button, queryByRole, render, touch, unmount } from '$lib/test/dom';
 
 const PIXEL = 'data:image/png;base64,iVBORw0KGgo=';
 
@@ -78,6 +78,33 @@ describe('EmbedTerminal', () => {
 		unmount();
 		render(EmbedTerminal, { kind: 'terminal', text: '$ make\nok' });
 		expect(document.querySelector('pre.ap-embed-termscreen')?.textContent).toBe('$ make\nok');
+	});
+
+	it('offers Expand, a labeled button in its header, only with `onexpand`, which it calls with that button', () => {
+		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn() });
+		expect(queryByRole('button', 'Expand terminal')).toBeNull();
+		unmount();
+		const onexpand = vi.fn();
+		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn(), onexpand });
+		const expand = button('Expand terminal');
+		expect(expand.closest('.ap-embed-termhead')).not.toBeNull();
+		expect([expand.type, expand.title, expand.getAttribute('aria-haspopup')]).toEqual(['button', 'Expand', 'dialog']);
+		expand.click();
+		expect(onexpand).toHaveBeenCalledExactlyOnceWith(expand);
+	});
+
+	it('expands on a tap on its screen, on a touch screen, and leaves a mouse’s click to select', () => {
+		const onexpand = vi.fn();
+		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn(), onexpand });
+		const screen = document.querySelector<HTMLElement>('.ap-embed-termscreen')!;
+		// The terminal drawn inside it, which the tap lands on.
+		const row = screen.appendChild(document.createElement('span'));
+		row.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+		row.click();
+		expect(onexpand).not.toHaveBeenCalled();
+		touch('pointerdown', row);
+		row.click();
+		expect(onexpand).toHaveBeenCalledExactlyOnceWith(button('Expand terminal'));
 	});
 });
 

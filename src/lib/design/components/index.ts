@@ -12,6 +12,7 @@ export { default as EmbedHtml } from './EmbedHtml.svelte';
 export { default as EmbedFallback } from './EmbedFallback.svelte';
 export { default as EmbedRemove } from './EmbedRemove.svelte';
 export { default as MediaViewer } from './MediaViewer.svelte';
+export { default as TerminalViewer } from './TerminalViewer.svelte';
 export { default as ReactionBar } from './ReactionBar.svelte';
 export { default as ThreadMarker } from './ThreadMarker.svelte';
 export { default as ThreadLines } from './ThreadLines.svelte';

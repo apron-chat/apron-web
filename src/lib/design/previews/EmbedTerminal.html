@@ -1,4 +1,4 @@
-<!-- @dsCard group="Embeds" height=420 subtitle="Live terminal, finished" -->
+<!-- @dsCard group="Embeds" height=420 subtitle="Live terminal, finished; Expand opens it full screen (a TerminalViewer)" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>EmbedTerminal</title></head>
@@ -8,8 +8,10 @@
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   // The app draws the screen with xterm.js through `attach`; without it, the text shows as it is.
-  add(A.EmbedTerminal, { kind: 'terminal', title: 'make deploy', url: '#', text: '$ make deploy\nbuilding api… ok\nrunning migrations 0041..0042… ok\npushing image registry/api:4f2c… ' });
-  add(A.EmbedTerminal, { kind: 'terminal', title: 'npm test', done: true, text: 'tests: 812 passed, 0 failed\ndone in 3m12s' });
+  // `onexpand` shows Expand in the header (and a tap on the screen, on a touch screen), to open it full screen.
+  var expand = function () {};
+  add(A.EmbedTerminal, { kind: 'terminal', title: 'make deploy', url: '#', text: '$ make deploy\nbuilding api… ok\nrunning migrations 0041..0042… ok\npushing image registry/api:4f2c… ', onexpand: expand });
+  add(A.EmbedTerminal, { kind: 'terminal', title: 'npm test', done: true, text: 'tests: 812 passed, 0 failed\ndone in 3m12s', onexpand: expand });
 </script>
 </body>
 </html>

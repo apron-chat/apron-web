@@ -1205,6 +1205,23 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 }
 @media (prefers-reduced-motion: reduce) { .ap-viewer[open] { animation: none; } .ap-viewer-btn { transition: none; } }
 
+/* TerminalViewer — a terminal embed full screen, on the MediaViewer's ground: the whole screen, 80 by 40, at a readable
+   size (the app fits its font to the stage), centered; a screen larger than the stage scrolls inside it, never the page.
+   The screen keeps the terminal theme's ground, a band of it around the text (a shadow, so it takes no room). */
+.ap-termviewer .ap-viewer-bar { gap: var(--space-3); }
+.ap-termviewer .ap-embed-livebadge, .ap-termviewer .ap-viewer-detail { flex: none; font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-termviewer .ap-embed-livebadge { color: var(--viewer-ink); }
+.ap-termviewer-stage { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--space-3) max(var(--space-4), env(safe-area-inset-right, 0px)) calc(var(--space-4) + env(safe-area-inset-bottom, 0px)) max(var(--space-4), env(safe-area-inset-left, 0px)); }
+.ap-termviewer-screen { width: max-content; margin: 0 auto; overflow: hidden; background: var(--bg-rail); box-shadow: 0 0 0 var(--space-2) var(--bg-rail); color: var(--ink); }
+.ap-termviewer-screen .xterm-viewport { overflow: hidden; }
+pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: var(--text-ui); line-height: var(--leading-field); white-space: pre; }
+/* A short screen, such as a phone on its side: a slimmer bar leaves the terminal more of the height. */
+@media (max-height: 500px) {
+	.ap-termviewer .ap-viewer-bar { padding-top: calc(var(--space-1) + env(safe-area-inset-top, 0px)); padding-bottom: var(--space-1); }
+	.ap-termviewer .ap-viewer-btn { width: var(--control-lg); height: var(--control-lg); }
+	.ap-termviewer-stage { padding-top: var(--space-2); padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px)); }
+}
+
 /* TimelineLoading — at the foot of the timeline while it catches up: a pill, and placeholder rows when there is nothing to show yet */
 /* The space below it is its own padding, not a sticky offset: an offset would pull it up onto the message above. */
 .ap-tlstatus { position: sticky; bottom: 0; z-index: var(--z-raised); display: flex; justify-content: center; margin-top: var(--space-4); padding-bottom: var(--space-2); pointer-events: none; }
@@ -1451,7 +1468,11 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
    fits the box's width, and as tall as the rows written (it sets the height). Its ground is the terminal theme's. */
 .ap-embed.ap-embed-terminal { width: var(--embed-terminal-w); max-width: 100%; overflow: hidden; border: 1px solid var(--line); background: var(--bg-rail); }
 .ap-embed-termhead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-1_5) var(--space-3); border-bottom: 1px solid var(--line); background: var(--bg-200); font-size: var(--text-sm); line-height: var(--leading-sm); }
-.ap-embed-termtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink-muted); }
+.ap-embed-termtitle { min-width: 0; margin-inline-end: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink-muted); }
+/* Expand: the screen full screen (TerminalViewer). Pulled into the header's padding so the header keeps its height; its
+   ring inside it, which the card's edge would cut outside. */
+.ap-embed-termexpand { flex: none; width: var(--control-sm); height: var(--control-sm); margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-1_5)) calc(-1 * var(--space-1)) calc(-1 * var(--space-1)); }
+.ap-embed-termexpand:focus-visible { outline-offset: var(--focus-offset-inset); }
 .ap-embed-livebadge { display: inline-flex; flex: none; align-items: center; gap: var(--space-1_5); font-weight: 600; color: var(--accent); }
 .ap-embed-livebadge i { width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); animation: ap-blink 1.2s steps(1) infinite; }
 .ap-embed-termscreen { display: block; margin: var(--space-2) var(--space-3); overflow: hidden; color: var(--ink); }

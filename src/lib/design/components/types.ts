@@ -42,6 +42,11 @@ export interface EmbedProps {
 	status?: string;
 	/** terminal: an attachment that draws the screen in the box it is given, such as an xterm.js terminal; `text` otherwise. */
 	attach?: (screen: HTMLElement) => void | (() => void);
+	/**
+	 * terminal: shows Expand in the header, which calls this with that button (focus goes back to it), to show the
+	 * terminal full screen in a TerminalViewer. On a touch screen, a tap on the screen calls it too.
+	 */
+	onexpand?: (expand: HTMLButtonElement) => void;
 	/** iframe: `height` is a suggestion, clamped to iframe-max-h; `live` false shows the paused placeholder. */
 	height?: number;
 	live?: boolean;
