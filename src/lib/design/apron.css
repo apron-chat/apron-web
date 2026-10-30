@@ -1275,9 +1275,15 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-preferences-content { padding: var(--space-6); overflow-y: auto; }
 .ap-preferences-content > h3 { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); }
 .ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
+/* On a phone the sections are tabs across the top, so a section has the dialog's whole width. */
 @media (max-width: 560px) {
-	.ap-preferences-body { grid-template-columns: 130px minmax(0, 1fr); }
+	.ap-preferences-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+	.ap-preferences-nav { display: flex; gap: 0; overflow-x: auto; padding: var(--space-2); border-inline-end: 0; border-bottom: 1px solid var(--line); scrollbar-width: none; scroll-padding-inline: var(--space-2); }
+	.ap-preferences-nav button { flex: none; width: auto; padding-inline: var(--space-2); white-space: nowrap; }
 	.ap-preferences-content { padding: var(--space-4); }
+	/* A choice goes under its title, full width, rather than squeezed beside it. */
+	.ap-pref-setting:has(> .ap-pref-select) { flex-wrap: wrap; gap: var(--space-2); }
+	.ap-pref-setting > .ap-pref-select { flex: 1 1 100%; width: 100%; }
 }
 
 /* SettingRow — a setting: its title and what it does, the control at the end; ruled above and below */
@@ -1299,6 +1305,7 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-pref-scopes { max-width: var(--pref-panel-w); padding: var(--space-4) 0; }
 .ap-pref-theme-setting select { flex: none; }
 .ap-pref-setting .ap-pref-select { width: min(100%, 320px); }
+.ap-pref-sites { display: block; width: min(100%, var(--pref-note-w)); height: auto; min-height: calc(4lh + 2 * var(--space-2)); margin-top: var(--space-2); padding: var(--space-2); resize: vertical; font-family: var(--font-mono); font-size: var(--text-sm); }
 .ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
 .ap-pref-fonts { margin-top: var(--space-4); }
 .ap-pref-font-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
@@ -1575,6 +1582,22 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-pick-group { margin: 0; padding: 0 var(--space-3); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; }
 .ap-pick-more { font-weight: 400; }
 .ap-pick-empty { padding: var(--space-2) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
+
+/* SearchPanel: a field, and the messages found below it, newest first, each a line of where and a line of what. */
+.ap-search-field { position: relative; }
+.ap-search-input { width: 100%; }
+/* Suggestions for a filter (a MentionPicker) drop below the field, over the results, rather than rising as over the composer. */
+.ap-search-field .ap-mpick { top: calc(100% + var(--space-1)); bottom: auto; inset-inline-start: 0; width: min(320px, 100%); }
+.ap-search-list { display: flex; flex-direction: column; gap: var(--space-0_5); max-height: 360px; overflow-y: auto; margin: var(--space-3) calc(-1 * var(--space-3)) 0; padding: 0; list-style: none; }
+.ap-search-row { display: flex; flex-direction: column; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-3); border-radius: var(--radius-md); color: var(--ink); cursor: pointer; }
+.ap-search-row-active { background: var(--hover); }
+.ap-search-meta { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-search-room { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 600; }
+.ap-search-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-search-when { flex: none; margin-inline-start: auto; }
+.ap-search-text { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; }
+.ap-search-text mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
+.ap-search-empty { padding: var(--space-2) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
 /* How many private rooms you're in, of the most the server allows: a quiet line at the dialog's foot, until it runs out. */
 .ap-quota { display: flex; align-self: center; align-items: center; gap: var(--space-2); margin-inline-end: auto; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; }
 .ap-quota-full { color: var(--ink); }

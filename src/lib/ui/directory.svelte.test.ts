@@ -4,6 +4,7 @@ import type { ClientSnapshot, RoomListing } from '$lib/protocol/client';
 import { renderMarkdown } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 import { directory } from './directory.svelte';
+import { mediaSettings } from './media-settings.svelte';
 import { blankSnapshot } from './session.svelte';
 
 const ada: Identity = { user_id: 'ada', name: 'Ada' };
@@ -187,4 +188,38 @@ describe('directory', () => {
 		}
 	});
 
+
+	it('loads avatars and images in messages from where media may load from, as Preferences choose', () => {
+		const away: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://gravatar.example/cy.png' };
+		const home: Identity = { user_id: 'di', name: 'Di', avatar: 'https://example.com/di.png' };
+		const image = () => directory.resolveImage('https://gravatar.example/x.png');
+		const plain: Identity = { user_id: 'ed', name: 'Ed', avatar: 'http://gravatar.example/ed.png' };
+		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 9, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
+		try {
+			// As ever: avatars and images from any site, an avatar elsewhere only over https; previews from the server's.
+			mediaSettings.update('default', []);
+			expect(directory.avatar(away)).toBe('https://gravatar.example/cy.png');
+			expect(directory.avatar(plain)).toBeUndefined();
+			expect(image()).toBe('https://gravatar.example/x.png');
+			expect(directory.mediaOrigins).toEqual(['https://media.example']);
+			mediaSettings.update('server', []);
+			expect(directory.avatar(home)).toBe('https://example.com/di.png');
+			expect(directory.avatar(away)).toBeUndefined();
+			expect(directory.resolveImage('https://media.example/a.png')).toBe('https://media.example/a.png');
+			expect(image()).toBeUndefined();
+			mediaSettings.update('custom', ['https://gravatar.example']);
+			expect(directory.avatar(away)).toBe('https://gravatar.example/cy.png');
+			expect(directory.resolveImage('https://media.example/a.png')).toBe('https://media.example/a.png');
+			mediaSettings.update('all');
+			expect(directory.resolveImage('https://anywhere.example/a.png')).toBe('https://anywhere.example/a.png');
+			expect(directory.resolveImage('ftp://anywhere.example/a.png')).toBeUndefined();
+			// An export opened without its images: back to the server's own, whatever was chosen, until a choice.
+			mediaSettings.limit();
+			mediaSettings.load();
+			expect(mediaSettings.policy).toBe('server');
+			expect(directory.avatar(away)).toBeUndefined();
+		} finally {
+			mediaSettings.update('default', []);
+		}
+	});
 });

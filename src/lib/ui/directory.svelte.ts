@@ -1,11 +1,12 @@
 import { bioOf, serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
-import { safeAvatar } from '$lib/protocol/embeds';
+import { embedMedia, sameOriginMedia } from '$lib/protocol/embeds';
 import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
-import type { EmojiResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
+import type { EmojiResolver, ImageResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 import { readPlaceLink, writeApronLink } from './apron-link';
 import { backendHost } from './connection';
 import { customEmoji } from './custom-emoji.svelte';
+import { mediaSettings } from './media-settings.svelte';
 import { shownSeen } from './user-status';
 
 type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
@@ -15,7 +16,8 @@ type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
  * per `user_id` (§3.3), followed through renames, the latest recorded object
  * as a fallback, room titles for `#room_id` references, the chat server's
  * origin, the only one streams load from, and the origins besides it that
- * embed media load from (`ext:media`).
+ * media, avatars and images in messages load from (`ext:media`, and as the
+ * viewer chose in Preferences).
  * Every message renders its sender from here, field by field: the kept
  * object, then the `from` the message carries, then the `user_id`. So a
  * rename or a new avatar shows on old messages too.
@@ -25,7 +27,14 @@ class Directory {
 	/** The chat server's WebSocket URL: what an Apron link in a message names to be one of its rooms (Appendix A.4). */
 	server = $state<string | undefined>();
 	/** The origins the server names for its media (`ext.media.origins`, EXT.md §6); replaced only when they change. */
-	mediaOrigins = $state.raw<readonly string[]>([]);
+	private serverMedia = $state.raw<readonly string[]>([]);
+	/**
+	 * The origins besides the server's own that link previews and attachments load from: the server's, and as the
+	 * viewer chose (`mediaSettings`), the sites they added, or any (`ANY_ORIGIN`).
+	 */
+	readonly mediaOrigins = $derived(mediaSettings.trusted(this.serverMedia));
+	/** The same for avatars and images in messages: any site, unless the viewer chose otherwise. */
+	readonly imageOrigins = $derived(mediaSettings.trustedImages(this.serverMedia));
 	you = $state.raw<Identity | undefined>();
 	private users = $state.raw<Users>({ users: {}, recordedUsers: {}, userAliases: {} });
 	/** When this client saw each user go offline (`ClientSnapshot.sawOffline`): a floor under their `seen`. */
@@ -68,7 +77,7 @@ class Directory {
 		this.origin = origin;
 		this.server = server;
 		const { origins } = serverMedia(snapshot.server);
-		if (origins.join(' ') !== this.mediaOrigins.join(' ')) this.mediaOrigins = origins;
+		if (origins.join(' ') !== this.serverMedia.join(' ')) this.serverMedia = origins;
 		// Its custom emoji (`ext:emoji`), kept through a reconnect until the next server frame says otherwise.
 		if (snapshot.server) customEmoji.apply(snapshot.server, server);
 		if (!snapshot.authenticated) return;
@@ -101,8 +110,11 @@ class Directory {
 	 * pieces is still current (`samePieces`).
 	 */
 	get pieces(): readonly unknown[] {
-		return [this.origin, this.server, this.you, this.users, this.rooms, this.untitled, this.parents, customEmoji.catalog, customEmoji.reducedMotion];
+		return [this.origin, this.mediaOrigins, this.imageOrigins, this.server, this.you, this.users, this.rooms, this.untitled, this.parents, customEmoji.catalog, customEmoji.reducedMotion];
 	}
+
+	/** An image in a message, where it may load from here (`embedMedia`); elsewhere it shows as a link. */
+	readonly resolveImage: ImageResolver = (src) => embedMedia(src, this.origin, this.imageOrigins);
 
 	/** Draws a custom emoji's key (`ext:emoji`) as its image, once the catalog has it; asks for the catalog the first time one is seen. */
 	readonly resolveEmoji: EmojiResolver = (key) => customEmoji.resolve(key);
@@ -132,9 +144,14 @@ class Directory {
 		return person?.name || person?.user_id || 'Unknown sender';
 	}
 
-	/** An avatar this client will load, if the user has one. */
+	/**
+	 * An avatar this client will load, if the user has one where avatars may load from (`imageOrigins`, §4.8.6):
+	 * from anywhere else, only `https:`, as ever.
+	 */
 	avatar(from: Identity | undefined): string | undefined {
-		return safeAvatar(this.person(from)?.avatar, this.origin);
+		const value = this.person(from)?.avatar;
+		const src = embedMedia(value, this.origin, this.imageOrigins);
+		return src?.startsWith('http:') && !sameOriginMedia(value, this.origin) && !this.imageOrigins.includes(new URL(src).origin) ? undefined : src;
 	}
 
 	/**

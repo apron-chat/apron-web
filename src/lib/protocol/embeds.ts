@@ -60,16 +60,21 @@ export function parseOrigins(value: unknown): string[] {
 	});
 }
 
+/** In a list of trusted origins: every `http(s):` origin, as the viewer may choose to load media from anywhere. */
+export const ANY_ORIGIN = '*';
+
 /**
- * `og` media the client may load (§4.8.1): what `sameOriginMedia` allows,
- * plus files on the origins the chat server names for its media
- * (`ext:media`), such as its storage bucket.
+ * Media the client may load (§4.8.1): what `sameOriginMedia` allows, plus
+ * files on the `trusted` origins, such as those the chat server names for its
+ * media (`ext:media`) and those the viewer added; with `ANY_ORIGIN` among
+ * them, any `http(s):` file.
  */
 export function embedMedia(value: unknown, origin: string | undefined, trusted: readonly string[] = []): string | undefined {
 	const own = sameOriginMedia(value, origin);
 	if (own) return own;
 	const link = safeLink(value);
-	return link && trusted.includes(new URL(link).origin) ? link : undefined;
+	if (!link) return undefined;
+	return trusted.includes(ANY_ORIGIN) || trusted.includes(new URL(link).origin) ? link : undefined;
 }
 
 /**

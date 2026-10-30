@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { messageEditor, newPrivateDialog, newThreadDialog, roomEditor, signInLinkDialog } from '$lib/components/lazy';
+	import { messageEditor, newPrivateDialog, newThreadDialog, roomEditor, searchDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
@@ -65,7 +65,7 @@
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
-	import { WIDE_MIN } from '$lib/ui/breakpoints';
+	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
@@ -76,6 +76,10 @@
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
+	import { HistoryKeeper } from '$lib/history/history-keeper';
+	import { historySettings } from '$lib/history/settings.svelte';
+	import { mediaSettings } from '$lib/ui/media-settings.svelte';
+	import { preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
@@ -237,7 +241,8 @@
 	/** A pushed room to open once it is listed, if its `push_id` is this account's. */
 	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
 	/** A room, thread or message the page's URL named when it opened, to open once its server lists its rooms. */
-	let linked = $state<(Destination & { server: string; room: string }) | undefined>();
+	/** A destination to open: a link's, or a search result's (`searched`). */
+	let linked = $state<(Destination & { server: string; room: string; searched?: boolean }) | undefined>();
 	/**
 	 * What a link's `room` was found to be, by server and room: the parent of a
 	 * thread, `null` for a room that isn't one, or `undefined` while it is looked up.
@@ -262,11 +267,8 @@
 	/** The member list's width and, on wide screens, whether it's collapsed. */
 	const memberList = new SidebarLayout({ side: 'right', ...MEMBER_LIST_WIDTHS, load: loadMemberListPrefs, save: saveMemberListPrefs });
 
-	/**
-	 * `/__preview` passes its in-memory server's sockets, and `/archive` those of the server reading an export,
-	 * with where and when it was saved (`archive`); every other visit connects for real.
-	 */
-	let { webSocketFactory, archive }: { webSocketFactory?: WebSocketFactory; archive?: { server: string; exportedAt: string } } = $props();
+	/** `/__preview` passes its in-memory server's sockets, and `/archive` those of the server reading an archive; every other visit connects for real. */
+	let { webSocketFactory }: { webSocketFactory?: WebSocketFactory } = $props();
 	/** Against the in-memory server: no backend to pick, and nothing remembered. */
 	const previewMode = untrack(() => webSocketFactory !== undefined);
 
@@ -286,6 +288,8 @@
 	let editingId = $state<string | undefined>();
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
+	/** Search local history is open (`SearchDialog`). */
+	let searchOpen = $state(false);
 	/**
 	 * Sign-in links (§4.11.2): one of no proposal this browser made waits for the viewer's answer (`asked`), one
 	 * for an addition proposed here for its account's session (`addition`), and why one didn't sign in (`failure`).
@@ -435,6 +439,19 @@
 
 	/** The view kept on this device for the next visit: only for a session saved here (a passkey or email account). */
 	const viewKeeper = new ViewKeeper({ enabled: !previewMode });
+	/**
+	 * The history kept on this device (`$lib/history`), for a session saved here: restored before the client
+	 * connects, so a reload goes on as a reconnect does. None against an in-memory server.
+	 */
+	let historyKeeper = $state.raw<HistoryKeeper | undefined>();
+	/** The retention the keeper was last told: Preferences changes it. */
+	let keptRetention: string | undefined;
+	$effect(() => {
+		const retention = historySettings.retention;
+		if (!historyKeeper || keptRetention === undefined || retention === keptRetention) return;
+		keptRetention = retention;
+		void historyKeeper.setRetention(historySettings.ms);
+	});
 	function keepView(): void {
 		void viewKeeper.keep(client, untrack(() => session.keepable), untrack(() => session.snapshot.you));
 	}
@@ -518,13 +535,15 @@
 		? newDividerBefore(timeline, newDivider.after, session.you, Boolean(paneRoom?.olderAvailable))
 		: undefined);
 	// `server.agent` names the implementation, for debugging, not the server: the host is the label.
+	/** What an archive's server says of it (`ext:archive`, ARCHIVE.md §4.1), while reading one. */
+	let archive = $derived(serverArchive(session.server));
 	let backendLabel = $derived(backendHost(archive?.server ?? serverInput) || 'Apron');
-	/** In place of the guest's read-only line, while reading an export: whose it is, and from when. */
+	/** In place of the guest's read-only line, while reading an archive: whose it is, and from when. */
 	let archiveNote = $derived.by(() => {
 		if (!archive) return undefined;
-		const saved = new Date(archive.exportedAt);
+		const saved = new Date(archive.exportedAt ?? '');
 		const when = Number.isNaN(saved.getTime()) ? '' : `, saved ${saved.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`;
-		return `An export from ${backendHost(archive.server) || 'an Apron server'}${when}. It’s read-only.`;
+		return `An export from ${backendHost(archive.server ?? '') || 'an Apron server'}${when}. It’s read-only.`;
 	});
 	/** How the connected server shows itself (§3.1): its title and avatar, never what it is known by (§1). */
 	let currentLook = $derived(client && session.server ? serverLook(session.server, client.url) : {});
@@ -1073,12 +1092,17 @@
 		notificationsChoiceMade = notificationsChosen();
 		notificationState = notificationPermission();
 		if (!previewMode) pushSettings.load();
+		// Where images load from holds for an export read here too.
+		mediaSettings.load();
 		webPushAvailable = webPushSupported();
 		runsInstalled = isStandalone();
 		// Push turned on or off, and descriptions put away, in another tab apply here too.
 		const storageChanged = (event: StorageEvent) => {
 			if (previewMode) return;
 			pushSettings.storageChanged(event.key);
+			// Not keeping history, or keeping less, chosen in another tab: this one stops or prunes too.
+			historySettings.storageChanged(event.key);
+			mediaSettings.storageChanged(event.key);
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 			// A description put away or brought back in another tab is here too.
 			if (event.key === HIDDEN_DESCRIPTIONS_KEY) hiddenDescriptions = loadHiddenDescriptions();
@@ -1127,6 +1151,12 @@
 			displayName,
 			webSocketFactory
 		);
+		if (!previewMode) {
+			historySettings.load();
+			keptRetention = historySettings.retention;
+			historyKeeper = new HistoryKeeper({ retentionMs: historySettings.ms, onfailure: (message) => (historySettings.failure = message) });
+		}
+		const keeper = historyKeeper;
 		// The view from this device's last visit, while this one signs in and catches up: only for the session
 		// saved here, which is the account it was kept for (a sign-in as anyone else drops it).
 		void viewKeeper.restore(chat, (view) => {
@@ -1138,6 +1168,8 @@
 			directory.apply(next, serverOrigin(chat.url), chat.url);
 			noteArrivals(next);
 		});
+		// Each session the client begins goes on from what this device kept for its server.
+		keeper?.watch(chat);
 		chat.start();
 		client = chat;
 		if (signInLink) links.follow(signInLink);
@@ -1168,6 +1200,7 @@
 			mentions.dispose();
 			session.dispose();
 			unsubscribe();
+			void keeper?.stop();
 			chat.stop();
 		};
 	});
@@ -1427,6 +1460,7 @@
 		return () => {
 			if (chat && account) void pushSettings.signedOut(chat, account);
 			if (chat) void viewKeeper.forget(chat.url);
+			if (chat) void historyKeeper?.forget(chat.url);
 			session.forget();
 		};
 	}
@@ -1447,7 +1481,7 @@
 	 * history entry rather than adding one; the effect calls it again as each
 	 * step lands.
 	 */
-	function openLinked(target: Destination & { server: string; room: string }): void {
+	function openLinked(target: Destination & { server: string; room: string; searched?: boolean }): void {
 		if (!client) return;
 		const listed = (id: string) => session.rooms.some((room) => room.id === id);
 		// A link names a thread by its room_id alone (Appendix A.4): it opens under the parent its record names.
@@ -1490,7 +1524,7 @@
 			return;
 		}
 		linked = undefined;
-		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message);
+		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message, target.searched);
 		if (target.user) void revealLinkedUser(target.thread ?? target.room, target.user);
 	}
 
@@ -1514,10 +1548,44 @@
 		return undefined;
 	}
 
+	// --- Search ---
+
+	/** Search can be opened: signed in, with rooms listed. */
+	let canSearch = $derived(Boolean(client) && session.ready);
+	/** Search's shortcut, as this platform writes it; none on a touch screen, which has no keys for it. */
+	const searchHint = globalThis.matchMedia?.('(pointer: coarse)').matches ? undefined : /Mac/.test(globalThis.navigator?.platform ?? '') ? '⌘F' : 'Ctrl+F';
+
+	/** What keeps this session's history on this device, if anything does: a session saved here, while keeping is on. */
+	function sessionKeeper(): HistoryKeeper | undefined {
+		return historyKeeper && session.passkeySession && client?.keptSessionFor(client.url) && historySettings.retention !== 'off' ? historyKeeper : undefined;
+	}
+
+	/** What Search looks through, in words: history kept on this device for this session, and what is loaded. */
+	function searchNote(): string {
+		if (!sessionKeeper()) return 'Messages loaded on this page.';
+		const span = { '1': 'the last day', '7': 'the last week', '30': 'the last 30 days', '365': 'the last year' }[historySettings.retention as string];
+		return `Messages kept on this device${span ? ` from ${span}` : ''}, and those loaded now.`;
+	}
+
+	/**
+	 * Search's link to History: Preferences, at History. On a phone the profile bar that owns Preferences is in the
+	 * rooms list, which shows first.
+	 */
+	function showHistoryPreferences(): void {
+		if (mobilePane !== 'rooms' && window.innerWidth < NARROW_MAX) openRooms();
+		preferencesOpener.open('history');
+	}
+
+	/** A search result picked: it opens where it is, as a link to it would, paging back to it. */
+	function openFound(message: MessageRecord): void {
+		if (!client) return;
+		linked = { server: client.url, room: message.room_id, message: message.message_id, searched: true };
+	}
+
 	/** Part of a link isn't here: the URL says where the page is instead, and a toast says what wasn't found. */
-	function abandonLink(missing: 'room' | 'thread' | 'message'): void {
+	function abandonLink(missing: 'room' | 'thread' | 'message', searched = linked?.searched): void {
 		linked = undefined;
-		feedback.error(`The linked ${missing} isn’t available here.`);
+		feedback.error(!searched ? `The linked ${missing} isn’t available here.` : missing === 'message' ? 'That message is too far back to open here.' : `That message’s ${missing} isn’t available here.`);
 		scrubUrl(addressOf(selectedRoomId, activeThread));
 	}
 
@@ -1546,7 +1614,7 @@
 	 * was created at (§2), so once what's loaded reaches back past that, it
 	 * isn't here. Only the linked room or thread is searched.
 	 */
-	async function revealLinkedMessage(roomId: string, thread: string | undefined, id: string): Promise<void> {
+	async function revealLinkedMessage(roomId: string, thread: string | undefined, id: string, searched = false): Promise<void> {
 		const paneId = thread ?? roomId;
 		const pane = () => session.rooms.find((room) => room.id === paneId);
 		const isOpen = () => activeRoom?.id === roomId && activeThread === thread;
@@ -1564,7 +1632,7 @@
 		}
 		if (!isOpen()) return;
 		if (!found()) {
-			abandonLink('message');
+			abandonLink('message', searched);
 			return;
 		}
 		await jumpToMessage(id);
@@ -2779,7 +2847,24 @@
 		if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 	}
 
+	/** A modal dialog is open, such as Preferences or a form: a shortcut opens no other over it. */
+	function modalOpen(): boolean {
+		try {
+			return document.querySelector('dialog:modal') !== null;
+		} catch {
+			// A browser without `:modal`.
+			return false;
+		}
+	}
+
 	function windowKeydown(event: KeyboardEvent): void {
+		// Ctrl+F (⌘F on a Mac) searches local history, from anywhere on the page but another dialog; there, and
+		// before signing in, the browser finds in the page as usual. (Ctrl+K is kept for a quick switcher.)
+		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f' && canSearch && !modalOpen()) {
+			event.preventDefault();
+			searchOpen = true;
+			return;
+		}
 		// Escape in the NewThreadDialog closes it and keeps the selection it was asked for.
 		if (event.key !== 'Escape' || !selection.active || newThread) return;
 		if (selection.menuOpen) {
@@ -2792,7 +2877,7 @@
 </script>
 
 <svelte:window onkeydown={windowKeydown} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
-<svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') keepView(); }} />
+<svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
 
 <svelte:head>
 	<title>{tabTitle(unread.total, presence.titleFlash)}</title>
@@ -2902,6 +2987,7 @@
 				memberListToggle={!memberListWide}
 				{unreadElsewhere}
 				{mentionsElsewhere}
+				onsearch={canSearch ? () => (searchOpen = true) : undefined} {searchHint}
 				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
 				onmute={canMuteRoom ? mutePane : undefined}
 			/>
@@ -3057,6 +3143,10 @@
 				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
 				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
 		{/key}
+	{/if}
+	{#if searchOpen && client && searchDialog.component}
+		{@const SearchDialog = searchDialog.component}
+		<SearchDialog {client} keeper={sessionKeeper()} rooms={session.rooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} onopen={openFound} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
 	{/if}
 	{#if newPrivateOpen && newPrivateDialog.component}
 		{@const NewPrivateDialog = newPrivateDialog.component}

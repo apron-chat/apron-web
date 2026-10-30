@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { markdownText, renderBio, renderMarkdown, renderPlain, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
+import { markdownText, renderBio, type ImageResolver, renderMarkdown, renderPlain, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
 
 const resolve: MentionResolver = (id) => {
 	if (id === 'alice') return { kind: 'user', id, name: 'Alice Chen' };
@@ -224,6 +224,24 @@ describe('bios (ext:bio)', () => {
 	it('links only the URL in a quoted or bracketed one', () => {
 		const box = parse('("https://example.com/a?b=1&c=2") <https://example.com/x>');
 		expect([...box.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://example.com/a?b=1&c=2', 'https://example.com/x']);
+	});
+});
+
+describe('images (§5.5)', () => {
+	const fromServer: ImageResolver = (src) => (src.startsWith('https://chat.example/') ? src : undefined);
+
+	it('shows an image only where it may load from, and any other as a link to it with its alt text, else its URL', () => {
+		expect(renderMarkdown('![cat](https://chat.example/cat.png)', undefined, undefined, undefined, undefined, fromServer)).toBe('<p><img src="https://chat.example/cat.png" alt="cat"></p>\n');
+		expect(renderMarkdown('![pixel](https://tracker.example/p.gif "Hi") and ![](https://tracker.example/q.gif)', undefined, undefined, undefined, undefined, fromServer)).toBe(
+			'<p><a href="https://tracker.example/p.gif" title="Hi" rel="noreferrer noopener" target="_blank">pixel</a> and <a href="https://tracker.example/q.gif" rel="noreferrer noopener" target="_blank">https://tracker.example/q.gif</a></p>\n'
+		);
+	});
+
+	it('loads none without a resolver, and asks with the URL as written', () => {
+		expect(renderMarkdown('![cat](https://chat.example/cat.png)')).not.toContain('<img');
+		const asked: string[] = [];
+		renderMarkdown('![a](https://chat.example/a.png?x=1&y=2)', undefined, undefined, undefined, undefined, (src) => void asked.push(src));
+		expect(asked).toEqual(['https://chat.example/a.png?x=1&y=2']);
 	});
 });
 

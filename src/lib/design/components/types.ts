@@ -491,6 +491,22 @@ export interface PickPerson extends Face {
 	existing?: boolean;
 }
 
+/** A message a SearchPanel found: where and when, by whom, and a line of it with the words searched for marked. */
+export interface SearchResult {
+	/** Its `message_id`. */
+	id: string;
+	/** The room it is in, or "Thread title · Room" for a thread's. */
+	room: string;
+	/** The sender's display name. */
+	who: string;
+	/** When it was posted, such as "Mar 3, 14:02". */
+	when?: string;
+	/** The exact time, for the tooltip. */
+	exact?: string;
+	/** Its text around a match, in runs, each match marked. */
+	parts: { text: string; match: boolean }[];
+}
+
 /** One of your private rooms, offered to leave in a PrivateRoomForm at the limit. */
 export interface PickRoom {
 	id: string;

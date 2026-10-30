@@ -11,7 +11,7 @@
 		guest: boolean;
 		/** Why passkeys can't be used in this browser, when they can't. */
 		passkeyUnavailable?: string;
-		/** Reading an export (`/archive`): what it is, said in place of the guest's line, with no sign-in to offer. */
+		/** Reading an archive (`ext:archive`): what it is, said in place of the guest's line, with no sign-in to offer. */
 		archive?: string;
 		onsignin: () => void;
 	}

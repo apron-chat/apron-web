@@ -35,6 +35,10 @@ const KEY = {
 	roomOrder: 'apron.roomOrder',
 	/** How far you have read each room and thread, by `readPositionKey`: the `message_id` read through. */
 	readPositions: 'apron.readPositions',
+	/** How long history is kept on this device (`$lib/history/retention`). */
+	historyRetention: 'apron.historyRetention',
+	/** Where images and other media load from (`$lib/ui/media-settings`): `{policy, origins}`. */
+	media: 'apron.media',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
 } as const;
@@ -472,4 +476,28 @@ export function loadAppearance(): unknown {
 
 export function saveAppearance(preferences: AppearancePreferences): void {
 	write(KEY.appearance, JSON.stringify(preferences));
+}
+
+export const HISTORY_RETENTION_KEY = KEY.historyRetention;
+
+export function loadHistoryRetention(): string | undefined {
+	return read(KEY.historyRetention) ?? undefined;
+}
+
+export function saveHistoryRetention(value: string): void {
+	write(KEY.historyRetention, value);
+}
+
+export const MEDIA_KEY = KEY.media;
+
+export function loadMediaSettings(): unknown {
+	try {
+		return JSON.parse(read(KEY.media) ?? 'null');
+	} catch {
+		return undefined;
+	}
+}
+
+export function saveMediaSettings(value: { policy: string; origins: readonly string[] }): void {
+	write(KEY.media, JSON.stringify(value));
 }

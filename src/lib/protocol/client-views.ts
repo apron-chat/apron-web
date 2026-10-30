@@ -12,7 +12,7 @@ import type {
 } from './types';
 import type { Capabilities, ClientSnapshot, RoomSnapshot } from './client-types';
 
-const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio'];
+const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio', 'ext:archive'];
 
 /**
  * How to render a user (§3.3): field by field, the kept object for its
@@ -91,6 +91,17 @@ export function serverSettings(server: ServerParams | undefined): { read_cursors
 		read_cursors: settings.read_cursors !== false,
 		...(typeof limit === 'number' && Number.isInteger(limit) && limit >= 0 ? { private_rooms: limit } : {})
 	};
+}
+
+/**
+ * What an archive's server says of it (`ext:archive`, ARCHIVE.md §4.1): the server it was saved from and when.
+ * Undefined from any other server.
+ */
+export function serverArchive(server: ServerParams | undefined): { server?: string; exportedAt?: string } | undefined {
+	const ext = hasCapability(server, 'ext:archive') ? server?.ext : undefined;
+	if (!isJsonObject(ext) || !isJsonObject(ext.archive)) return undefined;
+	const { server: from, exported_at: at } = ext.archive;
+	return { ...(typeof from === 'string' ? { server: from } : {}), ...(typeof at === 'string' ? { exportedAt: at } : {}) };
 }
 
 /** What an untitled private room is called while its members aren't known (§4.2.4: its `room_id` is no name, §2.4). */

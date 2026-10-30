@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { preferencesDialog } from './lazy';
+	import { preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
 	import { shownPerson } from '$lib/protocol/plain-text';
@@ -61,6 +63,8 @@
 	let preferencesOpen = $state(false);
 	/** Preferences mounts the first time it opens and then stays, so nothing of it renders or runs on a page that never opens it. */
 	let preferencesMounted = $state(false);
+	/** The section Preferences shows: the one last chosen, or the one asked for (`preferencesOpener`). */
+	let preferencesSection = $state('notifications');
 	let preferencesTrigger = $state<HTMLButtonElement | undefined>();
 	let draft = $state('');
 	let status = $state<Status>('idle');
@@ -103,7 +107,7 @@
 	async function exportChats(): Promise<{ name: string; rooms: number; messages: number } | undefined> {
 		const unopened = client.snapshot().rooms.filter((room) => room.parentRoomId !== undefined && !room.loaded && !room.resumed);
 		await Promise.allSettled(unopened.map((room) => client.loadRoom(room.id)));
-		const file = exportArchive(client.url, client.snapshot(), client.storedRecords());
+		const file = exportArchive(client.url, client.snapshot(), client.storedRecords(), client.roomSyncs());
 		if (file.rooms === 0) return undefined;
 		const url = URL.createObjectURL(new Blob([file.text], { type: 'application/jsonl' }));
 		const link = Object.assign(document.createElement('a'), { href: url, download: file.name });
@@ -213,6 +217,17 @@
 		preferencesMounted = true;
 		preferencesOpen = true;
 	}
+
+	// Asked from elsewhere on the page, such as Search's link to History: Preferences opens at that section.
+	$effect(() => {
+		const asked = preferencesOpener.asked;
+		if (!asked) return;
+		untrack(() => {
+			preferencesOpener.asked = undefined;
+			preferencesSection = asked.section;
+			showPreferences();
+		});
+	});
 
 	/** A handle the user typed in the editor, as opposed to the one it opened with. */
 	function chosenName(): string | undefined {
@@ -501,10 +516,12 @@
 		{@const PreferencesDialog = preferencesDialog.component}
 		<PreferencesDialog
 			bind:open={preferencesOpen}
+			bind:section={preferencesSection}
 			{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
 			{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
 			onexport={exportChats}
+			mediaHosts={serverMedia(session.server).origins.map((origin) => new URL(origin).host)}
 			onclosed={() => preferencesTrigger?.focus()}
 		/>
 	{/if}

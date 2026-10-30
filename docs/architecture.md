@@ -74,7 +74,7 @@ The wrappers: `ConnectScreen` and `SignIn` (the pieces the design system's
 `RoomItem`, its Private section's rows with the `Faces` of who each private room is with) with `ThreadList` (the design system's `ThreadList`, its rows `ThreadItem`s,
 which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, whose + mounts `AddMembersDialog`: the design system's `AddMembersForm`, the same `PeoplePicker` in a `Dialog` as `PrivateRoomForm`, adding the people picked), `ProfileBar` (`ProfileBar` with its
 `ProfileEditor`), `RoomHeader` (`RoomHeader`, with its ⋯ `MenuButton`) with
-`RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `NewPrivateDialog` (the design system's `PrivateRoomForm`, a `PeoplePicker` in a `Dialog`, which the page owns: it starts a private room with the people picked, or opens the one you already have with someone, and at the server's limit offers yours to leave), the private room's intro and "You were added" banner (the design system's `PrivateIntro` and `AddedBanner`, which the page renders), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
+`SearchDialog` (the design system's `SearchPanel`, a field and a listbox of results in a `Dialog`, which the page owns and opens from the room header's ⋯ menu or Ctrl/⌘F: it reads the query's text and `user:`/`room:` filters (`parseQuery`; the text matches as one run, `matchesText`), suggests a filter's value at the caret with the composer's `AutocompletePicker` (`filterAtCaret`, `searchPeople`, `searchRooms`, put in by `withFilterValue`) in the panel's `suggestions`, and matches (`queryMatcher`, resolving names against the users met and the rooms shown) with `$lib/ui/search` what `HistoryKeeper.searchKept` scans of this device's kept history (`scanMessages`, a few hundred rows a read) and what `storedRecords()` holds, and the page opens a result as a link to it, `linked` with `searched`), `RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `NewPrivateDialog` (the design system's `PrivateRoomForm`, a `PeoplePicker` in a `Dialog`, which the page owns: it starts a private room with the people picked, or opens the one you already have with someone, and at the server's limit offers yours to leave), the private room's intro and "You were added" banner (the design system's `PrivateIntro` and `AddedBanner`, which the page renders), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
 `ThreadDescription` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `RoleBadges`, `MentionText` (`Mention`), the embeds (`Embed*`; the trusted-origin gate stays in `embeds/og.ts`), `MessageEditor` (`MessageEditor`, whose `field` the app supplies, the Composer's `MessageField`), `NoticeLine` (a scoped `Message`, from `noticeView`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: `MessageField`, a `ComposerEditable` it fills and edits, with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`)) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
 `ProfileCard` (whose Message opens or starts a private conversation), `ReactorsPopover` and `EmojiPopover` (the full emoji picker, which the design system leaves to the client; all three in the design system's `Popover`, a bottom sheet on phones),
 `PreferencesDialog` (`SettingsSections` and `SettingRow`) with its `FontFamilyField` (`FontField`), `StatusPicker`, `PauseNotifications` and `NotifyPrompt` (`Nudge`), `SignInLinkDialog` (both
@@ -208,7 +208,15 @@ the checked scopes, and which of them push sends as `wake`, and
 Lock), `push-settings.svelte.ts` (`PushSettings`) turns push on and off per
 account and shares the one subscription between accounts and tabs, and
 `sw-handlers.ts` holds the service worker's push and click handlers, apart
-from the worker so tests can run them.
+from the worker so tests can run them. `media-settings.svelte.ts`
+(`MediaSettings`) keeps where media loads from (Preferences, Media), and
+`directory.mediaOrigins` (for `og` media) and `directory.imageOrigins` (for
+avatars, `directory.avatar`, and images in markdown, `directory.resolveImage`,
+which `renderMarkdown` turns into a link where it says no) are what it trusts on
+the active server: the server's `ext:media` origins, the sites added, or
+`ANY_ORIGIN`; Default trusts any for images only, as before.
+`embedMedia` checks against them, and `directory.pieces` includes them, so a
+change redraws every row.
 
 Protocol types, replay reduction, and the WebSocket session live under
 `src/lib/protocol` and speak Apron protocol v9. `client.ts` holds the session,
@@ -444,15 +452,88 @@ notifications. Editors start from the records, so an edit sends back every
 character, and IDs, tokens, write URLs and `ext` are never touched. Every `auth` the client sends carries `agent: "apron-web/0.4"`
 (§3.2).
 
-Exports live in `src/lib/archive`. `archive.ts` writes and reads the format:
-`exportArchive` takes a `ChatClient`'s `storedRecords()` (the `ProtocolStore`'s
-records, which `records()` returns as the store keeps them: one per key, and
-every membership logged) and its snapshot, and writes a header line, the users,
-the rooms, then each record as the wire would carry it, in `log_id` order;
-`parseArchive` reads one back through the same decoders as a server's frames,
-skipping lines it can't. `ArchiveServer` is the server in the page that
-`/archive` (`src/routes/archive`) mounts the app against, as `/__preview` mounts
-it against `MemoryProtocolServer`: it answers `auth`, `room_list` and `history`
-from the export and refuses everything else. Both make their sockets with
-`memorySocket` (`src/lib/preview/memory-socket.ts`), a `WebSocket` as far as
-the client can tell. Unlike `/__preview`, `/archive` is in every build.
+Exports live in `src/lib/archive`, in the format [ARCHIVE.md](../ARCHIVE.md)
+specifies. `archive.ts` writes and reads it: `exportArchive` takes a
+`ChatClient`'s `storedRecords()` (the `ProtocolStore`'s records, which
+`records()` returns as the store keeps them: one per key, and every membership
+logged), its `roomSyncs()` and its snapshot, and writes a header line, one
+`room_list`-shaped line listing the shown rooms (and their parents) with each
+one's `history_log_id` set to where its unbroken stretch of records starts (the
+oldest page it loaded, `olderBefore`, or its retention floor), then each record
+in a stretch, one per line in `log_id` order, as a `history` result would carry
+it; a message outside every stretch goes only when one in a stretch replies to
+it. `parseArchive` reads one back through the same decoders as a server's
+frames, skipping lines and records it can't. `ArchiveServer` is the server in
+the page that `/archive` (`src/routes/archive`) mounts the app against, as
+`/__preview` mounts it against `MemoryProtocolServer`: it offers only guest
+sign-in, as a `you` with `ext:permissions` `write: false`, says what it serves with `ext:archive`
+(which the read-only bar reads, `serverArchive`), answers `auth`, `room_list`
+and `history` (each room's stretch, or without `room_id` the joined rooms'
+together from the greatest of their bounds), refuses writes with `denied` and
+replies `unsupported` to the rest. Both make their sockets with `memorySocket`
+(`src/lib/preview/memory-socket.ts`), a `WebSocket` as far as the client can
+tell. Unlike `/__preview`, `/archive` is in every build.
+
+History kept on this device lives in `src/lib/history`. `log.ts` pages a
+room's log as `history` does (§4.3.2), for everything that answers it from what
+is kept rather than from a server: `sliceLog` takes the oldest `limit` entries
+from `after`, else the newest up to `before`, never splitting the entries at one
+`log_id` (a reaction or membership record's sets and entries, kept one per
+user), and `historyResult` folds them back into the records a server sends.
+`ArchiveServer` pages an export with it, from memory. `history-db.ts` is the
+IndexedDB store: a database per account on each server, named for both
+(`historyName`, `apron-history:` and the two encoded), so nothing read for one
+account (a restore, a page, a search) can come from another's, and forgetting
+one deletes its database; `listHistories` finds them by name
+(`indexedDB.databases()`), as a restore must before signing in, when only the
+server is known. Each is shaped like a server's log: `records` keyed by `[room,
+log, kind, id]` (`log_id`s as numbers, so a page or everything below a bound is
+one key range), with a `key` index to replace a message's or reaction set's row
+as it is written (compaction on write; a creation, `log_id == message_id`,
+needs none), `rooms` with each room's record and `RoomSync`, and `meta` with
+whose it is, the users, and a `version` each write moves on. It pages with the
+same rules in a few requests whatever the page's size (a key cursor jumps to
+the page's edge, one `getAll` reads it, one `count` says whether more lie past
+it); `log.test.ts` holds the two pagers to the same pages.
+
+`ProtocolStore.observe` reports each change it takes (a record that replaced
+what it had, a bound's eviction, a rebuild's clear), and `HistoryKeeper`
+(`history-keeper.ts`) mirrors those into the store in batches, one transaction
+each, with every settled room's sync (`ChatClient.keptState`), so a room's
+checkpoint is never kept without the records it covers. A write puts down only
+the room rows whose record (by reference) or sync fields changed, and the users
+only when `usersRevision` moved: the client's `KeptUsers` counts changes to
+what is kept of a user, not to their `status` or `seen`, so presence alone
+writes nothing. A room joined and
+settled that isn't kept yet is written whole (`storedRecords(roomId)`), a few
+rooms a write (`WHOLE_BUDGET`) so writing many isn't one long task; one no
+longer joined goes once the joined set is complete, which is kept as complete
+only once every joined room has a sync kept (one without would be left out of
+the next visit's listing of what changed since). One tab writes per server,
+under a Web Lock. A tab that takes it over goes on from what it restored when
+`version` is still what it read; otherwise, for the same account, it writes
+each room over only as far down as it holds it, keeping what is kept below when
+that reaches up to it, and leaving a room as it is kept when there is a gap
+between the two (`mergeOf`); another account's database on that server is
+deleted first, so one account's is kept per server, as one session is saved.
+Another tab deleting the database (signing out, or keeping turned off) closes
+it here (`versionchange`), and this tab's writer ends rather than make it again.
+A write that fails (a full disk) stops keeping for the page.
+
+Before each new session signs in (the first, another server, a `restart`, but
+not a reconnect), the client runs its `beforeFreshSession` hook while the
+connection opens, and signing in waits for it, for up to `FRESH_HOOK_MS`. The
+keeper's reads back each room's newest `RESTORE_WINDOW` entries (`plannedRoom`
+applies the retention) from the one database kept for the server, and `ChatClient.restore` takes them as a dropped
+connection's kept state: the rooms retained with their records and syncs, so
+the first sign-in resumes each from its checkpoint through `requestRooms`, the
+path a reconnect takes. Should that sign-in be as another account than the one
+it was kept for (a saved token that now resumes as someone else), everything the
+restore brought in goes before anything shows it (`dropRestored`). A room held only to its newest shows as loaded newest
+first, and the keeper remembers how far down the rest reaches (`Coverage`):
+`loadOlder` asks it first (`olderPagesFrom`), and it answers from IndexedDB
+while what is kept is still what it restored from, the server paging beyond.
+The sync it writes keeps that deeper reach, and records it served aren't
+written back. `settings.svelte.ts` holds the retention
+(`apron.historyRetention`), which Preferences' History section sets. The view
+`session-cache.ts` keeps still paints the page before the session signs in.

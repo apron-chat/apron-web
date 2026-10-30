@@ -181,6 +181,8 @@ export const UNSUPPORTED = -32601;
 const HISTORY_PAGE_SIZE = 200;
 /** A thread, or a room with no checkpoint, opens on its newest page this size; older pages load as the reader scrolls back. */
 export const THREAD_PAGE_SIZE = 50;
+/** The longest a new session's sign-in waits for what runs before it (`beforeFreshSession`). */
+export const FRESH_HOOK_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 60_000;
 /** How long a typing indicator this client sends should persist without a refresh, in the `activity` frame's `typing` seconds. */
 export const TYPING_TIMEOUT_S = 15;
@@ -561,4 +563,62 @@ export function reconnectDelay(attempt: number, random = 0.5, retryAfterMs?: num
 	const base = Math.min(MAX_RECONNECT_DELAY_MS, 500 * 2 ** Math.min(7, boundedAttempt - 1));
 	const jitter = 0.8 + Math.min(1, Math.max(0, random)) * 0.4;
 	return Math.max(retryAfterMs ?? 0, Math.round(base * jitter));
+}
+
+/**
+ * The user objects a client keeps (§3.3), counting each change to what a session keeps of them
+ * (`ChatClient.keptState`): every field but `status` and `seen` (§4.5), which change often and are kept for no one.
+ */
+export class KeptUsers extends Map<string, Identity> {
+	revision = 0;
+
+	override set(userId: string, user: Identity): this {
+		const before = this.get(userId);
+		if (!before || !sameKept(before, user)) this.revision++;
+		return super.set(userId, user);
+	}
+
+	override delete(userId: string): boolean {
+		const had = super.delete(userId);
+		if (had) this.revision++;
+		return had;
+	}
+
+	override clear(): void {
+		if (this.size) this.revision++;
+		super.clear();
+	}
+}
+
+/** A map that counts its changes. */
+export class CountedMap<K, V> extends Map<K, V> {
+	revision = 0;
+
+	override set(key: K, value: V): this {
+		if (this.get(key) !== value || !this.has(key)) this.revision++;
+		return super.set(key, value);
+	}
+
+	override delete(key: K): boolean {
+		const had = super.delete(key);
+		if (had) this.revision++;
+		return had;
+	}
+
+	override clear(): void {
+		if (this.size) this.revision++;
+		super.clear();
+	}
+}
+
+/** Whether two objects of one user agree on all but `status` and `seen`. */
+function sameKept(a: Identity, b: Identity): boolean {
+	const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+	for (const key of keys) {
+		if (key === 'status' || key === 'seen') continue;
+		const x = (a as JsonObject)[key];
+		const y = (b as JsonObject)[key];
+		if (x !== y && JSON.stringify(x) !== JSON.stringify(y)) return false;
+	}
+	return true;
 }
