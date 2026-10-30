@@ -1,6 +1,6 @@
+import type { ReactionChip as DesignReactionChip } from '$lib/design/components/types';
 import type { ReactionSummary } from '$lib/protocol/client';
 import { isEmojiSequence } from '$lib/protocol/custom-emoji';
-import type { CustomEmojiImage } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 
@@ -12,15 +12,18 @@ const recordedName: NameOf = (user) => withoutBidiOverrides(user.name || '') || 
 /** How many names a chip's tooltip lists before summing up the rest. */
 const NAMES_MAX = 8;
 
+/** A key's image, where it may load from (`directory.emojiImage`). */
+export type KeyImageShown = NonNullable<DesignReactionChip['image']>;
+
 /** How to show a key (§4.7), such as a custom emoji's (`ext:emoji`): its image, or nothing for a placeholder. */
-export type KeyImage = (key: string) => CustomEmojiImage | undefined;
+export type KeyImage = (key: string) => KeyImageShown | undefined;
 
 /** One reaction chip under a message: the emoji, how many reacted, and whether you did. */
 export interface ReactionChip {
 	/** The entry, as toggling sends it: an emoji sequence, or a key. */
 	emoji: string;
 	/** A key shown as its image. */
-	image?: CustomEmojiImage;
+	image?: KeyImageShown;
 	/** A key the client can't show (§4.7): a placeholder, the key its tooltip. */
 	placeholder?: boolean;
 	count: number;

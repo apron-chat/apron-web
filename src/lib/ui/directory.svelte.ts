@@ -1,12 +1,14 @@
 import { bioOf, serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
-import { embedMedia, sameOriginMedia } from '$lib/protocol/embeds';
+import { serverOrigin } from '$lib/protocol/embeds';
+import { mediaGate, type MediaGate, type MediaSrc } from './media-gate';
 import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
-import type { EmojiResolver, ImageResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
+import type { EmojiResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 import { readPlaceLink, writeApronLink } from './apron-link';
 import { backendHost } from './connection';
 import { customEmoji } from './custom-emoji.svelte';
 import { mediaSettings } from './media-settings.svelte';
+import type { KeyImage } from './reactions';
 import { shownSeen } from './user-status';
 
 type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
@@ -35,6 +37,17 @@ class Directory {
 	readonly mediaOrigins = $derived(mediaSettings.trusted(this.serverMedia));
 	/** The same for avatars and images in messages: any site, unless the viewer chose otherwise. */
 	readonly imageOrigins = $derived(mediaSettings.trustedImages(this.serverMedia));
+	/** What link previews, attachments and their viewer load (`mediaOrigins`): every such URL asks it (`$lib/ui/media-gate`). */
+	readonly previewGate = $derived(mediaGate(this.origin, this.mediaOrigins));
+	/** What images and custom emoji in messages, and HTML embeds, load (`imageOrigins`). */
+	readonly imageGate = $derived(mediaGate(this.origin, this.imageOrigins));
+	/** What avatars load (`imageOrigins`): from anywhere but the server, only `https:` (§4.8.6). */
+	readonly avatarGate = $derived(mediaGate(this.origin, this.imageOrigins, { httpsElsewhere: true }));
+
+	/** What the avatar of another server, such as one signed in to before, loads: as its own would, from it. */
+	avatarGateFor(server: string): MediaGate {
+		return mediaGate(serverOrigin(server), mediaSettings.trustedImages([]), { httpsElsewhere: true });
+	}
 	you = $state.raw<Identity | undefined>();
 	private users = $state.raw<Users>({ users: {}, recordedUsers: {}, userAliases: {} });
 	/** When this client saw each user go offline (`ClientSnapshot.sawOffline`): a floor under their `seen`. */
@@ -110,14 +123,21 @@ class Directory {
 	 * pieces is still current (`samePieces`).
 	 */
 	get pieces(): readonly unknown[] {
-		return [this.origin, this.mediaOrigins, this.imageOrigins, this.server, this.you, this.users, this.rooms, this.untitled, this.parents, customEmoji.catalog, customEmoji.reducedMotion];
+		return [this.origin, this.previewGate, this.imageGate, this.server, this.you, this.users, this.rooms, this.untitled, this.parents, customEmoji.catalog, customEmoji.reducedMotion];
 	}
 
-	/** An image in a message, where it may load from here (`embedMedia`); elsewhere it shows as a link. */
-	readonly resolveImage: ImageResolver = (src) => embedMedia(src, this.origin, this.imageOrigins);
-
 	/** Draws a custom emoji's key (`ext:emoji`) as its image, once the catalog has it; asks for the catalog the first time one is seen. */
-	readonly resolveEmoji: EmojiResolver = (key) => customEmoji.resolve(key);
+	readonly resolveEmoji: EmojiResolver = (key) => {
+		const image = customEmoji.resolve(key);
+		return image && this.imageGate.src(image.src) ? image : undefined;
+	};
+
+	/** A custom emoji's image as a reaction chip shows it, where it may load from; else nothing, for a placeholder. */
+	readonly emojiImage: KeyImage = (key) => {
+		const image = customEmoji.resolve(key);
+		const src = image && this.imageGate.src(image.src);
+		return image && src ? { ...image, src } : undefined;
+	};
 
 	forget(): void {
 		this.you = undefined;
@@ -148,10 +168,8 @@ class Directory {
 	 * An avatar this client will load, if the user has one where avatars may load from (`imageOrigins`, §4.8.6):
 	 * from anywhere else, only `https:`, as ever.
 	 */
-	avatar(from: Identity | undefined): string | undefined {
-		const value = this.person(from)?.avatar;
-		const src = embedMedia(value, this.origin, this.imageOrigins);
-		return src?.startsWith('http:') && !sameOriginMedia(value, this.origin) && !this.imageOrigins.includes(new URL(src).origin) ? undefined : src;
+	avatar(from: Identity | undefined): MediaSrc | undefined {
+		return this.avatarGate.src(this.person(from)?.avatar);
 	}
 
 	/**

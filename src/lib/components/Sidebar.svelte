@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { directory } from '$lib/ui/directory.svelte';
 	import { newRoomDialog } from './lazy';
 	import { tick, untrack } from 'svelte';
 	import type { ChatClient, RoomSnapshot, ServerLook } from '$lib/protocol/client';
@@ -555,7 +556,7 @@
 {/snippet}
 
 <aside class="ap-shell-side" aria-label="Rooms">
-	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={serverLook?.avatar} {returnTo} {onreturn} />
+	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={directory.avatarGate.src(serverLook?.avatar)} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
 		<SidebarSection title="Rooms" folded={folds.has('rooms')} onfold={(shut) => fold('rooms', shut)} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
 			{#if rooms.length === 0}

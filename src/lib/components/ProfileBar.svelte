@@ -86,6 +86,8 @@
 	/** While notifications are paused, when that ends in words ("until 14:30"). */
 	let paused = $derived(pause?.until !== undefined ? pausedUntilLabel(pause.until) : undefined);
 	let avatar = $derived(directory.avatar(you));
+	/** You as the bar shows you: your avatar only where avatars may load from. */
+	let barYou = $derived(shownYou && { ...shownYou, avatar });
 	/** Your `status` as you chose it (§4.5), from `you`: no dot without one. */
 	let ownStatus = $derived(typeof you?.status === 'string' && you.status !== '' ? you.status : undefined);
 	/** Not connected (connecting, or reconnecting): the dot isn't your status yet, so it says so, quietly. */
@@ -478,7 +480,8 @@
 		bind:bio={bioDraft}
 		maxBio={canSetBio ? MAX_BIO_CHARS : undefined}
 		{bioError}
-		avatar={you?.avatar}
+		{avatar}
+		hasAvatar={Boolean(you?.avatar)}
 		{face}
 		canUpload={canUploadAvatar}
 		onavatarfile={uploadAvatar}
@@ -498,7 +501,7 @@
 {/snippet}
 
 <DesignProfileBar
-	you={shownYou}
+	you={barYou}
 	placeholder={session.starting ? 'Signing in…' : 'Not signed in'}
 	backend={backendLabel}
 	note={wayBack ? 'add a sign-in' : undefined}

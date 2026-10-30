@@ -210,13 +210,32 @@ account and shares the one subscription between accounts and tabs, and
 `sw-handlers.ts` holds the service worker's push and click handlers, apart
 from the worker so tests can run them. `media-settings.svelte.ts`
 (`MediaSettings`) keeps where media loads from (Preferences, Media), and
-`directory.mediaOrigins` (for `og` media) and `directory.imageOrigins` (for
-avatars, `directory.avatar`, and images in markdown, `directory.resolveImage`,
-which `renderMarkdown` turns into a link where it says no) are what it trusts on
-the active server: the server's `ext:media` origins, the sites added, or
-`ANY_ORIGIN`; Default trusts any for images only, as before.
-`embedMedia` checks against them, and `directory.pieces` includes them, so a
-change redraws every row.
+`directory.mediaOrigins` (for link previews and uploads) and
+`directory.imageOrigins` (for avatars, custom emoji, images in markdown and HTML
+embeds) are what it trusts on the active server: the server's `ext:media`
+origins, the sites added, or `ANY_ORIGIN`; Default trusts any for images only,
+as before.
+
+Media loads only through one gate, by construction. `media-gate.ts` is the only
+place a URL becomes a `MediaSrc`, the type the design system's `MediaSrc`
+props take (an avatar, an attachment tile, a card's or upload's image, video or
+audio, the viewer's image, a custom emoji, a server's avatar): a `MediaGate`
+(`directory.previewGate`, `imageGate`, `avatarGate`, `avatarGateFor` a recent
+server, `localMedia` for this page's own object URLs) answers each URL with a
+`MediaSrc` or nothing, so a plain string can't reach one, and `npm run check`
+says where one tries. Markup from anyone else reaches the page only through
+`$lib/protocol/sanitize` (`sanitizeHtml`, which `renderMarkdown`, `renderPlain`,
+`renderBio` and HTML embeds use): after DOMPurify, every URL that would load is
+asked of the gate it is given (none: nothing loads), in an inert `<template>`
+so nothing is fetched meanwhile; an image, video or audio that may not load
+becomes a link to it (a custom emoji, its key), and `srcset`, `background`,
+`data` and `ping` never stay. `media-guard.test.ts` reads the source and fails
+on anything else that makes a `MediaSrc`, imports DOMPurify, inserts markup, or
+renders media outside the components that take a `MediaSrc`, and
+`e2e/media-gate.spec.ts` names media on another site every way a server or a
+sender can and checks that none of it is requested under This server only.
+Each gate is part of `directory.pieces`, so a change redraws every row, and
+sanitized markup is kept by the gate it was made with.
 
 Protocol types, replay reduction, and the WebSocket session live under
 `src/lib/protocol` and speak Apron protocol v9. `client.ts` holds the session,

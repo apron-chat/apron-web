@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { MediaSrc } from './types';
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
@@ -11,7 +12,9 @@
 		name?: string;
 		/** Change notification for callers that can't bind (plain pages); fires after `name` updates. */
 		oninput?: (name: string) => void;
-		avatar?: string;
+		avatar?: MediaSrc;
+		/** You have an avatar, shown or not (where it may not load, it isn't): Change and Remove are offered. Default: `avatar` is set. */
+		hasAvatar?: boolean;
 		/** Replaces the large avatar, such as with one tinted by the `user_id` and showing your status. */
 		face?: Snippet;
 		/** Caps `command` and `embed:upload`: a `/avatar` command with one `upload` embed (§4.8.6). */
@@ -65,7 +68,7 @@
 		class?: ClassValue;
 	}
 	let {
-		userId, name = $bindable(''), oninput, avatar, face, canUpload, onavatarfile, onremoveavatar, avatarBusy, avatarError, offline,
+		userId, name = $bindable(''), oninput, avatar, hasAvatar = Boolean(avatar), face, canUpload, onavatarfile, onremoveavatar, avatarBusy, avatarError, offline,
 		bio = $bindable(''), maxBio, bioError, status = 'idle', serverName, declinedNote, onsave, oncancel, signin, onconnect, dialog = true,
 		changeAvatarTestid, removeAvatarTestid, avatarFileTestid, nameTestid, bioTestid, class: className
 	}: Props = $props();
@@ -94,8 +97,8 @@
 		<div class="ap-profedit-av">
 			{#if canUpload}
 				<span class="ap-profedit-avbtns">
-					<Button size="sm" data-testid={changeAvatarTestid} disabled={saving || Boolean(avatarBusy) || offline} onclick={() => fileInput?.click()} label={avatarBusy === 'uploading' ? 'Uploading…' : avatar ? 'Change avatar' : 'Add avatar'} />
-					{#if avatar && onremoveavatar}
+					<Button size="sm" data-testid={changeAvatarTestid} disabled={saving || Boolean(avatarBusy) || offline} onclick={() => fileInput?.click()} label={avatarBusy === 'uploading' ? 'Uploading…' : hasAvatar ? 'Change avatar' : 'Add avatar'} />
+					{#if hasAvatar && onremoveavatar}
 						<button type="button" class="ap-link ap-profedit-remove" data-testid={removeAvatarTestid} disabled={Boolean(avatarBusy) || offline} onclick={onremoveavatar}>Remove</button>
 					{/if}
 				</span>

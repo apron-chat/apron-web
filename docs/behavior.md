@@ -1313,13 +1313,17 @@ when there is no text (delete the message instead), nor does an upload still
 being written.
 
 Media loads from where Preferences, under **Media**, says. **Default** is as Apron always has: `og` media only from the chat server's own
-origin and the origins it names with `ext:media`, avatars from any `https:`
-site, and images in markdown messages from any site. **This server only**
-loads all of them only from the server's origins; **This server and sites I
+origin and the origins it names with `ext:media`, avatars (users' and servers')
+from any `https:` site, and images in messages, custom emoji and the media of
+HTML embeds from any site. **This server only** loads all of them only from the
+server's origins (a server signed in to before, its avatar only from its own); **This server and sites I
 add** also from the sites listed under it (hosts or URLs, one per line, kept as
 `https:` origins); **Any site** from anywhere. Where an image in a message may
-not load, it shows as a link to it (its alt text, else its URL), an avatar as
-initials, and a card without its picture. Small `data:` images always show.
+not load, it shows as a link to it (its alt text, else its URL), as does an
+HTML embed's image, video or audio; a custom emoji shows as its key (and isn't
+offered in the emoji picker), an avatar as initials, and a card without its
+picture. An HTML embed never loads a `srcset`, a `background` or a `ping`.
+Small `data:` images always show.
 The choice is kept on this device, and another tab's applies at once. Stream
 URLs load only from the server's own origin, whatever the choice; links may
 point anywhere `http(s)`.

@@ -2349,7 +2349,7 @@
 	/** A message's reaction chips, from the timeline of the room it lives in. */
 	function reactionsFor(event: MessageRecord): ReactionChip[] {
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
-		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.resolveEmoji);
+		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.emojiImage);
 	}
 
 	function react(event: MessageRecord, emoji: string): void {

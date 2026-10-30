@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { MediaSrc } from './types';
 	/*
 	 * One file on a draft, or in a message being edited (§4.8.4): an image as a thumbnail, audio with a player
 	 * to listen back, a link or any other file as a card. Its name is a button that renames it in place; the
@@ -14,7 +15,7 @@
 		detail?: string;
 		kind?: 'image' | 'audio' | 'file' | 'link';
 		/** Previews an image or audio clip (an object URL, or a file the server hosts). */
-		src?: string;
+		src?: MediaSrc;
 		/**
 		 * Rename in place: a click on the name opens it for typing, all of it selected. Enter or clicking away
 		 * keeps the new name, Escape keeps the old one; an empty name changes nothing.

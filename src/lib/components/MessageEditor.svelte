@@ -56,7 +56,7 @@
 	let shown = $derived(embeds.filter((embed) => !removed.includes(embedKey(embed))));
 	let renamed = $derived(shown.flatMap((embed) => {
 		const title = titles[embedKey(embed)];
-		return title !== undefined && title !== embedTile(embed, directory.origin, directory.mediaOrigins).name ? [{ embed, title }] : [];
+		return title !== undefined && title !== embedTile(embed, directory.previewGate).name ? [{ embed, title }] : [];
 	}));
 	let changed = $derived(value !== text || shown.length !== embeds.length || renamed.length > 0);
 	/** A message keeps text or an embed (§3.5); emptied, it's deleted instead. */
@@ -85,7 +85,7 @@
 {#snippet tiles()}
 	{#each shown as embed, index (embed.embed_id ?? index)}
 		{@const key = embedKey(embed)}
-		{@const tile = embedTile(embed, directory.origin, directory.mediaOrigins)}
+		{@const tile = embedTile(embed, directory.previewGate)}
 		{@const name = titles[key] ?? tile.name}
 		<AttachmentTile {name} detail={tile.detail} kind={tile.kind} src={tile.src} labelTestid="edit-attachment"
 			onrename={tile.renamable ? (title) => (titles[key] = title) : undefined}

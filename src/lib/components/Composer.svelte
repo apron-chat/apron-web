@@ -6,6 +6,8 @@
 	import { isCommand } from '$lib/ui/commands';
 	import { mediaLimit, type MediaTypes } from '$lib/protocol/client';
 	import { linkPreviews } from '$lib/ui/link-previews';
+	import { directory } from '$lib/ui/directory.svelte';
+	import { loadableOg } from './embeds/og';
 	import { pastedFiles } from '$lib/ui/file-transfer';
 	import { clockLabel } from '$lib/ui/time';
 	import type { StagedFile as Staged } from '$lib/ui/pane-drafts.svelte';
@@ -125,6 +127,8 @@
 		void previewsArrived;
 		return command || disabled ? [] : linkPreviews.embeds(value, dismissed);
 	});
+	/** Those as their cards show them: their pictures only from where link previews may load from. */
+	let previewCards = $derived(previews.map((embed) => ({ ...embed, og: loadableOg(embed.og, directory.previewGate) })));
 
 	$effect(() => linkPreviews.subscribe(() => previewsArrived++));
 	// Typed links are looked up once typing pauses, so a half-typed URL isn't.
@@ -263,7 +267,7 @@
 	{replyText}
 	{oncancelreply}
 	attachments={files.length > 0 ? staged : undefined}
-	{previews}
+	previews={previewCards}
 	{preview}
 	onremovepreview={(index) => dismissPreview(previews[index]?.url ?? '')}
 	replyTestid="reply-draft"

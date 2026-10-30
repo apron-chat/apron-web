@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { directory } from '$lib/ui/directory.svelte';
+	import type { MediaSrc } from '$lib/ui/media-gate';
 	import MentionPicker from '$lib/design/components/MentionPicker.svelte';
 	import type { MentionPerson } from '$lib/protocol/markdown';
 	import type { EmojiSuggestion } from '$lib/ui/emoji-autocomplete';
@@ -28,10 +30,10 @@
 	}
 	let { id, query, people, rooms, emoji, active, onpick, onhover, testid }: Props = $props();
 
-	let senders = $derived(people?.map((person) => ({ user_id: person.id, name: person.name, avatar: person.avatar })));
+	let senders = $derived(people?.map((person) => ({ user_id: person.id, name: person.name, avatar: directory.avatarGate.src(person.avatar) })));
 </script>
 
-{#snippet face(person: { user_id: string; name?: string; avatar?: string })}
+{#snippet face(person: { user_id: string; name?: string; avatar?: MediaSrc })}
 	<Avatar name={person.name?.trim() || person.user_id} hue={hueOf(person.user_id)} src={person.avatar} size="sm" />
 {/snippet}
 

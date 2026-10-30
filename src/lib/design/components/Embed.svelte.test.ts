@@ -4,6 +4,7 @@ import EmbedFrame from './EmbedFrame.svelte';
 import EmbedStream from './EmbedStream.svelte';
 import EmbedUpload from './EmbedUpload.svelte';
 import { render, unmount } from '$lib/test/dom';
+import { media } from '$lib/test/media';
 
 const PIXEL = 'data:image/png;base64,iVBORw0KGgo=';
 
@@ -24,7 +25,7 @@ describe('EmbedUpload', () => {
 
 	it('puts what a viewer shows on the picture\'s link, and a plain click views it', () => {
 		const onview = vi.fn();
-		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.png', title: 'a.png', og: { image: { url: PIXEL } }, onview, viewer: { src: PIXEL, title: 'a.png', detail: 'Ada · 4:00 PM', width: 960, height: 600 } });
+		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.png', title: 'a.png', og: { image: { url: media(PIXEL) } }, onview, viewer: { src: media(PIXEL), title: 'a.png', detail: 'Ada · 4:00 PM', width: 960, height: 600 } });
 		const link = document.querySelector<HTMLAnchorElement>('a.ap-embed-imagelink')!;
 		expect([link.dataset.viewerSrc, link.dataset.viewerTitle, link.dataset.viewerDetail, link.dataset.viewerWidth, link.dataset.viewerHeight, link.hasAttribute('data-viewer-alt')]).toEqual([PIXEL, 'a.png', 'Ada · 4:00 PM', '960', '600', false]);
 		expect([link.title, link.getAttribute('aria-haspopup')]).toEqual(['View a.png', 'dialog']);
