@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { DRAGGED_ELEMENT_ID } from 'svelte-dnd-action';
-import { DEVICES, expect, test } from './fixtures';
+import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /** The sidebar's top-level rooms in an order of your own: dragged by their rows, or moved with Alt+↑/↓. */
 
@@ -14,6 +14,24 @@ const deployThread = (page: Page) => threadLists(page).getByText('Deploy checkli
 /** Lets any input the browser has queued (a click after a tap) run. */
 const nextFrame = (page: Page) => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
 
+/**
+ * Opens general and waits for its sidebar to settle: its threads you haven't joined are listed after the page shows,
+ * moving the rooms below them, so where a row is is read only once they're there.
+ */
+async function openGeneral(preview: Preview): Promise<void> {
+	await preview.open('#room=general');
+	await expect(preview.page.getByTestId('other-threads')).toBeAttached();
+	// And the rows they bring have grown into place: the rooms hold still from one look to the next.
+	const rooms = preview.page.getByRole('complementary', { name: 'Rooms' });
+	let last = '';
+	await expect.poll(async () => {
+		const now = JSON.stringify(await rooms.evaluate((side) => [...side.querySelectorAll('button[data-room]')].map((row) => Math.round(row.getBoundingClientRect().top))));
+		const still = now === last;
+		last = now;
+		return still;
+	}, { intervals: [150] }).toBe(true);
+}
+
 async function middle(page: Page, room: string): Promise<{ x: number; y: number; top: number }> {
 	const box = (await row(page, room).boundingBox())!;
 	return { x: box.x + box.width / 2, y: box.y + box.height / 2, top: box.y };
@@ -23,14 +41,14 @@ test.describe('room order, with a mouse', () => {
 	test.use(DEVICES.desktop);
 
 	test('a room dragged by any part of its row lands where it’s let go, every room’s threads folded away while it’s carried', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		expect(await order(page)).toEqual(['general', 'engineering']);
 		await expect(threadLists(page)).toHaveCount(1);
 		// From the row's very edge, not its name.
 		const edge = (await row(page, 'engineering').boundingBox())!;
-		await page.mouse.move(edge.x + 3, edge.y + 2);
+		await page.mouse.move(edge.x + 4, edge.y + 4);
 		await page.mouse.down();
-		await page.mouse.move(edge.x + 3, edge.y - 8, { steps: 3 });
+		await page.mouse.move(edge.x + 4, edge.y - 10, { steps: 4 });
 		await expect(threadLists(page)).toHaveCount(0);
 		const to = await middle(page, 'general');
 		await page.mouse.move(to.x, to.top + 4, { steps: 10 });
@@ -44,7 +62,7 @@ test.describe('room order, with a mouse', () => {
 	});
 
 	test('a room carried away from the list stays in its column, landing at the end it’s nearest, the keyboard back on it', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		await row(page, 'general').focus();
 		const from = await middle(page, 'general');
 		await page.mouse.move(from.x, from.y);
@@ -64,14 +82,30 @@ test.describe('room order, with a mouse', () => {
 		await expect(row(page, 'general')).toBeFocused();
 	});
 
+	test('a room below the open room’s threads, lifted and let go where it was, stays where it was', async ({ preview, page }) => {
+		await openGeneral(preview);
+		const privateRooms = page.getByTestId('private-list').locator('button[data-room]');
+		const before = await privateRooms.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.room));
+		const first = (await privateRooms.first().boundingBox())!;
+		await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+		await page.mouse.down();
+		// The threads above it fold away as it lifts, moving the rows under a pointer that stays put.
+		await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2 + 12, { steps: 3 });
+		await expect(threadLists(page)).toHaveCount(0);
+		await page.waitForTimeout(300);
+		await page.mouse.up();
+		await expect(threadLists(page)).toHaveCount(1);
+		expect(await privateRooms.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.room))).toEqual(before);
+	});
+
 	test('a click still opens a room', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		await row(page, 'engineering').click();
 		await expect(preview.heading()).toHaveText('engineering');
 	});
 
 	test('a press that isn’t a left-button drag never lifts a room: Ctrl+click, or one whose release went unseen', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const from = await middle(page, 'engineering');
 		// Ctrl+click, a Mac's right click, whose menu would take the release.
 		await page.keyboard.down('Control');
@@ -94,7 +128,7 @@ test.describe('room order, with a mouse', () => {
 	});
 
 	test('Space or Enter on a room’s block, focused by a click beside its buttons, leaves the threads as they are', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		// The block the library makes of each room (with its threads) takes focus from a click that lands off its buttons.
 		await row(page, 'general').evaluate((button) => (button.closest('.ap-roomblock') as HTMLElement).focus());
 		for (const key of ['Space', 'Enter']) {
@@ -106,7 +140,7 @@ test.describe('room order, with a mouse', () => {
 	});
 
 	test('pressing a thread and moving doesn’t carry its room', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const thread = (await deployThread(page).boundingBox())!;
 		await page.mouse.move(thread.x + thread.width / 2, thread.y + thread.height / 2);
 		await page.mouse.down();
@@ -117,7 +151,7 @@ test.describe('room order, with a mouse', () => {
 	});
 
 	test('Alt+↑ and Alt+↓ move the focused room, the keyboard staying on it', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		await expect(row(page, 'general')).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
 		await row(page, 'general').focus();
 		await page.keyboard.press('Alt+ArrowDown');
@@ -135,7 +169,7 @@ test.describe('room order, in a short window', () => {
 
 	// While the sidebar scrolls under it, the gap the others leave can lag behind the room; where it lands doesn't.
 	test('a room carried to the edge of the scrolling sidebar stays over its list, and lands at its end', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const scroller = await page.getByTestId('room-list').evaluate((list) => {
 			let node: HTMLElement | null = list;
 			while (node && !/(auto|scroll)/.test(getComputedStyle(node).overflowY)) node = node.parentElement;
@@ -165,7 +199,7 @@ test.describe('room order, in a short window, lifted without moving', () => {
 	test.use({ viewport: { width: 1280, height: 180 } });
 
 	test('a room lifted and let go where it was stays where it was, nothing scrolling under the pointer', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const from = await middle(page, 'general');
 		await page.mouse.move(from.x, from.y);
 		await page.mouse.down();
@@ -184,7 +218,7 @@ test.describe('room order, in a window too short for the list', () => {
 	test.use({ viewport: { width: 1280, height: 140 } });
 
 	test('a room carried to the edge of the scrolling sidebar lands at the end it’s seen at', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		await row(page, 'general').scrollIntoViewIfNeeded();
 		const scroller = await page.getByTestId('room-list').evaluate((list) => {
 			let node: HTMLElement | null = list;
@@ -208,13 +242,16 @@ test.describe('room order, with the window resized mid-drag', () => {
 	test.use(DEVICES.desktop);
 
 	test('the sidebar settles where it is rather than jumping each frame', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const from = await middle(page, 'general');
 		await page.mouse.move(from.x, from.y);
 		await page.mouse.down();
 		await page.mouse.move(from.x, from.y + 12, { steps: 3 });
 		await expect(threadLists(page)).toHaveCount(0);
 		await page.setViewportSize({ width: 1280, height: 140 });
+		// Held in the sidebar's middle, away from its edges, where nothing should scroll.
+		const side = (await page.getByRole('complementary', { name: 'Rooms' }).boundingBox())!;
+		await page.mouse.move(from.x, side.y + side.height / 2, { steps: 3 });
 		await page.waitForTimeout(200);
 		const scrolls = await page.getByTestId('room-list').evaluate((list) => new Promise<number[]>((done) => {
 			let node: HTMLElement | null = list;
@@ -228,11 +265,48 @@ test.describe('room order, with the window resized mid-drag', () => {
 	});
 });
 
+test.describe('room order, in a short window with motion allowed', () => {
+	// The room slides into its place after it's let go: nothing more scrolls under it meanwhile.
+	test.use({ viewport: { width: 1280, height: 140 }, contextOptions: { reducedMotion: 'no-preference' } });
+
+	test('the sidebar stops scrolling as soon as a room carried to its edge is let go', async ({ preview, page }) => {
+		await openGeneral(preview);
+		await row(page, 'general').scrollIntoViewIfNeeded();
+		const scroller = await page.getByTestId('room-list').evaluate((list) => {
+			let node: HTMLElement | null = list;
+			while (node && !/(auto|scroll)/.test(getComputedStyle(node).overflowY)) node = node.parentElement;
+			return node!.getBoundingClientRect().toJSON() as DOMRect;
+		});
+		const from = await middle(page, 'general');
+		await page.mouse.move(from.x, from.y);
+		await page.mouse.down();
+		await page.mouse.move(from.x, from.y + 12, { steps: 3 });
+		await page.mouse.move(from.x, scroller.bottom - 2, { steps: 4 });
+		// From the release, each frame while it slides into place (its copy still shown); once it's down the threads
+		// come back, and the browser keeps what's in view where it was, which may scroll.
+		await page.getByTestId('room-list').evaluate((list, id) => {
+			let node: HTMLElement | null = list;
+			while (node && !/(auto|scroll|hidden)/.test(getComputedStyle(node).overflowY)) node = node.parentElement;
+			const seen: number[] = [];
+			(window as unknown as { scrolls: Promise<number[]> }).scrolls = new Promise((done) => {
+				addEventListener('mouseup', () => {
+					const each = () => (document.getElementById(id) ? (seen.push(node!.scrollTop), requestAnimationFrame(each)) : done(seen));
+					each();
+				}, { capture: true, once: true });
+			});
+		}, DRAGGED_ELEMENT_ID);
+		await page.mouse.up();
+		const scrolls = await page.evaluate(() => (window as unknown as { scrolls: Promise<number[]> }).scrolls);
+		expect(scrolls.length).toBeGreaterThan(0);
+		expect(new Set(scrolls).size).toBe(1);
+	});
+});
+
 test.describe('room order, with pointer moves out of step with frames', () => {
 	test.use(DEVICES.desktop);
 
 	test('a room carried away from the list lands where it’s seen, however often the pointer reports', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const from = await middle(page, 'general');
 		await page.mouse.move(from.x, from.y);
 		await page.mouse.down();
@@ -262,7 +336,7 @@ test.describe('folding a room, with motion allowed', () => {
 	test.use({ ...DEVICES.desktop, contextOptions: { reducedMotion: 'no-preference' } });
 
 	test('a click on the open room that drifts a little folds it, rather than lifting it, and nothing in the list animates', async ({ preview, page }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const from = await middle(page, 'general');
 		await page.mouse.move(from.x, from.y);
 		await page.mouse.down();
@@ -301,7 +375,7 @@ test.describe('room order, by touch', () => {
 	}
 
 	test('a room held lifts, and can then be dragged to another place', async ({ preview, page, context }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const { touch } = await finger(context, page);
 		const from = await middle(page, 'engineering');
 		await touch('touchStart', from.x, from.y);
@@ -316,7 +390,7 @@ test.describe('room order, by touch', () => {
 	});
 
 	test('a swipe across the rooms doesn’t carry one', async ({ preview, page, context }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const { touch } = await finger(context, page);
 		const from = await middle(page, 'engineering');
 		await touch('touchStart', from.x, from.y);
@@ -329,7 +403,7 @@ test.describe('room order, by touch', () => {
 	});
 
 	test('a tap opens a room', async ({ preview, page, context }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const { tap } = await finger(context, page);
 		const room = await middle(page, 'engineering');
 		await tap(room.x, room.y);
@@ -337,7 +411,7 @@ test.describe('room order, by touch', () => {
 	});
 
 	test('a tap on a thread opens the thread', async ({ preview, page, context }) => {
-		await preview.open('#room=general');
+		await openGeneral(preview);
 		const { tap } = await finger(context, page);
 		const thread = (await deployThread(page).boundingBox())!;
 		await tap(thread.x + thread.width / 2, thread.y + thread.height / 2);

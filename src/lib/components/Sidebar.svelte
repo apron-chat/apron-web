@@ -13,7 +13,7 @@
 	import { loadSidebarFolds, loadThreadFolds, saveSidebarFolds, saveThreadFolds } from '$lib/ui/storage';
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import { flip } from 'svelte/animate';
-	import { dndzone, DRAGGED_ELEMENT_ID, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
+	import { dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import ProfileBar from './ProfileBar.svelte';
@@ -154,29 +154,34 @@
 		// scrolled under it (the library keeps where the rooms were until it scrolls something itself).
 		const seen = landing;
 		landing = undefined;
-		if (seen) return order.move(info.id, seen.target, seen.side);
-		if (info.trigger !== TRIGGERS.DROPPED_INTO_ZONE) return;
-		const ids = items.map((room) => room.id);
+		if (!seen && info.trigger !== TRIGGERS.DROPPED_INTO_ZONE) return;
+		const ids = seen ?? items.map((room) => room.id);
 		const at = ids.indexOf(info.id);
 		if (at > 0) order.move(info.id, ids[at - 1], 'after');
 		else if (ids.length > 1) order.move(info.id, ids[1], 'before');
 	}
 	/**
-	 * Where the carried room was seen as it was let go: next to the room its copy's middle is nearest, the rule the
-	 * library uses too, on where things are now. `contain` keeps the copy over its section, so this is always somewhere
-	 * in it. The library has slid its copy into its slot by the time it tells of the drop, so it's noted on release.
+	 * The section's rooms as shown, with the carried one where it was seen as it was let go: in the place of the row its
+	 * copy's middle is over (the nearest, between rows), the library's own rule, on where the rows are now. `contain`
+	 * keeps the copy over its section, so that's always somewhere in it. The library has slid its copy into its slot by
+	 * the time it tells of the drop, so it's noted on release.
 	 */
-	let landing: { target: string; side: 'before' | 'after' } | undefined;
-	function seenLanding(copy: HTMLElement, zone: HTMLElement, id: string): typeof landing {
+	let landing: string[] | undefined;
+	/** A room's block in its section's list, as `id` (the carried room's slot goes by the library's placeholder id at first). */
+	const roomOf = (block: Element, id: string) => {
+		const room = block.querySelector<HTMLElement>('button[data-room]')?.dataset.room;
+		return room === SHADOW_PLACEHOLDER_ITEM_ID ? id : room;
+	};
+	function seenLanding(copy: HTMLElement, zone: HTMLElement, id: string): string[] | undefined {
 		const box = copy.getBoundingClientRect();
 		const middle = box.top + box.height / 2;
-		const others = [...zone.querySelectorAll<HTMLElement>('button[data-room]')].filter((button) => button.dataset.room !== id);
-		const next = others.find((button) => {
-			const row = button.getBoundingClientRect();
-			return middle < row.top + row.height / 2;
-		});
-		if (next) return { target: next.dataset.room!, side: 'before' };
-		return others.length ? { target: others[others.length - 1].dataset.room!, side: 'after' } : undefined;
+		const rows = [...zone.children].map((block) => ({ id: roomOf(block, id), box: block.getBoundingClientRect() }));
+		if (rows.some((row) => row.id === undefined) || !rows.some((row) => row.id === id)) return undefined;
+		const distance = (row: (typeof rows)[number]) => (middle < row.box.top ? row.box.top - middle : middle > row.box.bottom ? middle - row.box.bottom : 0);
+		const over = rows.reduce((best, row, index) => (distance(row) < distance(rows[best]) ? index : best), 0);
+		const ids = rows.map((row) => row.id!).filter((other) => other !== id);
+		ids.splice(over, 0, id);
+		return ids;
 	}
 	/** How near the sidebar's top or bottom the pointer brings more of the section into view, at most (the library's own reach). */
 	const EDGE = 30;
@@ -195,6 +200,9 @@
 	 */
 	function contain(copy: HTMLElement, zone: HTMLElement, id: string): () => void {
 		const view = (zone.closest('.ap-shell-sidebody') as HTMLElement | null) ?? zone;
+		// The library slides its copy's `top` and `left` as it resizes it; corrected here as they slid, it could end up off
+		// the page altogether for a moment, which the library takes for a drop. They move at once instead.
+		copy.style.transition = copy.style.transition.split(/,(?![^(]*\))/).filter((part) => !/^\s*(top|left)\b/.test(part)).join(',');
 		const scrolling = view.style.overflow;
 		view.style.overflow = 'hidden';
 		requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -207,6 +215,10 @@
 		void tick().then(() => {
 			if (over) return;
 			start = view.scrollTop;
+			// The threads folding away moved its slot (and the rows around it) from under the copy: it follows its slot,
+			// so letting it go where it was leaves it there. The library places it by `top`, then moves it by `transform`.
+			const slot = [...zone.children].find((block) => roomOf(block, id) === id);
+			if (slot) copy.style.top = `${parseFloat(getComputedStyle(copy).top) + slot.getBoundingClientRect().top - (copy.getBoundingClientRect().top - new DOMMatrixReadOnly(copy.style.transform || 'none').m42)}px`;
 			clamp();
 		});
 		/** Brings more of the section into view while the pointer is near the sidebar's edge on that side. */
@@ -258,9 +270,18 @@
 			pointer = 'touches' in event ? (event.touches[0]?.clientY ?? pointer) : event.clientY;
 			clamp();
 		};
+		/** Let go: where it was seen is noted, and nothing more is scrolled or moved, as the library slides it into place. */
 		const release = () => {
 			clamp();
 			landing = seenLanding(copy, zone, id);
+			stop();
+		};
+		const stop = () => {
+			cancelAnimationFrame(frame);
+			removeEventListener('mousemove', follow);
+			removeEventListener('touchmove', follow);
+			removeEventListener('mouseup', release, true);
+			removeEventListener('touchend', release, true);
 		};
 		// Added after the library's own move listeners (the drag has begun), so these run after them; the release is
 		// caught on the way down, before the library's.
@@ -271,11 +292,7 @@
 		each();
 		return () => {
 			over = true;
-			cancelAnimationFrame(frame);
-			removeEventListener('mousemove', follow);
-			removeEventListener('touchmove', follow);
-			removeEventListener('mouseup', release, true);
-			removeEventListener('touchend', release, true);
+			stop();
 			view.style.overflow = scrolling;
 		};
 	}
