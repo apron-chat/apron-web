@@ -8,6 +8,9 @@ import { placeLinksIn, readPlaceLink, writeApronLink, type ApronLink } from './a
 import { backendHost } from './connection';
 import { directory, samePieces } from './directory.svelte';
 import { embedsOf, hueOf, isSystem, messageSnippet, textOf } from './messages';
+import { sameOriginMedia } from '$lib/protocol/embeds';
+import { liveAppend } from './live-append.svelte';
+import { settleMarkdown } from './live-markdown';
 import { minuteNow } from './clock.svelte';
 import { eventTime, idMillis, idWhen } from './time';
 
@@ -59,12 +62,36 @@ export interface MessageContext {
 	readonly uploads: Record<string, UploadState>;
 }
 
-/** A body's markup, rendered from its text with the directory's mentions (§3.5: an absent format is plain). */
-function bodyOf(body: MessageBody | undefined): NonNullable<MessageView['body']> {
-	const text = typeof body?.text === 'string' ? body.text : '';
+/**
+ * A body's markup, rendered from its text with the directory's mentions (§3.5: an absent format is plain).
+ * `text` in place of the body's own, such as with live text appended; `settle` for Markdown still arriving.
+ */
+function bodyOf(body: MessageBody | undefined, text = typeof body?.text === 'string' ? body.text : '', settle = false): NonNullable<MessageView['body']> {
 	const markdown = body?.format === 'markdown';
-	const html = markdown ? renderMarkdown(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.resolveImage) : renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji);
+	const html = markdown
+		? renderMarkdown(settle ? settleMarkdown(text) : text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.resolveImage)
+		: renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji);
 	return { html, markdown, code: html.includes('<pre') };
+}
+
+/** The `url` of a message's `append` embed (§4.8.5) while it is live, where the client may load it: the chat server's own. */
+export function liveAppendUrl(event: MessageRecord): string | undefined {
+	if (event.deleted) return undefined;
+	const embed = embedsOf(event).find((entry) => entry.kind === 'append');
+	return embed ? sameOriginMedia(embed.url, directory.origin) : undefined;
+}
+
+/** The body with an `append` embed's text so far after its own text, as one text in its format, kept per record while it's the same. */
+const appended = new WeakMap<MessageRecord, { pieces: readonly unknown[]; streamed: string; live: boolean; body: NonNullable<MessageView['body']> }>();
+
+function appendedBody(event: MessageRecord, streamed: string, live: boolean): NonNullable<MessageView['body']> {
+	const pieces = directory.pieces;
+	const kept = appended.get(event);
+	if (kept && kept.streamed === streamed && kept.live === live && samePieces(kept.pieces, pieces)) return kept.body;
+	// While it is still arriving, Markdown cut off mid-construct is settled; once `GET url` ended, the text is whole.
+	const body = bodyOf(event.body, textOf(event) + streamed, live);
+	appended.set(event, { pieces, streamed, live, body });
+	return body;
 }
 
 /** A scoped notice's title: its sender as the server names it (§3.3), `Name (~id)`, the name as shown (§3.5.2). */
@@ -259,7 +286,8 @@ function embedsIn(event: MessageRecord, row: MessageRow, context: MessageContext
 	const removable = row.caps.edit && !row.selecting && (Boolean(seen.text.trim()) || embeds.length > 1);
 	const detail = seen.time ? `${name} · ${seen.time}` : name;
 	const shown = embeds.flatMap((embed, index) => {
-		if (previewedByCard(embed, cards, context.server)) return [];
+		// An `append` embed has no card: its text continues the body (§4.8.5).
+		if (embed.kind === 'append' || previewedByCard(embed, cards, context.server)) return [];
 		const upload = (embed.embed_id ? uploads[embed.embed_id] : undefined) ?? stalled(embed, seen.timestamp);
 		const item: MessageEmbed = { key: embed.embed_id ?? String(index), embed: embed as unknown as EmbedProps, detail };
 		if (upload) item.upload = upload;
@@ -296,6 +324,14 @@ export function messageView(event: MessageRecord, row: MessageRow, context: Mess
 	const view: MessageView = { id: event.message_id, sender, timestamp: seen.timestamp, time: seen.time, caps: row.caps };
 	// A system line shows its text whatever it is; a message only text it has.
 	if (seen.body && (system || seen.text)) view.body = seen.body;
+	// Live text that continues the body (§4.8.5): the body and the text so far, as one, until a snapshot finishes it.
+	const append = system ? undefined : liveAppendUrl(event);
+	if (append) {
+		const live = liveAppend(append);
+		const streamed = live.text;
+		if (streamed) view.body = appendedBody(event, streamed, live.live);
+		if (live.live) view.writing = true;
+	}
 	const reply = replyOf(event, context);
 	if (reply) view.reply = reply;
 	if (!event.deleted && !system) {
@@ -334,7 +370,7 @@ export function noticeView(notice: Notice): MessageView {
 	};
 }
 
-const KEYS = ['id', 'timestamp', 'time', 'grouped', 'deleted', 'system', 'scope', 'mention', 'pinged', 'highlighted', 'selecting', 'selected', 'editing'] as const;
+const KEYS = ['id', 'timestamp', 'time', 'grouped', 'deleted', 'system', 'scope', 'mention', 'pinged', 'highlighted', 'selecting', 'selected', 'editing', 'writing'] as const;
 
 function sameFields<T extends object>(a: T | undefined, b: T | undefined): boolean {
 	if (a === b) return true;

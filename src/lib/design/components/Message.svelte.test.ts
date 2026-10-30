@@ -185,6 +185,15 @@ describe('a message row', () => {
 		expect(cleanup).toHaveBeenCalledOnce();
 	});
 
+	it('says Writing… under a body still arriving, and nothing once it is whole', () => {
+		const row = render({ body: { html: '<p>Here is the plan</p>', markdown: true }, writing: true });
+		const writing = row.querySelector('.ap-msg-writing')!;
+		expect([writing.getAttribute('role'), writing.textContent]).toEqual(['status', 'Writing…']);
+		expect(row.querySelector('.ap-msg-text')?.nextElementSibling).toBe(writing);
+		dom.unmount();
+		expect(render({ body: { html: '<p>Here is the plan</p>', markdown: true } }).querySelector('.ap-msg-writing')).toBeNull();
+	});
+
 	it('leaves bodies without code blocks alone', () => {
 		const code = vi.fn();
 		render({ body: { html: 'plain' } }, { code });
@@ -510,8 +519,8 @@ describe('embeds', () => {
 
 describe('test ids', () => {
 	it('puts each id it is given on the part it names', () => {
-		const row = render({ sender: { ...ada, handle: 'ada' }, reply: {}, reactions: [{ emoji: '👍', count: 1 }], caps: ALL }, {}, {
-			testids: { row: 'row', handle: 'handle', reply: 'reply', reactions: 'reactions', chip: 'chip', select: 'select' }
+		const row = render({ sender: { ...ada, handle: 'ada' }, reply: {}, reactions: [{ emoji: '👍', count: 1 }], caps: ALL, writing: true }, {}, {
+			testids: { row: 'row', handle: 'handle', reply: 'reply', reactions: 'reactions', chip: 'chip', select: 'select', writing: 'writing' }
 		});
 		engage(row);
 		dom.button('More actions').click();
@@ -523,5 +532,6 @@ describe('test ids', () => {
 		expect(ids('reactions')).toEqual([dom.byRole('group', 'Reactions')]);
 		expect(ids('chip')).toEqual([dom.button('👍 1. Add yours')]);
 		expect(ids('select')).toEqual([dom.button('Select message')]);
+		expect(ids('writing')).toEqual([row.querySelector('.ap-msg-writing')]);
 	});
 });
