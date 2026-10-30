@@ -9,13 +9,15 @@
  * writes for a server at a time (a Web Lock); another takes over when it goes,
  * and writes what it has whole, since what is kept may no longer be what it
  * read. Only for a session saved here (a passkey or email account), never a
- * guest's; signing out removes it.
+ * guest's; signing out removes it. Each account's is a database of its own
+ * (`historyName`): what is restored, paged and searched is only ever the
+ * signed-in account's.
  */
 import type { ClientSnapshot, KeptState, RestoredState, RoomSync } from '$lib/protocol/client-types';
 import { compareLogIds, type StoreChange, type StoredRecords } from '$lib/protocol/reducer';
 import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types';
 import { decrement } from '$lib/protocol/client-internals';
-import { forgetHistory, HistoryGone, historyVersion, openHistory, pageHistory, pruneHistory, readHistory, readRoomRows, scanMessages, timeLike, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
+import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -156,7 +158,8 @@ export class HistoryKeeper {
 	private readonly locks: Locks | undefined;
 	private readonly now: () => number;
 	private readonly onfailure: ((message: string) => void) | undefined;
-	private db: Promise<IDBDatabase> | undefined;
+	/** The databases this tab has open, by name: each closes, and goes from here, when another tab deletes it. */
+	private dbs = new Map<string, Promise<IDBDatabase>>();
 	private client: HistoryClient | undefined;
 	private unwatch: Array<() => void> = [];
 	/** Changes since the last write, in order. */
@@ -191,9 +194,31 @@ export class HistoryKeeper {
 		this.now = options.now ?? Date.now;
 	}
 
-	private open(): Promise<IDBDatabase> {
-		this.db ??= openHistory(this.databases ?? globalThis.indexedDB);
-		return this.db;
+	private get factory(): Databases {
+		return this.databases ?? globalThis.indexedDB;
+	}
+
+	/** The database of `userId`'s history on `server`, made if there is none. */
+	private open(server: string, userId: string): Promise<IDBDatabase> {
+		return this.openNamed(historyName(server, userId));
+	}
+
+	private openNamed(name: string): Promise<IDBDatabase> {
+		let db = this.dbs.get(name);
+		if (!db) {
+			db = openHistory(this.factory, name, () => this.dbs.delete(name));
+			db.catch(() => this.dbs.delete(name));
+			this.dbs.set(name, db);
+		}
+		return db;
+	}
+
+	/** Deletes the database `name`, closing this tab's connection first; other tabs close theirs as asked. */
+	private async drop(name: string): Promise<void> {
+		const db = this.dbs.get(name);
+		this.dbs.delete(name);
+		(await db?.catch(() => undefined))?.close();
+		await deleteHistory(this.factory, name);
 	}
 
 	private get keeping(): boolean {
@@ -211,7 +236,10 @@ export class HistoryKeeper {
 		try {
 			const now = this.now();
 			const cutoff = this.retentionMs === undefined || this.retentionMs === null ? undefined : now - this.retentionMs;
-			const kept = await readHistory(await this.open(), server, RESTORE_WINDOW, (row) => {
+			// The account of the session saved there: the one kept for the server, which signing in confirms.
+			const account = await this.keptAccount(server);
+			if (!account) return;
+			const kept = await readHistory(await this.open(server, account), RESTORE_WINDOW, (row) => {
 				const planned = plannedRoom(row.sync!, cutoff);
 				return planned && (planned.from !== undefined ? { from: planned.from } : {});
 			});
@@ -226,6 +254,17 @@ export class HistoryKeeper {
 		} catch (cause) {
 			console.warn('[apron] kept history could not be read', cause);
 		}
+	}
+
+	/**
+	 * Whose history is kept for `server`: one account, as one session is saved; should a race have left more, the
+	 * one written last.
+	 */
+	private async keptAccount(server: string): Promise<string | undefined> {
+		const found = await listHistories(this.factory, server);
+		if (found.length <= 1) return found[0]?.userId;
+		const saved = await Promise.all(found.map(async (entry) => ({ entry, meta: await readMeta(await this.openNamed(entry.name)).catch(() => undefined) })));
+		return saved.filter((each) => each.meta).sort((a, b) => b.meta!.savedAt - a.meta!.savedAt)[0]?.entry.userId;
 	}
 
 	/**
@@ -251,9 +290,10 @@ export class HistoryKeeper {
 	 */
 	async olderPage(server: string, roomId: string, before: string, limit: number): Promise<JsonObject | undefined> {
 		const cover = this.coverage.get(roomId);
-		if (!cover || this.known?.server !== server || (cover.from !== undefined && compareLogIds(before, cover.from) < 0)) return undefined;
+		const known = this.known;
+		if (!cover || known?.server !== server || (cover.from !== undefined && compareLogIds(before, cover.from) < 0)) return undefined;
 		try {
-			const { page, more, version } = await pageHistory(await this.open(), server, roomId, { before, limit }, cover.from === undefined ? undefined : Number(cover.from));
+			const { page, more, version } = await pageHistory(await this.open(server, known.userId), roomId, { before, limit }, cover.from === undefined ? undefined : Number(cover.from));
 			// Another tab wrote meanwhile: what is kept may no longer be what this one restored from.
 			if (!this.writer?.granted && version !== this.known?.version) {
 				this.coverage.clear();
@@ -270,13 +310,17 @@ export class HistoryKeeper {
 	}
 
 	/**
-	 * The messages kept here for `server` that `test` takes (`$lib/ui/search`), from every room kept, whatever the
-	 * page holds of them. Empty where nothing is kept, or there is no IndexedDB. `stop` ends the scan early.
+	 * The messages kept here of `userId`'s history on `server` that `test` takes (`$lib/ui/search`), from every
+	 * room kept, whatever the page holds of them. Empty where nothing is kept for that account, or there is no
+	 * IndexedDB. `stop` ends the scan early.
 	 */
-	async searchKept(server: string, test: (message: MessageRecord) => boolean, stop?: () => boolean): Promise<MessageRecord[]> {
+	async searchKept(server: string, userId: string, test: (message: MessageRecord) => boolean, stop?: () => boolean): Promise<MessageRecord[]> {
 		const found: MessageRecord[] = [];
 		try {
-			await scanMessages(await this.open(), server, (message) => {
+			// Only a database there is: opening one that isn't would make it.
+			const name = historyName(server, userId);
+			if (!(await listHistories(this.factory, server)).some((entry) => entry.name === name)) return found;
+			await scanMessages(await this.openNamed(name), (message) => {
 				if (test(message)) found.push(message);
 			}, stop);
 		} catch {
@@ -333,13 +377,16 @@ export class HistoryKeeper {
 		this.client = undefined;
 	}
 
-	/** Signed out of `server`, or keeping turned off (every server): what is kept goes, and nothing more is written for it. */
+	/**
+	 * Signed out of `server`, or keeping turned off (every server): what is kept goes, every account's database
+	 * there, and nothing more is written for it.
+	 */
 	async forget(server?: string): Promise<void> {
 		if (this.writer && (server === undefined || this.writer.server === server)) this.endWriter();
 		if (server === undefined || this.known?.server === server) this.known = undefined;
 		this.queue = [];
 		try {
-			await forgetHistory(await this.open(), server);
+			await Promise.all((await listHistories(this.factory, server)).map((entry) => this.drop(entry.name)));
 		} catch {
 			// Nothing kept, or no IndexedDB.
 		}
@@ -362,11 +409,12 @@ export class HistoryKeeper {
 			if (cover.from === undefined || Number(cover.from) < cutoff) this.coverage.set(room, { from: String(cutoff), older: true });
 		}
 		try {
-			const versions = await pruneHistory(await this.open(), cutoff);
-			// This tab's own prune leaves what it knows of what is kept as true as it was.
-			const known = this.known;
-			const pruned = known && versions.get(known.server);
-			if (known && pruned?.from === known.version) known.version = pruned.to;
+			for (const entry of await listHistories(this.factory)) {
+				const pruned = await pruneHistory(await this.openNamed(entry.name), cutoff);
+				// This tab's own prune leaves what it knows of what is kept as true as it was.
+				const known = this.known;
+				if (known && known.server === entry.server && known.userId === entry.userId && pruned?.from === known.version) known.version = pruned.to;
+			}
 		} catch {
 			// Kept as it was; the next visit restores only what is recent.
 		}
@@ -443,10 +491,14 @@ export class HistoryKeeper {
 		const take = () => (writer.taking = taking());
 		const taking = async () => {
 			if (this.writer !== writer) return;
-			const db = await this.open().catch(() => undefined);
-			const kept = db && await historyVersion(db, server).catch(() => undefined);
+			// One account's kept per server, as one session is saved: another's goes.
+			const others = await listHistories(this.factory, server).catch(() => []);
+			await Promise.all(others.filter((entry) => entry.userId !== userId).map((entry) => this.drop(entry.name).catch(() => undefined)));
+			if (this.writer !== writer) return;
+			const db = await this.open(server, userId).catch(() => undefined);
+			const kept = db && await readMeta(db).catch(() => undefined);
 			const known = this.known;
-			if (known && known.server === server && known.userId === userId && kept?.version === known.version && kept.userId === userId) {
+			if (known && known.server === server && known.userId === userId && kept?.version === known.version) {
 				// What this page knows is kept is still what is there: go on from it.
 				writer.synced = new Set(known.synced);
 				writer.withSync = new Set([...known.synced].filter((room) => !writer.cleared.has(room)));
@@ -455,15 +507,15 @@ export class HistoryKeeper {
 				this.queue = [];
 				this.coverage.clear();
 				this.served.clear();
-				if (db && kept?.userId === userId) {
-					// This account's, but moved on without this page (another tab wrote, or this one restored nothing):
-					// each room is written over only as far down as the client holds it, and what is kept below stays.
-					const rows = await readRoomRows(db, server).catch(() => []);
+				if (db && kept) {
+					// Kept, but moved on without this page (another tab wrote, or this one restored nothing): each room is
+					// written over only as far down as the client holds it, and what is kept below stays.
+					const rows = await readRoomRows(db).catch(() => []);
 					writer.disk = new Map(rows.filter((row) => row.sync).map((row) => [row.room, row.sync!]));
 					writer.withSync = new Set(writer.disk.keys());
 					writer.reset = false;
 				}
-				// Otherwise another account's, or nothing: it all goes first (`reset`).
+				// Otherwise nothing is: whatever is there goes first (`reset`).
 			}
 			if (this.writer !== writer) return;
 			writer.granted = true;
@@ -564,7 +616,7 @@ export class HistoryKeeper {
 			const sync = this.keptSync(room.id, room.sync);
 			const last = writer.rows.get(room.id);
 			if (last && last.record === record && sameSync(last.sync, sync)) continue;
-			rows.push({ server: writer.server, room: room.id, ...(record ? { record } : {}), sync });
+			rows.push({ room: room.id, ...(record ? { record } : {}), sync });
 			written.set(room.id, { record, sync });
 		}
 		// Once the joined set is complete, a room kept and no longer joined goes, and so, the first time, does
@@ -584,8 +636,8 @@ export class HistoryKeeper {
 		const flags = `${complete} ${current}`;
 		if (!changes.length && !whole.length && !rows.length && !dropped.length && !sweep && !withUsers && flags === writer.flags) return;
 		try {
-			const db = await this.open();
-			const version = await writeHistory(db, writer.server, {
+			const db = await this.open(writer.server, writer.userId);
+			const version = await writeHistory(db, {
 				changes, whole, rooms: rows, dropped, ...(sweep ? { keepOnly: sweep } : {}), reset: writer.reset, continues: !writer.reset,
 				meta: { server: writer.server, userId: writer.userId, complete, current, ...(withUsers ? { users: state.users, ...(state.aliases ? { aliases: state.aliases } : {}) } : {}) }
 			}, kept);
@@ -600,7 +652,8 @@ export class HistoryKeeper {
 			for (const room of dropped) writer.rows.delete(room);
 			this.known = { server: writer.server, userId: writer.userId, version, synced: new Set(synced) };
 		} catch (cause) {
-			if (cause instanceof HistoryGone) {
+			// Deleted by another tab as this one began to write: its connection closed (`openHistory`), and is gone too.
+			if (cause instanceof HistoryGone || !this.dbs.has(historyName(writer.server, writer.userId))) {
 				// Another tab signed out or stopped keeping: nothing goes back until a session here starts a writer again.
 				this.endWriter();
 				this.known = undefined;

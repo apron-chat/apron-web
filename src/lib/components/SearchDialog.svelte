@@ -20,7 +20,7 @@
 	 */
 	interface Props {
 		client: ChatClient;
-		/** What keeps history on this device; none against an in-memory server. */
+		/** What keeps history on this device, while it keeps this session's; none against an in-memory server. */
 		keeper?: HistoryKeeper;
 		/** The rooms shown, for naming where a result is. */
 		rooms: RoomSnapshot[];
@@ -123,7 +123,9 @@
 		const test = queryMatcher(asked, { users: Object.values(client.snapshot().users), rooms, parentOf: (roomId) => client.roomRecord(roomId)?.parent_room_id });
 		if (!test) return;
 		const loaded = client.storedRecords().messages.filter(test);
-		const kept = keeper ? await keeper.searchKept(client.url, test, () => run !== generation) : [];
+		// Only the signed-in account's: each account's kept history is a database of its own.
+		const you = client.snapshot().you?.user_id;
+		const kept = keeper && you !== undefined ? await keeper.searchKept(client.url, you, test, () => run !== generation) : [];
 		if (run !== generation) return;
 		({ messages: found, more } = newestMatches([kept, loaded]));
 		searching = false;

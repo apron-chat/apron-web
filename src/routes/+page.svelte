@@ -1555,10 +1555,14 @@
 	/** Search's shortcut, as this platform writes it; none on a touch screen, which has no keys for it. */
 	const searchHint = globalThis.matchMedia?.('(pointer: coarse)').matches ? undefined : /Mac/.test(globalThis.navigator?.platform ?? '') ? '⌘K' : 'Ctrl+K';
 
+	/** What keeps this session's history on this device, if anything does: a session saved here, while keeping is on. */
+	function sessionKeeper(): HistoryKeeper | undefined {
+		return historyKeeper && session.passkeySession && client?.keptSessionFor(client.url) && historySettings.retention !== 'off' ? historyKeeper : undefined;
+	}
+
 	/** What Search looks through, in words: history kept on this device for this session, and what is loaded. */
 	function searchNote(): string {
-		const kept = historyKeeper && client?.keptSessionFor(client.url) && historySettings.retention !== 'off';
-		if (!kept) return 'Messages loaded on this page.';
+		if (!sessionKeeper()) return 'Messages loaded on this page.';
 		const span = { '1': 'the last day', '7': 'the last week', '30': 'the last 30 days', '365': 'the last year' }[historySettings.retention as string];
 		return `Messages kept on this device${span ? ` from ${span}` : ''}, and those loaded now.`;
 	}
@@ -3131,7 +3135,7 @@
 	{/if}
 	{#if searchOpen && client && searchDialog.component}
 		{@const SearchDialog = searchDialog.component}
-		<SearchDialog {client} keeper={historyKeeper} rooms={session.rooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} onopen={openFound} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
+		<SearchDialog {client} keeper={sessionKeeper()} rooms={session.rooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} onopen={openFound} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
 	{/if}
 	{#if newPrivateOpen && newPrivateDialog.component}
 		{@const NewPrivateDialog = newPrivateDialog.component}

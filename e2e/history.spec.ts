@@ -47,32 +47,30 @@ async function keptServer(page: Page, messages: Array<Record<string, unknown>>, 
 	});
 }
 
-/** How many servers have history kept on this device. */
+/** How many history databases this device has: one per account on each server. */
 function keptServers(page: Page): Promise<number> {
-	return page.evaluate(() => new Promise<number>((resolve) => {
-		const request = indexedDB.open('apron-history');
-		request.onsuccess = () => {
-			const db = request.result;
-			if (!db.objectStoreNames.contains('meta')) return resolve(0);
-			const count = db.transaction('meta').objectStore('meta').count();
-			count.onsuccess = () => { resolve(count.result); db.close(); };
-		};
-		request.onerror = () => resolve(-1);
-	}));
+	return page.evaluate(async () => (await indexedDB.databases()).filter((entry) => entry.name?.startsWith('apron-history:')).length);
 }
 
-/** How many messages are kept on this device, for every server. */
+/** How many messages are kept on this device, for every server and account. */
 function keptMessages(page: Page): Promise<number> {
-	return page.evaluate(() => new Promise<number>((resolve) => {
-		const request = indexedDB.open('apron-history');
-		request.onsuccess = () => {
-			const db = request.result;
-			if (!db.objectStoreNames.contains('records')) return resolve(0);
-			const all = db.transaction('records').objectStore('records').getAll();
-			all.onsuccess = () => { resolve(all.result.filter((row: { kind: string }) => row.kind === 'm').length); db.close(); };
-		};
-		request.onerror = () => resolve(-1);
-	}));
+	return page.evaluate(async () => {
+		let total = 0;
+		for (const { name } of await indexedDB.databases()) {
+			if (!name?.startsWith('apron-history:')) continue;
+			total += await new Promise<number>((resolve) => {
+				const request = indexedDB.open(name);
+				request.onsuccess = () => {
+					const db = request.result;
+					if (!db.objectStoreNames.contains('records')) return resolve(0);
+					const all = db.transaction('records').objectStore('records').getAll();
+					all.onsuccess = () => { resolve(all.result.filter((row: { kind: string }) => row.kind === 'm').length); db.close(); };
+				};
+				request.onerror = () => resolve(0);
+			});
+		}
+		return total;
+	});
 }
 
 test('a reload shows what it kept, and asks only for what came since', async ({ page }) => {

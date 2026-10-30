@@ -192,7 +192,7 @@ describe('directory', () => {
 	it('loads avatars and images in messages from where media may load from, as Preferences choose', () => {
 		const away: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://gravatar.example/cy.png' };
 		const home: Identity = { user_id: 'di', name: 'Di', avatar: 'https://example.com/di.png' };
-		directory.apply(snapshot([ada, away, home], { server: { apron: 9, capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
+		directory.apply(snapshot([ada, away, home], { server: { apron: 9, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
 		const image = () => renderMarkdown('![x](https://gravatar.example/x.png)', undefined, undefined, undefined, undefined, directory.resolveImage);
 		try {
 			mediaSettings.update('server', []);

@@ -480,7 +480,12 @@ from `after`, else the newest up to `before`, never splitting the entries at one
 `log_id` (a reaction or membership record's sets and entries, kept one per
 user), and `historyResult` folds them back into the records a server sends.
 `ArchiveServer` pages an export with it, from memory. `history-db.ts` is the
-IndexedDB store, shaped like a server's log: `records` keyed by `[server, room,
+IndexedDB store: a database per account on each server, named for both
+(`historyName`, `apron-history:` and the two encoded), so nothing read for one
+account (a restore, a page, a search) can come from another's, and forgetting
+one deletes its database; `listHistories` finds them by name
+(`indexedDB.databases()`), as a restore must before signing in, when only the
+server is known. Each is shaped like a server's log: `records` keyed by `[room,
 log, kind, id]` (`log_id`s as numbers, so a page or everything below a bound is
 one key range), with a `key` index to replace a message's or reaction set's row
 as it is written (compaction on write; a creation, `log_id == message_id`,
@@ -508,14 +513,17 @@ under a Web Lock. A tab that takes it over goes on from what it restored when
 `version` is still what it read; otherwise, for the same account, it writes
 each room over only as far down as it holds it, keeping what is kept below when
 that reaches up to it, and leaving a room as it is kept when there is a gap
-between the two (`mergeOf`); another account's goes first. A write that fails
-(a full disk) stops keeping for the page.
+between the two (`mergeOf`); another account's database on that server is
+deleted first, so one account's is kept per server, as one session is saved.
+Another tab deleting the database (signing out, or keeping turned off) closes
+it here (`versionchange`), and this tab's writer ends rather than make it again.
+A write that fails (a full disk) stops keeping for the page.
 
 Before each new session signs in (the first, another server, a `restart`, but
 not a reconnect), the client runs its `beforeFreshSession` hook while the
 connection opens, and signing in waits for it, for up to `FRESH_HOOK_MS`. The
 keeper's reads back each room's newest `RESTORE_WINDOW` entries (`plannedRoom`
-applies the retention), and `ChatClient.restore` takes them as a dropped
+applies the retention) from the one database kept for the server, and `ChatClient.restore` takes them as a dropped
 connection's kept state: the rooms retained with their records and syncs, so
 the first sign-in resumes each from its checkpoint through `requestRooms`, the
 path a reconnect takes. Should that sign-in be as another account than the one

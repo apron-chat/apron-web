@@ -4,11 +4,16 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ChatClient, timelineMessages, type ClientSnapshot } from '$lib/protocol/client';
 import { MemoryProtocolServer } from '$lib/preview/memory-server';
 import { readKept } from '$lib/test/kept-history';
-import { forgetHistory, openHistory, writeHistory } from './history-db';
+import { deleteHistory, historyName, listHistories, openHistory, writeHistory, type Databases } from './history-db';
 import { HistoryKeeper, mergeOf, plannedRoom, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
 import type { RoomSync } from '$lib/protocol/client';
 
 const URL = 'wss://chat.example/';
+/** The memory server's account. */
+const ACCOUNT = 'preview_guest';
+
+/** The database of `userId`'s history on `server`, as the keeper names it. */
+const accountDb = (indexedDB: Databases, server = URL, userId = ACCOUNT) => openHistory(indexedDB, historyName(server, userId));
 const clients: ChatClient[] = [];
 afterEach(() => {
 	for (const client of clients.splice(0)) client.stop();
@@ -62,7 +67,7 @@ describe('HistoryKeeper', () => {
 		await keeper.stop();
 		first.stop();
 
-		const kept = await readKept(await openHistory(indexedDB), URL);
+		const kept = await readKept(await accountDb(indexedDB));
 		expect(kept?.meta).toMatchObject({ userId: 'preview_guest', complete: true });
 		expect(kept?.rooms.find((row) => row.room === 'general')?.sync?.checkpoint).toBeDefined();
 
@@ -102,7 +107,7 @@ describe('HistoryKeeper', () => {
 	it('writes everything whole when what is kept changed since it was read, as when another tab wrote', async () => {
 		const server = new MemoryProtocolServer({ account: true });
 		const indexedDB = new IDBFactory();
-		const db = await openHistory(indexedDB);
+		const db = await accountDb(indexedDB);
 		const meta = { server: URL, userId: 'preview_guest', complete: true, users: [] };
 		const earlier = new ChatClient(URL, 'Ada', server.factory);
 		clients.push(earlier);
@@ -118,12 +123,12 @@ describe('HistoryKeeper', () => {
 		await keeper.restore(saved(client));
 		// Another tab writes a message this one never had.
 		const ghost = { message_id: '1710000000099', log_id: '1710000000099', room_id: 'general', from: { user_id: 'ada' } };
-		await writeHistory(db, URL, { changes: [], whole: [{ room: 'general', messages: [ghost], reactions: [], memberships: [] }], rooms: [], dropped: [], meta }, new Set());
+		await writeHistory(db, { changes: [], whole: [{ room: 'general', messages: [ghost], reactions: [], memberships: [] }], rooms: [], dropped: [], meta }, new Set());
 		keeper.watch(saved(client));
 		client.start();
 		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
-		const kept = await readKept(db, URL);
+		const kept = await readKept(db);
 		expect(kept?.messages.map((message) => message.message_id)).not.toContain(ghost.message_id);
 		expect(kept?.messages.filter((message) => message.room_id === 'general').map((message) => message.message_id)).toEqual(ids(client.snapshot(), 'general'));
 		await keeper.stop();
@@ -211,20 +216,20 @@ describe('HistoryKeeper', () => {
 		client.start();
 		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
-		const db = await openHistory(indexedDB);
-		const written = (await readKept(db, URL))!.meta;
+		const db = await accountDb(indexedDB);
+		const written = (await readKept(db))!.meta;
 		const posted = server.post('general', 'grace', 'Something');
 		await waitFor(() => ids(client.snapshot(), 'general').includes(posted));
 		await keeper.flush();
-		const after = (await readKept(db, URL))!.meta;
+		const after = (await readKept(db))!.meta;
 		expect(after.version).toBeGreaterThan(written.version);
 		// Nothing new since: no write goes.
 		await keeper.flush();
-		expect((await readKept(db, URL))!.meta.version).toBe(after.version);
+		expect((await readKept(db))!.meta.version).toBe(after.version);
 		// A name changes: the users are written again.
 		await client.updateProfile({ name: 'Ada Lovelace' });
 		await keeper.flush();
-		const renamed = (await readKept(db, URL))!.meta;
+		const renamed = (await readKept(db))!.meta;
 		expect(renamed.version).toBeGreaterThan(after.version);
 		expect(renamed.users.find((user) => user.user_id === 'preview_guest')?.name).toBe('Ada Lovelace');
 		await keeper.stop();
@@ -240,13 +245,12 @@ describe('HistoryKeeper', () => {
 		client.start();
 		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
-		const db = await openHistory(indexedDB);
 		// Another tab signs out, or stops keeping.
-		await forgetHistory(db, URL);
+		await deleteHistory(indexedDB, historyName(URL, ACCOUNT));
 		const posted = server.post('general', 'grace', 'After');
 		await waitFor(() => ids(client.snapshot(), 'general').includes(posted));
 		await keeper.flush();
-		expect(await readKept(db, URL)).toBeUndefined();
+		expect(await readKept(await accountDb(indexedDB))).toBeUndefined();
 		expect(keeper.failure).toBeUndefined();
 		await keeper.stop();
 	});
@@ -269,7 +273,7 @@ describe('HistoryKeeper', () => {
 		const posted = server.post('general', 'grace', 'Mid-write');
 		await keeper.flush();
 		await writing;
-		expect((await readKept(await openHistory(indexedDB), URL))?.messages.map((message) => message.message_id)).toEqual(expect.arrayContaining([first, posted]));
+		expect((await readKept(await accountDb(indexedDB)))?.messages.map((message) => message.message_id)).toEqual(expect.arrayContaining([first, posted]));
 		await keeper.stop();
 	});
 
@@ -324,9 +328,9 @@ describe('HistoryKeeper', () => {
 		client.setUrl(OTHER);
 		await waitFor(() => client.snapshot().authenticated && Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
-		const db = await openHistory(indexedDB);
-		expect((await readKept(db, URL))?.messages.filter((message) => message.room_id === 'general').map((message) => message.message_id)).toEqual(had);
-		expect((await readKept(db, OTHER))?.messages.length).toBeGreaterThan(0);
+		const db = await accountDb(indexedDB);
+		expect((await readKept(db))?.messages.filter((message) => message.room_id === 'general').map((message) => message.message_id)).toEqual(had);
+		expect((await readKept(await accountDb(indexedDB, OTHER)))?.messages.length).toBeGreaterThan(0);
 
 		const posted = servers[URL].post('general', 'grace', 'While you were on the other server');
 		const from = servers[URL].frames.length;
@@ -335,7 +339,7 @@ describe('HistoryKeeper', () => {
 		expect(ids(client.snapshot(), 'general')).toEqual([...had, posted]);
 		expect(historyOf(servers[URL], 'general', from).every((params) => params?.after !== undefined)).toBe(true);
 		await keeper.flush();
-		expect((await readKept(db, OTHER))?.messages.length).toBeGreaterThan(0);
+		expect((await readKept(await accountDb(indexedDB, OTHER)))?.messages.length).toBeGreaterThan(0);
 		await keeper.stop();
 	});
 
@@ -369,7 +373,25 @@ describe('HistoryKeeper', () => {
 		client.start();
 		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
-		expect(await readKept(await openHistory(indexedDB), URL)).toBeUndefined();
+		expect(await readKept(await accountDb(indexedDB))).toBeUndefined();
+		await keeper.stop();
+	});
+
+	it('searches only the history of the account asked for, making none for another', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		const everything = () => true;
+		expect((await keeper.searchKept(URL, ACCOUNT, everything)).length).toBeGreaterThan(0);
+		expect(await keeper.searchKept(URL, 'someone_else', everything)).toEqual([]);
+		expect(await keeper.searchKept('wss://other.example/', ACCOUNT, everything)).toEqual([]);
+		expect((await listHistories(indexedDB)).map((entry) => [entry.server, entry.userId])).toEqual([[URL, ACCOUNT]]);
 		await keeper.stop();
 	});
 
@@ -383,13 +405,14 @@ describe('HistoryKeeper', () => {
 		client.start();
 		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
-		const db = await openHistory(indexedDB);
-		expect(await readKept(db, URL)).toBeDefined();
+		expect(await readKept(await accountDb(indexedDB))).toBeDefined();
+		(await accountDb(indexedDB, 'wss://other.example/')).close();
+		// Its database deleted, and only its.
 		await keeper.forget(URL);
-		expect(await readKept(db, URL)).toBeUndefined();
+		expect((await listHistories(indexedDB)).map((entry) => entry.server)).toEqual(['wss://other.example/']);
 		await keeper.setRetention(null);
 		await keeper.flush();
-		expect(await readKept(db, URL)).toBeUndefined();
+		expect(await listHistories(indexedDB)).toEqual([]);
 		await keeper.stop();
 	});
 });
@@ -421,12 +444,12 @@ function memoryLocks(): Pick<LockManager, 'request'> {
 describe('HistoryKeeper, when things go wrong', () => {
 	it('shows none of what was kept for one account to another that the saved session now signs in as', async () => {
 		const indexedDB = new IDBFactory();
-		const db = await openHistory(indexedDB);
+		const db = await accountDb(indexedDB, URL, 'zed');
 		const secret = { message_id: '1710000000090', log_id: '1710000000090', room_id: 'secret', from: { user_id: 'zed' }, body: { text: 'Only for Zed' } };
-		await writeHistory(db, URL, {
+		await writeHistory(db, {
 			changes: [], dropped: [],
 			whole: [{ room: 'secret', messages: [secret], reactions: [], memberships: [] }],
-			rooms: [{ server: URL, room: 'secret', record: { room_id: 'secret', log_id: '1710000000080', title: 'Secret', private: true }, sync: { id: 'secret', checkpoint: '1710000000090', latestLogId: '1710000000090', floor: '1710000000080' } }],
+			rooms: [{ room: 'secret', record: { room_id: 'secret', log_id: '1710000000080', title: 'Secret', private: true }, sync: { id: 'secret', checkpoint: '1710000000090', latestLogId: '1710000000090', floor: '1710000000080' } }],
 			meta: { server: URL, userId: 'zed', complete: true, users: [{ user_id: 'zed', name: 'Zed' }] }
 		}, new Set());
 		// The saved session signs in as someone else (the preview server's `preview_guest`).
@@ -444,12 +467,13 @@ describe('HistoryKeeper, when things go wrong', () => {
 		expect(client.snapshot().users.zed).toBeUndefined();
 		expect(client.snapshot().recordedUsers.zed).toBeUndefined();
 		expect(client.storedRecords().messages.map((message) => message.room_id)).not.toContain('secret');
-		// What is kept becomes this account's.
+		// One account's is kept for the server: Zed's goes, and this one's starts.
 		await keeper.flush();
-		const kept = await readKept(db, URL);
-		expect(kept?.meta.userId).toBe('preview_guest');
-		expect(kept?.rooms.map((row) => row.room)).not.toContain('secret');
-		expect(kept?.messages.map((message) => message.message_id)).not.toContain(secret.message_id);
+		expect((await listHistories(indexedDB)).map((entry) => entry.userId)).toEqual([ACCOUNT]);
+		const mine = await readKept(await accountDb(indexedDB));
+		expect(mine?.meta.userId).toBe(ACCOUNT);
+		expect(mine?.rooms.map((row) => row.room)).not.toContain('secret');
+		expect(mine?.messages.map((message) => message.message_id)).not.toContain(secret.message_id);
 		await keeper.stop();
 	});
 
@@ -468,8 +492,8 @@ describe('HistoryKeeper, when things go wrong', () => {
 		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded && room(client.snapshot(), 'engineering')?.loaded));
 		await keeper.stop();
 		client.stop();
-		const db = await openHistory(indexedDB);
-		expect((await readKept(db, URL))?.meta.complete).toBe(false);
+		const db = await accountDb(indexedDB);
+		expect((await readKept(db))?.meta.complete).toBe(false);
 
 		// So the next visit lists every joined room, not only those that changed since: engineering is there.
 		const from = server.frames.length;
@@ -496,7 +520,7 @@ describe('HistoryKeeper, when things go wrong', () => {
 		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
 		await keeper.flush();
 		// IndexedDB goes away under the page.
-		(await (keeper as unknown as { db: Promise<IDBDatabase> }).db).close();
+		(await [...(keeper as unknown as { dbs: Map<string, Promise<IDBDatabase>> }).dbs.values()][0]).close();
 		server.post('general', 'grace', 'Not kept');
 		await keeper.flush();
 		expect(failure).toBeDefined();
@@ -557,7 +581,7 @@ describe('HistoryKeeper in two tabs', () => {
 		await two.flush();
 		await two.stop();
 		second.stop();
-		const kept = await readKept(await openHistory(indexedDB), URL);
+		const kept = await readKept(await accountDb(indexedDB));
 		expect(kept?.messages.filter((message) => message.room_id === 'general').length).toBe(all.length + 1);
 
 		// The next visit pages all of it from this device.
@@ -596,7 +620,7 @@ describe('HistoryKeeper in two tabs', () => {
 		await one.stop();
 		await waitFor(() => (two as unknown as { writer?: { granted: boolean } }).writer?.granted === true);
 		await two.flush();
-		const kept = await readKept(await openHistory(indexedDB), URL);
+		const kept = await readKept(await accountDb(indexedDB));
 		expect(kept?.messages.filter((message) => message.room_id === 'general').map((message) => message.message_id)).toEqual(ids(second.snapshot(), 'general'));
 		await two.stop();
 	});
@@ -618,7 +642,7 @@ describe('plannedRoom and restoredState', () => {
 		expect(plannedRoom({ id: 'quiet', checkpoint: at(40) }, cutoff, now - day)).toEqual({ sync: { id: 'quiet', checkpoint: at(40), olderBefore: String(cutoff), hasOlder: true }, from: cutoff });
 		expect(plannedRoom({ id: 'quiet', checkpoint: at(40) }, cutoff, now - 31 * day)).toBeUndefined();
 		const meta = { server: URL, userId: 'ada', complete: true, users: [], version: 3, savedAt: now - day };
-		const rows = [{ row: { server: URL, room: 'quiet', sync: { id: 'quiet', checkpoint: at(40) } }, entries: [], older: false }];
+		const rows = [{ row: { room: 'quiet', sync: { id: 'quiet', checkpoint: at(40) } }, entries: [], older: false }];
 		expect(restoredState({ meta: { ...meta, current: true }, skipped: 0, rooms: rows }, 30 * day, now).state.rooms.map((sync) => sync.id)).toEqual(['quiet']);
 		// Saved while a room was catching up: each goes by its own checkpoint.
 		expect(restoredState({ meta, skipped: 0, rooms: rows }, 30 * day, now).state.rooms).toEqual([]);

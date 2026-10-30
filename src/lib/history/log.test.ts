@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import type { MembershipEntry, MessageRecord, ReactionSet } from '$lib/protocol/types';
-import { openHistory, pageHistory, writeHistory } from './history-db';
+import { historyName, openHistory, pageHistory, writeHistory } from './history-db';
 import { historyResult, pageQuery, roomLog, sliceLog, type PageQuery } from './log';
 
 const SERVER = 'wss://chat.example/';
@@ -52,20 +52,20 @@ describe('historyResult', () => {
 
 describe('pageHistory', () => {
 	it('pages what is kept on this device exactly as the log in memory pages', async () => {
-		const db = await openHistory(new IDBFactory());
-		await writeHistory(db, SERVER, { changes: [], whole: [{ room: 'general', ...records }], rooms: [], dropped: [], meta: { server: SERVER, userId: 'ada', complete: true, users: [] } }, new Set());
+		const db = await openHistory(new IDBFactory(), historyName(SERVER, 'ada'));
+		await writeHistory(db, { changes: [], whole: [{ room: 'general', ...records }], rooms: [], dropped: [], meta: { server: SERVER, userId: 'ada', complete: true, users: [] } }, new Set());
 		const queries: PageQuery[] = [
 			{ limit: 3 }, { limit: 200 }, { before: '35', limit: 2 }, { before: '110', limit: 2 }, { after: '50', limit: 2 },
 			{ after: '190', limit: 5 }, { after: '201', limit: 5 }, { after: '20', before: '60', limit: 200 }, { before: '9', limit: 5 }
 		];
 		for (const query of queries) {
-			const { page, more } = await pageHistory(db, SERVER, 'general', query);
+			const { page, more } = await pageHistory(db, 'general', query);
 			expect({ query, page, more }).toEqual({ query, ...sliceLog(log, query) });
 		}
 		// A page that ends where the range does: at `from`, or at `before` going forward.
-		expect(await pageHistory(db, SERVER, 'general', { before: '60', limit: 2 }, 55)).toMatchObject({ page: [{ log: '55' }, { log: '55' }, { log: '60' }], more: false });
-		expect(await pageHistory(db, SERVER, 'general', { after: '50', before: '60', limit: 4 })).toMatchObject({ page: [{ log: '50' }, { log: '55' }, { log: '55' }, { log: '60' }], more: false });
+		expect(await pageHistory(db, 'general', { before: '60', limit: 2 }, 55)).toMatchObject({ page: [{ log: '55' }, { log: '55' }, { log: '60' }], more: false });
+		expect(await pageHistory(db, 'general', { after: '50', before: '60', limit: 4 })).toMatchObject({ page: [{ log: '50' }, { log: '55' }, { log: '55' }, { log: '60' }], more: false });
 		// Nothing below `from`.
-		expect((await pageHistory(db, SERVER, 'general', { before: '60', limit: 200 }, 40)).page.map((entry) => entry.log)).toEqual(['40', '50', '55', '55', '60']);
+		expect((await pageHistory(db, 'general', { before: '60', limit: 200 }, 40)).page.map((entry) => entry.log)).toEqual(['40', '50', '55', '55', '60']);
 	});
 });

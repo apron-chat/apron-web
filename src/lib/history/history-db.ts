@@ -3,17 +3,21 @@
  * like a server's log (§4.3): each room's records keyed by their `log_id`,
  * compacted as they are written (one snapshot per message, one reaction set
  * per user and message, as `ProtocolStore` keeps them), beside each room's
- * record and how far it is synced (`RoomSync`). One account per server, as a
- * saved session is: another account's sign-in there replaces it.
+ * record and how far it is synced (`RoomSync`).
  *
- * - `meta`, by server: whose it is, whether its joined set was complete, the
+ * Each account on each server has a database of its own, named for both
+ * (`historyName`), so nothing read for one account can come from another's,
+ * and forgetting one deletes its database. One account per server is kept, as
+ * a saved session is: another account's sign-in there deletes the one before.
+ *
+ * - `meta`, one row: whose it is, whether its joined set was complete, the
  *   kept users, and a `version` each write moves on, so a writer can tell
  *   whether what it read is still what is there.
- * - `rooms`, by `[server, room]`: the room's record and its sync.
- * - `records`, by `[server, room, log, kind, id]`: messages (`m`), reaction
- *   sets (`r`) and memberships (`j`). Ordered by `log` within a room, so a
- *   page or everything below a bound is one key range; the `key` index finds
- *   the row of a message or reaction set to replace.
+ * - `rooms`, by `room`: the room's record and its sync.
+ * - `records`, by `[room, log, kind, id]`: messages (`m`), reaction sets
+ *   (`r`) and memberships (`j`). Ordered by `log` within a room, so a page or
+ *   everything below a bound is one key range; the `key` index finds the row
+ *   of a message or reaction set to replace.
  *
  * `log_id`s are kept as numbers (they are below 2^53, §2.1), which IndexedDB
  * orders numerically, as the protocol compares them.
@@ -23,8 +27,11 @@ import type { StoreChange } from '$lib/protocol/reducer';
 import type { Identity, MembershipEntry, MessageRecord, ReactionSet, RoomRecord } from '$lib/protocol/types';
 import type { LogEntry, PageQuery } from './log';
 
-export const DB_NAME = 'apron-history';
+/** What every history database's name starts with (`historyName`). */
+const PREFIX = 'apron-history:';
 const DB_VERSION = 1;
+/** The key of the one `meta` row. */
+const META = 'meta';
 
 type Kind = 'm' | 'r' | 'j';
 
@@ -42,14 +49,12 @@ export interface MetaRow {
 }
 
 export interface RoomRow {
-	server: string;
 	room: string;
 	record?: RoomRecord;
 	sync?: RoomSync;
 }
 
 interface RecordRow {
-	server: string;
 	room: string;
 	log: number;
 	kind: Kind;
@@ -64,7 +69,7 @@ export interface KeptRoom {
 	older: boolean;
 }
 
-/** What is kept for one server, as read in one transaction: each room's newest. */
+/** What is kept for one account, as read in one transaction: each room's newest. */
 export interface KeptHistory {
 	meta: MetaRow;
 	rooms: KeptRoom[];
@@ -72,25 +77,69 @@ export interface KeptHistory {
 	skipped: number;
 }
 
-export type Databases = Pick<IDBFactory, 'open'>;
+export type Databases = Pick<IDBFactory, 'open' | 'databases' | 'deleteDatabase'>;
 
-export function openHistory(databases: Databases = globalThis.indexedDB): Promise<IDBDatabase> {
+/** The database of `userId`'s history on `server`: both in its name, each encoded, so neither can run into the other. */
+export function historyName(server: string, userId: string): string {
+	return `${PREFIX}${encodeURIComponent(server)}:${encodeURIComponent(userId)}`;
+}
+
+/** A history database on this device: its name, and whose history on which server it holds. */
+export interface HistoryDatabase {
+	name: string;
+	server: string;
+	userId: string;
+}
+
+/** The history databases on this device, of every server and account, or of `server`'s accounts. */
+export async function listHistories(databases: Databases, server?: string): Promise<HistoryDatabase[]> {
+	const found: HistoryDatabase[] = [];
+	for (const { name } of await databases.databases()) {
+		const [encodedServer, encodedUser, ...rest] = name?.startsWith(PREFIX) ? name.slice(PREFIX.length).split(':') : [];
+		if (encodedServer === undefined || encodedUser === undefined || rest.length) continue;
+		try {
+			const entry = { name: name!, server: decodeURIComponent(encodedServer), userId: decodeURIComponent(encodedUser) };
+			if (server === undefined || entry.server === server) found.push(entry);
+		} catch {
+			// Not one of these.
+		}
+	}
+	return found;
+}
+
+/**
+ * Opens (or makes) the history database named `name` (`historyName`). Another tab deleting it (signing out, or no
+ * longer keeping) closes it here, and `onclose` hears so.
+ */
+export function openHistory(databases: Databases, name: string, onclose?: () => void): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
-		const request = databases.open(DB_NAME, DB_VERSION);
+		const request = databases.open(name, DB_VERSION);
 		request.onupgradeneeded = () => {
 			const db = request.result;
-			db.createObjectStore('meta', { keyPath: 'server' });
-			db.createObjectStore('rooms', { keyPath: ['server', 'room'] });
-			db.createObjectStore('records', { keyPath: ['server', 'room', 'log', 'kind', 'id'] }).createIndex('key', ['server', 'kind', 'id']);
+			db.createObjectStore('meta');
+			db.createObjectStore('rooms', { keyPath: 'room' });
+			db.createObjectStore('records', { keyPath: ['room', 'log', 'kind', 'id'] }).createIndex('key', ['kind', 'id']);
 		};
 		request.onsuccess = () => {
 			const db = request.result;
-			// A newer version open in another tab: this one steps aside rather than block it.
-			db.onversionchange = () => db.close();
+			// Deleted, or a newer version, in another tab: this one steps aside rather than block it.
+			db.onversionchange = () => {
+				db.close();
+				onclose?.();
+			};
 			resolve(db);
 		};
 		request.onerror = () => reject(request.error);
 		request.onblocked = () => reject(new Error('History is open in an older tab'));
+	});
+}
+
+/** Deletes a history database; once every tab has closed it (as `openHistory` does when asked), it is gone. */
+export function deleteHistory(databases: Databases, name: string): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const request = databases.deleteDatabase(name);
+		request.onsuccess = () => resolve();
+		request.onerror = () => reject(request.error);
 	});
 }
 
@@ -110,13 +159,9 @@ function committed(transaction: IDBTransaction): Promise<void> {
 	});
 }
 
-/** Every key from `[server]` up: arrays order after numbers and strings, so `[server, []]` is past them all. */
-function serverRange(server: string): IDBKeyRange {
-	return IDBKeyRange.bound([server], [server, []]);
-}
-
-function roomRange(server: string, room: string, below?: number): IDBKeyRange {
-	return below === undefined ? IDBKeyRange.bound([server, room], [server, room, []]) : IDBKeyRange.bound([server, room], [server, room, below], false, true);
+/** Every key of `room`'s records, or those below `below`: arrays order after numbers and strings, so `[room, []]` is past them all. */
+function roomRange(room: string, below?: number): IDBKeyRange {
+	return below === undefined ? IDBKeyRange.bound([room], [room, []]) : IDBKeyRange.bound([room], [room, below], false, true);
 }
 
 /** Calls `visit` for each row in `range`, which may delete it, then resolves. */
@@ -133,16 +178,16 @@ function eachRow(store: IDBObjectStore, range: IDBKeyRange, visit: (row: RecordR
 	});
 }
 
-function messageRow(server: string, record: MessageRecord): RecordRow {
-	return { server, room: record.room_id, log: Number(record.log_id), kind: 'm', id: record.message_id, value: record };
+function messageRow(record: MessageRecord): RecordRow {
+	return { room: record.room_id, log: Number(record.log_id), kind: 'm', id: record.message_id, value: record };
 }
 
-function reactionRow(server: string, set: ReactionSet, room: string): RecordRow {
-	return { server, room, log: Number(set.log_id), kind: 'r', id: `${set.message_id} ${set.from.user_id}`, value: set };
+function reactionRow(set: ReactionSet, room: string): RecordRow {
+	return { room, log: Number(set.log_id), kind: 'r', id: `${set.message_id} ${set.from.user_id}`, value: set };
 }
 
-function membershipRow(server: string, entry: MembershipEntry): RecordRow {
-	return { server, room: entry.room_id, log: Number(entry.log_id), kind: 'j', id: entry.user.user_id, value: entry };
+function membershipRow(entry: MembershipEntry): RecordRow {
+	return { room: entry.room_id, log: Number(entry.log_id), kind: 'j', id: entry.user.user_id, value: entry };
 }
 
 function entryOf(row: RecordRow): LogEntry {
@@ -158,18 +203,18 @@ function entryOf(row: RecordRow): LogEntry {
  * few requests whatever the page's size: a key cursor jumps to the `limit`-th row, whose `log_id` bounds the
  * page, which one `getAll` reads, and one `count` says whether more lie past it.
  */
-async function pageRows(records: IDBObjectStore, server: string, room: string, query: PageQuery, from?: number): Promise<{ page: LogEntry[]; more: boolean }> {
+async function pageRows(records: IDBObjectStore, room: string, query: PageQuery, from?: number): Promise<{ page: LogEntry[]; more: boolean }> {
 	const forward = query.after !== undefined;
 	const lower = Math.max(from ?? 0, query.after !== undefined ? Number(query.after) : 0);
-	const upper: IDBValidKey = query.before !== undefined ? [server, room, Number(query.before), []] : [server, room, []];
-	const range = IDBKeyRange.bound([server, room, lower], upper);
+	const upper: IDBValidKey = query.before !== undefined ? [room, Number(query.before), []] : [room, []];
+	const range = IDBKeyRange.bound([room, lower], upper);
 	const edge = await new Promise<number | undefined>((resolve, reject) => {
 		const request = records.openKeyCursor(range, forward ? 'next' : 'prev');
 		let advanced = query.limit <= 1;
 		request.onsuccess = () => {
 			const cursor = request.result;
 			if (!cursor) return resolve(undefined);
-			if (advanced) return resolve((cursor.key as [string, string, number])[2]);
+			if (advanced) return resolve((cursor.key as [string, number])[1]);
 			advanced = true;
 			cursor.advance(query.limit - 1);
 		};
@@ -177,31 +222,31 @@ async function pageRows(records: IDBObjectStore, server: string, room: string, q
 	});
 	// Fewer than `limit` rows: all of them.
 	if (edge === undefined) return { page: (await done(records.getAll(range)) as RecordRow[]).map(entryOf), more: false };
-	const pageRange = forward ? IDBKeyRange.bound([server, room, lower], [server, room, edge, []]) : IDBKeyRange.bound([server, room, edge], upper);
+	const pageRange = forward ? IDBKeyRange.bound([room, lower], [room, edge, []]) : IDBKeyRange.bound([room, edge], upper);
 	// The page reaches the end of the range: nothing past it, and a range from there to there, open at one end, is
 	// one IndexedDB refuses to make.
 	const atEnd = forward ? query.before !== undefined && edge >= Number(query.before) : edge <= lower;
-	const restRange = atEnd ? undefined : forward ? IDBKeyRange.bound([server, room, edge, []], upper, true, false) : IDBKeyRange.bound([server, room, lower], [server, room, edge], false, true);
+	const restRange = atEnd ? undefined : forward ? IDBKeyRange.bound([room, edge, []], upper, true, false) : IDBKeyRange.bound([room, lower], [room, edge], false, true);
 	const [rows, rest] = await Promise.all([done(records.getAll(pageRange)) as Promise<RecordRow[]>, restRange ? done(records.count(restRange)) : 0]);
 	return { page: rows.map(entryOf), more: rest > 0 };
 }
 
 /**
- * Reads back what is kept for `server`, or undefined when nothing is: for each room `plan` takes (its row with
- * a sync, and where to read from, if not its start), its newest `window` entries, in one transaction.
+ * Reads back what is kept, or undefined when nothing is: for each room `plan` takes (its row with a sync, and
+ * where to read from, if not its start), its newest `window` entries, in one transaction.
  */
-export async function readHistory(db: IDBDatabase, server: string, window: number, plan: (row: RoomRow) => { from?: number } | undefined): Promise<KeptHistory | undefined> {
+export async function readHistory(db: IDBDatabase, window: number, plan: (row: RoomRow) => { from?: number } | undefined): Promise<KeptHistory | undefined> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readonly');
 	const [meta, rows] = await Promise.all([
-		done(transaction.objectStore('meta').get(server)) as Promise<MetaRow | undefined>,
-		done(transaction.objectStore('rooms').getAll(serverRange(server))) as Promise<RoomRow[]>
+		done(transaction.objectStore('meta').get(META)) as Promise<MetaRow | undefined>,
+		done(transaction.objectStore('rooms').getAll()) as Promise<RoomRow[]>
 	]);
 	if (!meta) return undefined;
 	const records = transaction.objectStore('records');
 	const rooms = await Promise.all(rows.map(async (row) => {
 		const planned = row.sync ? plan(row) : undefined;
 		if (!planned) return undefined;
-		const { page, more } = await pageRows(records, server, row.room, { limit: window }, planned.from);
+		const { page, more } = await pageRows(records, row.room, { limit: window }, planned.from);
 		return { row, entries: page, older: more };
 	}));
 	const read = rooms.filter((room) => room !== undefined);
@@ -212,24 +257,23 @@ export async function readHistory(db: IDBDatabase, server: string, window: numbe
  * A page of one room's kept log (`pageRows`), and the version it was read at, so a reader can tell whether it
  * is still what it restored from.
  */
-export async function pageHistory(db: IDBDatabase, server: string, room: string, query: PageQuery, from?: number): Promise<{ page: LogEntry[]; more: boolean; version?: number }> {
+export async function pageHistory(db: IDBDatabase, room: string, query: PageQuery, from?: number): Promise<{ page: LogEntry[]; more: boolean; version?: number }> {
 	const transaction = db.transaction(['meta', 'records'], 'readonly');
 	const [meta, page] = await Promise.all([
-		done(transaction.objectStore('meta').get(server)) as Promise<MetaRow | undefined>,
-		pageRows(transaction.objectStore('records'), server, room, query, from)
+		done(transaction.objectStore('meta').get(META)) as Promise<MetaRow | undefined>,
+		pageRows(transaction.objectStore('records'), room, query, from)
 	]);
 	return { ...page, ...(meta ? { version: meta.version } : {}) };
 }
 
-/** Every room row kept for `server`. */
-export async function readRoomRows(db: IDBDatabase, server: string): Promise<RoomRow[]> {
-	return await done(db.transaction('rooms', 'readonly').objectStore('rooms').getAll(serverRange(server))) as RoomRow[];
+/** Every room row kept. */
+export async function readRoomRows(db: IDBDatabase): Promise<RoomRow[]> {
+	return await done(db.transaction('rooms', 'readonly').objectStore('rooms').getAll()) as RoomRow[];
 }
 
-/** The version of what is kept for `server`, or undefined when nothing is. */
-export async function historyVersion(db: IDBDatabase, server: string): Promise<{ version: number; userId: string } | undefined> {
-	const meta = await done(db.transaction('meta', 'readonly').objectStore('meta').get(server)) as MetaRow | undefined;
-	return meta ? { version: meta.version, userId: meta.userId } : undefined;
+/** What is kept says of itself (its `meta`), or undefined when nothing is. */
+export async function readMeta(db: IDBDatabase): Promise<MetaRow | undefined> {
+	return await done(db.transaction('meta', 'readonly').objectStore('meta').get(META)) as MetaRow | undefined;
 }
 
 /** One write: changes to rooms already kept, rooms kept whole, room rows, rooms dropped, and the meta row. */
@@ -242,11 +286,11 @@ export interface HistoryWrite {
 	rooms: RoomRow[];
 	/** Rooms to drop, rows and records. */
 	dropped: string[];
-	/** Every room to keep: any other kept for the server goes, rows and records. */
+	/** Every room to keep: any other kept goes, rows and records. */
 	keepOnly?: string[];
 	/** Without `users`, the users (and aliases) kept stay as they are. */
 	meta: Omit<MetaRow, 'version' | 'savedAt' | 'users'> & { users?: Identity[] };
-	/** Everything kept for the server goes first: another account's, or nothing known of what is there. */
+	/** Everything kept goes first: nothing is known of what is there. */
 	reset?: boolean;
 	/** Written on top of what is kept: when nothing is (another tab forgot it), nothing is written (`HistoryGone`). */
 	continues?: boolean;
@@ -257,14 +301,14 @@ export interface HistoryWrite {
  * without the records it covers. Resolves with the new version, once committed.
  * `kept` lists the rooms changes apply to: a change to any other room is skipped.
  */
-export async function writeHistory(db: IDBDatabase, server: string, write: HistoryWrite, kept: ReadonlySet<string>): Promise<number> {
+export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: ReadonlySet<string>): Promise<number> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readwrite', { durability: 'relaxed' });
 	const finished = committed(transaction);
 	const meta = transaction.objectStore('meta');
 	const rooms = transaction.objectStore('rooms');
 	const records = transaction.objectStore('records');
 	const byKey = records.index('key');
-	const previous = await done(meta.get(server)) as MetaRow | undefined;
+	const previous = await done(meta.get(META)) as MetaRow | undefined;
 	if (write.continues && !previous) {
 		// Written over what is kept, and nothing is: another tab forgot it (signed out, or chose not to keep).
 		finished.catch(() => undefined);
@@ -276,12 +320,12 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
 	 * is kept (`always`: whatever `kept` says): a message moved to a room that isn't goes from the one it left all the same.
 	 */
 	const replace = async (row: RecordRow, always = false) => {
-		for (const key of await done(byKey.getAllKeys(IDBKeyRange.only([server, row.kind, row.id])))) records.delete(key);
+		for (const key of await done(byKey.getAllKeys(IDBKeyRange.only([row.kind, row.id])))) records.delete(key);
 		if (always || kept.has(row.room)) records.put(row);
 	};
 	if (write.reset) {
-		records.delete(serverRange(server));
-		rooms.delete(serverRange(server));
+		records.clear();
+		rooms.clear();
 	}
 	for (const change of write.changes) {
 		switch (change.kind) {
@@ -290,29 +334,29 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
 				// A creation (`log_id == message_id`, §2.2) replaces no earlier snapshot: it needs no looking up, and is
 				// kept only in a room that is. Any later one may have moved out of a kept room.
 				if (record.log_id === record.message_id) {
-					if (kept.has(record.room_id)) records.put(messageRow(server, record));
+					if (kept.has(record.room_id)) records.put(messageRow(record));
 				} else {
-					await replace(messageRow(server, record));
+					await replace(messageRow(record));
 				}
 				break;
 			}
 			case 'reaction':
 				// Kept with its message, in the room it is in (the writer names it): nothing of a room not kept is.
-				if (change.set.room_id !== undefined && kept.has(change.set.room_id)) await replace(reactionRow(server, change.set, change.set.room_id));
+				if (change.set.room_id !== undefined && kept.has(change.set.room_id)) await replace(reactionRow(change.set, change.set.room_id));
 				break;
 			case 'membership':
-				if (kept.has(change.entry.room_id)) records.put(membershipRow(server, change.entry));
+				if (kept.has(change.entry.room_id)) records.put(membershipRow(change.entry));
 				break;
 			case 'evict':
 				// What the client drops below a room's bound: its messages and memberships (`evictBefore`).
-				if (kept.has(change.room)) await eachRow(records, roomRange(server, change.room, Number(change.floor)), (row, cursor) => { if (row.kind !== 'r') cursor.delete(); });
+				if (kept.has(change.room)) await eachRow(records, roomRange(change.room, Number(change.floor)), (row, cursor) => { if (row.kind !== 'r') cursor.delete(); });
 				break;
 			case 'clearRoom': {
 				// A rebuild: its messages and reactions go, and its sync with them until the room settles again.
 				if (!kept.has(change.room)) break;
-				await eachRow(records, roomRange(server, change.room), (row, cursor) => { if (row.kind !== 'j') cursor.delete(); });
-				const row = await done(rooms.get([server, change.room])) as RoomRow | undefined;
-				if (row?.sync) rooms.put({ server, room: change.room, ...(row.record ? { record: row.record } : {}) });
+				await eachRow(records, roomRange(change.room), (row, cursor) => { if (row.kind !== 'j') cursor.delete(); });
+				const row = await done(rooms.get(change.room)) as RoomRow | undefined;
+				if (row?.sync) rooms.put({ room: change.room, ...(row.record ? { record: row.record } : {}) });
 				break;
 			}
 			// A room record goes with its room's row; `clear` stops the writer before it gets here.
@@ -322,28 +366,28 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
 	}
 	for (const room of write.whole) {
 		if (room.from === undefined) {
-			records.delete(roomRange(server, room.room));
-			for (const message of room.messages) records.put(messageRow(server, message));
-			for (const set of room.reactions) records.put(reactionRow(server, set, room.room));
+			records.delete(roomRange(room.room));
+			for (const message of room.messages) records.put(messageRow(message));
+			for (const set of room.reactions) records.put(reactionRow(set, room.room));
 		} else {
 			// Over what is kept below `from`: an earlier snapshot of a message or set there is replaced, not kept beside.
-			records.delete(IDBKeyRange.bound([server, room.room, room.from], [server, room.room, []]));
-			for (const message of room.messages) await replace(messageRow(server, message), true);
-			for (const set of room.reactions) await replace(reactionRow(server, set, room.room), true);
+			records.delete(IDBKeyRange.bound([room.room, room.from], [room.room, []]));
+			for (const message of room.messages) await replace(messageRow(message), true);
+			for (const set of room.reactions) await replace(reactionRow(set, room.room), true);
 		}
-		for (const entry of room.memberships) records.put(membershipRow(server, entry));
+		for (const entry of room.memberships) records.put(membershipRow(entry));
 	}
 	for (const row of write.rooms) rooms.put(row);
 	const keepOnly = write.keepOnly ? new Set(write.keepOnly) : undefined;
-	const others = keepOnly ? (await done(rooms.getAllKeys(serverRange(server)))).map((key) => (key as [string, string])[1]).filter((room) => !keepOnly.has(room)) : [];
+	const others = keepOnly ? (await done(rooms.getAllKeys())).map((key) => key as string).filter((room) => !keepOnly.has(room)) : [];
 	for (const room of [...write.dropped, ...others]) {
-		records.delete(roomRange(server, room));
-		rooms.delete([server, room]);
+		records.delete(roomRange(room));
+		rooms.delete(room);
 	}
 	const version = (previous?.version ?? 0) + 1;
 	const { users, aliases, ...fields } = write.meta;
 	const people = users ? { users, ...(aliases ? { aliases } : {}) } : { users: previous?.users ?? [], ...(previous?.aliases ? { aliases: previous.aliases } : {}) };
-	meta.put({ ...fields, ...people, server, version, savedAt: Date.now() } satisfies MetaRow);
+	meta.put({ ...fields, ...people, version, savedAt: Date.now() } satisfies MetaRow, META);
 	await finished;
 	return version;
 }
@@ -352,31 +396,27 @@ export async function writeHistory(db: IDBDatabase, server: string, write: Histo
  * Drops what is older than `cutoff` (epoch milliseconds, a `log_id` on servers whose `log_id`s are times): every
  * record logged before it, as a server that discards the start of its log does, so a reaction set logged before it
  * goes even when its message was edited since (a page from here, which starts at the cutoff, would never hold it).
- * Only in rooms whose positions read as times, so a server counting from 1 loses nothing.
+ * Only in rooms whose positions read as times, so a server counting from 1 loses nothing. Resolves with the
+ * version it moved from and to, when it dropped anything.
  */
-export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<Map<string, { from: number; to: number }>> {
+export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<{ from: number; to: number } | undefined> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readwrite', { durability: 'relaxed' });
 	const finished = committed(transaction);
 	const records = transaction.objectStore('records');
 	const rooms = await done(transaction.objectStore('rooms').getAll()) as RoomRow[];
-	const pruned = new Set<string>();
-	for (const { server, room, sync } of rooms) {
+	let pruned = false;
+	for (const { room, sync } of rooms) {
 		if (!timeLike(sync)) continue;
-		const range = roomRange(server, room, cutoff);
-		if (await done(records.count(range))) pruned.add(server);
+		const range = roomRange(room, cutoff);
+		if (await done(records.count(range))) pruned = true;
 		records.delete(range);
 	}
-	// A new version for each server pruned, so another tab paging what it restored from here knows it changed.
+	// A new version, so another tab paging what it restored from here knows it changed.
 	const meta = transaction.objectStore('meta');
-	const versions = new Map<string, { from: number; to: number }>();
-	for (const server of pruned) {
-		const row = await done(meta.get(server)) as MetaRow | undefined;
-		if (!row) continue;
-		meta.put({ ...row, version: row.version + 1 });
-		versions.set(server, { from: row.version, to: row.version + 1 });
-	}
+	const row = pruned ? await done(meta.get(META)) as MetaRow | undefined : undefined;
+	if (row) meta.put({ ...row, version: row.version + 1 }, META);
 	await finished;
-	return versions;
+	return row && { from: row.version, to: row.version + 1 };
 }
 
 /** What `writeHistory` throws when it would write over what is kept and nothing is: another tab forgot it. */
@@ -391,30 +431,18 @@ export class HistoryGone extends Error {
 const SCAN_BATCH = 500;
 
 /**
- * Calls `visit` with every message kept for `server` (its latest snapshot), room by room, a batch of rows a read:
- * what a search of this device looks through. `stop` ends it early, between batches.
+ * Calls `visit` with every message kept (its latest snapshot), room by room, a batch of rows a read: what a search
+ * of this device looks through. `stop` ends it early, between batches.
  */
-export async function scanMessages(db: IDBDatabase, server: string, visit: (message: MessageRecord) => void, stop: () => boolean = () => false): Promise<void> {
-	let range = serverRange(server);
+export async function scanMessages(db: IDBDatabase, visit: (message: MessageRecord) => void, stop: () => boolean = () => false): Promise<void> {
+	let range: IDBKeyRange | undefined;
 	for (;;) {
 		const rows = await done(db.transaction('records').objectStore('records').getAll(range, SCAN_BATCH)) as RecordRow[];
 		for (const row of rows) if (row.kind === 'm') visit(row.value as MessageRecord);
 		if (rows.length < SCAN_BATCH || stop()) return;
 		const last = rows.at(-1)!;
-		range = IDBKeyRange.bound([server, last.room, last.log, last.kind, last.id], [server, []], true, false);
+		range = IDBKeyRange.lowerBound([last.room, last.log, last.kind, last.id], true);
 	}
-}
-
-/** Removes what is kept for `server`, or for every server. */
-export async function forgetHistory(db: IDBDatabase, server?: string): Promise<void> {
-	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readwrite');
-	const finished = committed(transaction);
-	for (const name of ['meta', 'rooms', 'records'] as const) {
-		const store = transaction.objectStore(name);
-		if (server === undefined) store.clear();
-		else store.delete(name === 'meta' ? server : serverRange(server));
-	}
-	await finished;
 }
 
 /** The earliest time a `log_id` reads as: before it, a server counts its positions some other way. */

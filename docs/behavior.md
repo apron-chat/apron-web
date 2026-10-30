@@ -683,15 +683,19 @@ since (a quiet room saved recently counts as caught up then, however old its
 last message). It is kept only for a session saved here (an account, or a token the
 server resumes), never for a guest; signing out removes it, as does choosing
 not to keep any, in any tab: the others stop writing it back, and a retention
-chosen in one tab holds in the others. Each server's history is kept apart: switching to another
-server, or connecting again from the sign-in screen, goes on from what was kept
-for that server in the same way, and leaves the others' as they are. One tab
+chosen in one tab holds in the others. Each account's history on each server
+is kept apart, in a database of its own: switching to another server, or
+connecting again from the sign-in screen, goes on from what was kept for that
+server in the same way, and leaves the others' as they are. One account's is
+kept per server, as one session is saved: signing in there as another deletes
+the one before. One tab
 writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped
 keeping more if the device ran out of space.
 
 **Search local history** (first in the room header's ⋯ menu, or Ctrl+K, ⌘K on a Mac)
 starts narrowed to the open room or thread (`room:#general `, the caret after
-it; Backspace widens it to everywhere), and looks through this server's history kept on this device and what the page has
+it; Backspace widens it to everywhere), and looks through this server's history kept on this device for the
+account signed in (none as a guest, or while keeping is off) and what the page has
 loaded, as you type: a message matches when its text holds every word typed,
 in any case and with or without accents. `user:` keeps what someone sent, by
 `@user_id` or name (`user:@ada`, `user:"Ada Lovelace"`), and `room:` what is in
