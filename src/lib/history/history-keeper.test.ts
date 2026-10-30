@@ -427,6 +427,21 @@ describe('HistoryKeeper', () => {
 		await keeper.stop();
 	});
 
+	it('keeps nothing where the browser can’t list its databases, since signing out couldn’t find them to delete', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const unlisted = { open: indexedDB.open.bind(indexedDB), deleteDatabase: indexedDB.deleteDatabase.bind(indexedDB) } as unknown as Databases;
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const keeper = new HistoryKeeper({ indexedDB: unlisted, locks: null });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		expect(await listHistories(indexedDB)).toEqual([]);
+		await keeper.stop();
+	});
+
 	it('forgets a server on sign-out, and everything when keeping is turned off', async () => {
 		const server = new MemoryProtocolServer({ account: true });
 		const indexedDB = new IDBFactory();

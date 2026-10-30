@@ -681,7 +681,8 @@ are); elsewhere everything loaded is kept. A room last caught up before the
 cutoff starts over from its newest page rather than paging through everything
 since (a quiet room saved recently counts as caught up then, however old its
 last message). It is kept only for a session saved here (an account, or a token the
-server resumes), never for a guest; signing out removes it, as does choosing
+server resumes), never for a guest, and only in a browser that can list its
+databases (so signing out can find it to delete); signing out removes it, as does choosing
 not to keep any, in any tab: the others stop writing it back, and a retention
 chosen in one tab holds in the others. Each account's history on each server
 is kept apart, in a database of its own: switching to another server, or

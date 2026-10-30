@@ -221,8 +221,12 @@ export class HistoryKeeper {
 		await deleteHistory(this.factory, name);
 	}
 
+	/**
+	 * Keeping is on, nothing has failed, and the browser lists its databases (`indexedDB.databases()`): without that
+	 * a restore can't find what is kept, nor signing out delete it, so nothing is kept at all.
+	 */
 	private get keeping(): boolean {
-		return this.retentionMs !== null && this.failure === undefined;
+		return this.retentionMs !== null && this.failure === undefined && typeof this.factory?.databases === 'function';
 	}
 
 	/**
