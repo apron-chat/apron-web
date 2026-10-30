@@ -106,15 +106,16 @@ test.describe('ext:permissions and ext:settings', () => {
 			for (const topic of await page.getByTestId('room-directory').locator('.ap-room-topic').allTextContents()) expect(topic).not.toMatch(/Join|Open/);
 		});
 
-		test('selects messages to copy as a log, with nothing to move them to', async ({ preview, page, context }) => {
+		test('selects messages to copy to the clipboard, with nothing to move them to, and leaves select mode once copied', async ({ preview, page, context }) => {
 			await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 			await preview.open();
 			await page.locator(`article[data-message-id="${WELCOME}"]`).click({ modifiers: ['Shift'] });
 			const bar = page.getByTestId('selection-bar');
 			await expect(bar).toContainText('1 message selected');
-			await expect(bar.getByRole('button')).toHaveText(['Cancel', 'Copy log']);
-			await bar.getByRole('button', { name: 'Copy log', exact: true }).click();
-			await expect(bar.getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
+			await expect(bar.getByRole('button')).toHaveText(['Cancel', 'Copy to clipboard']);
+			await bar.getByRole('button', { name: 'Copy to clipboard', exact: true }).click();
+			// Copied, select mode ends.
+			await expect(bar).toHaveCount(0);
 			expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^> \*\*.+\*\* · \w+day, \w{3} \d+, \d{4} at /);
 		});
 

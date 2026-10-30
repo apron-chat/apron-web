@@ -2876,13 +2876,15 @@
 		}
 	}
 
-	/** "Copy log" in select mode: the picked messages, in timeline order, as Markdown (`messageLog`). The selection stays. */
+	/** "Copy to clipboard" in select mode: the picked messages, in timeline order, as Markdown (`messageLog`). Once copied, select mode ends. */
 	async function copySelectionLog(): Promise<boolean> {
 		const picked = messages.filter((event) => selection.has(event.message_id));
 		if (!picked.length) return false;
 		try {
 			const reactions = (event: MessageRecord) => session.rooms.find((room) => room.id === event.room_id)?.timeline.reactions[event.message_id];
 			await copyRich(messageLog(picked, { lookup: resolveMessage, reactions }));
+			selection.cancel();
+			composer?.focus();
 			return true;
 		} catch {
 			feedback.error('Unable to copy the messages');
