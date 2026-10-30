@@ -5,7 +5,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
@@ -1832,8 +1832,8 @@
 	/**
 	 * Sends the composer's text: a message with the draft's mentions (§3.5) and
 	 * previews of its GitHub links as `link` embeds (§4.8.1), or
-	 * with capability `command` a command (§4.1), which `/nick`, `/join`, `/leave`,
-	 * `/topic`, `/kick` and `/invite` turn into the requests they spell. A
+	 * with capability `command` a command (§4.1), which `/nick`, `/join`, `/leave`
+	 * and `/topic` turn into the requests they spell; `/me` is a message. A
 	 * command's failure shows as a local notice in the pane, where its replies
 	 * land too.
 	 */
@@ -1861,7 +1861,7 @@
 		const originKey = draftKey(roomId);
 		const mentions = composerMentions;
 		const dismissed = composerDismissed;
-		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported }, mentions);
+		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms });
 		// A draft given back keeps the link previews that were removed from it.
 		const restore = () => {
 			if (!drafts.restore(originKey, draft, reply)) return;
@@ -1903,14 +1903,6 @@
 				chat.leaveRoom(leaving).promise.catch(failed);
 			} else if (action.kind === 'topic') {
 				chat.updateRoom(roomId, { description: action.description }).promise.catch(failed);
-			} else {
-				// `/kick @user` and `/invite @user` as `room_leave`/`room_join` with `user_id` (§4.2.2). A server
-				// that answers `unsupported` may still have the command itself (§4.1): it gets the text as typed.
-				const change = action.kind === 'kick' ? chat.leaveRoom(roomId, action.user) : chat.joinRoom(roomId, action.user);
-				change.promise.catch((cause: Error & { code?: number }) => {
-					if (cause.code === UNSUPPORTED) chat.command(roomId, draft, options).promise.catch(failed);
-					else failed(cause);
-				});
 			}
 		}
 		clearComposer(roomId);

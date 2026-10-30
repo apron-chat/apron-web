@@ -9,7 +9,12 @@ export function enterAction(event: Pick<KeyboardEvent, 'shiftKey'>, onHandheld: 
 	return event.shiftKey || onHandheld ? 'newline' : 'send';
 }
 
-/** Draft text that is a command (§4.1): one leading `/`. `//` posts a message that starts with `/`. */
+/** Draft text that is a command (§4.1): one leading `/`. `//` posts a message that starts with `/`, and `/me` an action. */
 export function isCommand(text: string): boolean {
-	return text.startsWith('/') && !text.startsWith('//');
+	return text.startsWith('/') && !text.startsWith('//') && meAction(text) === undefined;
+}
+
+/** The action a one-line `/me waves` describes (`waves`), which posts as a message in italics. */
+export function meAction(text: string): string | undefined {
+	return /^\/me[ \t]+([^\n]+)$/i.exec(text.trim())?.[1].trim();
 }

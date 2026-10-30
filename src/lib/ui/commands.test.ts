@@ -23,25 +23,24 @@ describe('composer commands', () => {
 		expect(composerAction('/leave', both)).toEqual({ kind: 'leave' });
 		expect(composerAction('/leave ops', both)).toEqual({ kind: 'leave', room: 'ops' });
 		expect(composerAction('/TOPIC Deploys *only* ', both)).toEqual({ kind: 'topic', description: 'Deploys *only*' });
-		expect(composerAction('/kick @guest_2', both)).toEqual({ kind: 'kick', user: 'guest_2' });
-		expect(composerAction('/invite bob.', both)).toEqual({ kind: 'invite', user: 'bob' });
+		// Members are added and removed in the member list; the server has its own /kick and /invite-….
+		expect(composerAction('/kick @guest_2', both)).toEqual({ kind: 'command', text: '/kick @guest_2' });
+		expect(composerAction('/invite 3', both)).toEqual({ kind: 'command', text: '/invite 3' });
 		// Without an argument, or without capability rooms, the server gets them.
 		expect(composerAction('/nick', both)).toEqual({ kind: 'command', text: '/nick' });
 		expect(composerAction('/join ops', { command: true, rooms: false })).toEqual({ kind: 'command', text: '/join ops' });
-		// A reason, or a server that doesn't let members remove others, leaves /kick to the server.
-		expect(composerAction('/kick @guest_2', { ...both, members: false })).toEqual({ kind: 'command', text: '/kick @guest_2' });
-		expect(composerAction('/kick', both)).toEqual({ kind: 'command', text: '/kick' });
 	});
 
-	it('reads a user argument per Appendix A.3, and exactly as a mention chip names it', () => {
-		// In text a trailing `-` is not part of the ID…
-		expect(composerAction('/kick @al-', both)).toEqual({ kind: 'kick', user: 'al' });
-		// …but a chip sent as `@al-` with `al-` in its mentions is that user.
-		expect(composerAction('/kick @al-', both, ['al-'])).toEqual({ kind: 'kick', user: 'al-' });
-		expect(composerAction('/kick @al', both, ['al'])).toEqual({ kind: 'kick', user: 'al' });
-		// Email and federated forms are one ID.
-		expect(composerAction('/kick @ada@example.com', both)).toEqual({ kind: 'kick', user: 'ada@example.com' });
-		expect(composerAction('/invite carol:b.example.', both)).toEqual({ kind: 'invite', user: 'carol:b.example' });
+	it('posts /me as an action in italics, with or without capability command', () => {
+		expect(composerAction('/me waves ', both)).toEqual({ kind: 'message', text: '_waves_' });
+		expect(composerAction('/ME shares #ops with @ada', { command: false, rooms: false })).toEqual({ kind: 'message', text: '_shares #ops with @ada_' });
+		// Not an action: nothing to do, another command, more than one line, or //.
+		expect(composerAction('/me', both)).toEqual({ kind: 'command', text: '/me' });
+		expect(composerAction('/meet ada', both)).toEqual({ kind: 'command', text: '/meet ada' });
+		expect(composerAction('/me waves\nthen leaves', both)).toEqual({ kind: 'command', text: '/me waves\nthen leaves' });
+		expect(composerAction('//me waves', both)).toEqual({ kind: 'message', text: '/me waves' });
+		expect(isCommand('/me waves')).toBe(false);
+		expect(isCommand('/me')).toBe(true);
 	});
 });
 
