@@ -69,15 +69,19 @@ describe('SearchPanel', () => {
 		expect(queryByText('Only the newest are listed. Add words to narrow it down.')).not.toBeNull();
 	});
 
-	it('is named Search local history, its “history” a link that closes it when there is somewhere to go', () => {
+	it('is named Search Local History, beside it how far back history is kept: a button that closes it for where that\'s set', () => {
 		const onhistory = vi.fn();
-		const { state } = render({ onhistory });
+		const { state } = render({ kept: '30 Days', onhistory });
 		const title = document.querySelector('.ap-dialog-title')!;
 		expect(document.querySelector('dialog')!.getAttribute('aria-labelledby')).toBe(title.id);
-		expect(title.textContent!.replace(/\s+/g, ' ').trim()).toBe('Search local history');
-		dom.button('history').click();
+		expect(title.textContent!.replace(/\s+/g, ' ').trim()).toBe('Search Local History');
+		dom.button('30 Days of history kept, in Preferences').click();
 		flushSync();
 		expect(onhistory).toHaveBeenCalledOnce();
 		expect(state.open).toBe(false);
+		// With nowhere to go, no button.
+		dom.unmount();
+		render({ kept: '30 Days' });
+		expect(document.querySelector('.ap-dialog-titlebtn')).toBeNull();
 	});
 });
