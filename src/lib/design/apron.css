@@ -1299,6 +1299,7 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-pref-scopes { max-width: var(--pref-panel-w); padding: var(--space-4) 0; }
 .ap-pref-theme-setting select { flex: none; }
 .ap-pref-setting .ap-pref-select { width: min(100%, 320px); }
+.ap-pref-sites { width: min(100%, 420px); resize: vertical; font-family: var(--font-mono); font-size: var(--text-sm); }
 .ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
 .ap-pref-fonts { margin-top: var(--space-4); }
 .ap-pref-font-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }

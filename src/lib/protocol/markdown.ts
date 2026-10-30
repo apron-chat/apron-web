@@ -114,6 +114,9 @@ export interface CustomEmojiImage {
 /** Says how to draw a key (`:name:`), or nothing to leave it text. */
 export type EmojiResolver = (key: string) => CustomEmojiImage | undefined;
 
+/** The URL an image in a message loads from, where it may load from it; nothing shows it as a link instead. */
+export type ImageResolver = (src: string) => string | undefined;
+
 /** Someone a composer can mention: a room member or a recent sender. */
 export interface MentionPerson {
 	id: string;
@@ -187,10 +190,24 @@ function markdown(source: string): string {
  * every render here, it shows the text without bidi embeddings and overrides
  * (§3.5.2); the text itself stays as written.
  */
-export function renderMarkdown(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver): string {
+export function renderMarkdown(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver, resolveImage?: ImageResolver): string {
 	const source = withoutBidiOverrides(text);
 	if (!DOMPurify.isSupported) return linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink, resolveEmoji);
-	return sanitize(linkText(markdown(source), resolve, resolveRoom, resolveLink, resolveEmoji));
+	return sanitize(linkText(withImages(markdown(source), resolveImage), resolve, resolveRoom, resolveLink, resolveEmoji));
+}
+
+/** An image as markdown-it writes one (`![alt](src "title")`): its `src`, `alt` and `title`, escaped. */
+const IMAGE = /<img src="([^"]*)" alt="([^"]*)"(?: title="([^"]*)")?>/g;
+
+/**
+ * Rendered markdown with each image that may not load (`resolveImage`, none without one) as a link to it, showing
+ * its alt text, else its URL: loading it would tell its site who reads the message (PROTOCOL.md §5.5).
+ */
+function withImages(html: string, resolveImage: ImageResolver | undefined): string {
+	return html.replace(IMAGE, (image, src: string, alt: string, title: string | undefined) => {
+		if (resolveImage?.(unescapeHtml(src)) !== undefined) return image;
+		return `<a href="${src}"${title === undefined ? '' : ` title="${title}"`}>${alt || src}</a>`;
+	});
 }
 
 /** A plain body as HTML: escaped, with bare links and mentions linked. Line breaks are kept by CSS (`pre-wrap`). */

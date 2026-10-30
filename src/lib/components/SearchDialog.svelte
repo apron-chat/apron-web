@@ -7,6 +7,7 @@
 	import type { HistoryKeeper } from '$lib/history/history-keeper';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import { isSystemId, type MessageRecord } from '$lib/protocol/types';
+	import { directory } from '$lib/ui/directory.svelte';
 	import { plainTextOf, senderName } from '$lib/ui/messages';
 	import { searchRooms, type RoomSuggestion } from '$lib/ui/room-autocomplete';
 	import { filterAtCaret, newestMatches, parseQuery, queryMatcher, searchPeople, snippet, withFilterValue, type SearchQuery } from '$lib/ui/search';
@@ -58,7 +59,7 @@
 	/** The `user:` or `room:` value the caret is in. */
 	let at = $derived(filterAtCaret(query, caret));
 	/** Everyone met, but the system identities, as the composer's `@` lists them. */
-	let people = $derived(Object.values(client.snapshot().users).filter((user) => !isSystemId(user.user_id)).map((user) => ({ id: user.user_id, name: user.name, avatar: user.avatar })));
+	let people = $derived(Object.values(client.snapshot().users).filter((user) => !isSystemId(user.user_id)).map((user) => ({ id: user.user_id, name: user.name, avatar: directory.avatar(user) })));
 	let peopleFound = $derived(at?.kind === 'users' ? searchPeople(people, at.typed) : []);
 	let roomsFound = $derived(at?.kind === 'rooms' ? searchRooms(roomSuggestions, at.typed) : []);
 	let suggested = $derived(at?.kind === 'users' ? peopleFound.length : roomsFound.length);

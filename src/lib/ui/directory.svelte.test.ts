@@ -4,6 +4,7 @@ import type { ClientSnapshot, RoomListing } from '$lib/protocol/client';
 import { renderMarkdown } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 import { directory } from './directory.svelte';
+import { mediaSettings } from './media-settings.svelte';
 import { blankSnapshot } from './session.svelte';
 
 const ada: Identity = { user_id: 'ada', name: 'Ada' };
@@ -187,4 +188,31 @@ describe('directory', () => {
 		}
 	});
 
+
+	it('loads avatars and images in messages from where media may load from, as Preferences choose', () => {
+		const away: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://gravatar.example/cy.png' };
+		const home: Identity = { user_id: 'di', name: 'Di', avatar: 'https://example.com/di.png' };
+		directory.apply(snapshot([ada, away, home], { server: { apron: 9, capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
+		const image = () => renderMarkdown('![x](https://gravatar.example/x.png)', undefined, undefined, undefined, undefined, directory.resolveImage);
+		try {
+			mediaSettings.update('server', []);
+			expect(directory.avatar(home)).toBe('https://example.com/di.png');
+			expect(directory.avatar(away)).toBeUndefined();
+			expect(directory.resolveImage('https://media.example/a.png')).toBe('https://media.example/a.png');
+			expect(image()).not.toContain('<img');
+			mediaSettings.update('custom', ['https://gravatar.example']);
+			expect(directory.avatar(away)).toBe('https://gravatar.example/cy.png');
+			expect(directory.resolveImage('https://media.example/a.png')).toBe('https://media.example/a.png');
+			mediaSettings.update('all');
+			expect(directory.resolveImage('https://anywhere.example/a.png')).toBe('https://anywhere.example/a.png');
+			expect(directory.resolveImage('http://anywhere.example/a.png')).toBeUndefined();
+			// An export opened without its images: back to the server's own, whatever was chosen, until a choice.
+			mediaSettings.limit();
+			mediaSettings.load();
+			expect(mediaSettings.policy).toBe('server');
+			expect(directory.avatar(away)).toBeUndefined();
+		} finally {
+			mediaSettings.update('server', []);
+		}
+	});
 });

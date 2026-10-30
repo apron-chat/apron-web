@@ -5,6 +5,7 @@
 	import Button from '$lib/design/components/Button.svelte';
 	import ConnectPage from '$lib/design/components/ConnectPage.svelte';
 	import TypingDots from '$lib/design/components/TypingDots.svelte';
+	import { mediaSettings } from '$lib/ui/media-settings.svelte';
 	import { keepSettingsInMemory } from '$lib/ui/storage';
 	import AppPage from '../+page.svelte';
 
@@ -46,9 +47,13 @@
 		}
 	}
 
-	/** Opens `archive`, its images loading from the sites it names only `withImages`. */
+	/**
+	 * Opens `archive`, its images loading from the sites it names only `withImages`. Without, nothing loads from
+	 * anywhere else either, whatever Preferences say, until the reader chooses otherwise there.
+	 */
 	function open(archive: Archive, withImages: boolean): void {
 		asking = undefined;
+		if (!withImages) mediaSettings.limit();
 		reading = { archive, server: new ArchiveServer(withImages ? archive : { ...archive, media: [] }) };
 	}
 
@@ -73,7 +78,7 @@
 			<div class="ap-connect-card" role="group" aria-label="Load images">
 				<h1 class="ap-connect-title">Apron</h1>
 				<p class="ap-connect-tag">Load its images?</p>
-				<p class="ap-form-hint" data-testid="archive-hosts">This export’s images load from {asking.hosts.join(', ')}. Loading them lets {asking.hosts.length === 1 ? 'that site' : 'those sites'} see that you’re reading it; without them, each shows as a card.</p>
+				<p class="ap-form-hint" data-testid="archive-hosts">This export’s images load from {asking.hosts.join(', ')}. Loading them lets {asking.hosts.length === 1 ? 'that site' : 'those sites'} see that you’re reading it. Without them, nothing loads from any other site: images show as links and avatars as initials.</p>
 				<div class="ap-connect-actions">
 					<Button variant="ghost" label="Open without images" onclick={() => open(archive, false)} />
 					<Button variant="primary" label="Load images" onclick={() => open(archive, true)} />

@@ -521,6 +521,7 @@
 			{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
 			onexport={exportChats}
+			mediaHosts={serverMedia(session.server).origins.map((origin) => new URL(origin).host)}
 			onclosed={() => preferencesTrigger?.focus()}
 		/>
 	{/if}

@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { historySettings, RETENTIONS, storageUsed } from '$lib/history/settings.svelte';
+	import { MEDIA_POLICIES, mediaSettings, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import Button from '$lib/design/components/Button.svelte';
@@ -22,7 +23,7 @@
 
 	interface Props {
 		open?: boolean;
-		/** The section shown: `notifications`, `appearance` or `history`. Bindable. */
+		/** The section shown: `notifications`, `appearance`, `media` or `history`. Bindable. */
 		section?: string;
 		/** Notifications on this device: the one switch, for while Apron is open and, by push, while it's closed. */
 		notificationsEnabled: boolean;
@@ -54,14 +55,17 @@
 		 * while nothing is loaded. Absent where there is nothing to export from.
 		 */
 		onexport?: () => Promise<{ name: string; rooms: number; messages: number } | undefined>;
+		/** The sites this server names for its media (`ext:media`), as hosts: what This server loads from besides it. */
+		mediaHosts?: readonly string[];
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), section: preferencesSection = $bindable('notifications'), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, onclosed }: Props = $props();
+	let { open = $bindable(false), section: preferencesSection = $bindable('notifications'), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, mediaHosts = [], onclosed }: Props = $props();
 
 	const SECTIONS = [
 		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
 		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
+		{ value: 'media', label: 'Media', hint: 'Choose where images and avatars load from.', id: 'ap-pref-media' },
 		{ value: 'history', label: 'History', hint: 'What this device keeps of your chats, and exports of them.', id: 'ap-pref-history' }
 	];
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
@@ -90,6 +94,13 @@
 		? { text: historySettings.failure, tone: 'err' }
 		: historySettings.retention !== 'off' && used ? { text: `Apron uses about ${used} on this device.` } : undefined);
 	let exporting = $state(false);
+
+	/** What the chosen media policy loads, under it. */
+	let mediaNote = $derived(mediaSettings.policy === 'all'
+		? 'Images and avatars from any site.'
+		: `Files on this server${mediaHosts.length ? ` and on ${mediaHosts.join(', ')}` : ''}${mediaSettings.policy === 'custom' ? ', and on the sites below' : ''}. Elsewhere, an image shows as a link and an avatar as initials.`);
+	/** The sites added, one per line as hosts, as the field shows them. */
+	let addedSites = $derived(mediaSettings.origins.map((origin) => new URL(origin).host).join('\n'));
 
 	type Note = { text: string; tone?: 'ok' | 'err' };
 	/**
@@ -289,6 +300,22 @@
 						{#snippet action()}<Button size="sm" variant="primary" label="Install app" onclick={oninstallapp} />{/snippet}
 					</Callout>
 				</div>
+			{/if}
+		{:else if preferencesSection === 'media'}
+			<SettingRow title="Load images from" for="ap-media-policy" hint="Loading an image or avatar tells the site it’s on that you’re reading, and from where. Small images sent with a message always show." class="ap-pref-media-setting">
+				<p class="ap-pref-note" data-testid="media-note">{mediaNote}</p>
+				{#snippet control()}
+					<select id="ap-media-policy" class="ap-field ap-pref-select" value={mediaSettings.policy} onchange={(event) => mediaSettings.update(event.currentTarget.value)} data-testid="media-policy">
+						{#each MEDIA_POLICIES as policy (policy.value)}<option value={policy.value}>{policy.label}</option>{/each}
+					</select>
+				{/snippet}
+			</SettingRow>
+			{#if mediaSettings.policy === 'custom'}
+				<SettingRow title="Sites" for="ap-media-sites" hint="One per line, such as cdn.example.com. Only https." stacked class="ap-pref-media-sites">
+					{#snippet control()}
+						<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update('custom', parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
+					{/snippet}
+				</SettingRow>
 			{/if}
 		{:else if preferencesSection === 'history'}
 			<SettingRow title="Keep history on this device" for="ap-history-retention" hint="Signed in to an account, the rooms you’ve joined open from here at once, then catch up with the server. Never as a guest; signing out removes it." class="ap-pref-history-setting">

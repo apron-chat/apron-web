@@ -78,6 +78,7 @@
 	import { ViewKeeper } from '$lib/ui/view-keeper';
 	import { HistoryKeeper } from '$lib/history/history-keeper';
 	import { historySettings } from '$lib/history/settings.svelte';
+	import { mediaSettings } from '$lib/ui/media-settings.svelte';
 	import { preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
@@ -1091,6 +1092,8 @@
 		notificationsChoiceMade = notificationsChosen();
 		notificationState = notificationPermission();
 		if (!previewMode) pushSettings.load();
+		// Where images load from holds for an export read here too.
+		mediaSettings.load();
 		webPushAvailable = webPushSupported();
 		runsInstalled = isStandalone();
 		// Push turned on or off, and descriptions put away, in another tab apply here too.
@@ -1099,6 +1102,7 @@
 			pushSettings.storageChanged(event.key);
 			// Not keeping history, or keeping less, chosen in another tab: this one stops or prunes too.
 			historySettings.storageChanged(event.key);
+			mediaSettings.storageChanged(event.key);
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 			// A description put away or brought back in another tab is here too.
 			if (event.key === HIDDEN_DESCRIPTIONS_KEY) hiddenDescriptions = loadHiddenDescriptions();

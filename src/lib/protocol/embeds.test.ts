@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { embedMedia, parseOrigins, safeAvatar, safeLink, sameOriginMedia, serverOrigin } from './embeds';
+import { ANY_ORIGIN, embedMedia, parseOrigins, safeAvatar, safeLink, sameOriginMedia, serverOrigin } from './embeds';
 
 describe('embed URL policy', () => {
 	it('loads media only from the chat server and links only over http(s)', () => {
@@ -23,6 +23,9 @@ describe('embed URL policy', () => {
 		expect(embedMedia('https://media.apron.chat/f/abc', 'https://server.apron.chat', trusted)).toBe('https://media.apron.chat/f/abc');
 		expect(embedMedia('https://server.apron.chat/files/x', 'https://server.apron.chat', trusted)).toBe('https://server.apron.chat/files/x');
 		expect(embedMedia('https://tracker.example/pixel.gif', 'https://server.apron.chat', trusted)).toBeUndefined();
+		// Anywhere, chosen: any https file, still no http one.
+		expect(embedMedia('https://tracker.example/pixel.gif', 'https://server.apron.chat', [ANY_ORIGIN])).toBe('https://tracker.example/pixel.gif');
+		expect(embedMedia('http://tracker.example/pixel.gif', 'https://server.apron.chat', [ANY_ORIGIN])).toBeUndefined();
 		// Streams stay on the chat server.
 		expect(sameOriginMedia('https://media.apron.chat/f/abc', 'https://server.apron.chat')).toBeUndefined();
 	});
