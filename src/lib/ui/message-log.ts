@@ -8,31 +8,33 @@ import { dayKeyOf, idMillis, idTime, isGrouped } from './time';
 export interface MessageLogOptions {
 	/** The name shown for a message's sender; the directory's by default (`senderName`). */
 	nameOf?: (event: MessageRecord) => string;
-	/** A message a reply quotes when it isn't in the log itself, if this client has it. */
+	/** A message a reply answers when it isn't in the log itself, if this client has it. */
 	lookup?: (id: string) => MessageRecord | undefined;
 	/** Which year is "this year", so a date leaves it out. */
 	now?: Date;
 }
 
-const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-const dayYearFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+const dayYearFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
 
-/** Characters that would turn a name into Markdown syntax inside its `**…**`. */
-const NAME_SYNTAX = /[\\`*_[\]<>]/g;
+/** Characters that would turn a name or a quoted snippet into Markdown syntax. */
+const INLINE_SYNTAX = /[\\`*_[\]<>~]/g;
+
+const inline = (text: string) => text.replace(INLINE_SYNTAX, '\\$&');
 
 /**
- * Messages as a readable Markdown log, for the clipboard ("Copy log"): one
- * block per sender's run, headed by their name in bold and the time, with the
- * full date on the first message, as an anchor, and the day wherever it
- * changes after. Consecutive
- * messages from one sender a few minutes apart share a header, as the
- * timeline groups them. A reply opens with a one-line quote of what it
- * answers. Bodies are copied as written, Markdown and all, with each
- * uploaded image after as a Markdown image; other attachments and link
- * previews are left out, and a message with nothing else shows reads
- * "(attachment)". `messages` are taken in the order given, each once: where
- * one comes more than once (edited, or an upload finishing), its latest
- * snapshot (by `log_id`) stands where it first came.
+ * Messages as a readable Markdown log, for the clipboard ("Copy log"). Each
+ * sender's run is one block quote, opened by their name in bold and the time
+ * as a paragraph of its own: the first with the full date (`Thursday, Oct 29,
+ * 2026 at 6:51 PM`) as an anchor, and the day again wherever it changes.
+ * Consecutive messages from one sender a few minutes apart share a quote, as
+ * the timeline groups them. A reply opens with one italic line naming what it
+ * answers (`↪ Ada: Deploy is green…`). Bodies are copied as written, Markdown
+ * and all, with each uploaded image after as a Markdown image; other
+ * attachments and link previews are left out, and a message with nothing else
+ * shows reads "(attachment)". `messages` are taken in the order given, each
+ * once: where one comes more than once (edited, or an upload finishing), its
+ * latest snapshot (by `log_id`) stands where it first came.
  */
 export function messageLog(messages: readonly MessageRecord[], options: MessageLogOptions = {}): string {
 	const nameOf = options.nameOf ?? senderName;
@@ -42,29 +44,34 @@ export function messageLog(messages: readonly MessageRecord[], options: MessageL
 		const kept = byId.get(event.message_id);
 		if (!kept || compareLogIds(event.log_id, kept.log_id) >= 0) byId.set(event.message_id, event);
 	}
-	const blocks: string[] = [];
+	// Each run's paragraphs: its header, then each message's reply line and body.
+	const runs: string[][] = [];
 	let previous: MessageRecord | undefined;
 	let lastDay: string | undefined;
 	for (const event of byId.values()) {
-		const lines: string[] = [];
 		const day = dayKeyOf(event.message_id);
 		const newDay = Boolean(day) && day !== lastDay;
-		if (!isGrouped(previous, event) || newDay) {
+		if (!runs.length || !isGrouped(previous, event) || newDay) {
 			// The first date carries its year whenever it is; later ones only when it isn't `now`'s.
-			const when = [newDay ? dayOf(event.message_id, lastDay === undefined ? undefined : now) : '', idTime(event.message_id)].filter(Boolean).join(', ');
-			lines.push(`**${nameOf(event).replace(NAME_SYNTAX, '\\$&')}**${when ? ` · ${when}` : ''}`);
+			const date = newDay ? dayOf(event.message_id, lastDay === undefined ? undefined : now) : '';
+			const when = [date, idTime(event.message_id)].filter(Boolean).join(' at ');
+			runs.push([`**${inline(nameOf(event))}**${when ? ` · ${when}` : ''}`]);
 		}
 		if (day) lastDay = day;
-		const quote = event.reply_to && !event.deleted ? replyQuote(event.reply_to.message_id, byId, options.lookup, nameOf) : undefined;
-		if (quote) lines.push(quote, '');
-		lines.push(bodyOf(event));
-		blocks.push(lines.join('\n'));
+		const run = runs[runs.length - 1];
+		if (event.reply_to && !event.deleted) run.push(replyLine(event.reply_to.message_id, byId, options.lookup, nameOf));
+		run.push(bodyOf(event));
 		previous = event;
 	}
-	return blocks.join('\n\n');
+	return runs.map((run) => quoted(run.join('\n\n'))).join('\n\n');
 }
 
-/** The date a message ID falls on (`Thu, Oct 30`, with the year when it isn't `now`'s, or always without `now`), or empty when it carries no time. */
+/** Text as a block quote: each line behind `> `, and a bare `>` for a blank one so the quote runs on. */
+function quoted(text: string): string {
+	return text.split('\n').map((line) => (line ? `> ${line}` : '>')).join('\n');
+}
+
+/** The day a message ID falls on (`Thursday, Oct 29`, with the year when it isn't `now`'s, or always without `now`), or empty when it carries no time. */
 function dayOf(id: string, now: Date | undefined): string {
 	const millis = idMillis(id);
 	if (!millis) return '';
@@ -102,10 +109,10 @@ function imageOf(embed: Embed): string | undefined {
 	return `![${alt}](${url.replace(/[()]/g, (paren) => (paren === '(' ? '%28' : '%29'))})`;
 }
 
-/** A reply's quote: who it answers and the first line of what they wrote, or a note when that message isn't here. */
-function replyQuote(id: string, byId: Map<string, MessageRecord>, lookup: MessageLogOptions['lookup'], nameOf: (event: MessageRecord) => string): string {
+/** A reply's line: who it answers and the first line of what they wrote, or a note when that message isn't here. */
+function replyLine(id: string, byId: Map<string, MessageRecord>, lookup: MessageLogOptions['lookup'], nameOf: (event: MessageRecord) => string): string {
 	const target = byId.get(id) ?? lookup?.(id);
-	if (!target) return '> _(reply to an earlier message)_';
-	if (target.deleted) return '> _(reply to a deleted message)_';
-	return `> **${nameOf(target).replace(NAME_SYNTAX, '\\$&')}**: ${messageSnippet(target)}`;
+	if (!target) return '_↪ (an earlier message)_';
+	if (target.deleted) return '_↪ (a deleted message)_';
+	return `_↪ **${inline(nameOf(target))}**: ${inline(messageSnippet(target))}_`;
 }

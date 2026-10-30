@@ -115,7 +115,7 @@ test.describe('ext:permissions and ext:settings', () => {
 			await expect(bar.getByRole('button')).toHaveText(['Cancel', 'Copy log']);
 			await bar.getByRole('button', { name: 'Copy log', exact: true }).click();
 			await expect(bar.getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
-			expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^\*\*.+\*\* · \w{3}, \w{3} \d+, \d{4}, /);
+			expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^> \*\*.+\*\* · \w+day, \w{3} \d+, \d{4} at /);
 		});
 
 				test('reads the messages of a room it hasn’t joined, opened by its link', async ({ preview, page }) => {

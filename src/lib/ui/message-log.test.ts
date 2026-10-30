@@ -16,7 +16,7 @@ function at(minute: number, from: string, text: string, extra: Partial<MessageRe
 describe('messageLog', () => {
 	const now = new Date(2026, 9, 30, 18);
 
-	it('heads each sender’s run with their name and time, dates the first, and quotes what a reply answers', () => {
+	it('quotes each sender’s run under their name and time, dates the first, and says what a reply answers', () => {
 		const deploy = at(2, 'ada', 'Deploy is green, rolling to **prod** now.');
 		const pods = at(4, 'ben', 'Worker pods are restarting in a loop.', { reply_to: { message_id: deploy.message_id } });
 		const crash = at(5, 'ben', 'Crash is in the new queue client:\n\n```\nTypeError: conn is undefined\n```');
@@ -24,58 +24,71 @@ describe('messageLog', () => {
 		const thanks = at(31, 'ada', 'Thanks both — retro at 16:00.', { body: { text: 'Thanks both — retro at 16:00.', embeds: [{ kind: 'og', url: 'https://meet.example/retro', og: { title: 'Retro' } }] } });
 		const time = (event: MessageRecord) => idTime(event.message_id);
 		expect(messageLog([deploy, pods, crash, rollback, thanks], { nameOf, now })).toBe([
-			`**Ada Lovelace** · Fri, Oct 30, 2026, ${time(deploy)}`,
-			'Deploy is green, rolling to **prod** now.',
+			`> **Ada Lovelace** · Friday, Oct 30, 2026 at ${time(deploy)}`,
+			'>',
+			'> Deploy is green, rolling to **prod** now.',
 			'',
-			`**Ben** · ${time(pods)}`,
-			'> **Ada Lovelace**: Deploy is green, rolling to prod now.',
+			`> **Ben** · ${time(pods)}`,
+			'>',
+			'> _↪ **Ada Lovelace**: Deploy is green, rolling to prod now._',
+			'>',
+			'> Worker pods are restarting in a loop.',
+			'>',
+			'> Crash is in the new queue client:',
+			'>',
+			'> ```',
+			'> TypeError: conn is undefined',
+			'> ```',
 			'',
-			'Worker pods are restarting in a loop.',
+			`> **Cy** · ${time(rollback)}`,
+			'>',
+			'> _↪ **Ben**: Worker pods are restarting in a loop._',
+			'>',
+			'> Rolled back worker to 1.8.3.',
 			'',
-			'Crash is in the new queue client:',
-			'',
-			'```',
-			'TypeError: conn is undefined',
-			'```',
-			'',
-			`**Cy** · ${time(rollback)}`,
-			'> **Ben**: Worker pods are restarting in a loop.',
-			'',
-			'Rolled back worker to 1.8.3.',
-			'',
-			`**Ada Lovelace** · ${time(thanks)}`,
-			'Thanks both — retro at 16:00.',
+			`> **Ada Lovelace** · ${time(thanks)}`,
+			'>',
+			'> Thanks both — retro at 16:00.',
 		].join('\n'));
 	});
 
-	it('quotes a reply’s target from outside the log when it can, and says so when it can’t', () => {
-		const earlier = { ...at(0, 'cy', 'Who owns the queue client?'), message_id: 'old', log_id: 'old' };
+	it('names a reply’s target from outside the log when it can, says so when it can’t, and keeps the snippet’s Markdown inert', () => {
+		const earlier = { ...at(0, 'cy', 'Who owns the *queue* client?'), message_id: 'old', log_id: 'old' };
 		const answer = { ...at(1, 'ben', 'I do.', { reply_to: { message_id: 'old' } }), message_id: 'a', log_id: 'a' };
 		const orphan = { ...at(2, 'ada', 'Agreed.', { reply_to: { message_id: 'gone' } }), message_id: 'b', log_id: 'b' };
+		const echo = { ...at(3, 'cy', 'It’s mine.', { reply_to: { message_id: 'c' } }), message_id: 'c2', log_id: 'c2' };
+		const plain = { ...at(3, 'ben', 'run `make` _now_', { body: { text: 'run `make` _now_', format: 'plain' } }), message_id: 'c', log_id: 'c' };
 		const lookup = (id: string) => (id === 'old' ? earlier : undefined);
-		expect(messageLog([answer, orphan], { nameOf, lookup })).toBe([
-			'**Ben**', '> **Cy**: Who owns the queue client?', '', 'I do.', '',
-			'**Ada Lovelace**', '> _(reply to an earlier message)_', '', 'Agreed.',
+		expect(messageLog([answer, orphan, plain, echo], { nameOf, lookup })).toBe([
+			'> **Ben**', '>', '> _↪ **Cy**: Who owns the queue client?_', '>', '> I do.', '',
+			'> **Ada Lovelace**', '>', '> _↪ (an earlier message)_', '>', '> Agreed.', '',
+			'> **Ben**', '>', '> run `make` _now_', '',
+			'> **Cy**', '>', '> _↪ **Ben**: run \\`make\\` \\_now\\__', '>', '> It’s mine.',
 		].join('\n'));
 	});
 
-	it('leaves out embeds, notes deleted and attachment-only messages, and keeps a name’s Markdown inert', () => {
+	it('notes deleted and attachment-only messages, and keeps a name’s Markdown inert', () => {
 		const id = (event: MessageRecord, value: string) => ({ ...event, message_id: value, log_id: value });
-		const upload = id(at(0, 'ada', '', { body: { embeds: [{ kind: 'upload', url: 'https://cdn.example/a.png', title: 'a.png' }] } }), 'u');
+		const upload = id(at(0, 'ada', '', { body: { embeds: [{ kind: 'upload', url: 'https://cdn.example/a.pdf', title: 'a.pdf' }] } }), 'u');
 		const gone = id(at(0, 'ben', '', { deleted: true, body: undefined }), 'd');
 		const starry = id(at(0, '*star*', 'hi'), 's');
-		expect(messageLog([upload, gone, starry], { nameOf })).toBe('**Ada Lovelace**\n_(attachment)_\n\n**Ben**\n_(deleted)_\n\n**\\*star\\***\nhi');
+		expect(messageLog([upload, gone, starry], { nameOf })).toBe('> **Ada Lovelace**\n>\n> _(attachment)_\n\n> **Ben**\n>\n> _(deleted)_\n\n> **\\*star\\***\n>\n> hi');
+	});
+
+	it('keeps a sender’s messages a few minutes apart in one quote', () => {
+		const first = at(0, 'ada', 'One.');
+		const second = at(2, 'ada', 'Two,\nstill two.');
+		expect(messageLog([first, second], { nameOf, now })).toBe(`> **Ada Lovelace** · Friday, Oct 30, 2026 at ${idTime(first.message_id)}\n>\n> One.\n>\n> Two,\n> still two.`);
 	});
 
 	it('dates the first message in full, and each new day after with the year only when it isn’t this one', () => {
 		const late = at(0, 'ada', 'Night.');
 		const next = { ...late, message_id: String(new Date(2026, 9, 31, 9).getTime()), body: { text: 'Morning.' } };
 		const thisYear = messageLog([late, next], { nameOf, now });
-		expect(thisYear).toContain('**Ada Lovelace** · Fri, Oct 30, 2026, ');
-		expect(thisYear).toContain('**Ada Lovelace** · Sat, Oct 31, ');
-		expect(thisYear).not.toContain('Oct 31, 2026');
+		expect(thisYear).toContain('> **Ada Lovelace** · Friday, Oct 30, 2026 at ');
+		expect(thisYear).toContain('> **Ada Lovelace** · Saturday, Oct 31 at ');
 		const lastYear = messageLog([late, next], { nameOf, now: new Date(2027, 0, 1) });
-		expect(lastYear).toContain('**Ada Lovelace** · Sat, Oct 31, 2026, ');
+		expect(lastYear).toContain('> **Ada Lovelace** · Saturday, Oct 31, 2026 at ');
 	});
 
 	it('shows each message once, as its latest snapshot, where it first came', () => {
@@ -83,7 +96,7 @@ describe('messageLog', () => {
 		const other = at(1, 'ben', 'On it.', { message_id: 'm2', log_id: '11' });
 		const edited = { ...first, log_id: '12', body: { text: 'Deploy is green' } };
 		const stale = { ...first, log_id: '9', body: { text: 'Deploy' } };
-		expect(messageLog([first, other, edited, stale], { nameOf })).toBe('**Ada Lovelace**\nDeploy is green\n\n**Ben**\nOn it.');
+		expect(messageLog([first, other, edited, stale], { nameOf })).toBe('> **Ada Lovelace**\n>\n> Deploy is green\n\n> **Ben**\n>\n> On it.');
 	});
 
 	it('adds uploaded images as Markdown images, and leaves out uploads still going, other files and link previews', () => {
@@ -92,17 +105,17 @@ describe('messageLog', () => {
 		const alone = at(0, 'cy', '', { message_id: 'j', log_id: 'j', body: { embeds: [image('https://media.example/f/(b)', 'a [b]\nc')] } });
 		const pending = at(0, 'cy', '', { message_id: 'k', log_id: 'k', body: { embeds: [{ kind: 'upload', title: 'image.webp' }, { kind: 'upload', title: 'notes.pdf', url: 'https://media.example/f/c' }] } });
 		expect(messageLog([shot, alone, pending], { nameOf })).toBe([
-			'**Cy**', 'stateless components ftw', '', '![image.webp](https://media.example/f/a)', '',
-			'**Cy**', '![a \\[b\\] c](https://media.example/f/%28b%29)', '',
-			'**Cy**',
-			'_(attachment)_',
+			'> **Cy**', '>', '> stateless components ftw', '>', '> ![image.webp](https://media.example/f/a)', '',
+			'> **Cy**', '>', '> ![a \\[b\\] c](https://media.example/f/%28b%29)', '',
+			'> **Cy**', '>', '> _(attachment)_',
 		].join('\n'));
 	});
 
 	it('renders as HTML for a rich paste, its images shown', () => {
-		const html = messageLogHtml('**Cy**\n> **Ben**: hi\n\nok\n\n![shot](https://media.example/f/a)');
-		expect(html).toContain('<strong>Cy</strong>');
+		const html = messageLogHtml('> **Cy**\n>\n> _↪ **Ben**: hi_\n>\n> ok\n>\n> ![shot](https://media.example/f/a)');
 		expect(html).toContain('<blockquote>');
+		expect(html).toContain('<strong>Cy</strong>');
+		expect(html).toContain('<em>↪ <strong>Ben</strong>: hi</em>');
 		expect(html).toContain('<img src="https://media.example/f/a" alt="shot"');
 	});
 
