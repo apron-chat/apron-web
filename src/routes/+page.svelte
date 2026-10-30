@@ -2882,7 +2882,7 @@
 		if (!picked.length) return false;
 		try {
 			const reactions = (event: MessageRecord) => session.rooms.find((room) => room.id === event.room_id)?.timeline.reactions[event.message_id];
-			await copyRich(messageLog(picked, { lookup: resolveMessage, reactions }));
+			await copyRich(messageLog(picked, { lookup: resolveMessage, reactions, order: selectableOrder }));
 			selection.cancel();
 			composer?.focus();
 			return true;

@@ -18,6 +18,8 @@ export interface MessageLogOptions {
 	reactions?: (event: MessageRecord) => readonly ReactionSummary[] | undefined;
 	/** The name shown for someone who reacted; the directory's by default. */
 	reactorName?: (user: Identity) => string;
+	/** Every message's ID in the conversation, in order, so a gap between two in the log can say how many it leaves out. */
+	order?: readonly string[];
 }
 
 const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
@@ -37,12 +39,15 @@ const inline = (text: string) => text.replace(INLINE_SYNTAX, '\\$&');
  * the timeline groups them. A reply opens with one italic line naming what it
  * answers (`↪ Ada: Deploy is green…`). A message with reactions opens a
  * quote of its own, its header listing them (`(👍 from Bob, Andy; 👎 from
- * Alice)`), so they can't be taken for another message's. Bodies are copied as written, Markdown
- * and all, with each uploaded image after as a Markdown image; other
- * attachments and link previews are left out, and a message with nothing else
- * shows reads "(attachment)". `messages` are taken in the order given, each
- * once: where one comes more than once (edited, or an upload finishing), its
- * latest snapshot (by `log_id`) stands where it first came.
+ * Alice)`), so they can't be taken for another message's. Where the log
+ * skips messages of `order`, a line between the quotes says how many
+ * (`_(3 messages omitted)_`), and the next message heads its own. Bodies are
+ * copied as written, Markdown and all, with each uploaded image after as a
+ * Markdown image; other attachments and link previews are left out, and a
+ * message with nothing else shows reads "(attachment)". `messages` are taken
+ * in the order given, each once: where one comes more than once (edited, or
+ * an upload finishing), its latest snapshot (by `log_id`) stands where it
+ * first came.
  */
 export function messageLog(messages: readonly MessageRecord[], options: MessageLogOptions = {}): string {
 	const nameOf = options.nameOf ?? senderName;
@@ -53,8 +58,9 @@ export function messageLog(messages: readonly MessageRecord[], options: MessageL
 		const kept = byId.get(event.message_id);
 		if (!kept || compareLogIds(event.log_id, kept.log_id) >= 0) byId.set(event.message_id, event);
 	}
-	// Each run's paragraphs: its header, then each message's reply line and body.
-	const runs: string[][] = [];
+	const position = new Map(options.order?.map((id, index) => [id, index]));
+	// Each run's paragraphs (its header, then each message's reply line and body), or a note of messages left out.
+	const runs: (string[] | string)[] = [];
 	let previous: MessageRecord | undefined;
 	let previousReacted = false;
 	let lastDay: string | undefined;
@@ -62,21 +68,23 @@ export function messageLog(messages: readonly MessageRecord[], options: MessageL
 		const day = dayKeyOf(event.message_id);
 		const newDay = Boolean(day) && day !== lastDay;
 		const reacted = event.deleted ? '' : reactionsOf(options.reactions?.(event), reactorName);
+		const omitted = previous ? (position.get(event.message_id) ?? 0) - (position.get(previous.message_id) ?? Infinity) - 1 : 0;
+		if (omitted > 0) runs.push(`_(${omitted === 1 ? '1 message' : `${omitted} messages`} omitted)_`);
 		// A message after a reacted one heads its own quote too, so the reactions read as that one's alone.
-		if (!runs.length || !isGrouped(previous, event) || newDay || reacted || previousReacted) {
+		if (!runs.length || !isGrouped(previous, event) || newDay || reacted || previousReacted || omitted > 0) {
 			// The first date carries its year whenever it is; later ones only when it isn't `now`'s.
 			const date = newDay ? dayOf(event.message_id, lastDay === undefined ? undefined : now) : '';
 			const when = [date, idTime(event.message_id)].filter(Boolean).join(' at ');
 			runs.push([`**${inline(nameOf(event))}**${when ? ` · ${when}` : ''}${reacted ? ` (${reacted})` : ''}`]);
 		}
 		if (day) lastDay = day;
-		const run = runs[runs.length - 1];
+		const run = runs[runs.length - 1] as string[];
 		if (event.reply_to && !event.deleted) run.push(replyLine(event.reply_to.message_id, byId, options.lookup, nameOf));
 		run.push(bodyOf(event));
 		previous = event;
 		previousReacted = Boolean(reacted);
 	}
-	return runs.map((run) => quoted(run.join('\n\n'))).join('\n\n');
+	return runs.map((run) => (typeof run === 'string' ? run : quoted(run.join('\n\n')))).join('\n\n');
 }
 
 /** Reactions as a header lists them, `👍 from Bob, Andy; 👎 from Alice`, or empty for none. */
