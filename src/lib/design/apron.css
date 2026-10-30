@@ -484,6 +484,10 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-nudge-text { flex: 1; min-width: 0; display: grid; gap: var(--space-0_5); }
 .ap-nudge-title { font-weight: 600; }
 .ap-nudge-detail { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
+/* Steps to follow, under its detail: numbered, each naming what to tap in bold, with its icon where the browser shows one. */
+.ap-nudge-steps { display: grid; gap: var(--space-1); margin: var(--space-1) 0 0; padding-inline-start: var(--space-4); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-nudge-steps b { font-weight: 600; white-space: nowrap; }
+.ap-nudge-glyph { width: 14px; height: 14px; margin-inline: 1px 3px; vertical-align: -2px; }
 .ap-nudge-actions { display: flex; justify-content: flex-end; gap: var(--space-1); }
 .ap-nudge-actions .ap-btn-ghost { color: var(--ink-muted); }
 .ap-nudge-actions .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
