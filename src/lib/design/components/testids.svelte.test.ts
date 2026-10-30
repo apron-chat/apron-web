@@ -5,7 +5,7 @@ import AttachmentTile from './AttachmentTile.svelte';
 import Composer from './Composer.svelte';
 import Attachments from './Attachments.svelte';
 import ConnectHeader from './ConnectHeader.svelte';
-import EmbedStream from './EmbedStream.svelte';
+import EmbedTerminal from './EmbedTerminal.svelte';
 import EmojiPopover from './EmojiPopover.svelte';
 import FloatingDay from './FloatingDay.svelte';
 import JumpBar from './JumpBar.svelte';
@@ -161,7 +161,7 @@ const rows: Row[] = [
 	// A root's own test id, where the app gives one.
 	['Popover', Popover, { label: 'Hello', children: dom.html('<p>Hello</p>'), testid: 'pop' }, { pop: () => dom.byRole('dialog', 'Hello') }],
 	['EmojiPopover', EmojiPopover, { testid: 'picker' }, { picker: () => dom.byRole('dialog', 'Emoji picker') }],
-	['EmbedStream', EmbedStream, { kind: 'stream', text: 'ok', testid: 'stream' }, { stream: () => document.querySelector('.ap-embed-stream')! }],
+	['EmbedTerminal', EmbedTerminal, { kind: 'terminal', text: 'ok', testid: 'terminal' }, { terminal: () => document.querySelector('.ap-embed-terminal')! }],
 	['SystemLine', SystemLine, { text: 'Ada joined', testid: 'line' }, { line: () => around('Ada joined') }],
 	['TimelineDivider', TimelineDivider, { kind: 'new', testid: 'divider' }, { divider: () => dom.byRole('separator', 'New') }],
 	['FloatingDay', FloatingDay, { label: 'Today', testid: 'day' }, { day: () => around('Today') }],

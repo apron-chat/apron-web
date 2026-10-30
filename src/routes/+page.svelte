@@ -6,7 +6,7 @@
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
 	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
-	import { serverOrigin } from '$lib/protocol/embeds';
+	import { embedsLabel, serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
@@ -61,6 +61,7 @@
 	import { ReadPositions } from '$lib/ui/read-positions';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
+	import { removeEmbedQuestion } from '$lib/ui/attachments';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
@@ -1332,7 +1333,7 @@
 			...(id ? { pushId: id, messageId: event.message_id, group: notificationGroup(id, room.id) } : {})
 		};
 		const shown = await showNotification(notificationTitle(senderName(event), room), {
-			body: body || 'New message',
+			body: body || embedsLabel(event.body?.embeds) || 'New message',
 			// One per message, shared with the server's push of it (§4.9), which replaces it quietly;
 			// a newer message in the room closes it. Without a `push_id`, one per room.
 			...(id ? { tag: messageNotificationTag(id, event.message_id), renotify: false } : { tag: `apron:${client.url}:${room.id}`, renotify: true }),
@@ -2360,7 +2361,7 @@
 	// --- Message rows ---
 
 	/** The test ids interop finds a message's parts by. */
-	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message' };
+	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message', writing: 'message-writing' };
 
 	/** What every row reads from, each field only where a row needs it. */
 	const messageContext: MessageContext = {
@@ -2676,10 +2677,11 @@
 		feedback.track(client.deleteMessage(event.message_id), 'Deleting message…');
 	}
 
-	/** The (x) on one of your embeds: saves the message without it. Hosted files go with it, so those ask first. */
+	/** The (x) on one of your embeds: saves the message without it. Hosted files and live output go with it, so those ask first. */
 	function removeEmbed(event: MessageRecord, embed: Embed): void {
 		if (!client || !session.canEdit) return;
-		if ((embed.kind === 'upload' || embed.kind === 'stream') && !confirm('Remove this attachment? Its file will be deleted.')) return;
+		const question = removeEmbedQuestion(embed);
+		if (question && !confirm(question)) return;
 		feedback.track(client.removeEmbed(event.message_id, embed), 'Removing embed…');
 	}
 

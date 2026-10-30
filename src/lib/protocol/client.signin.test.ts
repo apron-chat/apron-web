@@ -55,7 +55,7 @@ describe('sign-in', () => {
 		const requested = client.requestEmailCode(email);
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'], ...extra } });
+		side.receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'], ...extra } });
 		await settle();
 		side.receive({ id: side.request('auth').id, result: {} });
 		await requested;
@@ -174,7 +174,7 @@ describe('sign-in', () => {
 
 	it('signs in by email on a server without guests', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 9, auth: ['email', 'token'], capabilities: ['rooms'], welcome: 'Create an account with **email**.' } });
+		latest().receive({ method: 'server', params: { apron: 10, auth: ['email', 'token'], capabilities: ['rooms'], welcome: 'Create an account with **email**.' } });
 		expect(auths()).toHaveLength(0);
 		expect(snapshot.error).toMatch(/email/);
 		expect(snapshot.server?.welcome).toBe('Create an account with **email**.');
@@ -195,7 +195,7 @@ describe('sign-in', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 9, auth: ['email', 'guest', 'webauthn'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 10, auth: ['email', 'guest', 'webauthn'], capabilities: [] } });
 		await settle();
 		expect(next.sent.filter((frame) => frame.method === 'auth')).toEqual([]);
 		expect(snapshot.authenticated).toBe(false);
@@ -246,7 +246,7 @@ describe('sign-in', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 9, auth: ['email', 'guest'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 10, auth: ['email', 'guest'], capabilities: [] } });
 		await settle();
 		expect(next.sent.filter((frame) => frame.method === 'auth')).toEqual([]);
 		expect(snapshot.error).toMatch(/email/);
@@ -297,14 +297,14 @@ describe('sign-in', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 9, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
+		next.receive({ method: 'server', params: { apron: 10, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
 		expect(next.sent.filter((frame) => (frame.params as { token?: string } | undefined)?.token === 'bob-session')).toEqual([]);
 	});
 
 	it('signs up with a scheme listed only in signup', async () => {
 		const server = { auth: ['webauthn'], signup: ['email'] };
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 9, capabilities: ['rooms'], ...server } });
+		latest().receive({ method: 'server', params: { apron: 10, capabilities: ['rooms'], ...server } });
 		expect(snapshot.server?.signup).toEqual(['email']);
 		expect(snapshot.error).toMatch(/email/);
 		const side = await propose('new@example.com', [], server);
@@ -325,7 +325,7 @@ describe('sign-in', () => {
 		const bad = latest();
 		expect(bad.url).toBe('ws://other.test/');
 		bad.open();
-		bad.receive({ method: 'server', params: { apron: 9, auth: ['email', 'token'], capabilities: ['rooms'] } });
+		bad.receive({ method: 'server', params: { apron: 10, auth: ['email', 'token'], capabilities: ['rooms'] } });
 		await settle();
 		expect(bad.request('auth').params).toEqual({ scheme: 'email', token: 'Hk41x9', agent: 'apron-web/0.4' });
 		bad.receive({ id: bad.request('auth').id, error: { code: -32001, message: 'Invalid or expired token' } });
@@ -339,7 +339,7 @@ describe('sign-in', () => {
 		const signedIn = client.signInWithLink('Hk41x9', 'ws://other.test/', { beforeSwitch: () => (switched = true) });
 		const good = latest();
 		good.open();
-		good.receive({ method: 'server', params: { apron: 9, auth: ['email', 'token'], capabilities: ['rooms'] } });
+		good.receive({ method: 'server', params: { apron: 10, auth: ['email', 'token'], capabilities: ['rooms'] } });
 		await settle();
 		good.receive({ id: good.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_other' } });
 		await signedIn;
@@ -356,7 +356,7 @@ describe('sign-in', () => {
 		const socket = latest();
 		expect(socket.url).toBe(url);
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'] } });
 		await settle();
 		return socket;
 	}
@@ -434,7 +434,7 @@ describe('sign-in', () => {
 		const proposed = client.proposeExternal(returnUrl);
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 9, auth: ['external', 'token', 'guest'], capabilities: ['rooms'] } });
+		side.receive({ method: 'server', params: { apron: 10, auth: ['external', 'token', 'guest'], capabilities: ['rooms'] } });
 		await settle();
 		return { side, proposed };
 	}
@@ -500,7 +500,7 @@ describe('sign-in', () => {
 			const requested = client.requestEmailCode('ada@example.com');
 			const again = latest();
 			again.open();
-			again.receive({ method: 'server', params: { apron: 9, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
+			again.receive({ method: 'server', params: { apron: 10, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
 			await settle();
 			again.receive({ id: again.request('auth').id, error: { code: -32002, message: 'Slow down', data: { retry_after: 30 } } });
 			await expect(requested).rejects.toThrow('Slow down');
@@ -534,7 +534,7 @@ describe('sign-in', () => {
 		start();
 		const first = latest();
 		first.open();
-		first.receive({ method: 'server', params: { apron: 9, auth: ['email', 'external', 'token'], capabilities: [] } });
+		first.receive({ method: 'server', params: { apron: 10, auth: ['email', 'external', 'token'], capabilities: [] } });
 		first.receive({ id: first.request('auth').id, error: { code: -32001, message: 'Session expired' } });
 		await settle();
 		expect(snapshot.held).toBe(true);
@@ -544,7 +544,7 @@ describe('sign-in', () => {
 		client.retryNow();
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 9, auth: ['external', 'email', 'guest'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 10, auth: ['external', 'email', 'guest'], capabilities: [] } });
 		await settle();
 		expect(next.sent.filter((frame) => frame.method === 'auth')).toEqual([]);
 		expect(snapshot.held).toBe(true);
@@ -624,23 +624,23 @@ describe('sign-in', () => {
 
 	it('reads the server frame’s apron, capabilities and agent, and sends its own agent with auth', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 9, agent: 'aprond/0.9', auth: ['guest'], capabilities: ['rooms', 'history'] } });
-		expect(snapshot.server).toMatchObject({ apron: 9, agent: 'aprond/0.9', capabilities: ['rooms', 'history'] });
+		latest().receive({ method: 'server', params: { apron: 10, agent: 'aprond/0.9', auth: ['guest'], capabilities: ['rooms', 'history'] } });
+		expect(snapshot.server).toMatchObject({ apron: 10, agent: 'aprond/0.9', capabilities: ['rooms', 'history'] });
 		expect(snapshot.capabilities.rooms).toBe(true);
 		expect(auths()[0].params).toEqual({ scheme: 'guest', agent: 'apron-web/0.4' });
 		// Without a version it isn't an Apron server frame.
 		latest().receive({ method: 'server', params: { auth: ['guest'], capabilities: [] } });
-		expect(snapshot.server?.apron).toBe(9);
+		expect(snapshot.server?.apron).toBe(10);
 	});
 
 	it('keeps server.welcome from each server frame, which replaces the last', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [], welcome: 'Hello *there*' } });
+		latest().receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [], welcome: 'Hello *there*' } });
 		expect(snapshot.server?.welcome).toBe('Hello *there*');
-		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [] } });
+		latest().receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [] } });
 		expect(snapshot.server?.welcome).toBeUndefined();
 		// Not a string: ignored.
-		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [], welcome: { text: 'x' } } });
+		latest().receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [], welcome: { text: 'x' } } });
 		expect(snapshot.server).not.toHaveProperty('welcome');
 	});
 });
@@ -661,7 +661,7 @@ describe('accounts and their ways back in', () => {
 		await vi.advanceTimersByTimeAsync(10_000);
 		const socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'], ...extra } });
+		socket.receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'], ...extra } });
 		await vi.advanceTimersByTimeAsync(0);
 		return socket;
 	}
@@ -675,7 +675,7 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode(`${you}@example.com`);
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'], ...extra } });
+		side.receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'], ...extra } });
 		await vi.advanceTimersByTimeAsync(0);
 		await side.reply('auth', {});
 		await requested;
@@ -701,7 +701,7 @@ describe('accounts and their ways back in', () => {
 		const auth = ['email', 'webauthn'];
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'] } });
 		const socket = await signInByEmail(auth, 'ada');
 		await socket.reply('room_list', { joined: [] });
 		expect(snapshot.signedInWith).toBe('email');
@@ -723,7 +723,7 @@ describe('accounts and their ways back in', () => {
 		const extra = { signup: ['email'] };
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'], ...extra } });
+		latest().receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'], ...extra } });
 		expect(snapshot.error).toBe('Sign in with a passkey, or join with your email, from the connect screen.');
 		await signInByEmail(auth, 'newbie', extra);
 		const next = await reconnect(auth, extra);
@@ -736,7 +736,7 @@ describe('accounts and their ways back in', () => {
 	it('never signs in as a guest listed only in signup', async () => {
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 9, auth: ['email'], signup: ['guest'], capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 10, auth: ['email'], signup: ['guest'], capabilities: ['rooms'] } });
 		expect(frames(latest())).toEqual([]);
 		expect(snapshot.error).toMatch(/email/);
 	});
@@ -745,7 +745,7 @@ describe('accounts and their ways back in', () => {
 		const auth = ['webauthn', 'email'];
 		start();
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'] } });
 		const main = latest();
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
 		const login = client.usePasskey('login');
@@ -760,7 +760,7 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode('bob@example.com');
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
+		side.receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'] } });
 		await vi.advanceTimersByTimeAsync(0);
 		side.receive({ id: side.request('auth').id, result: {} });
 		await requested;
@@ -780,7 +780,7 @@ describe('accounts and their ways back in', () => {
 		const side = latest();
 		expect(side.url).toBe('ws://other.test/');
 		side.open();
-		side.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [] } });
+		side.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [] } });
 		await expect(requested).rejects.toThrow('does not support email');
 		expect(side.sent).toEqual([]);
 		expect(side.readyState).toBe(FakeSocket.CLOSED);
@@ -812,7 +812,7 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode('ada@example.com');
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
+		side.receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'] } });
 		await vi.advanceTimersByTimeAsync(0);
 		await side.reply('auth', {});
 		await requested;
@@ -849,7 +849,7 @@ describe('accounts and their ways back in', () => {
 		const again = client.signInWithCode('2');
 		await vi.advanceTimersByTimeAsync(0);
 		linkSocket.open();
-		linkSocket.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
+		linkSocket.receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'] } });
 		await expect(link).rejects.toThrow('Already signing in');
 		expect(linkSocket.sent).toEqual([]);
 		expect(linkSocket.readyState).toBe(FakeSocket.CLOSED);
@@ -882,7 +882,7 @@ describe('accounts and their ways back in', () => {
 		const link = client.signInWithLink('Hk41x9');
 		const linkSocket = latest();
 		linkSocket.open();
-		linkSocket.receive({ method: 'server', params: { apron: 9, auth, capabilities: ['rooms'] } });
+		linkSocket.receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'] } });
 		await vi.advanceTimersByTimeAsync(0);
 		linkSocket.receive({ id: linkSocket.request('auth').id, result: { you: { user_id: 'linky' }, token: 'st_link' } });
 		await link;
@@ -927,7 +927,7 @@ describe('accounts and their ways back in', () => {
 		const requested = client.requestEmailCode('ada@example.com');
 		const side = latest();
 		side.open();
-		side.receive({ method: 'server', params: { apron: 9, auth: ['email', 'guest'], capabilities: [], ping: 30 } });
+		side.receive({ method: 'server', params: { apron: 10, auth: ['email', 'guest'], capabilities: [], ping: 30 } });
 		await vi.advanceTimersByTimeAsync(0);
 		await side.reply('auth', {});
 		await requested;
@@ -946,7 +946,7 @@ describe('accounts and their ways back in', () => {
 		const again = client.requestEmailCode('ada@example.com');
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 9, auth: ['email', 'guest'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 10, auth: ['email', 'guest'], capabilities: [] } });
 		await vi.advanceTimersByTimeAsync(0);
 		await next.reply('auth', {});
 		await again;

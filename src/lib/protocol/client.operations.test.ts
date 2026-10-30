@@ -232,6 +232,19 @@ describe('saves', () => {
 		expect(socket.request('message').params.body).toEqual({ text: 'hi' });
 	});
 
+	it('saves a message with live text by its snapshot: its text as recorded, and its embeds sent back by embed_id (§4.8.2)', async () => {
+		await connect();
+		const append = { embed_id: 'e3', kind: 'append', url: 'https://chat.test/a/3' };
+		const terminal = { embed_id: 'e4', kind: 'terminal', title: 'make', url: 'https://chat.test/t/4' };
+		socket.receive({ method: 'message', params: message('100', { body: { text: 'Plan:\n\n', format: 'markdown', embeds: [append, terminal] } }) });
+		// Whatever has streamed in shows, but a save carries only the snapshot's text, so the append keeps going.
+		quiet(client.editMessage('100', 'The plan:\n\n'));
+		expect(socket.request('message').params.body).toEqual({ text: 'The plan:\n\n', format: 'markdown', embeds: [append, terminal] });
+		// Leaving one out ends it early (§4.8.3).
+		quiet(client.removeEmbed('100', { embed_id: 'e3', kind: 'append' }));
+		expect(socket.request('message').params.body).toEqual({ text: 'The plan:\n\n', format: 'markdown', embeds: [terminal] });
+	});
+
 	it('rejects saves of messages that are not loaded without sending anything', async () => {
 		await connect();
 		const handle = client.editMessage('404', 'nope');

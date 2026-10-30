@@ -1,10 +1,11 @@
 import { childRooms, timelineMessages, type Notice, type RoomListing, type RoomRename, type RoomSnapshot } from '$lib/protocol/client';
 import { compareLogIds, type MembershipRecord } from '$lib/protocol/reducer';
 import { isLogId, type Identity, type MessageRecord } from '$lib/protocol/types';
+import { embedsLabel } from '$lib/protocol/embeds';
 import { markdownText } from '$lib/protocol/markdown';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { isBaseline, MembershipRun } from './membership';
-import { embedsOf, isOwn, senderName, textOf } from './messages';
+import { isOwn, senderName, textOf } from './messages';
 import { dayKey, dayKeyOf, dayLabel, dayLabelOf, isGrouped } from './time';
 
 /** Longest title a thread started from a message gets, in characters. */
@@ -207,7 +208,7 @@ export function threadLatest(entry: Pick<ThreadEntry, 'latestMessage'>): { sende
 	if (!event) return undefined;
 	if (event.deleted) return { sender: '', text: 'Message deleted' };
 	const text = withoutBidiOverrides(textOf(event)).replace(/\s+/g, ' ').trim();
-	return { sender: senderName(event), text: text || (embedsOf(event).length ? 'Attachment' : 'Empty message') };
+	return { sender: senderName(event), text: text || embedsLabel(event.body?.embeds) || 'Empty message' };
 }
 
 /** A title for a thread started from a message: its first non-empty line, shortened, else "Thread". */

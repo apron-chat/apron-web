@@ -40,6 +40,6 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 					if (frame.id !== undefined) ws.send(JSON.stringify({ id: frame.id, error: { code: -32601, message: `Not in the mock: ${frame.method}` } }));
 			}
 		});
-		ws.send(JSON.stringify({ method: 'server', params: { apron: 9, agent: 'apron-e2e-mock', auth: ['guest', 'webauthn', 'email'], signup: ['guest', 'webauthn'], ping: 60, capabilities: ['history', 'rooms', 'status'], ...options.server } }));
+		ws.send(JSON.stringify({ method: 'server', params: { apron: 10, agent: 'apron-e2e-mock', auth: ['guest', 'webauthn', 'email'], signup: ['guest', 'webauthn'], ping: 60, capabilities: ['history', 'rooms', 'status'], ...options.server } }));
 	});
 }

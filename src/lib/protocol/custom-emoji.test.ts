@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { JsonValue, ServerParams } from './types';
 import { catalogUrlOf, emojiKeySegments, isEmojiSequence, parseCatalog, reactionKey, searchCatalog } from './custom-emoji';
 
-const server = (catalog_url: unknown, capabilities = ['ext:emoji']): ServerParams => ({ apron: 9, auth: ['guest'], capabilities, ext: { emoji: { catalog_url: catalog_url as JsonValue } } });
+const server = (catalog_url: unknown, capabilities = ['ext:emoji']): ServerParams => ({ apron: 10, auth: ['guest'], capabilities, ext: { emoji: { catalog_url: catalog_url as JsonValue } } });
 
 describe('ext:emoji catalog', () => {
 	it('takes catalog_url as https, http on a loopback host, or a JSON data URL, only while the server lists ext:emoji', () => {

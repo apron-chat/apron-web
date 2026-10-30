@@ -45,14 +45,14 @@ describe('bidi embeddings and overrides (§3.5.2)', () => {
 		expect(shownPerson(undefined)).toBeUndefined();
 	});
 
-	it('are taken out of an embed\'s text as shown, never out of its addresses or IDs', () => {
+	it('are taken out of an embed\'s text as shown, never out of its addresses, IDs or a terminal\'s output', () => {
 		const embed = {
-			kind: 'upload', embed_id: 'e\u202E1', url: 'https://x.example/a\u202Eb', title: 'evil\u202Egnp.exe', text: 't\u202Ax',
+			kind: 'upload', embed_id: 'e\u202E1', url: 'https://x.example/a\u202Eb', title: 'evil\u202Egnp.exe', html: '<b>t\u202Ax</b>', output: '\u202Eraw',
 			og: { title: 'O\u202Bg', description: 'd\u202Ce', site_name: 's\u202Dn', image: { url: 'https://x.example/i\u202E.png', alt: 'a\u202Elt' } }
 		};
 		const shown = shownEmbed(embed);
 		expect(shown).toEqual({
-			kind: 'upload', embed_id: 'e\u202E1', url: 'https://x.example/a\u202Eb', title: 'evilgnp.exe', text: 'tx',
+			kind: 'upload', embed_id: 'e\u202E1', url: 'https://x.example/a\u202Eb', title: 'evilgnp.exe', html: '<b>tx</b>', output: '\u202Eraw',
 			og: { title: 'Og', description: 'de', site_name: 'sn', image: { url: 'https://x.example/i\u202E.png', alt: 'alt' } }
 		});
 		expect(embed.title).toBe('evil\u202Egnp.exe');

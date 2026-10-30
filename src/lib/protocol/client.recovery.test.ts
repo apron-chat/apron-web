@@ -386,7 +386,7 @@ describe('after a reconnect', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
 		await next.reply('auth', { you: { user_id: 'guest_1' } });
 		await next.reply('room_list', { joined: [general, { ...side, latest_log_id: '23' }] });
 		// The room resumes first (history goes one request at a time): nothing new there.
@@ -449,7 +449,7 @@ describe('after a reconnect', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
 		await next.reply('auth', { you: { user_id: 'guest_1' } });
 		// Behind auth, before the joined listing: still joined, not offered to join again.
 		expect(snapshot.threadDirectory.general?.map((listing) => [listing.id, listing.joined])).toEqual([['40', true]]);
@@ -486,7 +486,7 @@ describe('after a reconnect', () => {
 		vi.advanceTimersByTime(5_000);
 		const again = latest();
 		again.open();
-		again.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		again.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
 		// The first kept room resumes right behind auth; the others wait their turn.
 		expect(history()).toEqual([{ room_id: 'general', after: '13' }]);
 		await again.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
@@ -540,7 +540,7 @@ describe('after a reconnect', () => {
 
 	it('lists again in full when a token resume signs in someone else', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await latest().reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'secret' });
 		await latest().reply('room_list', { joined: [general], users: [] });
 		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
@@ -548,7 +548,7 @@ describe('after a reconnect', () => {
 		vi.advanceTimersByTime(5_000);
 		socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		expect(socket.request('room_list').params).toMatchObject({ latest_log_id: '12' });
 		// The token now signs in someone else: the changes since belong to another identity, so list again in full.
 		await socket.reply('auth', { you: { user_id: 'bob', name: 'Bob' } });
@@ -584,7 +584,7 @@ describe('after a reconnect', () => {
 		client.retryNow();
 		socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms', 'activity'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms', 'activity'] } });
 		// auth, the listing, and the kept room's recovery go out together, before any reply (§3.2).
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list', 'history']);
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });

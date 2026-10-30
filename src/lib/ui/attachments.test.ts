@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { embedTile } from './attachments';
+import { embedTile, removeEmbedQuestion } from './attachments';
 
 const origin = 'https://chat.test';
 
@@ -18,6 +18,23 @@ describe('embedTile', () => {
 		expect(embedTile({ kind: 'upload', title: 'x.png', url: `${origin}/f/4`, og: { image: { url: 'https://evil.test/x.png' } } }, origin).kind).toBe('file');
 		expect(embedTile({ kind: 'link', url: 'https://github.com/a/b/pull/1', og: { title: 'Fix the cert' } }, origin))
 			.toEqual({ kind: 'link', name: 'Fix the cert', detail: 'github.com', renamable: false });
-		expect(embedTile({ kind: 'stream', url: `${origin}/s/1` }, origin)).toMatchObject({ kind: 'link', name: 'chat.test', renamable: false });
+		expect(embedTile({ kind: 'iframe', url: `${origin}/v/1` }, origin)).toMatchObject({ kind: 'link', name: 'chat.test', detail: 'chat.test', renamable: false });
+		expect(embedTile({ kind: 'html', html: '<b>x</b>' }, origin)).toEqual({ kind: 'link', name: 'html', detail: 'Embedded content', renamable: false });
+	});
+
+	it('says which live text an embed is: a terminal by its title, live or finished, or text the body is still getting', () => {
+		expect(embedTile({ kind: 'terminal', title: 'make test', url: `${origin}/t/1` }, origin)).toEqual({ kind: 'link', name: 'make test', detail: 'Live terminal', renamable: false });
+		expect(embedTile({ kind: 'terminal', output: 'ok\n' }, origin)).toEqual({ kind: 'link', name: 'Terminal', detail: 'Terminal output', renamable: false });
+		expect(embedTile({ kind: 'append', url: `${origin}/a/1` }, origin)).toEqual({ kind: 'link', name: 'Live text', detail: 'Still arriving', renamable: false });
+	});
+});
+
+describe('removeEmbedQuestion', () => {
+	it('asks before an upload, a terminal or live text goes, saying what goes with it, and not for anything else', () => {
+		expect(removeEmbedQuestion({ kind: 'upload', url: `${origin}/f/1` })).toMatch(/file will be deleted/);
+		expect(removeEmbedQuestion({ kind: 'terminal', output: 'ok' })).toMatch(/output will be deleted/);
+		expect(removeEmbedQuestion({ kind: 'terminal', url: `${origin}/t/1` })).toMatch(/^Stop this live terminal/);
+		expect(removeEmbedQuestion({ kind: 'append', url: `${origin}/a/1` })).toMatch(/^Stop this live text/);
+		expect(removeEmbedQuestion({ kind: 'link', url: 'https://example.com/' })).toBeUndefined();
 	});
 });

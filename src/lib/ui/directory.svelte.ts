@@ -15,7 +15,7 @@ type Users = Pick<ClientSnapshot, 'users' | 'recordedUsers' | 'userAliases'>;
  * Who and where names refer to on the active backend: the kept user object
  * per `user_id` (§3.3), followed through renames, the latest recorded object
  * as a fallback, room titles for `#room_id` references, the chat server's
- * origin, the only one streams load from, and the origins besides it that
+ * origin, the only one live text loads from, and the origins besides it that
  * media, avatars and images in messages load from (`ext:media`, and as the
  * viewer chose in Preferences).
  * Every message renders its sender from here, field by field: the kept

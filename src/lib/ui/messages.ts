@@ -1,4 +1,5 @@
 import { markdownText, type MentionPerson } from '$lib/protocol/markdown';
+import { embedsLabel } from '$lib/protocol/embeds';
 import { cleanPlainText } from '$lib/protocol/plain-text';
 import { isJsonObject, isSystemId, type Embed, type Identity, type MessageRecord } from '$lib/protocol/types';
 import { directory } from './directory.svelte';
@@ -65,7 +66,7 @@ export function hueOf(userId: string | undefined): number | undefined {
 export function messageSnippet(target: MessageRecord, lines = 1, max = 120): string {
 	const text = cleanPlainText(plainTextOf(target)).split('\n').map((line) => line.trim()).filter(Boolean).slice(0, lines).join('\n');
 	const short = text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
-	return short || (embedsOf(target).length ? 'Attachment' : 'Empty message');
+	return short || embedsLabel(target.body?.embeds) || 'Empty message';
 }
 
 export function isOwn(event: MessageRecord, me: Identity | undefined): boolean {
