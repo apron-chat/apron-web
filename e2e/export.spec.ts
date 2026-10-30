@@ -103,7 +103,7 @@ test('Preferences, Media: sites added load besides the server’s', async ({ pre
 	const preferences = page.getByRole('dialog', { name: 'Preferences' });
 	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
 	// As ever by default: previews from the server, avatars and images in messages from anywhere.
-	await expect(preferences.getByTestId('media-policy')).toHaveValue('standard');
+	await expect(preferences.getByTestId('media-policy')).toHaveValue('default');
 	await expect(preferences.getByTestId('media-note')).toHaveText('Previews from this server. Avatars and images from any site.');
 	await expect(preferences.getByTestId('media-sites')).toHaveCount(0);
 	await preferences.getByTestId('media-policy').selectOption('custom');

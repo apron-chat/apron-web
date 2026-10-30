@@ -99,7 +99,7 @@
 	let mediaNote = $derived.by(() => {
 		const server = `this server${mediaHosts.length ? ` and ${mediaHosts.join(', ')}` : ''}`;
 		if (mediaSettings.policy === 'all') return 'Everything, from any site.';
-		if (mediaSettings.policy === 'standard') return `Previews from ${server}. Avatars and images from any site.`;
+		if (mediaSettings.policy === 'default') return `Previews from ${server}. Avatars and images from any site.`;
 		return `Only from ${server}${mediaSettings.policy === 'custom' ? ' and the sites below' : ''}.`;
 	});
 	/** The sites added, one per line as hosts, as the field shows them. */

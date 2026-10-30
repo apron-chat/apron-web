@@ -197,7 +197,7 @@ describe('directory', () => {
 		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 9, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
 		try {
 			// As ever: avatars and images from any site, an avatar elsewhere only over https; previews from the server's.
-			mediaSettings.update('standard', []);
+			mediaSettings.update('default', []);
 			expect(directory.avatar(away)).toBe('https://gravatar.example/cy.png');
 			expect(directory.avatar(plain)).toBeUndefined();
 			expect(image()).toBe('https://gravatar.example/x.png');
@@ -219,7 +219,7 @@ describe('directory', () => {
 			expect(mediaSettings.policy).toBe('server');
 			expect(directory.avatar(away)).toBeUndefined();
 		} finally {
-			mediaSettings.update('standard', []);
+			mediaSettings.update('default', []);
 		}
 	});
 });

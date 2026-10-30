@@ -5,7 +5,7 @@ import { loadMediaSettings, MEDIA_KEY, saveMediaSettings } from './storage';
 /**
  * Where images, avatars and other media load from. Loading one tells the site
  * that hosts it that someone is reading, and from where (PROTOCOL.md §5.5).
- * - `standard`: as Apron always has: link previews and attachments from the
+ * - `default`: as Apron always has: link previews and attachments from the
  *   chat server's own origin and those it names for its media (`ext:media`,
  *   EXT.md §6), avatars and images in messages from any site.
  * - `server`: all of it from the server's origins only.
@@ -14,7 +14,7 @@ import { loadMediaSettings, MEDIA_KEY, saveMediaSettings } from './storage';
  * Small inline images (`data:`) always show.
  */
 export const MEDIA_POLICIES = [
-	{ value: 'standard', label: 'Standard' },
+	{ value: 'default', label: 'Default' },
 	{ value: 'server', label: 'This server only' },
 	{ value: 'custom', label: 'This server and sites I add' },
 	{ value: 'all', label: 'Any site' }
@@ -22,7 +22,7 @@ export const MEDIA_POLICIES = [
 
 export type MediaPolicy = (typeof MEDIA_POLICIES)[number]['value'];
 
-export const DEFAULT_MEDIA_POLICY: MediaPolicy = 'standard';
+export const DEFAULT_MEDIA_POLICY: MediaPolicy = 'default';
 
 function known(value: unknown): value is MediaPolicy {
 	return MEDIA_POLICIES.some((policy) => policy.value === value);
@@ -95,7 +95,7 @@ export class MediaSettings {
 
 	/** The origins avatars and images in messages load from besides the server's own: any, as ever, by default. */
 	trustedImages(server: readonly string[]): readonly string[] {
-		return this.policy === 'standard' ? [...server, ANY_ORIGIN] : this.trusted(server);
+		return this.policy === 'default' ? [...server, ANY_ORIGIN] : this.trusted(server);
 	}
 }
 

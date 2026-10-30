@@ -1309,8 +1309,7 @@ first, since the server deletes its content. A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
-Media loads from where Preferences, under **Media**, says. **Standard** (the
-default) is as Apron always has: `og` media only from the chat server's own
+Media loads from where Preferences, under **Media**, says. **Default** is as Apron always has: `og` media only from the chat server's own
 origin and the origins it names with `ext:media`, avatars from any `https:`
 site, and images in markdown messages from any site. **This server only**
 loads all of them only from the server's origins; **This server and sites I

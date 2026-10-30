@@ -214,7 +214,7 @@ from the worker so tests can run them. `media-settings.svelte.ts`
 avatars, `directory.avatar`, and images in markdown, `directory.resolveImage`,
 which `renderMarkdown` turns into a link where it says no) are what it trusts on
 the active server: the server's `ext:media` origins, the sites added, or
-`ANY_ORIGIN`; Standard, the default, trusts any for images only, as before.
+`ANY_ORIGIN`; Default trusts any for images only, as before.
 `embedMedia` checks against them, and `directory.pieces` includes them, so a
 change redraws every row.
 
