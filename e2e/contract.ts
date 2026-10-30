@@ -151,7 +151,19 @@ export const SCENES: Scene[] = [
 		steps: async (preview, look) => {
 			const id = await preview.startLive('general', 'ada', 'terminal', { title: 'make test' });
 			await preview.liveWrite(id, '$ make test\r\n');
-			await expect(preview.page.getByTestId('terminal-embed').locator('.ap-embed-livebadge')).toHaveText('Live');
+			const terminal = preview.page.getByTestId('terminal-embed');
+			await expect(terminal.locator('.ap-embed-livebadge')).toHaveText('Live');
+			await expect(terminal.locator('.xterm-rows')).toContainText('$ make test');
+			const append = await preview.startLive('general', 'grace', 'append', { body: { text: 'Here is the plan:', format: 'markdown' } });
+			await preview.liveWrite(append, ' roll back, then **renew** the cert.');
+			const writing = preview.message('Here is the plan:').getByTestId('message-writing');
+			await expect(writing).toBeVisible();
+			await look();
+			// Finished: the terminal says so, and the appended text stays in the body without Writing….
+			await preview.liveEnd(id);
+			await expect(terminal.locator('.ap-embed-detail')).toHaveText('Finished');
+			await preview.liveEnd(append);
+			await expect(writing).toHaveCount(0);
 			await look();
 		}
 	},

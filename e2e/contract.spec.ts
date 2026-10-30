@@ -35,11 +35,7 @@ const OUT_OF_REACH: Record<string, string> = {
  * Entries the interop suite uses that this app no longer renders: real breaks, reported to fix on one side
  * or the other, and tested (as fixme) below rather than failing every run.
  */
-const KNOWN_BREAKS: Record<string, string> = {
-	'stream-embed': 'Protocol v10 replaced `stream` embeds with `terminal` (testid `terminal-embed`, drawn by xterm.js) and `append`: interop’s reference.spec.ts moves to those.',
-	'.ap-embed-streamhead': 'Protocol v10: a terminal embed’s header is `.ap-embed-termhead`, its title `.ap-embed-termtitle`, its screen `.ap-embed-termscreen` (xterm’s rows in `.xterm-rows`).',
-	'pre .ap-term-fg2': 'Protocol v10: xterm.js draws a terminal’s colors (its own `.xterm-fg-2` spans in `.xterm-rows`), not the line renderer’s `.ap-term-*` classes.'
-};
+const KNOWN_BREAKS: Record<string, string> = {};
 
 const seen: Seen[] = existsSync(SEEN_DIR) ? readdirSync(SEEN_DIR).map((f) => JSON.parse(readFileSync(join(SEEN_DIR, f), 'utf8'))) : [];
 const ran = new Set(seen.map((s) => s.scene));
