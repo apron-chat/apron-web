@@ -194,7 +194,7 @@ describe('directory', () => {
 		const home: Identity = { user_id: 'di', name: 'Di', avatar: 'https://example.com/di.png' };
 		const image = () => directory.resolveImage('https://gravatar.example/x.png');
 		const plain: Identity = { user_id: 'ed', name: 'Ed', avatar: 'http://gravatar.example/ed.png' };
-		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 9, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
+		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
 		try {
 			// As ever: avatars and images from any site, an avatar elsewhere only over https; previews from the server's.
 			mediaSettings.update('default', []);

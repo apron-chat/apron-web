@@ -43,7 +43,7 @@ async function keptServer(page: Page, messages: Array<Record<string, unknown>>, 
 					if (frame.id !== undefined) reply({});
 			}
 		});
-		ws.send(JSON.stringify({ method: 'server', params: { apron: 9, agent: 'apron-e2e-kept', auth: ['guest', 'token'], ping: 60, capabilities: ['history', 'rooms'] } }));
+		ws.send(JSON.stringify({ method: 'server', params: { apron: 10, agent: 'apron-e2e-kept', auth: ['guest', 'token'], ping: 60, capabilities: ['history', 'rooms'] } }));
 	});
 }
 

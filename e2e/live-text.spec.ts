@@ -117,8 +117,10 @@ test.describe('an append embed', () => {
 		await message.hover();
 		await message.getByRole('button', { name: 'Edit message', exact: true }).click();
 		const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
-		await expect(editor).toHaveValue('Plan:');
-		await editor.fill('The plan:');
+		await expect(editor).toBeFocused();
+		await expect(editor).toHaveText('Plan:');
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.type('The plan:');
 		await page.keyboard.press('Enter');
 		const saved = await preview.waitForSent('message', (params) => params.message_id !== undefined);
 		expect(saved.body).toMatchObject({ text: 'The plan:', embeds: [{ embed_id: id, kind: 'append' }] });
