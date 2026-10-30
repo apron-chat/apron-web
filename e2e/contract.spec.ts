@@ -26,7 +26,6 @@ const OUT_OF_REACH: Record<string, string> = {
 	'option /Until I resume/': `Pausing notifications. ${SIGNED_IN}`,
 	'button "Sign out"': SIGNED_IN,
 	'button "Signing in…"': 'Shown only during a passkey ceremony, which needs an authenticator and a server that verifies it.',
-	'.ap-embed-livebadge': 'A live stream loads only from the chat server’s own origin, and the preview has none.',
 	// push.spec's statusChooser takes a status control as a menu button or a select: this app has the button.
 	'combobox /status/i': 'The alternative to `button /status/i` (seen): interop accepts a select or a menu button.',
 	option: 'The options of that select, the alternative to the menu this app shows.'
@@ -36,7 +35,11 @@ const OUT_OF_REACH: Record<string, string> = {
  * Entries the interop suite uses that this app no longer renders: real breaks, reported to fix on one side
  * or the other, and tested (as fixme) below rather than failing every run.
  */
-const KNOWN_BREAKS: Record<string, string> = {};
+const KNOWN_BREAKS: Record<string, string> = {
+	'stream-embed': 'Protocol v10 replaced `stream` embeds with `terminal` (testid `terminal-embed`, drawn by xterm.js) and `append`: interop’s reference.spec.ts moves to those.',
+	'.ap-embed-streamhead': 'Protocol v10: a terminal embed’s header is `.ap-embed-termhead`, its title `.ap-embed-termtitle`, its screen `.ap-embed-termscreen` (xterm’s rows in `.xterm-rows`).',
+	'pre .ap-term-fg2': 'Protocol v10: xterm.js draws a terminal’s colors (its own `.xterm-fg-2` spans in `.xterm-rows`), not the line renderer’s `.ap-term-*` classes.'
+};
 
 const seen: Seen[] = existsSync(SEEN_DIR) ? readdirSync(SEEN_DIR).map((f) => JSON.parse(readFileSync(join(SEEN_DIR, f), 'utf8'))) : [];
 const ran = new Set(seen.map((s) => s.scene));

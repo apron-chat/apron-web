@@ -1,8 +1,10 @@
 import { mergeExt } from '$lib/protocol/client-internals';
 import type { WebSocketFactory } from '$lib/protocol/client-types';
+import type { LiveFetch } from '$lib/protocol/live-text';
 import { isJsonObject, type JsonObject, type WireFrame } from '$lib/protocol/types';
 import { memorySocket, type MemoryHost, type MemorySocket } from './memory-socket';
 import { DAWN, DUSK } from './preview-images';
+import { APPEND_DEMO, TERMINAL_DEMO, type DemoStep } from './live-demos';
 
 export type PreviewRoom = {
 	room_id: string;
@@ -31,7 +33,38 @@ const basePeople: Record<string, Person> = {
 const roomId = 'general';
 
 /** What the demo server advertises (§3.1). */
-export const PREVIEW_CAPABILITIES = ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'ext', 'ext:settings', 'ext:permissions'];
+export const PREVIEW_CAPABILITIES = ['history', 'edit', 'rooms', 'reactions', 'activity', 'command', 'embed:terminal', 'embed:append', 'ext', 'ext:settings', 'ext:permissions'];
+
+/**
+ * The origin the preview's server is at (`ws://apron-preview.invalid`): the live text it mints (§4.8.3) is served
+ * here, through `fetchLive` (the page routes these URLs to it, `setLiveFetch`), since there is no network.
+ */
+export const PREVIEW_ORIGIN = 'http://apron-preview.invalid';
+
+/** How long a write URL a command minted waits for its `PUT` before it stops working, as the servers' 5 minutes. */
+export const PREVIEW_PENDING_MS = 5 * 60_000;
+
+/** How long after `/embed-terminal` or `/embed-append` the preview plays its demo in place of a `PUT` that can't come. */
+export const PREVIEW_DEMO_AFTER_MS = 1500;
+
+/**
+ * One live text (`append` or `terminal`, §4.8.3): pending until its `PUT` starts (a command's posts its message
+ * then), live while it streams, ended once its text has.
+ */
+interface LiveWrite {
+	kind: 'append' | 'terminal';
+	embed_id: string;
+	write: string;
+	read: string;
+	title?: string;
+	state: 'pending' | 'live' | 'ended';
+	/** A command's: the message it posts when the write starts. */
+	command?: { room: string; text: string; reply_to?: JsonObject };
+	message_id?: string;
+	chunks: Uint8Array[];
+	readers: Set<ReadableStreamDefaultController<Uint8Array>>;
+	timers: ReturnType<typeof setTimeout>[];
+}
 
 /** Its settings (`ext:settings`): the most private rooms one user may be a member of, so the new-conversation dialog counts. */
 export const PREVIEW_SETTINGS = { private_rooms: 5 };
@@ -71,6 +104,8 @@ export interface PreviewKnobs {
 	people?: Record<string, JsonObject>;
 	/** The `title` and `description` of seeded rooms and threads, by `room_id`, in place of the demo's. */
 	rooms?: Record<string, { title?: string; description?: string }>;
+	/** `off`: `/embed-terminal` and `/embed-append` wait for a `PUT` (`fetchLive`, or `liveWrite`) rather than playing their demo. */
+	liveDemo?: 'off';
 }
 
 /**
@@ -94,7 +129,7 @@ const richMessages: { id: string; from: string; text: string; fields?: JsonObjec
 	{ id: '1710000000045', from: 'linus', text: 'One embed of each kind.', body: { embeds: [
 		{ kind: 'iframe', url: 'https://apron-preview.invalid/live', title: 'Live view', height: 160 },
 		{ kind: 'html', html: '<p><b>Bold</b> relayed HTML.</p><script>window.__embedRan = true</script>' },
-		{ kind: 'stream', title: 'build.log', format: 'terminal', text: '\u001b[32mok\u001b[0m 12 tests passed\n' },
+		{ kind: 'terminal', embed_id: 'preview-build-log', title: 'build.log', output: '\u001b[32mok\u001b[0m 12 tests passed\n' },
 		{ kind: 'upload', url: 'https://apron-preview.invalid/files/notes.txt', title: 'notes.txt', og: { type: 'text/plain' } },
 		{ kind: 'poll', url: 'https://apron-preview.invalid/polls/lunch', title: 'Lunch poll' }
 	] } }
@@ -144,6 +179,9 @@ export class MemoryProtocolServer {
 	private yourSeen?: string;
 	/** Every frame a client sent, parsed, in the order it arrived: what the browser suite asserts the wire by. */
 	readonly frames: WireFrame[] = [];
+	/** Live text (§4.8.3), by `embed_id`. */
+	private lives = new Map<string, LiveWrite>();
+	private liveSerial = 1;
 
 	constructor(knobs: PreviewKnobs = {}) {
 		this.knobs = knobs;
@@ -361,6 +399,219 @@ export class MemoryProtocolServer {
 		return room.room_id;
 	}
 
+	/**
+	 * Someone else posts a message with a live `terminal` or `append` embed (§4.8.3), as if their `PUT` just began:
+	 * it streams what `liveWrite` writes (or `playDemo`) until `liveEnd`. `body` is the rest of the body (an append's
+	 * opening text, in Markdown by default). Returns the embed's `embed_id`.
+	 */
+	startLive(roomId: string, from: string, kind: 'terminal' | 'append', fields: { title?: string; body?: JsonObject } = {}): string {
+		const live = this.newLive(kind, fields.title);
+		live.state = 'live';
+		const embeds = [this.liveEmbed(live)];
+		live.message_id = this.post(roomId, from, { text: '', ...(kind === 'append' ? { format: 'markdown' } : {}), ...fields.body, embeds });
+		return live.embed_id;
+	}
+
+	/** Writes to a live text, as its `PUT` body would: every reader gets it, and later readers get it from the start. */
+	liveWrite(embedId: string, data: string | Uint8Array): void {
+		const live = this.lives.get(embedId);
+		if (!live || live.state !== 'live') throw new Error(`No live text: ${embedId}`);
+		const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+		if (!bytes.byteLength) return;
+		live.chunks.push(bytes);
+		for (const reader of live.readers) reader.enqueue(bytes);
+	}
+
+	/**
+	 * Ends a live text, as the end of its `PUT` body does: its readers' responses end, and a snapshot finishes the
+	 * message: a terminal's embed with its `output`, an append's text moved into the body and the embed gone.
+	 */
+	liveEnd(embedId: string): void {
+		const live = this.lives.get(embedId);
+		if (!live || live.state === 'ended') return;
+		const started = live.state === 'live';
+		this.stopLive(live);
+		const found = started && live.message_id ? this.findMessage(live.message_id) : undefined;
+		if (!found || !isJsonObject(found.message.body)) return;
+		const text = new TextDecoder().decode(concat(live.chunks));
+		const body = structuredClone(found.message.body) as JsonObject;
+		const embeds = (Array.isArray(body.embeds) ? body.embeds : []).filter(isJsonObject);
+		const at = embeds.findIndex((embed) => embed.embed_id === embedId);
+		if (at === -1) return;
+		if (live.kind === 'terminal') {
+			embeds[at] = { embed_id: live.embed_id, kind: 'terminal', ...(live.title ? { title: live.title } : {}), output: text };
+		} else {
+			embeds.splice(at, 1);
+			// The appended text doesn't change the mentions (§4.8.5).
+			body.text = `${typeof body.text === 'string' ? body.text : ''}${text}`;
+		}
+		if (embeds.length) body.embeds = embeds;
+		else delete body.embeds;
+		this.republish(found.room, found.message, { body });
+	}
+
+	/** Drops every reader's connection to a live text mid-stream, as a network would: a reader that reconnects gets it all again. */
+	liveDrop(embedId: string): void {
+		const live = this.lives.get(embedId);
+		if (!live) return;
+		for (const reader of live.readers) reader.error(new TypeError('The connection dropped'));
+		live.readers.clear();
+	}
+
+	/** Plays a canned stream into a live text (`live-demos.ts`), then ends it: what `/embed-terminal` and `/embed-append` show here. */
+	playDemo(embedId: string, steps: readonly DemoStep[] = this.lives.get(embedId)?.kind === 'append' ? APPEND_DEMO : TERMINAL_DEMO): void {
+		const live = this.lives.get(embedId);
+		if (!live || live.state !== 'live') return;
+		let at = 0;
+		for (const step of steps) {
+			at += step.wait;
+			live.timers.push(setTimeout(() => {
+				if (live.state === 'live') this.liveWrite(embedId, step.data);
+			}, at));
+		}
+		live.timers.push(setTimeout(() => this.liveEnd(embedId), at + 300));
+	}
+
+	/**
+	 * The preview's HTTP, for the live text it minted: `GET` a live text's `url` (the text kept, then more as it
+	 * arrives, until it ends; §4.8.3), and `PUT` to a `write_url` (the body streams in, and its end ends the text).
+	 * Anything else is a 404, as is a write URL that expired or was used.
+	 */
+	fetchLive: LiveFetch = async (url, init) => {
+		const path = url.startsWith(`${PREVIEW_ORIGIN}/`) ? url.slice(PREVIEW_ORIGIN.length) : '';
+		const method = (init.method ?? 'GET').toUpperCase();
+		const [, area, token] = /^\/(live|write)\/([^/?#]+)$/.exec(path) ?? [];
+		const live = [...this.lives.values()].find((candidate) => (area === 'live' ? candidate.read : candidate.write) === token);
+		if (!live) return new Response('Not found', { status: 404 });
+		if (area === 'write' && method === 'PUT') return this.receiveWrite(live, init.body);
+		// A command's live text has no message, so no url anyone knows of, until its write starts.
+		if (area !== 'live' || method !== 'GET' || (live.command && live.state === 'pending')) return new Response('Not found', { status: 404 });
+		const signal = init.signal ?? undefined;
+		let reader: ReadableStreamDefaultController<Uint8Array> | undefined;
+		const body = new ReadableStream<Uint8Array>({
+			start(controller) {
+				reader = controller;
+				for (const chunk of live.chunks) controller.enqueue(chunk);
+				if (live.state === 'ended') controller.close();
+				else live.readers.add(controller);
+				signal?.addEventListener('abort', () => {
+					if (!live.readers.delete(controller)) return;
+					controller.error(new DOMException('The request was aborted', 'AbortError'));
+				}, { once: true });
+			},
+			cancel() {
+				if (reader) live.readers.delete(reader);
+			}
+		});
+		return new Response(body, { headers: { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff' } });
+	};
+
+	/** A `PUT` to a write URL: a command's starts its message now; then the body streams in, and its end ends the text. */
+	private async receiveWrite(live: LiveWrite, body: RequestInit['body']): Promise<Response> {
+		if (live.write === '' || live.state === 'ended') return new Response('Not found', { status: 404 });
+		this.beginLive(live);
+		// Used once: a second PUT to it is a 404.
+		live.write = '';
+		const stream = new Response(body ?? null).body;
+		if (stream) {
+			const reader = stream.getReader();
+			for (;;) {
+				const { done, value } = await reader.read();
+				if (done || live.state !== 'live') break;
+				this.liveWrite(live.embed_id, value);
+			}
+		}
+		this.liveEnd(live.embed_id);
+		return new Response(null, { status: 204 });
+	}
+
+	private newLive(kind: 'append' | 'terminal', title?: string): LiveWrite {
+		const serial = this.liveSerial++;
+		const token = () => `${serial}${Math.random().toString(36).slice(2, 10)}`;
+		const live: LiveWrite = { kind, embed_id: `preview-live-${serial}`, write: token(), read: token(), state: 'pending', chunks: [], readers: new Set(), timers: [], ...(title ? { title } : {}) };
+		this.lives.set(live.embed_id, live);
+		return live;
+	}
+
+	/** The embed as broadcast while live: with its `url` (§4.8.3). */
+	private liveEmbed(live: LiveWrite): JsonObject {
+		return { embed_id: live.embed_id, kind: live.kind, ...(live.title ? { title: live.title } : {}), url: `${PREVIEW_ORIGIN}/live/${live.read}` };
+	}
+
+	/** What the sender is told of each new live text: its write URL, for it alone (§4.8.3). */
+	private liveResult(live: LiveWrite): JsonObject {
+		return { embed_id: live.embed_id, kind: live.kind, write_url: `${PREVIEW_ORIGIN}/write/${live.write}` };
+	}
+
+	/** Its write started: a command's posts its message now, from the command's sender, in its room (the contract's step 4). */
+	private beginLive(live: LiveWrite): void {
+		if (live.state !== 'pending') return;
+		live.state = 'live';
+		for (const timer of live.timers.splice(0)) clearTimeout(timer);
+		const command = live.command;
+		if (!command) return;
+		const room = this.rooms.get(command.room);
+		if (!room) return;
+		const id = this.nextLog(room);
+		const body = live.kind === 'append' ? { text: command.text, format: 'markdown', embeds: [this.liveEmbed(live)] } : { text: '', embeds: [this.liveEmbed(live)] };
+		const record: JsonObject = { message_id: id, log_id: id, room_id: room.room_id, from: this.recorded('preview_guest'), body, ...(command.reply_to ? { reply_to: command.reply_to } : {}) };
+		room.messages.push(record);
+		live.message_id = id;
+		this.broadcast({ method: 'message', params: record }, room);
+	}
+
+	/** Ends its readers and timers, and its write URL: no snapshot. */
+	private stopLive(live: LiveWrite): void {
+		live.state = 'ended';
+		live.write = '';
+		for (const timer of live.timers.splice(0)) clearTimeout(timer);
+		for (const reader of live.readers) reader.close();
+		live.readers.clear();
+	}
+
+	/** A new snapshot of a message, as the server makes one (§3.5): the same `message_id`, a new `log_id`. */
+	private republish(room: PreviewRoom, message: JsonObject, fields: JsonObject): void {
+		const record: JsonObject = { ...structuredClone(message), ...fields, log_id: this.nextLog(room) };
+		const index = room.messages.indexOf(message);
+		if (index !== -1) room.messages.splice(index, 1);
+		room.messages.push(record);
+		this.broadcast({ method: 'message', params: record }, room);
+	}
+
+	/**
+	 * A message request's live embeds (§4.8.2, §4.8.3): new ones get an `embed_id` and a `url`, listed with their write
+	 * URLs for the result; kept ones (sent back by `embed_id`) get their `url` or `output` back from the records; one a
+	 * save leaves out ends early, with nothing appended. At most one `append` per message (§4.8.5).
+	 */
+	private liveEmbeds(body: JsonObject, previous: JsonObject | undefined): { body: JsonObject; results: JsonObject[]; created: LiveWrite[] } | string {
+		const embeds = Array.isArray(body.embeds) ? body.embeds : [];
+		if (embeds.filter((embed) => isJsonObject(embed) && embed.kind === 'append').length > 1) return 'A message has at most one append embed';
+		const before = isJsonObject(previous?.body) && Array.isArray(previous.body.embeds) ? previous.body.embeds.filter(isJsonObject) : [];
+		const results: JsonObject[] = [];
+		const created: LiveWrite[] = [];
+		const kept = new Set<string>();
+		const next = embeds.map((embed) => {
+			if (!isJsonObject(embed) || (embed.kind !== 'terminal' && embed.kind !== 'append')) return embed;
+			const id = typeof embed.embed_id === 'string' ? embed.embed_id : undefined;
+			const stored = id ? before.find((entry) => entry.embed_id === id) : undefined;
+			if (stored) {
+				kept.add(id!);
+				const { url: _url, output: _output, ...given } = embed;
+				return { ...given, ...(stored.url !== undefined ? { url: stored.url } : {}), ...(stored.output !== undefined ? { output: stored.output } : {}) };
+			}
+			const live = this.newLive(embed.kind, typeof embed.title === 'string' && embed.title ? embed.title : undefined);
+			created.push(live);
+			results.push(this.liveResult(live));
+			return this.liveEmbed(live);
+		});
+		for (const entry of before) {
+			const id = typeof entry.embed_id === 'string' ? entry.embed_id : undefined;
+			const live = id ? this.lives.get(id) : undefined;
+			if (live && !kept.has(id!) && live.state !== 'ended') this.stopLive(live);
+		}
+		return { body: next.length ? { ...body, embeds: next } : body, results, created };
+	}
+
 	factory: WebSocketFactory = (url) => this.createSocket(url);
 
 	private makeRoom(id: string, title: string | undefined, members: string[], parent?: string): PreviewRoom {
@@ -378,7 +629,7 @@ export class MemoryProtocolServer {
 			// A test's fields replace the demo's, `ext` key by key.
 			const extra = structuredClone(this.knobs.server ?? {});
 			const ext = { settings: PREVIEW_SETTINGS, ...(isJsonObject(extra.ext) ? extra.ext : {}) };
-			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses, ...extra, ext } });
+			socket.deliver({ method: 'server', params: { apron: 10, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses, ...extra, ext } });
 		},
 		received: (socket, frame) => this.receive(socket, frame),
 		closed: (socket) => this.sockets.delete(socket)
@@ -479,6 +730,10 @@ export class MemoryProtocolServer {
 		const id = typeof p.message_id === 'string' ? p.message_id : this.nextLog(room);
 		const log = this.nextLog(room);
 		const previous = typeof p.message_id === 'string' ? this.findMessage(id) : undefined;
+		// Live text: new embeds get their URLs, kept ones their server-owned fields; a tombstone ends any still live.
+		const lived = isJsonObject(p.body) && !p.deleted ? this.liveEmbeds(p.body, previous?.message) : undefined;
+		if (typeof lived === 'string') return fail(lived);
+		if (p.deleted) for (const live of this.lives.values()) if (live.message_id === id && live.state !== 'ended') this.stopLive(live);
 		const reactions = new Map<string, string[]>();
 		if (typeof p.message_id === 'string') {
 			for (const candidate of this.rooms.values()) {
@@ -498,15 +753,17 @@ export class MemoryProtocolServer {
 		const ext = p.deleted ? undefined : mergedExt(kept, p.ext);
 		const record: JsonObject = {
 			message_id: id, log_id: log, room_id: room.room_id, from,
-			...(p.body && !p.deleted ? { body: p.body } : {}),
+			...(p.body && !p.deleted ? { body: lived?.body ?? p.body } : {}),
 			...(p.reply_to ? { reply_to: p.reply_to } : {}),
 			...(ext ? { ext } : {}),
 			...(p.deleted ? { deleted: true } : {})
 		};
 		if (reactions.size) room.reactions.set(id, reactions);
 		room.messages.push(record);
+		for (const live of lived?.created ?? []) live.message_id = id;
 		this.broadcast({ method: 'message', params: record }, room);
-		reply({ message_id: id, log_id: log });
+		// The write URLs of its new live text, for the sender alone, after the broadcast (§4.8.3).
+		reply({ message_id: id, log_id: log, ...(lived?.results.length ? { embeds: lived.results } : {}) });
 	}
 
 	private react(socket: MemorySocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
@@ -631,12 +888,53 @@ export class MemoryProtocolServer {
 		this.broadcast({ method: 'activity', params: { ...p, from: this.recorded('preview_guest') } }, this.rooms.get(p.room_id));
 	}
 	private command(socket: MemorySocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
-		const text = (p.body as JsonObject | undefined)?.text;
-		if (text === '/help') {
-			socket.deliver({ method: 'message', params: { room_id: String(p.room_id ?? roomId), from: { user_id: '~private', name: 'System message to you' }, body: { text: 'Preview commands: /help. Room and message operations are handled in memory.' } } });
+		const body = isJsonObject(p.body) ? p.body : {};
+		const text = typeof body.text === 'string' ? body.text : '';
+		const room = String(p.room_id ?? roomId);
+		const notice = (markdown: string) => socket.deliver({ method: 'message', params: { room_id: room, from: { user_id: '~private', name: 'System message to you' }, body: { text: markdown, format: 'markdown' } } });
+		const [, name = '', rest = ''] = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trim()) ?? [];
+		if (name !== 'embed-terminal' && name !== 'embed-append' && Array.isArray(body.embeds) && body.embeds.some((embed) => isJsonObject(embed) && (embed.kind === 'terminal' || embed.kind === 'append'))) {
+			return fail('Live text embeds go in a message, or come from /embed-terminal or /embed-append');
+		}
+		if (name === 'help') {
+			notice('Preview commands:\n\n- `/help`: this list.\n- `/embed-terminal [title]`: a terminal to stream a program\'s output into (80×40).\n- `/embed-append [markdown]`: a message whose text streams in after the Markdown you give.\n\nRoom and message operations are handled in memory.');
 			reply();
-		} else fail(`Unknown command: ${String(text ?? '')}`);
+		} else if (name === 'embed-terminal' || name === 'embed-append') {
+			if (!this.rooms.has(room)) return fail('Unknown room');
+			const kind = name === 'embed-terminal' ? 'terminal' : 'append';
+			const live = this.newLive(kind, kind === 'terminal' ? rest.trim() || undefined : undefined);
+			live.command = { room, text: kind === 'append' ? rest.trim() : '', ...(isJsonObject(p.reply_to) ? { reply_to: structuredClone(p.reply_to) } : {}) };
+			const writeUrl = `${PREVIEW_ORIGIN}/write/${live.write}`;
+			// Its write URL stops working if no PUT comes in time (§4.8.3).
+			live.timers.push(setTimeout(() => {
+				if (live.state === 'pending') this.stopLive(live);
+			}, PREVIEW_PENDING_MS));
+			reply({ embeds: [this.liveResult(live)] });
+			const recipe = kind === 'terminal'
+				? `Stream a terminal into this room within 5 minutes (80×40):\n\n\`\`\`sh\nscript -qfc 'stty cols 80 rows 40; YOUR_COMMAND' /dev/null | curl -sT - '${writeUrl}'\n\`\`\``
+				: `Stream text into this room within 5 minutes:\n\n\`\`\`sh\nyour-llm-command | curl -sT - '${writeUrl}'\n\`\`\``;
+			const demo = this.knobs.liveDemo !== 'off';
+			notice(`${recipe}${demo ? '\n\nThis preview has no network, so it plays a demo here in a moment instead.' : ''}`);
+			if (demo) {
+				live.timers.push(setTimeout(() => {
+					if (live.state !== 'pending') return;
+					this.beginLive(live);
+					this.playDemo(live.embed_id);
+				}, PREVIEW_DEMO_AFTER_MS));
+			}
+		} else fail(`Unknown command: ${text}`);
 	}
+}
+
+/** One buffer of all of them, in order. */
+function concat(chunks: readonly Uint8Array[]): Uint8Array {
+	const all = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0));
+	let at = 0;
+	for (const chunk of chunks) {
+		all.set(chunk, at);
+		at += chunk.byteLength;
+	}
+	return all;
 }
 
 let previewServer: MemoryProtocolServer | undefined;
@@ -648,4 +946,10 @@ export const previewWebSocketFactory: WebSocketFactory = (url) => {
 		if (scope.__APRON_PREVIEW__) scope.__apronPreview = previewServer;
 	}
 	return previewServer.factory(url);
+};
+
+/** The preview's live text, for `setLiveFetch`: its own origin's URLs from its server (`fetchLive`), any other from the network. */
+export const previewLiveFetch: LiveFetch = (url, init) => {
+	if (!url.startsWith(`${PREVIEW_ORIGIN}/`)) return fetch(url, init);
+	return previewServer ? previewServer.fetchLive(url, init) : Promise.resolve(new Response('Not found', { status: 404 }));
 };

@@ -147,6 +147,15 @@ export const SCENES: Scene[] = [
 		}
 	},
 	{
+		name: 'live-text',
+		steps: async (preview, look) => {
+			const id = await preview.startLive('general', 'ada', 'terminal', { title: 'make test' });
+			await preview.liveWrite(id, '$ make test\r\n');
+			await expect(preview.page.getByTestId('terminal-embed').locator('.ap-embed-livebadge')).toHaveText('Live');
+			await look();
+		}
+	},
+	{
 		name: 'message-actions',
 		steps: async (preview, look) => {
 			const { page } = preview;
