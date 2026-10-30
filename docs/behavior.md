@@ -1235,6 +1235,21 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   longer, up to 15 s), and the new response replaces it, from a fresh
   terminal. Once `GET` ends it says Ended, and when a snapshot carries
   `output`, it shows that, from a fresh terminal, as Finished.
+  **Expand terminal** (the ⤢ in its header, or on a touch screen a tap on
+  the terminal; a mouse click there still selects text) opens it full screen
+  in the terminal viewer, on the image viewer's dark ground: its title, Live
+  or how it stopped, and **Close**, over the same 80 by 40 screen at a
+  readable size. The font is the largest that fits the 80 columns in the
+  viewer's width and, where the screen is tall enough, the 40 rows in its
+  height (about 17.75px at 1280×900), but the rows never take it below 13px
+  (a phone on its side, 844×390: 13px, and a screen using all 40 rows
+  scrolls up and down inside the viewer), and the columns never take it
+  below 9px (a phone upright, 390px: 9px, and the screen scrolls sideways
+  inside the viewer; the page never does). It shows the same text as the
+  message, live or finished, and keeps up with it as it arrives, without
+  reading `url` a second time (a server caps how often a live text is
+  read). Escape, Close or Back closes it (opening it adds a history entry),
+  with focus back on Expand, and it closes if its message goes.
 - **Live text in the body** (`append` embeds, capability `embed:append`,
   [§4.8.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#485-embedappend)),
   such as a model's reply as it writes: no card. The message shows its

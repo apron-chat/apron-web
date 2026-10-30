@@ -81,7 +81,8 @@ which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, whose + mounts
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
 choice submitted with a form a `CheckList`-style row),
 `MediaViewerHost` (the design system's `MediaViewer`, opened by image embeds through
-`media-viewer.svelte.ts`, which reads the open timeline's `data-viewer-*` links), `UpdateNotice` (the design system's `ActionBanner`, which reads whether the page's
+`media-viewer.svelte.ts`, which reads the open timeline's `data-viewer-*` links), `TerminalViewerHost` (the design
+system's `TerminalViewer`, opened by a terminal embed's Expand through `terminal-viewer.svelte.ts`; below), `UpdateNotice` (the design system's `ActionBanner`, which reads whether the page's
 `PaneDrafts` hold anything unsent through `pageDrafts`). Avatars are the design system's `Avatar`, given an avatar
 `directory` will load and the `hue` of their `user_id` (`hueOf`).
 
@@ -167,7 +168,24 @@ page), its font fitted to the box's width (`terminalFontSize`) and its height
 cut to the rows written (`shownRows`), themed from the design tokens and
 again when the theme changes. Writes made before xterm loaded wait in order,
 and a reset is RIS written in the same queue, so a reconnect can't show the
-old response's tail. An `append` embed has no component: `messageView` reads
+old response's tail. The embed writes its decoded text to a `TerminalFeed`
+(also in `terminal-screen.ts`), not straight to its screen: the feed keeps
+the text since the last reset and writes it on to every screen attached, and
+a screen attached later is shown the text so far first. That is how the
+full-screen viewer follows a live terminal without a second `GET url` (the
+server caps reads per live text): the design system's `EmbedTerminal` shows
+Expand when given `onexpand` (and calls it on a touch tap on the screen),
+the app's `EmbedTerminal` hands `terminalViewer.show` (`src/lib/ui/terminal-viewer.svelte.ts`)
+a view of itself (title, live, status and its feed, read as they change),
+and `TerminalViewerHost`, mounted once in the layout, draws the design
+system's `TerminalViewer` (a `<dialog>` on the `MediaViewer`'s ground, its
+screen box in a stage that scrolls) with a second `TerminalScreen`, fitted
+by `VIEWER_FIT` (`TerminalFit`: the columns in the stage's width and the
+rows in its height, no smaller than 13px for the rows or 9px for the
+columns) to the stage it sits in (`space`), attached to that feed while
+open. Opening it pushes a history entry (`page.state.terminal`), so Back
+closes it, and closing it otherwise leaves that entry; an embed that goes
+closes the viewer showing it. An `append` embed has no component: `messageView` reads
 `liveAppend(url)` (`src/lib/ui/live-append.svelte.ts`, one per `url`, a
 `createSubscriber` that reads while some row shows it and tells readers at
 most once a frame, decoding with a streaming `TextDecoder`) and renders the
