@@ -181,10 +181,12 @@ test.describe('the panel toggles', () => {
 
 			const side = await at(page.locator('.ap-shell-side'));
 			const server = await at(page.locator('.ap-shell-sidehead-server'));
+			// Its avatar, inside the button's pill, which is inset as the profile bar's is.
+			const serverAvatar = await at(page.locator('.ap-shell-sidehead-avatar'));
 			const hideRooms = await at(button('Hide rooms'));
 			near(hideRooms.end, side.end - 12, 'the rooms toggle ends a --space-3 inside the list');
 			expect(server.end, 'the server stops before the toggle').toBeLessThanOrEqual(hideRooms.start);
-			near(server.start, side.start + 16, 'the server starts at the list\'s outer edge');
+			near(serverAvatar.start, side.start + 16, 'the server starts at the list\'s outer edge');
 
 			const list = page.getByRole('complementary', { name: 'Room member list', exact: true });
 			const members = await at(list);

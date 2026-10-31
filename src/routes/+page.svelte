@@ -36,6 +36,7 @@
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 	import { INSTALL_OFFER_AFTER_MS, installWay, installedAlready } from '$lib/ui/install';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
+	import ServerPane from '$lib/components/ServerPane.svelte';
 	import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
 	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
 	import ConnectionNotice from '$lib/components/ConnectionNotice.svelte';
@@ -294,6 +295,8 @@
 	/** Link previews removed from the composer's draft, by URL. */
 	let composerDismissed = $state<string[]>([]);
 	let connectOpen = $state(false);
+	/** Disconnected from the server pane: the connect screen can't be cancelled back to it. */
+	let disconnected = $state(false);
 	/** The sign-in scheme the connect screen opens with, when something asked for one. */
 	let connectScheme = $state<Scheme | undefined>();
 	let recentServers = $state<RecentServer[]>([]);
@@ -1307,6 +1310,18 @@
 		client.listMembers(room.id, maxAge).catch(() => undefined);
 	}
 
+	/**
+	 * The server pane's Disconnect: whatever belonged to this server goes, the connection closes, and the connect
+	 * screen opens, where connecting again (here, or to another server) is the way back. What was kept for it stays.
+	 */
+	function disconnect(): void {
+		if (!client || previewMode) return;
+		leaveBackend();
+		client.disconnect();
+		disconnected = true;
+		openConnect();
+	}
+
 	/** The connect form was submitted: whatever belonged to the previous backend goes. */
 	function leaveBackend(): void {
 		drafts.open(undefined);
@@ -1543,6 +1558,7 @@
 		if (client) recentServers = rememberServer(recentServers, client.url, currentLook);
 		connectOpen = false;
 		offeringLink = false;
+		disconnected = false;
 	}
 
 	// --- Navigation and drafts ---
@@ -3027,7 +3043,7 @@
 {:else if connectOpen}
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
-		canCancel={session.rooms.length > 0 || session.ready || offeringLink} initialScheme={connectScheme}
+		canCancel={!disconnected && (session.rooms.length > 0 || session.ready || offeringLink)} initialScheme={connectScheme}
 		initialError={links.failure?.error}
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
 	/>
@@ -3067,7 +3083,7 @@
 			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
-			onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
+			onsignin={previewMode ? undefined : (name, scheme) => openConnect(scheme ? { scheme, name } : { signIn: true, name })}
 			returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
 			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut}
 			onnewprivate={canStartPrivate ? () => (newPrivateOpen = true) : undefined}
@@ -3272,6 +3288,7 @@
 		<NewPrivateDialog client={client!} {session} enabled={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopen={openPrivateRoom} onclose={() => (newPrivateOpen = false)} />
 	{/if}
 	<!-- Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut. -->
+	<ServerPane {client} {session} onnewserver={previewMode ? undefined : () => openConnect()} ondisconnect={previewMode ? undefined : disconnect} />
 	<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	<ReactorsPopover />
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->

@@ -129,7 +129,7 @@ const rows: Row[] = [
 		userId: 'ada', name: 'Ada', avatar: 'data:image/png;base64,iVBORw0KGgo=', canUpload: true, onavatarfile: vi.fn(), onremoveavatar: vi.fn(), dialog: false,
 		maxBio: 250, changeAvatarTestid: 'change', removeAvatarTestid: 'remove', avatarFileTestid: 'file', nameTestid: 'name', bioTestid: 'bio'
 	}, {
-		change: () => dom.button('Change avatar'), remove: () => dom.button('Remove'), file: () => document.querySelector('input[type="file"]')!, name: () => byLabel('Handle'),
+		change: () => dom.button(/^Upload (a new|an) avatar$/), remove: () => dom.button('Remove'), file: () => document.querySelector('input[type="file"]')!, name: () => byLabel('Display name'),
 		bio: () => document.querySelector('textarea[aria-label="Bio"]')!
 	}],
 	['SignInForm, email', SignInForm, {

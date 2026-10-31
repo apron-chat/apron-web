@@ -3,8 +3,11 @@
 	import type { ClassValue } from 'svelte/elements';
 
 	interface Props {
-		/** Each section: its nav label, which also heads it, the line under the heading, and the heading's id. */
-		sections: Array<{ value: string; label: string; hint?: string; id: string }>;
+		/**
+		 * Each section: its nav label, which also heads it, the line under the heading, and the heading's id.
+		 * `heading: false` keeps the heading for screen readers only, where the open tab says it already.
+		 */
+		sections: Array<{ value: string; label: string; hint?: string; id: string; heading?: boolean }>;
 		/** The open section's `value`: `bind:current`. */
 		current: string;
 		/** The open section's settings, such as SettingRows, under its heading. */
@@ -13,11 +16,17 @@
 		class?: ClassValue;
 	}
 	let { sections, current = $bindable(), children, class: className }: Props = $props();
+	let nav = $state<HTMLElement | undefined>();
+	// On a phone the nav is a strip that scrolls: the open section's tab is scrolled to, never left off its edge.
+	$effect(() => {
+		void current;
+		nav?.querySelector('[aria-current="page"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+	});
 </script>
 
 <!-- A settings dialog's body (Dialog's `flush`): a nav of sections beside the open one, which scrolls on its own. -->
 <div class={['ap-preferences-body', className]}>
-	<nav class="ap-preferences-nav" aria-label="Preference sections">
+	<nav class="ap-preferences-nav" aria-label="Preference sections" bind:this={nav}>
 		{#each sections as section (section.value)}
 			<button type="button" aria-current={current === section.value ? 'page' : undefined} onclick={() => (current = section.value)}>{section.label}</button>
 		{/each}
@@ -25,8 +34,8 @@
 	{#each sections as section (section.value)}
 		{#if section.value === current}
 			<section class="ap-preferences-content" aria-labelledby={section.id}>
-				<h3 id={section.id}>{section.label}</h3>
-				{#if section.hint}<p class="ap-form-hint">{section.hint}</p>{/if}
+				<h3 id={section.id} class={section.heading === false ? 'ap-sr' : undefined}>{section.label}</h3>
+				{#if section.hint && section.heading !== false}<p class="ap-form-hint">{section.hint}</p>{/if}
 				{@render children?.()}
 			</section>
 		{/if}

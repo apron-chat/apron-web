@@ -36,7 +36,16 @@ const OUT_OF_REACH: Record<string, string> = {
  * Entries the interop suite uses that this app no longer renders: real breaks, reported to fix on one side
  * or the other, and tested (as fixme) below rather than failing every run.
  */
-const KNOWN_BREAKS: Record<string, string> = {};
+const PROFILE_IN_PREFERENCES = 'Your profile is Preferences’ first section now, which the profile bar’s one button (button /^Open preferences/) opens: the handle, avatar, bio, Sign-in row and Sign out are in dialog "Preferences".';
+const KNOWN_BREAKS: Record<string, string> = {
+	'button /^Your profile on/': PROFILE_IN_PREFERENCES,
+	'dialog "Edit profile"': PROFILE_IN_PREFERENCES,
+	'dialog "Edit profile" (substring)': PROFILE_IN_PREFERENCES,
+	'button "Sign in with a passkey"': 'A guest’s Profile offers Sign in (button "Sign in" in dialog "Preferences"), as the composer does where guests can’t post: the connect screen, at the way the server signs in first, a passkey where it signs in and guests start.',
+	'button "Connect to a server…"': 'The connect screen is the server pane’s Connect to another server…, which the rooms list’s head (button /^Server: /) opens.',
+	'switch "Notifications"': 'Preferences opens at Profile now: the switch is in its Notifications section, a press away (button "Notifications" in its navigation).',
+	'#ap-pref-notifications-note': 'Preferences opens at Profile now: the note is in its Notifications section, a press away.'
+};
 
 const seen: Seen[] = existsSync(SEEN_DIR) ? readdirSync(SEEN_DIR).map((f) => JSON.parse(readFileSync(join(SEEN_DIR, f), 'utf8'))) : [];
 const ran = new Set(seen.map((s) => s.scene));

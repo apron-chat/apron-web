@@ -28,15 +28,24 @@
 		element?: HTMLDivElement;
 		/** Its rendered height in px, bindable, to place it by before it fits. */
 		offsetHeight?: number;
+		/**
+		 * Closes it. A bottom sheet then dims the page behind it, which a press on closes, and shows a grabber at
+		 * its top, so it reads as something over the page to put away.
+		 */
+		onclose?: () => void;
 		children: Snippet;
 	}
-	let { mode = 'popover', top, left, width, height, label, class: className, testid, state, onkeydown, onkeydowncapture, onfocusout, element = $bindable(), offsetHeight = $bindable(0), children }: Props = $props();
+	let { mode = 'popover', top, left, width, height, label, class: className, testid, state, onkeydown, onkeydowncapture, onfocusout, element = $bindable(), offsetHeight = $bindable(0), onclose, children }: Props = $props();
 	const popover = $derived(mode === 'popover');
 	/** Its placement. */
 	const px = (name: string, value: number | undefined) => value !== undefined && `${name}: ${value}px`;
 	const style = $derived([popover && px('top', top), popover && px('left', left), popover && px('width', width), px('height', height)].filter(Boolean).join('; ') || undefined);
 </script>
 
+{#if mode === 'sheet' && onclose}
+	<!-- The page behind the sheet, dimmed: a press on it closes the sheet, and reaches nothing under it. -->
+	<div class="ap-popover-scrim" aria-hidden="true" onclick={onclose}></div>
+{/if}
 <div
 	role="dialog"
 	tabindex="-1"
@@ -51,5 +60,6 @@
 	bind:this={element}
 	bind:offsetHeight
 >
+	{#if mode === 'sheet' && onclose}<span class="ap-popover-grabber" aria-hidden="true"></span>{/if}
 	{@render children()}
 </div>

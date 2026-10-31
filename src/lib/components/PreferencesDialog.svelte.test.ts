@@ -8,6 +8,7 @@ import { render, cleanup } from '$lib/test/dom';
 function notificationProps(overrides: Record<string, unknown> = {}) {
 	return {
 		open: false,
+		section: 'notifications',
 		notificationsEnabled: true,
 		notificationsSupported: true,
 		notificationPermission: 'granted' as const,
