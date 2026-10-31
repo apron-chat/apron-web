@@ -720,10 +720,10 @@ push say so; iPhone and iPad Safari say to add Apron to the Home Screen first.
 **Appearance** picks a light or dark mode
 over the system's, and a theme: Apron (the system fonts and Apron's own
 palette), Ferrous (graphite and cream, in Recursive Sans Casual and Rec Mono
-Casual), Gumball (bubblegum pink, in the system's rounded face where it has
-one), Linocut (high contrast, black on white, for e-ink too), or Custom. Apron carries Recursive, cut to
-those two faces, and loads it only for a theme that uses it, after a copy
-installed on the device. Custom shows its CSS, starting from the theme chosen
+Casual), Gumball (cotton-candy pink with a lavender sidebar, in Nunito),
+Linocut (high contrast, black on white, for e-ink too), or Custom. Apron
+carries those fonts (Recursive cut to those two faces, and Nunito) and loads
+one only for a theme that uses it, after a copy installed on the device. Custom shows its CSS, starting from the theme chosen
 before: the interface, message and code fonts as design tokens (`--font-sans`,
 `--font-chat`, `--font-mono`), then its base colors (`--base-ground`,
 `--base-ink`, `--base-accent`, `--base-link`), each `#hex` or

@@ -72,12 +72,22 @@ export const THEMES = [
 		id: 'gumball',
 		name: 'Gumball',
 		css: themeCss(
-			{ sans: 'ui-rounded, var(--font-sans-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' },
-			`/* Bubblegum pink and plum, links in sour-apple teal: base colors, as light-dark(light, dark). */
-	--base-ground: light-dark(#fff0f6, #2a1426);
-	--base-ink: light-dark(#3b1030, #ffe3f1);
-	--base-accent: light-dark(#cc1f68, #ff7ab8);
-	--base-link: light-dark(#0f6b80, #7fe0e0);`
+			{ sans: '"Nunito", "Apron Nunito", var(--font-sans-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' },
+			`/* Cotton candy: pink and plum, sky-blue links: base colors, as light-dark(light, dark). */
+	--base-ground: light-dark(#fff6fb, #251a35);
+	--base-ink: light-dark(#3a2e5c, #f3eaff);
+	--base-accent: light-dark(#c93a7e, #ff8cc6);
+	--base-link: light-dark(#2f6fd6, #8fc4ff);
+	/* The sidebar in lavender (navy at night), raised things in white, and softer lines than the bases give */
+	--bg-rail: light-dark(#ddd6f2, #141a36);
+	--bg-000: light-dark(#ebe6fb, #1a2142);
+	--bg-200: light-dark(#ffffff, #2f2242);
+	--bg-300: light-dark(#ffe3f0, #3b2b52);
+	--line: light-dark(#f0dbe8, #3e3058);
+	--line-strong: light-dark(#9a7a94, #8e7fae);
+	--ink-muted: light-dark(#6f638f, #b9abd8);
+	--accent-soft: light-dark(#ffd9ec, #4b2a52);
+	--denim-soft: light-dark(#dcebff, #24345c);`
 		)
 	},
 	{
