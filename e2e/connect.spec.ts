@@ -104,6 +104,39 @@ test.describe('the server pane', () => {
 		await expect(page.getByRole('form', { name: 'Sign in' })).toBeVisible();
 	});
 
+	test('Enter in an unchanged Display name sends nothing, and a changed one saves', async ({ preview, page }) => {
+		const sent: Record<string, any>[] = [];
+		await preview.openRoot({ token: 'account-session', sent });
+		await page.getByRole('button', { name: /^Open preferences/ }).click();
+		const preferences = page.getByRole('dialog', { name: 'Preferences' });
+		const name = preferences.getByTestId('display-name-input');
+		await name.press('Enter');
+		await expect(preferences.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+		await expect(preferences.getByText('Saved.', { exact: true })).toHaveCount(0);
+		expect(sent.filter((frame) => frame.method === 'me')).toEqual([]);
+		await name.fill('Ada L');
+		await name.press('Enter');
+		await expect(preferences.getByText('Saved.', { exact: true })).toBeVisible();
+		expect(sent.filter((frame) => frame.method === 'me').map((frame) => frame.params)).toEqual([{ name: 'Ada L' }]);
+	});
+
+	test('Sign out in Profile shows the guest’s own name and bio, and focus moves to Sign in', async ({ preview, page }) => {
+		await preview.openRoot({
+			token: 'account-session',
+			you: { user_id: 'lovelace', name: 'Ada', ext: { bio: 'Writes the engines.' } },
+			server: { capabilities: ['history', 'rooms', 'status', 'ext:bio'] }
+		});
+		await page.getByRole('button', { name: /^Open preferences/ }).click();
+		const preferences = page.getByRole('dialog', { name: 'Preferences' });
+		const bio = preferences.getByRole('textbox', { name: 'Bio' });
+		await expect(bio).toHaveValue('Writes the engines.');
+		await preferences.getByRole('button', { name: 'Sign out', exact: true }).click();
+		await expect(preferences).toContainText('Signed out.');
+		await expect(preferences.getByTestId('display-name-input')).toHaveValue('Guest 2');
+		await expect(bio).toHaveValue('');
+		await expect(preferences.getByRole('button', { name: 'Sign in', exact: true })).toBeFocused();
+	});
+
 	test('opens and closes from the keyboard, Escape giving focus back', async ({ preview, page }) => {
 		await preview.openRoot({ token: 'account-session' });
 		const server = head(preview).getByRole('button', { name: /^Server: / });

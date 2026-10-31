@@ -6,9 +6,10 @@ export const OFFSITE = /^https?:\/\/(?!127\.0\.0\.1[:/]|localhost[:/])/;
 
 /**
  * What a test changes about the scripted server: `server` frame fields (§3.1), fields of `you` (§3.3), and a `token`
- * its `auth` answers with, which makes the session an account's rather than a guest's.
+ * its `auth` answers with, which makes the session an account's rather than a guest's. With a `token`, a guest `auth` after
+ * the first (signing out) gets a new guest, without the token or those fields. `sent` collects every frame the page sends.
  */
-export type MockOptions = { server?: Record<string, unknown>; you?: Record<string, unknown>; token?: string };
+export type MockOptions = { server?: Record<string, unknown>; you?: Record<string, unknown>; token?: string; sent?: Record<string, any>[] };
 
 /**
  * A scripted server for the app's own route (`/`), which, unlike `/__preview`, connects to a real backend
@@ -20,18 +21,30 @@ export type MockOptions = { server?: Record<string, unknown>; you?: Record<strin
  */
 export async function mockServer(page: Page, options: MockOptions = {}): Promise<void> {
 	await page.route(OFFSITE, (route) => route.abort());
+	let auths = 0;
 	await page.routeWebSocket(/.*/, (ws) => {
-		const you = { user_id: 'guest_1', name: 'Guest 1', status: 'online', ...options.you };
+		let you: Record<string, unknown> = { user_id: 'guest_1', name: 'Guest 1', status: 'online', ...options.you };
 		// Complete objects, as the listing carries them: the shown status, and `seen` with a shown `offline`.
 		const ada = { user_id: 'ada', name: 'Ada', status: 'offline', seen: String(NOW.getTime() - 2 * 60 * 60 * 1000) };
 		const bob = { user_id: 'bob', name: 'Bob', status: 'online' };
 		const general = { room_id: 'general', title: 'General', log_id: '1', latest_log_id: '1', history_log_id: null, members: [{ user_id: you.user_id }, { user_id: ada.user_id }, { user_id: bob.user_id }] };
 		ws.onMessage((data) => {
 			const frame = JSON.parse(String(data));
+			options.sent?.push(frame);
 			const reply = (result: unknown) => frame.id !== undefined && ws.send(JSON.stringify({ id: frame.id, result }));
 			switch (frame.method) {
 				case 'ping': return ws.send(JSON.stringify({ method: 'pong' }));
-				case 'auth': return reply({ you, ...(options.token ? { token: options.token } : {}) });
+				case 'auth': {
+					if (options.token && frame.params?.scheme === 'guest' && auths++ > 0) {
+						you = { user_id: 'guest_2', name: 'Guest 2', status: 'online' };
+						return reply({ you });
+					}
+					return reply({ you, ...(options.token ? { token: options.token } : {}) });
+				}
+				case 'me': {
+					you = { ...you, ...(typeof frame.params?.name === 'string' ? { name: frame.params.name } : {}) };
+					return reply({ you });
+				}
 				case 'room_list': return reply({ joined: [general], users: [you, ada, bob] });
 				// Idle reports (§4.5.3): taken, and kept nowhere.
 				case 'status': return reply({});
