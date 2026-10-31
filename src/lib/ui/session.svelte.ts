@@ -24,6 +24,14 @@ export const blankSnapshot = (): ClientSnapshot => ({
 /** The same values in the same order, item by item: the same list, though the client made it afresh. */
 const sameItems = <T>(a: readonly T[] | undefined, b: readonly T[] | undefined): boolean => a === b || Boolean(a && b && a.length === b.length && a.every((item, index) => item === b[index]));
 
+/** One listed room, as state of its own (`SnapshotParts.room`). */
+class RoomPart {
+	room = $state.raw<RoomSnapshot | undefined>();
+	constructor(room: RoomSnapshot) {
+		this.room = room;
+	}
+}
+
 /**
  * The parts of the client's snapshot that the session's own views read, each as state of its own. Each snapshot is a
  * new object, and setting state marks everything that reads it, and everything below that however deep, to be
@@ -52,6 +60,18 @@ class SnapshotParts {
 	held = $state.raw<boolean | undefined>();
 	disconnectedAt = $state.raw<number | undefined>();
 	retryingSince = $state.raw<number | undefined>();
+	/** Each room listed now, or before (then undefined), by id. Not state: only take() adds to it. */
+	private byId = new Map<string, RoomPart>();
+
+	/**
+	 * The listed room with this id, read on its own: what reads it is marked when that room changes, not when any
+	 * does. A room never listed yet is looked up in the rooms, so its reader is marked once it is.
+	 */
+	room(id: string): RoomSnapshot | undefined {
+		const part = this.byId.get(id);
+		return part ? part.room : this.rooms.find((room) => room.id === id);
+	}
+
 	take(next: ClientSnapshot): void {
 		this.status = next.status;
 		this.authenticated = next.authenticated;
@@ -60,7 +80,19 @@ class SnapshotParts {
 		this.server = next.server;
 		const capabilities = this.capabilities;
 		if ((Object.keys(next.capabilities) as (keyof typeof capabilities)[]).some((key) => next.capabilities[key] !== capabilities[key])) this.capabilities = next.capabilities;
-		if (!sameItems(this.rooms, next.rooms)) this.rooms = next.rooms;
+		if (!sameItems(this.rooms, next.rooms)) {
+			const listed = new Set<string>();
+			for (const room of next.rooms) {
+				// The first of an id, as `find` would have it.
+				if (listed.has(room.id)) continue;
+				listed.add(room.id);
+				const part = this.byId.get(room.id);
+				if (part) part.room = room;
+				else this.byId.set(room.id, new RoomPart(room));
+			}
+			for (const [id, part] of this.byId) if (!listed.has(id)) part.room = undefined;
+			this.rooms = next.rooms;
+		}
 		this.anyRooms = next.rooms.length > 0;
 		this.activeRoom = next.activeRoom;
 		this.roomsListed = next.roomsListed;
@@ -174,6 +206,14 @@ export class SessionView {
 		return copy && copy !== live ? copy : undefined;
 	}
 	readonly activeRoom = $derived(this.standIn ?? this.rooms.find((room) => room.id === this.activeRoomId));
+
+	/**
+	 * The room with this id in `rooms`, read on its own: a view of one room (a row in the rooms list) is checked
+	 * again when that room changes, rather than with every change to any of them, as it would reading `rooms`.
+	 */
+	room(id: string): RoomSnapshot | undefined {
+		return this.live.anyRooms ? this.live.room(id) : this.rooms.find((room) => room.id === id);
+	}
 	/** The open room on screen is a copy held from before, while the live one catches up: a reconnect, or a reload. */
 	readonly activeRoomHeld = $derived(Boolean(this.standIn) || (this.showingHeld && this.activeRoomId !== undefined));
 	/**

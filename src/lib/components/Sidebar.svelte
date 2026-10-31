@@ -116,7 +116,7 @@
 	 * Each section's rooms as last listed, kept while their ids and order hold: the list's `animate:` reads every row's
 	 * place before and after each change to it, and the drag zone takes its rooms again and restyles every row, while
 	 * nearly every change (a message, an unread count) leaves the rooms where they were. Rows take their room as it is
-	 * now from `latest`. Not state: it only remembers what was shown.
+	 * now from `session.room`. Not state: it only remembers what was shown.
 	 */
 	const listed: Partial<Record<Section, RoomSnapshot[]>> = {};
 	function steady(section: Section, list: RoomSnapshot[]): RoomSnapshot[] {
@@ -124,8 +124,6 @@
 		if (last && last.length === list.length && last.every((room, index) => room.id === list[index].id)) return last;
 		return (listed[section] = list);
 	}
-	/** Each listed room as it is now, by id, for rows whose list is kept from before (`steady`). */
-	let latest = $derived(new Map([...rooms, ...privateRooms].map((room) => [room.id, room])));
 	/** Ends keeping the carried room in its section's column. */
 	let uncontain: (() => void) | undefined;
 	$effect(() => () => uncontain?.());
@@ -578,7 +576,8 @@
 	>
 		{#each items as listedRoom (listedRoom.id)}
 			<!-- The library's stand-in for the carried room isn't listed: it's shown as it was given. -->
-			{@const room = latest.get(listedRoom.id) ?? listedRoom}
+			<!-- Each row takes its room as it is now on its own, so a message redraws (and marks to check) only its room's row. -->
+			{@const room = session.room(listedRoom.id) ?? listedRoom}
 			<!-- The others make way for a carried room; a fold or a new room isn't animated. -->
 			<div class="ap-roomblock" animate:flip={{ duration: reordering ? FLIP_MS : 0 }}>
 				<div class="ap-roomgrip" {@attach grip}>{@render roomRow(room, withFaces ? roomFaces(room, session.you) : undefined)}</div>
