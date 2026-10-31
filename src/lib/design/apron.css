@@ -1207,13 +1207,17 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 
 /* TerminalViewer — a terminal embed full screen, on the MediaViewer's ground: the whole screen, 80 by 40, at a readable
    size (the app fits its font to the stage), centered; a screen larger than the stage scrolls inside it, never the page.
-   The screen keeps the terminal theme's ground, a band of it around the text (a shadow, so it takes no room). */
+   The screen keeps the terminal theme's ground, a band of it around the text (a shadow, so it takes no room). The app
+   keeps scrollback there, which xterm's own scrollbar shows over the last column, slimmed to a few pixels (it sets
+   its size inline, hence !important). */
 .ap-termviewer .ap-viewer-bar { gap: var(--space-3); }
 .ap-termviewer .ap-embed-livebadge, .ap-termviewer .ap-viewer-detail { flex: none; font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-termviewer .ap-embed-livebadge { color: var(--viewer-ink); }
 .ap-termviewer-stage { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--space-3) max(var(--space-4), env(safe-area-inset-right, 0px)) calc(var(--space-4) + env(safe-area-inset-bottom, 0px)) max(var(--space-4), env(safe-area-inset-left, 0px)); }
 .ap-termviewer-screen { width: max-content; margin: 0 auto; overflow: hidden; background: var(--bg-rail); box-shadow: 0 0 0 var(--space-2) var(--bg-rail); color: var(--ink); }
 .ap-termviewer-screen .xterm-viewport { overflow: hidden; }
+.ap-termviewer-screen .xterm-scrollable-element > .scrollbar.vertical { width: var(--space-1_5) !important; }
+.ap-termviewer-screen .xterm-scrollable-element > .scrollbar.vertical > .slider { width: 100% !important; border-radius: var(--radius-full); }
 pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: var(--text-ui); line-height: var(--leading-field); white-space: pre; }
 /* A short screen, such as a phone on its side: a slimmer bar leaves the terminal more of the height. */
 @media (max-height: 500px) {

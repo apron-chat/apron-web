@@ -8,7 +8,7 @@ import { button, press, render, stubDialog, unmount } from '$lib/test/dom';
 import { FakeTerminal } from '$lib/test/fake-xterm';
 import { directory } from '$lib/ui/directory.svelte';
 import { blankSnapshot } from '$lib/ui/session.svelte';
-import { VIEWER_FIT } from '$lib/ui/terminal-screen';
+import { VIEWER_FIT, VIEWER_SCROLLBACK } from '$lib/ui/terminal-screen';
 import { terminalViewer } from '$lib/ui/terminal-viewer.svelte';
 import { loadXterm } from '$lib/ui/xterm';
 import TerminalViewerHost from '../TerminalViewerHost.svelte';
@@ -136,6 +136,8 @@ describe('a terminal embed, expanded (the viewer)', () => {
 		expect(full.element?.closest('.ap-termviewer-screen')).not.toBeNull();
 		expect(full.options.fontSize).toBeGreaterThanOrEqual(VIEWER_FIT.min);
 		expect(text(full.written)).toEqual([ESC_C, '$ make\r\n']);
+		// It keeps lines to scroll back through; the message's is a glance, and keeps none.
+		expect([FakeTerminal.made[0].options.scrollback, full.options.scrollback]).toEqual([0, VIEWER_SCROLLBACK]);
 		// A history entry of its own, for Back.
 		expect(page.state.terminal).toBeTypeOf('number');
 

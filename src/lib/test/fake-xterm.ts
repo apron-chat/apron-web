@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import type { Terminal } from '@xterm/xterm';
 import type { Xterm } from '$lib/ui/xterm';
 
 /** A buffer line for `shownRows`: its text, and the columns with a background color. */
@@ -11,9 +12,9 @@ export function fakeLine(text = '', colored: number[] = []) {
 	};
 }
 
-/** A screen's buffer: `rows` lines (the rest blank), normal or alternate, scrolled by `baseY`. */
+/** A screen's buffer: `rows` lines (the rest blank), normal or alternate, scrolled by `baseY`, in view at the foot. */
 export function fakeBuffer(rows: ReturnType<typeof fakeLine>[] = [], type: 'normal' | 'alternate' = 'normal', baseY = 0) {
-	return { type, baseY, getLine: (y: number) => rows[y] ?? fakeLine() };
+	return { type, baseY, viewportY: baseY, getLine: (y: number) => rows[y] ?? fakeLine() };
 }
 
 /**
@@ -29,7 +30,9 @@ export class FakeTerminal {
 	textarea: HTMLTextAreaElement | undefined;
 	element: HTMLElement | undefined;
 	disposed = false;
-	buffer = { active: fakeBuffer(), onBufferChange: this.listen('onBufferChange') };
+	/** What `attachCustomKeyEventHandler` was given: whether xterm may handle a key. */
+	keyHandler: ((event: KeyboardEvent) => boolean) | undefined;
+	buffer: { readonly active: Pick<Terminal['buffer']['active'], 'type' | 'baseY' | 'viewportY' | 'getLine'>; onBufferChange: unknown } = { active: fakeBuffer() as never, onBufferChange: this.listen('onBufferChange') };
 	parser = {
 		registerOscHandler: (ident: number, callback: (data: string) => boolean | Promise<boolean>) => {
 			this.oscs.set(ident, callback);
@@ -68,6 +71,23 @@ export class FakeTerminal {
 		this.written.push(data);
 	}
 
+	attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean): void {
+		this.keyHandler = handler;
+	}
+
+	scrollLines(lines: number): void {
+		const buffer = this.buffer.active as { viewportY: number; baseY: number };
+		buffer.viewportY = Math.max(0, Math.min(buffer.baseY, buffer.viewportY + lines));
+	}
+
+	scrollToTop(): void {
+		this.scrollLines(-Infinity);
+	}
+
+	scrollToBottom(): void {
+		this.scrollLines(Infinity);
+	}
+
 	reset(): void {
 		this.written.push('<reset()>');
 	}
@@ -79,6 +99,52 @@ export class FakeTerminal {
 
 /** The module `loadXterm` resolves to, with the fake in place of `Terminal`. */
 export const fakeXterm = { Terminal: FakeTerminal } as unknown as Xterm;
+
+/**
+ * The fake, recording as it does, around a real xterm.js terminal that is never opened (jsdom can't draw one): what is
+ * written is parsed, into a buffer of the options' size and scrollback, which scrolls as xterm's does.
+ */
+export class HeadlessTerminal extends FakeTerminal {
+	readonly real: Terminal;
+
+	constructor(real: Terminal, options: Record<string, unknown>) {
+		super(options);
+		this.real = real;
+		this.buffer = { get active() { return real.buffer.active; }, onBufferChange: this.buffer.onBufferChange };
+	}
+
+	override write(data: string | Uint8Array): void {
+		super.write(data);
+		this.real.write(data);
+	}
+
+	/** Once what was written is parsed. */
+	parsed(): Promise<void> {
+		return new Promise((resolve) => this.real.write('', resolve));
+	}
+
+	override scrollLines(lines: number): void {
+		this.real.scrollLines(lines);
+	}
+
+	override scrollToTop(): void {
+		this.real.scrollToTop();
+	}
+
+	override scrollToBottom(): void {
+		this.real.scrollToBottom();
+	}
+}
+
+/** `loadXterm` for `HeadlessTerminal`s: real xterm.js, never drawn. */
+export async function headlessXterm(): Promise<Xterm> {
+	const xterm = await import('@xterm/xterm');
+	return { Terminal: class extends HeadlessTerminal {
+		constructor(options: Record<string, unknown>) {
+			super(new xterm.Terminal(options), options);
+		}
+	} } as unknown as Xterm;
+}
 
 /** A `loadXterm` that resolves when the test says so. */
 export function deferredXterm() {

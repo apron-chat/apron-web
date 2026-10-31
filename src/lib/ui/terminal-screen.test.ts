@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { deferredXterm, fakeBuffer, fakeLine, FakeTerminal, fakeXterm } from '$lib/test/fake-xterm';
-import { shownRows, TERMINAL_COLS, TERMINAL_FONT_MAX, TERMINAL_FONT_MIN, TERMINAL_ROWS, TERMINAL_VIEWER_FONT_MAX, TERMINAL_VIEWER_FONT_MIN, TerminalFeed, terminalFontSize, terminalOptions, TerminalScreen, VIEWER_FIT, type TerminalSink } from './terminal-screen';
+import { press } from '$lib/test/dom';
+import { deferredXterm, fakeBuffer, fakeLine, FakeTerminal, fakeXterm, HeadlessTerminal, headlessXterm } from '$lib/test/fake-xterm';
+import { shownRows, TERMINAL_COLS, TERMINAL_FONT_MAX, TERMINAL_FONT_MIN, TERMINAL_ROWS, TERMINAL_VIEWER_FONT_MAX, TERMINAL_VIEWER_FONT_MIN, TerminalFeed, terminalFontSize, terminalOptions, TerminalScreen, VIEWER_FIT, VIEWER_SCROLLBACK, type TerminalSink } from './terminal-screen';
 
 const ESC_C = '\u001bc';
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -16,7 +17,7 @@ function host(): HTMLElement {
 }
 
 describe('a terminal embed’s screen (§4.8.6)', () => {
-	it('is 80 by 40 and only reads: no input, no blinking cursor, no scrollback, LF as CR LF, and links that open nothing', () => {
+	it('is 80 by 40 and only reads: no input, no blinking cursor, no scrollback unless said, LF as CR LF, and links that open nothing', () => {
 		const options = terminalOptions({}, 'monospace', 12);
 		expect(options).toMatchObject({ cols: 80, rows: 40, disableStdin: true, cursorBlink: false, cursorInactiveStyle: 'none', convertEol: true, scrollback: 0, windowOptions: {} });
 		expect([TERMINAL_COLS, TERMINAL_ROWS]).toEqual([80, 40]);
@@ -36,6 +37,9 @@ describe('a terminal embed’s screen (§4.8.6)', () => {
 		expect(terminal.subscribed.filter((name) => ['onData', 'onBinary', 'onTitleChange', 'onBell', 'onKey'].includes(name))).toEqual([]);
 		// Not a tab stop: nothing can be typed into it.
 		expect(terminal.textarea?.tabIndex).toBe(-1);
+		// And no key is xterm's once a click has focused it: Escape and the arrows reach the page.
+		expect(terminal.keyHandler?.(new KeyboardEvent('keydown', { key: 'Escape' }))).toBe(false);
+		expect(terminal.keyHandler?.(new KeyboardEvent('keydown', { key: 'PageUp' }))).toBe(false);
 		screen.dispose();
 		expect(terminal.disposed).toBe(true);
 	});
@@ -76,6 +80,172 @@ describe('a terminal embed’s screen (§4.8.6)', () => {
 		FakeTerminal.made[0].element!.dispatchEvent(wheel);
 		expect(reached).not.toHaveBeenCalled();
 		expect(wheel.defaultPrevented).toBe(false);
+	});
+});
+
+describe('scrollback', () => {
+	/** `count` numbered lines, as a long build prints them. */
+	const lines = (count: number, from = 1) => Array.from({ length: count }, (_, i) => `line ${from + i}\n`).join('');
+	/** Each row drawn `row` pixels high, as jsdom lays out nothing. */
+	function rowsOf(row: number) {
+		return vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+			const height = this.classList.contains('xterm-screen') ? TERMINAL_ROWS * row : 0;
+			return { width: 0, height, top: 0, left: 0, right: 0, bottom: height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+		});
+	}
+	/** A stage `height` high around content `content` high, scrolled as a browser would. */
+	function stage(height: number, content: number): HTMLElement {
+		const box = host();
+		let top = 0;
+		Object.defineProperty(box, 'clientHeight', { value: height });
+		Object.defineProperty(box, 'scrollHeight', { value: Math.max(height, content) });
+		Object.defineProperty(box, 'scrollTop', { get: () => top, set: (value: number) => (top = Math.max(0, Math.min(Math.max(height, content) - height, value))) });
+		return box;
+	}
+	const wheel = (target: Element, deltaY: number, init: WheelEventInit = {}) => {
+		const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY, ...init });
+		target.dispatchEvent(event);
+		return event;
+	};
+	const swipe = (target: Element, type: string, y: number) => {
+		const event = new Event(type, { bubbles: true, cancelable: true });
+		Object.defineProperty(event, 'touches', { value: [{ clientY: y }] });
+		target.dispatchEvent(event);
+	};
+	/** The first line in view. */
+	const top = (terminal: HeadlessTerminal) => terminal.real.buffer.active.getLine(terminal.real.buffer.active.viewportY)?.translateToString(true);
+
+	it('is kept only in the viewer: VIEWER_SCROLLBACK lines there, none in a message', async () => {
+		expect(terminalOptions({}, 'monospace', 12, VIEWER_SCROLLBACK).scrollback).toBe(VIEWER_SCROLLBACK);
+		expect(VIEWER_SCROLLBACK).toBeGreaterThanOrEqual(1000);
+		new TerminalScreen(host(), { load: async () => fakeXterm });
+		new TerminalScreen(host(), { fit: VIEWER_FIT, scrollback: VIEWER_SCROLLBACK, load: async () => fakeXterm });
+		await settle();
+		expect(FakeTerminal.made.map((terminal) => terminal.options.scrollback)).toEqual([0, VIEWER_SCROLLBACK]);
+	});
+
+	it('keeps all of a long run replayed into the viewer, the earlier lines reachable; a message keeps the last 40', async () => {
+		const feed = new TerminalFeed();
+		feed.reset();
+		feed.write(lines(120));
+		const inline = host();
+		const space = stage(800, 0);
+		const box = space.appendChild(document.createElement('div'));
+		feed.attach(new TerminalScreen(inline, { load: headlessXterm }));
+		feed.attach(new TerminalScreen(box, { fit: VIEWER_FIT, space, scrollback: VIEWER_SCROLLBACK, load: headlessXterm }));
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(2));
+		const [message, viewer] = FakeTerminal.made as HeadlessTerminal[];
+		await Promise.all([message.parsed(), viewer.parsed()]);
+		// The message: the screen, as a terminal shows it.
+		expect(message.real.buffer.active.length).toBe(TERMINAL_ROWS);
+		expect(message.real.buffer.active.getLine(0)?.translateToString(true)).toBe('line 82');
+		// The viewer: every line, in view at the foot, the first one there to scroll back to.
+		expect(viewer.real.buffer.active.length).toBe(121);
+		expect(viewer.real.buffer.active.getLine(0)?.translateToString(true)).toBe('line 1');
+		expect(top(viewer)).toBe('line 82');
+		const rects = rowsOf(20);
+		wheel(box, -100);
+		expect(top(viewer)).toBe('line 77');
+		rects.mockRestore();
+	});
+
+	it('scrolls back and forth with a wheel, a swipe and the keys, which reach neither xterm nor the page', async () => {
+		const dialog = host();
+		const space = dialog.appendChild(stage(800, 0));
+		const box = space.appendChild(document.createElement('div'));
+		const feed = new TerminalFeed();
+		feed.attach(new TerminalScreen(box, { fit: VIEWER_FIT, space, scrollback: VIEWER_SCROLLBACK, keys: dialog, load: headlessXterm }));
+		feed.write(lines(120));
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(1));
+		const terminal = FakeTerminal.made[0] as HeadlessTerminal;
+		await terminal.parsed();
+		const rects = rowsOf(20);
+		const reached = vi.fn();
+		terminal.element!.addEventListener('wheel', reached);
+		// A wheel: whole lines, a part of one kept for the next.
+		const up = wheel(terminal.element!, -50);
+		expect([up.defaultPrevented, reached.mock.calls.length, top(terminal)]).toEqual([true, 0, 'line 80']);
+		wheel(terminal.element!, -10);
+		expect(top(terminal)).toBe('line 79');
+		wheel(terminal.element!, 1, { deltaMode: WheelEvent.DOM_DELTA_LINE });
+		expect(top(terminal)).toBe('line 80');
+		// Sideways is the stage's own.
+		expect(wheel(terminal.element!, 10, { deltaX: 40 }).defaultPrevented).toBe(false);
+		// A swipe up the screen goes forward, down it goes back.
+		swipe(terminal.element!, 'touchstart', 300);
+		swipe(terminal.element!, 'touchmove', 340);
+		expect(top(terminal)).toBe('line 78');
+		swipe(terminal.element!, 'touchmove', 280);
+		expect(top(terminal)).toBe('line 81');
+		// The keys, wherever focus is in the dialog: Home, End, a line, a page (the rows in view less one).
+		const close = dialog.appendChild(document.createElement('button'));
+		expect(press(close, 'Home')).toBe(false);
+		expect(top(terminal)).toBe('line 1');
+		press(close, 'ArrowDown');
+		expect(top(terminal)).toBe('line 2');
+		press(close, 'PageDown');
+		expect(top(terminal)).toBe('line 41');
+		press(close, 'PageUp');
+		expect(top(terminal)).toBe('line 2');
+		expect(press(close, 'PageDown', { ctrlKey: true })).toBe(true);
+		expect(press(close, 'Enter')).toBe(true);
+		press(close, 'End');
+		expect(top(terminal)).toBe('line 82');
+		rects.mockRestore();
+	});
+
+	it('follows new output at the foot, and leaves a reader who scrolled back where they are', async () => {
+		const space = stage(800, 0);
+		const box = space.appendChild(document.createElement('div'));
+		const feed = new TerminalFeed();
+		feed.attach(new TerminalScreen(box, { fit: VIEWER_FIT, space, scrollback: VIEWER_SCROLLBACK, keys: space, load: headlessXterm }));
+		feed.write(lines(120));
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(1));
+		const terminal = FakeTerminal.made[0] as HeadlessTerminal;
+		await terminal.parsed();
+		const rects = rowsOf(20);
+		feed.write(lines(5, 121));
+		await terminal.parsed();
+		expect(top(terminal)).toBe('line 87');
+		wheel(box, -200);
+		expect(top(terminal)).toBe('line 77');
+		feed.write(lines(5, 126));
+		await terminal.parsed();
+		expect(top(terminal)).toBe('line 77');
+		// Back at the foot, it follows again.
+		press(space, 'End');
+		feed.write(lines(1, 131));
+		await terminal.parsed();
+		expect(top(terminal)).toBe('line 93');
+		rects.mockRestore();
+	});
+
+	it('on a screen shorter than its 40 rows, scrolls the lines kept and the stage as one: the stage at the foot while there are lines above', async () => {
+		// 40 rows of 20 pixels in a stage 300 high: the stage scrolls 500.
+		const space = stage(300, 800);
+		const box = space.appendChild(document.createElement('div'));
+		const feed = new TerminalFeed();
+		feed.attach(new TerminalScreen(box, { fit: VIEWER_FIT, space, scrollback: VIEWER_SCROLLBACK, keys: space, load: headlessXterm }));
+		feed.write(lines(50));
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(1));
+		const terminal = FakeTerminal.made[0] as HeadlessTerminal;
+		await terminal.parsed();
+		const rects = rowsOf(20);
+		space.scrollTop = 500;
+		expect(top(terminal)).toBe('line 12');
+		// Back: the lines above first, the stage staying at the foot, then the stage.
+		wheel(space, -200);
+		expect([top(terminal), space.scrollTop]).toEqual(['line 2', 500]);
+		wheel(space, -60);
+		expect([top(terminal), space.scrollTop]).toEqual(['line 1', 460]);
+		// Forward: the stage to the foot first, then the lines.
+		wheel(space, 100);
+		expect([top(terminal), space.scrollTop]).toEqual(['line 4', 500]);
+		press(space, 'Home');
+		expect([top(terminal), space.scrollTop]).toEqual(['line 1', 0]);
+		press(space, 'End');
+		expect([top(terminal), space.scrollTop]).toEqual(['line 12', 500]);
+		rects.mockRestore();
 	});
 });
 
