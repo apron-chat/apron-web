@@ -879,7 +879,10 @@
 	// Reading the latest message advances your read position, and your read cursor (capability `activity`),
 	// which the server syncs to your other devices.
 	// Only from a live, visible, loaded pane at its latest message, once it has opened at its divider (`readAction`).
-	$effect(() => {
+	// Before the page draws (`$effect.pre`): a message that arrives while you read the latest is marked read, and the
+	// client's snapshot of that comes, before the timeline and sidebar work out the message's own. They then work out
+	// the two together once, where after drawing each row and room was worked out again for the read.
+	$effect.pre(() => {
 		const action = readAction(
 			{ server: client?.url, room: paneRoom, last: messages[messages.length - 1]?.message_id, ready: session.ready, readingLatest, visible: presence.visible, away: presence.away },
 			untrack(() => ({ pushId: accountPushId, closedThrough }))
