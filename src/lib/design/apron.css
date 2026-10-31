@@ -725,6 +725,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 }
 @media (prefers-reduced-motion: reduce) {
 	.ap-shell, .ap-shell .ap-shell-side, .ap-shell .ap-memberlist, .ap-shell .ap-roomhead, .ap-shell .ap-memberlist:not(.ap-memberlist-open), .ap-shell-slides .ap-shell-handle, .ap-shell-slides .ap-shell-toggle { transition: none; }
+	/* As specific as the shut panels' and handle's own transitions, which would otherwise still fade and slide them. */
+	.ap-shell-slides.ap-shell-side-shut .ap-shell-side, .ap-shell-slides.ap-shell-members-wide .ap-memberlist, .ap-shell-slides.ap-shell-members-wide:not(.ap-shell-members-open) .ap-memberlist, .ap-shell-slides .ap-shell-handle-right.ap-shell-handle-shut { transition: none; }
 }
 
 /* MemberList — who is in the room (§4.2.1): Online, then Offline (§4.5), each folding away from its heading */
