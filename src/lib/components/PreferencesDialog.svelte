@@ -324,7 +324,7 @@
 				{/snippet}
 			</SettingRow>
 		{:else if preferencesSection === 'history'}
-			<SettingRow title="Retention" for="ap-history-retention" hint="How long this device keeps your chats. Signing out deletes them." class="ap-pref-history-setting">
+			<SettingRow title="Retention" for="ap-history-retention" hint="Signing out deletes stored history." class="ap-pref-history-setting">
 				{#if historyNote}<p class={['ap-pref-note', historyNote.tone === 'err' && 'ap-tone-danger']}>{historyNote.text}</p>{/if}
 				{#snippet control()}
 					<select id="ap-history-retention" class="ap-field ap-pref-select" value={historySettings.retention} onchange={(event) => historySettings.update(event.currentTarget.value)} data-testid="history-retention">
