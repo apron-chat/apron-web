@@ -81,7 +81,8 @@
 		onnewprivate?: () => void;
 		onsignout: SignOutHandler;
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
-		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
+		/** Opens the connect screen to sign in; none where the page has no connect screen (an export read, the preview). */
+		onsignin?: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
 	let { client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
 	/** The head's server button: the server pane sits beside it. */

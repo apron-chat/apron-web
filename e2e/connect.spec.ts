@@ -92,6 +92,18 @@ test.describe('the server pane', () => {
 		await expect(page.getByRole('dialog', { name: 'Preferences' }).getByTestId('display-name-input')).toBeVisible();
 	});
 
+	test('a guest gets Sign in in Profile, opening the connect screen, on a server signing in no other way here', async ({ preview, page }) => {
+		// A guest's own sign-in methods (`auth`) offer nothing to add, yet the server signs up with a passkey.
+		await preview.openRoot({ server: { auth: ['guest'], signup: ['guest', 'webauthn'] } });
+		await page.getByRole('button', { name: /^Open preferences/ }).click();
+		const preferences = page.getByRole('dialog', { name: 'Preferences' });
+		await expect(preferences).toContainText('You’re a guest here. Sign in to keep your name and rooms.');
+		await expect(preferences.getByRole('button', { name: /^Add / })).toHaveCount(0);
+		await preferences.getByRole('button', { name: 'Sign in', exact: true }).click();
+		await expect(preferences).toHaveCount(0);
+		await expect(page.getByRole('form', { name: 'Sign in' })).toBeVisible();
+	});
+
 	test('opens and closes from the keyboard, Escape giving focus back', async ({ preview, page }) => {
 		await preview.openRoot({ token: 'account-session' });
 		const server = head(preview).getByRole('button', { name: /^Server: / });

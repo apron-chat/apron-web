@@ -51,8 +51,11 @@
 		onresume: () => Promise<void> | void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: SignOutHandler;
-		/** Opens the connect screen to sign in, with `scheme` or the way the server offers first, carrying a name typed here. */
-		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
+		/**
+		 * Opens the connect screen to sign in, with `scheme` or the way the server offers first, carrying a name typed
+		 * here; none where the page has no connect screen (an export read, the preview).
+		 */
+		onsignin?: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
 	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin }: Props = $props();
 
@@ -261,7 +264,7 @@
 	function signIn(scheme?: 'webauthn' | 'email' | 'external'): void {
 		const chosen = chosenName();
 		preferencesOpen = false;
-		onsignin(chosen, scheme);
+		onsignin?.(chosen, scheme);
 	}
 
 	/** Account actions for a passkey session: another passkey for this identity, or signing out. */
@@ -500,7 +503,7 @@
 		onsave={save}
 		{dirty}
 		onrevert={revert}
-		signin={canUsePasskey || canUseEmail || canUseExternal ? signin : undefined}
+		signin={session.passkeySession ? (canUsePasskey || canUseEmail || canUseExternal ? signin : undefined) : onsignin ? signin : undefined}
 		signout={session.passkeySession && you ? signout : undefined}
 		changeAvatarTestid="change-avatar" removeAvatarTestid="remove-avatar" avatarFileTestid="avatar-input" nameTestid="display-name-input" bioTestid="bio-input"
 	/>
