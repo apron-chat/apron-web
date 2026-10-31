@@ -33,6 +33,14 @@ describe('RoomHeader', () => {
 		expect(sub()).toEqual(['محمد is typing…']);
 	});
 
+	it('runs a line along its foot while other rooms catch up, which says nothing to a screen reader', () => {
+		const header = render({});
+		expect(header.querySelector('[data-testid="room-updating"]')).toBeNull();
+		dom.unmount();
+		const updating = render({ updating: true }).querySelector('[data-testid="room-updating"]');
+		expect(updating?.getAttribute('aria-hidden')).toBe('true');
+	});
+
 	it('puts Edit and Leave in a ⋯ menu named for the room or thread, and Join and the member list beside it', () => {
 		const onjoin = vi.fn();
 		render({ thread: 'deploy', threadName: 'Deploy', onedit: () => {}, onleave: () => {}, canJoin: true, onjoin, onmemberlist: () => {}, memberListOpen: true, busy: true });

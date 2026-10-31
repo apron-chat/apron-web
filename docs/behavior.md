@@ -87,6 +87,16 @@ waiting while hidden shows nothing either, and the banner's "Still trying to
 reconnect…" also counts only from then, never the time the tab was away (hiding
 the tab mid-reconnect stops the count; a browser offline while the tab shows
 still counts). Its **Try Again** shows the new attempt at once.
+
+The pill is only for the open room or thread, whose newest messages may not be
+shown yet. Once it's current, other rooms still catching up (as after a reload
+or reconnect) show as a thin line running along the foot of the room header,
+on the same timing as the pill and never with it, and the open room's own
+catch-up goes page after page before theirs. Reading back, older messages
+loading show as a pill at the top of the timeline, "Loading earlier messages…"
+(or replies), over where the day floats (which steps aside meanwhile); it takes
+no space either.
+
 Through a quiet reconnect the page stays as it was (a guest who only reads
 keeps reading): the rooms' and member list's + buttons, the Online and Offline headings, the Private section and the
 profile bar's note stay up, and the composer still takes typing, while Send

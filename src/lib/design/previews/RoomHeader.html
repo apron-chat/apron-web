@@ -1,4 +1,4 @@
-<!-- @dsCard group="Navigation" height=360 subtitle="Room with its member list's toggle and ⋯ actions (Mute, Edit, Leave), private room with its description put away, a conversation with one person (their face, and who can see it), open thread with its replies, muted (a bell-off button that unmutes, left of its ⋯ menu, which offers Unmute too), a thread read without joining; on phones a ‹ back to the rooms list, a tag with what's new elsewhere, and who's typing" -->
+<!-- @dsCard group="Navigation" height=360 subtitle="Room with its member list's toggle and ⋯ actions (Mute, Edit, Leave), private room with its description put away, a conversation with one person (their face, and who can see it), open thread with its replies, muted (a bell-off button that unmutes, left of its ⋯ menu, which offers Unmute too), a thread read without joining; on phones a ‹ back to the rooms list, a tag with what's new elsewhere, and who's typing; while other rooms catch up, a thin line running along its foot" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>RoomHeader</title></head>
@@ -14,6 +14,7 @@
   add(A.RoomHeader, { room: 'p1', name: 'Bob', faces: [{ user_id: 'bob', name: 'Bob', hue: 200, status: 'online' }], topic: 'Online · only you and Bob can see this room', private: true, onmemberlist: noop, onleave: noop });
   add(A.RoomHeader, { room: 'ops', name: 'Ops', thread: 'mig-0042', threadName: 'Migration 0042', replies: { count: 12, more: true }, onback: noop, unreadElsewhere: 3, mentionsElsewhere: 1, onroom: noop, muted: 'until 15:42', onunmute: noop, onedit: noop, onleave: noop });
   add(A.RoomHeader, { room: 'ops', name: 'Ops', thread: 'deploy', threadName: 'Deploy', typing: ['Alice'], replies: { count: 1 }, onback: noop, onroom: noop, canJoin: true, onjoin: noop, note: 'History unavailable' });
+  add(A.RoomHeader, { room: 'general', name: 'General', topic: 'Say hello', onback: noop, onmemberlist: noop, updating: true });
 </script>
 </body>
 </html>

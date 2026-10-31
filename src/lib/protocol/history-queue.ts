@@ -68,6 +68,11 @@ export class HistoryQueue {
 	private readonly concurrency: number;
 	/** Pumps again when a wait that held a job back is over but no longer the connection's (`limited`). */
 	private wake?: ReturnType<typeof setTimeout>;
+	/**
+	 * The room whose page, one that went first, was just answered: its next page goes before the other rooms', though
+	 * it's asked for only once the answer is read, a moment after the slot is free. Kept for that moment.
+	 */
+	private keptFor?: string;
 
 	constructor(private readonly hooks: HistoryQueueHooks, concurrency = HISTORY_CONCURRENCY) {
 		this.concurrency = Math.max(1, concurrency);
@@ -111,6 +116,12 @@ export class HistoryQueue {
 			let next: HistoryJob | undefined;
 			for (const job of this.jobs.values()) {
 				if (job.requestId !== undefined) continue;
+				if (this.keptFor !== undefined) {
+					if (job.roomId !== this.keptFor) continue;
+					this.keptFor = undefined;
+					next = job;
+					break;
+				}
 				if (urgent(job)) {
 					next = job;
 					break;
@@ -161,6 +172,20 @@ export class HistoryQueue {
 		for (const job of this.jobs.values()) if (job.requestId === requestId && job.late !== undefined) return this.free(job);
 	}
 
+	/**
+	 * Keeps the slot for `roomId`'s next page while its answer is read (its callbacks, a turn or two of microtasks):
+	 * a page that goes first is often one of several, and the room on screen catches up without the other rooms'
+	 * pages in between. Once that moment is over without one, the slot is anyone's.
+	 */
+	private keep(roomId: string): void {
+		this.keptFor = roomId;
+		queueMicrotask(() => queueMicrotask(() => {
+			if (this.keptFor !== roomId) return;
+			this.keptFor = undefined;
+			this.pump();
+		}));
+	}
+
 	private free(job: HistoryJob): void {
 		clearTimeout(job.late);
 		if (this.jobs.get(job.id) !== job) return;
@@ -174,7 +199,10 @@ export class HistoryQueue {
 		request.promise.then((result) => {
 			if (this.jobs.get(job.id) !== job) return;
 			this.jobs.delete(job.id);
-			if (!job.settled) job.resolve(result);
+			if (!job.settled) {
+				if (job.retry || job.roomId === this.hooks.activeRoomId()) this.keep(job.roomId);
+				job.resolve(result);
+			}
 			this.pump();
 		}, (cause: Error) => {
 			if (this.jobs.get(job.id) !== job) return;
