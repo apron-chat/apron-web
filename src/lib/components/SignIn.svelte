@@ -453,7 +453,8 @@
 
 	async function signOut(): Promise<void> {
 		try {
-			if (await signOutThen(client, onsignout)) pending = true;
+			await signOutThen(client, onsignout);
+			pending = true;
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Unable to sign out';
 		}

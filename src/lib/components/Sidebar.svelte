@@ -17,6 +17,7 @@
 	import { dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
+	import type { KeptHistoryControls } from '$lib/history/history-keeper';
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
 	import RoomItem from '$lib/design/components/RoomItem.svelte';
@@ -80,11 +81,13 @@
 		/** The + beside Private, for a signed-in account: start a private conversation, in the page's NewPrivateDialog. */
 		onnewprivate?: () => void;
 		onsignout: SignOutHandler;
+		/** The history kept on this device, for Profile's Sign out and Preferences' History; none before it is ready. */
+		keptHistory?: KeptHistoryControls;
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		/** Opens the connect screen to sign in; none where the page has no connect screen (an export read, the preview). */
 		onsignin?: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
-	let { client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, keptHistory, onsignin }: Props = $props();
 	/** The head's server button: the server pane sits beside it. */
 	let serverHead = $state<HTMLButtonElement | undefined>();
 	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
@@ -590,7 +593,7 @@
 		{/if}
 	</div>
 	<p class="ap-sr" role="status" aria-atomic="true">{moved}</p>
-	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} />
+	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {keptHistory} {onsignin} />
 </aside>
 
 {#if createOpen && newRoomDialog.component}{@const NewRoomDialog = newRoomDialog.component}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}

@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { confirmSignOut, passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, SIGN_OUT_DELETES_HISTORY, type SignInInput } from './sign-in';
-import { DEFAULT_RETENTION, historySettings } from '$lib/history/settings.svelte';
+import { passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, type SignInInput } from './sign-in';
 
 /** Connected to the server in the form as a guest, with passkeys that both sign in and sign up. */
 const guestHere: SignInInput = {
@@ -132,36 +131,11 @@ describe('signOutThen', () => {
 	it('drops the session, push with it, only after signing out worked, and leaves push on when it throws', async () => {
 		const steps: string[] = [];
 		const signedOut = { signOut: async () => { steps.push('signOut'); } };
-		await expect(signOutThen(signedOut, () => { steps.push('noted'); return () => steps.push('push off'); }, () => true)).resolves.toBe(true);
+		await signOutThen(signedOut, () => { steps.push('noted'); return () => steps.push('push off'); });
 		expect(steps).toEqual(['noted', 'signOut', 'push off']);
 		const off = vi.fn();
 		const client = { signOut: async () => { throw new Error('Wait for pending requests to finish, then try again'); } };
-		await expect(signOutThen(client, () => off, () => true)).rejects.toThrow(/pending requests/);
+		await expect(signOutThen(client, () => off)).rejects.toThrow(/pending requests/);
 		expect(off).not.toHaveBeenCalled();
-	});
-
-	it('changes nothing when the prompt is declined', async () => {
-		const signOut = vi.fn(async () => {});
-		const noted = vi.fn(() => () => {});
-		await expect(signOutThen({ signOut }, noted, () => false)).resolves.toBe(false);
-		expect(noted).not.toHaveBeenCalled();
-		expect(signOut).not.toHaveBeenCalled();
-	});
-
-	it('asks before signing out only while history is kept', () => {
-		const confirm = vi.fn(() => false);
-		vi.stubGlobal('confirm', confirm);
-		try {
-			historySettings.retention = '30';
-			expect(confirmSignOut()).toBe(false);
-			expect(confirm).toHaveBeenCalledWith(SIGN_OUT_DELETES_HISTORY);
-			confirm.mockClear();
-			historySettings.retention = 'off';
-			expect(confirmSignOut()).toBe(true);
-			expect(confirm).not.toHaveBeenCalled();
-		} finally {
-			historySettings.retention = DEFAULT_RETENTION;
-			vi.unstubAllGlobals();
-		}
 	});
 });

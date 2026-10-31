@@ -62,7 +62,7 @@ function keptMessages(page: Page): Promise<number> {
 				const request = indexedDB.open(name);
 				request.onsuccess = () => {
 					const db = request.result;
-					if (!db.objectStoreNames.contains('records')) return resolve(0);
+					if (!db.objectStoreNames.contains('records')) { db.close(); return resolve(0); }
 					const all = db.transaction('records').objectStore('records').getAll();
 					all.onsuccess = () => { resolve(all.result.filter((row: { kind: string }) => row.kind === 'm').length); db.close(); };
 				};
@@ -106,6 +106,49 @@ test('a reload shows what it kept, and asks only for what came since', async ({ 
 	await expect(retention).toHaveValue('30');
 	await retention.selectOption('off');
 	await expect.poll(() => keptServers(page)).toBe(0);
+});
+
+test('Sign out keeps history for the account by default, and History clears one account or all', async ({ page }) => {
+	const base = process.env.E2E_URL;
+	await page.clock.setFixedTime(NOW);
+	const start = NOW.getTime() - 2 * DAY;
+	const messages = Array.from({ length: 20 }, (_, n) => ({ message_id: String(start + n * 1000), log_id: String(start + n * 1000), room_id: 'general', from: ada, body: { text: `Message ${n}` } }));
+	await keptServer(page, messages, []);
+	await page.goto(`${base}/`);
+	await expect(page.getByText('Message 19', { exact: true })).toBeVisible();
+	await expect.poll(() => keptMessages(page), { timeout: 10_000 }).toBe(20);
+
+	await page.getByRole('button', { name: /^Open preferences/ }).click();
+	const preferences = page.getByRole('dialog', { name: 'Preferences' });
+	const history = () => preferences.getByRole('navigation').getByRole('button', { name: 'History' }).click();
+	const profile = () => preferences.getByRole('navigation').getByRole('button', { name: 'Profile' }).click();
+	await history();
+	// The only account kept is this one: one button says both.
+	await expect(preferences.getByTestId('clear-history-current')).toHaveText(/^Clear current user \(20 messages using .+\)$/);
+	await expect(preferences.getByTestId('clear-history-all')).toHaveCount(0);
+
+	// Another account's history beside it, as signing in as someone else here leaves it.
+	await page.evaluate(async () => {
+		const mine = (await indexedDB.databases()).find((entry) => entry.name?.startsWith('apron-history:'))!.name!;
+		await new Promise((resolve) => { const request = indexedDB.open(mine.replace(/:[^:]*$/, ':someone_else')); request.onsuccess = () => { request.result.close(); resolve(undefined); }; });
+	});
+	await profile();
+	await history();
+	await expect(preferences.getByTestId('clear-history-current')).toHaveText('Clear current user (20 messages)');
+	await expect(preferences.getByTestId('clear-history-all')).toHaveText(/^Clear all users \(2 accounts using .+\)$/);
+
+	// Clearing this account's leaves the other's, and nothing comes back while it stays signed in.
+	page.once('dialog', (dialog) => void dialog.accept());
+	await preferences.getByTestId('clear-history-current').click();
+	await expect(preferences.getByTestId('clear-history-current')).toHaveCount(0);
+	await expect(preferences.getByTestId('clear-history-all')).toHaveText(/^Clear all users \(1 account using .+\)$/);
+	expect(await keptServers(page)).toBe(1);
+	expect(await keptMessages(page)).toBe(0);
+
+	page.once('dialog', (dialog) => void dialog.accept());
+	await preferences.getByTestId('clear-history-all').click();
+	await expect(preferences.getByTestId('clear-history-all')).toHaveCount(0);
+	expect(await keptServers(page)).toBe(0);
 });
 
 test('search finds a message only this device still has, and opens it where it is', async ({ page }) => {

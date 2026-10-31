@@ -442,6 +442,32 @@ describe('HistoryKeeper', () => {
 		await keeper.stop();
 	});
 
+	it('forgets one account when asked, counting what each keeps, and leaves the others', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		(await accountDb(indexedDB, URL, 'zed')).close();
+		expect((await keeper.accounts()).map((entry) => entry.userId).sort()).toEqual([ACCOUNT, 'zed'].sort());
+		expect(await keeper.messagesKept(URL, ACCOUNT)).toBe((await readKept(await accountDb(indexedDB)))!.messages.length);
+		expect(await keeper.messagesKept(URL, ACCOUNT)).toBeGreaterThan(0);
+		expect(await keeper.messagesKept(URL, 'zed')).toBe(0);
+		expect(await keeper.messagesKept(URL, 'nobody')).toBe(0);
+		await keeper.clear(URL, 'zed');
+		expect((await keeper.accounts()).map((entry) => entry.userId)).toEqual([ACCOUNT]);
+		// The signed-in account's cleared: what the page has isn't written back while it stays signed in.
+		await keeper.clear(URL, ACCOUNT);
+		client.setDisplayName('Ada again');
+		await keeper.flush();
+		expect(await keeper.accounts()).toEqual([]);
+		await keeper.stop();
+	});
+
 	it('forgets a server on sign-out, and everything when keeping is turned off', async () => {
 		const server = new MemoryProtocolServer({ account: true });
 		const indexedDB = new IDBFactory();
@@ -514,9 +540,9 @@ describe('HistoryKeeper, when things go wrong', () => {
 		expect(client.snapshot().users.zed).toBeUndefined();
 		expect(client.snapshot().recordedUsers.zed).toBeUndefined();
 		expect(client.storedRecords().messages.map((message) => message.room_id)).not.toContain('secret');
-		// One account's is kept for the server: Zed's goes, and this one's starts.
+		// Zed's stays, for when Zed signs in again, beside this one's.
 		await keeper.flush();
-		expect((await listHistories(indexedDB)).map((entry) => entry.userId)).toEqual([ACCOUNT]);
+		expect((await listHistories(indexedDB)).map((entry) => entry.userId).sort()).toEqual([ACCOUNT, 'zed'].sort());
 		const mine = await readKept(await accountDb(indexedDB));
 		expect(mine?.meta.userId).toBe(ACCOUNT);
 		expect(mine?.rooms.map((row) => row.room)).not.toContain('secret');

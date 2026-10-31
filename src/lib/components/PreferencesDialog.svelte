@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { untrack, type Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
-	import { historySettings, RETENTIONS, storageUsed } from '$lib/history/settings.svelte';
+	import { clearLabels, historySettings, RETENTIONS, storageUsed, type KeptSummary } from '$lib/history/settings.svelte';
+	import type { KeptHistoryControls } from '$lib/history/history-keeper';
 	import { MEDIA_POLICIES, mediaSettings, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
@@ -57,6 +58,10 @@
 		 * while nothing is loaded. Absent where there is nothing to export from.
 		 */
 		onexport?: (options: { privateRooms: boolean }) => Promise<{ name: string; rooms: number; messages: number; privateLeftOut: number } | undefined>;
+		/** The history kept on this device, for History's Clear buttons; none where nothing is kept (the preview). */
+		keptHistory?: KeptHistoryControls;
+		/** The signed-in account, whose history Clear current user deletes; none for a guest. */
+		keptAccount?: { server: string; userId: string };
 		/** The host of the server connected to, which media always loads from. */
 		serverHost?: string;
 		/** The sites this server names for its media (`ext:media`), as hosts: trusted with it. */
@@ -64,7 +69,7 @@
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), section: preferencesSection = $bindable('profile'), profile, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
+	let { open = $bindable(false), section: preferencesSection = $bindable('profile'), profile, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, keptHistory, keptAccount, serverHost, mediaHosts = [], onclosed }: Props = $props();
 
 	const SECTIONS = [
 		// Its tab names it already: no heading over your status, but for screen readers.
@@ -87,18 +92,43 @@
 	let testNotificationStatus = $state<'idle' | 'sending' | NotificationTestResult>('idle');
 	/** What the last export saved. */
 	let exportNote = $state<string | undefined>();
-	/** How much Apron keeps on this device, read as History opens. */
-	let used = $state<string | undefined>();
+	/** What is kept on this device, read as History opens and again after a Clear. */
+	let kept = $state<KeptSummary | undefined>();
+	/** Read again after a Clear, or as keeping is turned on or off. */
+	let keptRead = $state(0);
 	$effect(() => {
 		if (preferencesSection !== 'history' || !open) return;
+		void keptRead;
+		void historySettings.retention;
+		const account = keptAccount;
 		let current = true;
-		void storageUsed().then((usage) => { if (current) used = usage; });
+		void (async () => {
+			const accounts = await keptHistory?.accounts() ?? [];
+			const mine = account && accounts.some((entry) => entry.server === account.server && entry.userId === account.userId);
+			const summary = { accounts: accounts.length, current: mine ? await keptHistory!.messagesKept(account.server, account.userId) : undefined, used: await storageUsed() };
+			if (current) kept = summary;
+		})();
 		return () => { current = false; };
 	});
-	/** Under the retention: why nothing more is kept, or how much is. */
-	let historyNote = $derived<Note | undefined>(historySettings.failure
-		? { text: historySettings.failure, tone: 'err' }
-		: historySettings.retention !== 'off' && used ? { text: `Using about ${used}.` } : undefined);
+	let clearing = $state<'current' | 'all' | undefined>();
+	let labels = $derived(kept ? clearLabels(kept) : {});
+	/** Under the retention: why nothing more is kept. */
+	let historyNote = $derived<Note | undefined>(historySettings.failure ? { text: historySettings.failure, tone: 'err' } : undefined);
+
+	/** Deletes what is kept, asked first: the signed-in account's, or every account's on this device. */
+	async function clearKept(which: 'current' | 'all'): Promise<void> {
+		if (!keptHistory || clearing) return;
+		const whose = which === 'current' ? 'this account' : 'every account';
+		if (!confirm(`Delete the history this device keeps for ${whose}? This cannot be undone.`)) return;
+		clearing = which;
+		try {
+			if (which === 'current' && keptAccount) await keptHistory.clear(keptAccount.server, keptAccount.userId);
+			else if (which === 'all') await keptHistory.clear();
+		} finally {
+			clearing = undefined;
+			keptRead++;
+		}
+	}
 	let exporting = $state(false);
 	/** Export's Include private rooms: off each time Preferences opens, so private rooms go only when asked for. */
 	let exportPrivate = $state(false);
@@ -325,8 +355,14 @@
 				{/snippet}
 			</SettingRow>
 		{:else if preferencesSection === 'history'}
-			<SettingRow title="Retention" for="ap-history-retention" hint="Signing out deletes stored history." class="ap-pref-history-setting">
+			<SettingRow title="Retention" for="ap-history-retention" hint="How long this device keeps messages it has loaded." class="ap-pref-history-setting">
 				{#if historyNote}<p class={['ap-pref-note', historyNote.tone === 'err' && 'ap-tone-danger']}>{historyNote.text}</p>{/if}
+				{#if labels.current || labels.all}
+					<p class="ap-pref-note ap-pref-clear">
+						{#if labels.current}<button class="ap-link" type="button" disabled={clearing !== undefined} onclick={() => clearKept('current')} data-testid="clear-history-current">{labels.current}</button>{/if}
+						{#if labels.all}<button class="ap-link" type="button" disabled={clearing !== undefined} onclick={() => clearKept('all')} data-testid="clear-history-all">{labels.all}</button>{/if}
+					</p>
+				{/if}
 				{#snippet control()}
 					<select id="ap-history-retention" class="ap-field ap-pref-select" value={historySettings.retention} onchange={(event) => historySettings.update(event.currentTarget.value)} data-testid="history-retention">
 						{#each RETENTIONS as retention (retention.value)}<option value={retention.value}>{retention.label}</option>{/each}

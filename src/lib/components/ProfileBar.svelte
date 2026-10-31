@@ -23,6 +23,11 @@
 	import { hueOf } from '$lib/ui/messages';
 	import TypingDots from '$lib/design/components/TypingDots.svelte';
 	import { exportArchive } from '$lib/archive/archive';
+	import { historySettings } from '$lib/history/settings.svelte';
+	import type { KeptHistoryControls } from '$lib/history/history-keeper';
+
+	/** Asked before Sign out deletes this account's history, with Keep local history unchecked. */
+	const SIGN_OUT_DELETES_HISTORY = 'Signing out deletes local history. Continue?';
 
 	type Status = 'idle' | 'saving' | 'saved' | 'altered' | 'declined';
 
@@ -51,13 +56,15 @@
 		onresume: () => Promise<void> | void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: SignOutHandler;
+		/** The history kept on this device: Sign out keeps this account's or deletes it, and Preferences clears it. */
+		keptHistory?: KeptHistoryControls;
 		/**
 		 * Opens the connect screen to sign in, with `scheme` or the way the server offers first, carrying a name typed
 		 * here; none where the page has no connect screen (an export read, the preview).
 		 */
 		onsignin?: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
-	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, keptHistory, onsignin }: Props = $props();
 
 	let preferencesOpen = $state(false);
 	/** Preferences mounts the first time it opens and then stays, so nothing of it renders or runs on a page that never opens it. */
@@ -73,6 +80,10 @@
 	let openedWith = $state('');
 	let passkeyError = $state('');
 	let passkeyNotice = $state('');
+	/** Sign out's Keep local history: checked each time, so deleting is always chosen. */
+	let keepHistory = $state(true);
+	/** History is kept on this device, so Sign out offers to keep this account's or delete it. */
+	let offersKeep = $derived(Boolean(keptHistory) && historySettings.retention !== 'off');
 	let bioDraft = $state('');
 	/** The bio the editor opened with; Save sends the bio only when the draft differs. */
 	let bioOpenedWith = $state('');
@@ -80,6 +91,8 @@
 	let avatarStatus = $state<'idle' | 'uploading' | 'removing'>('idle');
 	let avatarError = $state('');
 	let you = $derived(session.you);
+	/** The account whose history Preferences' Clear current user deletes: a session saved here. */
+	let keptAccount = $derived(session.passkeySession && you ? { server: client.url, userId: you.user_id } : undefined);
 	/** You as the bar shows you: your name without bidi embeddings and overrides (§3.5.2); the editor starts from it as written. */
 	let shownYou = $derived(shownPerson(you));
 	/** While notifications are paused, when that ends in words ("until 14:30"). */
@@ -275,8 +288,13 @@
 		passkeyNotice = '';
 		try {
 			if (action === 'logout') {
-				if (!(await signOutThen(client, onsignout))) return;
-				passkeyNotice = 'Signed out.';
+				const forget = offersKeep && !keepHistory ? keptAccount : undefined;
+				if (forget && !confirm(SIGN_OUT_DELETES_HISTORY)) return;
+				await signOutThen(client, onsignout);
+				// Deleting is its own step, once signing out worked, and only of this account's.
+				if (forget) await keptHistory?.clear(forget.server, forget.userId);
+				keepHistory = true;
+				passkeyNotice = forget ? 'Signed out, and this account’s local history deleted.' : 'Signed out.';
 			} else {
 				// Labelled with the account's name, so the passkey manager shows whose it is.
 				await client.usePasskey('register', you?.name);
@@ -509,7 +527,10 @@
 {/snippet}
 {#snippet signout()}
 	<p class="ap-form-hint">Signed in to <bdi>{backendLabel}</bdi> as <bdi>{shownYou?.name || you?.user_id}</bdi>.</p>
-	<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
+	<span class="ap-profedit-signout-actions">
+		{#if offersKeep}<label class="ap-pref-check"><input class="ap-checklist-box" type="checkbox" bind:checked={keepHistory} data-testid="keep-history" /> Keep local history</label>{/if}
+		<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
+	</span>
 {/snippet}
 {#snippet profileForm()}
 	<ProfileEditor
@@ -563,6 +584,8 @@
 			{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
 			onexport={exportChats}
+			{keptHistory}
+			{keptAccount}
 			mediaHosts={serverMedia(session.server).origins.map((origin) => new URL(origin).host)}
 			serverHost={serverHost}
 			onclosed={() => preferencesTrigger?.focus()}

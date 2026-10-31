@@ -21,8 +21,6 @@
  * - `done`, `sign-out`: leave the panel, or leave the registered session.
  */
 
-import { historySettings } from '$lib/history/settings.svelte';
-
 export type Scheme = 'guest' | 'webauthn' | 'email' | 'external' | 'token';
 
 /** On Passkey: sign in to an account with a saved passkey, or create one with a new passkey. */
@@ -195,27 +193,13 @@ export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'register
  */
 export type SignOutHandler = () => () => void;
 
-/** What Sign out asks first while history is kept on this device, which signing out deletes. */
-export const SIGN_OUT_DELETES_HISTORY = 'Signing out deletes local history. Continue?';
-
-/** Asks before a sign-out that deletes kept history; nothing to ask while none is kept. */
-export function confirmSignOut(): boolean {
-	if (historySettings.retention === 'off') return true;
-	return globalThis.confirm?.(SIGN_OUT_DELETES_HISTORY) ?? true;
-}
-
 /**
- * Every Sign out button's way out. It asks first where history is kept here
- * (`ask`), and resolves false, changing nothing, when that's declined. Then it
- * leaves the registered session, and only once that worked does the page
- * drop it (turning push off for the account, forgetting kept history): a
- * sign-out that throws, such as with requests pending, leaves push and the
- * page as they were.
+ * Leaves the registered session, and only once that worked does the page
+ * drop it (turning push off for the account): a sign-out that throws, such
+ * as with requests pending, leaves push and the page as they were.
  */
-export async function signOutThen(client: { signOut(): Promise<void> }, onsignout: SignOutHandler, ask: () => boolean = confirmSignOut): Promise<boolean> {
-	if (!ask()) return false;
+export async function signOutThen(client: { signOut(): Promise<void> }, onsignout: SignOutHandler): Promise<void> {
 	const signedOut = onsignout();
 	await client.signOut();
 	signedOut();
-	return true;
 }

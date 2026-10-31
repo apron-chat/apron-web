@@ -108,6 +108,44 @@ export async function listHistories(databases: Databases, server?: string): Prom
 }
 
 /**
+ * How many messages the history database named `name` keeps, of every room: 0 where there is none, which this
+ * never makes (a count racing a delete mustn't bring it back). Its connection closes once counted, and steps
+ * aside for a delete meanwhile.
+ */
+export function countMessages(databases: Databases, name: string): Promise<number> {
+	return new Promise((resolve) => {
+		const request = databases.open(name);
+		let made = false;
+		// None there: undone, so there is still none.
+		request.onupgradeneeded = () => {
+			made = true;
+			request.transaction?.abort();
+		};
+		request.onerror = () => resolve(0);
+		request.onblocked = () => resolve(0);
+		request.onsuccess = () => {
+			const db = request.result;
+			db.onversionchange = () => db.close();
+			if (made || !db.objectStoreNames.contains('records')) {
+				db.close();
+				return resolve(0);
+			}
+			try {
+				// The `key` index is [kind, id]: every message's sorts between ['m'] and ['m', []], as an array sorts after any string.
+				const transaction = db.transaction('records', 'readonly');
+				transaction.oncomplete = transaction.onabort = () => db.close();
+				const count = transaction.objectStore('records').index('key').count(IDBKeyRange.bound(['m'], ['m', []]));
+				count.onsuccess = () => resolve(count.result);
+				count.onerror = () => resolve(0);
+			} catch {
+				db.close();
+				resolve(0);
+			}
+		};
+	});
+}
+
+/**
  * Opens (or makes) the history database named `name` (`historyName`). Another tab deleting it (signing out, or no
  * longer keeping) closes it here, and `onclose` hears so.
  */
