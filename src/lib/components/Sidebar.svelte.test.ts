@@ -5,6 +5,7 @@ import { capabilitiesOf, type ChatClient, type ClientSnapshot, type RoomSnapshot
 import { createTimeline } from '$lib/protocol/reducer';
 import { blankSnapshot, SessionView } from '$lib/ui/session.svelte';
 import Sidebar from './Sidebar.svelte';
+import { serverPane } from '$lib/ui/server-pane.svelte';
 import { RoomOrder } from '$lib/ui/room-order.svelte';
 import { loadRoomOrder, saveRoomOrder } from '$lib/ui/storage';
 import * as dom from '$lib/test/dom';
@@ -136,23 +137,25 @@ describe('Sidebar', () => {
 		session.dispose();
 	});
 
-	it('names the server in its head, and reaches the connect screen from the profile, closing it', () => {
+	it('names the server in its head, which opens the server pane, and opens your profile from its foot', () => {
 		const client = new Proxy({ listRooms: () => Promise.resolve(), url: 'wss://fake.test/' }, { get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined) }) as unknown as ChatClient;
 		const session = new SessionView();
 		session.apply(live(), client);
-		const onconnect = vi.fn();
-		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', serverLook: { title: 'Fake' }, serverAddress: client.url, threads: [], mentions: {}, unread: {}, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onsignin: vi.fn(), onconnect } as never);
+		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', serverLook: { title: 'Fake' }, serverAddress: client.url, threads: [], mentions: {}, unread: {}, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onsignin: vi.fn() } as never);
 		const head = document.querySelector('.ap-shell-sidehead')!;
 		expect(head.querySelector('.ap-shell-sidehead-name')?.textContent).toBe('Fake');
 		expect(head.querySelector('.ap-shell-sidehead-host')?.textContent).toBe('fake.test');
-		expect(head.querySelector('button')).toBeNull();
-		dom.button(/^Your profile on fake\.test/).click();
+		const server = dom.button(/^Server: .*Fake.*fake\.test$/s);
+		expect(server.getAttribute('aria-expanded')).toBe('false');
+		server.click();
 		flushSync();
-		const editor = dom.byRole('dialog', 'Edit profile');
-		dom.button('Connect to a server…', editor).click();
+		expect(serverPane.anchor).toBe(server);
+		expect(server.getAttribute('aria-expanded')).toBe('true');
+		server.click();
 		flushSync();
-		expect(onconnect).toHaveBeenCalledOnce();
-		expect(dom.queryByRole('dialog', 'Edit profile')).toBeNull();
+		expect(serverPane.anchor).toBeUndefined();
+		// One button at the foot: your profile, in the preferences.
+		expect(dom.button(/^Open preferences\. Your profile on fake\.test: /)).toBeTruthy();
 		session.dispose();
 	});
 
@@ -164,7 +167,7 @@ describe('Sidebar', () => {
 		session.apply(live({ rooms: [general, random, thread('deploy', 'Deploy'), thread('cert', 'Expired cert')] }), client);
 		const onroom = vi.fn();
 		const threads = [thread('deploy', 'Deploy'), thread('cert', 'Expired cert')].map((room) => ({ id: room.id, parentRoomId: 'general', title: room.title, loaded: true, participants: [], joined: true }));
-		const props = $state({ client, session, backendLabel: 'fake.test', account: 'acct', threads, activeThread: undefined as string | undefined, mentions: {}, unread: { cert: 2 }, displayName: 'Ada', onroom, onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() });
+		const props = $state({ client, session, backendLabel: 'fake.test', account: 'acct', threads, activeThread: undefined as string | undefined, mentions: {}, unread: { cert: 2 }, displayName: 'Ada', onroom, onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn() });
 		dom.render(Sidebar, props as never);
 		flushSync();
 		const listed = () => [...document.querySelectorAll<HTMLElement>('button[data-thread]')].map((button) => button.dataset.thread);
@@ -202,7 +205,7 @@ describe('Sidebar', () => {
 		const session = new SessionView();
 		session.apply(live({ rooms: [general, random, thread('deploy', 'Deploy'), thread('cert', 'Expired cert')] }), client);
 		const threads = [thread('deploy', 'Deploy'), thread('cert', 'Expired cert')].map((room) => ({ id: room.id, parentRoomId: 'general', title: room.title, loaded: true, participants: [], joined: true }));
-		const props = $state({ client, session, backendLabel: 'fake.test', account: 'acct', threads, activeThread: undefined as string | undefined, mentions: {}, unread: { cert: 2 }, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn() });
+		const props = $state({ client, session, backendLabel: 'fake.test', account: 'acct', threads, activeThread: undefined as string | undefined, mentions: {}, unread: { cert: 2 }, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn() });
 		const listed = () => [...document.querySelectorAll<HTMLElement>('button[data-thread]')].map((button) => button.dataset.thread);
 		const room = (id: string) => document.querySelector<HTMLElement>(`button[data-room="${id}"]`)!;
 		const expand = () => document.querySelector<HTMLElement>('[data-testid="expand-threads"]');

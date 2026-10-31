@@ -15,6 +15,8 @@ declare global {
 			rooms?: true;
 			/** The terminal viewer is open over it, since this time (ms): Back closes it. */
 			terminal?: number;
+			/** Preferences is open, this many entries since it opened: closing it goes Back as many. */
+			preferences?: number;
 		}
 		// interface Platform {}
 	}

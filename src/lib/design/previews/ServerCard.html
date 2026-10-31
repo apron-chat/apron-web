@@ -1,0 +1,19 @@
+<!-- @dsCard group="Identity" height=420 subtitle="The server you're connected to, from the rooms list's head: its look and how the connection stands, its description, who you are there, its address to copy, and Connect to another server… and Disconnect" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ServerCard</title></head>
+<body>
+<div id="root" style="position:relative;height:388px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  var noop = function () {};
+  A.render(A.ServerCard, root, {
+    top: 16, left: 16, width: 320,
+    name: 'Northwind Ops', address: 'wss://chat.northwind.example/',
+    description: A.html('<p>Where the <strong>Northwind</strong> operations team chats. Be kind; page on-call in #incidents.</p>'),
+    connection: { label: 'Connected', tone: 'ok' }, you: { name: 'Alice Chen' }, onprofile: noop, protocol: 'Apron 9', oncopyaddress: noop,
+    onnewserver: noop, ondisconnect: noop
+  });
+</script>
+</body>
+</html>

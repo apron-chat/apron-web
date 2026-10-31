@@ -13,7 +13,7 @@ import { loadMediaSettings, MEDIA_KEY, saveMediaSettings } from './storage';
  * Inline images (`data:`) always show.
  */
 export const MEDIA_POLICIES = [
-	{ value: 'trusted', label: 'This server and trusted sites' },
+	{ value: 'trusted', label: 'Server and trusted sites' },
 	{ value: 'any', label: 'Any site' }
 ] as const;
 

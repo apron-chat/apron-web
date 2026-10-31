@@ -21,6 +21,7 @@
 	import ThreadList from './ThreadList.svelte';
 	import RoomItem from '$lib/design/components/RoomItem.svelte';
 	import SidebarHead from '$lib/design/components/SidebarHead.svelte';
+	import { serverPane } from '$lib/ui/server-pane.svelte';
 	import SidebarSection from '$lib/design/components/SidebarSection.svelte';
 
 	interface Props {
@@ -61,8 +62,6 @@
 		pause?: { until?: PausedUntil };
 		onpause: (until: PausedUntil) => Promise<void> | void;
 		onresume: () => Promise<void> | void;
-		/** The connect screen, from the profile editor's Connect to a server… button. */
-		onconnect: () => void;
 		/** The room or thread the phone's rooms list opened over, and the › back to it. */
 		returnTo?: string;
 		onreturn?: () => void;
@@ -82,9 +81,12 @@
 		onnewprivate?: () => void;
 		onsignout: SignOutHandler;
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
-		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
+		/** Opens the connect screen to sign in; none where the page has no connect screen (an export read, the preview). */
+		onsignin?: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
-	let { client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
+	/** The head's server button: the server pane sits beside it. */
+	let serverHead = $state<HTMLButtonElement | undefined>();
 	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
 	let sections = $derived(sidebarSections(session.rooms));
 	/** Each in the order kept on this device: the order rooms arrive in is the server's, and may differ on each visit. */
@@ -110,6 +112,18 @@
 	/** Each section's rooms while one is carried in it, as they'd land; none between drags. */
 	let carried = $state<Partial<Record<Section, RoomSnapshot[]>>>({});
 	let reordering = $derived(Object.keys(carried).length > 0);
+	/**
+	 * Each section's rooms as last listed, kept while their ids and order hold: the list's `animate:` reads every row's
+	 * place before and after each change to it, and the drag zone takes its rooms again and restyles every row, while
+	 * nearly every change (a message, an unread count) leaves the rooms where they were. Rows take their room as it is
+	 * now from `session.room`. Not state: it only remembers what was shown.
+	 */
+	const listed: Partial<Record<Section, RoomSnapshot[]>> = {};
+	function steady(section: Section, list: RoomSnapshot[]): RoomSnapshot[] {
+		const last = listed[section];
+		if (last && last.length === list.length && last.every((room, index) => room.id === list[index].id)) return last;
+		return (listed[section] = list);
+	}
 	/** Ends keeping the carried room in its section's column. */
 	let uncontain: (() => void) | undefined;
 	$effect(() => () => uncontain?.());
@@ -439,8 +453,22 @@
 		saveSidebarFolds([...next]);
 	}
 	const newsIn = (id: string) => (unread[id] ?? 0) > 0 || (mentions[id] ?? 0) > 0;
+	/**
+	 * Each room's threads, in the order of `session.rooms`: grouped once per snapshot, where each row looking
+	 * through every room for its own would take rooms × rooms for the list.
+	 */
+	let threadsOf = $derived.by(() => {
+		const byParent = new Map<string, RoomSnapshot[]>();
+		for (const room of session.rooms) {
+			if (room.parentRoomId === undefined) continue;
+			const list = byParent.get(room.parentRoomId);
+			if (list) list.push(room);
+			else byParent.set(room.parentRoomId, [room]);
+		}
+		return byParent;
+	});
 	/** News in the room, or in a thread of it you've joined (as `threadsWithNews` counts them, without building their entries). */
-	const hasNews = (room: RoomSnapshot) => newsIn(room.id) || session.rooms.some((thread) => thread.parentRoomId === room.id && thread.joined && newsIn(thread.id));
+	const hasNews = (room: RoomSnapshot) => newsIn(room.id) || (threadsOf.get(room.id) ?? []).some((thread) => thread.joined && newsIn(thread.id));
 	const shown = (list: RoomSnapshot[], key: string) => (folds.has(key) ? list.filter((room) => room.id === session.activeRoomId || hasNews(room)) : list);
 	let listError = $state('');
 	let createOpen = $state(false);
@@ -524,7 +552,7 @@
 		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
 		<!-- Under a room that isn't open (or is folded, when its row has a … that unfolds it), only its joined threads with news, so activity there isn't missed; and the one open in it, which stays while you read it. -->
-		{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
+		{@const news = threadsWithNews(threadsOf.get(room.id) ?? [], room.id, unread, mentions)}
 		{@const kept = active ? threads.filter((entry) => entry.id === activeThread || news.some((other) => other.id === entry.id)) : news}
 		{#if kept.length > 0}
 			<ThreadList roomId={room.id} roomTitle={room.title} threads={kept} others={[]} activeThread={active ? activeThread : undefined} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
@@ -538,7 +566,7 @@
 	in for them, and it keeps no outline on the list while a room is carried.
 -->
 {#snippet roomList(section: Section, list: RoomSnapshot[], withFaces: boolean)}
-	{@const items = carried[section] ?? list}
+	{@const items = carried[section] ?? steady(section, list)}
 	<!-- The rows inside are the controls; the list takes their keys to reorder them. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
@@ -546,7 +574,10 @@
 		use:dndzone={{ items, type: section, flipDurationMs: FLIP_MS, delayTouchStart: HOLD_MS, zoneTabIndex: -1, zoneItemTabIndex: -1, autoAriaDisabled: true, dropTargetStyle: {}, transformDraggedElement: lift }}
 		onconsider={(event) => consider(section, event)} onfinalize={(event) => finalize(section, event)} onkeydown={(event) => reorderKey(event, list)} {@attach guard}
 	>
-		{#each items as room (room.id)}
+		{#each items as listedRoom (listedRoom.id)}
+			<!-- The library's stand-in for the carried room isn't listed: it's shown as it was given. -->
+			<!-- Each row takes its room as it is now on its own, so a message redraws (and marks to check) only its room's row. -->
+			{@const room = session.room(listedRoom.id) ?? listedRoom}
 			<!-- The others make way for a carried room; a fold or a new room isn't animated. -->
 			<div class="ap-roomblock" animate:flip={{ duration: reordering ? FLIP_MS : 0 }}>
 				<div class="ap-roomgrip" {@attach grip}>{@render roomRow(room, withFaces ? roomFaces(room, session.you) : undefined)}</div>
@@ -556,7 +587,7 @@
 {/snippet}
 
 <aside class="ap-shell-side" aria-label="Rooms">
-	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={directory.avatarGate.src(serverLook?.avatar)} {returnTo} {onreturn} />
+	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={directory.avatarGate.src(serverLook?.avatar)} onopen={() => serverHead && serverPane.toggle(serverHead)} expanded={serverHead !== undefined && serverPane.anchor === serverHead} bind:button={serverHead} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
 		<SidebarSection title="Rooms" folded={folds.has('rooms')} onfold={(shut) => fold('rooms', shut)} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
 			{#if rooms.length === 0}
@@ -588,7 +619,7 @@
 		{/if}
 	</div>
 	<p class="ap-sr" role="status" aria-atomic="true">{moved}</p>
-	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} {onconnect} />
+	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} />
 </aside>
 
 {#if createOpen && newRoomDialog.component}{@const NewRoomDialog = newRoomDialog.component}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}

@@ -101,7 +101,7 @@ export function mentionsMe(event: MessageRecord, me: Identity | undefined): bool
  * Who a composer can mention: the room's members (§4.2.2), kept current by
  * memberships, those who spoke most recently first; without a member list,
  * the room's recent senders. The viewer is marked `me` and is always present.
- * Names and avatars are the latest known.
+ * Names, avatars and roles (for `@&role`) are the latest known.
  */
 export function peopleIn(messages: MessageRecord[], me: Identity | undefined, members?: Identity[]): MentionPerson[] {
 	const people: MentionPerson[] = [];
@@ -113,10 +113,12 @@ export function peopleIn(messages: MessageRecord[], me: Identity | undefined, me
 		seen.add(from.user_id);
 		const latest = directory.person(from) ?? from;
 		const avatar = directory.avatar(from);
+		const roles = Array.isArray(latest.roles) ? latest.roles.filter((role) => typeof role === 'string') : [];
 		people.push({
 			id: from.user_id,
 			...(latest.name ? { name: latest.name } : {}),
 			...(avatar ? { avatar } : {}),
+			...(roles.length ? { roles } : {}),
 			...(from.user_id === me?.user_id ? { me: true } : {})
 		});
 	};

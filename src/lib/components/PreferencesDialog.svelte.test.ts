@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { flushSync, tick } from 'svelte';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import PreferencesDialog from './PreferencesDialog.svelte';
 import { render, cleanup } from '$lib/test/dom';
 
@@ -8,6 +8,7 @@ import { render, cleanup } from '$lib/test/dom';
 function notificationProps(overrides: Record<string, unknown> = {}) {
 	return {
 		open: false,
+		section: 'notifications',
 		notificationsEnabled: true,
 		notificationsSupported: true,
 		notificationPermission: 'granted' as const,
@@ -37,22 +38,22 @@ function notifications(props: Record<string, unknown>) {
 
 describe('PreferencesDialog', () => {
 	it('has one Notifications switch that says how far it reaches, open or closed', () => {
-		expect(notifications({ webPush: { ...push, enabled: true } })).toEqual({ note: 'On · alerts on this device, even when Apron is closed.', action: undefined, switches: 1 });
-		expect(notifications({ webPush: undefined }).note).toBe('On · alerts while Apron is open. This server doesn’t alert when it’s closed.');
-		expect(notifications({ webPush: { ...push, signIn: true } }).note).toBe('On · alerts while Apron is open. Sign in to be alerted when it’s closed, too.');
-		expect(notifications({ webPush: { ...push, supported: false, homeScreen: true } }).note).toBe('On · alerts while Apron is open. To be alerted when it’s closed, add Apron to your Home Screen.');
-		expect(notifications({ webPush: { ...push, supported: false } }).note).toBe('On · alerts while Apron is open. This browser can’t alert when it’s closed.');
-		expect(notifications({ webPush: { ...push, enabled: true }, notifyScopes: ['joined'] }).note).toBe('On · alerts while Apron is open. This server sends none of your choices above when it’s closed.');
+		expect(notifications({ webPush: { ...push, enabled: true } })).toEqual({ note: 'On, even when Apron is closed.', action: undefined, switches: 1 });
+		expect(notifications({ webPush: undefined }).note).toBe('On while Apron is open. This server can’t alert when it’s closed.');
+		expect(notifications({ webPush: { ...push, signIn: true } }).note).toBe('On while Apron is open. Sign in to be alerted when it’s closed.');
+		expect(notifications({ webPush: { ...push, supported: false, homeScreen: true } }).note).toBe('On while Apron is open. Add it to your Home Screen to be alerted when it’s closed.');
+		expect(notifications({ webPush: { ...push, supported: false } }).note).toBe('On while Apron is open. This browser can’t alert when it’s closed.');
+		expect(notifications({ webPush: { ...push, enabled: true }, notifyScopes: ['joined'] }).note).toBe('On while Apron is open. None of your choices below alert when it’s closed.');
 		// Off, before and after permission; blocked.
-		expect(notifications({ notificationsEnabled: false, notificationPermission: 'default', webPush: push }).note).toBe('Turning this on will ask your browser for permission.');
+		expect(notifications({ notificationsEnabled: false, notificationPermission: 'default', webPush: push }).note).toBe('Your browser will ask for permission.');
 		expect(notifications({ notificationsEnabled: false, webPush: push }).note).toBe('Off.');
-		expect(notifications({ notificationsEnabled: false, notificationPermission: 'denied', webPush: push }).note).toMatch(/^Notifications are blocked/);
+		expect(notifications({ notificationsEnabled: false, notificationPermission: 'denied', webPush: push }).note).toMatch(/^Blocked by your browser/);
 	});
 
 	it('offers to alert when Apron is closed too, or for this server instead, where push could but doesn\'t yet', () => {
-		expect(notifications({ webPush: push })).toEqual({ note: 'On · alerts while Apron is open. Not yet when it’s closed.', action: 'Alert when it’s closed, too', switches: 1 });
+		expect(notifications({ webPush: push })).toEqual({ note: 'On while Apron is open.', action: 'Alert when it’s closed, too', switches: 1 });
 		const held = notifications({ webPush: { ...push, enabled: true, heldBy: 'chat.example' } });
-		expect(held.note).toBe('On · alerts while Apron is open. When it’s closed, this browser alerts for one server at a time: now chat.example.');
+		expect(held.note).toBe('On while Apron is open. When it’s closed, this browser alerts only for chat.example.');
 		expect(held.action).toBe('Alert for this server instead');
 		// The action is push's.
 		let pushed = 0;
@@ -61,6 +62,29 @@ describe('PreferencesDialog', () => {
 		expect(pushed).toBe(1);
 	});
 
+
+	it('exports without private rooms unless Include private rooms is checked, and says how many were left out', async () => {
+		const onexport = vi.fn(async ({ privateRooms }: { privateRooms: boolean }) => ({ name: 'apron-chat.example-2026-10-30.jsonl', rooms: 3, messages: 10, privateLeftOut: privateRooms ? 0 : 2 }));
+		render(PreferencesDialog, notificationProps({ section: 'history', onexport }));
+		const box = document.querySelector<HTMLInputElement>('[data-testid="export-private"]')!;
+		expect(box.checked).toBe(false);
+		expect(box.closest('label')?.textContent?.trim()).toBe('Include private rooms');
+		const note = async () => {
+			const calls = onexport.mock.calls.length;
+			document.querySelector<HTMLButtonElement>('[data-testid="export-chats"]')!.click();
+			await vi.waitFor(() => expect(onexport).toHaveBeenCalledTimes(calls + 1));
+			await tick();
+			flushSync();
+			return document.querySelector('.ap-pref-note')?.textContent;
+		};
+		expect(await note()).toBe('Saved apron-chat.example-2026-10-30.jsonl: 10 messages in 3 rooms; 2 private rooms left out.');
+		expect(onexport).toHaveBeenLastCalledWith({ privateRooms: false });
+		box.click();
+		flushSync();
+		expect(await note()).toBe('Saved apron-chat.example-2026-10-30.jsonl: 10 messages in 3 rooms.');
+		expect(onexport).toHaveBeenLastCalledWith({ privateRooms: true });
+		cleanup();
+	});
 
 	it('says the status picker\'s answer in its one live region', async () => {
 		const props = $state({

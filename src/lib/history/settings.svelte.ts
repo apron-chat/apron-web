@@ -13,7 +13,7 @@ export const RETENTIONS = [
 	{ value: '7', label: 'A week', ms: 7 * DAY_MS },
 	{ value: '30', label: '30 days', ms: 30 * DAY_MS },
 	{ value: '365', label: 'A year', ms: 365 * DAY_MS },
-	{ value: 'all', label: 'Everything loaded', ms: undefined }
+	{ value: 'all', label: 'Forever', ms: undefined }
 ] as const satisfies ReadonlyArray<{ value: string; label: string; ms: number | null | undefined }>;
 
 export type Retention = (typeof RETENTIONS)[number]['value'];

@@ -35,7 +35,7 @@ async function exported(): Promise<{ source: ChatClient; text: string }> {
 	await source.react('1710000000001', ['🎉']).promise;
 	await source.listRooms('general', 0);
 	await source.loadRoom('thread_deploy');
-	return { source, text: exportArchive(source.url, source.snapshot(), source.storedRecords(), source.roomSyncs(), new Date('2026-10-27T12:00:00Z')).text };
+	return { source, text: exportArchive(source.url, source.snapshot(), source.storedRecords(), source.roomSyncs(), { now: new Date('2026-10-27T12:00:00Z') }).text };
 }
 
 describe('exports', () => {
@@ -81,6 +81,42 @@ describe('exports', () => {
 		const shown = timelineMessages(room(reader.snapshot(), 'general')!);
 		expect(shown.length).toBe(450);
 		expect(shown[0].body?.text).toBe('#0');
+	});
+
+	it('leaves out private rooms, the threads in them, their records and anyone known only from them, unless asked', async () => {
+		const { source } = await exported();
+		const launch = 'private_1710000000060';
+		await source.loadRoom(launch);
+		const { room_id: secret } = await source.createRoom({ parentRoomId: launch, title: 'Launch day' }).promise;
+		await source.send(secret, 'The date is set.').promise;
+		await waitFor(() => texts(source.snapshot(), secret).length === 1);
+		// Loaded, so it has a stretch of its log to export, and not only what arrived live.
+		await source.loadRoom(secret);
+		const snapshot = source.snapshot();
+		// Someone the page knows, but from nowhere that goes.
+		const withStranger = { ...snapshot, users: { ...snapshot.users, zed: { user_id: 'zed', name: 'Zed' } } };
+		const privates = snapshot.rooms.filter((shown) => shown.private && shown.parentRoomId === undefined).map((shown) => shown.id);
+		expect(privates).toContain(launch);
+
+		const left = exportArchive(source.url, withStranger, source.storedRecords(), source.roomSyncs(), { privateRooms: false });
+		expect(left.privateLeftOut).toBe(privates.length);
+		const without = parseArchive(left.text);
+		const listed = without.rooms.map((entry) => entry.record.room_id);
+		expect(listed).not.toContain(secret);
+		for (const id of privates) expect(listed).not.toContain(id);
+		expect(listed).toContain('general');
+		expect(without.messages.some((message) => message.room_id === launch || message.room_id === secret)).toBe(false);
+		expect(left.text).not.toContain('The date is set.');
+		expect(without.users.map((user) => user.user_id)).not.toContain('zed');
+		expect(without.users.map((user) => user.user_id)).toContain('ada');
+
+		// As before, with them.
+		const all = exportArchive(source.url, withStranger, source.storedRecords(), source.roomSyncs());
+		expect(all.privateLeftOut).toBe(0);
+		const withThem = parseArchive(all.text);
+		expect(withThem.rooms.map((entry) => entry.record.room_id)).toEqual(expect.arrayContaining([launch, secret]));
+		expect(withThem.messages.some((message) => message.room_id === secret)).toBe(true);
+		expect(withThem.users.map((user) => user.user_id)).toContain('zed');
 	});
 
 	it('keeps statuses out, and lists the rooms it shows with where their stretch of records starts', async () => {

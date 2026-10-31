@@ -1,18 +1,17 @@
-<!-- @dsCard group="Identity" height=400 subtitle="Closed with its preferences gear, notifications paused and a sign-in to add; open, its editor above it; before signing in" -->
+<!-- @dsCard group="Identity" height=160 subtitle="One button to your profile and the preferences: notifications paused and a sign-in to add; pressed while open; before signing in" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ProfileBar</title></head>
 <body>
-<div id="root" style="display:flex;gap:24px;align-items:flex-end;padding:16px;height:368px;box-sizing:border-box"></div>
+<div id="root" style="display:flex;gap:24px;align-items:flex-end;padding:16px;height:128px;box-sizing:border-box"></div>
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   function col() { var c = document.createElement('div'); c.style.cssText = 'width:248px;background:var(--bg-000);display:flex;flex-direction:column;justify-content:flex-end;height:100%'; root.appendChild(c); return c; }
   var noop = function () {};
-  add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work', status: 'online', note: 'add a sign-in', onpreferences: noop, paused: 'until 14:30' }, col());
-  add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work', open: true, onpreferences: noop,
-    editor: A.part(A.ProfileEditor, { userId: 'alice', name: 'Alice Chen', canUpload: true, dialog: false, onconnect: noop }) }, col());
-  add(A.ProfileBar, { placeholder: 'Signing in…', backend: 'Work', onpreferences: noop }, col());
+  add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work', status: 'online', note: 'add a sign-in', onopen: noop, paused: 'until 14:30' }, col());
+  add(A.ProfileBar, { you: { user_id: 'alice', name: 'Alice Chen' }, backend: 'Work', open: true, onopen: noop }, col());
+  add(A.ProfileBar, { placeholder: 'Signing in…', backend: 'Work', onopen: noop }, col());
 </script>
 </body>
 </html>

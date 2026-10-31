@@ -74,6 +74,8 @@
 		mutedWithRoom?: boolean;
 		/** A request in flight: Join and the actions menu can't be used. */
 		busy?: boolean;
+		/** Other rooms are still catching up, with this one shown as it is: a thin moving line along its foot. */
+		updating?: boolean;
 		/** Search local history, first in the ⋯ actions menu: it opens a <SearchPanel>. `searchHint` names its shortcut, as the item's hint. */
 		onsearch?: () => void;
 		searchHint?: string;
@@ -97,7 +99,7 @@
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
-		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false, onsearch, searchHint,
+		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false, updating = false, onsearch, searchHint,
 		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, searchTestid, muteTestid, unmuteTestid,
 		unmuteButtonTestid, class: className
 	}: Props = $props();
@@ -187,4 +189,5 @@
 			{#snippet lead(value)}{#if value === 'search'}<Search size={15} aria-hidden="true" />{:else if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else if value === 'mute'}<BellOff size={15} aria-hidden="true" />{:else if value === 'unmute'}<Bell size={15} aria-hidden="true" />{:else if value === 'link'}<Link size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
 		</MenuButton>
 	{/if}
+	{#if updating}<span class="ap-roomhead-updating" data-testid="room-updating" aria-hidden="true"></span>{/if}
 </header>

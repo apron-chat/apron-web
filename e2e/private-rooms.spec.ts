@@ -11,49 +11,53 @@ test.use(DEVICES.desktop);
 test.describe('signed in to an account', () => {
 	test.use({ knobs: { account: true } });
 
-	test('Message on a profile card starts a private room with them, which opens under Private', async ({ preview, page }) => {
+	test('Message on a profile card, or Direct message in a member\'s menu, starts a private room with them, which opens under Private', async ({ preview, page }) => {
 		await preview.open();
-		await page.getByTestId('message-list').getByRole('button', { name: 'Linus', exact: true }).first().click();
-		const card = page.getByTestId('profile-card');
-		await card.getByRole('button', { name: 'Message', exact: true }).click();
 
-		// Created private, then Linus added once its record said so, then opened.
-		const created = await preview.waitForSent('room_set', (p) => p.private === true && p.parent_room_id === undefined);
-		expect(created.title).toBeUndefined();
-		await preview.waitForSent('room_join', (p) => p.user_id === 'linus');
-		await expect(card).toBeHidden();
-		await expect(preview.heading()).toHaveText(/^Linus/);
-		await expect(page.getByTestId('private-list').locator('button[aria-current="page"]')).toHaveAccessibleName('Linus');
-		await expect(page.getByTestId('room-list').getByText('Linus')).toHaveCount(0);
-		await expect(preview.composer()).toHaveAttribute('aria-placeholder', 'Message Linus');
-		await expect(page.getByTestId('private-intro')).toContainText('@linus');
-		// Started here, so no banner says you were added.
-		await expect(page.getByTestId('added-banner')).toHaveCount(0);
+		await test.step('Message on a profile card starts a private room with them, which opens under Private', async () => {
+			await page.getByTestId('message-list').getByRole('button', { name: 'Linus', exact: true }).first().click();
+			const card = page.getByTestId('profile-card');
+			await card.getByRole('button', { name: 'Message', exact: true }).click();
 
-		// Message again opens the same room rather than starting another.
-		await preview.openRoom('general');
-		await page.getByTestId('message-list').getByRole('button', { name: 'Linus', exact: true }).first().click();
-		await page.getByTestId('profile-card').getByRole('button', { name: 'Message', exact: true }).click();
-		await expect(preview.heading()).toHaveText(/^Linus/);
-		expect((await preview.sent('room_set')).filter((p) => p.private === true)).toHaveLength(1);
-	});
+			// Created private, then Linus added once its record said so, then opened.
+			const created = await preview.waitForSent('room_set', (p) => p.private === true && p.parent_room_id === undefined);
+			expect(created.title).toBeUndefined();
+			await preview.waitForSent('room_join', (p) => p.user_id === 'linus');
+			await expect(card).toBeHidden();
+			await expect(preview.heading()).toHaveText(/^Linus/);
+			await expect(page.getByTestId('private-list').locator('button[aria-current="page"]')).toHaveAccessibleName('Linus');
+			await expect(page.getByTestId('room-list').getByText('Linus')).toHaveCount(0);
+			await expect(preview.composer()).toHaveAttribute('aria-placeholder', 'Message Linus');
+			await expect(page.getByTestId('private-intro')).toContainText('@linus');
+			// Started here, so no banner says you were added.
+			await expect(page.getByTestId('added-banner')).toHaveCount(0);
 
-	test('Direct message in a member\'s menu starts a private room with them, as Message on their card does', async ({ preview, page }) => {
-		await preview.open();
-		const list = await preview.showMembers();
-		// A press on their row drops its menu down beneath it.
-		await list.locator('li.ap-member[data-user="linus"]').click({ button: 'right' });
-		const menu = page.getByRole('menu', { name: 'Linus' });
-		await expect(menu.getByRole('menuitem')).toHaveText(['Profile', 'Direct message', 'Remove from room']);
-		await menu.getByRole('menuitem', { name: 'Direct message' }).click();
-		await preview.waitForSent('room_join', (p) => p.user_id === 'linus');
-		await expect(preview.heading()).toHaveText(/^Linus/);
-		await expect(page.getByTestId('private-list').locator('button[aria-current="page"]')).toHaveAccessibleName('Linus');
-		// A click on their row opens their card, as the menu's Profile does.
-		await preview.openRoom('general');
-		await list.locator('li.ap-member[data-user="linus"]').click();
-		await expect(page.getByRole('menu')).toHaveCount(0);
-		await expect(page.getByTestId('profile-card')).toBeVisible();
+			// Message again opens the same room rather than starting another.
+			await preview.openRoom('general');
+			await page.getByTestId('message-list').getByRole('button', { name: 'Linus', exact: true }).first().click();
+			await page.getByTestId('profile-card').getByRole('button', { name: 'Message', exact: true }).click();
+			await expect(preview.heading()).toHaveText(/^Linus/);
+			expect((await preview.sent('room_set')).filter((p) => p.private === true)).toHaveLength(1);
+		});
+
+		// With Margaret: the room with Linus is already there, and would only open again.
+		await test.step('Direct message in a member\'s menu starts a private room with them, as Message on their card does', async () => {
+			await preview.openRoom('general');
+			const list = await preview.showMembers();
+			// A press on their row drops its menu down beneath it.
+			await list.locator('li.ap-member[data-user="margaret"]').click({ button: 'right' });
+			const menu = page.getByRole('menu', { name: 'Margaret Hamilton' });
+			await expect(menu.getByRole('menuitem')).toHaveText(['Profile', 'Direct message', 'Remove from room']);
+			await menu.getByRole('menuitem', { name: 'Direct message' }).click();
+			await preview.waitForSent('room_join', (p) => p.user_id === 'margaret');
+			await expect(preview.heading()).toHaveText(/^Margaret Hamilton/);
+			await expect(page.getByTestId('private-list').locator('button[aria-current="page"]')).toHaveAccessibleName('Margaret Hamilton');
+			// A click on their row opens their card, as the menu's Profile does.
+			await preview.openRoom('general');
+			await list.locator('li.ap-member[data-user="margaret"]').click();
+			await expect(page.getByRole('menu')).toHaveCount(0);
+			await expect(page.getByTestId('profile-card')).toBeVisible();
+		});
 	});
 
 	test('the + beside Private starts a named room with the people picked, one at a time', async ({ preview, page }) => {

@@ -3,6 +3,7 @@
 export { default as Button } from './Button.svelte';
 export { default as Avatar } from './Avatar.svelte';
 export { default as Message } from './Message.svelte';
+export { default as ServerCard } from './ServerCard.svelte';
 export { default as Embed } from './Embed.svelte';
 export { default as EmbedUpload } from './EmbedUpload.svelte';
 export { default as EmbedTerminal } from './EmbedTerminal.svelte';

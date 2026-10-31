@@ -33,3 +33,26 @@ jobs:
       - run: npm run build
       # The design system bundle builds from src/lib/design.
       - run: npm run design:bundle
+
+  # The perf budget: counts (layouts, style recalcs, DOM nodes, requests, bytes) per perf probe against
+  # scripts/qa/perf-budget.json. Counts hold steady across runners where timings don't; see scripts/qa/README.md.
+  perf-budget:
+    # Pinned: Playwright 1.56 installs Chromium for Ubuntu 24.04, not 26.04, and a fixed OS keeps the counts steady.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: perf-budget-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          submodules: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npx playwright-core install --with-deps chromium
+      - run: APRON_PREVIEW=1 npm run build
+      - run: npm run qa -- budget --build build

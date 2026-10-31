@@ -15,11 +15,17 @@ test('an export opens on /archive as it was, read-only', async ({ preview, page 
 	await preferences.getByRole('navigation').getByRole('button', { name: 'History' }).click();
 	const [download] = await Promise.all([page.waitForEvent('download'), preferences.getByTestId('export-chats').click()]);
 	expect(download.suggestedFilename()).toMatch(/^apron-apron-preview\.invalid-\d{4}-\d{2}-\d{2}\.jsonl$/);
-	// The note under the row (the dialog's live region says it too).
-	await expect(preferences.locator('.ap-pref-note', { hasText: /^Saved / })).toHaveText(/^Saved apron-.*\.jsonl: \d+ messages in \d+ rooms\.$/);
+	// The note under the row (the dialog's live region says it too): private rooms go only when asked for.
+	await expect(preferences.locator('.ap-pref-note', { hasText: /^Saved / })).toHaveText(/^Saved apron-.*\.jsonl: \d+ messages in \d+ rooms; 2 private rooms left out\.$/);
 	const text = await readFile((await download.path())!, 'utf8');
 	// The thread was never opened here, and is exported with its messages all the same.
 	expect(text).toContain('"room_id":"thread_deploy","from"');
+	expect(text).not.toContain('private_');
+	expect(text).not.toContain('Announcement goes out Thursday');
+	await preferences.getByRole('checkbox', { name: 'Include private rooms' }).check();
+	const [withPrivate] = await Promise.all([page.waitForEvent('download'), preferences.getByTestId('export-chats').click()]);
+	await expect(preferences.locator('.ap-pref-note', { hasText: /^Saved / })).toHaveText(/^Saved apron-.*\.jsonl: \d+ messages in \d+ rooms\.$/);
+	expect(await readFile((await withPrivate.path())!, 'utf8')).toContain('"room_id":"private_1710000000060"');
 
 	await page.goto(`${process.env.E2E_URL}/archive`);
 	await page.getByTestId('archive-file').setInputFiles({ name: download.suggestedFilename(), mimeType: 'application/jsonl', buffer: Buffer.from(text) });
@@ -89,7 +95,8 @@ test('an export opened with its images loads them from the sites it names, and n
 	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
 	// Held to the sites it was agreed to load from, whatever Media said, which it names.
 	await expect(preferences.getByTestId('media-policy')).toHaveValue('trusted');
-	await expect(preferences.getByTestId('media-note')).toHaveText('From this server, media.example (trusted by the server) and the origins below. Other images wait for a click.');
+	await expect(preferences.getByTestId('media-note')).toHaveText('From this server and the trusted origins below. Other images wait for a click.');
+	await expect(preferences.getByTestId('media-server-origins')).toHaveText('Includes origins trusted by the server: media.example');
 	await preferences.getByTestId('media-policy').selectOption('any');
 	await expect(preferences.getByTestId('media-note')).toHaveText('Everything, from any site.');
 	await page.keyboard.press('Escape');
@@ -103,7 +110,7 @@ test('Preferences, Media: the server, and the origins the viewer trusts, kept as
 	const preferences = page.getByRole('dialog', { name: 'Preferences' });
 	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
 	await expect(preferences.getByTestId('media-policy')).toHaveValue('trusted');
-	await expect(preferences.getByTestId('media-note')).toHaveText('From this server and the origins below. Other images wait for a click.');
+	await expect(preferences.getByTestId('media-note')).toHaveText('From this server and the trusted origins below. Other images wait for a click.');
 	const sites = preferences.getByTestId('media-sites');
 	await sites.fill('cdn.example\nhttps://img.example/a.png\nhttp://plain.example');
 	await sites.blur();

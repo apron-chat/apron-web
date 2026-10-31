@@ -19,7 +19,7 @@
 	import { SettleFlag } from '$lib/ui/settle-flag';
 	import type { Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
-	import Message from '$lib/design/components/Message.svelte';
+	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
 	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
 	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
@@ -36,6 +36,7 @@
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 	import { INSTALL_OFFER_AFTER_MS, installWay, installedAlready } from '$lib/ui/install';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
+	import ServerPane from '$lib/components/ServerPane.svelte';
 	import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
 	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
 	import ConnectionNotice from '$lib/components/ConnectionNotice.svelte';
@@ -80,12 +81,13 @@
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
-	import { HistoryKeeper } from '$lib/history/history-keeper';
+	import type { HistoryKeeper } from '$lib/history/history-keeper';
+	import { takeKeeper } from '$lib/history/startup';
 	import { historySettings } from '$lib/history/settings.svelte';
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
-	import { preferencesOpener } from '$lib/ui/preferences.svelte';
-	import { buildRoomTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
+	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
+	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
@@ -295,6 +297,8 @@
 	/** Link previews removed from the composer's draft, by URL. */
 	let composerDismissed = $state<string[]>([]);
 	let connectOpen = $state(false);
+	/** Disconnected from the server pane: the connect screen can't be cancelled back to it. */
+	let disconnected = $state(false);
 	/** The sign-in scheme the connect screen opens with, when something asked for one. */
 	let connectScheme = $state<Scheme | undefined>();
 	let recentServers = $state<RecentServer[]>([]);
@@ -411,7 +415,9 @@
 	let activeRoom = $derived(session.activeRoom);
 	/** The active room's threads: the joined ones, then those listed as not joined, which get cards too. */
 	let threadSource = $derived(session.threadSource(activeRoom?.id));
-	let threads = $derived(threadEntries(threadSource.rooms, activeRoom?.id, threadSource.directory));
+	// Kept entry by entry while each says the same (`steady`), as the timeline's items are: not state, only what was last worked out.
+	let lastThreads: ThreadEntry[] = [];
+	let threads = $derived((lastThreads = steady(lastThreads, threadEntries(threadSource.rooms, activeRoom?.id, threadSource.directory))));
 	let joinedThreads = $derived(threads.filter((entry) => entry.joined));
 	/** The sidebar lists joined threads, and a thread open without joining while it is open. */
 	let listedThreads = $derived(threads.filter((entry) => entry.joined || entry.id === activeThread));
@@ -515,12 +521,35 @@
 	// to the tab) shows nothing.
 	$effect(() => checking.set(!session.reconnectQuiet && !session.waitingToReconnect && (paneCatchingUp || quietReconnect)));
 	$effect(() => () => checking.dispose());
+	/**
+	 * Other rooms are still catching up while this one is shown as it is: the room header's thin moving line
+	 * (`updating`), not the pill, since nothing on screen is out of date; once the pill is gone, so the two don't
+	 * show together. Not for rooms held by a history wait, whose recovery fetches nothing until it's over. Through a
+	 * quiet reconnect's first moments, like the pill, nothing.
+	 */
+	let updatingShown = $state(false);
+	const updating = new SettleFlag((on) => (updatingShown = on));
+	$effect(() => updating.set(Boolean(paneRoom) && !paneCatchingUp && !checkingShown && !session.reconnectQuiet && !session.waitingToReconnect && session.rooms.some((room) => room.id !== paneRoom?.id && room.recovering && !room.limited)));
+	$effect(() => () => updating.dispose());
+	/** Older messages load above those shown, reading back: a pill at the top of the timeline says so. */
+	let olderShown = $state(false);
+	/** The room or thread whose older messages the pill is for: switched away from, it doesn't linger over the next. */
+	let olderFor = $state<string | undefined>();
+	const older = new SettleFlag((on) => {
+		olderShown = on;
+		olderFor = on ? olderSource?.id : undefined;
+	});
+	$effect(() => older.set(Boolean(olderSource?.loadingOlder)));
+	let olderLoading = $derived(olderShown && olderFor !== undefined && olderFor === olderSource?.id);
+	$effect(() => () => older.dispose());
 	/** Nothing held to show while the room's threads are listed: placeholders, so its messages and thread cards appear together. */
 	let paneHeldBack = $derived(awaitingThreads && !activeThread && !session.activeRoomHeld);
 	let messages = $derived(timelineMessages(paneRoom));
-	let timeline = $derived(buildRoomTimeline({
+	// Kept item by item while each says the same (`steady`), so a change elsewhere redraws no row: not state, only what was last worked out.
+	let lastTimeline: TimelineItem[] = [];
+	let timeline = $derived((lastTimeline = steady(lastTimeline, buildRoomTimeline({
 		messages, threads: activeThread ? [] : threads, renames: paneRoom?.renames, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships
-	}));
+	}))));
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
@@ -856,7 +885,10 @@
 	// Reading the latest message advances your read position, and your read cursor (capability `activity`),
 	// which the server syncs to your other devices.
 	// Only from a live, visible, loaded pane at its latest message, once it has opened at its divider (`readAction`).
-	$effect(() => {
+	// Before the page draws (`$effect.pre`): a message that arrives while you read the latest is marked read, and the
+	// client's snapshot of that comes, before the timeline and sidebar work out the message's own. They then work out
+	// the two together once, where after drawing each row and room was worked out again for the read.
+	$effect.pre(() => {
 		const action = readAction(
 			{ server: client?.url, room: paneRoom, last: messages[messages.length - 1]?.message_id, ready: session.ready, readingLatest, visible: presence.visible, away: presence.away },
 			untrack(() => ({ pushId: accountPushId, closedThrough }))
@@ -995,9 +1027,14 @@
 	// Not only after the frame: the list is the same element from pane to pane, kept where the last pane left it, and the
 	// browser's scroll anchoring can move it on the swap (to a day divider both panes have). That scroll's event
 	// comes before the frame, and against the last pane's position it would read as the reader scrolling up.
+	// By the count and the room's id, not the list and the room themselves, which are new with every snapshot (each
+	// room listed as the page loads, say): each time it scrolls it lays the page out, and what else changes in the
+	// pane is followed below.
+	let paneCount = $derived(messages.length);
+	let paneId = $derived(paneRoom?.id);
 	$effect(() => {
-		messages.length;
-		paneRoom?.id;
+		void paneCount;
+		void paneId;
 		if (!stickToBottom || !messageScroll) return;
 		scrollToLatest();
 		requestAnimationFrame(() => {
@@ -1106,7 +1143,9 @@
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
 		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.
-		const hashChanged = () => {
+		const hashChanged = (event: HashChangeEvent) => {
+			// Preferences opening, closing or changing section (`ProfileBar`) doesn't move the page.
+			if (onlyPreferencesDiffer(event.oldURL, event.newURL)) return;
 			const link = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 			if (link) {
 				links.follow(link);
@@ -1194,9 +1233,9 @@
 			webSocketFactory
 		);
 		if (!previewMode) {
-			historySettings.load();
+			// Made as the app started, and reading what it restores since (`$lib/history/startup`).
+			historyKeeper = takeKeeper();
 			keptRetention = historySettings.retention;
-			historyKeeper = new HistoryKeeper({ retentionMs: historySettings.ms, onfailure: (message) => (historySettings.failure = message) });
 		}
 		const keeper = historyKeeper;
 		// The view from this device's last visit, while this one signs in and catches up: only for the session
@@ -1285,6 +1324,18 @@
 		const room = paneRoom;
 		if (!client || !room || !session.ready || !session.canManageRooms) return;
 		client.listMembers(room.id, maxAge).catch(() => undefined);
+	}
+
+	/**
+	 * The server pane's Disconnect: whatever belonged to this server goes, the connection closes, and the connect
+	 * screen opens, where connecting again (here, or to another server) is the way back. What was kept for it stays.
+	 */
+	function disconnect(): void {
+		if (!client || previewMode) return;
+		leaveBackend();
+		client.disconnect();
+		disconnected = true;
+		openConnect();
 	}
 
 	/** The connect form was submitted: whatever belonged to the previous backend goes. */
@@ -1523,6 +1574,7 @@
 		if (client) recentServers = rememberServer(recentServers, client.url, currentLook);
 		connectOpen = false;
 		offeringLink = false;
+		disconnected = false;
 	}
 
 	// --- Navigation and drafts ---
@@ -2399,9 +2451,12 @@
 		return { name: senderName(target), text: messageSnippet(target) };
 	}
 
-	/** A message's reaction chips, from the timeline of the room it lives in. */
+	/**
+	 * A message's reaction chips, from the timeline of the room it lives in: that room on its own (`session.room`), so
+	 * a message drawn on screen isn't worked out again with each change in another room.
+	 */
 	function reactionsFor(event: MessageRecord): ReactionChip[] {
-		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
+		const room = session.room(event.room_id);
 		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.emojiImage);
 	}
 
@@ -2443,6 +2498,12 @@
 
 	/** The picker the React action opened last, and on which message: it's open for that row while it is the open one. */
 	let reactPick: { id: string; request: EmojiPickerRequest } | undefined;
+	/**
+	 * A row on show has its React picker open: the timeline's `ap-timeline-picking`, so the other rows don't take the
+	 * hover look meanwhile. A class rather than `:has()` on the timeline, which the browser re-checks over every row
+	 * on each hover change (each step of a wheel scroll under the pointer).
+	 */
+	let pickingRow = $derived(emojiPicker.current !== undefined && emojiPicker.current === reactPick?.request && shownTimeline.some((item) => item.kind === 'message' && item.event.message_id === reactPick?.id));
 
 	/** One set of handlers for every row; each finds its message by the row's id. */
 	const messageHandlers: MessageHandlers = {
@@ -3008,7 +3069,7 @@
 {:else if connectOpen}
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
-		canCancel={session.rooms.length > 0 || session.ready || offeringLink} initialScheme={connectScheme}
+		canCancel={!disconnected && (session.rooms.length > 0 || session.ready || offeringLink)} initialScheme={connectScheme}
 		initialError={links.failure?.error}
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
 	/>
@@ -3048,7 +3109,7 @@
 			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
-			onconnect={() => openConnect()} onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
+			onsignin={previewMode ? undefined : (name, scheme) => openConnect(scheme ? { scheme, name } : { signIn: true, name })}
 			returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
 			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut}
 			onnewprivate={canStartPrivate ? () => (newPrivateOpen = true) : undefined}
@@ -3074,6 +3135,7 @@
 				replyCount={activeThread ? threadReplyCount : undefined}
 				moreReplies={Boolean(activeThread && threadRoom?.olderAvailable)}
 				waiting={Boolean(historyWait)}
+				updating={updatingShown && !checkingShown}
 				canEdit={canEditPane}
 				editDisabled={!paneReady}
 				canLeave={session.canManageRooms && !session.readOnly && Boolean(paneRoom?.joined)}
@@ -3119,8 +3181,10 @@
 				{/key}
 			{/if}
 
-			<div class="ap-timeline" bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
-				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown} testid="floating-day" />
+			<!-- Outside the log, so it's announced once as a status rather than as an entry each time older messages load. -->
+			{#if olderLoading}<TimelineLoading top label={activeThread ? 'Loading earlier replies…' : 'Loading earlier messages…'} />{/if}
+			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
+				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown && !olderLoading} testid="floating-day" />
 				{#if snapshot.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
 				{/if}
@@ -3147,21 +3211,26 @@
 							<SystemLine timestamp={idMillis(item.logId)} timelineItem testid={activeThread ? 'thread-renamed' : 'room-renamed'}>{#if item.title}{what} renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}{what} name cleared{/if}</SystemLine>
 						{:else}
 							{@const event = item.event}
-							{@const view = messageView(event, {
-								grouped: item.grouped,
-								reactions: reactionsFor(event),
-								mention: mentionsMe(event, session.you),
-								pinged: mentions.pinged.includes(event.message_id),
-								highlighted: highlightedId === event.message_id,
-								selecting: selection.active,
-								selected: selection.has(event.message_id),
-								editing: editingId === event.message_id,
-								caps: capsFor(event)
-							}, messageContext)}
 							{#if event.message_id === newDividerAt}
 								<TimelineDivider kind="new" testid="new-divider" />
 							{/if}
-							<Message {view} on={messageHandlers} testids={MESSAGE_TESTIDS} editor={view.editing && messageEditor.component ? editMessage : undefined} embed={messageEmbed} />
+							<TimelineMessage
+								row={() => messageView(item.event, {
+									grouped: item.grouped,
+									reactions: reactionsFor(item.event),
+									mention: mentionsMe(item.event, session.you),
+									pinged: mentions.pinged.includes(item.event.message_id),
+									highlighted: highlightedId === item.event.message_id,
+									selecting: selection.active,
+									selected: selection.has(item.event.message_id),
+									editing: editingId === item.event.message_id,
+									caps: capsFor(item.event)
+								}, messageContext)}
+								on={messageHandlers}
+								testids={MESSAGE_TESTIDS}
+								editor={(view) => (view.editing && messageEditor.component ? editMessage : undefined)}
+								embed={messageEmbed}
+							/>
 						{/if}
 					{/each}
 				{/if}
@@ -3250,6 +3319,7 @@
 		<NewPrivateDialog client={client!} {session} enabled={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopen={openPrivateRoom} onclose={() => (newPrivateOpen = false)} />
 	{/if}
 	<!-- Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut. -->
+	<ServerPane {client} {session} onnewserver={previewMode ? undefined : () => openConnect()} ondisconnect={previewMode ? undefined : disconnect} />
 	<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	<ReactorsPopover />
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->

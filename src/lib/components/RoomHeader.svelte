@@ -25,6 +25,8 @@
 		moreReplies?: boolean;
 		/** The pane's history waits, as the server asked (`retry_after`): "Waiting" in place of a failure. The timeline's notice counts it down. */
 		waiting?: boolean;
+		/** Other rooms are still catching up, with this one shown as it is (the design RoomHeader's `updating`). */
+		updating?: boolean;
 		/** Offer Edit for the room, or the open thread (capability `rooms`): its title and description. */
 		canEdit: boolean;
 		/** Join and the actions menu can't be used now, such as while a request is in flight. */
@@ -64,7 +66,7 @@
 		searchHint?: string;
 	}
 	let {
-		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, canEdit, editDisabled, canLeave, canJoin = false,
+		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, updating = false, canEdit, editDisabled, canLeave, canJoin = false,
 		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription, onsearch, searchHint
 	}: Props = $props();
 
@@ -131,6 +133,7 @@
 	onunmute={onmute ? () => onmute(false, mutedWithRoom ? room.id : pane.id) : undefined}
 	{mutedWithRoom}
 	busy={editDisabled}
+	{updating}
 	{ondescription}
 	{onsearch}
 	{searchHint}

@@ -12,7 +12,7 @@ import { mediaSettings } from './media-settings.svelte';
 /** What a component's MediaAsk does for `ask`. */
 export function askProps(ask: MediaAsk): MediaAskProps {
 	const { origin } = ask;
-	return { host: ask.host, onload: () => directory.loadOnce(ask.url), ...(origin ? { ontrust: () => mediaSettings.trust(origin) } : {}) };
+	return { url: ask.url, host: ask.host, onload: () => directory.loadOnce(ask.url), ...(origin ? { ontrust: () => mediaSettings.trust(origin) } : {}) };
 }
 
 /**

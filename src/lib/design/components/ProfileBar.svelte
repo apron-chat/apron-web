@@ -13,51 +13,60 @@
 		/** Shown in place of your name before there is a `you`, such as "Signing in…" or "Not signed in". */
 		placeholder?: string;
 		backend?: string;
-		/** After the backend's name: something to do, such as "add a sign-in". */
+		/** Something to do, such as "add a sign-in": the line under your name says it, unless notifications are paused. */
 		note?: string;
 		/** Your `status` (§4.5) as you chose it: a dot on your avatar, and said in the button's label. `statusLabel` replaces its words. */
 		status?: string;
 		statusLabel?: string;
 		/** Replaces the avatar, such as with one tinted by your `user_id`. */
 		avatar?: Snippet;
+		/** The bar's one button: your profile and the preferences, such as a dialog that opens at Profile. */
+		onopen?: () => void;
+		/** What it opens is open: the bar shows pressed. */
 		open?: boolean;
-		onedit?: () => void;
-		/** Usually a <ProfileEditor> (`dialog: false`); shown in a dialog popover above the bar while `open`. */
-		editor?: Snippet;
-		/** A gear beside the bar that opens the preferences. */
-		onpreferences?: () => void;
-		/** Notifications are paused (§4.5 `mute`), and until when, in words ("until 14:30"): a small bell-off on the gear's corner. */
+		/** Notifications are paused (§4.5 `mute`), and until when, in words ("until 14:30"): the line under your name says so, and a small bell-off marks the gear. */
 		paused?: string;
-		/** The gear, to return focus to as its dialog closes; bindable. */
-		preferencesButton?: HTMLButtonElement;
-		/** Rendered in the bar, such as the dialog the gear opens. */
+		/** The button, to return focus to as what it opened closes; bindable. */
+		button?: HTMLButtonElement;
+		/** Rendered in the bar, such as the dialog the button opens. */
 		children?: Snippet;
 		/** Classes for the bar, added to its own. */
 		class?: ClassValue;
 	}
-	let { you, placeholder, backend, note, status, statusLabel, avatar, open, onedit, editor, onpreferences, paused, preferencesButton = $bindable(), children, class: className }: Props = $props();
+	let { you, placeholder, backend, note, status, statusLabel, avatar, onopen, open, paused, button = $bindable(), children, class: className }: Props = $props();
 	const name = $derived(you?.name || uid(you) || placeholder || '');
 	/** The placeholder in a sentence: "Signing in…" says "signing in". */
 	const label = $derived(you?.name || uid(you) || (placeholder ?? '').replace(/…$/, '').toLowerCase());
 	const statusWords = $derived(status ? (statusLabel ?? presenceLabel(status) ?? '').toLowerCase() : '');
+	/**
+	 * Its one line under your name, the most useful thing to say, not the server the head above already names:
+	 * notifications paused, else what to do (`note`), else your status, else your `@user_id`; the server only
+	 * before there is a you.
+	 */
+	const sub = $derived.by((): { kind: 'paused' | 'note' | 'status' | 'id' | 'backend'; text: string } | undefined => {
+		if (paused) return { kind: 'paused', text: `Paused ${paused}` };
+		if (note) return { kind: 'note', text: note.charAt(0).toUpperCase() + note.slice(1) };
+		const words = status ? (statusLabel ?? presenceLabel(status)) : undefined;
+		if (words) return { kind: 'status', text: words };
+		if (uid(you)) return { kind: 'id', text: `@${uid(you)}` };
+		return backend ? { kind: 'backend', text: `on ${backend}` } : undefined;
+	});
 </script>
 
+<!-- Your identity, and the one way to your profile and the preferences: the gear says where it leads. -->
 <div class={['ap-profile', className]}>
-	{#if open && editor}<div class="ap-profile-pop" role="dialog" aria-label="Edit profile">{@render editor()}</div>{/if}
 	{@render children?.()}
-	<button type="button" class={['ap-profile-me', open && 'ap-profile-open']} aria-haspopup="dialog" aria-expanded={!!open} aria-label="Your profile on {backend || 'this backend'}: {label}{statusWords ? `, ${statusWords}` : ''}. Edit" onclick={onedit}>
+	<button type="button" class={['ap-profile-me', open && 'ap-profile-open']} bind:this={button} aria-haspopup="dialog"
+		aria-label="{paused ? `Open preferences. Notifications paused ${paused}.` : 'Open preferences.'} Your profile on {backend || 'this server'}: {label}{statusWords ? `, ${statusWords}` : ''}"
+		title={paused ? `Profile and preferences · notifications paused ${paused}` : 'Profile and preferences'} onclick={onopen}>
 		{#if avatar}{@render avatar()}{:else}<Avatar name={you?.name || uid(you) || '?'} src={you?.avatar} {status} {statusLabel} />{/if}
 		<span class="ap-profile-text">
 			<span class="ap-profile-name">{name}</span>
-			<!-- The separator is an expression: a space leading an {#if} block's text would be trimmed. -->
-			<span class="ap-profile-sub">{#if backend}{'on '}<bdi>{backend}</bdi>{:else}{uid(you)}{/if}{#if note}{' · '}{note}{/if}</span>
+			{#if sub}<span class={['ap-profile-sub', `ap-profile-sub-${sub.kind}`]}>{#if sub.kind === 'paused'}<BellOff size={12} strokeWidth={2} aria-hidden="true" />{/if}<bdi>{sub.text}</bdi></span>{/if}
 		</span>
-		<span class="ap-profile-edit" aria-hidden="true">Edit</span>
+		<span class="ap-profile-gear" aria-hidden="true">
+			<Settings size={18} strokeWidth={1.6} />
+			{#if paused}<span class="ap-profile-paused"><BellOff size={10} strokeWidth={2.2} /></span>{/if}
+		</span>
 	</button>
-	{#if onpreferences}
-		<button class="ap-iconbtn ap-iconbtn-lg ap-profile-settings" bind:this={preferencesButton} type="button" aria-label={paused ? `Open preferences. Notifications paused ${paused}` : 'Open preferences'} aria-haspopup="dialog" title={paused ? `Preferences · notifications paused ${paused}` : 'Preferences'} onclick={onpreferences}>
-			<Settings size={18} strokeWidth={1.6} aria-hidden="true" />
-			{#if paused}<span class="ap-profile-paused" aria-hidden="true"><BellOff size={10} strokeWidth={2.2} /></span>{/if}
-		</button>
-	{/if}
 </div>

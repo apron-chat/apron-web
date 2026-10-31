@@ -53,6 +53,25 @@ export function topLevelRooms(rooms: readonly RoomSnapshot[]): RoomSnapshot[] {
 	return rooms.filter((room) => room.parentRoomId === undefined);
 }
 
+/**
+ * Whether two snapshots of a room say the same: every field the same value, `renames` and `members` (made afresh
+ * each time, or not) item by item.
+ */
+export function sameRoomSnapshot(a: RoomSnapshot, b: RoomSnapshot): boolean {
+	const keys = Object.keys(a) as (keyof RoomSnapshot)[];
+	if (keys.length !== Object.keys(b).length) return false;
+	return keys.every((key) => {
+		if (a[key] === b[key]) return true;
+		if (key === 'renames') return sameItems(a.renames, b.renames, (x, y) => x.log_id === y.log_id && x.title === y.title && x.previous === y.previous);
+		if (key === 'members') return sameItems(a.members, b.members, (x, y) => x === y);
+		return false;
+	});
+}
+
+function sameItems<T>(a: readonly T[] | undefined, b: readonly T[] | undefined, same: (x: T, y: T) => boolean): boolean {
+	return Boolean(a && b && a.length === b.length && a.every((item, index) => same(item, b[index])));
+}
+
 /** Direct children (threads) of a room, in listing order. */
 export function childRooms(rooms: readonly RoomSnapshot[], parentRoomId: string): RoomSnapshot[] {
 	return rooms.filter((room) => room.parentRoomId === parentRoomId);

@@ -196,7 +196,7 @@ describe('directory', () => {
 		const plain: Identity = { user_id: 'ed', name: 'Ed', avatar: 'http://gravatar.example/ed.png' };
 		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
 		try {
-			// This server and trusted sites: the server's own and those it names; anything else in the timeline asks.
+			// Server and trusted sites: the server's own and those it names; anything else in the timeline asks.
 			mediaSettings.update('trusted', []);
 			expect(directory.mediaOrigins).toEqual(['https://media.example']);
 			expect(directory.avatar(home)).toBe('https://example.com/di.png');

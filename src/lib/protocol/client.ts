@@ -61,6 +61,7 @@ import {
 	type RoomListing,
 	type RoomPatch,
 	type RoomResult,
+	type RoomSnapshot,
 	type RoomSync,
 	type SendOptions,
 	type UploadFile,
@@ -136,7 +137,7 @@ import {
 	type TypingState,
 	type ValidHistoryResponse
 } from './client-internals';
-import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, serverAddress, serverSettings, yourPermissions } from './client-views';
+import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, sameRoomSnapshot, serverAddress, serverSettings, yourPermissions } from './client-views';
 import { reactionKey } from './custom-emoji';
 import { HistoryQueue } from './history-queue';
 
@@ -372,6 +373,8 @@ export class ChatClient {
 	private connectionId = 0;
 	private reconnectAttempt = 0;
 	private running = false;
+	/** Disconnected at the viewer's asking (`disconnect`): connecting again starts it, as nothing does after `stop`. */
+	private disconnected = false;
 	private authenticated = false;
 	private authRequested = false;
 	/** A passkey ceremony is under way: other requests wait. */
@@ -517,6 +520,7 @@ export class ChatClient {
 		if (!nextUrl || nextUrl === this.serverUrl) return;
 		this.switchServer(nextUrl);
 		if (this.running) this.restart();
+		else if (this.disconnected) this.start();
 	}
 
 	/** Points the client at another server, with that server's kept session, without connecting. */
@@ -589,15 +593,21 @@ export class ChatClient {
 
 	start(): void {
 		if (this.running) return;
+		this.run();
+		if (this.waitForPresence()) return;
+		this.connectNow();
+	}
+
+	/** Runs, without connecting yet: what `start` does first, and a sign-in after a `disconnect` before it adopts its connection. */
+	private run(): void {
 		this.running = true;
+		this.disconnected = false;
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
 		this.showReconnectDivider = this.reconnectAttempt > 0;
 		globalThis.document?.addEventListener('visibilitychange', this.visibilityChanged);
 		globalThis.addEventListener?.('online', this.networkReturned);
 		this.hiddenAt = pageHidden() ? this.now() : undefined;
-		if (this.waitForPresence()) return;
-		this.connectNow();
 	}
 
 	stop(): void {
@@ -636,8 +646,23 @@ export class ChatClient {
 		this.emit();
 	}
 
+	/**
+	 * Closes the connection at the viewer's asking (a server's Disconnect), as `stop` does, keeping the session kept
+	 * for this server: connecting again, here or to another server, or signing in, starts it again.
+	 */
+	disconnect(): void {
+		// Nothing is held for a sign-in any more: connecting again connects afresh.
+		this.reconnectHeld = false;
+		this.signInNeeded = undefined;
+		this.stop();
+		this.disconnected = true;
+	}
+
 	restart(): void {
-		if (!this.running) return;
+		if (!this.running) {
+			if (this.disconnected) this.start();
+			return;
+		}
 		this.connectionProbe?.abort();
 		this.connectionId += 1;
 		this.reconnectHeld = false;
@@ -666,7 +691,10 @@ export class ChatClient {
 	 * restarts from its shortest delay.
 	 */
 	retryNow(): void {
-		if (!this.running) return;
+		if (!this.running) {
+			if (this.disconnected) this.start();
+			return;
+		}
 		if (this.retryAfterRemaining()) {
 			this.emit();
 			return;
@@ -757,7 +785,7 @@ export class ChatClient {
 				const renames = this.store.roomRenames(room.id);
 				const members = this.currentMembers(this.store.members(room.id));
 				const namedForMembers = untitledPrivate(record);
-				return {
+				const next: RoomSnapshot = {
 					id: room.id,
 					title: namedForMembers ? this.membersTitle(members) : roomTitle(room.id, record),
 					...(untitledThread(record) ? { untitled: true as const } : {}),
@@ -787,6 +815,10 @@ export class ChatClient {
 					...(this.memberCounts.has(room.id) ? { memberCount: this.memberCounts.get(room.id) } : {}),
 					notices: this.notices.get(room.id) ?? NO_NOTICES
 				};
+				// The same object while nothing in it changed: the page then redraws only the rooms that did, where a
+				// fresh one for every room on each snapshot (each message, each read) had it redraw them all.
+				if (room.published && sameRoomSnapshot(room.published, next)) return room.published;
+				return (room.published = next);
 			}),
 			activeRoom: this.activeRoomId,
 			pending: [...this.requests.values()]
@@ -1185,9 +1217,9 @@ export class ChatClient {
 		return this.approveSignIn(connection, scheme, secret, { beforeSwitch: options.beforeSwitch, retryable: false, state: options.state, method });
 	}
 
-	/** Throws unless a sign-in approval may start now: the client runs, and none is in flight. */
+	/** Throws unless a sign-in approval may start now: the client runs (or was disconnected, which it starts), and none is in flight. */
 	private checkApproval(): void {
-		if (!this.running) throw new Error('Connect to the server first');
+		if (!this.running && !this.disconnected) throw new Error('Connect to the server first');
 		if (this.approvalInFlight) throw new Error('Already signing in; wait for it to finish');
 	}
 
@@ -1218,6 +1250,8 @@ export class ChatClient {
 				this.closeSignInConnection(connection);
 				throw new Error('Server authentication response did not include an identity');
 			}
+			// Disconnected at the viewer's asking, signing in connects again, on this connection.
+			if (!this.running && this.disconnected) this.run();
 			if (!this.running) {
 				this.closeSignInConnection(connection);
 				throw new Error('Connection stopped');

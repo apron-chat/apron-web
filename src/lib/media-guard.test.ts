@@ -36,6 +36,7 @@ describe('media loads only through the gate', () => {
 			'lib/design/components/MediaViewer.svelte',
 			'lib/design/components/MentionPicker.svelte',
 			'lib/design/components/ReactionBar.svelte',
+			'lib/design/components/ServerCard.svelte',
 			'lib/design/components/SidebarHead.svelte',
 			// A custom emoji's tag, written into markup that `sanitizeHtml` then asks the gate about.
 			'lib/protocol/markdown.ts'
@@ -70,6 +71,7 @@ describe('markup from anyone else goes through the one sanitizer', () => {
 		expect(using(/\{@html\b/)).toEqual([
 			'lib/components/ConnectScreen.svelte',
 			'lib/components/ProfileCard.svelte',
+			'lib/components/ServerPane.svelte',
 			'lib/components/ThreadDescription.svelte',
 			'lib/design/components/EmbedHtml.svelte',
 			'lib/design/components/Message.svelte'

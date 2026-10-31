@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=250 subtitle="Chips, and a message that pings you" -->
+<!-- @dsCard group="Timeline" height=250 subtitle="Chips, a role, and a message that pings you" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Mention</title></head>
@@ -12,9 +12,10 @@
   add(A.Message, { view: { sender: alice, time: '14:02', body: { markdown: true, html: '<p>Handing the rollback to <span class="ap-mention" data-user-id="dana" title="@dana">@Dana</span> and <span class="ap-mention" data-user-id="bob" title="@bob">@Bob</span>.</p>' } } });
   add(A.Message, { view: { sender: bob, time: '14:05', mention: true, pinged: true, body: { markdown: true, html: '<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> can you check the migration logs?</p>' } } });
   add(A.Message, { view: { sender: bob, time: '14:05', grouped: true, body: { markdown: true, html: '<p>cc <span class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</span></p>' } } });
+  add(A.Message, { view: { sender: alice, time: '14:09', body: { markdown: true, html: '<p><span class="ap-mention ap-mention-role" title="Everyone with the role mods">@mods</span> the deploy is stuck, can someone look?</p>' } } });
   var row = document.createElement('div'); row.className = 'ap-row'; root.appendChild(row);
   add(A.Mention, { user_id: 'dana', name: 'Dana' }, row); add(A.Mention, { user_id: 'sam', name: 'Sam', me: true }, row);
-  add(A.Mention, { roomId: 'ops', title: 'Ops', onopen: function () {} }, row); add(A.Mention, { roomId: 'ops', name: 'Ops', hash: true }, row); add(A.Mention, { user_id: 'ghost_9', unknown: true }, row);
+  add(A.Mention, { roomId: 'ops', title: 'Ops', onopen: function () {} }, row); add(A.Mention, { roomId: 'ops', name: 'Ops', hash: true }, row); add(A.Mention, { user_id: 'ghost_9', unknown: true }, row); add(A.Mention, { role: 'mods' }, row);
 </script>
 </body>
 </html>

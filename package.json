@@ -18,7 +18,8 @@
 		"icons": "node scripts/icons.js",
 		"design:bundle": "node scripts/design-bundle.js",
 		"qa": "node scripts/qa/cli.js",
-		"e2e": "APRON_PREVIEW=1 vite build && playwright test --config e2e/playwright.config.ts"
+		"e2e": "APRON_PREVIEW=1 vite build && playwright test --config e2e/playwright.config.ts",
+		"e2e:short": "APRON_PREVIEW=1 vite build && E2E_TIER=short playwright test --config e2e/playwright.config.ts"
 	},
 	"devDependencies": {
 		"@playwright/test": "~1.56.1",

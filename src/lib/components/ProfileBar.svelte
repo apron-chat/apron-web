@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { preferencesDialog } from './lazy';
-	import { preferencesOpener } from '$lib/ui/preferences.svelte';
+	import { pushState, replaceState } from '$app/navigation';
+	import { page } from '$app/state';
+	import { preferencesOpener, preferencesUrl, readPreferences } from '$lib/ui/preferences.svelte';
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
 	import { shownPerson } from '$lib/protocol/plain-text';
@@ -24,7 +26,7 @@
 	import TypingDots from '$lib/design/components/TypingDots.svelte';
 	import { exportArchive } from '$lib/archive/archive';
 
-	type Status = 'idle' | 'saving' | 'altered' | 'declined';
+	type Status = 'idle' | 'saving' | 'saved' | 'altered' | 'declined';
 
 	interface Props {
 		client: ChatClient;
@@ -51,20 +53,19 @@
 		onresume: () => Promise<void> | void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: SignOutHandler;
-		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
-		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
-		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
-		/** Opens the connect screen as it is: another server, or another way to sign in. */
-		onconnect: () => void;
+		/**
+		 * Opens the connect screen to sign in, with `scheme` or the way the server offers first, carrying a name typed
+		 * here; none where the page has no connect screen (an export read, the preview).
+		 */
+		onsignin?: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
-	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin, onconnect }: Props = $props();
+	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin }: Props = $props();
 
-	let open = $state(false);
 	let preferencesOpen = $state(false);
 	/** Preferences mounts the first time it opens and then stays, so nothing of it renders or runs on a page that never opens it. */
 	let preferencesMounted = $state(false);
-	/** The section Preferences shows: the one last chosen, or the one asked for (`preferencesOpener`). */
-	let preferencesSection = $state('notifications');
+	/** The section Preferences shows: Profile from the bar, the one last chosen, or the one asked for (`preferencesOpener`). */
+	let preferencesSection = $state('profile');
 	let preferencesTrigger = $state<HTMLButtonElement | undefined>();
 	let draft = $state('');
 	let status = $state<Status>('idle');
@@ -106,12 +107,18 @@
 
 	/**
 	 * Preferences' Export: what the client has stored, saved as a file, unless there is nothing yet. The threads
-	 * listed but never opened load their newest messages first, so none of them is saved empty.
+	 * listed but never opened load their newest messages first, so none of them is saved empty: those in private
+	 * rooms only when private rooms go too.
 	 */
-	async function exportChats(): Promise<{ name: string; rooms: number; messages: number } | undefined> {
-		const unopened = client.snapshot().rooms.filter((room) => room.parentRoomId !== undefined && !room.loaded && !room.resumed);
+	async function exportChats(options: { privateRooms: boolean }): Promise<{ name: string; rooms: number; messages: number; privateLeftOut: number } | undefined> {
+		const rooms = new Map(client.snapshot().rooms.map((room) => [room.id, room]));
+		const inPrivate = (id: string): boolean => {
+			for (let at: string | undefined = id, depth = 0; at !== undefined && depth < 64; at = rooms.get(at)?.parentRoomId, depth++) if (rooms.get(at)?.private === true) return true;
+			return false;
+		};
+		const unopened = [...rooms.values()].filter((room) => room.parentRoomId !== undefined && !room.loaded && !room.resumed && (options.privateRooms || !inPrivate(room.id)));
 		await Promise.allSettled(unopened.map((room) => client.loadRoom(room.id)));
-		const file = exportArchive(client.url, client.snapshot(), client.storedRecords(), client.roomSyncs());
+		const file = exportArchive(client.url, client.snapshot(), client.storedRecords(), client.roomSyncs(), options);
 		if (file.rooms === 0) return undefined;
 		const url = URL.createObjectURL(new Blob([file.text], { type: 'application/jsonl' }));
 		const link = Object.assign(document.createElement('a'), { href: url, download: file.name });
@@ -141,7 +148,7 @@
 	/** External sign-in on the server's page (§4.11.5), where the server offers it. */
 	let canUseExternal = $derived(!!session.server?.auth.includes('external'));
 	/** Why the server declined the handle, and what happens to it now: a guest who can sign in gets it applied once signed in. */
-	let declinedNote = $derived(`The server declined this handle${declinedReason ? ` (${declinedReason})` : ''}. ${(canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession ? 'Sign in and it’s applied once you’re signed in.' : 'Your old one is still in use.'}`);
+	let declinedNote = $derived(`The server declined this name${declinedReason ? ` (${declinedReason})` : ''}. ${(canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession ? 'Sign in and it’s applied once you’re signed in.' : 'Your old one is still in use.'}`);
 	/**
 	 * No way back into the account that the server signs in with, as far as
 	 * this browser knows: only a kept token (pasted, or an invite, §3.2), or an
@@ -157,11 +164,32 @@
 	 * `state`. A link of no proposal here never adds; it signs in.
 	 */
 	let addEmail = $state<{ scheme: 'email' | 'external'; step: 'address' | 'code'; email: string; code: string; page?: string; busy: boolean; error: string } | undefined>();
-	function toggle(): void {
-		if (open) {
-			close();
-			return;
-		}
+	/** The name or bio differs from what the server keeps: Save and Revert show. */
+	let dirty = $derived(draft.trim() !== openedWith.trim() || (canSetBio && bioDraft.trim() !== bioOpenedWith.trim()));
+	let savedTimer: ReturnType<typeof setTimeout> | undefined;
+	/** A guest's Sign in, which takes focus when Sign out goes. */
+	let signInButton = $state<HTMLButtonElement>();
+	// "Saved." says so a moment, then goes.
+	$effect(() => {
+		if (status !== 'saved') return;
+		clearTimeout(savedTimer);
+		savedTimer = setTimeout(() => {
+			if (status === 'saved') status = 'idle';
+		}, 2000);
+		return () => clearTimeout(savedTimer);
+	});
+
+	/** Revert: back to what the server keeps. */
+	function revert(): void {
+		draft = openedWith;
+		bioDraft = bioOpenedWith;
+		bioError = '';
+		status = 'idle';
+		declinedReason = '';
+	}
+
+	/** Profile's form starts from what the server keeps: your name and bio, and no note from last time. */
+	function resetProfile(): void {
 		draft = you?.name || displayName;
 		openedWith = draft;
 		bioDraft = bioOf(you) ?? '';
@@ -174,7 +202,6 @@
 		passkeyNotice = '';
 		avatarError = '';
 		addEmail = undefined;
-		open = true;
 	}
 
 	/** The server sets `avatar` and sends `user` once the image is written; `you` then carries it. */
@@ -205,19 +232,14 @@
 		}
 	}
 
-	function close(): void {
-		open = false;
-		status = 'idle';
-	}
-
-	/** The editor's Connect to a server…: the connect screen, in its place. */
-	function connect(): void {
-		close();
-		onconnect();
+	/** The bar's button: Preferences, at your profile. */
+	function openProfile(): void {
+		preferencesSection = 'profile';
+		showPreferences();
 	}
 
 	function showPreferences(): void {
-		open = false;
+		resetProfile();
 		preferencesMounted = true;
 		preferencesOpen = true;
 	}
@@ -233,6 +255,45 @@
 		});
 	});
 
+	// The address names the open section (`#preferences=notifications`): a link to it opens Preferences there, and
+	// Back and Forward, through the sections opened, change it.
+	$effect(() => {
+		const follow = () => {
+			const section = readPreferences(window.location.hash);
+			if (!section) {
+				preferencesOpen = false;
+				return;
+			}
+			preferencesSection = section;
+			if (!preferencesOpen) showPreferences();
+		};
+		untrack(follow);
+		window.addEventListener('hashchange', follow);
+		return () => window.removeEventListener('hashchange', follow);
+	});
+
+	// Opening Preferences, and each section chosen, is a history entry; closing it returns to where it opened from.
+	$effect(() => {
+		const section = preferencesOpen ? preferencesSection : undefined;
+		untrack(() => recordPreferences(section));
+	});
+	// Leaving with it open (Sign in opens the connect screen in its place) closes it in the address too.
+	$effect(() => () => recordPreferences(undefined));
+
+	function recordPreferences(section: string | undefined): void {
+		if (readPreferences(window.location.hash) === section) return;
+		/** How many entries Preferences has added since it opened. */
+		const depth = page.state.preferences ?? 0;
+		try {
+			if (section) pushState(preferencesUrl(window.location.href, section), { ...page.state, preferences: depth + 1 });
+			// Back past the entries it added; one opened by a link has none, so it closes in place.
+			else if (depth) window.history.go(-depth);
+			else replaceState(preferencesUrl(window.location.href, undefined), { ...page.state, preferences: undefined });
+		} catch {
+			// The router isn't started yet (in development): Preferences just isn't in the address.
+		}
+	}
+
 	/** A handle the user typed in the editor, as opposed to the one it opened with. */
 	function chosenName(): string | undefined {
 		const requested = draft.trim();
@@ -243,10 +304,10 @@
 	 * Signing in happens on the connect screen, which carries a handle typed
 	 * here along so it is applied once the passkey or email signs in.
 	 */
-	function signIn(scheme: 'webauthn' | 'email' | 'external' = 'webauthn'): void {
+	function signIn(scheme?: 'webauthn' | 'email' | 'external'): void {
 		const chosen = chosenName();
-		close();
-		onsignin(chosen, scheme);
+		preferencesOpen = false;
+		onsignin?.(chosen, scheme);
 	}
 
 	/** Account actions for a passkey session: another passkey for this identity, or signing out. */
@@ -260,9 +321,14 @@
 			} else {
 				// Labelled with the account's name, so the passkey manager shows whose it is.
 				await client.usePasskey('register', you?.name);
-				passkeyNotice = 'Passkey saved · this backend will ask your device next time';
+				passkeyNotice = 'Passkey saved. This server will ask your device next time.';
 			}
 			resetDraft();
+			if (action === 'logout') {
+				// Sign out went with the account: focus goes to the guest's Sign in that took its place.
+				await tick();
+				signInButton?.focus();
+			}
 		} catch (cause) {
 			passkeyError = passkeyMessage(cause);
 		}
@@ -324,25 +390,37 @@
 		void continueAddEmail();
 	}
 
+	/** Whose name and bio the form holds: another identity (signed out, signed in elsewhere) starts it afresh. */
+	let formFor: string | undefined;
+	$effect(() => {
+		const id = you?.user_id;
+		untrack(() => {
+			if (id === undefined || id === formFor) return;
+			const first = formFor === undefined;
+			formFor = id;
+			if (!first || !dirty) resetDraft();
+		});
+	});
+
+	/** Back to what the server keeps for whoever this session is now: the name and the bio. */
 	function resetDraft(): void {
 		draft = you?.name || displayName;
 		openedWith = draft;
+		bioDraft = bioOf(you) ?? '';
+		bioOpenedWith = bioDraft;
+		bioError = '';
 		if (status === 'declined') status = 'idle';
 	}
 
 	/** Shows what the server kept for a `me` request carrying `requested`. */
-	async function track(handle: OperationHandle, requested: string, closeWhenKept: boolean): Promise<void> {
+	async function track(handle: OperationHandle, requested: string): Promise<void> {
 		status = 'saving';
 		declinedReason = '';
 		try {
 			const result = await handle.promise;
 			const kept = isJsonObject(result.you) && typeof result.you.name === 'string' ? result.you.name : requested;
 			if (kept === requested) {
-				if (closeWhenKept) {
-					close();
-					return;
-				}
-				status = 'idle';
+				status = 'saved';
 			} else {
 				serverName = kept;
 				status = 'altered';
@@ -385,76 +463,72 @@
 	/** Sends the bio, if it changed, then the handle with `name`; the editor then shows what the server actually kept. */
 	async function save(): Promise<void> {
 		const requested = draft.trim();
-		if (!requested) return;
+		// Enter in the name with nothing changed submits too: nothing to send.
+		if (!requested || !dirty) return;
 		if (!(await saveBio())) return;
 		displayName = requested;
 		saveDisplayName(requested);
 		const handle = client.setDisplayName(requested);
 		if (!handle) {
-			close();
+			// Not signed in yet: the name goes with the next `auth`, so it is what the form starts from now.
+			draft = requested;
+			openedWith = requested;
+			status = 'saved';
 			return;
 		}
-		void track(handle, requested, true);
+		void track(handle, requested);
 	}
 </script>
 
-<!-- The design system's ProfileBar and ProfileEditor draw it; the app fills in its avatar, and the ways to sign in this server offers. -->
+<!-- The design system's ProfileBar and, in Preferences' Profile, ProfileEditor draw it; the app fills in its avatar, and the ways to sign in this server offers. -->
 {#snippet barAvatar()}
 	<Avatar name={shownYou?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={shownStatus} statusLabel={ownLabel} />
 {/snippet}
 {#snippet face()}
-	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" status={shownStatus} statusLabel={ownLabel} />
+	<!-- No status dot: the status is chosen just above it. -->
+	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" />
+{/snippet}
+{#snippet signinHint()}
+	{#if passkeyError}
+		<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
+	{:else if passkeyNotice}
+		<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
+	{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
+		<span class="ap-form-hint">{passkeyUnavailable}</span>
+	{:else if wayBack}
+		<span class="ap-form-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
+	{:else if session.passkeySession}
+		<span class="ap-form-hint">{canUseEmail || canUseExternal ? 'You can sign in to this account anywhere.' : 'You sign in to this account with a passkey.'}</span>
+	{:else}
+		<span class="ap-form-hint">You’re a guest here. Sign in to keep your name and rooms.</span>
+	{/if}
 {/snippet}
 {#snippet signin()}
 	{#if snapshot.authBusy && !addEmail?.busy}
 		<span class="ap-form-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
 	{:else}
-		<span class="ap-profedit-row">
+		<!-- How this session signs in comes first, then what you can do about it. -->
+		{#if session.passkeySession}
+			{@render signinHint()}
+			<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
 			<span class="ap-profedit-buttons">
-				{#if session.passkeySession}
-					<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
-					{#if canUsePasskey && you}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
-					{/if}
-					{#if canUseEmail && you && !addEmail}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
-					{/if}
-					{#if canUseExternal && you && !addEmail}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
-					{/if}
-					<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
-				{:else}
-					{#if canUsePasskey}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || status === 'saving'} onclick={() => signIn('webauthn')}>Sign in with a passkey</button>
-					{/if}
-					{#if canUseEmail}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
-						<!-- Adding an address to a guest asks and answers on this connection; whether that keeps the
-						     guest identity as an account is the server's call (§4.11). -->
-						{#if you && !addEmail}
-							<button class="ap-btn ap-btn-sm" type="button" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
-						{/if}
-					{/if}
-					{#if canUseExternal}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={status === 'saving'} onclick={() => signIn('external')}>Sign in externally</button>
-						{#if you && !addEmail}
-							<button class="ap-btn ap-btn-sm" type="button" title="Keep this identity: add an external sign-in to it, if the server allows" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
-						{/if}
-					{/if}
+				{#if canUsePasskey && you}
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
+				{/if}
+				{#if canUseEmail && you && !addEmail}
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+				{/if}
+				{#if canUseExternal && you && !addEmail}
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
 				{/if}
 			</span>
-			{#if passkeyError}
-				<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
-			{:else if passkeyNotice}
-				<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
-			{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
-				<span class="ap-form-hint">{passkeyUnavailable}</span>
-			{:else if wayBack}
-				<span class="ap-form-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
-			{:else}
-				<span class="ap-form-hint">{session.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
-			{/if}
-		</span>
+		{:else}
+			<!-- A guest: signing in, as the composer offers it where guests can't post, at the row's end; the connect screen picks the way. -->
+			<span class="ap-profedit-inline">
+				{@render signinHint()}
+				<button class="ap-btn ap-btn-primary ap-btn-sm" type="button" bind:this={signInButton} disabled={status === 'saving'} onclick={() => signIn()}>Sign in</button>
+			</span>
+		{/if}
 		{#if addEmail}
 			<span class="ap-profedit-add" role="group" aria-label={addEmail.scheme === 'email' ? 'Add email' : 'Add external sign-in'}>
 				{#if addEmail.scheme === 'external' && !addEmail.page}
@@ -474,7 +548,11 @@
 		{/if}
 	{/if}
 {/snippet}
-{#snippet editor()}
+{#snippet signout()}
+	<p class="ap-form-hint">Signed in to <bdi>{backendLabel}</bdi> as <bdi>{shownYou?.name || you?.user_id}</bdi>.</p>
+	<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
+{/snippet}
+{#snippet profileForm()}
 	<ProfileEditor
 		dialog={false}
 		userId={you?.user_id ?? '—'}
@@ -495,9 +573,10 @@
 		{serverName}
 		{declinedNote}
 		onsave={save}
-		oncancel={close}
-		signin={canUsePasskey || canUseEmail || canUseExternal ? signin : undefined}
-		onconnect={connect}
+		{dirty}
+		onrevert={revert}
+		signin={session.passkeySession ? (canUsePasskey || canUseEmail || canUseExternal ? signin : undefined) : onsignin ? signin : undefined}
+		signout={session.passkeySession && you ? signout : undefined}
 		changeAvatarTestid="change-avatar" removeAvatarTestid="remove-avatar" avatarFileTestid="avatar-input" nameTestid="display-name-input" bioTestid="bio-input"
 	/>
 {/snippet}
@@ -510,18 +589,17 @@
 	status={ownStatus}
 	statusLabel={ownLabel}
 	avatar={barAvatar}
-	{open}
-	onedit={toggle}
-	{editor}
-	onpreferences={showPreferences}
+	open={preferencesOpen}
+	onopen={openProfile}
 	{paused}
-	bind:preferencesButton={preferencesTrigger}
+	bind:button={preferencesTrigger}
 >
 	{#if preferencesMounted && preferencesDialog.component}
 		{@const PreferencesDialog = preferencesDialog.component}
 		<PreferencesDialog
 			bind:open={preferencesOpen}
 			bind:section={preferencesSection}
+			profile={profileForm}
 			{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
 			{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}

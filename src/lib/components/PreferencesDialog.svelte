@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { historySettings, RETENTIONS, storageUsed } from '$lib/history/settings.svelte';
 	import { MEDIA_POLICIES, mediaSettings, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
@@ -23,8 +23,10 @@
 
 	interface Props {
 		open?: boolean;
-		/** The section shown: `notifications`, `appearance`, `media` or `history`. Bindable. */
+		/** The section shown: `profile`, `notifications`, `appearance`, `media` or `history`. Bindable. */
 		section?: string;
+		/** Profile's form, under your status: your avatar, handle and bio, and how you sign in. */
+		profile?: Snippet;
 		/** Notifications on this device: the one switch, for while Apron is open and, by push, while it's closed. */
 		notificationsEnabled: boolean;
 		notificationsSupported: boolean;
@@ -54,7 +56,7 @@
 		 * Saves what this page has loaded as an export (`$lib/archive`), and says what it saved: none of it
 		 * while nothing is loaded. Absent where there is nothing to export from.
 		 */
-		onexport?: () => Promise<{ name: string; rooms: number; messages: number } | undefined>;
+		onexport?: (options: { privateRooms: boolean }) => Promise<{ name: string; rooms: number; messages: number; privateLeftOut: number } | undefined>;
 		/** The host of the server connected to, which media always loads from. */
 		serverHost?: string;
 		/** The sites this server names for its media (`ext:media`), as hosts: trusted with it. */
@@ -62,13 +64,14 @@
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), section: preferencesSection = $bindable('notifications'), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
+	let { open = $bindable(false), section: preferencesSection = $bindable('profile'), profile, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
 
 	const SECTIONS = [
-		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
-		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
-		{ value: 'media', label: 'Media', hint: 'Where images and avatars load from. Each site sees what you load.', id: 'ap-pref-media' },
-		{ value: 'history', label: 'History', hint: 'What this device keeps of your chats.', id: 'ap-pref-history' }
+		{ value: 'profile', label: 'Profile', id: 'ap-pref-profile' },
+		{ value: 'notifications', label: 'Notifications', id: 'ap-pref-notifications' },
+		{ value: 'appearance', label: 'Appearance', id: 'ap-pref-appearance' },
+		{ value: 'media', label: 'Media', id: 'ap-pref-media' },
+		{ value: 'history', label: 'History', id: 'ap-pref-history' }
 	];
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
@@ -96,14 +99,11 @@
 		? { text: historySettings.failure, tone: 'err' }
 		: historySettings.retention !== 'off' && used ? { text: `Using about ${used}.` } : undefined);
 	let exporting = $state(false);
+	/** Export's Include private rooms: off each time Preferences opens, so private rooms go only when asked for. */
+	let exportPrivate = $state(false);
 
-	/** What the chosen media policy loads, under it: the server, and the sites it trusts, by name. */
-	let mediaNote = $derived.by(() => {
-		if (mediaSettings.policy === 'any') return 'Everything, from any site.';
-		const server = serverHost ?? 'this server';
-		const trusted = mediaHosts.length ? `, ${mediaHosts.join(', ')} (trusted by the server)` : '';
-		return `From ${server}${trusted} and the origins below. Other images wait for a click.`;
-	});
+	/** What the chosen media policy loads, under it: the server, by name, and the trusted origins. */
+	let mediaNote = $derived(mediaSettings.policy === 'any' ? 'Everything, from any site.' : `From ${serverHost ?? 'this server'} and the trusted origins below. Other images wait for a click.`);
 	/** The trusted origins, one per line as hosts, as the field shows them. */
 	let addedSites = $derived(mediaSettings.origins.map((origin) => new URL(origin).host).join('\n'));
 
@@ -114,18 +114,18 @@
 	 * (push, §4.9), with why not. `action` turns push on here when it could be.
 	 */
 	let notificationsNote = $derived.by((): Note & { action?: string } => {
-		if (notificationPermission === 'denied') return { text: 'Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.', tone: 'err' };
-		if (!notificationsSupported) return { text: 'Notifications aren’t available here. Use a supported browser over HTTPS or localhost.' };
-		if (!notificationsEnabled) return { text: notificationPermission === 'granted' ? 'Off.' : 'Turning this on will ask your browser for permission.' };
-		const open = 'On · alerts while Apron is open.';
-		if (!webPush) return { text: `${open} This server doesn’t alert when it’s closed.`, tone: 'ok' };
-		if (webPush.signIn) return { text: `${open} Sign in to be alerted when it’s closed, too.`, tone: 'ok' };
+		if (notificationPermission === 'denied') return { text: 'Blocked by your browser. Allow notifications in its site settings.', tone: 'err' };
+		if (!notificationsSupported) return { text: 'Not available here. Use a supported browser over HTTPS.' };
+		if (!notificationsEnabled) return { text: notificationPermission === 'granted' ? 'Off.' : 'Your browser will ask for permission.' };
+		const open = 'On while Apron is open.';
+		if (!webPush) return { text: `${open} This server can’t alert when it’s closed.`, tone: 'ok' };
+		if (webPush.signIn) return { text: `${open} Sign in to be alerted when it’s closed.`, tone: 'ok' };
 		if (webPush.error) return { text: webPush.error, tone: 'err' };
-		if (!webPush.supported) return { text: webPush.homeScreen ? `${open} To be alerted when it’s closed, add Apron to your Home Screen.` : `${open} This browser can’t alert when it’s closed.`, tone: 'ok' };
-		if (webPush.heldBy) return { text: `${open} When it’s closed, this browser alerts for one server at a time: now ${webPush.heldBy}.`, tone: 'ok', action: 'Alert for this server instead' };
-		if (webPush.enabled && pushesNothing) return { text: `${open} This server sends none of your choices above when it’s closed.`, tone: 'ok' };
-		if (webPush.enabled) return { text: 'On · alerts on this device, even when Apron is closed.', tone: 'ok' };
-		return { text: `${open} Not yet when it’s closed.`, tone: 'ok', action: 'Alert when it’s closed, too' };
+		if (!webPush.supported) return { text: webPush.homeScreen ? `${open} Add it to your Home Screen to be alerted when it’s closed.` : `${open} This browser can’t alert when it’s closed.`, tone: 'ok' };
+		if (webPush.heldBy) return { text: `${open} When it’s closed, this browser alerts only for ${webPush.heldBy}.`, tone: 'ok', action: 'Alert for this server instead' };
+		if (webPush.enabled && pushesNothing) return { text: `${open} None of your choices below alert when it’s closed.`, tone: 'ok' };
+		if (webPush.enabled) return { text: 'On, even when Apron is closed.', tone: 'ok' };
+		return { text: open, tone: 'ok', action: 'Alert when it’s closed, too' };
 	});
 	let notificationsLocked = $derived(!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied'));
 	/** What the test notification did. */
@@ -175,7 +175,7 @@
 		exporting = true;
 		let saved: Awaited<ReturnType<typeof onexport>>;
 		try {
-			saved = await onexport();
+			saved = await onexport({ privateRooms: exportPrivate });
 		} catch {
 			exportNote = 'The export couldn’t be saved. Try again, or free up memory by closing other tabs.';
 			return;
@@ -183,7 +183,8 @@
 			exporting = false;
 		}
 		const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
-		exportNote = saved ? `Saved ${saved.name}: ${count(saved.messages, 'message')} in ${count(saved.rooms, 'room')}.` : 'Nothing is loaded to export yet.';
+		const leftOut = saved?.privateLeftOut ? `; ${count(saved.privateLeftOut, 'private room')} left out` : '';
+		exportNote = saved ? `Saved ${saved.name}: ${count(saved.messages, 'message')} in ${count(saved.rooms, 'room')}${leftOut}.` : 'Nothing is loaded to export yet.';
 	}
 
 	/** The export reader, in a tab of its own, so this page's session carries on. */
@@ -260,24 +261,13 @@
 <Dialog bind:open title="Preferences" size="lg" closeLabel="Close preferences" backdropCloses flush onclose={preferencesClosed}>
 	<SettingsSections sections={SECTIONS} bind:current={preferencesSection}>
 		<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
-		{#if preferencesSection === 'notifications'}
+		{#if preferencesSection === 'profile'}
 			{#if status}
 				<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} onannounce={(text) => (statusAnswer = text)} disabled={status.disabled} />
 			{/if}
-			{#if pause}
-				<PauseNotifications until={pause.until} {onpause} {onresume} />
-			{/if}
-			<div class="ap-pref-scopes">
-				<CheckList
-					label="Notify me about"
-					options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
-					value={notifyScopes}
-					min={1}
-					onchange={onnotifyscopes}
-				/>
-				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch below turns notifications off.</p>
-			</div>
-			<SettingRow title="Notifications" hint="Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can." class="ap-pref-notifications">
+			{@render profile?.()}
+		{:else if preferencesSection === 'notifications'}
+			<SettingRow title="Notifications" class="ap-pref-notifications">
 				<p class={['ap-pref-note', notificationsNote.tone === 'ok' && 'ap-tone-ok', notificationsNote.tone === 'err' && 'ap-tone-danger']} id="ap-pref-notifications-note">{notificationsNote.text}</p>
 				<p class="ap-pref-test">
 					{#if notificationsNote.action}<Button size="sm" variant="ghost" label={notificationsNote.action} onclick={onwebpush} />{/if}
@@ -306,22 +296,35 @@
 					</Callout>
 				</div>
 			{/if}
+			{#if pause}
+				<PauseNotifications until={pause.until} {onpause} {onresume} />
+			{/if}
+			<div class="ap-pref-scopes">
+				<CheckList
+					label="Notify me about"
+					options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
+					value={notifyScopes}
+					min={1}
+					onchange={onnotifyscopes}
+				/>
+				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch above turns notifications off.</p>
+			</div>
 		{:else if preferencesSection === 'media'}
-			<SettingRow title="Load images from" for="ap-media-policy" stacked class="ap-pref-media-setting">
+			<SettingRow title="Load images from" for="ap-media-policy" hint={mediaNote} hintTestid="media-note" class="ap-pref-media-setting">
 				{#snippet control()}
 					<select id="ap-media-policy" class="ap-field ap-pref-select" value={mediaSettings.policy} onchange={(event) => mediaSettings.update(event.currentTarget.value)} data-testid="media-policy">
 						{#each MEDIA_POLICIES as policy (policy.value)}<option value={policy.value}>{policy.label}</option>{/each}
 					</select>
-					<p class="ap-form-hint ap-pref-media-note" data-testid="media-note">{mediaNote}</p>
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com. Always load adds one." stacked class="ap-pref-media-sites">
+			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com. Each site sees what you load." stacked class="ap-pref-media-sites">
+				{#if mediaHosts.length}<p class="ap-form-hint" data-testid="media-server-origins">Includes origins trusted by the server: {mediaHosts.join(', ')}</p>{/if}
 				{#snippet control()}
 					<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update(mediaSettings.policy, parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
 				{/snippet}
 			</SettingRow>
 		{:else if preferencesSection === 'history'}
-			<SettingRow title="Keep history" for="ap-history-retention" hint="Your rooms open at once after a reload. Accounts only; signing out removes it." class="ap-pref-history-setting">
+			<SettingRow title="Retention" for="ap-history-retention" hint="Signing out deletes stored history." class="ap-pref-history-setting">
 				{#if historyNote}<p class={['ap-pref-note', historyNote.tone === 'err' && 'ap-tone-danger']}>{historyNote.text}</p>{/if}
 				{#snippet control()}
 					<select id="ap-history-retention" class="ap-field ap-pref-select" value={historySettings.retention} onchange={(event) => historySettings.update(event.currentTarget.value)} data-testid="history-retention">
@@ -330,6 +333,7 @@
 				{/snippet}
 			</SettingRow>
 			<SettingRow title="Export chats" hint="Saves what this page has loaded as a .jsonl file.">
+				<label class="ap-pref-check"><input class="ap-checklist-box" type="checkbox" bind:checked={exportPrivate} disabled={exporting} data-testid="export-private" /> Include private rooms</label>
 				{#if exportNote}<p class="ap-pref-note">{exportNote}</p>{/if}
 				{#snippet control()}
 					<Button size="sm" variant="ghost" label={exporting ? 'Exporting…' : 'Export'} disabled={!onexport} aria-disabled={exporting ? 'true' : undefined} aria-busy={exporting ? 'true' : undefined} onclick={exportChats} data-testid="export-chats" />

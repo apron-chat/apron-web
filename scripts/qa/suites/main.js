@@ -20,6 +20,9 @@ import {
 	wait
 } from '../lib/helpers.js';
 
+/** A busy account, for the `-busy` perf probes: 40 more rooms, and a long history in general. */
+const BUSY = { manyRooms: 40, filler: { general: 1500 } };
+
 const own = async (p) => {
 	await send(p, 'A message of my own, to select and edit.');
 	return lastMessage(p);
@@ -80,7 +83,7 @@ export default {
 			name: 'preferences',
 			steps: async (p) => {
 				await roomsPane(p);
-				await pressButton(p, 'Open preferences');
+				await pressButton(p, /^Open preferences/);
 				await wait(p, 400);
 			}
 		},
@@ -88,7 +91,7 @@ export default {
 			name: 'preferences-scrolled',
 			viewports: ['desktop'],
 			steps: async (p) => {
-				await pressButton(p, 'Open preferences');
+				await pressButton(p, /^Open preferences/);
 				await wait(p, 300);
 				await scrollDialogToEnd(p);
 				await wait(p, 200);
@@ -316,13 +319,28 @@ export default {
 	],
 
 	// Perf probes (desktop unless a viewport is given): each runs on a freshly loaded page; `qa perf`
-	// measures frames and layout/style/script time from `action` until `settle` ms after it.
+	// measures frames and layout/style/script time from `action` until `settle` ms after it. The `-busy`
+	// ones load an account at scale (`BUSY`), where costs that grow with rooms or history show.
 	interactions: [
+		{ name: 'load-busy', knobs: BUSY },
+		{ name: 'switch-room-busy', knobs: BUSY, settle: 1000, action: (p) => roomList(p).getByText('room 20', { exact: true }).first().click() },
+		{
+			name: 'send-message-busy',
+			knobs: BUSY,
+			settle: 1000,
+			setup: (p) => composer(p).click(),
+			action: async (p) => {
+				for (const text of ['Shipping it', 'Second thought', 'Done']) {
+					await p.keyboard.type(text);
+					await p.keyboard.press('Enter');
+				}
+			}
+		},
 		{ name: 'sidebar-collapse', action: (p) => button(p, 'Collapse sidebar').click() },
 		{ name: 'member-list-hide', action: (p) => button(p, 'Hide member list').click() },
 		{ name: 'member-list-overlay-open', viewport: VIEWPORTS.tablet, action: (p) => p.getByRole('button', { name: /member list/i }).first().click() },
 		{ name: 'open-thread', settle: 1000, action: (p) => roomList(p).getByText('Deploy checklist', { exact: true }).first().click() },
-		{ name: 'open-preferences', settle: 800, action: (p) => button(p, 'Open preferences').click() },
+		{ name: 'open-preferences', settle: 800, action: (p) => button(p, /^Open preferences/).click() },
 		{
 			name: 'scroll-timeline',
 			settle: 500,

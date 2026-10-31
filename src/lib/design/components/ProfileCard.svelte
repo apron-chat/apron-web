@@ -17,6 +17,8 @@
 	 * what you can do about them.
 	 */
 	interface Props extends PopoverPlacement {
+		/** Closes it: on a phone, a press on the dimmed page behind the sheet. */
+		onclose?: () => void;
 		userId: string;
 		/** Display name; falls back to `userId`. */
 		name?: string;
@@ -81,13 +83,13 @@
 	}
 	let {
 		userId, name, avatar, you = false, status, statusLabel, seen, roles, bio, bioBody, sharesName = false, membership, onmessage, messaging = false, onmention, oncopyid, onaddtoroom, adding = false, note,
-		element = $bindable(), offsetHeight = $bindable(0), statusTestid, seenTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout
+		element = $bindable(), offsetHeight = $bindable(0), statusTestid, seenTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout, onclose
 	}: Props = $props();
 	const shownName = $derived(name || userId);
 	const shown = $derived(presence(status));
 </script>
 
-<Popover label={`Profile of ${shownName}`} {mode} {top} {left} {width} {height} class={['ap-profcard', className]} {testid} {onkeydown} {onfocusout} bind:element bind:offsetHeight>
+<Popover label={`Profile of ${shownName}`} {mode} {top} {left} {width} {height} class={['ap-profcard', className]} {testid} {onkeydown} {onfocusout} {onclose} bind:element bind:offsetHeight>
 	<div class="ap-profcard-who">
 		{#if avatar}{@render avatar()}{:else}<Avatar name={shownName} user_id={userId} size="lg" {status} {statusLabel} />{/if}
 		<div class="ap-profcard-names">

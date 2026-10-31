@@ -96,6 +96,16 @@ waiting while hidden shows nothing either, and the banner's "Still trying to
 reconnect…" also counts only from then, never the time the tab was away (hiding
 the tab mid-reconnect stops the count; a browser offline while the tab shows
 still counts). Its **Try Again** shows the new attempt at once.
+
+The pill is only for the open room or thread, whose newest messages may not be
+shown yet. Once it's current, other rooms still catching up (as after a reload
+or reconnect) show as a thin line running along the foot of the room header,
+on the same timing as the pill and never with it, and the open room's own
+catch-up goes page after page before theirs. Reading back, older messages
+loading show as a pill at the top of the timeline, "Loading earlier messages…"
+(or replies), over where the day floats (which steps aside meanwhile); it takes
+no space either.
+
 Through a quiet reconnect the page stays as it was (a guest who only reads
 keeps reading): the rooms' and member list's + buttons, the Online and Offline headings, the Private section and the
 profile bar's note stay up, and the composer still takes typing, while Send
@@ -431,8 +441,30 @@ rooms and threads, searchable by title or ID (a bare `#` lists them to browse, a
 Enter there still sends; Tab picks); choosing one inserts a chip
 showing `#title` that is sent as `#room_id`, and a typed `#room_id` naming a
 known room collapses into the same chip once finished (it mentions no one).
-Backspace right after either kind of chip turns it back into the text it
-showed (`@Ada Lovelace`, `#Deploy checklist`) to edit. A reply's quote above
+
+The `@` picker also lists the roles ([PROTOCOL.md §3.3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#334-roles))
+held by someone in the room other than you, each with how many people it
+reaches: a role whose name is exactly what's typed comes right after whoever
+it names exactly, and roles whose names start with it come after the people,
+taking whatever room the list has left and keeping up to three places when the
+people fill it. A space after a role's name keeps the picker open only for the
+role it names exactly, as for people, so Enter after `@mo ` sends. `@&` lists
+roles alone, with the typed name highlighted as for people. A role whose name isn't one ID (one with a space, say) isn't
+offered. A picked role becomes a chip showing `@role` with a group outline,
+its tooltip saying how many it mentions, and is sent as `@&role`; a typed
+`@&role` naming such a role collapses into the same chip once finished. A role
+is a label for display, not something the server resolves, so the client
+lists everyone else in the room who holds it (the people the picker draws
+from, so a room whose member listing the server cut short reaches only those
+listed) one by one in `body.mentions`, after the people mentioned before the
+chip and once each, as they hold the role when it is sent or saved. `&` can't
+start an ID ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)),
+so `@&role` mentions no user to any client, and a client that knows nothing
+of it shows the text as written. A rendered body (never inside code), a reply's
+quote and the "Replying to" line show `@&role` as the same chip, which only
+reads, titled with who it's for.
+Backspace right after a chip turns it back into the text it
+showed (`@Ada Lovelace`, `#Deploy checklist`) to edit, a role's into `@&role`. A reply's quote above
 its message and the "Replying to" line above the composer show the replied
 message's first line with its mentions drawn the same way. A fenced
 code block that names a known language (` ```ts `, ` ```py `, ` ```diff `, …)
@@ -461,8 +493,8 @@ outside, or tabbing out closes it. Mentions inside a reply's quote only read,
 since the quote is the button that jumps to its message.
 
 A mention that lands while the tab is hidden or unfocused flashes the tab title
-and plays a soft chime. **Preferences** (the gear beside your profile) starts
-its Notifications section with **Notify me about**, one choice for desktop
+and plays a soft chime. **Preferences** (the profile bar's one button) has a
+Notifications section that starts with **Notify me about**, one choice for desktop
 notifications and push alike, one line per option: Mentions (messages whose
 `body.mentions` list you, or an edit that adds you), Replies to my messages
 (replies to one of your messages that is loaded here; with the replied-to
@@ -566,7 +598,7 @@ app window) where push works for the signed-in account, the same prompt is
 offered as soon as you're signed in, without the mention, since a phone that's
 rarely open may not see one arrive for days, and each device asks for its own
 permission. With the rooms list showing, it sits above the
-profile bar, pointing at the Preferences gear where the switch lives, and says
+profile bar, pointing at the button to Preferences where the switch lives, and says
 so; on phones, or with the list collapsed, it sits above the composer. It
 doesn't take focus from what you're typing; a screen reader reads it as it
 appears. While they're on, a notification replaces the chime (the chime
@@ -701,8 +733,9 @@ font choice is marked experimental, to be replaced by a choice of themes. All
 of these stay on this device; settings aren't synced.
 
 **History** keeps what a signed-in session has loaded on this device, for
-**30 days** unless changed (a day, a week, a year, everything loaded, or not at
-all), and with it how far each joined room is caught up. The next visit shows it
+**30 days** unless **Retention** says otherwise (a day, a week, a year,
+forever, or not at all; its note says only that signing out deletes
+stored history), and with it how far each joined room is caught up. The next visit shows it
 at once and goes on as a reconnect does: each room asks the server only for what
 came after its checkpoint (§4.3.5), and the joined listing only for rooms that
 changed since (`latest_log_id`, §4.2.1); a thread opened again goes on from
@@ -760,7 +793,12 @@ each message's reactions, and the join and leave records, with who you are and
 the users as they were, without their statuses. A quoted message from before
 that, or from another room, goes along only as the quote. Threads listed but
 never opened load their newest page first; older messages of a room are in the
-export only once scrolled back to (or restored on this device). **Open an export** opens `/archive` in a new tab, where a
+export only once scrolled back to (or restored on this device). Private rooms
+(§4.2.4) and the threads in them go only with **Include private rooms**
+checked, which is off each time Preferences opens: without it they, their
+records and anyone known only from them are left out, the threads in them
+aren't loaded first, and the note under Export says how many private rooms
+were left out. **Open an export** opens `/archive` in a new tab, where a
 chosen or dropped export opens in this same app, read-only, against a server in
 the page that serves only that file: it signs in as the export's `you`, as a
 guest who may only read (`ext:permissions` `write: false`), lists its
@@ -1429,11 +1467,12 @@ showing its output). A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
-Media loads from where Preferences, under **Media**, says. **This server and
+Media loads from where Preferences, under **Media**, says. **Server and
 trusted sites**, the default, loads it from the chat server's own origin, the
-origins the server names with `ext:media` (Preferences names them, such as
-`media.apron.chat (trusted by the server)`), and the **Trusted origins** listed
-under it (hosts or URLs, one per line, kept as `https:` origins). **Any site**
+origins the server names with `ext:media` (named above the **Trusted
+origins** field, as "Includes origins trusted by the server: media.apron.chat"),
+and the trusted origins listed in that field (hosts or URLs, one per line, kept
+as `https:` origins). **Any site**
 loads it from anywhere; the trusted origins stay listed for when the default is
 chosen again. Earlier versions' choices carry over: Default, This server only and
 This server and sites I add become the default, their sites kept as trusted
@@ -1453,8 +1492,24 @@ The choice is kept on this device, and another tab's applies at once. Live
 text URLs load only from the server's own origin, whatever the choice; links may
 point anywhere `http(s)`.
 
-**Connect to a server…** in the profile editor (the profile bar at the foot of
-the sidebar, for guests and accounts alike) opens the connect screen: a WebSocket URL or an HTTP(S) server
+The rooms list's head shows the server you're connected to (its avatar, title
+and host, and a ▾ after the title); pressing it opens the **server pane** under
+it (a bottom sheet on phones, over the dimmed page, with a grabber): the
+server's avatar and title (on two lines if it needs them), how the connection
+stands (a green, amber or red dot) beside its host, its `description` rendered
+as CommonMark and sanitized like a message, who you are there ("Signed in as
+Ada", "(guest)" for a guest) with **Edit profile** (Preferences at Profile),
+its address with a copy button, and the protocol version it speaks. Escape, or
+a press outside or on the dimmed page, closes it. At its foot, **Connect to
+another server…** opens the connect screen, and **Disconnect**, at the other
+end in the danger tone, closes the connection, drops what the page held from it
+and opens the connect screen without a Cancel: connecting again, to it or to
+another server, is the way back. What this device kept for it (the saved
+session, its history) stays, so connecting to it again doesn't ask to sign in
+again; a reload connects to it again too. In the preview and an export read on
+`/archive`, the pane has neither.
+
+The connect screen (**Connect to another server…**, for guests and accounts alike) takes a WebSocket URL or an HTTP(S) server
 base URL, a display name, and a sign-in choice among the schemes the server
 advertises (Guest by default; Passkey, below; Email, External and Token, further down). Once the server in the field
 has answered, the top of the form shows it as it shows itself
@@ -1487,13 +1542,25 @@ also sets your avatar: a `/avatar` command carrying one `upload` embed
 server applies it with a `user` notification. **Remove** sends `me` with
 `avatar: ""`.
 
-The profile editor's Sign-in row offers, where the server's `auth` lists them,
-**Sign in with a passkey**, **Sign in with email**, **Sign in externally**,
-**Add email** and **Add external sign-in** to a guest, and **Add passkey**,
-**Add email**, **Add external sign-in** and **Sign out** to a registered
-account. A guest's Add email proposes and approves on the guest's connection,
-which adds the address to the guest's account (§4.11); Sign in with email is a
-sign-in to the address's own account. Adding needs the
+Your profile is the first section of **Preferences**, which the profile bar at
+the foot of the sidebar opens (one button: your avatar and name, a line under it
+that says notifications are paused, else something to do such as "Add a
+sign-in", else your status, else your `@user_id`, and a gear). The section has
+no heading of its own (its tab names it): your status at the top (with
+capability `status`), then rows like the other sections': your avatar, in a
+column beside your **Display name** (the ID under it, "User ID assigned by
+server: @ada") and bio, with **Upload** across the avatar's lower edge (dimmed,
+"Not supported on this server" on hover, where the server takes no uploads),
+and **Revert** and **Save** only while the name or bio differs from what the
+server keeps (Preferences stays open; "Saved." says so a moment); the Sign-in
+row, which says how this session signs in first; and, for an account, "Signed in
+to … as …" with **Sign out** at the end, in the danger tone. A guest's Sign-in
+row is **Sign in** alone, at the end of its hint's line, as the composer offers it where guests can't post: the
+connect screen, at the way the server signs in first, whatever the server's
+`auth` lists (as the composer's). An account's offers, where the server's `auth` lists them,
+**Add passkey**, **Add email** and **Add external sign-in**, and the row after
+it **Sign out**. Add email proposes and approves on the account's connection,
+which adds the address to the account (§4.11). Adding needs the
 scheme in `auth`, since adding is a way back in and a scheme listed only in
 `signup` doesn't sign in (the spec doesn't say whether servers may allow
 adding such a scheme; this client doesn't offer it). With the Go reference server, open
@@ -1637,7 +1704,7 @@ know, or none holds back by method, as without the extension.
 
 Passkeys use the browser's native WebAuthn JSON APIs, with no frontend dependency.
 An up-to-date browser is required; unsupported browsers can still chat as guests.
-Browser cancellation and verification errors appear in the profile editor. A
+Browser cancellation and verification errors appear in Preferences' Profile. A
 connection change cancels the active ceremony. Chat requests pause while a
 ceremony is active, preventing edits from crossing an identity change.
 

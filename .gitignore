@@ -34,3 +34,6 @@ devenv.local.yaml
 
 # Design system bundle output
 /dist-design
+
+# Playwright run outside e2e/playwright.config.ts (which writes to .qa/)
+/test-results
