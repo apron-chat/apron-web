@@ -93,3 +93,22 @@ export function deriveTokens(vars: ReadonlyMap<string, string>): Array<[string, 
 		return [name, l === d ? l : `light-dark(${l}, ${d})`];
 	});
 }
+
+/**
+ * A token's value as it reads in one mode: the half of `light-dark(light, dark)` for that mode, or the value as it is.
+ * For what reads a token back as a color (the browser's chrome, the emoji picker): a custom property's computed value
+ * is its text, `light-dark()` included, which only a color property resolves.
+ */
+export function forMode(value: string, mode: 'light' | 'dark'): string {
+	const pair = /^light-dark\(([\s\S]*)\)$/i.exec(value.trim());
+	if (!pair) return value.trim();
+	// The comma between the halves, not one inside a half's own rgb() or var().
+	let depth = 0;
+	for (let i = 0; i < pair[1].length; i++) {
+		const c = pair[1][i];
+		if (c === '(') depth++;
+		else if (c === ')') depth--;
+		else if (c === ',' && depth === 0) return (mode === 'light' ? pair[1].slice(0, i) : pair[1].slice(i + 1)).trim();
+	}
+	return value.trim();
+}

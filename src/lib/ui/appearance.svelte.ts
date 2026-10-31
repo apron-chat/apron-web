@@ -1,5 +1,5 @@
 import { loadAppearance, saveAppearance } from './storage';
-import { basesError, deriveTokens } from './theme-colors';
+import { basesError, deriveTokens, forMode } from './theme-colors';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 /** A premade theme's id, or `custom` for the CSS written in Preferences. */
@@ -21,7 +21,7 @@ const THEME_VARS_MAX = 100;
  * Values that would load something: a theme only sets tokens, so it fetches
  * nothing beyond Apron's own fonts. app.html repeats this; keep the two in step.
  */
-const UNSAFE_VALUE = /[\\{};!@]|\b(?:url|src|image|image-set|cross-fade|element)\s*\(/i;
+export const UNSAFE_VALUE = /[\\{};!@]|\b(?:url|src|image|image-set|cross-fade|element)\s*\(/i;
 
 /** What a theme without colors of its own shows for them, commented out, so a custom theme starts from them. */
 const COLOR_EXAMPLE = `/* Base colors, as light-dark(light, dark): the rest of the palette follows from them.
@@ -117,9 +117,13 @@ export class AppearanceSettings {
 	load(): void {
 		const stored = loadAppearance();
 		this.current = decodeAppearance(stored);
+		// What app.html set before the first paint is the theme's to replace.
+		const painted = storedVars(stored);
+		applied = painted.map(([name]) => name);
 		const vars = applyAppearance(this.current);
-		// Saved before themes, as fonts: saved again as a custom theme, for app.html's first paint.
-		if (stored && typeof stored === 'object' && !('theme' in stored)) saveAppearance({ ...this.current, vars });
+		// Saved again when what app.html paints first isn't this theme as it is now: saved before themes (as fonts), or
+		// saved by an earlier version of the theme.
+		if (stored && typeof stored === 'object' && (!('theme' in stored) || JSON.stringify(painted) !== JSON.stringify(vars))) saveAppearance({ ...this.current, vars });
 	}
 
 	update(next: AppearancePreferences): void {
@@ -127,11 +131,12 @@ export class AppearanceSettings {
 		saveAppearance({ ...this.current, vars: applyAppearance(this.current) });
 	}
 
-	/** Shows custom CSS as it is edited, without saving it; `revert` goes back to what is saved. False when it doesn't read. */
-	preview(css: string): boolean {
-		if (parseThemeCss(css).error) return false;
+	/** Shows custom CSS as it is edited, without saving it; `revert` goes back to what is saved. Why not, when it doesn't read. */
+	preview(css: string): string | undefined {
+		const { error } = parseThemeCss(css);
+		if (error) return error;
 		applyAppearance({ ...this.current, theme: 'custom', customCss: css });
-		return true;
+		return undefined;
 	}
 
 	revert(): void {
@@ -140,6 +145,16 @@ export class AppearanceSettings {
 }
 
 export const appearanceSettings = new AppearanceSettings();
+
+/** The theme's tokens on the root now, by name; and the mode and tokens last applied, which needn't be again. */
+let applied: string[] = [];
+let appliedKey = '';
+
+/** The tokens a saved appearance carries for app.html, those that are pairs of strings. */
+function storedVars(stored: unknown): ThemeVars {
+	const vars = stored && typeof stored === 'object' ? (stored as Record<string, unknown>).vars : undefined;
+	return Array.isArray(vars) ? vars.filter((v): v is [string, string] => Array.isArray(v) && typeof v[0] === 'string' && typeof v[1] === 'string') : [];
+}
 
 /** Reject CSS syntax; accept a single installed family name, not a raw font-family declaration. */
 export function sanitizeFontFamily(value: unknown): string {
@@ -176,7 +191,12 @@ export function parseThemeCss(css: string): { vars: ThemeVars; error?: string } 
 		const value = match[2].replace(/\s+/g, ' ').trim();
 		if (!value) return fail(`${match[1]} needs a value.`);
 		if (UNSAFE_VALUE.test(value)) return fail(`${match[1]} can’t use url(), @, braces, backslashes or !important.`);
-		if (/["']/.test(value.replace(/"[^"]*"|'[^']*'/g, ''))) return fail(`${match[1]} has an unclosed quote.`);
+		const bare = value.replace(/"[^"]*"|'[^']*'/g, '');
+		if (/["']/.test(bare)) return fail(`${match[1]} has an unclosed quote.`);
+		// The browser drops a value whose brackets don't pair, so it would apply as nothing.
+		let depth = 0;
+		for (const c of bare) if ((depth += c === '(' ? 1 : c === ')' ? -1 : 0) < 0) break;
+		if (depth !== 0) return fail(`${match[1]} has a bracket that isn’t closed or opened.`);
 		vars.delete(match[1]);
 		vars.set(match[1], value);
 	}
@@ -210,19 +230,28 @@ export function decodeAppearance(value: unknown): AppearancePreferences {
 function applyAppearance(preferences: AppearancePreferences): ThemeVars {
 	const { vars } = parseThemeCss(cssForTheme(preferences));
 	if (typeof document === 'undefined') return vars;
+	// Unchanged (a keystroke in a comment): restyling the page again would change nothing.
+	const key = JSON.stringify([preferences.mode, vars]);
+	if (key === appliedKey) return vars;
+	appliedKey = key;
 	const root = document.documentElement;
 	if (preferences.mode === 'system') delete root.dataset.theme;
 	else root.dataset.theme = preferences.mode;
-	// The root's inline custom properties are all the theme's (app.html sets them before the first paint).
-	for (const name of [...root.style].filter((name) => name.startsWith('--'))) root.style.removeProperty(name);
+	// Only the theme's own tokens go, never what else sets on the root (the keyboard's --app-height and --app-top).
+	const names = new Set(vars.map(([name]) => name));
+	for (const name of applied) if (!names.has(name)) root.style.removeProperty(name);
 	for (const [name, value] of vars) root.style.setProperty(name, value);
-	// The browser's own chrome takes the chosen mode's ground too, or the theme's; System restores app.html's. Only
-	// then is it read: reading computed style here would lay out the page before it has rendered.
-	const themed = preferences.mode !== 'system' || vars.some(([name]) => name === '--bg-100');
-	const ground = themed ? getComputedStyle(root).getPropertyValue('--bg-100').trim() : '';
+	applied = [...names];
+	// The browser's own chrome takes the theme's ground, each of app.html's tags its mode's half, or with a mode chosen,
+	// that mode's ground; System and no ground of the theme's restores app.html's. tokens.css's is read only for a chosen
+	// mode: reading computed style here would lay out the page before it has rendered.
+	const ground = vars.find(([name]) => name === '--bg-100')?.[1];
+	const tuned = !ground && preferences.mode !== 'system' ? getComputedStyle(root).getPropertyValue('--bg-100').trim() : '';
 	for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
 		meta.dataset.system ??= meta.content;
-		meta.content = !ground ? meta.dataset.system : ground;
+		const mode = preferences.mode !== 'system' ? preferences.mode : (meta.getAttribute('media') ?? '').includes('light') ? 'light' : 'dark';
+		const color = ground ? forMode(ground, mode) : tuned;
+		meta.content = color && !color.includes('var(') ? color : meta.dataset.system;
 	}
 	return vars;
 }

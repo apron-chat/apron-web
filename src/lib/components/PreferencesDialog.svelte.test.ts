@@ -187,6 +187,25 @@ describe('PreferencesDialog', () => {
 		expect(css()).toBeNull();
 		choose('custom');
 		expect(css()!.value).toBe('--accent: #3cb4f2;');
+
+		// CSS that stops reading as it's typed leaves the last that did on show, and says so quietly.
+		css()!.value = '--accent: #123456; --line: (';
+		css()!.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		expect(document.getElementById('ap-theme-css-error')?.textContent).toMatch(/^Not showing yet: --line/);
+		expect(document.getElementById('ap-theme-css-error')?.getAttribute('role')).toBeNull();
+		expect(css()!.getAttribute('aria-describedby')).toBe('ap-theme-css-hint ap-theme-css-error');
+		expect(root.style.getPropertyValue('--accent')).toBe('#3cb4f2');
+
+		// Closing Preferences with edits not applied puts back what's kept.
+		css()!.value = '--accent: #123456;';
+		css()!.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('#123456');
+		document.querySelector('dialog')!.dispatchEvent(new Event('close'));
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('#3cb4f2');
+		expect(appearanceSettings.current.customCss).toBe('--accent: #3cb4f2;');
 		appearanceSettings.update({ ...DEFAULT_APPEARANCE });
 	});
 });

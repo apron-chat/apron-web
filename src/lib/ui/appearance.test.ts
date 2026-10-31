@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cssForTheme, decodeAppearance, DEFAULT_APPEARANCE, parseThemeCss, sanitizeFontFamily, THEME_CSS_MAX, THEMES } from './appearance.svelte';
+import html from '../../app.html?raw';
+import { cssForTheme, decodeAppearance, DEFAULT_APPEARANCE, parseThemeCss, sanitizeFontFamily, THEME_CSS_MAX, THEMES, UNSAFE_VALUE } from './appearance.svelte';
 
 describe('appearance preferences', () => {
 	it('defaults to the system mode and the Apron theme', () => {
@@ -69,10 +70,16 @@ describe('theme CSS', () => {
 			'@import "x.css"; --a: b;',
 			'--a: b; /* open',
 			'--base-ground: red; --base-ink: #fff;',
+			'--accent: red);',
+			'--accent: rgb(1, 2, 3;',
 			'--base-ground: light-dark(#fff, #000);',
 			'x'.repeat(THEME_CSS_MAX + 1)
 		]) {
 			expect(parseThemeCss(css), css).toMatchObject({ vars: [], error: expect.any(String) });
 		}
+	});
+
+	it('checks values in app.html, before the first paint, as the parser does', () => {
+		expect(html).toContain(`!/${UNSAFE_VALUE.source}/${UNSAFE_VALUE.flags}.test(value)`);
 	});
 });

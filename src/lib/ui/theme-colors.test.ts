@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseThemeCss, THEMES } from './appearance.svelte';
-import { contrast, deriveTokens, readBase } from './theme-colors';
+import { contrast, deriveTokens, forMode, readBase } from './theme-colors';
 
 /** One mode's color of a token a theme sets: `light-dark()`'s half, or the one color. */
 function color(vars: Map<string, string>, name: string, mode: 'light' | 'dark') {
@@ -39,5 +39,13 @@ describe('theme colors', () => {
 				for (const groundName of ['--bg-100', '--bg-200']) expect(contrast(color(vars, '--line-strong', mode), color(vars, groundName, mode)), `${theme.id} --line-strong on ${groundName} ${mode}`).toBeGreaterThanOrEqual(3);
 			}
 		}
+	});
+
+	it('reads a token as one mode shows it: its half of light-dark(), or the value as it is', () => {
+		expect(forMode('light-dark(#fff0f6, #2a1426)', 'light')).toBe('#fff0f6');
+		expect(forMode(' light-dark(#fff0f6, #2a1426) ', 'dark')).toBe('#2a1426');
+		// The comma between the halves, not one inside a half.
+		expect(forMode('light-dark(rgb(1, 2, 3), rgb(4, 5, 6))', 'dark')).toBe('rgb(4, 5, 6)');
+		expect(forMode('#123456', 'dark')).toBe('#123456');
 	});
 });

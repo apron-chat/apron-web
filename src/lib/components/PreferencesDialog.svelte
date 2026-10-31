@@ -77,6 +77,8 @@
 	/** The theme's CSS as edited; applying it makes it the custom theme. */
 	let themeDraft = $state('');
 	let themeError = $state('');
+	/** Why the CSS as typed isn't on show, while it doesn't read. */
+	let draftError = $state('');
 	let themeEdited = $derived(themeDraft !== cssForTheme(appearanceSettings.current));
 	let testNotificationStatus = $state<'idle' | 'sending' | NotificationTestResult>('idle');
 	/** What the last export saved. */
@@ -156,6 +158,7 @@
 		untrack(() => {
 			themeDraft = cssForTheme(appearanceSettings.current);
 			themeError = '';
+			draftError = '';
 			testNotificationStatus = 'idle';
 			exportNote = undefined;
 		});
@@ -210,6 +213,7 @@
 		themeDraft = cssForTheme(appearanceSettings.current);
 		// A saved custom theme that doesn't read (edited in storage) applies nothing, and says why.
 		themeError = theme === 'custom' ? (parseThemeCss(customCss).error ?? '') : '';
+		draftError = '';
 	}
 
 	/** Edited CSS becomes the custom theme. */
@@ -222,17 +226,22 @@
 		}
 		appearanceSettings.update({ ...appearanceSettings.current, theme: 'custom', customCss: themeDraft });
 		themeError = '';
+		draftError = '';
 	}
 
-	/** The CSS shows as it's typed, whenever it reads; Apply saves it. */
+	/**
+	 * The CSS shows as it's typed, whenever it reads; Apply saves it. While it doesn't, the last that did stays on
+	 * show, and the error says why, quietly (it's announced on Apply, not on every keystroke).
+	 */
 	function editTheme(): void {
 		themeError = '';
-		appearanceSettings.preview(themeDraft);
+		draftError = appearanceSettings.preview(themeDraft) ?? '';
 	}
 
 	function discardTheme(): void {
 		themeDraft = cssForTheme(appearanceSettings.current);
 		themeError = '';
+		draftError = '';
 		appearanceSettings.revert();
 	}
 
@@ -339,7 +348,7 @@
 					</select>
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Theme" for="ap-theme" hint="Fonts and other design tokens, over either mode. A theme’s fonts need to be installed on this device. Custom starts from the theme you had." class="ap-pref-theme-setting">
+			<SettingRow title="Theme" for="ap-theme" hint="Fonts and other design tokens, over either mode. Custom starts from the theme you had." class="ap-pref-theme-setting">
 				{#snippet control()}
 					<select
 						id="ap-theme"
@@ -357,8 +366,9 @@
 					<p class="ap-form-hint" id="ap-theme-css-hint">Edits show as you type; Apply keeps them. Only <code>--token: value;</code> declarations are read, colors can be <code>light-dark(light, dark)</code>, and nothing loads with <code>url()</code>.</p>
 					{#snippet control()}
 						<form onsubmit={applyTheme}>
-							<textarea id="ap-theme-css" class="ap-field ap-pref-css" rows="12" spellcheck="false" autocomplete="off" maxlength={THEME_CSS_MAX} aria-describedby="ap-theme-css-hint" aria-invalid={themeError ? 'true' : undefined} bind:value={themeDraft} oninput={editTheme} data-testid="theme-css"></textarea>
-							{#if themeError}<p class="ap-pref-note ap-tone-danger" role="alert">{themeError}</p>{/if}
+							<textarea id="ap-theme-css" class="ap-field ap-pref-css" rows="12" spellcheck="false" autocomplete="off" maxlength={THEME_CSS_MAX} aria-describedby={['ap-theme-css-hint', (themeError || draftError) && 'ap-theme-css-error'].filter(Boolean).join(' ')} aria-invalid={themeError || draftError ? 'true' : undefined} bind:value={themeDraft} oninput={editTheme} data-testid="theme-css"></textarea>
+							{#if themeError}<p class="ap-pref-note ap-tone-danger" id="ap-theme-css-error" role="alert">{themeError}</p>
+							{:else if draftError}<p class="ap-pref-note" id="ap-theme-css-error">Not showing yet: {draftError}</p>{/if}
 							<div class="ap-pref-theme-actions">
 								<Button size="sm" variant="ghost" label="Discard changes" disabled={!themeEdited} onclick={discardTheme} />
 								<Button type="submit" size="sm" variant="primary" label="Apply" disabled={!themeEdited} />
