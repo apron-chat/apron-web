@@ -1,4 +1,5 @@
 import { canEdit, canManageRooms, canReact, capabilitiesOf, type ChatClient, type ClientSnapshot, type RoomSnapshot } from '$lib/protocol/client';
+import type { ConnectionStatus } from '$lib/protocol/client-types';
 import type { Identity, ServerParams } from '$lib/protocol/types';
 import { connectionStateOf, isSessionReady, reconnectErrorOf } from './connection';
 
@@ -20,6 +21,60 @@ export const blankSnapshot = (): ClientSnapshot => ({
 	status: 'idle', authenticated: false, capabilities: capabilitiesOf(undefined), rooms: [], pending: [], typing: [], users: {}, recordedUsers: {}, userAliases: {}, uploads: {}, threadDirectory: {}, showReconnectDivider: false
 });
 
+/** The same values in the same order, item by item: the same list, though the client made it afresh. */
+const sameItems = <T>(a: readonly T[] | undefined, b: readonly T[] | undefined): boolean => a === b || Boolean(a && b && a.length === b.length && a.every((item, index) => item === b[index]));
+
+/**
+ * The parts of the client's snapshot that the session's own views read, each as state of its own. Each snapshot is a
+ * new object, and setting state marks everything that reads it, and everything below that however deep, to be
+ * checked again, even where nothing comes out different: holding the snapshot whole, every message marked the rooms
+ * pane, the open room, the server's capabilities and each message's controls with them. A part set to what it
+ * already was (the same object, or a fresh copy of equal value: the capabilities, the sign-in methods, a list of the
+ * same rooms) marks nothing.
+ */
+class SnapshotParts {
+	status = $state.raw<ConnectionStatus>('idle');
+	authenticated = $state.raw(false);
+	you = $state.raw<ClientSnapshot['you']>();
+	error = $state.raw<string | undefined>();
+	server = $state.raw<ClientSnapshot['server']>();
+	capabilities = $state.raw<ClientSnapshot['capabilities']>(capabilitiesOf(undefined));
+	rooms = $state.raw<RoomSnapshot[]>([]);
+	/** Whether any room is listed: what the views that only ask that read, rather than the rooms, which change with each message. */
+	anyRooms = $state.raw(false);
+	activeRoom = $state.raw<string | undefined>();
+	roomsListed = $state.raw<boolean | undefined>();
+	readOnly = $state.raw<boolean | undefined>();
+	passkeySession = $state.raw<boolean | undefined>();
+	signedInWith = $state.raw<ClientSnapshot['signedInWith']>();
+	signInMethods = $state.raw<ClientSnapshot['signInMethods']>();
+	signInNeeded = $state.raw<ClientSnapshot['signInNeeded']>();
+	held = $state.raw<boolean | undefined>();
+	disconnectedAt = $state.raw<number | undefined>();
+	retryingSince = $state.raw<number | undefined>();
+	take(next: ClientSnapshot): void {
+		this.status = next.status;
+		this.authenticated = next.authenticated;
+		this.you = next.you;
+		this.error = next.error;
+		this.server = next.server;
+		const capabilities = this.capabilities;
+		if ((Object.keys(next.capabilities) as (keyof typeof capabilities)[]).some((key) => next.capabilities[key] !== capabilities[key])) this.capabilities = next.capabilities;
+		if (!sameItems(this.rooms, next.rooms)) this.rooms = next.rooms;
+		this.anyRooms = next.rooms.length > 0;
+		this.activeRoom = next.activeRoom;
+		this.roomsListed = next.roomsListed;
+		this.readOnly = next.readOnly;
+		this.passkeySession = next.passkeySession;
+		this.signedInWith = next.signedInWith;
+		if (!sameItems(this.signInMethods, next.signInMethods)) this.signInMethods = next.signInMethods;
+		this.signInNeeded = next.signInNeeded;
+		this.held = next.held;
+		this.disconnectedAt = next.disconnectedAt;
+		this.retryingSince = next.retryingSince;
+	}
+}
+
 /**
  * The page's view of the protocol client. The client rebuilds its rooms and
  * identity from each new connection, so while a reconnect is in flight (and
@@ -29,7 +84,9 @@ export const blankSnapshot = (): ClientSnapshot => ({
  */
 export class SessionView {
 	// Snapshots are immutable values from the client: raw state avoids proxying them and keeps identity comparisons honest.
+	// Each is new, so whatever reads it is checked again with every one: the views here read its parts (`live`) instead.
 	snapshot = $state.raw<ClientSnapshot>(blankSnapshot());
+	private live = new SnapshotParts();
 	/** True once a dropped connection has stayed down for RECONNECT_STALL_MS while someone could see it. */
 	stalled = $state(false);
 	/**
@@ -51,32 +108,32 @@ export class SessionView {
 	/** The last ready snapshot of this session: what a quiet reconnect keeps showing of how you're signed in. */
 	private lastReady = $state.raw<ClientSnapshot | undefined>();
 
-	readonly ready = $derived(isSessionReady(this.snapshot));
-	readonly connection = $derived(connectionStateOf(this.snapshot));
-	readonly reconnectError = $derived(reconnectErrorOf(this.snapshot));
+	readonly ready = $derived(isSessionReady(this.live));
+	readonly connection = $derived(connectionStateOf(this.live));
+	readonly reconnectError = $derived(reconnectErrorOf(this.live));
 	/** A reconnect that has stalled past the quiet window, or one the server refused. */
 	readonly reconnectNeedsAttention = $derived(this.connection === 'reconnecting' && (this.stalled || Boolean(this.reconnectError)));
 	/**
 	 * The session is still coming up: its rooms aren't listed yet, and nothing has gone wrong (offline, a refused
 	 * sign-in, a stalled reconnect). The page shows placeholders then, not "Not signed in" or "No rooms yet".
 	 */
-	readonly starting = $derived(!this.snapshot.roomsListed && this.snapshot.status !== 'offline' && !this.snapshot.signInNeeded && !this.reconnectNeedsAttention && !this.reconnectError);
+	readonly starting = $derived(!this.live.roomsListed && this.live.status !== 'offline' && !this.live.signInNeeded && !this.reconnectNeedsAttention && !this.reconnectError);
 	// `held` is read last: hold() replaces it with each snapshot, and a ready session with its rooms listed, which
 	// doesn't depend on it then, isn't marked to be checked again (with everything that reads the rooms) each time.
-	private readonly holding = $derived((!this.ready || this.snapshot.rooms.length === 0) && this.snapshot.status !== 'offline' && Boolean(this.held));
-	readonly rooms = $derived(this.snapshot.rooms.length ? this.snapshot.rooms : this.holding ? this.held!.rooms : []);
-	readonly activeRoomId = $derived(this.snapshot.rooms.length ? this.snapshot.activeRoom : this.holding ? this.held!.activeRoom : undefined);
-	readonly you = $derived(this.snapshot.you ?? (this.holding ? this.held!.you : undefined));
-	readonly server = $derived(this.snapshot.server ?? (this.holding ? this.held!.server : undefined));
+	private readonly holding = $derived((!this.ready || !this.live.anyRooms) && this.live.status !== 'offline' && Boolean(this.held));
+	readonly rooms = $derived(this.live.anyRooms ? this.live.rooms : this.holding ? this.held!.rooms : []);
+	readonly activeRoomId = $derived(this.live.anyRooms ? this.live.activeRoom : this.holding ? this.held!.activeRoom : undefined);
+	readonly you = $derived(this.live.you ?? (this.holding ? this.held!.you : undefined));
+	readonly server = $derived(this.live.server ?? (this.holding ? this.held!.server : undefined));
 	/** The whole view is the held one: the rooms aren't listed again yet. */
-	readonly showingHeld = $derived(this.holding && this.snapshot.rooms.length === 0);
+	readonly showingHeld = $derived(this.holding && !this.live.anyRooms);
 	/**
 	 * Disconnected while the page is hidden: the client waits for it to be shown before connecting again, and nobody
 	 * is watching, so nothing says a reconnect is under way.
 	 */
-	readonly waitingToReconnect = $derived(this.snapshot.disconnectedAt !== undefined && this.snapshot.retryingSince === undefined);
+	readonly waitingToReconnect = $derived(this.live.disconnectedAt !== undefined && this.live.retryingSince === undefined);
 	/** A reconnect from a ready session that needs nobody yet: the page keeps everything as it was meanwhile. */
-	readonly reconnectingQuietly = $derived(this.connection === 'reconnecting' && !this.reconnectNeedsAttention && !this.snapshot.held && this.lastReady !== undefined);
+	readonly reconnectingQuietly = $derived(this.connection === 'reconnecting' && !this.reconnectNeedsAttention && !this.live.held && this.lastReady !== undefined);
 	/**
 	 * Ready, or reconnecting quietly: controls that come and go with the session (a room's +, the member list's
 	 * sections, the composer's field) stay as they were, rather than blinking out and back with a short drop.
@@ -84,13 +141,13 @@ export class SessionView {
 	 */
 	readonly steady = $derived(this.ready || this.reconnectingQuietly);
 	/** The server's capabilities, kept from before through a reconnect until the new connection says otherwise. */
-	readonly capabilities = $derived(this.snapshot.server || !this.holding ? this.snapshot.capabilities : capabilitiesOf(this.server));
+	readonly capabilities = $derived(this.live.server || !this.holding ? this.live.capabilities : capabilitiesOf(this.server));
 	/** Signed in to an account (passkey, email, token), kept through a quiet reconnect. */
-	readonly passkeySession = $derived(this.snapshot.passkeySession || (this.reconnectingQuietly && Boolean(this.lastReady?.passkeySession)));
+	readonly passkeySession = $derived(this.live.passkeySession || (this.reconnectingQuietly && Boolean(this.lastReady?.passkeySession)));
 	/** How this account signs in, as `ClientSnapshot.signInMethods`, kept through a quiet reconnect. */
-	readonly signInMethods = $derived(this.snapshot.signInMethods ?? (this.reconnectingQuietly ? this.lastReady?.signInMethods : undefined));
+	readonly signInMethods = $derived(this.live.signInMethods ?? (this.reconnectingQuietly ? this.lastReady?.signInMethods : undefined));
 	/** How this session signed in, as `ClientSnapshot.signedInWith`, kept through a quiet reconnect. */
-	readonly signedInWith = $derived(this.snapshot.signedInWith ?? (this.reconnectingQuietly ? this.lastReady?.signedInWith : undefined));
+	readonly signedInWith = $derived(this.live.signedInWith ?? (this.reconnectingQuietly ? this.lastReady?.signedInWith : undefined));
 	/**
 	 * A freshly listed room starts empty while history recovers; its held copy
 	 * stays on screen until the recovered timeline replaces it.
@@ -171,7 +228,7 @@ export class SessionView {
 	/** Create and update rooms and threads (capability `rooms`). */
 	readonly canManageRooms = $derived(canManageRooms(this.server));
 	/** You only read (`ext:permissions` with `write: false`): no composer, reactions, joins, or new threads. */
-	readonly readOnly = $derived(Boolean(this.snapshot.readOnly) || (this.reconnectingQuietly && Boolean(this.lastReady?.readOnly)));
+	readonly readOnly = $derived(Boolean(this.live.readOnly) || (this.reconnectingQuietly && Boolean(this.lastReady?.readOnly)));
 	/** Reaction chips and the React action (capability `reactions`). */
 	readonly canReact = $derived(canReact(this.server));
 
@@ -197,6 +254,7 @@ export class SessionView {
 	apply(next: ClientSnapshot, client: ChatClient): void {
 		const wasReady = isSessionReady(this.snapshot) && this.snapshot.rooms.length > 0;
 		this.snapshot = next;
+		this.live.take(next);
 		// A view held for someone else (kept on this device for the account that was signed in) isn't this one's.
 		if (this.held?.you && next.you && this.held.you.user_id !== next.you.user_id) this.forget();
 		// Kept only through a drop (`disconnectedAt`): a restart, a sign-out or a sign-in elsewhere starts over.
