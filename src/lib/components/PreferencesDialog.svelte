@@ -99,13 +99,8 @@
 	/** Export's Include private rooms: off each time Preferences opens, so private rooms go only when asked for. */
 	let exportPrivate = $state(false);
 
-	/** What the chosen media policy loads, under it: the server, and the sites it trusts, by name. */
-	let mediaNote = $derived.by(() => {
-		if (mediaSettings.policy === 'any') return 'Everything, from any site.';
-		const server = serverHost ?? 'this server';
-		const trusted = mediaHosts.length ? `, ${mediaHosts.join(', ')} (trusted by the server)` : '';
-		return `From ${server}${trusted} and the origins below. Other images wait for a click.`;
-	});
+	/** What the chosen media policy loads, under it: the server, by name, and the trusted origins. */
+	let mediaNote = $derived(mediaSettings.policy === 'any' ? 'Everything, from any site.' : `From ${serverHost ?? 'this server'} and the trusted origins below. Other images wait for a click.`);
 	/** The trusted origins, one per line as hosts, as the field shows them. */
 	let addedSites = $derived(mediaSettings.origins.map((origin) => new URL(origin).host).join('\n'));
 
@@ -317,7 +312,8 @@
 					</select>
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com. Always load adds one." stacked class="ap-pref-media-sites">
+			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com." stacked class="ap-pref-media-sites">
+				{#if mediaHosts.length}<p class="ap-form-hint" data-testid="media-server-origins">Includes origins trusted by the server: {mediaHosts.join(', ')}</p>{/if}
 				{#snippet control()}
 					<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update(mediaSettings.policy, parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
 				{/snippet}

@@ -1342,9 +1342,10 @@ being written.
 
 Media loads from where Preferences, under **Media**, says. **Server and
 trusted sites**, the default, loads it from the chat server's own origin, the
-origins the server names with `ext:media` (Preferences names them, such as
-`media.apron.chat (trusted by the server)`), and the **Trusted origins** listed
-under it (hosts or URLs, one per line, kept as `https:` origins). **Any site**
+origins the server names with `ext:media` (named above the **Trusted
+origins** field, as "Includes origins trusted by the server: media.apron.chat"),
+and the trusted origins listed in that field (hosts or URLs, one per line, kept
+as `https:` origins). **Any site**
 loads it from anywhere; the trusted origins stay listed for when the default is
 chosen again. Earlier versions' choices carry over: Default, This server only and
 This server and sites I add become the default, their sites kept as trusted

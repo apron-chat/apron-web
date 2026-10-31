@@ -95,7 +95,8 @@ test('an export opened with its images loads them from the sites it names, and n
 	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
 	// Held to the sites it was agreed to load from, whatever Media said, which it names.
 	await expect(preferences.getByTestId('media-policy')).toHaveValue('trusted');
-	await expect(preferences.getByTestId('media-note')).toHaveText('From this server, media.example (trusted by the server) and the origins below. Other images wait for a click.');
+	await expect(preferences.getByTestId('media-note')).toHaveText('From this server and the trusted origins below. Other images wait for a click.');
+	await expect(preferences.getByTestId('media-server-origins')).toHaveText('Includes origins trusted by the server: media.example');
 	await preferences.getByTestId('media-policy').selectOption('any');
 	await expect(preferences.getByTestId('media-note')).toHaveText('Everything, from any site.');
 	await page.keyboard.press('Escape');
@@ -109,7 +110,7 @@ test('Preferences, Media: the server, and the origins the viewer trusts, kept as
 	const preferences = page.getByRole('dialog', { name: 'Preferences' });
 	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
 	await expect(preferences.getByTestId('media-policy')).toHaveValue('trusted');
-	await expect(preferences.getByTestId('media-note')).toHaveText('From this server and the origins below. Other images wait for a click.');
+	await expect(preferences.getByTestId('media-note')).toHaveText('From this server and the trusted origins below. Other images wait for a click.');
 	const sites = preferences.getByTestId('media-sites');
 	await sites.fill('cdn.example\nhttps://img.example/a.png\nhttp://plain.example');
 	await sites.blur();
