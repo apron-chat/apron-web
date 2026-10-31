@@ -47,7 +47,8 @@ function themeCss(fonts: { sans: string; chat: string; mono: string }, colors = 
 
 /**
  * The premade themes, each a different look: the tuned Apron palette, a warm
- * graphite one in Recursive (which Apron carries, fonts.css), and high contrast.
+ * graphite one in Recursive (which Apron carries, fonts.css), a pink one, and
+ * high contrast, black on white like a block print, for e-ink too.
  */
 export const THEMES = [
 	{ id: 'apron', name: 'Apron', css: themeCss({ sans: 'var(--font-sans-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' }) },
@@ -68,8 +69,20 @@ export const THEMES = [
 		)
 	},
 	{
-		id: 'chalk',
-		name: 'Chalk (high contrast)',
+		id: 'gumball',
+		name: 'Gumball',
+		css: themeCss(
+			{ sans: 'ui-rounded, var(--font-sans-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' },
+			`/* Bubblegum pink and plum, links in sour-apple teal: base colors, as light-dark(light, dark). */
+	--base-ground: light-dark(#fff0f6, #2a1426);
+	--base-ink: light-dark(#3b1030, #ffe3f1);
+	--base-accent: light-dark(#cc1f68, #ff7ab8);
+	--base-link: light-dark(#0f6b80, #7fe0e0);`
+		)
+	},
+	{
+		id: 'linocut',
+		name: 'Linocut (high contrast)',
 		css: themeCss(
 			{ sans: 'var(--font-sans-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' },
 			`/* Full-strength text on white or black: base colors, as light-dark(light, dark). */
