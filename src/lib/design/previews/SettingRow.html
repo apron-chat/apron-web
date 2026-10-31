@@ -22,7 +22,7 @@
     control: A.part(A.Switch, { checked: true, label: 'Notifications', describedby: 'note-1', onchange: function () {} }) });
   add(A.SettingRow, { title: 'Mode', for: 'mode-1', hint: 'System follows your operating system’s light or dark preference.', class: 'ap-pref-theme-setting',
     control: A.html('<select id="mode-1" class="ap-field ap-pref-select"><option>System</option><option>Light</option><option>Dark</option></select>') });
-  add(A.SettingRow, { title: 'Theme', for: 'theme-1', hint: 'Fonts and other design tokens, over either mode. A theme’s fonts need to be installed on this device.', class: 'ap-pref-theme-setting',
+  add(A.SettingRow, { title: 'Theme', for: 'theme-1', hint: 'Fonts and other design tokens, over either mode. The first time, Custom starts from the theme you had.', class: 'ap-pref-theme-setting',
     control: A.html('<select id="theme-1" class="ap-field ap-pref-select"><option>Apron</option><option>Ferrous</option><option>Gumball</option><option>Linocut (high contrast)</option><option selected>Custom</option></select>') });
   add(A.SettingRow, { title: 'Theme CSS', for: 'css-1', stacked: true, class: 'ap-pref-theme-css',
     children: A.html('<p class="ap-form-hint">Edits show as you type; Apply keeps them. Only <code>--token: value;</code> declarations are read.</p>'),

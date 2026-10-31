@@ -12,7 +12,7 @@ import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH } from '$lib/ui/notification
  * does with it.
  */
 
-vi.mock('$service-worker', () => ({ base: '/app', build: ['/app/_app/immutable/start.js'], files: ['/app/icon-192.png'], prerendered: [], version: '1700000000000' }));
+vi.mock('$service-worker', () => ({ base: '/app', build: ['/app/_app/immutable/start.js', '/app/_app/immutable/assets/nunito-latin.abc.woff2'], files: ['/app/icon-192.png'], prerendered: [], version: '1700000000000' }));
 
 type Listener = (event: unknown) => void;
 const listeners = new Map<string, Listener>();
@@ -22,12 +22,22 @@ let tabs: Array<{ visibilityState: string; postMessage: ReturnType<typeof vi.fn>
 const setAppBadge = vi.fn(async () => undefined);
 const openWindow = vi.fn(async () => undefined);
 const matchAll = vi.fn(async () => tabs);
+/** The worker's cache, by URL or path. */
+const cached = new Map<string, unknown>();
+const key = (request: unknown) => (typeof request === 'string' ? request : (request as { url: string }).url);
+const cache = {
+	addAll: vi.fn(async (paths: string[]) => paths.forEach((path) => cached.set(path, `cached ${path}`))),
+	match: async (request: unknown) => cached.get(key(request)),
+	put: vi.fn(async (request: unknown, response: unknown) => void cached.set(key(request), response))
+};
 
 beforeAll(async () => {
 	vi.stubGlobal('indexedDB', idb);
+	vi.stubGlobal('caches', { open: async () => cache, match: async () => undefined, keys: async () => [] });
 	vi.stubGlobal('self', {
 		addEventListener: (type: string, listener: Listener) => listeners.set(type, listener),
 		location: { origin: 'https://apron.example' },
+		skipWaiting: async () => undefined,
 		navigator: { setAppBadge, clearAppBadge: vi.fn(async () => undefined) },
 		registration: {
 			showNotification: vi.fn(async (title: string, options: NotificationOptions) => void shown.push({ title, options })),
@@ -130,5 +140,21 @@ describe('the service worker', () => {
 		tabs = [];
 		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
 		expect(openWindow).toHaveBeenCalledWith('/app/#push_room=th1');
+	});
+
+	it('installs the app’s files but not the themes’ fonts, and keeps a font once a theme loads it', async () => {
+		await dispatch('install', {});
+		expect(cache.addAll).toHaveBeenCalledWith(['/app/_app/immutable/start.js', '/app/icon-192.png']);
+		const font = { method: 'GET', mode: 'cors', url: 'https://apron.example/app/_app/immutable/assets/nunito-latin.abc.woff2' };
+		const fetched = { ok: true, clone: () => 'kept font' };
+		vi.stubGlobal('fetch', vi.fn(async () => fetched));
+		let responded: Promise<unknown> | undefined;
+		listeners.get('fetch')!({ request: font, respondWith: (promise: Promise<unknown>) => (responded = promise) });
+		expect(await responded).toBe(fetched);
+		expect(cache.put).toHaveBeenCalledWith(font, 'kept font');
+		// The next time, it's the kept one.
+		listeners.get('fetch')!({ request: font, respondWith: (promise: Promise<unknown>) => (responded = promise) });
+		expect(await responded).toBe('kept font');
+		expect(fetch).toHaveBeenCalledTimes(1);
 	});
 });

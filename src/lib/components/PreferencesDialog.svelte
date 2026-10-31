@@ -348,7 +348,7 @@
 					</select>
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Theme" for="ap-theme" hint="Fonts and other design tokens, over either mode. Custom starts from the theme you had." class="ap-pref-theme-setting">
+			<SettingRow title="Theme" for="ap-theme" hint="Fonts and other design tokens, over either mode. The first time, Custom starts from the theme you had." class="ap-pref-theme-setting">
 				{#snippet control()}
 					<select
 						id="ap-theme"
