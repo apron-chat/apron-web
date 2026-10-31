@@ -203,6 +203,45 @@ describe('sign-in', () => {
 		expect(snapshot.error).toMatch(/email/);
 	});
 
+	it('signs in with an email code after a disconnect, carrying on with the code’s connection', async () => {
+		await latest().greet([], { auth: ['email', 'guest'] });
+		const main = latest();
+		client.disconnect();
+		await settle();
+		expect(snapshot.status).toBe('offline');
+		const side = await propose('ada@example.com', ['email', 'guest']);
+		await approve(side, '418092', { you: { user_id: 'ada', name: 'Ada' }, token: 'st_Hk41' });
+		expect(main.readyState).toBe(FakeSocket.CLOSED);
+		expect(latest()).toBe(side);
+		expect(snapshot.status).toBe('connected');
+		expect(snapshot.you?.user_id).toBe('ada');
+		// Running again: a dropped connection reconnects.
+		side.drop();
+		await vi.advanceTimersByTimeAsync(5_000);
+		expect(latest()).not.toBe(side);
+	});
+
+	it('forgets a session held for a sign-in on a disconnect, and connecting again connects afresh', async () => {
+		await latest().greet([], { auth: ['email', 'guest', 'webauthn'] });
+		const side = await propose('ada@example.com', ['email', 'guest', 'webauthn']);
+		await approve(side, '418092', { you: { user_id: 'ada' } });
+		side.drop();
+		vi.advanceTimersByTime(5_000);
+		const next = latest();
+		next.open();
+		next.receive({ method: 'server', params: { apron: 9, auth: ['email', 'guest', 'webauthn'], capabilities: [] } });
+		await settle();
+		expect(snapshot.held).toBe(true);
+		client.disconnect();
+		await settle();
+		expect(snapshot.held).toBeFalsy();
+		// What the connect screen does for a held session, retrying it, starts a disconnected client.
+		client.retryNow();
+		await settle();
+		expect(latest()).not.toBe(next);
+		expect(snapshot.status).not.toBe('offline');
+	});
+
 	it('adds an email to the signed-in account on the same connection, without changing how it signed in', async () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'], token: 'st_guest' });
 		expect(snapshot.signedInWith).toBe('token');

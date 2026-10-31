@@ -592,6 +592,13 @@ export class ChatClient {
 
 	start(): void {
 		if (this.running) return;
+		this.run();
+		if (this.waitForPresence()) return;
+		this.connectNow();
+	}
+
+	/** Runs, without connecting yet: what `start` does first, and a sign-in after a `disconnect` before it adopts its connection. */
+	private run(): void {
 		this.running = true;
 		this.disconnected = false;
 		this.reconnectHeld = false;
@@ -600,8 +607,6 @@ export class ChatClient {
 		globalThis.document?.addEventListener('visibilitychange', this.visibilityChanged);
 		globalThis.addEventListener?.('online', this.networkReturned);
 		this.hiddenAt = pageHidden() ? this.now() : undefined;
-		if (this.waitForPresence()) return;
-		this.connectNow();
 	}
 
 	stop(): void {
@@ -645,6 +650,9 @@ export class ChatClient {
 	 * for this server: connecting again, here or to another server, or signing in, starts it again.
 	 */
 	disconnect(): void {
+		// Nothing is held for a sign-in any more: connecting again connects afresh.
+		this.reconnectHeld = false;
+		this.signInNeeded = undefined;
 		this.stop();
 		this.disconnected = true;
 	}
@@ -682,7 +690,10 @@ export class ChatClient {
 	 * restarts from its shortest delay.
 	 */
 	retryNow(): void {
-		if (!this.running) return;
+		if (!this.running) {
+			if (this.disconnected) this.start();
+			return;
+		}
 		if (this.retryAfterRemaining()) {
 			this.emit();
 			return;
@@ -1201,9 +1212,9 @@ export class ChatClient {
 		return this.approveSignIn(connection, scheme, secret, { beforeSwitch: options.beforeSwitch, retryable: false, state: options.state, method });
 	}
 
-	/** Throws unless a sign-in approval may start now: the client runs, and none is in flight. */
+	/** Throws unless a sign-in approval may start now: the client runs (or was disconnected, which it starts), and none is in flight. */
 	private checkApproval(): void {
-		if (!this.running) throw new Error('Connect to the server first');
+		if (!this.running && !this.disconnected) throw new Error('Connect to the server first');
 		if (this.approvalInFlight) throw new Error('Already signing in; wait for it to finish');
 	}
 
@@ -1234,6 +1245,8 @@ export class ChatClient {
 				this.closeSignInConnection(connection);
 				throw new Error('Server authentication response did not include an identity');
 			}
+			// Disconnected at the viewer's asking, signing in connects again, on this connection.
+			if (!this.running && this.disconnected) this.run();
 			if (!this.running) {
 				this.closeSignInConnection(connection);
 				throw new Error('Connection stopped');

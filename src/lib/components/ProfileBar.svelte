@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { preferencesDialog } from './lazy';
 	import { preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { pausedUntilLabel } from '$lib/ui/pause';
@@ -165,6 +165,8 @@
 	/** The name or bio differs from what the server keeps: Save and Revert show. */
 	let dirty = $derived(draft.trim() !== openedWith.trim() || (canSetBio && bioDraft.trim() !== bioOpenedWith.trim()));
 	let savedTimer: ReturnType<typeof setTimeout> | undefined;
+	/** A guest's Sign in, which takes focus when Sign out goes. */
+	let signInButton = $state<HTMLButtonElement>();
 	// "Saved." says so a moment, then goes.
 	$effect(() => {
 		if (status !== 'saved') return;
@@ -281,6 +283,11 @@
 				passkeyNotice = 'Passkey saved. This server will ask your device next time.';
 			}
 			resetDraft();
+			if (action === 'logout') {
+				// Sign out went with the account: focus goes to the guest's Sign in that took its place.
+				await tick();
+				signInButton?.focus();
+			}
 		} catch (cause) {
 			passkeyError = passkeyMessage(cause);
 		}
@@ -342,9 +349,25 @@
 		void continueAddEmail();
 	}
 
+	/** Whose name and bio the form holds: another identity (signed out, signed in elsewhere) starts it afresh. */
+	let formFor: string | undefined;
+	$effect(() => {
+		const id = you?.user_id;
+		untrack(() => {
+			if (id === undefined || id === formFor) return;
+			const first = formFor === undefined;
+			formFor = id;
+			if (!first || !dirty) resetDraft();
+		});
+	});
+
+	/** Back to what the server keeps for whoever this session is now: the name and the bio. */
 	function resetDraft(): void {
 		draft = you?.name || displayName;
 		openedWith = draft;
+		bioDraft = bioOf(you) ?? '';
+		bioOpenedWith = bioDraft;
+		bioError = '';
 		if (status === 'declined') status = 'idle';
 	}
 
@@ -399,12 +422,16 @@
 	/** Sends the bio, if it changed, then the handle with `name`; the editor then shows what the server actually kept. */
 	async function save(): Promise<void> {
 		const requested = draft.trim();
-		if (!requested) return;
+		// Enter in the name with nothing changed submits too: nothing to send.
+		if (!requested || !dirty) return;
 		if (!(await saveBio())) return;
 		displayName = requested;
 		saveDisplayName(requested);
 		const handle = client.setDisplayName(requested);
 		if (!handle) {
+			// Not signed in yet: the name goes with the next `auth`, so it is what the form starts from now.
+			draft = requested;
+			openedWith = requested;
 			status = 'saved';
 			return;
 		}
@@ -458,7 +485,7 @@
 			<!-- A guest: signing in, as the composer offers it where guests can't post, at the row's end; the connect screen picks the way. -->
 			<span class="ap-profedit-inline">
 				{@render signinHint()}
-				<button class="ap-btn ap-btn-primary ap-btn-sm" type="button" disabled={status === 'saving'} onclick={() => signIn()}>Sign in</button>
+				<button class="ap-btn ap-btn-primary ap-btn-sm" type="button" bind:this={signInButton} disabled={status === 'saving'} onclick={() => signIn()}>Sign in</button>
 			</span>
 		{/if}
 		{#if addEmail}
