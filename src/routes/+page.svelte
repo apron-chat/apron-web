@@ -2444,9 +2444,12 @@
 		return { name: senderName(target), text: messageSnippet(target) };
 	}
 
-	/** A message's reaction chips, from the timeline of the room it lives in. */
+	/**
+	 * A message's reaction chips, from the timeline of the room it lives in: that room on its own (`session.room`), so
+	 * a message drawn on screen isn't worked out again with each change in another room.
+	 */
 	function reactionsFor(event: MessageRecord): ReactionChip[] {
-		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
+		const room = session.room(event.room_id);
 		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.emojiImage);
 	}
 

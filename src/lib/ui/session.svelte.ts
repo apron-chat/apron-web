@@ -185,7 +185,7 @@ export class SessionView {
 	 * stays on screen until the recovered timeline replaces it.
 	 */
 	private readonly standIn = $derived.by(() => {
-		const live = this.rooms.find((room) => room.id === this.activeRoomId);
+		const live = this.room(this.activeRoomId);
 		// Only a room with nothing to show yet, or waiting for its threads, has a stand-in: the held view isn't read
 		// otherwise, so replacing it (each snapshot) doesn't mark the open room, and all that reads it, to check again.
 		if (!live || (!showsNothingYet(live) && this.awaitingThreads !== live.id)) return undefined;
@@ -205,13 +205,16 @@ export class SessionView {
 		const copy = this.held?.rooms.find((room) => room.id === live.id);
 		return copy && copy !== live ? copy : undefined;
 	}
-	readonly activeRoom = $derived(this.standIn ?? this.rooms.find((room) => room.id === this.activeRoomId));
+	// The open room on its own (`room`), not found in the rooms: a message in another room doesn't mark it, and all
+	// that reads it (the timeline, the composer, the member list), to be checked again.
+	readonly activeRoom = $derived(this.standIn ?? this.room(this.activeRoomId));
 
 	/**
 	 * The room with this id in `rooms`, read on its own: a view of one room (a row in the rooms list) is checked
 	 * again when that room changes, rather than with every change to any of them, as it would reading `rooms`.
 	 */
-	room(id: string): RoomSnapshot | undefined {
+	room(id: string | undefined): RoomSnapshot | undefined {
+		if (id === undefined) return undefined;
 		return this.live.anyRooms ? this.live.room(id) : this.rooms.find((room) => room.id === id);
 	}
 	/** The open room on screen is a copy held from before, while the live one catches up: a reconnect, or a reload. */
