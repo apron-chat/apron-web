@@ -206,6 +206,8 @@ export class SessionView {
 			this.pendingActiveRoom = undefined;
 			if (next.activeRoom !== target) client.selectRoom(target);
 		}
+		// Until then, the room on screen catches up first: its history goes before the other rooms'.
+		client.awaitRoom(this.pendingActiveRoom);
 		this.trackStall(next);
 		this.trackQuiet(next);
 	}
@@ -215,6 +217,7 @@ export class SessionView {
 		client.selectRoom(roomId);
 		if (this.holding && this.held) this.held = { ...this.held, activeRoom: roomId };
 		this.pendingActiveRoom = this.holding ? roomId : undefined;
+		client.awaitRoom(this.pendingActiveRoom);
 	}
 
 	/** Drops the held view: the next connection is a different session (a new server, or a sign-out). */

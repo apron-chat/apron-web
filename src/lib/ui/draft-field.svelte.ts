@@ -92,7 +92,7 @@ export class DraftField {
 		this.host = host;
 		this.pickerId = pickerId;
 		this.matches = $derived(this.query === undefined ? [] : this.matching(this.query));
-		this.emojiMatches = $derived(this.emojiFound && this.emojiData ? withCustomEmoji(customEmoji.catalog, this.emojiFound.query, searchEmoji(this.emojiData, this.emojiFound.query), (emoji) => customEmoji.image(emoji).src) : []);
+		this.emojiMatches = $derived(this.emojiFound && this.emojiData ? withCustomEmoji(customEmoji.catalog, this.emojiFound.query, searchEmoji(this.emojiData, this.emojiFound.query), (emoji) => directory.mediaGate.src(customEmoji.image(emoji).src)) : []);
 		this.roomIds = $derived(host.rooms.map((room) => room.id));
 		this.roomMatches = $derived(this.roomFound ? searchRooms(host.rooms, this.roomFound.query) : []);
 		this.pickerOpen = $derived(this.query !== undefined && !host.disabled);

@@ -154,6 +154,7 @@
 	/* Stacking, lowest first. Each is relative to the nearest stacking context: a dialog, opened in the top layer, has its own. */
 	--z-raised: 1;    /* over its neighbors in the flow: a sticky divider or loading pill, an active row's bar, a description's × */
 	--z-float: 2;     /* over those: a message's hover actions, the floating day and loading pill */
+	--z-head: 3;      /* a pane's header, sticky: over what passes under it, with the menus it opens */
 	--z-handle: 4;    /* a panel's resize handle, on its border */
 	--z-menu: 5;      /* menus and pickers opened in place: the profile popover, a menu, autocomplete, a font field's suggestions */
 	--z-toggle: 5;    /* a panel's toggle in the window's corner */

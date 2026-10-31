@@ -7,7 +7,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
@@ -62,6 +62,13 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* A pane's header: the room's, the rooms sidebar's and the member list's, one height and one rule under each. The rule is
    drawn inside it, not a border, so what it centres has its whole height and lands on whole pixels, as the panel toggles do. */
 .ap-roomhead, .ap-shell-sidehead, .ap-memberlist-head { display: flex; align-items: center; gap: var(--space-2); height: var(--header-h); box-sizing: border-box; padding: 0 var(--space-4); box-shadow: inset 0 -1px var(--line); }
+/* Sticky, on a plain ground (the room header's is RoomHeader's), though nothing scrolls them: iOS (26 on) blurs and fades
+   the top edge of a page added to the Home Screen, its status bar with it, unless a fixed or sticky box with a plain
+   background spans that edge; with one there, the status bar takes its color, a private room's plum too. No
+   backdrop-filter on them, which would make that edge glass again. Sticky makes each its own layer, so it's raised, or
+   the menus it opens would go under what follows it. */
+.ap-roomhead, .ap-shell-sidehead, .ap-memberlist-head { position: sticky; top: 0; z-index: var(--z-head); }
+.ap-shell-sidehead, .ap-memberlist-head { background: var(--bg-000); }
 /* A menu's surface: a message's or member's menu, the mention picker, the font picker. */
 .ap-menu, .ap-mpick, .ap-font-options { margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
 /* A floating card's surface: a profile card, the profile editor, a nudge. */
@@ -479,6 +486,10 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-nudge-text { flex: 1; min-width: 0; display: grid; gap: var(--space-0_5); }
 .ap-nudge-title { font-weight: 600; }
 .ap-nudge-detail { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
+/* Steps to follow, under its detail: numbered, each naming what to tap in bold, with its icon where the browser shows one. */
+.ap-nudge-steps { display: grid; gap: var(--space-1); margin: var(--space-1) 0 0; padding-inline-start: var(--space-4); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-nudge-steps b { font-weight: 600; white-space: nowrap; }
+.ap-nudge-glyph { width: 14px; height: 14px; margin-inline: 1px 3px; vertical-align: -2px; }
 .ap-nudge-actions { display: flex; justify-content: flex-end; gap: var(--space-1); }
 .ap-nudge-actions .ap-btn-ghost { color: var(--ink-muted); }
 .ap-nudge-actions .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
@@ -1149,6 +1160,11 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-dialog-lg .ap-dialog-frame { height: 100%; }
 .ap-dialog-head { flex: none; display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6); border-bottom: 1px solid var(--line); }
 .ap-dialog-heading { flex: 1; min-width: 0; display: grid; gap: var(--space-0_5); padding-top: 2px; }
+/* A title with a control beside it (titleEnd), on its line. */
+.ap-dialog-titlerow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--space-1); min-width: 0; }
+/* That control as a word of the title: its size and weight, in the link's blue on its soft ground (as a mention chip), deeper under the pointer. */
+.ap-dialog-titlebtn { margin: 0; padding: 0 var(--space-1_5); border: 0; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font: inherit; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; white-space: nowrap; cursor: pointer; }
+.ap-dialog-titlebtn:hover { background: color-mix(in srgb, var(--denim) 22%, var(--denim-soft)); }
 .ap-dialog-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; overflow-wrap: anywhere; }
 .ap-dialog-sub { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-dialog-close { flex: none; }
@@ -1328,6 +1344,9 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-pref-scopes { max-width: var(--pref-panel-w); padding: var(--space-4) 0; }
 .ap-pref-theme-setting select { flex: none; }
 .ap-pref-setting .ap-pref-select { width: min(100%, 320px); }
+/* Media's choice, under its title, and what it loads under that. */
+.ap-pref-media-setting .ap-pref-select { display: block; margin-top: var(--space-2); }
+.ap-pref-media-note { max-width: var(--pref-note-w); margin: var(--space-2) 0 0; }
 .ap-pref-sites { display: block; width: min(100%, var(--pref-note-w)); height: auto; min-height: calc(4lh + 2 * var(--space-2)); margin-top: var(--space-2); padding: var(--space-2); resize: vertical; font-family: var(--font-mono); font-size: var(--text-sm); }
 .ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
 .ap-pref-fonts { margin-top: var(--space-4); }
@@ -1486,6 +1505,18 @@ pre.ap-embed-termtext { font-family: var(--font-mono); font-size: var(--text-ui)
 @media (max-width: 719px) { .ap-embed-termscreen { margin: var(--space-1_5); } }
 .ap-embed-ogcard { display: flex; flex-direction: column; overflow: hidden; width: min(100%, var(--embed-card-w)); border: 1px solid var(--line); background: var(--bg-200); color: var(--ink); text-decoration: none; }
 a.ap-embed-ogcard:hover { background: var(--hover); }
+/* Media that waits for a click (MediaAsk, and the sanitizer's copy of it in message bodies): a dashed box on a line of
+   its own, where the image would be, what and where it is on one line, its buttons on the next. */
+.ap-media-ask { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); width: fit-content; max-width: 100%; margin-block: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); background: var(--bg-200); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); box-sizing: border-box; }
+.ap-media-ask-label { overflow-wrap: anywhere; }
+.ap-media-ask-what { font-weight: 600; }
+.ap-media-ask-host { color: var(--ink-muted); }
+.ap-media-ask-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); max-width: 100%; }
+/* A long host wraps in its button rather than running out of the box. */
+.ap-media-ask-actions .ap-btn { max-width: 100%; height: auto; min-height: var(--control-md); white-space: normal; overflow-wrap: anywhere; text-align: start; background: var(--bg-100); }
+/* An embed whose media waits: the embed without it, and the ask under it. */
+.ap-embed-held { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); max-width: min(100%, var(--embed-max-w)); }
+.ap-embed-held > .ap-media-ask { margin-block: 0; }
 .ap-embed-ogimg { display: block; width: 100%; aspect-ratio: 1.91 / 1; object-fit: cover; background: var(--bg-300); }
 .ap-embed-ogcard .ap-embed-cardtext { padding: var(--space-3) var(--space-4); }
 .ap-embed-site { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
@@ -1564,11 +1595,12 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-dmintro-detail { overflow-wrap: anywhere; }
 .ap-dmintro-private { color: var(--private); font-weight: 600; }
 .ap-dmintro-private svg { display: inline-block; margin-inline-end: var(--space-2); vertical-align: -2px; }
-/* AddedBanner — under a private room's header when someone else added you: what happened, Mute, Leave and its ×. */
-.ap-addedbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); border: 1px solid color-mix(in srgb, var(--private) 30%, transparent); border-radius: var(--radius-md); background: color-mix(in srgb, var(--private-soft) 70%, var(--bg-100)); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
-.ap-addedbar-text { flex: 1 1 200px; min-width: 0; margin: 0; }
-.ap-addedbar-error { flex-basis: 100%; }
-.ap-addedbar-close { flex: none; }
+/* AddedBanner — under a private room's header when someone else added you: what happened, its × in the corner, then Mute, Leave and Dismiss. */
+.ap-addedbar { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--space-1) var(--space-2); margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-1) var(--space-1) var(--space-2) var(--space-3); border: 1px solid color-mix(in srgb, var(--private) 30%, transparent); border-radius: var(--radius-md); background: color-mix(in srgb, var(--private-soft) 70%, var(--bg-100)); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
+/* Its sentence beside the × in the top corner, centred on the ×'s first line; its actions in one row under both. */
+.ap-addedbar-text { min-width: 0; margin: 0; padding-block: calc((var(--control-md) - var(--leading-ui)) / 2); }
+.ap-addedbar-actions, .ap-addedbar-error { grid-column: 1 / -1; }
+.ap-addedbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 /* PeoplePicker (PrivateRoomForm, AddMembersForm) — the people picked, as chips in a field, then everyone who matches, as a listbox; at the limit, your
    private rooms to leave instead. */
 .ap-pick-field { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); height: auto; min-height: var(--control-lg); padding: 2px var(--space-1); cursor: text; }

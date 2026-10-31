@@ -11,6 +11,8 @@ const KEY = {
 	recentServers: 'apron.recentServers',
 	sidebar: 'apron.sidebar',
 	notificationsEnabled: 'apron.desktopNotifications',
+	/** The offer to add Apron to the Home Screen (`InstallPrompt`) was answered on this device: it isn't made again. */
+	installOffer: 'apron.installOffer',
 	/** The accounts push is turned on for, and the one this browser's push subscription is registered for. */
 	webPush: 'apron.webPushAccounts',
 	webPushOwner: 'apron.webPushOwner',
@@ -314,6 +316,17 @@ export function notificationsChosen(): boolean {
 export function saveNotificationsEnabled(enabled: boolean): void {
 	write(KEY.notificationsEnabled, String(enabled));
 }
+
+/** Whether the offer to add Apron to the Home Screen was answered on this device (installed, or Not now). */
+export function installOfferAnswered(): boolean {
+	return read(KEY.installOffer) !== null;
+}
+
+export function answerInstallOffer(): void {
+	write(KEY.installOffer, 'answered');
+}
+
+export const INSTALL_OFFER_KEY = KEY.installOffer;
 
 /** `push_id`s made here and not saved (no storage, or `/__preview`). */
 const unsavedPushIds = new Map<string, string>();

@@ -6,8 +6,8 @@
 	import Button from './Button.svelte';
 
 	/**
-	 * Under a private room's header (§4.2.4) when someone else added you to it: says so, with Mute and Leave, until its
-	 * × puts it away.
+	 * Under a private room's header (§4.2.4) when someone else added you to it: says so, with Mute, Leave and Dismiss on
+	 * a row under it, until Dismiss or the × in its corner puts it away.
 	 */
 	interface Props {
 		/** The sentence, such as "You were added to this private room." */
@@ -34,12 +34,15 @@
 
 <div class={['ap-addedbar', className]} role="status" data-testid={testid}>
 	<p class="ap-addedbar-text">{text}</p>
-	{#if muted}
-		{#if onunmute}<Button variant="ghost" size="sm" disabled={busy} onclick={onunmute}><BellOff size={15} aria-hidden="true" />Unmute</Button>{:else}<span class="ap-addedbar-note">Muted</span>{/if}
-	{:else if onmute}
-		<Button variant="ghost" size="sm" disabled={busy} onclick={onmute}><BellOff size={15} aria-hidden="true" />Mute</Button>
-	{/if}
-	{#if onleave}<Button size="sm" disabled={busy} onclick={onleave}><LogOut size={15} aria-hidden="true" />Leave</Button>{/if}
-	<button type="button" class="ap-iconbtn ap-addedbar-close" aria-label="Dismiss" title="Dismiss" onclick={ondismiss}><X size={16} aria-hidden="true" /></button>
+	<button type="button" class="ap-iconbtn ap-addedbar-close" aria-label="Close" title="Close" onclick={ondismiss}><X size={16} aria-hidden="true" /></button>
+	<div class="ap-addedbar-actions">
+		{#if muted}
+			{#if onunmute}<Button variant="ghost" size="sm" disabled={busy} onclick={onunmute}><BellOff size={15} aria-hidden="true" />Unmute</Button>{:else}<span class="ap-addedbar-note">Muted</span>{/if}
+		{:else if onmute}
+			<Button variant="ghost" size="sm" disabled={busy} onclick={onmute}><BellOff size={15} aria-hidden="true" />Mute</Button>
+		{/if}
+		{#if onleave}<Button size="sm" disabled={busy} onclick={onleave}><LogOut size={15} aria-hidden="true" />Leave</Button>{/if}
+		<Button variant="ghost" size="sm" onclick={ondismiss}>Dismiss</Button>
+	</div>
 	{#if error}<p class="ap-addedbar-note ap-addedbar-error ap-tone-danger" role="alert">{error}</p>{/if}
 </div>

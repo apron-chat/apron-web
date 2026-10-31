@@ -13,18 +13,17 @@
 	/**
 	 * The member list's +: adds the people picked to the open room or thread (`room_join` with each `user_id`, §4.2.2),
 	 * in the design system's AddMembersForm, from the people the session knows who aren't members yet, or by a
-	 * `@user_id` typed whole. One the server refuses doesn't stop the rest, and stays picked, with why.
+	 * `@user_id` typed whole. One the server refuses doesn't stop the rest, and stays picked, with why. Those added
+	 * show in the timeline as their joins do.
 	 */
 	interface Props {
 		client: ChatClient;
 		session: SessionView;
 		room: RoomSnapshot;
-		/** Some were added to the room with this id: "Added Bo and Cy.", for the member list to say. */
-		onadded: (roomId: string, text: string) => void;
 		/** It closed: done, or put away. */
 		onclose: () => void;
 	}
-	let { client, session, room, onadded, onclose }: Props = $props();
+	let { client, session, room, onclose }: Props = $props();
 
 	/** The most people listed at once: typing narrows it. */
 	const PEOPLE_SHOWN = 50;
@@ -65,8 +64,6 @@
 		const refused = await addMembers(client, roomId, ids);
 		saving = false;
 		const name = (userId: string) => directory.name({ user_id: userId });
-		const added = ids.filter((id) => !refused.some((refusal) => refusal.userId === id));
-		if (added.length) onadded(roomId, `Added ${added.length > 2 ? `${added.length} people` : added.map(name).join(' and ')}.`);
 		chosenIds = refused.map(({ userId }) => userId);
 		if (refused.length) error = couldNotAdd(refused, name);
 		else open = false;

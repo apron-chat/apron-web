@@ -69,8 +69,9 @@ page first shows the view kept from last time: the rooms and threads, the open
 room with its messages from the last day (the newest 150 per room), its thread
 cards and members, and who you are. While it checks for new messages, a pill
 says so (below), and each room is replaced by the live one once it has
-recovered: what arrived meanwhile comes in under the New divider, and edits,
-deletions and reactions update in place. The kept view is only for showing: it
+recovered, the open room's first (its history goes ahead of the others', also
+while the server hasn't listed it again yet): what arrived meanwhile comes in
+under the New divider, and edits, deletions and reactions update in place. The kept view is only for showing: it
 never sends a read cursor, notifies, or counts as unread, and the live session
 recovers every room as it would without it. It is kept per server in IndexedDB
 for the account signed in there, dropped after a week, removed on sign-out, and
@@ -212,7 +213,7 @@ a room like any message; one for a room you haven't joined also shows as a
 notice where you are. `~server`, `~room`, and `~private` are sender scopes, not rooms (Appendix A.1); a
 room ID starting with `@` or `~` is an ordinary room.
 
-Joins and leaves show in a room's timeline as the quietest system line, at
+Joins and leaves show in a room's or thread's timeline, private or not, as the quietest system line, at
 each membership record's `log_id` among the messages: "Ada joined", with the
 time on hover. Records with nothing else between them (a message, a card, a
 notice, or a date divider) make one line, netted out per user, so someone who
@@ -223,7 +224,9 @@ everyone in the tooltip. A record joining more than 20 users at once is a
 baseline, not an event, and gets no line. Names render like any other user,
 with the `@user_id` when someone else shows under the same name. The lines
 never count as unread or mention you, and a message after one starts a new
-sender group.
+sender group. A title change, in a room or thread, private or not, gets a
+system line at its room record's `log_id`: "Room renamed to “Ops”" (or
+"Thread renamed to …", or "… name cleared"), which also ends a run of joins.
 
 On wide screens the rooms list is a column beside the conversation: drag its
 inner border (its right one, or its left under a right-to-left layout, where
@@ -258,7 +261,8 @@ who aren't members yet, but you and the system identities, narrowed by a name
 or `@user_id` typed; when none of them matches, the `@user_id` typed is offered
 to add by it. **Add** sends `room_join` with each picked `user_id` in turn; one
 the server refuses doesn't stop the rest, stays picked, and the dialog says
-why, while those added are said in the panel. Pressing a member's row
+why. Those added show in the room's timeline as any join does ("Ada joined"),
+not in the panel. Pressing a member's row
 anywhere drops down its menu beneath it (a right-click, the context menu key or a
 long press opens it where that was): **Profile** opens their profile card;
 **Direct message** (not to a system identity) opens the private conversation you
@@ -618,9 +622,30 @@ On iPhone and iPad Safari outside a Home Screen app, push isn't offered: under
 the Notifications switch, a callout gives the steps to add Apron to the Home
 Screen. Where the browser offers to install Apron (Chromium's
 `beforeinstallprompt`), the client holds that offer back and shows **Install
-app** under the Notifications switch only, never elsewhere, and not once Apron runs installed. The web manifest
+app** under the Notifications switch, and in the install offer below, and not once Apron runs installed. The web manifest
 (`static/manifest.webmanifest`) names Apron, its icons, `start_url` and
 `display: standalone`.
+
+On a phone or tablet not running Apron installed, 20 seconds after the session
+is up, the same kind of prompt as the notifications offer asks "Add Apron to
+your Home Screen?": it opens full screen, like an app, and, on an iPhone or
+iPad signed in where push works, can alert you when it's closed. Where the
+browser offers to install Apron, its **Install** asks the browser (as
+Preferences' **Install app** does, which answers this offer too). Elsewhere
+**Show me how** lists the steps for this browser: Share (in Safari's toolbar or
+its ⋯ menu), Add to Home Screen (under View More if it isn't listed), then Add;
+another iPhone browser's Share by the address, likewise; an Android browser's
+menu, Install app or Add to Home screen; and in an app's own browser
+(Instagram, Facebook and the like), which can't, to open the page in the
+browser first. Under the steps, "Not there? Open this page in Safari first"
+(in your browser, on Android) covers the browsers apps open pages in, which look like
+the browser but have no such menu. **Not now**, **Got it** once the steps
+are read, Escape, or installing answers it, so it isn't offered again on this
+device, in any tab. It never shows with the notifications offer: whichever
+comes first holds the other back until it's answered. It isn't offered where
+Chrome says Apron is installed already (`getInstalledRelatedApps`, the
+manifest naming it in `related_applications`), nor while reading an archive,
+nor on a computer, whose browser offers installing in the address bar.
 
 `push_id` names the account: 12 random bytes in base64url (16 characters),
 made once per account on each server and kept in `apron.pushIds`, so it
@@ -745,10 +770,11 @@ export was saved, and offers no sign-in: the server offers only guests'. Nothing
 remembered, as in `/__preview`. An export names the sites its images load from
 (the server's origin and those it named for its media), and since a file can
 name any, `/archive` lists them and asks first: **Load images**, or **Open
-without images**. Either way the page is held to **This server only**, whatever
-Media says (until it's changed there): with images, media loads from the sites
-it named and nowhere else; without, from nowhere, so images show as links,
-avatars as initials, and cards without pictures.
+without images**. Either way the page is held to the server's own sites,
+whatever Media says (until it's changed there, or Always load is clicked): with
+images, media loads from the sites it named and nowhere else; without, from
+nowhere, so images wait for a click, avatars show as initials, and cards as
+cards without pictures.
 
 With the `command` capability, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#41-command)): the composer shows a **Command** tag, sets the line in
@@ -1403,14 +1429,26 @@ showing its output). A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
-Media loads from where Preferences, under **Media**, says. **Default** is as Apron always has: `og` media only from the chat server's own
-origin and the origins it names with `ext:media`, avatars from any `https:`
-site, and images in markdown messages from any site. **This server only**
-loads all of them only from the server's origins; **This server and sites I
-add** also from the sites listed under it (hosts or URLs, one per line, kept as
-`https:` origins); **Any site** from anywhere. Where an image in a message may
-not load, it shows as a link to it (its alt text, else its URL), an avatar as
-initials, and a card without its picture. Small `data:` images always show.
+Media loads from where Preferences, under **Media**, says. **This server and
+trusted sites**, the default, loads it from the chat server's own origin, the
+origins the server names with `ext:media` (Preferences names them, such as
+`media.apron.chat (trusted by the server)`), and the **Trusted origins** listed
+under it (hosts or URLs, one per line, kept as `https:` origins). **Any site**
+loads it from anywhere; the trusted origins stay listed for when the default is
+chosen again. Earlier versions' choices carry over: Default, This server only and
+This server and sites I add become the default, their sites kept as trusted
+origins, and Any site stays.
+
+Under the default, an image, video or audio from anywhere else in the timeline
+(in a message, an HTML embed, a link preview's card or an upload) waits for a
+click where it would be: its alt text or kind, its site, **Load**, which loads
+that one on this page, and, for an `https:` site, **Always load**, which adds the
+site to the trusted origins. An image in a link waits after the link. A custom
+emoji from anywhere else shows as its key (and isn't offered in the emoji
+picker), an avatar as initials (a server signed in to before, its avatar only
+from its own origin), and a custom emoji catalog on another site isn't fetched.
+An HTML embed never loads a `srcset`, a `background` or a `ping`. Images in a
+message or embed itself (`data:`) always show: they load from nowhere.
 The choice is kept on this device, and another tab's applies at once. Live
 text URLs load only from the server's own origin, whatever the choice; links may
 point anywhere `http(s)`.

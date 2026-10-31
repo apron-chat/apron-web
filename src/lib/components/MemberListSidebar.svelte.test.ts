@@ -240,9 +240,9 @@ describe('MemberListSidebar', () => {
 		await dom.submit(document.querySelector<HTMLFormElement>('dialog form')!);
 		await vi.waitFor(() => expect(dom.byRole('alert').textContent).toBe('Couldn’t add Cy: Denied.'));
 		expect(joinRoom.mock.calls).toEqual([['general', 'grace'], ['general', 'cy']]);
-		// Who couldn't be added stays picked, to try again; who was added is said in the list.
+		// Who couldn't be added stays picked, to try again; who was added is left for the timeline to say.
 		expect([...document.querySelectorAll('.ap-pick-chip-name')].map((chip) => chip.textContent)).toEqual(['Cy']);
-		expect(dom.byRole('status').textContent).toBe('Added grace.');
+		expect(dom.queryByRole('status')).toBeNull();
 		dom.unmount();
 		render([ada]);
 		expect(dom.queryByRole('button', 'Add member')).toBeNull();

@@ -22,7 +22,7 @@
 	import Message from '$lib/design/components/Message.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
 	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
-	import { linkedRoomIn, messageView, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
+	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
 	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
@@ -33,6 +33,8 @@
 	import SidebarHandle from '$lib/components/SidebarHandle.svelte';
 	import MemberListSidebar from '$lib/components/MemberListSidebar.svelte';
 	import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
+	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
+	import { INSTALL_OFFER_AFTER_MS, installWay, installedAlready } from '$lib/ui/install';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
 	import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
 	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
@@ -62,12 +64,13 @@
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
 	import { removeEmbedQuestion } from '$lib/ui/attachments';
+	import { messageLog, messageLogHtml } from '$lib/ui/message-log';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -79,9 +82,10 @@
 	import { ViewKeeper } from '$lib/ui/view-keeper';
 	import { HistoryKeeper } from '$lib/history/history-keeper';
 	import { historySettings } from '$lib/history/settings.svelte';
+	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
 	import { preferencesOpener } from '$lib/ui/preferences.svelte';
-	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
@@ -235,8 +239,18 @@
 	let silenced = $derived(pageSilenced(pausedUntil, session.you?.status));
 	/** Pausing needs capability `status` and a signed-in account (a guest's `user_id` ends with its connection). */
 	let canPause = $derived(session.server?.capabilities?.includes('status') === true && pushAccount !== undefined);
-	/** Chromium's offer to install Apron, kept for the push setting's Install app button. */
+	/** Chromium's offer to install Apron, kept for the push setting's Install app button and the install offer. */
 	let installPrompt = $state<InstallPromptEvent | undefined>();
+	/** The offer to add Apron to the Home Screen (InstallPrompt) was answered on this device, or Apron was installed. */
+	let installAnswered = $state(true);
+	/** A phone's session has been up for INSTALL_OFFER_AFTER_MS: the install offer may be made. */
+	let installOfferDue = $state(false);
+	/** How this phone puts Apron on its Home Screen, while it's not running from there. */
+	let installHow = $derived(runsInstalled ? undefined : installWay(Boolean(installPrompt)));
+	/** Installed, Apron could alert this device while it's closed, as it can't before: an iPhone or iPad, signed in where push works. */
+	let installAlerts = $derived(needsHomeScreen() && Boolean(webPushServerKey));
+	/** The install offer, while it waits for an answer: one offer at a time, so not while notifications are offered. */
+	let installOffer = $derived(installOfferDue && !installAnswered && !notifyOffer ? installHow : undefined);
 	/** The account's `push_id` (§4.9): it names the account in pushed payloads and in message notifications. */
 	let accountPushId = $derived(pushSettings.accountPushId);
 	/** A pushed room to open once it is listed, if its `push_id` is this account's. */
@@ -504,9 +518,9 @@
 	/** Nothing held to show while the room's threads are listed: placeholders, so its messages and thread cards appear together. */
 	let paneHeldBack = $derived(awaitingThreads && !activeThread && !session.activeRoomHeld);
 	let messages = $derived(timelineMessages(paneRoom));
-	let timeline = $derived(activeThread
-		? buildThreadTimeline({ messages, renames: paneRoom?.renames, notices: paneRoom?.notices })
-		: buildRoomTimeline({ messages, threads, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships }));
+	let timeline = $derived(buildRoomTimeline({
+		messages, threads: activeThread ? [] : threads, renames: paneRoom?.renames, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships
+	}));
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
@@ -573,6 +587,8 @@
 	let readingLatest = $derived(latestVisible && latestVisibleIn === paneRoom?.id && newDivider.room === paneRoom?.id && newDivider.landed);
 	/** The pane's messages this viewer may pick, in order: what shift-click ranges run along. */
 	let selectableOrder = $derived(messages.filter(canSelect).map((event) => event.message_id));
+	/** Picked messages move with `message` requests (capability `edit`), which a reader who may not write makes none of. */
+	let canMoveSelection = $derived(session.canEdit && !session.readOnly);
 	let selectThreads = $derived(joinedThreads.filter((entry) => entry.id !== activeThread));
 	/** New threads hang off a top-level room; this client keeps threads one level deep. */
 	let canStartThreads = $derived(session.canManageRooms && !session.readOnly && Boolean(activeRoom) && activeRoom?.parentRoomId === undefined);
@@ -669,7 +685,7 @@
 			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible, readThrough: syncsReads ? (room) => readPositions.through(room, session.you) : () => undefined },
 			{ mentions, messages: incomingMessages },
 			{
-				offerable: untrack(() => !notifyOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
+				offerable: untrack(() => !notifyOffer && !installOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
 				active: notificationsActive, away: presence.away, silenced, scopes: notifyScopes
 			}
 		);
@@ -690,6 +706,24 @@
 		if (session.showingHeld) return;
 		const me = session.you;
 		unread.observe(session.rooms, me, paneRoom?.id, readingLatest && presence.visible, (room) => readPositions.through(room, me), syncsReads);
+	});
+
+	// On a phone, a while after the session is up, offer to add Apron to the Home Screen: once, until answered. Not
+	// while reading an archive, whose answer wouldn't be kept, nor where Chrome says Apron is installed already.
+	$effect(() => {
+		if (!session.ready || archive || installOfferDue || untrack(() => installAnswered || !installHow)) return;
+		let current = true;
+		const due = setTimeout(() => {
+			void installedAlready().then((installed) => {
+				if (!current) return;
+				if (installed) installAnswered = true;
+				else installOfferDue = true;
+			});
+		}, INSTALL_OFFER_AFTER_MS);
+		return () => {
+			current = false;
+			clearTimeout(due);
+		};
 	});
 
 	// Signed in to an installed app where push works: offer notifications now, not at the first mention.
@@ -1091,6 +1125,7 @@
 		recentServers = previewMode ? [] : loadRecentServers();
 		notificationsEnabled = loadNotificationsEnabled();
 		notificationsChoiceMade = notificationsChosen();
+		installAnswered = installOfferAnswered();
 		notificationState = notificationPermission();
 		if (!previewMode) pushSettings.load();
 		// Where images load from holds for an export read here too.
@@ -1107,6 +1142,8 @@
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 			// A description put away or brought back in another tab is here too.
 			if (event.key === HIDDEN_DESCRIPTIONS_KEY) hiddenDescriptions = loadHiddenDescriptions();
+			// The install offer answered in another tab is answered here too.
+			if (event.key === INSTALL_OFFER_KEY) installAnswered = installOfferAnswered();
 		};
 		window.addEventListener('storage', storageChanged);
 		// Any input on the page means someone is attending it (§4.5 `idle`). Captured, so a
@@ -1121,7 +1158,11 @@
 			event.preventDefault();
 			installPrompt = event as InstallPromptEvent;
 		};
-		const installed = () => (installPrompt = undefined);
+		const installed = () => {
+			installPrompt = undefined;
+			installAnswered = true;
+			answerInstallOffer();
+		};
 		window.addEventListener('beforeinstallprompt', installOffered);
 		window.addEventListener('appinstalled', installed);
 		// A push notification clicked with no tab open opens one at its room.
@@ -1417,11 +1458,22 @@
 		notifyScopesSaved += 1;
 	}
 
-	/** Chromium's install prompt, from the push setting's Install app button: offered once. */
+	/**
+	 * Chromium's install prompt, from the push setting's Install app button or the install offer's Install: offered
+	 * once, and either answers the install offer, so it doesn't come back with the steps once the prompt is gone.
+	 */
 	async function installApp(): Promise<void> {
 		const prompt = installPrompt;
 		installPrompt = undefined;
+		installAnswered = true;
+		answerInstallOffer();
 		await prompt?.prompt().catch(() => undefined);
+	}
+
+	/** The install offer's Not now, or Got it once its steps are read: not made again. */
+	function declineInstallOffer(): void {
+		installAnswered = true;
+		answerInstallOffer();
 	}
 
 	/**
@@ -2350,7 +2402,7 @@
 	/** A message's reaction chips, from the timeline of the room it lives in. */
 	function reactionsFor(event: MessageRecord): ReactionChip[] {
 		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
-		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.resolveEmoji);
+		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.emojiImage);
 	}
 
 	function react(event: MessageRecord, emoji: string): void {
@@ -2432,7 +2484,10 @@
 		},
 		beginSelect: onRow(beginSelect),
 		removeReply: onRow(removeReply),
-		removeEmbed: (view, embed) => onRow((event) => removeEmbed(event, embed as unknown as Embed))(view),
+		removeEmbed: (view, props) => {
+			const embed = sourceEmbed(props);
+			if (embed) onRow((event) => removeEmbed(event, embed))(view);
+		},
 		openRoom: openMentionedRoom,
 		// A user mention, or the sender's name or avatar, opens their profile card.
 		openProfile: openProfileFrom,
@@ -2548,7 +2603,10 @@
 
 	function scrollToLatest(): void {
 		if (!messageScroll) return;
-		messageScroll.scrollTop = messageScroll.scrollHeight;
+		// Not when already at the end, or past it in iOS's rubber band: pulling past the latest scrolls down, which
+		// pins again, and setting the scroll top there would snap the bounce back under the finger every frame.
+		const end = messageScroll.scrollHeight - messageScroll.clientHeight;
+		if (messageScroll.scrollTop < end - 1) messageScroll.scrollTop = messageScroll.scrollHeight;
 		lastScrollTop = messageScroll.scrollTop;
 	}
 
@@ -2617,8 +2675,9 @@
 	 * Any message in the open pane can be picked for a move (capability `edit`), anyone's:
 	 * the server decides whose it lets you move, and a refusal moves none (MessageSelection.move).
 	 */
+	/** Anyone who can read may pick messages, to copy them as a log; moving them is offered only to who may edit. */
 	function canSelect(event: MessageRecord): boolean {
-		return session.canEdit && !session.readOnly && !event.deleted && event.room_id === paneRoom?.id;
+		return !event.deleted && event.room_id === paneRoom?.id;
 	}
 
 	/** Whether a picked message is yours, which the server always lets you move. */
@@ -2802,6 +2861,39 @@
 		else if (result.unadded) feedback.error(unaddedNote(result.unadded));
 	}
 
+	/**
+	 * Copies Markdown as plain text and, where the browser takes it, as HTML too
+	 * (`messageLogHtml`), so a rich editor pastes it formatted, images and all.
+	 */
+	async function copyRich(markdown: string): Promise<void> {
+		if (typeof ClipboardItem === 'undefined' || !navigator.clipboard.write) return navigator.clipboard.writeText(markdown);
+		const item = new ClipboardItem({
+			'text/plain': new Blob([markdown], { type: 'text/plain' }),
+			'text/html': new Blob([messageLogHtml(markdown)], { type: 'text/html' })
+		});
+		try {
+			await navigator.clipboard.write([item]);
+		} catch {
+			await navigator.clipboard.writeText(markdown);
+		}
+	}
+
+	/** "Copy to clipboard" in select mode: the picked messages, in timeline order, as Markdown (`messageLog`). Once copied, select mode ends. */
+	async function copySelectionLog(): Promise<boolean> {
+		const picked = messages.filter((event) => selection.has(event.message_id));
+		if (!picked.length) return false;
+		try {
+			const reactions = (event: MessageRecord) => session.rooms.find((room) => room.id === event.room_id)?.timeline.reactions[event.message_id];
+			await copyRich(messageLog(picked, { lookup: resolveMessage, reactions, order: selectableOrder }));
+			selection.cancel();
+			composer?.focus();
+			return true;
+		} catch {
+			feedback.error('Unable to copy the messages');
+			return false;
+		}
+	}
+
 	/** The messages moved, but some of their authors weren't added to the thread: how many, and the server's first reason. */
 	function unaddedNote(unadded: { failed: number; total: number; error: unknown }): string {
 		const who = unadded.failed === unadded.total ? (unadded.total === 1 ? 'the author' : 'the authors') : `${unadded.failed} of ${unadded.total} authors`;
@@ -2879,7 +2971,7 @@
 </script>
 
 <svelte:window onkeydown={windowKeydown} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
-<svelte:document onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
+<svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
 
 <svelte:head>
 	<title>{tabTitle(unread.total, presence.titleFlash)}</title>
@@ -2922,7 +3014,7 @@
 	/>
 {:else}
 <!-- A message row's embed, through the app's media gates; and the row being edited, in the editor loaded for it. -->
-{#snippet messageEmbed(item: MessageEmbed)}<EmbedItem embed={item.embed as unknown as Embed} upload={item.upload} detail={item.detail} />{/snippet}
+{#snippet messageEmbed(item: MessageEmbed)}{@const embed = sourceEmbed(item.embed)}{#if embed}<EmbedItem {embed} upload={item.upload} detail={item.detail} />{/if}{/snippet}
 {#snippet editMessage(view: MessageView)}
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}
@@ -2965,7 +3057,8 @@
 	{#snippet sideHandle()}<SidebarHandle layout={sidebar} />{/snippet}
 	<!-- The first-mention offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->
 	{#snippet nudge()}
-		{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} pointer onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />{/if}
+		{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} pointer onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />
+		{:else if installOffer}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
 	{/snippet}
 
 	{#snippet main()}
@@ -3050,7 +3143,8 @@
 						{:else if item.kind === 'members'}
 							<MembershipLine joined={item.joined} left={item.left} logId={item.logId} />
 						{:else if item.kind === 'renamed'}
-							<SystemLine timestamp={idMillis(item.logId)} timelineItem testid="thread-renamed">{#if item.title}Thread renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}Thread name cleared{/if}</SystemLine>
+							{@const what = activeThread ? 'Thread' : 'Room'}
+							<SystemLine timestamp={idMillis(item.logId)} timelineItem testid={activeThread ? 'thread-renamed' : 'room-renamed'}>{#if item.title}{what} renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}{what} name cleared{/if}</SystemLine>
 						{:else}
 							{@const event = item.event}
 							{@const view = messageView(event, {
@@ -3078,7 +3172,8 @@
 			{/if}
 
 			<div class="ap-shell-nudge-inline" aria-live="polite">
-				{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />{/if}
+				{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />
+				{:else if installOffer}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
 			</div>
 			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
@@ -3099,8 +3194,8 @@
 
 			{#if selection.active}
 				<SelectionBar
-					{selection} threads={selectThreads} parentRoom={activeThread ? activeRoom.id : undefined} canCreateThread={canStartThreads}
-					onmove={(room) => moveSelection(room)} onnewthread={newThreadFromSelection} onfill={() => selection.fillBetween(selectableOrder)}
+					{selection} threads={canMoveSelection ? selectThreads : []} parentRoom={canMoveSelection && activeThread ? activeRoom.id : undefined} canCreateThread={canMoveSelection && canStartThreads}
+					onmove={(room) => moveSelection(room)} onnewthread={newThreadFromSelection} onfill={() => selection.fillBetween(selectableOrder)} oncopy={copySelectionLog}
 					oncancel={() => { selection.cancel(); composer?.focus(); }}
 				/>
 			{:else if session.readOnly}
@@ -3148,7 +3243,7 @@
 	{/if}
 	{#if searchOpen && client && searchDialog.component}
 		{@const SearchDialog = searchDialog.component}
-		<SearchDialog {client} keeper={sessionKeeper()} rooms={session.rooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} onopen={openFound} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
+		<SearchDialog {client} keeper={sessionKeeper()} rooms={session.rooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} onopen={openFound} kept={historySettings.title} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
 	{/if}
 	{#if newPrivateOpen && newPrivateDialog.component}
 		{@const NewPrivateDialog = newPrivateDialog.component}

@@ -24,6 +24,9 @@ describe('AddedBanner', () => {
 			dom.button(name).click();
 			expect(handler).toHaveBeenCalledOnce();
 		}
+		// The × in its corner dismisses it too.
+		dom.button('Close').click();
+		expect(props.ondismiss).toHaveBeenCalledTimes(2);
 		dom.unmount();
 		// Once muted, Unmute; a refused change says why.
 		dom.render(AddedBanner, { muted: true, onunmute: vi.fn(), ondismiss: vi.fn(), error: 'Too Many Requests' });

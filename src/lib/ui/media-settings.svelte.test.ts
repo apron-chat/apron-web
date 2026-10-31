@@ -19,34 +19,50 @@ describe('media settings', () => {
 		expect(parseMediaOrigins('cdn.example\nhttps://img.example/a/b.png, http://plain.example  cdn.example:443 ftp://x.example nonsense:/ \n')).toEqual(['https://cdn.example', 'https://img.example']);
 	});
 
-	it('trusts the server’s origins, those and the sites added, or any', () => {
+	it('trusts the server’s origins and the trusted ones, or any; Always load adds one', () => {
 		const settings = new MediaSettings();
 		const server = ['https://media.example'];
-		// Default, as ever: previews from the server's, avatars and images from any.
-		expect(settings.policy).toBe('default');
+		expect(settings.policy).toBe('trusted');
+		expect(settings.asks).toBe(true);
 		expect(settings.trusted(server)).toEqual(server);
-		expect(settings.trustedImages(server)).toEqual([...server, ANY_ORIGIN]);
-		settings.update('server');
-		expect(settings.trusted(server)).toEqual(server);
-		expect(settings.trustedImages(server)).toEqual(server);
-		settings.update('custom', ['https://cdn.example', 'https://media.example']);
+		settings.update('trusted', ['https://cdn.example', 'https://media.example']);
 		expect(settings.trusted(server)).toEqual(['https://media.example', 'https://cdn.example']);
-		settings.update('all');
+		settings.trust('https://img.example');
+		settings.trust('img.example');
+		settings.trust('http://plain.example');
+		expect(settings.origins).toEqual(['https://cdn.example', 'https://media.example', 'https://img.example']);
+		settings.update('any');
+		expect(settings.asks).toBe(false);
 		expect(settings.trusted(server)).toEqual(['https://media.example', ANY_ORIGIN]);
-		// The sites added stay for when they're chosen again.
-		expect(settings.origins).toEqual(['https://cdn.example', 'https://media.example']);
+		// The trusted origins stay for when they're chosen again, and Always load still adds to them.
+		settings.trust('https://more.example');
+		expect(settings.policy).toBe('any');
+		expect(settings.origins).toContain('https://more.example');
 	});
 
-	it('loads what was saved, and the default for anything else', () => {
+	it('loads what was saved, what earlier versions saved as its nearest, and the default for anything else', () => {
 		const settings = new MediaSettings();
-		settings.update('custom', ['https://cdn.example']);
+		settings.update('trusted', ['https://cdn.example']);
 		const again = new MediaSettings();
 		again.load();
-		expect(again.policy).toBe('custom');
+		expect(again.policy).toBe('trusted');
 		expect(again.origins).toEqual(['https://cdn.example']);
-		localStorage.setItem('apron.media', JSON.stringify({ policy: 'everything', origins: ['http://x.example', 7] }));
-		again.load();
-		expect(again.policy).toBe('default');
-		expect(again.origins).toEqual([]);
+		for (const [saved, policy] of [['default', 'trusted'], ['server', 'trusted'], ['custom', 'trusted'], ['all', 'any'], ['any', 'any'], ['everything', 'trusted']]) {
+			localStorage.setItem('apron.media', JSON.stringify({ policy: saved, origins: ['https://kept.example', 'http://x.example', 7] }));
+			again.load();
+			expect(again.policy).toBe(policy);
+			expect(again.origins).toEqual(['https://kept.example']);
+		}
+	});
+
+	it('holds an export to the server’s origins until something is chosen', () => {
+		const settings = new MediaSettings();
+		settings.update('any', ['https://cdn.example']);
+		settings.limit();
+		settings.load();
+		expect(settings.policy).toBe('trusted');
+		expect(settings.trusted([])).toEqual([]);
+		settings.trust('https://img.example');
+		expect(settings.trusted([])).toEqual(['https://cdn.example', 'https://img.example']);
 	});
 });

@@ -307,8 +307,10 @@ function shorten(text: string, max: number): string {
 export interface RoomTimelineInput {
 	/** The room's own messages, in timeline order. */
 	messages: MessageRecord[];
-	/** The room's threads. */
-	threads: ThreadEntry[];
+	/** The room's threads: none for a thread, which has none of its own. */
+	threads?: ThreadEntry[];
+	/** The room's title changes, ascending. */
+	renames?: readonly RoomRename[];
 	/** Transient notices shown in the room (§3.5), in arrival order. */
 	notices?: readonly Notice[];
 	/** The room's membership records (§4.2.2), ascending by `log_id`. */
@@ -332,15 +334,17 @@ function noticeQueue(notices: readonly Notice[]): (before?: string) => Notice[] 
 }
 
 /**
- * The room view: its messages in order, with each thread's card where the
- * thread was started (its anchor). Date dividers split days.
+ * A room or thread view: its messages in order, with each thread's card where
+ * the thread was started (its anchor), and a "renamed" line where each title
+ * change was logged. Date dividers split days. A thread's description shows
+ * above them, pinned under the header, not as an item.
  *
  * Join and leave lines sit at their records' `log_id`s among the messages
  * and cards. Records with nothing else between them (a date divider counts)
  * make one line, netted out: a run that nets to nothing leaves no line and
  * does not break a sender's group. Baseline records are skipped (`isBaseline`).
  */
-export function buildRoomTimeline({ messages, threads, notices = [], memberships = [], now = new Date() }: RoomTimelineInput): TimelineItem[] {
+export function buildRoomTimeline({ messages, threads = [], renames = [], notices = [], memberships = [], now = new Date() }: RoomTimelineInput): TimelineItem[] {
 	// Cards merge in by anchor; one without an anchor goes last.
 	const floating = [...threads];
 	floating.sort((a, b) => (a.anchor === undefined ? 1 : b.anchor === undefined ? -1 : compareLogIds(a.anchor, b.anchor)));
@@ -386,6 +390,12 @@ export function buildRoomTimeline({ messages, threads, notices = [], memberships
 			runDay = day;
 		}
 	};
+	const pushRename = (rename: RoomRename) => {
+		closeRun();
+		pushDate(dayKeyOf(rename.log_id), () => dayLabelOf(rename.log_id, now));
+		items.push({ kind: 'renamed', key: `renamed:${rename.log_id}`, logId: rename.log_id, title: withoutBidiOverrides(rename.title) });
+		previous = undefined;
+	};
 	const pending = noticeQueue(notices);
 	// A notice is a system line: it never groups with the messages around it.
 	const pushNotice = (notice: Notice) => {
@@ -395,24 +405,35 @@ export function buildRoomTimeline({ messages, threads, notices = [], memberships
 	};
 	let next = 0;
 	let nextMembership = 0;
+	let nextRename = 0;
 	/**
 	 * Everything before `before` (all when undefined) that is not a message:
-	 * cards and membership records merged by log position, then the notices
-	 * that followed the last message. A notice and a membership record in the
+	 * cards, membership records and renames merged by log position, then the
+	 * notices that followed the last message. A notice and a record in the
 	 * same gap go by time, since a record's `log_id` is its commit time.
 	 */
 	const pushGap = (before?: string) => {
 		const due = (position: string) => before === undefined || compareLogIds(position, before) < 0;
 		const gapNotices = pending(before);
 		let notice = 0;
+		const noticesBefore = (logId: string) => {
+			while (notice < gapNotices.length && gapNotices[notice].at < Number(logId)) pushNotice(gapNotices[notice++]);
+		};
 		for (;;) {
 			const card = next < floating.length && (floating[next].anchor === undefined ? before === undefined : due(floating[next].anchor!)) ? floating[next] : undefined;
 			const record = nextMembership < memberships.length && due(memberships[nextMembership].log_id) ? memberships[nextMembership] : undefined;
-			if (!card && !record) break;
-			if (record && (!card || card.anchor === undefined || compareLogIds(record.log_id, card.anchor) < 0)) {
-				while (notice < gapNotices.length && gapNotices[notice].at < Number(record.log_id)) pushNotice(gapNotices[notice++]);
+			const rename = nextRename < renames.length && due(renames[nextRename].log_id) ? renames[nextRename] : undefined;
+			if (!card && !record && !rename) break;
+			// A card without an anchor goes after everything else.
+			const earlier = (logId: string, other: string | undefined) => other === undefined || compareLogIds(logId, other) < 0;
+			if (record && earlier(record.log_id, rename?.log_id) && (!card || earlier(record.log_id, card.anchor))) {
+				noticesBefore(record.log_id);
 				pushMembership(record);
 				nextMembership++;
+			} else if (rename && (!card || earlier(rename.log_id, card.anchor))) {
+				noticesBefore(rename.log_id);
+				pushRename(rename);
+				nextRename++;
 			} else {
 				pushCard(card!);
 				next++;
@@ -429,60 +450,6 @@ export function buildRoomTimeline({ messages, threads, notices = [], memberships
 	}
 	pushGap();
 	closeRun();
-	return items;
-}
-
-export interface ThreadTimelineInput {
-	/** The thread room's own messages, in timeline order. */
-	messages: MessageRecord[];
-	/** The thread room's title changes, ascending. */
-	renames?: readonly RoomRename[];
-	now?: Date;
-	/** Transient notices shown in the thread (§3.5), in arrival order. */
-	notices?: readonly Notice[];
-}
-
-/**
- * The thread view: the thread's messages with date dividers, and a "Thread
- * renamed" line where each title change was logged. Its description shows
- * above them, pinned under the header, not as an item.
- */
-export function buildThreadTimeline({ messages, renames = [], now = new Date(), notices = [] }: ThreadTimelineInput): TimelineItem[] {
-	const items: TimelineItem[] = [];
-	let lastDay = '';
-	let previous: MessageRecord | undefined;
-	const pushDay = (id: string) => {
-		const day = dayKeyOf(id);
-		if (!day || day === lastDay) return;
-		items.push({ kind: 'date', key: `date:${day}`, label: dayLabelOf(id, now) });
-		lastDay = day;
-		previous = undefined;
-	};
-	let next = 0;
-	const pushRenames = (before?: string) => {
-		for (; next < renames.length && (before === undefined || compareLogIds(renames[next].log_id, before) < 0); next++) {
-			const rename = renames[next];
-			pushDay(rename.log_id);
-			items.push({ kind: 'renamed', key: `renamed:${rename.log_id}`, logId: rename.log_id, title: withoutBidiOverrides(rename.title) });
-			previous = undefined;
-		}
-	};
-	const pending = noticeQueue(notices);
-	const pushNotices = (before?: string) => {
-		for (const notice of pending(before)) {
-			items.push({ kind: 'notice', key: notice.key, notice });
-			previous = undefined;
-		}
-	};
-	for (const event of messages) {
-		pushRenames(event.message_id);
-		pushNotices(event.message_id);
-		pushDay(event.message_id);
-		items.push({ kind: 'message', key: event.message_id, event, grouped: isGrouped(previous, event) });
-		previous = event;
-	}
-	pushRenames();
-	pushNotices();
 	return items;
 }
 

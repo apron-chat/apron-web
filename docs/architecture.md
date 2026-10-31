@@ -75,7 +75,7 @@ The wrappers: `ConnectScreen` and `SignIn` (the pieces the design system's
 which share `RoomItem`'s row), `MemberListSidebar` (`MemberList`, whose + mounts `AddMembersDialog`: the design system's `AddMembersForm`, the same `PeoplePicker` in a `Dialog` as `PrivateRoomForm`, adding the people picked), `ProfileBar` (`ProfileBar` with its
 `ProfileEditor`), `RoomHeader` (`RoomHeader`, with its ⋯ `MenuButton`) with
 `SearchDialog` (the design system's `SearchPanel`, a field and a listbox of results in a `Dialog`, which the page owns and opens from the room header's ⋯ menu or Ctrl/⌘F: it reads the query's text and `user:`/`room:` filters (`parseQuery`; the text matches as one run, `matchesText`), suggests a filter's value at the caret with the composer's `AutocompletePicker` (`filterAtCaret`, `searchPeople`, `searchRooms`, put in by `withFilterValue`) in the panel's `suggestions`, and matches (`queryMatcher`, resolving names against the users met and the rooms shown) with `$lib/ui/search` what `HistoryKeeper.searchKept` scans of this device's kept history (`scanMessages`, a few hundred rows a read) and what `storedRecords()` holds, and the page opens a result as a link to it, `linked` with `searched`), `RoomEditor`, `NewRoomDialog` and `NewThreadDialog` (all three the design system's `RoomForm`, one centered `Dialog` for creating or editing a room or thread; each wrapper keeps only its own requests: `RoomEditor` saves with `room_set`, `NewRoomDialog` creates a room and words a refused Private, and `NewThreadDialog`, which the page owns, names every new thread, from a room, a message or a selection, and leaves creating it to the page), `NewPrivateDialog` (the design system's `PrivateRoomForm`, a `PeoplePicker` in a `Dialog`, which the page owns: it starts a private room with the people picked, or opens the one you already have with someone, and at the server's limit offers yours to leave), the private room's intro and "You were added" banner (the design system's `PrivateIntro` and `AddedBanner`, which the page renders), `ThreadCard` (the design system's `ThreadMarker`; it and `ThreadList`'s rows share the preview lines of `ThreadLines`),
-`ThreadDescription` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `RoleBadges`, `MentionText` (`Mention`), the embeds (`Embed*`; the trusted-origin gate stays in `embeds/og.ts`; `EmbedTerminal` below), `MessageEditor` (`MessageEditor`, whose `field` the app supplies, the Composer's `MessageField`), `NoticeLine` (a scoped `Message`, from `noticeView`), `MembershipLine` and the thread-renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: `MessageField`, a `ComposerEditable` it fills and edits, with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`)) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
+`ThreadDescription` (the open room's or thread's description, pinned under the header until its × puts it away, which `storage.ts` remembers per room until it's edited), `RoleBadges`, `MentionText` (`Mention`), the embeds (`Embed*`; the trusted-origin gate stays in `embeds/og.ts`; `EmbedTerminal` below), `MessageEditor` (`MessageEditor`, whose `field` the app supplies, the Composer's `MessageField`), `NoticeLine` (a scoped `Message`, from `noticeView`), `MembershipLine` and the renamed line (`SystemLine`), `Composer` (`Composer`, whose `field` the app supplies: `MessageField`, a `ComposerEditable` it fills and edits, with its `AutocompletePicker` (`MentionPicker`, for `@`, `#` and `:`)) and `StagedFile` (`AttachmentTile` in `Attachments`), `SelectionBar`, `JumpBar`, `StatusBanner`, `ReadOnlyBar`,
 `ProfileCard` (whose Message opens or starts a private conversation), `ReactorsPopover` and `EmojiPopover` (the full emoji picker, which the design system leaves to the client; all three in the design system's `Popover`, a bottom sheet on phones),
 `PreferencesDialog` (`SettingsSections` and `SettingRow`) with its `FontFamilyField` (`FontField`), `StatusPicker`, `PauseNotifications` and `NotifyPrompt` (`Nudge`), `SignInLinkDialog` (both
 the design system's `Dialog`; a setting that takes effect at once is its `Switch`, and a
@@ -268,13 +268,49 @@ account and shares the one subscription between accounts and tabs, and
 `sw-handlers.ts` holds the service worker's push and click handlers, apart
 from the worker so tests can run them. `media-settings.svelte.ts`
 (`MediaSettings`) keeps where media loads from (Preferences, Media), and
-`directory.mediaOrigins` (for `og` media) and `directory.imageOrigins` (for
-avatars, `directory.avatar`, and images in markdown, `directory.resolveImage`,
-which `renderMarkdown` turns into a link where it says no) are what it trusts on
-the active server: the server's `ext:media` origins, the sites added, or
-`ANY_ORIGIN`; Default trusts any for images only, as before.
-`embedMedia` checks against them, and `directory.pieces` includes them, so a
-change redraws every row.
+`directory.mediaOrigins` is what it trusts on the active server: the server's
+`ext:media` origins and the viewer's trusted origins, or `ANY_ORIGIN` under Any
+site.
+
+Media loads only through one gate, by construction. `media-gate.ts` is the only
+place a URL becomes a `MediaSrc`, the type the design system's `MediaSrc`
+props take (an avatar, an attachment tile, a card's or upload's image, video or
+audio, the viewer's image, a custom emoji, a server's avatar): a `MediaGate`
+(`directory.mediaGate`, `avatarGate`, `avatarGateFor` a recent server,
+`localMedia` for this page's own object URLs) answers each URL with a
+`MediaSrc` or nothing, so a plain string can't reach one without a cast, and
+`npm run check` says where one tries. An embed reaches the design system's
+`Embed` only as `message-view`'s `embedProps` makes it (its `og` media gated, no
+HTML); the page draws it from the embed it was made from (`sourceEmbed`). The
+custom emoji catalog is fetched only where `mediaGate` lets its emoji load, since
+a fetch tells a site as much as an image does. A live view (`iframe`) loads only
+on a click, as a link would. Markup from anyone else reaches the page only through
+`$lib/protocol/sanitize` (`sanitizeHtml`, which `renderMarkdown`, `renderPlain`,
+`renderBio` and HTML embeds use): after DOMPurify, every URL that would load is
+asked of the gate it is given (none: nothing loads; `data:` media, in the
+markup itself, loads from nowhere and stays), in an inert `<template>`
+so nothing is fetched meanwhile; an image, video or audio that may not load
+waits for a click where the gate says one may load it (`MediaGate.ask`), else
+becomes a link to it (a custom emoji, its key), and `srcset`, `background`,
+`data` and `ping` never stay. Media that waits for a click is the design
+system's `MediaAsk` in a card or an upload (`loadableOg` gives its `ask`), and
+the same markup, written by the sanitizer, in a message body; **Load** calls
+`directory.loadOnce` (the gate then lets that URL through, on this page) and
+**Always load** `mediaSettings.trust` (its origin joins the trusted ones).
+`media-ask.ts` connects both, and answers the sanitizer's buttons
+(`data-media-load`, `data-media-trust`) for the whole page; DOMPurify keeps no
+`data-` attribute it doesn't name, so only the sanitizer writes them. `media-guard.test.ts` reads the source and fails
+on anything else that makes a `MediaSrc`, imports DOMPurify, inserts markup, or
+renders media outside the components that take a `MediaSrc`, and
+`e2e/media-gate.spec.ts` names media on another site every way a server or a
+sender can (and a custom emoji catalog on another site) and checks that none of
+it is requested by default until a click, that Load loads only that one, and
+that Always load trusts the site. What stays outside the gate:
+the previews the viewer's own pasted links get from the sites `link-previews`
+knows, a live view on a click, and the casts `media-guard.test.ts` lists, none
+of them media.
+Each gate is part of `directory.pieces`, so a change redraws every row, and
+sanitized markup is kept by the gate it was made with.
 
 Protocol types, replay reduction, and the WebSocket session live under
 `src/lib/protocol` and speak Apron protocol v10. `client.ts` holds the session,

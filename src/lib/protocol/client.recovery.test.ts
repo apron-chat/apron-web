@@ -371,6 +371,48 @@ describe('after a reconnect', () => {
 		expect(snapshot.showReconnectDivider).toBe(false);
 	});
 
+	describe('the room the page waits to show again', () => {
+		const record = (id: string, base: number, latest = base + 1) => ({ room_id: id, log_id: String(base), title: id, latest_log_id: String(latest), history_log_id: String(base) });
+		const page = (id: string, log: string) => ({ messages: [{ message_id: `${id}-${log}`, log_id: log, room_id: id, from: { user_id: 'guest_1' }, body: { text: log } }], more: false, latest_log_id: log, history_log_id: String(Number(log) - 1) });
+		const history = () => latest().sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params).room_id);
+
+		/** Four rooms recovered, eng open; then the connection drops, and the page waits to show eng again. */
+		async function reconnected(): Promise<FakeSocket> {
+			await latest().greet(['history', 'rooms'], { room: record('general', 10) });
+			await latest().reply('history', page('general', '11'));
+			latest().receive({ method: 'room_update', params: { joined: [record('ops', 20), record('quiet', 30), record('eng', 40)] } });
+			for (const [id, log] of [['ops', '21'], ['quiet', '31'], ['eng', '41']]) await latest().reply('history', page(id, log));
+			client.selectRoom('eng');
+			latest().drop();
+			client.awaitRoom('eng');
+			vi.advanceTimersByTime(5_000);
+			const again = latest();
+			again.open();
+			again.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+			await again.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
+			return again;
+		}
+
+		it('catches it up before the rooms kept ahead of it, while the server hasn\u2019t listed it again', async () => {
+			const again = await reconnected();
+			// Each kept room resumes behind auth; one is out, and eng's goes next rather than in the order kept.
+			expect(history()).toEqual(['general']);
+			await again.reply('history', { more: false, latest_log_id: '11', history_log_id: '10' });
+			expect(history()).toEqual(['general', 'eng']);
+		});
+
+		it('lets go of it once the listing leaves it out, so the room open instead goes first', async () => {
+			const again = await reconnected();
+			// Removed from eng while away; general, open in its place, has two pages to catch up.
+			await again.reply('room_list', { joined: [record('general', 10, 19), record('ops', 20, 29), record('quiet', 30, 39)], users: [] });
+			expect(snapshot.activeRoom).toBe('general');
+			await again.reply('history', { messages: [], first_log_id: '12', last_log_id: '12', more: true, latest_log_id: '19', history_log_id: '10' });
+			expect(history().at(-1)).toBe('ops');
+			await again.reply('history', { more: false, latest_log_id: '29', history_log_id: '20' });
+			expect(history().at(-1)).toBe('general');
+		});
+	});
+
 	it('keeps a loaded thread\u2019s records through a reconnect, marked resumed until its next load catches up', async () => {
 		const side = { room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '22', history_log_id: '20' };
 		await latest().greet(['history', 'rooms'], { room: general });

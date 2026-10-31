@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { markdownText, renderBio, type ImageResolver, renderMarkdown, renderPlain, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
+import type { MediaCheck } from './sanitize';
+import { markdownText, renderBio, renderMarkdown, renderPlain, type EmojiResolver, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
 
 const resolve: MentionResolver = (id) => {
 	if (id === 'alice') return { kind: 'user', id, name: 'Alice Chen' };
@@ -228,20 +229,30 @@ describe('bios (ext:bio)', () => {
 });
 
 describe('images (§5.5)', () => {
-	const fromServer: ImageResolver = (src) => (src.startsWith('https://chat.example/') ? src : undefined);
+	const fromServer: MediaCheck = { key: 'chat.example', src: (src) => (typeof src === 'string' && src.startsWith('https://chat.example/') ? src : undefined) };
+	const shown = (text: string) => renderMarkdown(text, undefined, undefined, undefined, undefined, fromServer);
 
 	it('shows an image only where it may load from, and any other as a link to it with its alt text, else its URL', () => {
-		expect(renderMarkdown('![cat](https://chat.example/cat.png)', undefined, undefined, undefined, undefined, fromServer)).toBe('<p><img src="https://chat.example/cat.png" alt="cat"></p>\n');
-		expect(renderMarkdown('![pixel](https://tracker.example/p.gif "Hi") and ![](https://tracker.example/q.gif)', undefined, undefined, undefined, undefined, fromServer)).toBe(
-			'<p><a href="https://tracker.example/p.gif" title="Hi" rel="noreferrer noopener" target="_blank">pixel</a> and <a href="https://tracker.example/q.gif" rel="noreferrer noopener" target="_blank">https://tracker.example/q.gif</a></p>\n'
+		expect(shown('![cat](https://chat.example/cat.png)')).toBe('<p><img src="https://chat.example/cat.png" alt="cat"></p>\n');
+		expect(shown('![pixel](https://tracker.example/p.gif "Hi") and ![](https://tracker.example/q.gif)')).toBe(
+			'<p><a href="https://tracker.example/p.gif" target="_blank" rel="noreferrer noopener" title="Hi">pixel</a> and <a href="https://tracker.example/q.gif" target="_blank" rel="noreferrer noopener">https://tracker.example/q.gif</a></p>\n'
 		);
+		// Linked, as a reference, or in a link: never a link in a link.
+		expect(shown('[![badge](https://tracker.example/b.svg)](https://example.com)')).toBe('<p><a href="https://example.com" rel="noreferrer noopener" target="_blank">badge</a></p>\n');
+		expect(shown('![ref][r]\n\n[r]: https://tracker.example/r.png')).not.toContain('<img');
 	});
 
-	it('loads none without a resolver, and asks with the URL as written', () => {
+	it('loads none without a gate, and asks with the URL as written', () => {
 		expect(renderMarkdown('![cat](https://chat.example/cat.png)')).not.toContain('<img');
-		const asked: string[] = [];
-		renderMarkdown('![a](https://chat.example/a.png?x=1&y=2)', undefined, undefined, undefined, undefined, (src) => void asked.push(src));
+		const asked: unknown[] = [];
+		renderMarkdown('![a](https://chat.example/a.png?x=1&y=2)', undefined, undefined, undefined, undefined, { key: 'ask', src: (src) => void asked.push(src) });
 		expect(asked).toEqual(['https://chat.example/a.png?x=1&y=2']);
+	});
+
+	it('shows a custom emoji only where it may load from, else its key', () => {
+		const emoji: EmojiResolver = (key) => (key === ':blob:' ? { src: 'https://tracker.example/blob.png', alt: ':blob:' } : undefined);
+		expect(renderPlain('hi :blob:', undefined, undefined, undefined, emoji, fromServer)).toBe('hi :blob:');
+		expect(renderPlain('hi :blob:', undefined, undefined, undefined, emoji, { key: 'any', src: (src) => src as string })).toContain('<img class="ap-cemoji"');
 	});
 });
 
@@ -387,42 +398,44 @@ describe('custom emoji in text (ext:emoji)', () => {
 		':b:': { src: 'https://chat.example/e/b.png', alt: ':b:' }
 	};
 	const emoji = (key: string) => images[key];
+	/** Lets every image load: what is tested here is how they show, not where from. */
+	const any: MediaCheck = { key: 'any', src: (src) => (typeof src === 'string' ? src : undefined) };
 	const img = (key: string) => {
 		const { src, alt, width, height } = images[key];
 		return `<img class="ap-cemoji" src="${src}" alt="${alt}" title="${alt}" style="aspect-ratio: ${width && height ? `${width} / ${height}` : '1 / 1'}">`;
 	};
 
 	it('renders a key the catalog has as its image, with its alt as hover text and its aspect ratio, square without one', () => {
-		expect(renderMarkdown('Shipped :partyparrot:', undefined, undefined, undefined, emoji)).toBe(`<p>Shipped ${img(':partyparrot:')}</p>\n`);
-		expect(renderMarkdown(':shipit:', undefined, undefined, undefined, emoji)).toBe(`<p>${img(':shipit:')}</p>\n`);
-		expect(renderPlain('plain :shipit:', undefined, undefined, undefined, emoji)).toBe(`plain ${img(':shipit:')}`);
+		expect(renderMarkdown('Shipped :partyparrot:', undefined, undefined, undefined, emoji, any)).toBe(`<p>Shipped ${img(':partyparrot:')}</p>\n`);
+		expect(renderMarkdown(':shipit:', undefined, undefined, undefined, emoji, any)).toBe(`<p>${img(':shipit:')}</p>\n`);
+		expect(renderPlain('plain :shipit:', undefined, undefined, undefined, emoji, any)).toBe(`plain ${img(':shipit:')}`);
 	});
 
 	it('scans left to right: adjacent keys, a time before a key, unknown keys as text', () => {
-		expect(renderPlain(':a::b:', undefined, undefined, undefined, emoji)).toBe(img(':a:') + img(':b:'));
-		expect(renderPlain('12:30:partyparrot:', undefined, undefined, undefined, emoji)).toBe(`12:30${img(':partyparrot:')}`);
-		expect(renderPlain(':nope: :a: :Partyparrot:', undefined, undefined, undefined, emoji)).toBe(`:nope: ${img(':a:')} :Partyparrot:`);
-		expect(renderPlain(':a:b:', undefined, undefined, undefined, emoji)).toBe(`${img(':a:')}b:`);
+		expect(renderPlain(':a::b:', undefined, undefined, undefined, emoji, any)).toBe(img(':a:') + img(':b:'));
+		expect(renderPlain('12:30:partyparrot:', undefined, undefined, undefined, emoji, any)).toBe(`12:30${img(':partyparrot:')}`);
+		expect(renderPlain(':nope: :a: :Partyparrot:', undefined, undefined, undefined, emoji, any)).toBe(`:nope: ${img(':a:')} :Partyparrot:`);
+		expect(renderPlain(':a:b:', undefined, undefined, undefined, emoji, any)).toBe(`${img(':a:')}b:`);
 	});
 
 	it('leaves keys in code spans and code blocks as text, and doesn\'t look without a catalog', () => {
-		expect(renderMarkdown('`:a:` and\n\n```\n:b:\n```', undefined, undefined, undefined, emoji)).toBe('<p><code>:a:</code> and</p>\n<pre><code>:b:\n</code></pre>\n');
+		expect(renderMarkdown('`:a:` and\n\n```\n:b:\n```', undefined, undefined, undefined, emoji, any)).toBe('<p><code>:a:</code> and</p>\n<pre><code>:b:\n</code></pre>\n');
 		expect(renderMarkdown('Shipped :partyparrot:')).toBe('<p>Shipped :partyparrot:</p>\n');
 	});
 
 	it('keeps a mention that runs into a key a mention, and the key after a space an image', () => {
 		const people: MentionResolver = (id) => (id === 'ada' ? { kind: 'user', id, name: 'Ada' } : undefined);
-		expect(renderPlain('@ada :a:', people, undefined, undefined, emoji)).toBe(`<button type="button" class="ap-mention" data-user-id="ada" title="@ada">@Ada</button> ${img(':a:')}`);
+		expect(renderPlain('@ada :a:', people, undefined, undefined, emoji, any)).toBe(`<button type="button" class="ap-mention" data-user-id="ada" title="@ada">@Ada</button> ${img(':a:')}`);
 	});
 
 	it('lets no other style through the sanitizer', () => {
 		const sneaky = (key: string) => (key === ':a:' ? { src: 'https://chat.example/a.png', alt: 'x" onerror="alert(1)' } : undefined);
-		const html = renderMarkdown(':a:', undefined, undefined, undefined, sneaky);
+		const html = renderMarkdown(':a:', undefined, undefined, undefined, sneaky, any);
 		expect(html).not.toContain(' onerror="');
 		expect(html).toContain('style="aspect-ratio: 1 / 1"');
 		// Raw HTML stays text; an image of another class, or another style, keeps no style.
 		expect(renderMarkdown('<img class="ap-cemoji" style="color: red">')).not.toContain('<img');
 		const odd = (key: string) => (key === ':a:' ? { src: 'https://chat.example/a.png', alt: 'a', width: 1, height: Number.NaN } : undefined);
-		expect(renderMarkdown(':a:', undefined, undefined, undefined, odd)).toContain('style="aspect-ratio: 1 / 1"');
+		expect(renderMarkdown(':a:', undefined, undefined, undefined, odd, any)).toContain('style="aspect-ratio: 1 / 1"');
 	});
 });

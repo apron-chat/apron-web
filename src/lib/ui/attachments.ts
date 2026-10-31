@@ -1,4 +1,5 @@
-import { embedMedia, safeLink } from '$lib/protocol/embeds';
+import { safeLink } from '$lib/protocol/embeds';
+import type { MediaGate, MediaSrc } from './media-gate';
 import type { Embed } from '$lib/protocol/types';
 
 /** How an embed shows as a tile in the message editor (the design system's `AttachmentTile`). */
@@ -6,7 +7,7 @@ export interface EmbedTile {
 	kind: 'image' | 'audio' | 'file' | 'link';
 	name: string;
 	detail?: string;
-	src?: string;
+	src?: MediaSrc;
 	/** Its name is the sender's to change: an upload's `title` (§4.8.4). */
 	renamable: boolean;
 }
@@ -16,9 +17,9 @@ export interface EmbedTile {
  * or a file card under its title; live text (a terminal's output, or text
  * appended to the body) as a card saying which, under its title; anything
  * else (a link preview, a frame) as a card named by its title or address.
- * Media load only from where the timeline would load them (`embedMedia`).
+ * Media load only from where the timeline would load them (`gate`).
  */
-export function embedTile(embed: Embed, origin: string | undefined, trusted: readonly string[] = []): EmbedTile {
+export function embedTile(embed: Embed, gate: MediaGate): EmbedTile {
 	const og = embed.og ?? {};
 	const url = safeLink(embed.url);
 	if (embed.kind === 'terminal') return { kind: 'link', name: embed.title || 'Terminal', detail: typeof embed.output === 'string' ? 'Terminal output' : 'Live terminal', renamable: false };
@@ -29,8 +30,8 @@ export function embedTile(embed: Embed, origin: string | undefined, trusted: rea
 	}
 	const name = embed.title || og.title || 'File';
 	if (!url) return { kind: 'file', name, detail: 'Uploading…', renamable: true };
-	const image = embedMedia(og.image?.url, origin, trusted);
-	const audio = embedMedia(og.audio?.url, origin, trusted);
+	const image = gate.src(og.image?.url);
+	const audio = gate.src(og.audio?.url);
 	if (og.video) return image ? { kind: 'image', name, detail: 'Video', src: image, renamable: true } : { kind: 'file', name, detail: 'Video', renamable: true };
 	if (audio) return { kind: 'audio', name, src: audio, renamable: true };
 	if (image) {

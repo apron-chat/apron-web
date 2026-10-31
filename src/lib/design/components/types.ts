@@ -1,16 +1,27 @@
 import type { Component, Snippet } from 'svelte';
 import type { ClassValue } from 'svelte/elements';
-import type { Sender } from './util';
-export type { Sender };
+import type { MediaSrc, Sender } from './util';
+export type { MediaSrc, Sender };
 
 /** OpenGraph description of an embed (§4.8.1), `og:` prefix dropped, structured properties nested. */
 export interface OG {
 	title?: string;
 	description?: string;
 	site_name?: string;
-	image?: { url: string; type?: string; width?: number; height?: number; alt?: string };
-	video?: { url: string; type?: string; width?: number; height?: number };
-	audio?: { url: string; type?: string };
+	/** Each medium: its `url` where it may load, else what a click may load (`ask`), else neither. */
+	image?: { url?: MediaSrc; type?: string; width?: number; height?: number; alt?: string; ask?: MediaAskProps };
+	video?: { url?: MediaSrc; type?: string; width?: number; height?: number; ask?: MediaAskProps };
+	audio?: { url?: MediaSrc; type?: string; ask?: MediaAskProps };
+}
+
+/** Media that waits for a click (MediaAsk): its site, and what Load and Always load do. */
+export interface MediaAskProps {
+	/** The site it is on, as its host. */
+	host: string;
+	/** Loads it, this once. */
+	onload: () => void;
+	/** Trusts its site from now on; absent where it can't be (not `https:`). */
+	ontrust?: () => void;
 }
 
 /** One entry of `body.embeds` (§4.8). `kind` picks the renderer; unknown kinds render from `og`, else EmbedFallback (§3.5). */
@@ -71,7 +82,7 @@ export interface ReactionChip {
 	/** The entry (§4.7): an emoji sequence, or a key such as `:partyparrot:`. Toggling sends it as it is. */
 	emoji: string;
 	/** A key shown as its image, such as a custom emoji's (`ext:emoji`). */
-	image?: { src: string; alt: string; width?: number; height?: number };
+	image?: { src: MediaSrc; alt: string; width?: number; height?: number };
 	/** A key the client can't show: a placeholder shape, the key its tooltip. */
 	placeholder?: boolean;
 	count: number;
@@ -111,7 +122,7 @@ export interface MessageAction {
 export interface BackendEntry {
 	id: string;
 	label: string;
-	icon?: string;
+	icon?: MediaSrc;
 	unread?: boolean;
 	mentions?: number;
 	state?: 'online' | 'offline';
@@ -131,7 +142,7 @@ export type Presence = 'online' | 'idle' | 'dnd' | 'offline' | 'invisible' | 'un
 /** One image in the MediaViewer. */
 export interface MediaItem {
 	/** The image to show: the full file where it may load, else its preview. */
-	src: string;
+	src: MediaSrc;
 	alt?: string;
 	/** What it is called, such as its file name. */
 	title: string;
@@ -172,7 +183,7 @@ export interface AttachmentFile {
 	preparing?: boolean;
 	kind?: 'image' | 'audio' | 'file';
 	/** Previews an image or audio clip (an object URL). */
-	src?: string;
+	src?: MediaSrc;
 }
 
 /** What a Composer hands its `field` snippet: how your own field reads, as its textarea would. */
@@ -206,7 +217,7 @@ export interface PickerEmoji {
 	native: string;
 	name: string;
 	/** A custom emoji's image, shown in place of `native`. */
-	image?: string;
+	image?: MediaSrc;
 }
 
 /** Someone in a MemberList (§4.2.1). */
@@ -214,7 +225,7 @@ export interface MemberListPerson {
 	user_id: string;
 	/** Falls back to `user_id`. */
 	name?: string;
-	avatar?: string;
+	avatar?: MediaSrc;
 	/** Their `status` (§4.5): a dot on the avatar; offline (or invisible) dims the row. */
 	status?: Presence | (string & {});
 	/** The status in words, instead of its own, such as for your own ("Invisible · others see you as offline"). */
@@ -259,7 +270,7 @@ export interface MessageSender {
 	/** Badges beside the name (never part of it); absent when there are none. */
 	roles?: string[];
 	/** An avatar this client will load (§4.8.6); without one, initials. */
-	avatar?: string;
+	avatar?: MediaSrc;
 	/** The initials' tint, 0–360; absent keeps the denim placeholder. */
 	hue?: number;
 }
@@ -272,7 +283,7 @@ export interface MessageReply {
 	/** The quoted message's `message_id`, to jump to. */
 	id?: string;
 	name?: string;
-	avatar?: string;
+	avatar?: MediaSrc;
 	hue?: number;
 	/** One line of its text (~120 chars, first line, no Markdown), mentions picked out. */
 	snippet?: (string | MessageMention)[];
@@ -295,7 +306,7 @@ export interface MessageLinkCard {
 	/** A room or thread itself: its name is the title. */
 	room?: LinkCardPlace;
 	/** Who sent a message, once it's loaded here: the title. */
-	sender?: { name: string; avatar?: string; hue?: number };
+	sender?: { name: string; avatar?: MediaSrc; hue?: number };
 	/** Epoch ms of a loaded message's `message_id`: the tooltip on `time`. */
 	timestamp?: number;
 	/** When a loaded message was, pre-formatted, with its day when that isn't today. */
@@ -477,7 +488,7 @@ export interface Face {
 	/** Falls back to `user_id`. */
 	name?: string;
 	/** An avatar this client will load (§4.8.6). */
-	src?: string;
+	src?: MediaSrc;
 	/** The initials' tint, 0–360, such as one made from the `user_id`. */
 	hue?: number;
 	/** Their `status` (§4.5), on a face shown alone. */
@@ -530,7 +541,7 @@ export interface RecentBackend {
 	/** What to call it: its `title` (§3.1), else its host. */
 	label?: string;
 	/** Its `avatar` (§3.1), loaded as a user's is (§4.8.6); initials without one. */
-	avatar?: string;
+	avatar?: MediaSrc;
 }
 
 /** The server in the connect screen's Server field, once it has answered: how it shows itself (§3.1), beside its address. */
@@ -539,5 +550,5 @@ export interface ConnectServer {
 	name: string;
 	/** Its address (§1), always shown with the name, since a title and an avatar can be copied (§5.3). */
 	address: string;
-	avatar?: string;
+	avatar?: MediaSrc;
 }

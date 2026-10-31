@@ -4,7 +4,10 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import MediaViewer from '$lib/design/components/MediaViewer.svelte';
 import EmbedUpload from '$lib/components/embeds/EmbedUpload.svelte';
 import { gallery, mediaItemOf, mediaViewer } from './media-viewer.svelte';
+import { directory } from './directory.svelte';
+import { blankSnapshot } from './session.svelte';
 import { render } from '$lib/test/dom';
+import { media } from '$lib/test/media';
 
 const PIXEL = 'data:image/png;base64,iVBORw0KGgo=';
 
@@ -19,24 +22,27 @@ beforeAll(() => {
 	};
 });
 
+// The files are the chat server's own: where previews may load from.
+beforeAll(() => directory.apply(blankSnapshot(), 'https://files.example'));
+
 afterEach(() => {
 	mediaViewer.open = false;
 });
 
 function link(src: string, title: string, extra = ''): string {
-	return `<a href="https://files.example/${title}" data-viewer-src="${src}" data-viewer-title="${title}" ${extra}>${title}</a>`;
+	return `<a href="https://files.example/${title}" data-viewer-src="${src.includes(':') ? src : `https://files.example/${src}`}" data-viewer-title="${title}" ${extra}>${title}</a>`;
 }
 
 describe('gallery', () => {
-	it('pages through the images in the same timeline, in order, from the one clicked', () => {
-		document.body.innerHTML = `<div class="ap-timeline">${link('a.png', 'a.png', 'data-viewer-detail="Ada · 4:00 PM" data-viewer-width="960" data-viewer-height="600"')}<a data-viewer-title="no-src">x</a>${link('b.png', 'b.png')}${link('c.png', 'c.png', 'data-viewer-alt="A ridge"')}</div>${link('elsewhere.png', 'elsewhere.png')}`;
+	it('pages through the images in the same timeline, in order, from the one clicked, but one from elsewhere', () => {
+		document.body.innerHTML = `<div class="ap-timeline">${link('a.png', 'a.png', 'data-viewer-detail="Ada · 4:00 PM" data-viewer-width="960" data-viewer-height="600"')}<a data-viewer-title="no-src">x</a>${link('https://tracker.example/t.png', 'elsewhere')}${link('b.png', 'b.png')}${link('c.png', 'c.png', 'data-viewer-alt="A ridge"')}</div>${link('elsewhere.png', 'elsewhere.png')}`;
 		const links = [...document.querySelectorAll<HTMLElement>('.ap-timeline [data-viewer-src]')];
-		const found = gallery(links[1]);
+		const found = gallery(links[2]);
 		expect(found.index).toBe(1);
 		expect(found.items).toEqual([
-			{ src: 'a.png', title: 'a.png', detail: 'Ada · 4:00 PM', href: 'https://files.example/a.png', width: 960, height: 600 },
-			{ src: 'b.png', title: 'b.png', href: 'https://files.example/b.png' },
-			{ src: 'c.png', title: 'c.png', alt: 'A ridge', href: 'https://files.example/c.png' }
+			{ src: 'https://files.example/a.png', title: 'a.png', detail: 'Ada · 4:00 PM', href: 'https://files.example/a.png', width: 960, height: 600 },
+			{ src: 'https://files.example/b.png', title: 'b.png', href: 'https://files.example/b.png' },
+			{ src: 'https://files.example/c.png', title: 'c.png', alt: 'A ridge', href: 'https://files.example/c.png' }
 		]);
 		expect(mediaItemOf(document.querySelector<HTMLElement>('[data-viewer-title="no-src"]')!)).toBeUndefined();
 	});
@@ -60,8 +66,8 @@ describe('MediaViewer', () => {
 			open: true,
 			index: 0,
 			items: [
-				{ src: PIXEL, title: 'dusk.jpg', detail: 'Grace Hopper · 4:00 PM', href: 'https://files.example/dusk.jpg' },
-				{ src: PIXEL, title: 'dawn.jpg' }
+				{ src: media(PIXEL), title: 'dusk.jpg', detail: 'Grace Hopper · 4:00 PM', href: 'https://files.example/dusk.jpg' },
+				{ src: media(PIXEL), title: 'dawn.jpg' }
 			],
 			onclose
 		});
@@ -109,6 +115,6 @@ describe('an image upload', () => {
 		anchor.dispatchEvent(click);
 		expect(click.defaultPrevented).toBe(true);
 		expect(mediaViewer.open).toBe(true);
-		expect(mediaViewer.items).toEqual([{ src: PIXEL, title: 'dusk.jpg', detail: 'Grace Hopper · 4:00 PM', href: 'https://files.example/dusk.jpg', width: 960, height: 600 }]);
+		expect(mediaViewer.items).toEqual([{ src: media(PIXEL), title: 'dusk.jpg', detail: 'Grace Hopper · 4:00 PM', href: 'https://files.example/dusk.jpg', width: 960, height: 600 }]);
 	});
 });

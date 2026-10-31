@@ -6,6 +6,7 @@ export { default as Message } from './Message.svelte';
 export { default as Embed } from './Embed.svelte';
 export { default as EmbedUpload } from './EmbedUpload.svelte';
 export { default as EmbedTerminal } from './EmbedTerminal.svelte';
+export { default as MediaAsk } from './MediaAsk.svelte';
 export { default as EmbedCard } from './EmbedCard.svelte';
 export { default as EmbedFrame } from './EmbedFrame.svelte';
 export { default as EmbedHtml } from './EmbedHtml.svelte';

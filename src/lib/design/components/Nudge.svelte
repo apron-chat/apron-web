@@ -11,6 +11,8 @@
 		note?: string;
 		/** Drawn in an accent circle before the title, such as a bell. */
 		icon?: Snippet;
+		/** More under the title and detail, in line with them, such as steps to follow. */
+		children?: Snippet;
 		/** The buttons: a quiet Not now, then the one thing to do. */
 		actions?: Snippet;
 		/**
@@ -24,7 +26,7 @@
 		/** A `data-testid` for the nudge. */
 		testid?: string;
 	}
-	let { title, detail, note, icon, actions, pointer = false, class: className, testid }: Props = $props();
+	let { title, detail, note, icon, children, actions, pointer = false, class: className, testid }: Props = $props();
 	const id = $props.id();
 </script>
 
@@ -36,10 +38,11 @@
 <div role="dialog" data-testid={testid} class={['ap-nudge', pointer && 'ap-nudge-pointer', className]} aria-labelledby="{id}-title" aria-describedby={detail ? `${id}-detail` : undefined}>
 	<div class="ap-nudge-top">
 		{#if icon}<span class="ap-nudge-icon" aria-hidden="true">{@render icon()}</span>{/if}
-		<span class="ap-nudge-text">
+		<div class="ap-nudge-text">
 			<span class="ap-nudge-title" id="{id}-title">{title}</span>
 			{#if detail}<span class="ap-nudge-detail" id="{id}-detail">{detail}</span>{/if}
-		</span>
+			{@render children?.()}
+		</div>
 	</div>
 	{#if actions}<div class="ap-nudge-actions">{@render actions()}</div>{/if}
 	{#if note}<p class="ap-nudge-note">{note}</p>{/if}

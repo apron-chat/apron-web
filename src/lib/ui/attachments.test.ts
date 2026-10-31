@@ -1,31 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import { embedTile, removeEmbedQuestion } from './attachments';
+import { mediaGate } from './media-gate';
 
 const origin = 'https://chat.test';
+const gate = mediaGate(origin, []);
 
 describe('embedTile', () => {
 	it('shows an upload as its picture, audio or a file card, by its title, renamable', () => {
-		expect(embedTile({ kind: 'upload', embed_id: 'e1', title: 'dusk.jpg', url: `${origin}/f/1`, og: { title: 'old.jpg', image: { url: `${origin}/f/1/thumb`, width: 640, height: 480 } } }, origin))
+		expect(embedTile({ kind: 'upload', embed_id: 'e1', title: 'dusk.jpg', url: `${origin}/f/1`, og: { title: 'old.jpg', image: { url: `${origin}/f/1/thumb`, width: 640, height: 480 } } }, gate))
 			.toEqual({ kind: 'image', name: 'dusk.jpg', detail: '640 × 480', src: `${origin}/f/1/thumb`, renamable: true });
-		expect(embedTile({ kind: 'upload', url: `${origin}/f/2`, og: { title: 'memo.ogg', audio: { url: `${origin}/f/2` } } }, origin))
+		expect(embedTile({ kind: 'upload', url: `${origin}/f/2`, og: { title: 'memo.ogg', audio: { url: `${origin}/f/2` } } }, gate))
 			.toEqual({ kind: 'audio', name: 'memo.ogg', src: `${origin}/f/2`, renamable: true });
-		expect(embedTile({ kind: 'upload', title: 'notes.txt', url: `${origin}/f/3` }, origin)).toEqual({ kind: 'file', name: 'notes.txt', detail: 'TXT file', renamable: true });
-		expect(embedTile({ kind: 'upload', title: 'renamed notes', url: `${origin}/f/3` }, origin).detail).toBe('File');
-		expect(embedTile({ kind: 'upload', title: 'big.bin' }, origin)).toEqual({ kind: 'file', name: 'big.bin', detail: 'Uploading…', renamable: true });
+		expect(embedTile({ kind: 'upload', title: 'notes.txt', url: `${origin}/f/3` }, gate)).toEqual({ kind: 'file', name: 'notes.txt', detail: 'TXT file', renamable: true });
+		expect(embedTile({ kind: 'upload', title: 'renamed notes', url: `${origin}/f/3` }, gate).detail).toBe('File');
+		expect(embedTile({ kind: 'upload', title: 'big.bin' }, gate)).toEqual({ kind: 'file', name: 'big.bin', detail: 'Uploading…', renamable: true });
 	});
 
 	it('loads no picture from elsewhere, and names other embeds by their title or host', () => {
-		expect(embedTile({ kind: 'upload', title: 'x.png', url: `${origin}/f/4`, og: { image: { url: 'https://evil.test/x.png' } } }, origin).kind).toBe('file');
-		expect(embedTile({ kind: 'link', url: 'https://github.com/a/b/pull/1', og: { title: 'Fix the cert' } }, origin))
+		expect(embedTile({ kind: 'upload', title: 'x.png', url: `${origin}/f/4`, og: { image: { url: 'https://evil.test/x.png' } } }, gate).kind).toBe('file');
+		expect(embedTile({ kind: 'link', url: 'https://github.com/a/b/pull/1', og: { title: 'Fix the cert' } }, gate))
 			.toEqual({ kind: 'link', name: 'Fix the cert', detail: 'github.com', renamable: false });
-		expect(embedTile({ kind: 'iframe', url: `${origin}/v/1` }, origin)).toMatchObject({ kind: 'link', name: 'chat.test', detail: 'chat.test', renamable: false });
-		expect(embedTile({ kind: 'html', html: '<b>x</b>' }, origin)).toEqual({ kind: 'link', name: 'html', detail: 'Embedded content', renamable: false });
+		expect(embedTile({ kind: 'iframe', url: `${origin}/v/1` }, gate)).toMatchObject({ kind: 'link', name: 'chat.test', detail: 'chat.test', renamable: false });
+		expect(embedTile({ kind: 'html', html: '<b>x</b>' }, gate)).toEqual({ kind: 'link', name: 'html', detail: 'Embedded content', renamable: false });
 	});
 
 	it('says which live text an embed is: a terminal by its title, live or finished, or text the body is still getting', () => {
-		expect(embedTile({ kind: 'terminal', title: 'make test', url: `${origin}/t/1` }, origin)).toEqual({ kind: 'link', name: 'make test', detail: 'Live terminal', renamable: false });
-		expect(embedTile({ kind: 'terminal', output: 'ok\n' }, origin)).toEqual({ kind: 'link', name: 'Terminal', detail: 'Terminal output', renamable: false });
-		expect(embedTile({ kind: 'append', url: `${origin}/a/1` }, origin)).toEqual({ kind: 'link', name: 'Live text', detail: 'Still arriving', renamable: false });
+		expect(embedTile({ kind: 'terminal', title: 'make test', url: `${origin}/t/1` }, gate)).toEqual({ kind: 'link', name: 'make test', detail: 'Live terminal', renamable: false });
+		expect(embedTile({ kind: 'terminal', output: 'ok\n' }, gate)).toEqual({ kind: 'link', name: 'Terminal', detail: 'Terminal output', renamable: false });
+		expect(embedTile({ kind: 'append', url: `${origin}/a/1` }, gate)).toEqual({ kind: 'link', name: 'Live text', detail: 'Still arriving', renamable: false });
 	});
 });
 
