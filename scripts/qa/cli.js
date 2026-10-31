@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, relative, resolve } from 'node:path';
 import { ab } from './lib/ab.js';
 import { int, list, parseArgs } from './lib/args.js';
-import { compareBudget, countsOf, formatBudget, readBudget, writeBudget } from './lib/budget.js';
+import { compareBudget, countsOf, formatBudget, readBudget, shardOf, writeBudget } from './lib/budget.js';
 import { launch } from './lib/browser.js';
 import { compareDirs, diffDirs, formatDiff, summarize } from './lib/images.js';
 import { extractInteropContract, interopDir } from './lib/interop-contract.js';
@@ -37,7 +37,7 @@ const HELP = `npm run qa -- <command> [options]
                          [--build dirA --build dirB] [--out file.json]
   budget --build <dir>   Check a preview build's counts (layouts, style recalcs, DOM nodes, requests,
                          bytes) per perf probe against scripts/qa/perf-budget.json; exits 1 when one is
-                         over. --update rewrites the baseline. [--runs 3] [--cpu 4] [--only p]
+                         over. --update rewrites the baseline. [--runs 3] [--cpu 4] [--only p] [--shard i/n]
   prof --url A --url B   CPU-profile page load; biggest per-function changes. [--runs 6] [--cpu 4]
   sheet <spec.json>      Render hand-picked before/after panels (title, note, crop box, scale) to a PNG.
                          [--out <spec>.png]
@@ -150,7 +150,12 @@ async function main() {
 			const dir = o.build?.[0] ?? 'build';
 			if (!existsSync(join(dir, '__preview.html'))) throw new Error(`budget needs a preview build: no ${join(dir, '__preview.html')} (APRON_PREVIEW=1 npm run build)`);
 			const suite = await loadSuite('main');
-			const probes = selectProbes(suite, list(o.only)).filter((p) => p.budget !== false);
+			// `--shard 2/3`: this machine's share of the probes, checked against the same baseline; the first also
+			// checks the bundle's size.
+			const [index, count] = o.shard ? String(o.shard).split('/').map(Number) : [1, 1];
+			if (!(index >= 1 && index <= count)) throw new Error(`--shard takes <index>/<count>, e.g. 2/3, not ${o.shard}`);
+			if (count > 1 && o.update) throw new Error('--update rewrites the whole baseline: run it without --shard');
+			const probes = shardOf(selectProbes(suite, list(o.only)).filter((p) => p.budget !== false), index, count);
 			const runs = int(o.runs, 3);
 			const cpu = int(o.cpu, 4);
 			const server = await serveDir(dir);
@@ -159,7 +164,7 @@ async function main() {
 			try {
 				// Under reduced motion, so an animation's layouts don't count once per frame drawn: a faster runner
 				// draws more frames, and the count would go with it.
-				result = await runPerf({ browser, urls: [server.url], labels: ['now'], runs, cpu, reducedMotion: 'reduce', probes, path: suite.path, builds: [dir] });
+				result = await runPerf({ browser, urls: [server.url], labels: ['now'], runs, cpu, reducedMotion: 'reduce', probes, path: suite.path, builds: index === 1 ? [dir] : [] });
 			} finally {
 				await browser.close();
 				await server.close();

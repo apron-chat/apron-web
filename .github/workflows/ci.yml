@@ -10,13 +10,15 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels the run for the one before it; runs on main each finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    concurrency:
-      group: test-${{ github.ref }}
-      cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -36,13 +38,16 @@ jobs:
 
   # The perf budget: counts (layouts, style recalcs, DOM nodes, requests, bytes) per perf probe against
   # scripts/qa/perf-budget.json. Counts hold steady across runners where timings don't; see scripts/qa/README.md.
-  perf-budget:
+  # The probes are split across three runners (`--shard`), each checking its share against the same baseline.
+  perf-budget-shard:
+    name: perf-budget (${{ matrix.shard }}/3)
     # Pinned: Playwright 1.56 installs Chromium for Ubuntu 24.04, not 26.04, and a fixed OS keeps the counts steady.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    concurrency:
-      group: perf-budget-${{ github.ref }}
-      cancel-in-progress: true
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -53,6 +58,24 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci
-      - run: npx playwright-core install --with-deps chromium
+      - id: playwright
+        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+      # Chromium for this Playwright, kept between runs; the runner image has the libraries it needs.
+      - id: chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-ubuntu-24.04-${{ steps.playwright.outputs.version }}
+      - if: steps.chromium.outputs.cache-hit != 'true'
+        run: npx playwright-core install --with-deps chromium
       - run: APRON_PREVIEW=1 npm run build
-      - run: npm run qa -- budget --build build
+      - run: npm run qa -- budget --build build --shard ${{ matrix.shard }}/3
+
+  # The check branch protection and reviewers see: passes once every shard has.
+  perf-budget:
+    needs: perf-budget-shard
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "${{ needs.perf-budget-shard.result }}" = success
