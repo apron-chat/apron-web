@@ -80,7 +80,8 @@
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
-	import { HistoryKeeper } from '$lib/history/history-keeper';
+	import type { HistoryKeeper } from '$lib/history/history-keeper';
+	import { takeKeeper } from '$lib/history/startup';
 	import { historySettings } from '$lib/history/settings.svelte';
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
@@ -1225,9 +1226,9 @@
 			webSocketFactory
 		);
 		if (!previewMode) {
-			historySettings.load();
+			// Made as the app started, and reading what it restores since (`$lib/history/startup`).
+			historyKeeper = takeKeeper();
 			keptRetention = historySettings.retention;
-			historyKeeper = new HistoryKeeper({ retentionMs: historySettings.ms, onfailure: (message) => (historySettings.failure = message) });
 		}
 		const keeper = historyKeeper;
 		// The view from this device's last visit, while this one signs in and catches up: only for the session

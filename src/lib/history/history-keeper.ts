@@ -144,6 +144,20 @@ interface Writer {
 	flags?: string;
 }
 
+/** What a restore reads (`readHistory`), and the time it planned the rooms by. */
+interface KeptRead {
+	kept: KeptHistory;
+	now: number;
+}
+
+/** A read begun ahead of its restore (`prepare`): for which server, at which retention, and once read, what. */
+interface Prepared {
+	server: string;
+	retentionMs: number | undefined | null;
+	read: Promise<KeptRead | undefined>;
+	done?: KeptRead;
+}
+
 /** Who a writer writes for, and what is known to be kept for them: `synced` rooms mirror the client as of `version`. */
 interface Known {
 	server: string;
@@ -166,6 +180,8 @@ export class HistoryKeeper {
 	private queue: StoreChange[] = [];
 	/** What this page knows is kept: from what it restored, then from each write. */
 	private known: Known | undefined;
+	/** What is read for the next restore, begun as the page started (`prepare`). */
+	private prepared: Prepared | undefined;
 	/** How far down each room's kept log reaches below what the client holds, for the server `known` names. */
 	private coverage = new Map<string, Coverage>();
 	/** The ranges of each room's log served from here (`olderPage`): their records are kept already, so their changes aren't written again. */
@@ -232,9 +248,37 @@ export class HistoryKeeper {
 	}
 
 	/**
+	 * Begins reading what was kept for `server` now, ahead of the session that restores it (`restore`): the page
+	 * calls it as it starts, so opening the database and reading it go on beside the rest of its startup rather
+	 * than after it, and are done or under way when signing in waits for them (`FRESH_HOOK_MS`). Only the next
+	 * restore, and only one for `server`, takes what it read. Resolves once read.
+	 */
+	async prepare(server: string): Promise<void> {
+		if (!this.keeping) return;
+		const prepared: Prepared = { server, retentionMs: this.retentionMs, read: this.read(server) };
+		this.prepared = prepared;
+		// A read that fails is the restore's to report, should one take it.
+		prepared.done = await prepared.read.catch(() => undefined);
+	}
+
+	/** What is kept for `server`'s saved session, read as a restore takes it, as of now; undefined when nothing is. */
+	private async read(server: string): Promise<KeptRead | undefined> {
+		const now = this.now();
+		const cutoff = this.retentionMs === undefined || this.retentionMs === null ? undefined : now - this.retentionMs;
+		// The account of the session saved there: the one kept for the server, which signing in confirms.
+		const account = await this.keptAccount(server);
+		if (!account) return undefined;
+		const kept = await readHistory(await this.open(server, account), RESTORE_WINDOW, (row) => {
+			const planned = plannedRoom(row.sync!, cutoff);
+			return planned && (planned.from !== undefined ? { from: planned.from } : {});
+		});
+		return kept && { kept, now };
+	}
+
+	/**
 	 * Before a new session connects: what was kept for its server, for the session saved there, restored into
-	 * the client. `watch` has the client run it for each new session; never throws, since without IndexedDB
-	 * there is nothing kept.
+	 * the client, from what `prepare` read for it when it did. `watch` has the client run it for each new
+	 * session; never throws, since without IndexedDB there is nothing kept.
 	 */
 	restore(client: HistoryClient): Promise<void> {
 		return (this.restoring = this.restoreFor(client));
@@ -242,19 +286,15 @@ export class HistoryKeeper {
 
 	private async restoreFor(client: HistoryClient): Promise<void> {
 		const server = client.url;
+		const prepared = this.prepared;
+		this.prepared = undefined;
 		if (!this.keeping || !client.keptSessionFor(server)) return;
 		try {
-			const now = this.now();
-			const cutoff = this.retentionMs === undefined || this.retentionMs === null ? undefined : now - this.retentionMs;
-			// The account of the session saved there: the one kept for the server, which signing in confirms.
-			const account = await this.keptAccount(server);
-			if (!account) return;
-			const kept = await readHistory(await this.open(server, account), RESTORE_WINDOW, (row) => {
-				const planned = plannedRoom(row.sync!, cutoff);
-				return planned && (planned.from !== undefined ? { from: planned.from } : {});
-			});
+			// Read for another server, or at another retention: read again.
+			const read = await (prepared?.server === server && prepared.retentionMs === this.retentionMs ? prepared.read : this.read(server));
 			// Moved on to another server meanwhile: that one's session restores its own.
-			if (!kept || client.url !== server) return;
+			if (!read || client.url !== server) return;
+			const { kept, now } = read;
 			const { state, coverage } = restoredState(kept, this.retentionMs ?? undefined, now);
 			// Too late, the client started without it: what is kept is no longer what it has.
 			if (!client.restore(state)) return;
@@ -407,6 +447,7 @@ export class HistoryKeeper {
 	async forget(server?: string): Promise<void> {
 		if (this.writer && (server === undefined || this.writer.server === server)) this.endWriter();
 		if (server === undefined || this.known?.server === server) this.known = undefined;
+		if (server === undefined || this.prepared?.server === server) this.prepared = undefined;
 		this.queue = [];
 		try {
 			await Promise.all((await listHistories(this.factory, server)).map((entry) => this.drop(entry.name)));
@@ -438,9 +479,13 @@ export class HistoryKeeper {
 			await this.restoring;
 			for (const entry of entries) {
 				const pruned = await pruneHistory(await this.openNamed(entry.name), cutoff);
-				// This tab's own prune leaves what it knows of what is kept as true as it was.
+				// This tab's own prune leaves what it knows of what is kept as true as it was, and so what it read ahead
+				// of a restore (`prepare`) before the prune: what the prune dropped, older than the retention, is below
+				// where a restore reaches from now on (`reach`).
 				const known = this.known;
 				if (known && known.server === entry.server && known.userId === entry.userId && pruned?.from === known.version) known.version = pruned.to;
+				const read = this.prepared?.server === entry.server ? this.prepared.done?.kept.meta : undefined;
+				if (read && read.userId === entry.userId && pruned?.from === read.version) read.version = pruned.to;
 			}
 		} catch {
 			// Kept as it was; the next visit restores only what is recent.
