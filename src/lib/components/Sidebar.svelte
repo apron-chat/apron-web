@@ -112,6 +112,20 @@
 	/** Each section's rooms while one is carried in it, as they'd land; none between drags. */
 	let carried = $state<Partial<Record<Section, RoomSnapshot[]>>>({});
 	let reordering = $derived(Object.keys(carried).length > 0);
+	/**
+	 * Each section's rooms as last listed, kept while their ids and order hold: the list's `animate:` reads every row's
+	 * place before and after each change to it, and the drag zone takes its rooms again and restyles every row, while
+	 * nearly every change (a message, an unread count) leaves the rooms where they were. Rows take their room as it is
+	 * now from `latest`. Not state: it only remembers what was shown.
+	 */
+	const listed: Partial<Record<Section, RoomSnapshot[]>> = {};
+	function steady(section: Section, list: RoomSnapshot[]): RoomSnapshot[] {
+		const last = listed[section];
+		if (last && last.length === list.length && last.every((room, index) => room.id === list[index].id)) return last;
+		return (listed[section] = list);
+	}
+	/** Each listed room as it is now, by id, for rows whose list is kept from before (`steady`). */
+	let latest = $derived(new Map([...rooms, ...privateRooms].map((room) => [room.id, room])));
 	/** Ends keeping the carried room in its section's column. */
 	let uncontain: (() => void) | undefined;
 	$effect(() => () => uncontain?.());
@@ -540,7 +554,7 @@
 	in for them, and it keeps no outline on the list while a room is carried.
 -->
 {#snippet roomList(section: Section, list: RoomSnapshot[], withFaces: boolean)}
-	{@const items = carried[section] ?? list}
+	{@const items = carried[section] ?? steady(section, list)}
 	<!-- The rows inside are the controls; the list takes their keys to reorder them. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
@@ -548,7 +562,9 @@
 		use:dndzone={{ items, type: section, flipDurationMs: FLIP_MS, delayTouchStart: HOLD_MS, zoneTabIndex: -1, zoneItemTabIndex: -1, autoAriaDisabled: true, dropTargetStyle: {}, transformDraggedElement: lift }}
 		onconsider={(event) => consider(section, event)} onfinalize={(event) => finalize(section, event)} onkeydown={(event) => reorderKey(event, list)} {@attach guard}
 	>
-		{#each items as room (room.id)}
+		{#each items as listedRoom (listedRoom.id)}
+			<!-- The library's stand-in for the carried room isn't listed: it's shown as it was given. -->
+			{@const room = latest.get(listedRoom.id) ?? listedRoom}
 			<!-- The others make way for a carried room; a fold or a new room isn't animated. -->
 			<div class="ap-roomblock" animate:flip={{ duration: reordering ? FLIP_MS : 0 }}>
 				<div class="ap-roomgrip" {@attach grip}>{@render roomRow(room, withFaces ? roomFaces(room, session.you) : undefined)}</div>
