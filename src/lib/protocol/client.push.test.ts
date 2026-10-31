@@ -28,7 +28,7 @@ const sent = (method: string) => socket.sent.filter((frame) => frame.method === 
 
 async function greet(push?: Record<string, unknown>, you = 'ada'): Promise<void> {
 	socket.open();
-	socket.receive({ method: 'server', params: { apron: 9, auth: ['token', 'guest'], capabilities: [], ...(push ? { push } : {}) } });
+	socket.receive({ method: 'server', params: { apron: 10, auth: ['token', 'guest'], capabilities: [], ...(push ? { push } : {}) } });
 	// Nothing is registered before auth.
 	expect(sent('push_register')).toEqual([]);
 	await socket.reply('auth', { you: { user_id: you, name: you } });
@@ -79,7 +79,7 @@ describe('push registration', () => {
 		reconnect();
 		await greet({ relay: {} });
 		expect(sent('push_register')).toEqual([]);
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['token', 'guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['token', 'guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
 		expect(sent('push_register')).toEqual([renewed]);
 	});
 

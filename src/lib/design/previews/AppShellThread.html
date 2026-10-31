@@ -41,7 +41,7 @@
   msg({ sender: bob, time: '14:04', grouped: true, body: { html: 'Crash is in the new queue client.' }, embeds: [{ key: '0', embed: { kind: 'upload', url: '#', title: 'worker-crash.log', og: { description: 'text/plain · 42 KB' } } }] }, tl);
   msg({ sender: dana, time: '14:20', body: { html: 'Rolled back worker to 1.8.3.' }, reactions: [{ emoji: '🙏', count: 2, mine: true, who: 'Sam, Bob' }], reply: { id: '1724803100000', name: bob.name, snippet: ['Worker pods are restarting in a loop.'] } }, tl);
   add(A.SystemLine, { time: '14:25', children: A.html('Thread renamed to <span class="ap-msg-text">“Deploy”</span>') }, tl);
-  msg({ sender: me, time: '14:32', caps: mine, body: { html: 'Re-running the migration now.' }, embeds: [{ key: '0', embed: { kind: 'stream', format: 'terminal', url: '#', text: '$ ./migrate up 0042\nacquiring lock on accounts… ok\napplying 0042_orders_idx… ' } }] }, tl);
+  msg({ sender: me, time: '14:32', caps: mine, body: { html: 'Re-running the migration now.' }, embeds: [{ key: '0', embed: { kind: 'terminal', title: 'migrate', url: '#', text: '$ ./migrate up 0042\nacquiring lock on accounts… ok\napplying 0042_orders_idx… ' } }] }, tl);
   add(A.Composer, { room: 'Ops', thread: { thread: 'deploy', name: 'Deploy' }, canUpload: true }, $('foot'));
   setTimeout(function () { tl.scrollTop = tl.scrollHeight; }, 60);
 </script>

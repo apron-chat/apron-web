@@ -1,3 +1,4 @@
+import { embedsLabel } from '$lib/protocol/embeds';
 import { compareLogIds } from '$lib/protocol/reducer';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { isJsonObject } from '$lib/protocol/types';
@@ -350,7 +351,7 @@ export function pushNotification(message: unknown, pushId: string | undefined): 
 	const name = typeof from.name === 'string' ? withoutBidiOverrides(from.name) : undefined;
 	const sender = [name, from.user_id].find((value): value is string => typeof value === 'string' && value.trim() !== '') ?? 'Someone';
 	const text = isJsonObject(message.body) && typeof message.body.text === 'string' ? message.body.text : undefined;
-	const body = notificationBody(text) || 'New message';
+	const body = notificationBody(text) || embedsLabel(isJsonObject(message.body) ? message.body.embeds : undefined) || 'New message';
 	const target: PushTarget = { push: true, roomId, pushId, messageId, group: notificationGroup(pushId, roomId) };
 	return { title: `${sender} · ${roomId}`, options: { body, tag: messageNotificationTag(pushId, messageId), renotify: false, data: target } };
 }

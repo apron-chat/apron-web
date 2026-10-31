@@ -19,7 +19,7 @@ const dm = (id: string, other: string, latestLogId?: string) =>
 	({ id, title: other, joined: true, private: true, namedForMembers: true, members: members('ada', other), ...(latestLogId ? { latestLogId } : {}) }) as unknown as RoomSnapshot;
 
 function render(rooms: RoomSnapshot[] = [], limit?: number) {
-	const server = { apron: 9, auth: ['guest'], capabilities: ['rooms', 'ext:settings'], ...(limit !== undefined ? { ext: { settings: { private_rooms: limit } } } : {}) };
+	const server = { apron: 10, auth: ['guest'], capabilities: ['rooms', 'ext:settings'], ...(limit !== undefined ? { ext: { settings: { private_rooms: limit } } } : {}) };
 	const snapshot: ClientSnapshot = { ...blankSnapshot(), authenticated: true, you: ada, rooms, server, users: Object.fromEntries(people.map((user) => [user.user_id, user])) };
 	directory.apply(snapshot, undefined);
 	const session = { snapshot, rooms, you: ada, server } as unknown as SessionView;

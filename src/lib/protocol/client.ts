@@ -185,7 +185,7 @@ function addressOf(url: string): string {
 }
 
 /**
- * A browser-only Apron protocol v9 session; instantiate one per mounted UI.
+ * A browser-only Apron protocol v10 session; instantiate one per mounted UI.
  *
  * State model: one store of room records, message snapshots, reaction sets,
  * and memberships shared by every room (PROTOCOL.md §2), projected per visible

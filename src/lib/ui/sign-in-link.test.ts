@@ -83,7 +83,7 @@ describe('sign-in links (§4.11.2)', () => {
 	});
 
 	it('waits for a kept session’s resume to settle before an addition’s link is given up on', () => {
-		const server = { apron: 9, auth: ['email', 'token', 'guest'], capabilities: [] };
+		const server = { apron: 10, auth: ['email', 'token', 'guest'], capabilities: [] };
 		const base = { status: 'connected' as const, authenticated: false, server };
 		expect(sessionSettled({ ...base, authenticated: true })).toBe(true);
 		expect(sessionSettled({ ...base, authenticated: true, authBusy: true })).toBe(false);

@@ -14,7 +14,7 @@ Wrangler:
 ```sh
 git submodule update --init   # or clone with --recurse-submodules
 npm ci
-npm run dev       # Vite serves the UI and proxies /ws, /write/, /files/, /streams/ to 127.0.0.1:8080
+npm run dev       # Vite serves the UI and proxies /ws, /write/, /files/, /live/ to 127.0.0.1:8080
 npm run check     # svelte-check
 npm test          # reducer and replay unit tests
 npm run build     # writes the static site to build/
@@ -34,7 +34,11 @@ The server the client opens first is `VITE_DEFAULT_SERVER_URL` from the build
 (the connect screen switches to any other, and remembers it):
 
 - `npm run dev` leaves it unset, so it uses same-origin `/ws`, proxied to
-  port 8080. To start dev against another server, set it in `.env.local`.
+  port 8080. To start dev against another server, set it in `.env.local` or
+  on the command line (`VITE_DEFAULT_SERVER_URL=ws://127.0.0.1:8787/ npm run dev`);
+  a server this browser remembers from an earlier visit comes first, so switch
+  with the connect screen there. Its live text (`terminal` and `append`
+  embeds) then loads from that server's origin, which serves it with CORS.
 - Builds (`npm run build`, production, and Previews) read `.env.production`:
   `wss://server.apron.chat/`, the Cloudflare demo server
   ([apron-chat/apron-server-cloudflare](https://github.com/apron-chat/apron-server-cloudflare)). To

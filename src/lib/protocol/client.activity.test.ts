@@ -35,7 +35,7 @@ describe('typing', () => {
 
 	/** Replaces the server frame, advertising capability `activity`. */
 	function advertiseActivity(socket = latest()): void {
-		socket.receive({ method: 'server', params: { apron: 9, agent: 'fake', auth: ['guest'], capabilities: ['activity'] } });
+		socket.receive({ method: 'server', params: { apron: 10, agent: 'fake', auth: ['guest'], capabilities: ['activity'] } });
 	}
 
 	it('bounds typing traffic while refreshing it before expiry, and lets a sent message end it without another frame', () => {

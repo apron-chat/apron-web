@@ -24,6 +24,7 @@
 	import LinkCard from './LinkCard.svelte';
 	import ReplyPreview from './ReplyPreview.svelte';
 	import RoleBadges from './RoleBadges.svelte';
+	import TypingDots from './TypingDots.svelte';
 	import type { MessageAction, MessageEmbed, MessageTestids, MessageView } from './types';
 	import { times } from './util';
 
@@ -277,6 +278,7 @@
 			{:else}
 				<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
 				{#if view.body}<div class={['ap-msg-text', view.body.markdown ? 'ap-msg-markdown' : 'ap-msg-plain']} {@attach view.body.code && code}>{@html view.body.html}</div>{/if}
+				{#if view.writing}<div class="ap-msg-writing" role="status" data-testid={testids?.writing}><TypingDots />Writing…</div>{/if}
 				{#if view.linkCards?.length}<div class="ap-msg-linkcards">{#each view.linkCards as card (card.href)}<LinkCard {card} data-testid={testids?.linkCard} />{/each}</div>{/if}
 				{#if view.embeds?.length}<MessageEmbeds embeds={view.embeds} {embed} onremove={(item) => on.removeEmbed?.(view, item)} />{/if}
 			{/if}

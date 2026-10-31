@@ -147,6 +147,27 @@ export const SCENES: Scene[] = [
 		}
 	},
 	{
+		name: 'live-text',
+		steps: async (preview, look) => {
+			const id = await preview.startLive('general', 'ada', 'terminal', { title: 'make test' });
+			await preview.liveWrite(id, '$ make test\r\n');
+			const terminal = preview.page.getByTestId('terminal-embed');
+			await expect(terminal.locator('.ap-embed-livebadge')).toHaveText('Live');
+			await expect(terminal.locator('.xterm-rows')).toContainText('$ make test');
+			const append = await preview.startLive('general', 'grace', 'append', { body: { text: 'Here is the plan:', format: 'markdown' } });
+			await preview.liveWrite(append, ' roll back, then **renew** the cert.');
+			const writing = preview.message('Here is the plan:').getByTestId('message-writing');
+			await expect(writing).toBeVisible();
+			await look();
+			// Finished: the terminal says so, and the appended text stays in the body without Writing….
+			await preview.liveEnd(id);
+			await expect(terminal.locator('.ap-embed-detail')).toHaveText('Finished');
+			await preview.liveEnd(append);
+			await expect(writing).toHaveCount(0);
+			await look();
+		}
+	},
+	{
 		name: 'message-actions',
 		steps: async (preview, look) => {
 			const { page } = preview;
@@ -344,6 +365,11 @@ export const SCENES: Scene[] = [
 			await look();
 			// With `status`, a status to choose, do not disturb among them.
 			await preferences.getByRole('button', { name: /status/i }).click();
+			await look();
+			// Notifications, a press away in the section navigation.
+			await page.keyboard.press('Escape');
+			await preferences.getByRole('navigation', { name: 'Preference sections' }).getByRole('button', { name: 'Notifications', exact: true }).click();
+			await expect(preferences.getByRole('switch', { name: 'Notifications' })).toBeVisible();
 			await look();
 		}
 	},

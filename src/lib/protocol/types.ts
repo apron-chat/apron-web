@@ -1,5 +1,5 @@
 /**
- * Wire types and decoders for Apron protocol v9 (`protocol/PROTOCOL.md`).
+ * Wire types and decoders for Apron protocol v10 (`protocol/PROTOCOL.md`).
  * Decoders normalize server records to the fields the protocol defines
  * and drop unknown top-level keys (§1: unknown keys MAY be dropped), while
  * copying known values exactly, including `ext`, literal `null`s, unknown embed
@@ -15,7 +15,7 @@ export interface JsonObject {
  * Optional features of `server.capabilities` (§4) that this client uses;
  * it ignores the rest.
  */
-export type Capability = 'history' | 'edit' | 'rooms' | 'reactions' | 'activity' | 'embed:upload' | 'embed:stream' | 'command' | 'status' | 'ext' | 'ext:settings' | 'ext:limits' | 'ext:media' | 'ext:permissions' | 'ext:bio' | 'ext:archive';
+export type Capability = 'history' | 'edit' | 'rooms' | 'reactions' | 'activity' | 'embed:upload' | 'embed:append' | 'embed:terminal' | 'command' | 'status' | 'ext' | 'ext:settings' | 'ext:limits' | 'ext:media' | 'ext:permissions' | 'ext:bio' | 'ext:archive';
 
 /**
  * A user object (§3.3). Current objects (`you`, `new` in `user`, room
@@ -79,17 +79,18 @@ export interface OpenGraphMedia extends JsonObject {
 
 /**
  * One entry of `body.embeds` (§4.8). `kind` picks the renderer:
- * `upload` (a file the server hosts; pending while `url` is absent), `stream`
- * (live text at `url`, finished with `text`), `iframe`, `html`, and any other
- * kind from `og` or as a fallback card.
+ * `upload` (a file the server hosts; pending while `url` is absent),
+ * `terminal` (live output at `url`, finished with `output`, §4.8.6), `append`
+ * (live text at `url` that continues the body, §4.8.5; never a card),
+ * `iframe`, `html`, and any other kind from `og` or as a fallback card.
  */
 export interface Embed extends JsonObject {
 	kind: string;
 	embed_id?: string;
 	url?: string;
 	title?: string;
-	text?: string;
-	format?: string;
+	/** `terminal`: the kept output, once it ended (§4.8.6). */
+	output?: string;
 	html?: string;
 	height?: number;
 	og?: OpenGraph;

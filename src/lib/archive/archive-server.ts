@@ -97,7 +97,7 @@ export class ArchiveServer {
 			const archive = { ...(this.archive.server ? { server: this.archive.server } : {}), ...(this.archive.exportedAt ? { exported_at: this.archive.exportedAt } : {}) };
 			const media = this.archive.media.length > 0;
 			const capabilities = media ? [...ARCHIVE_CAPABILITIES, 'ext:media'] : ARCHIVE_CAPABILITIES;
-			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-archive', auth: ['guest'], capabilities, ext: { settings, ...(media ? { media: { origins: this.archive.media } } : {}), archive } } });
+			socket.deliver({ method: 'server', params: { apron: 10, agent: 'apron-archive', auth: ['guest'], capabilities, ext: { settings, ...(media ? { media: { origins: this.archive.media } } : {}), archive } } });
 		},
 		received: (socket, frame) => this.receive(socket, frame),
 		closed: () => undefined

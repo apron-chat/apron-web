@@ -26,7 +26,6 @@ const OUT_OF_REACH: Record<string, string> = {
 	'option /Until I resume/': `Pausing notifications. ${SIGNED_IN}`,
 	'button "Sign out"': SIGNED_IN,
 	'button "Signing in…"': 'Shown only during a passkey ceremony, which needs an authenticator and a server that verifies it.',
-	'.ap-embed-livebadge': 'A live stream loads only from the chat server’s own origin, and the preview has none.',
 	// push.spec's statusChooser takes a status control as a menu button or a select: this app has the button.
 	'combobox /status/i': 'The alternative to `button /status/i` (seen): interop accepts a select or a menu button.',
 	option: 'The options of that select, the alternative to the menu this app shows.'
@@ -36,16 +35,7 @@ const OUT_OF_REACH: Record<string, string> = {
  * Entries the interop suite uses that this app no longer renders: real breaks, reported to fix on one side
  * or the other, and tested (as fixme) below rather than failing every run.
  */
-const PROFILE_IN_PREFERENCES = 'Your profile is Preferences’ first section now, which the profile bar’s one button (button /^Open preferences/) opens: the handle, avatar, bio, Sign-in row and Sign out are in dialog "Preferences".';
-const KNOWN_BREAKS: Record<string, string> = {
-	'button /^Your profile on/': PROFILE_IN_PREFERENCES,
-	'dialog "Edit profile"': PROFILE_IN_PREFERENCES,
-	'dialog "Edit profile" (substring)': PROFILE_IN_PREFERENCES,
-	'button "Sign in with a passkey"': 'A guest’s Profile offers Sign in (button "Sign in" in dialog "Preferences"), as the composer does where guests can’t post: the connect screen, at the way the server signs in first, a passkey where it signs in and guests start.',
-	'button "Connect to a server…"': 'The connect screen is the server pane’s Connect to another server…, which the rooms list’s head (button /^Server: /) opens.',
-	'switch "Notifications"': 'Preferences opens at Profile now: the switch is in its Notifications section, a press away (button "Notifications" in its navigation).',
-	'#ap-pref-notifications-note': 'Preferences opens at Profile now: the note is in its Notifications section, a press away.'
-};
+const KNOWN_BREAKS: Record<string, string> = {};
 
 const seen: Seen[] = existsSync(SEEN_DIR) ? readdirSync(SEEN_DIR).map((f) => JSON.parse(readFileSync(join(SEEN_DIR, f), 'utf8'))) : [];
 const ran = new Set(seen.map((s) => s.scene));

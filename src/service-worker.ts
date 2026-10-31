@@ -11,7 +11,7 @@ import { anyWindowVisible, appWindows, askPushId, handleClick, handlePush, isNew
  * Keeps each deploy's app files cached so the app opens fast, still opens
  * offline, and a tab left open across a deploy can still load its lazy chunks.
  * Only the app's own files and page loads are handled: the WebSocket,
- * uploads, files, streams and every backend's URLs go straight to the network.
+ * uploads, files, live text and every backend's URLs go straight to the network.
  * It also shows message notifications where a page can't show its own, and
  * the messages the server pushes (§4.9).
  */

@@ -318,7 +318,7 @@ describe('a listing refused with retry_after', () => {
 
 	it('of the joined rooms goes again once the wait is over, rather than leaving the connection with none', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
 		refuse(socket.request('room_list').id, 6);
 		await settle();
