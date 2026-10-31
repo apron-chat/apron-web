@@ -24,5 +24,9 @@ describe('searchRoles', () => {
 		expect(searchRoles(roles, '&ad').map((role) => role.role)).toEqual(['admin']);
 		expect(searchRoles(roles, '').length).toBe(3);
 		expect(searchRoles(roles, 'x')).toEqual([]);
+		// A space after the name matches only the role it names exactly, so the picker can close.
+		expect(searchRoles(roles, 'mo ')).toEqual([]);
+		expect(searchRoles(roles, '&mo ')).toEqual([]);
+		expect(searchRoles(roles, 'mod ').map((role) => role.role)).toEqual(['mod']);
 	});
 });

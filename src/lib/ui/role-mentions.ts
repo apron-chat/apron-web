@@ -30,13 +30,18 @@ export function roomRoles(people: MentionPerson[]): RoleSuggestion[] {
 	return [...byRole].map(([role, members]) => ({ role, members })).sort((a, b) => b.members.length - a.members.length || a.role.localeCompare(b.role));
 }
 
-/** Roles whose name starts with `query` (an `&` before it asks for roles alone), an exact one first. */
+/**
+ * Roles whose name starts with `query` (an `&` before it asks for roles
+ * alone), an exact one first. As for people, a space typed after the name
+ * matches only the role it names exactly, so `@mo ` lets the picker close.
+ */
 export function searchRoles(roles: RoleSuggestion[], query: string): RoleSuggestion[] {
-	const needle = query.replace(/^&/, '').trimEnd().toLowerCase();
+	const needle = query.replace(/^&/, '').toLowerCase();
+	const exact = needle.trimEnd();
 	return roles
 		.map((suggestion) => {
 			const role = suggestion.role.toLowerCase();
-			const rank = role === needle ? 0 : role.startsWith(needle) ? 1 : -1;
+			const rank = exact && role === exact ? 0 : role.startsWith(needle) ? 1 : -1;
 			return rank < 0 ? undefined : { suggestion, rank };
 		})
 		.filter((entry) => entry !== undefined)

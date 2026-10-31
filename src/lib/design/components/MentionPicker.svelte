@@ -40,8 +40,11 @@
 	const kind = $derived(rooms ? 'rooms' : emoji ? 'emoji' : 'people');
 	const items: (Sender | PickerRole | PickerRoom | PickerEmoji)[] = $derived(rooms ?? emoji ?? people);
 	const listLabel = $derived(kind === 'rooms' ? 'Room suggestions' : kind === 'emoji' ? 'Emoji suggestions' : 'Mention someone');
-	const emptyText = $derived(kind === 'rooms' ? `No room matches “${query}”` : kind === 'emoji' ? `No emoji match “${query}”` : query ? `No one here matches “${query}”` : 'People in this room');
-	const q = $derived(query.toLowerCase());
+	/** `@&`: only roles were asked for. */
+	const rolesOnly = $derived(kind === 'people' && query.startsWith('&'));
+	const emptyText = $derived(kind === 'rooms' ? `No room matches “${query}”` : kind === 'emoji' ? `No emoji match “${query}”` : rolesOnly ? (query.length > 1 ? `No role here matches “${query.slice(1)}”` : 'No one else here has a role') : query ? `No one here matches “${query}”` : 'People in this room');
+	// What reads in accent: the typed text, without the `&` that asks for roles.
+	const q = $derived((rolesOnly ? query.slice(1) : query).toLowerCase());
 	const key = (item: Sender | PickerRole | PickerRoom | PickerEmoji, index: number): string => ('user_id' in item ? uid(item) : 'role' in item ? `&${item.role}` : item.id) ?? String(index);
 	let list = $state<HTMLUListElement>();
 	let none = $state<HTMLDivElement>();

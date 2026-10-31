@@ -339,8 +339,9 @@ export class DraftField {
 
 	/**
 	 * People whose name or ID starts with the query, and roles whose name
-	 * does: whoever it names exactly first, then people, then a few roles,
-	 * kept a place even when the people fill the list. `@&` asks for roles alone.
+	 * does: whoever or whatever it names exactly first, then people, then
+	 * roles, which keep up to `ROLE_MATCHES_MAX` places when the people fill
+	 * the list and take whatever room is left otherwise. `@&` asks for roles alone.
 	 */
 	private matching(text: string): MentionMatch[] {
 		const roles = searchRoles(this.roles, text);
@@ -361,7 +362,8 @@ export class DraftField {
 		const otherRoles = roles.filter((suggestion) => !exactRoles.includes(suggestion));
 		const named = people.filter((_, index) => scored[index].rank === 0);
 		const rest = people.slice(named.length);
-		const roleCount = Math.min(otherRoles.length, ROLE_MATCHES_MAX);
+		const free = MENTION_MATCHES_MAX - named.length - exactRoles.length - rest.length;
+		const roleCount = Math.min(otherRoles.length, Math.max(ROLE_MATCHES_MAX, free));
 		return [...named, ...exactRoles, ...rest.slice(0, Math.max(0, MENTION_MATCHES_MAX - named.length - exactRoles.length - roleCount)), ...otherRoles.slice(0, roleCount)].slice(0, MENTION_MATCHES_MAX);
 	}
 

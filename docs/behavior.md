@@ -435,9 +435,12 @@ known room collapses into the same chip once finished (it mentions no one).
 
 The `@` picker also lists the roles ([PROTOCOL.md §3.3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#334-roles))
 held by someone in the room other than you, each with how many people it
-reaches: a role whose name matches what's typed comes after whoever it names
-exactly, keeping up to three places when the people fill the list, and `@&`
-lists roles alone. A role whose name isn't one ID (one with a space, say) isn't
+reaches: a role whose name is exactly what's typed comes right after whoever
+it names exactly, and roles whose names start with it come after the people,
+taking whatever room the list has left and keeping up to three places when the
+people fill it. A space after a role's name keeps the picker open only for the
+role it names exactly, as for people, so Enter after `@mo ` sends. `@&` lists
+roles alone, with the typed name highlighted as for people. A role whose name isn't one ID (one with a space, say) isn't
 offered. A picked role becomes a chip showing `@role` with a group outline,
 its tooltip saying how many it mentions, and is sent as `@&role`; a typed
 `@&role` naming such a role collapses into the same chip once finished. A role
