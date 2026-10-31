@@ -1262,7 +1262,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-selbar .ap-btn { border-radius: var(--radius-inner); }
 .ap-selbar-count { font-weight: 600; font-variant-numeric: tabular-nums; }
 .ap-selbar-info { display: inline-flex; align-items: center; gap: var(--space-3); white-space: nowrap; }
-.ap-selbar-actions { display: inline-flex; align-items: center; gap: var(--space-2); margin-inline-start: auto; white-space: nowrap; }
+/* The actions wrap, right-aligned, rather than run past the bar's edge where it is narrow; each button keeps its label on one line. */
+.ap-selbar-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-2); margin-inline-start: auto; min-width: 0; max-width: 100%; }
+.ap-selbar-actions > * { white-space: nowrap; }
 .ap-selbar-status { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--ink-muted); }
 .ap-selbar-pick { position: relative; }
 .ap-menu { position: absolute; inset-inline-end: 0; bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); min-width: 200px; }

@@ -84,7 +84,7 @@
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
 	import { preferencesOpener } from '$lib/ui/preferences.svelte';
-	import { buildRoomTimeline, buildThreadTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
@@ -538,9 +538,9 @@
 	/** Nothing held to show while the room's threads are listed: placeholders, so its messages and thread cards appear together. */
 	let paneHeldBack = $derived(awaitingThreads && !activeThread && !session.activeRoomHeld);
 	let messages = $derived(timelineMessages(paneRoom));
-	let timeline = $derived(activeThread
-		? buildThreadTimeline({ messages, renames: paneRoom?.renames, notices: paneRoom?.notices })
-		: buildRoomTimeline({ messages, threads, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships }));
+	let timeline = $derived(buildRoomTimeline({
+		messages, threads: activeThread ? [] : threads, renames: paneRoom?.renames, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships
+	}));
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
@@ -3165,7 +3165,8 @@
 						{:else if item.kind === 'members'}
 							<MembershipLine joined={item.joined} left={item.left} logId={item.logId} />
 						{:else if item.kind === 'renamed'}
-							<SystemLine timestamp={idMillis(item.logId)} timelineItem testid="thread-renamed">{#if item.title}Thread renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}Thread name cleared{/if}</SystemLine>
+							{@const what = activeThread ? 'Thread' : 'Room'}
+							<SystemLine timestamp={idMillis(item.logId)} timelineItem testid={activeThread ? 'thread-renamed' : 'room-renamed'}>{#if item.title}{what} renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}{what} name cleared{/if}</SystemLine>
 						{:else}
 							{@const event = item.event}
 							{@const view = messageView(event, {

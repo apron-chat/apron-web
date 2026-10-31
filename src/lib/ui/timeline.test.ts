@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ProtocolStore, applyRecords, decodeHistoryRecords, timelineEvents, type MembershipRecord } from '$lib/protocol/reducer';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { byActivity, escapeMarkdown, buildRoomTimeline, inHeldOrder, buildThreadTimeline, newDividerBefore, sidebarRooms, sidebarSections, threadEntries, threadEntry, threadDescriptionFor, threadDescriptionText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { byActivity, escapeMarkdown, buildRoomTimeline, inHeldOrder, newDividerBefore, sidebarRooms, sidebarSections, threadEntries, threadEntry, threadDescriptionFor, threadDescriptionText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { messageSnippet, peopleIn, rangeBetween, spanOf } from './messages';
 import { roomSnapshot as room } from '$lib/test/builders';
@@ -210,18 +210,32 @@ describe('room view', () => {
 	});
 });
 
-describe('thread view', () => {
+describe('renames', () => {
 	it('places each rename by its log position and breaks grouping around it, else is just its messages with date dividers', () => {
 		const first = message(1000, 'bob', { room_id: 't1' });
 		const second = message(3000, 'bob', { room_id: 't1' });
 		const renames = [{ log_id: String(base + 2000), title: 'Deploy', previous: '' }, { log_id: String(base + 4000), title: 'Deploy v2', previous: 'Deploy' }];
-		const items = buildThreadTimeline({ messages: [first, second], renames });
+		const items = buildRoomTimeline({ messages: [first, second], renames });
 		expect(kinds(items)).toEqual(['date', 'message', 'renamed', 'message', 'renamed']);
 		expect(items[2]).toMatchObject({ title: 'Deploy' });
 		expect(items[3]).toMatchObject({ grouped: false });
 		expect(items[4]).toMatchObject({ title: 'Deploy v2' });
 		// Without renames, just its messages with date dividers.
-		expect(kinds(buildThreadTimeline({ messages: [message(1000, 'bob'), message(2000, 'bob')] }))).toEqual(['date', 'message', 'message']);
+		expect(kinds(buildRoomTimeline({ messages: [message(1000, 'bob'), message(2000, 'bob')] }))).toEqual(['date', 'message', 'message']);
+	});
+
+	it('merges renames with cards and membership records by log position, a rename ending a run of joins', () => {
+		const card = { ...threadEntry(room('t1', [message(2500, 'bob', { room_id: 't1' })], { parentRoomId: 'general' })), anchor: String(base + 2500) };
+		const items = buildRoomTimeline({
+			messages: [message(0, 'alice'), message(9000, 'alice')],
+			threads: [card],
+			renames: [{ log_id: String(base + 2000), title: 'Ops', previous: 'Dev' }],
+			memberships: [
+				{ log_id: String(base + 1000), entries: [{ user: { user_id: 'bob' }, joined: true }] },
+				{ log_id: String(base + 3000), entries: [{ user: { user_id: 'carol' }, joined: true }] }
+			]
+		});
+		expect(kinds(items)).toEqual(['date', 'message', 'members', 'renamed', 'thread', 'members', 'message']);
 	});
 });
 
@@ -275,7 +289,7 @@ describe('transient notices and threads not joined', () => {
 		});
 		expect(items.filter((item) => item.kind !== 'date').map((item) => item.kind === 'notice' ? item.notice.key : item.kind === 'message' ? `${item.event.message_id === first.message_id ? 'first' : item.event.message_id === second.message_id ? 'second' : 'third'}${item.grouped ? '+' : ''}` : item.kind))
 			.toEqual(['first', 'between', 'second', 'third+', 'late']);
-		const thread = buildThreadTimeline({ messages: [first, second], notices: [notice('reply', second.message_id)] });
+		const thread = buildRoomTimeline({ messages: [first, second], notices: [notice('reply', second.message_id)] });
 		expect(kinds(thread)).toEqual(['date', 'message', 'message', 'notice']);
 	});
 
@@ -435,7 +449,7 @@ describe('join and leave lines', () => {
 });
 
 describe('the New divider', () => {
-	const ids = (offsets: number[], from = 'alice') => buildThreadTimeline({ messages: offsets.map((offset) => message(offset, from)), now: new Date(base) });
+	const ids = (offsets: number[], from = 'alice') => buildRoomTimeline({ messages: offsets.map((offset) => message(offset, from)), now: new Date(base) });
 	const at = (offset: number) => String(base + offset);
 
 	it('goes above the first message after your read position, unless you wrote it', () => {
