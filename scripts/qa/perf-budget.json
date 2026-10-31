@@ -5,23 +5,23 @@
 	"probes": {
 		"load": {
 			"requests": 22,
-			"startupJsKB": 998.4,
+			"startupJsKB": 1001.2,
 			"domNodes": 543,
 			"layouts": 11,
 			"styleRecalcs": 19,
-			"heapMB": 7.6
+			"heapMB": 7.5
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 971,
+			"startupJsKB": 973.8,
 			"domNodes": 1196,
-			"layouts": 52,
-			"styleRecalcs": 60,
-			"heapMB": 10.3
+			"layouts": 13,
+			"styleRecalcs": 20,
+			"heapMB": 10.1
 		},
 		"switch-room-busy": {
 			"layouts": 2,
-			"styleRecalcs": 13
+			"styleRecalcs": 12
 		},
 		"send-message-busy": {
 			"layouts": 38,
@@ -40,8 +40,8 @@
 			"styleRecalcs": 4
 		},
 		"open-thread": {
-			"layouts": 4,
-			"styleRecalcs": 14
+			"layouts": 5,
+			"styleRecalcs": 15
 		},
 		"open-preferences": {
 			"layouts": 1,
@@ -56,12 +56,12 @@
 			"styleRecalcs": 6
 		},
 		"hover-messages": {
-			"layouts": 6,
-			"styleRecalcs": 9
+			"layouts": 7,
+			"styleRecalcs": 10
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 504.4,
+		"jsGzipKB": 505.3,
 		"cssGzipKB": 21.7
 	}
 }
