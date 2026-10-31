@@ -720,12 +720,13 @@ push say so; iPhone and iPad Safari say to add Apron to the Home Screen first.
 **Appearance** picks a light or dark mode
 over the system's, and a theme: Apron (the system fonts), Ferrous (Recursive
 Sans Casual and Rec Mono Casual), Newsprint (serif messages), Terminal
-(monospace throughout), or Custom. Under it, the theme's CSS sets the
-interface, message and code fonts as design tokens (`--font-sans`,
-`--font-chat`, `--font-mono`); editing it and applying makes it the custom
-theme, which may set any other token too, in either mode. Only `--token:
-value;` declarations are read, alone or in one `:root` block, and none may
-load anything (`url()`, `@import`), so a theme's fonts must be installed.
+(monospace throughout), or Custom. Custom shows its CSS, starting from the
+theme chosen before: the interface, message and code fonts as design tokens
+(`--font-sans`, `--font-chat`, `--font-mono`), and any other token, in either
+mode, once applied. A premade theme hides it and keeps it for next time.
+Only `--token: value;` declarations are read, alone or in one `:root` block,
+and none may load anything (`url()`, `@import`), so a theme's fonts must be
+installed.
 Fonts chosen one by one before themes become a custom theme. All of these stay
 on this device; settings aren't synced.
 

@@ -198,23 +198,19 @@
 	}
 
 	/**
-	 * A premade theme applies at once. Custom applies the saved custom CSS, or,
-	 * the first time, the theme it was chosen from, edits included.
+	 * A theme applies at once. Custom shows its CSS: the saved custom theme, or,
+	 * the first time, the CSS of the theme it was chosen from.
 	 */
 	function chooseTheme(theme: string): void {
 		if (theme !== 'custom' && !THEMES.some((premade) => premade.id === theme)) return;
-		const customCss = theme === 'custom' ? appearanceSettings.current.customCss || themeDraft : appearanceSettings.current.customCss;
-		const { error } = parseThemeCss(customCss);
-		if (theme === 'custom' && error) {
-			themeError = error;
-			return;
-		}
+		const customCss = theme === 'custom' ? appearanceSettings.current.customCss || cssForTheme(appearanceSettings.current) : appearanceSettings.current.customCss;
 		appearanceSettings.update({ ...appearanceSettings.current, theme: theme as ThemeId, customCss });
 		themeDraft = cssForTheme(appearanceSettings.current);
-		themeError = '';
+		// A saved custom theme that doesn't read (edited in storage) applies nothing, and says why.
+		themeError = theme === 'custom' ? (parseThemeCss(customCss).error ?? '') : '';
 	}
 
-	/** Edited CSS becomes the custom theme, whichever theme it started from. */
+	/** Edited CSS becomes the custom theme. */
 	function applyTheme(event: SubmitEvent): void {
 		event.preventDefault();
 		const { error } = parseThemeCss(themeDraft);
@@ -332,36 +328,34 @@
 					</select>
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Theme" for="ap-theme" hint="Fonts and other design tokens, over either mode. A theme’s fonts need to be installed on this device." class="ap-pref-theme-setting">
+			<SettingRow title="Theme" for="ap-theme" hint="Fonts and other design tokens, over either mode. A theme’s fonts need to be installed on this device. Custom starts from the theme you had." class="ap-pref-theme-setting">
 				{#snippet control()}
 					<select
 						id="ap-theme"
 						class="ap-field ap-pref-select"
 						value={appearanceSettings.current.theme}
-						onchange={(event) => {
-							chooseTheme(event.currentTarget.value);
-							// Custom with CSS that doesn't read stays on the theme before, saying why.
-							event.currentTarget.value = appearanceSettings.current.theme;
-						}}
+						onchange={(event) => chooseTheme(event.currentTarget.value)}
 					>
 						{#each THEMES as theme (theme.id)}<option value={theme.id}>{theme.name}</option>{/each}
 						<option value="custom">Custom</option>
 					</select>
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Theme CSS" for="ap-theme-css" stacked class="ap-pref-theme-css">
-				<p class="ap-form-hint" id="ap-theme-css-hint">Edit the tokens, then apply them as your custom theme. Only <code>--token: value;</code> declarations are read, and nothing loads with <code>url()</code>.</p>
-				{#snippet control()}
-					<form onsubmit={applyTheme}>
-						<textarea id="ap-theme-css" class="ap-field ap-pref-css" rows="12" spellcheck="false" autocomplete="off" maxlength={THEME_CSS_MAX} aria-describedby="ap-theme-css-hint" aria-invalid={themeError ? 'true' : undefined} bind:value={themeDraft} oninput={() => (themeError = '')} data-testid="theme-css"></textarea>
-						{#if themeError}<p class="ap-pref-note ap-tone-danger" role="alert">{themeError}</p>{/if}
-						<div class="ap-pref-theme-actions">
-							<Button size="sm" variant="ghost" label="Discard changes" disabled={!themeEdited} onclick={discardTheme} />
-							<Button type="submit" size="sm" variant="primary" label={appearanceSettings.current.theme === 'custom' ? 'Apply' : 'Apply as custom theme'} disabled={!themeEdited} />
-						</div>
-					</form>
-				{/snippet}
-			</SettingRow>
+			{#if appearanceSettings.current.theme === 'custom'}
+				<SettingRow title="Theme CSS" for="ap-theme-css" stacked class="ap-pref-theme-css">
+					<p class="ap-form-hint" id="ap-theme-css-hint">Edit the tokens, then apply them. Only <code>--token: value;</code> declarations are read, and nothing loads with <code>url()</code>.</p>
+					{#snippet control()}
+						<form onsubmit={applyTheme}>
+							<textarea id="ap-theme-css" class="ap-field ap-pref-css" rows="12" spellcheck="false" autocomplete="off" maxlength={THEME_CSS_MAX} aria-describedby="ap-theme-css-hint" aria-invalid={themeError ? 'true' : undefined} bind:value={themeDraft} oninput={() => (themeError = '')} data-testid="theme-css"></textarea>
+							{#if themeError}<p class="ap-pref-note ap-tone-danger" role="alert">{themeError}</p>{/if}
+							<div class="ap-pref-theme-actions">
+								<Button size="sm" variant="ghost" label="Discard changes" disabled={!themeEdited} onclick={discardTheme} />
+								<Button type="submit" size="sm" variant="primary" label="Apply" disabled={!themeEdited} />
+							</div>
+						</form>
+					{/snippet}
+				</SettingRow>
+			{/if}
 		{/if}
 	</SettingsSections>
 </Dialog>
