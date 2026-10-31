@@ -195,7 +195,7 @@ test.describe('room order, with a mouse', () => {
 	});
 });
 
-test.describe('room order, in a short window', () => {
+test.describe('room order, in a short window', { tag: '@full' }, () => {
 	// The sidebar's rooms scroll here, and a drag near its edge scrolls them, by where the pointer is.
 	test.use({ viewport: { width: 1280, height: 180 } });
 
@@ -227,7 +227,7 @@ test.describe('room order, in a short window', () => {
 	});
 });
 
-test.describe('room order, in a short window, lifted without moving', () => {
+test.describe('room order, in a short window, lifted without moving', { tag: '@full' }, () => {
 	test.use({ viewport: { width: 1280, height: 180 } });
 
 	test('a room lifted and let go where it was stays where it was, nothing scrolling under the pointer', async ({ preview, page }) => {
@@ -245,7 +245,7 @@ test.describe('room order, in a short window, lifted without moving', () => {
 	});
 });
 
-test.describe('room order, in a window with the sidebar scrolled past the open room’s threads', () => {
+test.describe('room order, in a window with the sidebar scrolled past the open room’s threads', { tag: '@full' }, () => {
 	test.use({ viewport: { width: 1280, height: 260 } });
 
 	test('a room just below them stays under the pointer as they fold away, and where it’s let go as they come back', async ({ preview, page }) => {
@@ -253,7 +253,7 @@ test.describe('room order, in a window with the sidebar scrolled past the open r
 	});
 });
 
-test.describe('room order, in a window too short for the list', () => {
+test.describe('room order, in a window too short for the list', { tag: '@full' }, () => {
 	// The list doesn't fit, so the sidebar scrolls while a room is carried; the room still lands where it's seen.
 	test.use({ viewport: { width: 1280, height: 140 } });
 
@@ -278,7 +278,7 @@ test.describe('room order, in a window too short for the list', () => {
 	});
 });
 
-test.describe('room order, with the window resized mid-drag', () => {
+test.describe('room order, with the window resized mid-drag', { tag: '@full' }, () => {
 	test.use(DEVICES.desktop);
 
 	test('the sidebar settles where it is rather than jumping each frame', async ({ preview, page }) => {
@@ -305,7 +305,7 @@ test.describe('room order, with the window resized mid-drag', () => {
 	});
 });
 
-test.describe('room order, in a short window with motion allowed', () => {
+test.describe('room order, in a short window with motion allowed', { tag: '@full' }, () => {
 	// The room slides into its place after it's let go: nothing more scrolls under it meanwhile.
 	test.use({ viewport: { width: 1280, height: 140 }, contextOptions: { reducedMotion: 'no-preference' } });
 
@@ -342,7 +342,7 @@ test.describe('room order, in a short window with motion allowed', () => {
 	});
 });
 
-test.describe('room order, with pointer moves out of step with frames', () => {
+test.describe('room order, with pointer moves out of step with frames', { tag: '@full' }, () => {
 	test.use(DEVICES.desktop);
 
 	test('a room carried away from the list lands where it’s seen, however often the pointer reports', async ({ preview, page }) => {
@@ -371,7 +371,7 @@ test.describe('room order, with pointer moves out of step with frames', () => {
 	});
 });
 
-test.describe('folding a room, with motion allowed', () => {
+test.describe('folding a room, with motion allowed', { tag: '@full' }, () => {
 	// The suite runs with reduced motion, which leaves the rooms nothing to animate: this checks they don't when they could.
 	test.use({ ...DEVICES.desktop, contextOptions: { reducedMotion: 'no-preference' } });
 
