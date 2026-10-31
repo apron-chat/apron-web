@@ -60,8 +60,9 @@ page first shows the view kept from last time: the rooms and threads, the open
 room with its messages from the last day (the newest 150 per room), its thread
 cards and members, and who you are. While it checks for new messages, a pill
 says so (below), and each room is replaced by the live one once it has
-recovered: what arrived meanwhile comes in under the New divider, and edits,
-deletions and reactions update in place. The kept view is only for showing: it
+recovered, the open room's first (its history goes ahead of the others', also
+while the server hasn't listed it again yet): what arrived meanwhile comes in
+under the New divider, and edits, deletions and reactions update in place. The kept view is only for showing: it
 never sends a read cursor, notifies, or counts as unread, and the live session
 recovers every room as it would without it. It is kept per server in IndexedDB
 for the account signed in there, dropped after a week, removed on sign-out, and
@@ -203,7 +204,7 @@ a room like any message; one for a room you haven't joined also shows as a
 notice where you are. `~server`, `~room`, and `~private` are sender scopes, not rooms (Appendix A.1); a
 room ID starting with `@` or `~` is an ordinary room.
 
-Joins and leaves show in a room's timeline as the quietest system line, at
+Joins and leaves show in a room's or thread's timeline, private or not, as the quietest system line, at
 each membership record's `log_id` among the messages: "Ada joined", with the
 time on hover. Records with nothing else between them (a message, a card, a
 notice, or a date divider) make one line, netted out per user, so someone who
@@ -214,7 +215,9 @@ everyone in the tooltip. A record joining more than 20 users at once is a
 baseline, not an event, and gets no line. Names render like any other user,
 with the `@user_id` when someone else shows under the same name. The lines
 never count as unread or mention you, and a message after one starts a new
-sender group.
+sender group. A title change, in a room or thread, private or not, gets a
+system line at its room record's `log_id`: "Room renamed to “Ops”" (or
+"Thread renamed to …", or "… name cleared"), which also ends a run of joins.
 
 On wide screens the rooms list is a column beside the conversation: drag its
 inner border (its right one, or its left under a right-to-left layout, where
@@ -249,7 +252,8 @@ who aren't members yet, but you and the system identities, narrowed by a name
 or `@user_id` typed; when none of them matches, the `@user_id` typed is offered
 to add by it. **Add** sends `room_join` with each picked `user_id` in turn; one
 the server refuses doesn't stop the rest, stays picked, and the dialog says
-why, while those added are said in the panel. Pressing a member's row
+why. Those added show in the room's timeline as any join does ("Ada joined"),
+not in the panel. Pressing a member's row
 anywhere drops down its menu beneath it (a right-click, the context menu key or a
 long press opens it where that was): **Profile** opens their profile card;
 **Direct message** (not to a system identity) opens the private conversation you
@@ -609,9 +613,30 @@ On iPhone and iPad Safari outside a Home Screen app, push isn't offered: under
 the Notifications switch, a callout gives the steps to add Apron to the Home
 Screen. Where the browser offers to install Apron (Chromium's
 `beforeinstallprompt`), the client holds that offer back and shows **Install
-app** under the Notifications switch only, never elsewhere, and not once Apron runs installed. The web manifest
+app** under the Notifications switch, and in the install offer below, and not once Apron runs installed. The web manifest
 (`static/manifest.webmanifest`) names Apron, its icons, `start_url` and
 `display: standalone`.
+
+On a phone or tablet not running Apron installed, 20 seconds after the session
+is up, the same kind of prompt as the notifications offer asks "Add Apron to
+your Home Screen?": it opens full screen, like an app, and, on an iPhone or
+iPad signed in where push works, can alert you when it's closed. Where the
+browser offers to install Apron, its **Install** asks the browser (as
+Preferences' **Install app** does, which answers this offer too). Elsewhere
+**Show me how** lists the steps for this browser: Share (in Safari's toolbar or
+its ⋯ menu), Add to Home Screen (under View More if it isn't listed), then Add;
+another iPhone browser's Share by the address, likewise; an Android browser's
+menu, Install app or Add to Home screen; and in an app's own browser
+(Instagram, Facebook and the like), which can't, to open the page in the
+browser first. Under the steps, "Not there? Open this page in Safari first"
+(in your browser, on Android) covers the browsers apps open pages in, which look like
+the browser but have no such menu. **Not now**, **Got it** once the steps
+are read, Escape, or installing answers it, so it isn't offered again on this
+device, in any tab. It never shows with the notifications offer: whichever
+comes first holds the other back until it's answered. It isn't offered where
+Chrome says Apron is installed already (`getInstalledRelatedApps`, the
+manifest naming it in `related_applications`), nor while reading an archive,
+nor on a computer, whose browser offers installing in the address bar.
 
 `push_id` names the account: 12 random bytes in base64url (16 characters),
 made once per account on each server and kept in `apron.pushIds`, so it
@@ -665,6 +690,82 @@ over the system's, and an installed font for the interface, messages and code
 (suggested from installed fonts where the browser allows listing them); the
 font choice is marked experimental, to be replaced by a choice of themes. All
 of these stay on this device; settings aren't synced.
+
+**History** keeps what a signed-in session has loaded on this device, for
+**30 days** unless changed (a day, a week, a year, everything loaded, or not at
+all), and with it how far each joined room is caught up. The next visit shows it
+at once and goes on as a reconnect does: each room asks the server only for what
+came after its checkpoint (§4.3.5), and the joined listing only for rooms that
+changed since (`latest_log_id`, §4.2.1); a thread opened again goes on from
+where its last load got to. Each room opens with the newest fifty entries of its
+log (messages, reaction sets and joins and leaves); as
+you scroll back, older pages come from this device first, then from the server
+once what is kept runs out, as messages older than the retention do. The retention counts by when a message
+was logged, on servers whose `log_id`s are times (as the reference servers'
+are); elsewhere everything loaded is kept. A room last caught up before the
+cutoff starts over from its newest page rather than paging through everything
+since (a quiet room saved recently counts as caught up then, however old its
+last message). It is kept only for a session saved here (an account, or a token the
+server resumes), never for a guest, and only in a browser that can list its
+databases (so signing out can find it to delete); signing out removes it, as does choosing
+not to keep any, in any tab: the others stop writing it back, and a retention
+chosen in one tab holds in the others. Each account's history on each server
+is kept apart, in a database of its own: switching to another server, or
+connecting again from the sign-in screen, goes on from what was kept for that
+server in the same way, and leaves the others' as they are. One account's is
+kept per server, as one session is saved: signing in there as another deletes
+the one before. One tab
+writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped
+keeping more if the device ran out of space.
+
+**Search local history** (first in the room header's ⋯ menu, or Ctrl+F, ⌘F on a Mac, in place of the browser's find while signed in and no other dialog is open)
+starts narrowed to the open room or thread (`room:#general `, the caret after
+it; Backspace widens it to everywhere), and looks through this server's history kept on this device for the
+account signed in (none as a guest, or while keeping is off) and what the page has
+loaded, as you type: a message matches when its text holds what is typed, as
+one run (in any case, with or without accents, any spaces as one; quotes around
+all of it are dropped). `user:` keeps what someone sent, by
+`@user_id` or name (`user:@ada`, `user:"Ada Lovelace"`), and `room:` what is in
+a room and its threads, by `#room_id` or title (`room:#general`); several of
+one filter keep what matches any of them, and filters alone, without text,
+list everything they keep. Typing a filter's value suggests people for `user:`
+(everyone met) and rooms for `room:` (as the composer's `#` does), below the
+field: ↑ ↓ move, Enter or Tab puts in `@user_id` or `#room_id` and a space, and
+Escape puts the suggestions away. The newest hundred matches are
+listed, newest first, each with its room (a thread's with its room after it),
+sender, time and a line of it with what was found marked; ↑ ↓ and Enter, or a click,
+open one where it is, paging back to it from this device as a link to it does.
+One too far back to reach that way says so. The field's note says what is
+searched: what is kept here, and for how long, or only what is loaded, for a
+session that keeps nothing (a guest, "Don't keep", `/__preview`, `/archive`).
+Its title's "history" links to Preferences at History (over the rooms list,
+on a phone), where what this device keeps is chosen. There is no server search
+in the protocol, so nothing is asked of the server.
+
+**Export** saves what this page has loaded from the server as a `.jsonl` file
+(`apron-<host>-<day>.jsonl`, in the format [ARCHIVE.md](../ARCHIVE.md)
+specifies): the rooms and threads the rooms list shows, the rooms those are
+threads of, and each room's records from the oldest page loaded to its latest,
+compacted as the client keeps them (§4.3.4): each message's latest snapshot,
+each message's reactions, and the join and leave records, with who you are and
+the users as they were, without their statuses. A quoted message from before
+that, or from another room, goes along only as the quote. Threads listed but
+never opened load their newest page first; older messages of a room are in the
+export only once scrolled back to (or restored on this device). **Open an export** opens `/archive` in a new tab, where a
+chosen or dropped export opens in this same app, read-only, against a server in
+the page that serves only that file: it signs in as the export's `you`, as a
+guest who may only read (`ext:permissions` `write: false`), lists its
+rooms and threads as they were joined, pages their history, and refuses
+anything that would change them. The read-only bar says where and when the
+export was saved, and offers no sign-in: the server offers only guests'. Nothing is sent to the exported server and nothing is
+remembered, as in `/__preview`. An export names the sites its images load from
+(the server's origin and those it named for its media), and since a file can
+name any, `/archive` lists them and asks first: **Load images**, or **Open
+without images**. Either way the page is held to the server's own sites,
+whatever Media says (until it's changed there, or Always load is clicked): with
+images, media loads from the sites it named and nowhere else; without, from
+nowhere, so images wait for a click, avatars show as initials, and cards as
+cards without pictures.
 
 With the `command` capability, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#41-command)): the composer shows a **Command** tag, sets the line in
@@ -838,7 +939,10 @@ lifts once the pointer has moved a few pixels (a click that drifts stays a
 click); on a touch screen hold it for a moment and it
 lifts (a tap still opens it, and a swipe still scrolls). While it's carried
 every room's threads fold away, so the list is just its rooms and the others
-make way for it, and they come back as they were once it's dropped. It keeps to
+make way for it, and they come back as they were once it's dropped. They fold
+around the room in hand, which stays under the pointer: threads above it fold
+toward it (the sidebar scrolling back, and a gap left above the section for
+whatever it can't), and the room let go stays where it was as they come back. It keeps to
 its section's column, moving only up and down within the part of the section in
 view, so it lands where it's seen; carried past either end it goes to that end. While a
 room is carried the sidebar scrolls only to bring more of its section into view,
@@ -1234,8 +1338,28 @@ first, since the server deletes its content. A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
-Media in `og` loads only from the chat server's own origin and the origins it
-names with `ext:media`, and stream URLs only from its own origin; links may
+Media loads from where Preferences, under **Media**, says. **This server and
+trusted sites**, the default, loads it from the chat server's own origin, the
+origins the server names with `ext:media` (Preferences names them, such as
+`media.apron.chat (trusted by the server)`), and the **Trusted origins** listed
+under it (hosts or URLs, one per line, kept as `https:` origins). **Any site**
+loads it from anywhere; the trusted origins stay listed for when the default is
+chosen again. Earlier versions' choices carry over: Default, This server only and
+This server and sites I add become the default, their sites kept as trusted
+origins, and Any site stays.
+
+Under the default, an image, video or audio from anywhere else in the timeline
+(in a message, an HTML embed, a link preview's card or an upload) waits for a
+click where it would be: its alt text or kind, its site, **Load**, which loads
+that one on this page, and, for an `https:` site, **Always load**, which adds the
+site to the trusted origins. An image in a link waits after the link. A custom
+emoji from anywhere else shows as its key (and isn't offered in the emoji
+picker), an avatar as initials (a server signed in to before, its avatar only
+from its own origin), and a custom emoji catalog on another site isn't fetched.
+An HTML embed never loads a `srcset`, a `background` or a `ping`. Images in a
+message or embed itself (`data:`) always show: they load from nowhere.
+The choice is kept on this device, and another tab's applies at once. Stream
+URLs load only from the server's own origin, whatever the choice; links may
 point anywhere `http(s)`.
 
 **Connect to a server…** in the profile editor (the profile bar at the foot of
@@ -1387,8 +1511,9 @@ warns too when refused, without the token.
 A server may let someone only read, such as its guests, and says so in their
 `you` with `write: false` ([EXT.md §7](../EXT.md#7-extpermissions)). Signed in
 as a guest there, the composer gives way to a bar saying so with a **Sign in**
-button (it opens the sign-in panel on Passkey); signed in to an account, the
-bar only says so. Replying, reacting, editing, moving and deleting messages,
+button (it opens the sign-in panel on Passkey); signed in to an account, or as
+a guest on a server whose `auth` offers only `guest` (nothing would lift it,
+as on `/archive`), the bar only says so. Replying, reacting, editing, moving and deleting messages,
 starting threads, editing rooms and threads, adding or removing members, and
 Join and Leave are hidden; a room picked under Other Rooms (which says no
 Join) opens to read through its history without joining it, and Other Threads

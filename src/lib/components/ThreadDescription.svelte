@@ -12,7 +12,7 @@
 	 * lines, and its × puts it away (`ondismiss`).
 	 */
 	let { description, thread, onopenroom, ondismiss }: { description: string; thread: boolean; onopenroom: (roomId: string) => void; ondismiss: () => void } = $props();
-	let html = $derived(renderMarkdown(description, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji));
+	let html = $derived(renderMarkdown(description, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji, directory.mediaGate));
 
 	function click(event: MouseEvent): void {
 		const roomLink = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-room-id]');

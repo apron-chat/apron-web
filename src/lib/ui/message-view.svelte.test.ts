@@ -6,7 +6,7 @@ import type { Identity, MessageRecord } from '$lib/protocol/types';
 import { messageRecord, roomSnapshot } from '$lib/test/builders';
 import { directory } from './directory.svelte';
 import type { ApronLink } from './apron-link';
-import { linkedRoomIn, messageView, noticeView, UPLOAD_STALE_MS, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
+import { linkedRoomIn, messageView, noticeView, sourceEmbed, UPLOAD_STALE_MS, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow } from './message-view';
 import { avatarHue } from './messages';
 import { idWhen } from './time';
 import { blankSnapshot } from './session.svelte';
@@ -211,7 +211,12 @@ describe('messageView', () => {
 		const own = row({ caps: { ...NONE, edit: true } });
 		const view = messageView(messageRecord(1710000000000, 'ops', { body: { text: '', embeds } }), own, context([], uploads));
 		expect(view.embeds?.map((item) => [item.key, item.upload?.progress, item.removable])).toEqual([['e1', 0.5, undefined], ['e2', undefined, true], ['2', undefined, true]]);
-		expect(view.embeds?.[0].embed).toBe(embeds[0]);
+		expect(sourceEmbed(view.embeds![0].embed)).toBe(embeds[0]);
+		expect(view.embeds?.[0].embed).toEqual(embeds[0]);
+		// Drawn again, an embed is the same, so its row is kept; its HTML never reaches the design system.
+		expect(messageView(messageRecord(1710000000000, 'ops', { body: { text: '', embeds } }), own, context([], uploads)).embeds?.[0].embed).toBe(view.embeds?.[0].embed);
+		const html = messageView(messageRecord(1710000000001, 'ops', { body: { text: 'x', embeds: [{ kind: 'html', html: '<img src=x onerror=alert(1)>' }] } }), own, context([], uploads));
+		expect(html.embeds?.[0].embed).toEqual({ kind: 'html' });
 		expect(view.embeds?.[0].detail).toBe(`Ada · ${view.time}`);
 		// The only embed of a message without text, anyone else's, or in select mode: no (x).
 		expect(messageView(messageRecord(2, 'ops', { body: { text: '', embeds: [embeds[2]] } }), own, context()).embeds?.[0].removable).toBeUndefined();

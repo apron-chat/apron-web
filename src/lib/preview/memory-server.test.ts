@@ -80,11 +80,17 @@ describe('in-memory preview protocol', () => {
 		const factory = server.factory;
 		const client = new ChatClient('ws://apron-preview.invalid', 'Preview User', (url) => {
 			const socket = factory(url);
-			const deliver = (socket as unknown as { deliver: (frame: Record<string, unknown>) => void }).deliver;
-			(socket as unknown as { deliver: (frame: Record<string, unknown>) => void }).deliver = (frame) => {
-				frames.push(frame);
-				deliver(frame);
-			};
+			// Every frame the server sends, as the client's handler receives it.
+			let handler: ((event: MessageEvent) => void) | null = null;
+			Object.defineProperty(socket, 'onmessage', {
+				get: () => handler,
+				set: (next: ((event: MessageEvent) => void) | null) => {
+					handler = next && ((event) => {
+						frames.push(JSON.parse(event.data as string) as Record<string, unknown>);
+						next(event);
+					});
+				}
+			});
 			return socket;
 		});
 		clients.push(client);

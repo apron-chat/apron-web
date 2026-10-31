@@ -1,4 +1,5 @@
 import type { EmojiMartData } from '@emoji-mart/data';
+import type { MediaSrc } from './media-gate';
 import { searchCatalog, type CustomEmoji, type EmojiCatalog } from '$lib/protocol/custom-emoji';
 import { tokenAtCaret, type CaretToken, type DraftPart } from './draft';
 
@@ -11,7 +12,7 @@ export interface EmojiSuggestion {
 	/** What picking it inserts: the emoji, or a custom emoji's key. */
 	native: string;
 	/** A custom emoji's image (`ext:emoji`). */
-	image?: string;
+	image?: MediaSrc;
 }
 
 const SHORTCODE_CHAR = /[\w+-]/;
@@ -68,8 +69,11 @@ export function searchEmoji(data: EmojiMartData, query: string): EmojiSuggestion
  * tag (`searchCatalog`), ahead of the standard ones, together at most as many
  * as the standard search shows. Picking one inserts its key.
  */
-export function withCustomEmoji(catalog: EmojiCatalog | undefined, query: string, standard: EmojiSuggestion[], src: (emoji: CustomEmoji) => string): EmojiSuggestion[] {
+export function withCustomEmoji(catalog: EmojiCatalog | undefined, query: string, standard: EmojiSuggestion[], src: (emoji: CustomEmoji) => MediaSrc | undefined): EmojiSuggestion[] {
 	if (!catalog) return standard;
-	const custom = searchCatalog(catalog, query, MAX_MATCHES).map((emoji) => ({ id: emoji.key.slice(1, -1), name: emoji.alt ?? emoji.key, native: emoji.key, image: src(emoji) }));
+	const custom = searchCatalog(catalog, query, MAX_MATCHES).map((emoji) => {
+		const image = src(emoji);
+		return { id: emoji.key.slice(1, -1), name: emoji.alt ?? emoji.key, native: emoji.key, ...(image ? { image } : {}) };
+	});
 	return [...custom, ...standard].slice(0, MAX_MATCHES);
 }

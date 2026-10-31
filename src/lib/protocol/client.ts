@@ -9,7 +9,9 @@ import {
 	createTimeline,
 	decodeHistoryRecords,
 	type DecodedRecords,
-	type ReactionSummary
+	type ReactionSummary,
+	type StoreChange,
+	type StoredRecords
 } from './reducer';
 import {
 	isJsonObject,
@@ -46,6 +48,7 @@ import {
 	type CreateRoomOptions,
 	type EmbedEdits,
 	type HistoryStart,
+	type KeptState,
 	type MessageFormat,
 	type MessagePatch,
 	type MessageResult,
@@ -54,9 +57,11 @@ import {
 	type Notice,
 	type OperationHandle,
 	type PushRegistration,
+	type RestoredState,
 	type RoomListing,
 	type RoomPatch,
 	type RoomResult,
+	type RoomSync,
 	type SendOptions,
 	type UploadFile,
 	type UploadState,
@@ -87,6 +92,7 @@ import {
 	ROOM_LIST_REUSE_MS,
 	STABLE_CONNECTION_MS,
 	THREAD_PAGE_SIZE,
+	FRESH_HOOK_MS,
 	TYPING_REFRESH_MS,
 	TYPING_TIMEOUT_S,
 	AGENT,
@@ -94,10 +100,12 @@ import {
 	absent,
 	pageHidden,
 	canonicalJson,
+	CountedMap,
 	decrement,
 	historyParams,
 	increment,
 	isEmbedded,
+	KeptUsers,
 	limitCategory,
 	limitHolds,
 	limitScope,
@@ -133,7 +141,7 @@ import { reactionKey } from './custom-emoji';
 import { HistoryQueue } from './history-queue';
 
 export * from './client-types';
-export type { ReactionSummary, RoomRename, TimelineState } from './reducer';
+export type { ReactionSummary, RoomRename, StoreChange, StoredRecords, TimelineState } from './reducer';
 export { editableTitle, IDLE_RETRY_MS, recoveryBufferFits, reconnectDelay, UNSUPPORTED } from './client-internals';
 export type { MediaLimit, MediaTypes, Permissions, ServerLook, ServerMedia } from './client-views';
 export {
@@ -153,6 +161,7 @@ export {
 	normalizeWebSocketUrl,
 	sameServer,
 	serverAddress,
+	serverArchive,
 	serverLook,
 	peopleTitle,
 	PRIVATE_ROOM,
@@ -206,10 +215,10 @@ export class ChatClient {
 	/** Latest submitted client fields per room while an update is unconfirmed. */
 	private readonly pendingRoomSaves = new Map<string, PendingSave>();
 	/** One kept user object per `user_id` (§3.3), merged from current objects only. */
-	private readonly users = new Map<string, Identity>();
+	private readonly users = new KeptUsers();
 	/** The latest recorded object per `user_id` and the `log_id` of the record that carried it. */
 	private readonly recordedUsers = new Map<string, { identity: Identity; log_id: string }>();
-	private readonly userAliases = new Map<string, string>();
+	private readonly userAliases = new CountedMap<string, string>();
 	/** The greatest `log_id` this client has received: where a notice sits in its room's timeline. */
 	private greatestLogId?: string;
 	/** Read cursors per room, per user (§4.6). */
@@ -286,6 +295,14 @@ export class ChatClient {
 	 * history (§4.3).
 	 */
 	private readonly retainedRooms = new Map<string, RoomState>();
+	/** What runs before a new session connects (`beforeFreshSession`), whether one is due, and the run under way. */
+	private freshHook: (() => Promise<void>) | undefined;
+	/** Where older pages come from before the server (`olderPagesFrom`). */
+	private olderSource: ((roomId: string, before: string, limit: number) => Promise<JsonObject | undefined>) | undefined;
+	private fresh = true;
+	private preparing: Promise<void> | undefined;
+	/** Whose kept state `restore` took, until the next sign-in says whether it is theirs. */
+	private restoredUserId: string | undefined;
 	/**
 	 * The joined rooms kept from the last connection were its whole joined set
 	 * (its `room_list` arrived): a reconnect as the same identity may then list
@@ -402,6 +419,8 @@ export class ChatClient {
 	 */
 	private tokenName: { token: string; name: string } | undefined;
 	private activeRoomId?: string;
+	/** The room the reader will see once it's listed again (`awaitRoom`): a reload or reconnect showing it from before. */
+	private awaitedRoomId?: string;
 	private server?: ServerParams;
 	private you?: Identity;
 	private displayName = '';
@@ -475,7 +494,7 @@ export class ChatClient {
 		this.historyQueue = new HistoryQueue({
 			send: (params, allowBeforeAuth) => this.enqueueRequest('history', params, { visible: false, allowBeforeAuth }),
 			limited: () => Boolean(this.limited('history')),
-			activeRoomId: () => this.activeRoomId,
+			activeRoomId: () => (this.rooms.get(this.awaitedRoomId ?? '')?.kind === 'pending' ? this.awaitedRoomId : this.activeRoomId),
 			emit: () => this.emit()
 		}, historyConcurrency);
 		this.webSocketFactory = webSocketFactory;
@@ -678,6 +697,16 @@ export class ChatClient {
 		this.connectNow();
 	}
 
+	/**
+	 * The room the UI will select once this connection lists it (or undefined): while it's kept from the last
+	 * connection, not listed yet (`pending`), its history requests go before the other rooms', so what's on screen
+	 * catches up first rather than in the order the rooms were kept. Once listed it's selected, and once the listing
+	 * leaves it out it's gone: either way the active room's go first again.
+	 */
+	awaitRoom(roomId: string | undefined): void {
+		this.awaitedRoomId = roomId;
+	}
+
 	/** Selects the room (or thread) the UI shows; unknown rooms are ignored. */
 	selectRoom(roomId: string): void {
 		if (this.rooms.has(roomId) && this.rooms.get(roomId)!.kind !== 'pending') {
@@ -809,6 +838,130 @@ export class ChatClient {
 	/** Aggregated reactions for a message (undefined for tombstones or none). */
 	reactions(messageId: string): ReactionSummary[] | undefined {
 		return this.store.reactions(messageId, this.you?.user_id);
+	}
+
+	/**
+	 * Every record this client has stored, compacted: what an export keeps (`$lib/archive`). With `roomId`, only
+	 * that room's (`ProtocolStore.records`).
+	 */
+	storedRecords(roomId?: string): StoredRecords {
+		return this.store.records(roomId);
+	}
+
+	/**
+	 * Sets what runs before each new session signs in: the first, and the one after switching servers or
+	 * connecting anew (`restart`), but not a reconnect, which goes on with what it has. Such as restoring what
+	 * was kept for the server (`restore`). It runs while the connection opens, and signing in waits for it,
+	 * `FRESH_HOOK_MS` at most.
+	 */
+	beforeFreshSession(hook: (() => Promise<void>) | undefined): void {
+		this.freshHook = hook;
+	}
+
+	/**
+	 * Sets where `loadOlder` looks first for a page older than what a room holds: what this device kept
+	 * (`$lib/history`), answering as `history` would, or undefined where it has none, when the server pages.
+	 */
+	olderPagesFrom(source: ((roomId: string, before: string, limit: number) => Promise<JsonObject | undefined>) | undefined): void {
+		this.olderSource = source;
+	}
+
+	/** Each room's sync (`RoomSync`): with `storedRecords`, where what is stored of a room's log starts and ends (`$lib/archive`). */
+	roomSyncs(): RoomSync[] {
+		return [...this.rooms.values()].map(roomSync);
+	}
+
+	/** Calls `listener` with each change to the stored records until the returned function is called (`ProtocolStore.observe`). */
+	observeStore(listener: (change: StoreChange) => void): () => void {
+		return this.store.observe(listener);
+	}
+
+	/**
+	 * What this session keeps of its joined rooms, to go on from after a reload (`restore`): each room's sync,
+	 * which with its records is what a dropped connection keeps (`suspendProtocolView`). Undefined until signed in.
+	 * Without `withUsers`, its users (and aliases) are left out: `usersRevision` says whether they changed.
+	 */
+	keptState(withUsers = true): KeptState | undefined {
+		const you = this.you?.user_id;
+		if (!this.authenticated || you === undefined) return undefined;
+		const rooms = [...this.rooms.values()].filter((room) => room.kind !== 'viewed').map((room) => ({
+			id: room.id,
+			// A recovery under way may have cleared the room for a rebuild, or not yet reached its checkpoint.
+			...(room.recovery ? {} : { sync: roomSync(room) })
+		}));
+		const users = withUsers ? [...this.users.values()].map(({ status: _status, seen: _seen, ...user }) => user as Identity) : [];
+		return { userId: you, complete: this.joinedComplete && !this.joinedListing, rooms, users, ...(withUsers && this.userAliases.size ? { aliases: Object.fromEntries(this.userAliases) } : {}) };
+	}
+
+	/**
+	 * Counts the changes to the users that `keptState` keeps, and their aliases: unchanged, they are as they
+	 * were, whatever their statuses did meanwhile.
+	 */
+	usersRevision(): number {
+		return this.users.revision + this.userAliases.revision;
+	}
+
+	/**
+	 * Before `start`, takes what a session kept (`keptState`) with its rooms' records, as if a connection had
+	 * dropped: the rooms are kept, hidden, and the next sign-in as `userId` resumes each from its checkpoint
+	 * (`requestRooms`), listing only what changed since where the joined set was complete. Their timelines show
+	 * what was kept meanwhile. Ignored once signing in has begun or rooms are held: returns whether it was taken.
+	 */
+	restore(state: RestoredState): boolean {
+		if (this.authRequested || this.authenticated || this.rooms.size || this.retainedRooms.size) return false;
+		const { rooms, messages, reactions, memberships } = state.records;
+		for (const record of rooms) this.store.putRoom(record);
+		for (const record of messages) {
+			this.store.putMessage(record);
+			this.observeLogId(record.log_id);
+			this.noteRecorded(record.from, record.log_id);
+		}
+		for (const set of reactions) {
+			this.store.putReaction(set);
+			this.noteRecorded(set.from, set.log_id);
+		}
+		for (const entry of memberships) {
+			this.store.putMembership(entry);
+			this.noteRecorded(entry.user, entry.log_id);
+		}
+		for (const user of state.users) this.noteUser(cloneJson(user));
+		for (const [old, next] of Object.entries(state.aliases ?? {})) this.userAliases.set(old, next);
+		for (const sync of state.rooms) {
+			const room = Object.assign(newRoomState(sync.id, 'joined'), {
+				latestLogId: sync.latestLogId, historyLogId: sync.historyLogId, floor: sync.floor, checkpoint: sync.checkpoint,
+				loadCheckpoint: sync.loadCheckpoint, olderBefore: sync.olderBefore, hasOlder: sync.hasOlder
+			});
+			room.timeline = this.store.timeline(sync.id, state.userId);
+			room.dirty = false;
+			this.retainedRooms.set(sync.id, room);
+		}
+		this.store.takeTouched();
+		this.joinedComplete = state.complete;
+		this.keptUserId = state.complete ? state.userId : undefined;
+		this.resumingUserId = state.userId;
+		this.restoredUserId = state.userId;
+		return true;
+	}
+
+	/**
+	 * A sign-in as someone other than whose kept state `restore` took (a saved token that now resumes as another
+	 * account): the rooms, records and users it brought in go before anything shows them, and the joined listing,
+	 * asked for as theirs, is asked again as this account's (`listJoinedRooms`).
+	 */
+	private dropRestored(): void {
+		for (const room of this.rooms.values()) this.discardRoom(room, 'Signed in as another account');
+		this.rooms.clear();
+		this.retainedRooms.clear();
+		this.store.clear();
+		this.store.takeTouched();
+		this.users.clear();
+		this.recordedUsers.clear();
+		this.userAliases.clear();
+		this.memberCounts.clear();
+		this.greatestLogId = undefined;
+		this.joinedComplete = false;
+		this.keptUserId = undefined;
+		this.activeRoomId = undefined;
 	}
 
 	/** Your own emoji set on a message, including a requested change not yet confirmed. */
@@ -2558,6 +2711,14 @@ export class ChatClient {
 		this.emit();
 		try {
 			const before = decrement(room.olderBefore);
+			// What this device kept first: it says nothing new of the server's log, so only its records apply.
+			const kept = this.olderSource ? await this.olderSource(room.id, before, THREAD_PAGE_SIZE).catch(() => undefined) : undefined;
+			if (stale()) return;
+			if (kept && validHistoryMetadata(kept)) {
+				this.applyPage(room, kept);
+				this.noteOlderPage(room, kept);
+				return;
+			}
 			const result = await this.historyQueue.request(room.id, { room_id: room.id, before, limit: THREAD_PAGE_SIZE }, { retry: true }).promise;
 			if (stale()) return;
 			if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
@@ -2627,6 +2788,18 @@ export class ChatClient {
 	private connectNow(): void {
 		if (!this.running || this.socket) return;
 		this.stopWaitingForPresence();
+		if (this.fresh && this.freshHook && !this.rooms.size && !this.retainedRooms.size) {
+			// A new session: what was kept for this server goes in before it signs in (`beforeFreshSession`),
+			// while the connection opens.
+			this.fresh = false;
+			const preparing: Promise<void> = Promise.race([
+				this.freshHook().catch(() => undefined),
+				new Promise<void>((resolve) => setTimeout(resolve, FRESH_HOOK_MS))
+			]).then(() => {
+				if (this.preparing === preparing) this.preparing = undefined;
+			});
+			this.preparing = preparing;
+		}
 		this.connectionProbe?.abort();
 		const id = ++this.connectionId;
 		this.status = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
@@ -2844,6 +3017,15 @@ export class ChatClient {
 			this.emit();
 			return;
 		}
+		// What runs before a new session (`beforeFreshSession`) goes first: signing in lists and resumes rooms.
+		const preparing = this.preparing;
+		if (preparing) {
+			const socket = this.socket;
+			void preparing.then(() => {
+				if (this.socket === socket && !this.authenticated && !this.authRequested) this.authenticate(auth);
+			});
+			return;
+		}
 		this.authenticate(auth);
 	}
 
@@ -2967,6 +3149,9 @@ export class ChatClient {
 		// as they arrive like any other (§4.5).
 		if (signIn) this.resetMutes();
 		const previousUserId = this.you?.user_id ?? this.resumingUserId;
+		// What a restore brought in is for the account it was kept for: anyone else sees none of it.
+		if (this.restoredUserId !== undefined && signIn && identity.user_id !== this.restoredUserId) this.dropRestored();
+		this.restoredUserId = undefined;
 		this.setYou(cloneJson(identity as Identity), true);
 		if (signIn) this.dropKeptStatuses(identity.user_id === this.resumingUserId);
 		// The listings made for who was signed in, on this connection or before a drop: another identity lists its own.
@@ -4076,6 +4261,9 @@ export class ChatClient {
 		this.joinedComplete = false;
 		this.keptUserId = undefined;
 		this.resumingUserId = undefined;
+		this.fresh = true;
+		// A restore taken for the session discarded isn't the next one's to drop (`dropRestored`).
+		this.restoredUserId = undefined;
 		this.forgetListedRooms();
 		this.resetMutes();
 		this.forgetConnectionState();
@@ -4551,6 +4739,15 @@ export class ChatClient {
 		const snapshot = this.snapshot();
 		for (const listener of this.listeners) listener(snapshot);
 	}
+}
+
+/** A room's sync (`RoomSync`), as `keptState` reports it. */
+function roomSync(room: RoomState): RoomSync {
+	const fields = {
+		latestLogId: room.latestLogId, historyLogId: room.historyLogId, floor: room.floor, checkpoint: room.checkpoint,
+		loadCheckpoint: room.loadCheckpoint, olderBefore: room.olderBefore, hasOlder: room.hasOlder
+	};
+	return { id: room.id, ...Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) };
 }
 
 /** The sign-in methods kept in storage as a comma-separated list. */

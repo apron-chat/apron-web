@@ -17,7 +17,7 @@
   msg({ sender: bob, time: '14:04', grouped: true, body: { html: 'Crash is in the new queue client.' }, selected: true });
   msg({ sender: dana, time: '14:20', body: { html: 'Rolled back worker to 1.8.3.' }, selected: true });
   msg({ sender: alice, time: '14:31', body: { html: 'Retro at 16:00, same link as last week.' } });
-  add(A.SelectionBar, { count: 3, threads: [{ thread: 'deploy', name: 'Deploy' }, { thread: 'mig-0042', name: 'Migration 0042' }], onselectrange: none, onnewthread: none });
+  add(A.SelectionBar, { count: 3, threads: [{ thread: 'deploy', name: 'Deploy' }, { thread: 'mig-0042', name: 'Migration 0042' }], onselectrange: none, oncopy: function () { return true; }, onnewthread: none });
   add(A.SelectionBar, { count: 3, status: 'saving' });
   // In a thread: the menu offers the room first. Without onnewthread (no capability `rooms`) there is no New thread.
   var spacer = document.createElement('div'); spacer.style.height = '96px'; root.appendChild(spacer);

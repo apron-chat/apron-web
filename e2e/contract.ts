@@ -366,8 +366,8 @@ export const SCENES: Scene[] = [
 		steps: async (preview, look) => {
 			const { page } = preview;
 			const list = await preview.showMembers();
-			// Their row's menu, then its Profile: the card.
-			await list.locator('button[data-user-id="linus"]').click();
+			// Their row's menu (a right-click; a click opens the card at once), then its Profile: the card.
+			await list.locator('button[data-user-id="linus"]').click({ button: 'right' });
 			await expect(page.getByRole('menu').getByRole('menuitem', { name: 'Profile', exact: true })).toBeVisible();
 			await look();
 			await page.getByRole('menu').getByRole('menuitem', { name: 'Profile', exact: true }).click();

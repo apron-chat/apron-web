@@ -11,6 +11,8 @@ const KEY = {
 	recentServers: 'apron.recentServers',
 	sidebar: 'apron.sidebar',
 	notificationsEnabled: 'apron.desktopNotifications',
+	/** The offer to add Apron to the Home Screen (`InstallPrompt`) was answered on this device: it isn't made again. */
+	installOffer: 'apron.installOffer',
 	/** The accounts push is turned on for, and the one this browser's push subscription is registered for. */
 	webPush: 'apron.webPushAccounts',
 	webPushOwner: 'apron.webPushOwner',
@@ -35,6 +37,10 @@ const KEY = {
 	roomOrder: 'apron.roomOrder',
 	/** How far you have read each room and thread, by `readPositionKey`: the `message_id` read through. */
 	readPositions: 'apron.readPositions',
+	/** How long history is kept on this device (`$lib/history/retention`). */
+	historyRetention: 'apron.historyRetention',
+	/** Where images and other media load from (`$lib/ui/media-settings`): `{policy, origins}`. */
+	media: 'apron.media',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
 } as const;
@@ -311,6 +317,17 @@ export function saveNotificationsEnabled(enabled: boolean): void {
 	write(KEY.notificationsEnabled, String(enabled));
 }
 
+/** Whether the offer to add Apron to the Home Screen was answered on this device (installed, or Not now). */
+export function installOfferAnswered(): boolean {
+	return read(KEY.installOffer) !== null;
+}
+
+export function answerInstallOffer(): void {
+	write(KEY.installOffer, 'answered');
+}
+
+export const INSTALL_OFFER_KEY = KEY.installOffer;
+
 /** `push_id`s made here and not saved (no storage, or `/__preview`). */
 const unsavedPushIds = new Map<string, string>();
 
@@ -472,4 +489,28 @@ export function loadAppearance(): unknown {
 
 export function saveAppearance(preferences: AppearancePreferences): void {
 	write(KEY.appearance, JSON.stringify(preferences));
+}
+
+export const HISTORY_RETENTION_KEY = KEY.historyRetention;
+
+export function loadHistoryRetention(): string | undefined {
+	return read(KEY.historyRetention) ?? undefined;
+}
+
+export function saveHistoryRetention(value: string): void {
+	write(KEY.historyRetention, value);
+}
+
+export const MEDIA_KEY = KEY.media;
+
+export function loadMediaSettings(): unknown {
+	try {
+		return JSON.parse(read(KEY.media) ?? 'null');
+	} catch {
+		return undefined;
+	}
+}
+
+export function saveMediaSettings(value: { policy: string; origins: readonly string[] }): void {
+	write(KEY.media, JSON.stringify(value));
 }

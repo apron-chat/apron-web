@@ -4,6 +4,7 @@ import type { ClientSnapshot, RoomListing } from '$lib/protocol/client';
 import { renderMarkdown } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 import { directory } from './directory.svelte';
+import { mediaSettings } from './media-settings.svelte';
 import { blankSnapshot } from './session.svelte';
 
 const ada: Identity = { user_id: 'ada', name: 'Ada' };
@@ -187,4 +188,45 @@ describe('directory', () => {
 		}
 	});
 
+
+	it('loads avatars and images in messages from where media may load from, as Preferences choose', () => {
+		const away: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://gravatar.example/cy.png' };
+		const home: Identity = { user_id: 'di', name: 'Di', avatar: 'https://example.com/di.png' };
+		const image = () => directory.mediaGate.src('https://gravatar.example/x.png');
+		const plain: Identity = { user_id: 'ed', name: 'Ed', avatar: 'http://gravatar.example/ed.png' };
+		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 9, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
+		try {
+			// This server and trusted sites: the server's own and those it names; anything else in the timeline asks.
+			mediaSettings.update('trusted', []);
+			expect(directory.mediaOrigins).toEqual(['https://media.example']);
+			expect(directory.avatar(home)).toBe('https://example.com/di.png');
+			expect(directory.avatar(away)).toBeUndefined();
+			expect(directory.mediaGate.src('https://media.example/a.png')).toBe('https://media.example/a.png');
+			expect(image()).toBeUndefined();
+			expect(directory.mediaGate.ask('https://gravatar.example/x.png')).toEqual({ url: 'https://gravatar.example/x.png', host: 'gravatar.example', origin: 'https://gravatar.example' });
+			// Load: that one, on this page, and nothing else from there.
+			directory.loadOnce('https://gravatar.example/x.png');
+			expect(image()).toBe('https://gravatar.example/x.png');
+			expect(directory.mediaGate.ask('https://gravatar.example/x.png')).toBeUndefined();
+			expect(directory.mediaGate.src('https://gravatar.example/y.png')).toBeUndefined();
+			expect(directory.avatar(away)).toBeUndefined();
+			// Always load: the site, avatars too, an avatar elsewhere only over https.
+			mediaSettings.trust('https://gravatar.example');
+			expect(directory.avatar(away)).toBe('https://gravatar.example/cy.png');
+			expect(directory.avatar(plain)).toBeUndefined();
+			expect(directory.mediaGate.src('https://gravatar.example/y.png')).toBe('https://gravatar.example/y.png');
+			mediaSettings.update('any', []);
+			expect(directory.mediaGate.src('https://anywhere.example/a.png')).toBe('https://anywhere.example/a.png');
+			expect(directory.mediaGate.ask('https://anywhere.example/a.png')).toBeUndefined();
+			expect(directory.mediaGate.src('ftp://anywhere.example/a.png')).toBeUndefined();
+			expect(directory.avatar(away)).toBe('https://gravatar.example/cy.png');
+			// An export opened without its images: back to the server's own, whatever was chosen, until a choice.
+			mediaSettings.limit();
+			mediaSettings.load();
+			expect(mediaSettings.policy).toBe('trusted');
+			expect(directory.avatar(away)).toBeUndefined();
+		} finally {
+			mediaSettings.update('trusted', []);
+		}
+	});
 });

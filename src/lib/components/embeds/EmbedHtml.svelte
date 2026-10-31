@@ -1,22 +1,16 @@
 <script lang="ts">
-	import DOMPurify from 'dompurify';
 	import DesignEmbedHtml from '$lib/design/components/EmbedHtml.svelte';
+	import { canSanitize, sanitizeHtml } from '$lib/protocol/sanitize';
 	import type { Embed } from '$lib/protocol/types';
+	import { directory } from '$lib/ui/directory.svelte';
 	import EmbedFallback from './EmbedFallback.svelte';
 
-	/** Server-relayed HTML (§4.8), inserted only after the allowlist sanitizer. */
+	/**
+	 * Server-relayed HTML (§4.8), inserted only after the sanitizer, every link opening in a new tab like the rest of
+	 * the chat's, and its media only from where images may load from (`directory.mediaGate`).
+	 */
 	let { embed }: { embed: Embed } = $props();
-	let html = $derived(typeof embed.html === 'string' && DOMPurify.isSupported ? clean(embed.html) : undefined);
-
-	/** Sanitized, with every link opening in a new tab like the rest of the chat's. */
-	function clean(source: string): string {
-		const body = DOMPurify.sanitize(source, { FORBID_TAGS: ['style', 'form', 'input', 'button'], FORBID_ATTR: ['style'], RETURN_DOM: true }) as HTMLElement;
-		for (const link of body.querySelectorAll('a[href]')) {
-			link.setAttribute('target', '_blank');
-			link.setAttribute('rel', 'noreferrer noopener');
-		}
-		return body.innerHTML;
-	}
+	let html = $derived(typeof embed.html === 'string' && canSanitize ? sanitizeHtml(embed.html, 'embed', directory.mediaGate) : undefined);
 </script>
 
 {#if html !== undefined}

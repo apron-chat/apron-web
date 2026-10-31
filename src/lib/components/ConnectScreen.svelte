@@ -52,14 +52,14 @@
 	/** `server.welcome` (§3.2), for the server in the field once it has answered: CommonMark, sanitized as a message is. */
 	let welcome = $derived.by(() => {
 		const text = answered ? session.server?.welcome : undefined;
-		return text ? renderMarkdown(text, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji) : '';
+		return text ? renderMarkdown(text, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji, directory.mediaGate) : '';
 	});
 	/** How it shows itself (§3.1): its title, else its host, always with its address beside it (§5.3). */
 	let look = $derived(answered ? serverLook(session.server, client.url) : undefined);
-	let server = $derived(look ? { name: look.title ?? (backendHost(client.url) || client.url), address: client.url, ...(look.avatar ? { avatar: look.avatar } : {}) } : undefined);
-	let description = $derived(look?.description ? renderMarkdown(look.description, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji) : '');
+	let server = $derived(look ? { name: look.title ?? (backendHost(client.url) || client.url), address: client.url, avatar: directory.avatarGate.src(look.avatar) } : undefined);
+	let description = $derived(look?.description ? renderMarkdown(look.description, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji, directory.mediaGate) : '');
 	/** Each recent server by its title, else its host, with its address. */
-	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (backendHost(entry.url) || entry.url), ...(entry.avatar ? { avatar: entry.avatar } : {}) })));
+	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (backendHost(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar) })));
 </script>
 
 <!-- The design system's ConnectPage draws the page; the app's SignIn runs the form, with a ConnectHeader at its top. -->

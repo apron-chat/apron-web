@@ -2,7 +2,7 @@
 
 | Protocol Version | 9          |
 |------------------|------------|
-| Last Updated     | 2026-10-27 |
+| Last Updated     | 2026-10-29 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -39,6 +39,7 @@ the fallback of that capability:
 | `ext:permissions` | offers writing, adding members, and moving others' messages as `you` allows ([§7](#7-extpermissions)) | writes; offers adding members in any room, as PROTOCOL.md allows; moves your own messages only |
 | `ext:bio`      | shows bios on profile cards, and edits your own ([§8](#8-extbio)); also with `ext`              | no bios                            |
 | `ext:emoji`    | shows the server's custom emoji in reactions and text, and offers them to pick ([§9](#9-extemoji)) | shows keys as text, and in reactions as a placeholder |
+| `ext:archive`  | says whose archive it reads, and when it was written ([§10](#10-extarchive))                    | says only that you read            |
 
 Some features have no capability:
 
@@ -232,7 +233,8 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
   note, and offers no reactions, edits, moves, deletions, joins, leaves, room
   or thread changes, or member changes. Other Rooms lists rooms without Join:
   picking one reads it through its history. For a guest, the note offers to
-  sign in.
+  sign in; reading an archive (`ext:archive`), it says whose archive it is
+  instead ([ARCHIVE.md §4](ARCHIVE.md#4-serving)).
 - With `add_members`, the member list's + and a profile card's Add to room
   are offered in any room. With `add_members: false` or absent, they are
   offered only in a private room that the user is a member of.
@@ -292,3 +294,16 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
 - The composer's `:shortcode` list offers matching custom emoji first.
 - Where the user prefers reduced motion, apron-web shows `static_url` in
   place of `url`.
+
+---
+
+## 10. `ext:archive`
+
+An apron-web extension: a server that serves an archive, read-only, says so,
+and whose archive it is.
+[ARCHIVE.md §4.1](ARCHIVE.md#41-extarchive) defines it.
+
+### 10.1 apron-web
+
+- apron-web says in place of the composer which server the archive is from,
+  and when it was written.

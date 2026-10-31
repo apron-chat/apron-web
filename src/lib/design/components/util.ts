@@ -1,11 +1,20 @@
 /* Shared helpers for the presentational components. No protocol state: everything arrives as props. */
 import type { Presence } from './types';
 
+declare const mediaSrc: unique symbol;
+
+/**
+ * A URL a component may load as media (an image, a video, an audio clip): one the app's media gate let through, by
+ * where it is and what the viewer chose to load from. Nothing else makes one, so a component that takes only this
+ * can't be handed a URL that wasn't asked about. (The design previews pass plain strings; only the type differs.)
+ */
+export type MediaSrc = string & { readonly [mediaSrc]: true };
+
 /** A user object (§3.3). `user_id` is stable; `name` falls back to it; `avatar` is optional (§4.8.6). */
 export interface Sender {
 	user_id: string;
 	name?: string;
-	avatar?: string;
+	avatar?: MediaSrc;
 	/** Server-assigned labels such as "admin" or "bot" (§3.3), shown as badges beside the name. */
 	roles?: string[];
 	ext?: Record<string, unknown>;

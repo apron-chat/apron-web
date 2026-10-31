@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { resolve } from '$app/paths';
+	import { historySettings, RETENTIONS, storageUsed } from '$lib/history/settings.svelte';
+	import { MEDIA_POLICIES, mediaSettings, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
 	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import Button from '$lib/design/components/Button.svelte';
@@ -20,6 +23,8 @@
 
 	interface Props {
 		open?: boolean;
+		/** The section shown: `notifications`, `appearance`, `media` or `history`. Bindable. */
+		section?: string;
 		/** Notifications on this device: the one switch, for while Apron is open and, by push, while it's closed. */
 		notificationsEnabled: boolean;
 		notificationsSupported: boolean;
@@ -45,16 +50,26 @@
 		 * something else for.
 		 */
 		status?: { value?: string; accepted?: readonly string[]; unsupported: readonly string[]; onchoose: (status: string) => Promise<string | undefined>; onunsupported: (status: string) => void; disabled?: boolean };
+		/**
+		 * Saves what this page has loaded as an export (`$lib/archive`), and says what it saved: none of it
+		 * while nothing is loaded. Absent where there is nothing to export from.
+		 */
+		onexport?: () => Promise<{ name: string; rooms: number; messages: number } | undefined>;
+		/** The host of the server connected to, which media always loads from. */
+		serverHost?: string;
+		/** The sites this server names for its media (`ext:media`), as hosts: trusted with it. */
+		mediaHosts?: readonly string[];
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onclosed }: Props = $props();
+	let { open = $bindable(false), section: preferencesSection = $bindable('notifications'), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
 
 	const SECTIONS = [
 		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
-		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' }
+		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
+		{ value: 'media', label: 'Media', hint: 'Where images and avatars load from. Each site sees what you load.', id: 'ap-pref-media' },
+		{ value: 'history', label: 'History', hint: 'What this device keeps of your chats.', id: 'ap-pref-history' }
 	];
-	let preferencesSection = $state('notifications');
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
 	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: it wakes for nothing. */
@@ -66,6 +81,31 @@
 	let fontBrowserState = $state<FontBrowserState>('idle');
 	let fontError = $state('');
 	let testNotificationStatus = $state<'idle' | 'sending' | NotificationTestResult>('idle');
+	/** What the last export saved. */
+	let exportNote = $state<string | undefined>();
+	/** How much Apron keeps on this device, read as History opens. */
+	let used = $state<string | undefined>();
+	$effect(() => {
+		if (preferencesSection !== 'history' || !open) return;
+		let current = true;
+		void storageUsed().then((usage) => { if (current) used = usage; });
+		return () => { current = false; };
+	});
+	/** Under the retention: why nothing more is kept, or how much is. */
+	let historyNote = $derived<Note | undefined>(historySettings.failure
+		? { text: historySettings.failure, tone: 'err' }
+		: historySettings.retention !== 'off' && used ? { text: `Using about ${used}.` } : undefined);
+	let exporting = $state(false);
+
+	/** What the chosen media policy loads, under it: the server, and the sites it trusts, by name. */
+	let mediaNote = $derived.by(() => {
+		if (mediaSettings.policy === 'any') return 'Everything, from any site.';
+		const server = serverHost ?? 'this server';
+		const trusted = mediaHosts.length ? `, ${mediaHosts.join(', ')} (trusted by the server)` : '';
+		return `From ${server}${trusted} and the origins below. Other images wait for a click.`;
+	});
+	/** The trusted origins, one per line as hosts, as the field shows them. */
+	let addedSites = $derived(mediaSettings.origins.map((origin) => new URL(origin).host).join('\n'));
 
 	type Note = { text: string; tone?: 'ok' | 'err' };
 	/**
@@ -108,7 +148,7 @@
 	let statusAnswer = $state<string | undefined>();
 	let announced: Record<string, string | undefined> | undefined;
 	$effect(() => {
-		const now: Record<string, string | undefined> = { notifications: notificationsNote.text, test: testNote?.text, pause: pauseNote, status: statusAnswer };
+		const now: Record<string, string | undefined> = { notifications: notificationsNote.text, test: testNote?.text, pause: pauseNote, status: statusAnswer, exported: exportNote, history: historySettings.failure };
 		const before = announced;
 		announced = now;
 		if (!before) return;
@@ -126,8 +166,30 @@
 			fontBrowserState = typeof window !== 'undefined' && typeof (window as LocalFontAccessWindow).queryLocalFonts === 'function' ? 'idle' : 'unsupported';
 			fontError = '';
 			testNotificationStatus = 'idle';
+			exportNote = undefined;
 		});
 	});
+
+	async function exportChats(): Promise<void> {
+		if (!onexport || exporting) return;
+		exporting = true;
+		let saved: Awaited<ReturnType<typeof onexport>>;
+		try {
+			saved = await onexport();
+		} catch {
+			exportNote = 'The export couldn’t be saved. Try again, or free up memory by closing other tabs.';
+			return;
+		} finally {
+			exporting = false;
+		}
+		const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+		exportNote = saved ? `Saved ${saved.name}: ${count(saved.messages, 'message')} in ${count(saved.rooms, 'room')}.` : 'Nothing is loaded to export yet.';
+	}
+
+	/** The export reader, in a tab of its own, so this page's session carries on. */
+	function openExport(): void {
+		window.open(resolve('/archive'), '_blank', 'noopener');
+	}
 
 	async function sendTestNotification(): Promise<void> {
 		testNotificationStatus = 'sending';
@@ -197,8 +259,8 @@
 
 <Dialog bind:open title="Preferences" size="lg" closeLabel="Close preferences" backdropCloses flush onclose={preferencesClosed}>
 	<SettingsSections sections={SECTIONS} bind:current={preferencesSection}>
+		<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
 		{#if preferencesSection === 'notifications'}
-			<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
 			{#if status}
 				<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} onannounce={(text) => (statusAnswer = text)} disabled={status.disabled} />
 			{/if}
@@ -244,6 +306,40 @@
 					</Callout>
 				</div>
 			{/if}
+		{:else if preferencesSection === 'media'}
+			<SettingRow title="Load images from" for="ap-media-policy" stacked class="ap-pref-media-setting">
+				{#snippet control()}
+					<select id="ap-media-policy" class="ap-field ap-pref-select" value={mediaSettings.policy} onchange={(event) => mediaSettings.update(event.currentTarget.value)} data-testid="media-policy">
+						{#each MEDIA_POLICIES as policy (policy.value)}<option value={policy.value}>{policy.label}</option>{/each}
+					</select>
+					<p class="ap-form-hint ap-pref-media-note" data-testid="media-note">{mediaNote}</p>
+				{/snippet}
+			</SettingRow>
+			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com. Always load adds one." stacked class="ap-pref-media-sites">
+				{#snippet control()}
+					<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update(mediaSettings.policy, parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
+				{/snippet}
+			</SettingRow>
+		{:else if preferencesSection === 'history'}
+			<SettingRow title="Keep history" for="ap-history-retention" hint="Your rooms open at once after a reload. Accounts only; signing out removes it." class="ap-pref-history-setting">
+				{#if historyNote}<p class={['ap-pref-note', historyNote.tone === 'err' && 'ap-tone-danger']}>{historyNote.text}</p>{/if}
+				{#snippet control()}
+					<select id="ap-history-retention" class="ap-field ap-pref-select" value={historySettings.retention} onchange={(event) => historySettings.update(event.currentTarget.value)} data-testid="history-retention">
+						{#each RETENTIONS as retention (retention.value)}<option value={retention.value}>{retention.label}</option>{/each}
+					</select>
+				{/snippet}
+			</SettingRow>
+			<SettingRow title="Export chats" hint="Saves what this page has loaded as a .jsonl file.">
+				{#if exportNote}<p class="ap-pref-note">{exportNote}</p>{/if}
+				{#snippet control()}
+					<Button size="sm" variant="ghost" label={exporting ? 'Exporting…' : 'Export'} disabled={!onexport} aria-disabled={exporting ? 'true' : undefined} aria-busy={exporting ? 'true' : undefined} onclick={exportChats} data-testid="export-chats" />
+				{/snippet}
+			</SettingRow>
+			<SettingRow title="Open an export" hint="Reads one in a new tab, read-only.">
+				{#snippet control()}
+					<Button size="sm" variant="ghost" label="Open…" onclick={openExport} />
+				{/snippet}
+			</SettingRow>
 		{:else}
 			<SettingRow title="Theme" for="ap-theme-mode" hint="System follows your operating system’s light or dark preference." class="ap-pref-theme-setting">
 				{#snippet control()}

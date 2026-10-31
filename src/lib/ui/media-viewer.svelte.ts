@@ -5,10 +5,16 @@
  * list of its own. `MediaViewerHost` (mounted once, in the page) draws it.
  */
 import type { MediaItem } from '$lib/design/components/types';
+import { directory } from './directory.svelte';
+import type { MediaGate } from './media-gate';
 
-/** What a link that opens the viewer says about its image. */
-export function mediaItemOf(link: HTMLElement): MediaItem | undefined {
-	const { viewerSrc: src, viewerTitle: title, viewerAlt: alt, viewerDetail: detail, viewerWidth: width, viewerHeight: height } = link.dataset;
+/**
+ * What a link that opens the viewer says about its image, where it may load from (`gate`): what the page says is
+ * asked again, as anything read back from it is.
+ */
+export function mediaItemOf(link: HTMLElement, gate: MediaGate = directory.mediaGate): MediaItem | undefined {
+	const { viewerTitle: title, viewerAlt: alt, viewerDetail: detail, viewerWidth: width, viewerHeight: height } = link.dataset;
+	const src = gate.src(link.dataset.viewerSrc);
 	if (!src || !title) return undefined;
 	const href = link instanceof HTMLAnchorElement ? link.href : undefined;
 	return {

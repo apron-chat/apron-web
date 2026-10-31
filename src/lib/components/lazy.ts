@@ -9,4 +9,5 @@ export const newRoomDialog = new Lazy(() => onDemand().then((m) => m.NewRoomDial
 export const newThreadDialog = new Lazy(() => onDemand().then((m) => m.NewThreadDialog));
 export const preferencesDialog = new Lazy(() => onDemand().then((m) => m.PreferencesDialog));
 export const roomEditor = new Lazy(() => onDemand().then((m) => m.RoomEditor));
+export const searchDialog = new Lazy(() => onDemand().then((m) => m.SearchDialog));
 export const signInLinkDialog = new Lazy(() => onDemand().then((m) => m.SignInLinkDialog));

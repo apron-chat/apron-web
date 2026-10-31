@@ -14,9 +14,11 @@
 		onmove: (room: string) => void;
 		onnewthread: () => void;
 		onfill: () => void;
+		/** Copies the picked messages as a log; resolves whether it worked. */
+		oncopy: () => Promise<boolean>;
 		oncancel: () => void;
 	}
-	let { selection, threads, parentRoom, canCreateThread, onmove, onnewthread, onfill, oncancel }: Props = $props();
+	let { selection, threads, parentRoom, canCreateThread, onmove, onnewthread, onfill, oncopy, oncancel }: Props = $props();
 	let current = $derived(selection.current);
 	let count = $derived(current?.ids.length ?? 0);
 	let destinations = $derived(threads.map((thread) => ({ thread: thread.id, name: designTitle(thread) })));
@@ -27,6 +29,6 @@
 	<DesignSelectionBar
 		{count} threads={destinations} room={parentRoom} status={current.saving ? 'saving' : 'idle'} denied={current.denied}
 		bind:open={selection.menuOpen} testid="selection-bar" newThreadTestid="new-thread"
-		{onmove} onnewthread={canCreateThread ? onnewthread : undefined} onselectrange={count > 1 && !current.saving ? onfill : undefined} {oncancel}
+		{onmove} {oncopy} onnewthread={canCreateThread ? onnewthread : undefined} onselectrange={count > 1 && !current.saving ? onfill : undefined} {oncancel}
 	/>
 {/if}

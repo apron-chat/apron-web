@@ -1,6 +1,7 @@
 import { mergeExt } from '$lib/protocol/client-internals';
 import type { WebSocketFactory } from '$lib/protocol/client-types';
 import { isJsonObject, type JsonObject, type WireFrame } from '$lib/protocol/types';
+import { memorySocket, type MemoryHost, type MemorySocket } from './memory-socket';
 import { DAWN, DUSK } from './preview-images';
 
 export type PreviewRoom = {
@@ -15,18 +16,6 @@ export type PreviewRoom = {
 	messages: JsonObject[];
 	reactions: Map<string, Map<string, string[]>>;
 	log_id: number;
-};
-
-type PreviewSocket = {
-	url: string;
-	readyState: number;
-	onopen: ((event: Event) => void) | null;
-	onmessage: ((event: MessageEvent) => void) | null;
-	onerror: ((event: Event) => void) | null;
-	onclose: ((event: CloseEvent) => void) | null;
-	close(): void;
-	send(data: string): void;
-	deliver(frame: WireFrame): void;
 };
 
 type Person = { user_id: string; name: string; avatar?: string; roles?: string[]; status?: string; ext?: JsonObject };
@@ -140,7 +129,7 @@ function mergedExt(kept: JsonObject | undefined, write: unknown): JsonObject | u
 
 /** A single, page-lifetime demo server. It owns no network connection or persistent storage. */
 export class MemoryProtocolServer {
-	private sockets = new Set<PreviewSocket>();
+	private sockets = new Set<MemorySocket>();
 	private rooms = new Map<string, PreviewRoom>();
 	private serial = 1710000000100;
 	private roomSerial = 1;
@@ -380,49 +369,26 @@ export class MemoryProtocolServer {
 		return room;
 	}
 
-	private createSocket(url: string): WebSocket {
-		const server = this;
-		let socket: PreviewSocket;
-		socket = {
-			url, readyState: 0,
-			onopen: null,
-			onmessage: null,
-			onerror: null,
-			onclose: null,
-			close: () => {
-				if (socket.readyState === 3) return;
-				socket.readyState = 3;
-				server.sockets.delete(socket);
-				socket.onclose?.({} as CloseEvent);
-			},
-			send: (data) => {
-				if (socket.readyState !== 1) return;
-				let frame: WireFrame;
-				try { frame = JSON.parse(data) as WireFrame; } catch { return; }
-				queueMicrotask(() => server.receive(socket, frame));
-			},
-			deliver: (frame) => {
-				if (socket.readyState === 1) socket.onmessage?.({ data: JSON.stringify(frame) } as MessageEvent);
-			}
-		};
-		queueMicrotask(() => {
-			if (socket.readyState !== 0) return;
-			server.sockets.add(socket);
-			socket.readyState = 1;
-			socket.onopen?.({} as Event);
-			const capabilities = [...PREVIEW_CAPABILITIES.filter((name) => !server.knobs.withoutCapabilities?.includes(name)), ...(server.knobs.capabilities ?? [])];
+	private host: MemoryHost = {
+		opened: (socket) => {
+			this.sockets.add(socket);
+			const capabilities = [...PREVIEW_CAPABILITIES.filter((name) => !this.knobs.withoutCapabilities?.includes(name)), ...(this.knobs.capabilities ?? [])];
 			// With `status`, the optional statuses it takes (§4.5).
 			const statuses = capabilities.includes('status') ? { status: ['dnd', 'invisible'] } : {};
 			// A test's fields replace the demo's, `ext` key by key.
-			const extra = structuredClone(server.knobs.server ?? {});
+			const extra = structuredClone(this.knobs.server ?? {});
 			const ext = { settings: PREVIEW_SETTINGS, ...(isJsonObject(extra.ext) ? extra.ext : {}) };
 			socket.deliver({ method: 'server', params: { apron: 9, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses, ...extra, ext } });
-		});
-		return socket as unknown as WebSocket;
+		},
+		received: (socket, frame) => this.receive(socket, frame),
+		closed: (socket) => this.sockets.delete(socket)
+	};
+
+	private createSocket(url: string): WebSocket {
+		return memorySocket(url, this.host);
 	}
 
-	private receive(socket: PreviewSocket, frame: WireFrame): void {
-		if (socket.readyState !== 1) return;
+	private receive(socket: MemorySocket, frame: WireFrame): void {
 		this.frames.push(frame);
 		if (frame.method === 'ping') { socket.deliver({ method: 'pong' }); return; }
 		const params = frame.params ?? {};
@@ -507,7 +473,7 @@ export class MemoryProtocolServer {
 	private broadcast(frame: WireFrame, room?: PreviewRoom): void {
 		for (const peer of this.sockets) if (!room || room.members.has('preview_guest')) peer.deliver(frame);
 	}
-	private message(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
+	private message(socket: MemorySocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const room = this.rooms.get(String(p.room_id ?? roomId));
 		if (!room) return fail('Unknown room');
 		const id = typeof p.message_id === 'string' ? p.message_id : this.nextLog(room);
@@ -543,7 +509,7 @@ export class MemoryProtocolServer {
 		reply({ message_id: id, log_id: log });
 	}
 
-	private react(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
+	private react(socket: MemorySocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const target = this.findMessage(String(p.message_id ?? ''));
 		if (!target) return fail('Message not found');
 		const room = target.room;
@@ -567,7 +533,7 @@ export class MemoryProtocolServer {
 		return found;
 	}
 
-	private setRoom(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
+	private setRoom(socket: MemorySocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		let room = typeof p.room_id === 'string' ? this.rooms.get(p.room_id) : undefined;
 		if (!room) {
 			const parent = typeof p.parent_room_id === 'string' ? p.parent_room_id : undefined;
@@ -592,7 +558,7 @@ export class MemoryProtocolServer {
 		reply({ room_id: room.room_id, log_id: String(room.log_id) });
 	}
 
-	private joinRoom(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string, code?: number) => void): void {
+	private joinRoom(socket: MemorySocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string, code?: number) => void): void {
 		const room = this.rooms.get(String(p.room_id));
 		if (!room || this.hidden(room)) return fail('Unknown room');
 		if (typeof p.user_id === 'string' && p.user_id !== 'preview_guest') {
@@ -603,7 +569,7 @@ export class MemoryProtocolServer {
 		socket.deliver({ method: 'room_update', params: { joined: [this.roomRecord(room, true)], users: this.users() } });
 		reply();
 	}
-	private leaveRoom(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
+	private leaveRoom(socket: MemorySocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const room = this.rooms.get(String(p.room_id));
 		if (room && typeof p.user_id === 'string' && p.user_id !== 'preview_guest') return this.changeMember(room, p.user_id, false, reply, fail);
 		room?.members.delete('preview_guest');
@@ -632,7 +598,7 @@ export class MemoryProtocolServer {
 	}
 
 	/** `me` (§3.3): given fields replace, `""` clears, omitted ones stay, and `ext` merges by its keys (§4.12). */
-	private updateMe(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void): void {
+	private updateMe(socket: MemorySocket, p: JsonObject, reply: (result?: JsonObject) => void): void {
 		const me = this.people.preview_guest;
 		const changed: JsonObject = { user_id: me.user_id };
 		if (typeof p.name === 'string') changed.name = me.name = p.name || 'You';
@@ -660,11 +626,11 @@ export class MemoryProtocolServer {
 		// The result's `you` is complete.
 		reply({ you: this.you() });
 	}
-	private activity(socket: PreviewSocket, p: JsonObject): void {
+	private activity(socket: MemorySocket, p: JsonObject): void {
 		if (typeof p.room_id !== 'string') return;
 		this.broadcast({ method: 'activity', params: { ...p, from: this.recorded('preview_guest') } }, this.rooms.get(p.room_id));
 	}
-	private command(socket: PreviewSocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
+	private command(socket: MemorySocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
 		const text = (p.body as JsonObject | undefined)?.text;
 		if (text === '/help') {
 			socket.deliver({ method: 'message', params: { room_id: String(p.room_id ?? roomId), from: { user_id: '~private', name: 'System message to you' }, body: { text: 'Preview commands: /help. Room and message operations are handled in memory.' } } });
