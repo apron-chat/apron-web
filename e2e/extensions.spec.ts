@@ -1,14 +1,15 @@
 import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /**
- * The extensions EXTENSIONS.md defines, in the browser: `ext:permissions` and `ext:settings` in their current
- * shapes, custom emoji (`ext:emoji`) in text, reactions and the pickers, reaction keys and U+FE0F (§4.7), and text
- * direction (§3.5.2). The server's own title, description and avatar beside its address (§3.1, §1) are in connect.spec.ts.
+ * The server's own look and the extensions EXTENSIONS.md defines, in the browser: the server's title and avatar
+ * beside its address (§3.1, §1), `ext:permissions` and `ext:settings` in their current shapes, custom emoji
+ * (`ext:emoji`) in text, reactions and the pickers, reaction keys and U+FE0F (§4.7), and text direction (§3.5.2).
  */
 
-// 2×2 PNGs: red is the animated image, blue its still copy.
+// 2×2 PNGs: red is the animated image, blue its still copy, green an avatar.
 const RED = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==';
 const BLUE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGNgYPgPRmAKABf2A/1+6zfzAAAAAElFTkSuQmCC';
+const GREEN = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGNgWMAAQhAKABGOAoEf3CQEAAAAAElFTkSuQmCC';
 
 const CATALOG = {
 	':partyparrot:': { url: RED, static_url: BLUE, category: 'Parrots', tags: ['celebrate'] },
@@ -39,6 +40,51 @@ async function pickAndMoveToNewThread(preview: Preview, id: string): Promise<voi
 	await bar.getByRole('button', { name: 'Move to thread ▾', exact: true }).click();
 	await preview.page.getByTestId('new-thread').click();
 }
+
+test.describe('the server frame: title, description and avatar (§3.1), and the address (§1)', () => {
+	test('shows the title and avatar, always with the address, and keeps one recent entry per address', async ({ preview, page }) => {
+		// Saved before addresses were normalized: two entries for this server, and another server with the same title.
+		await page.addInitScript(() => {
+			if (sessionStorage.getItem('seeded')) return;
+			sessionStorage.setItem('seeded', '1');
+			localStorage.setItem('apron.recentServers', JSON.stringify([
+				{ url: 'WSS://Server.Apron.Chat:443', label: 'server.apron.chat' },
+				{ url: 'wss://server.apron.chat/', title: 'Old title' },
+				{ url: 'wss://evil.example/', title: 'Mock Chat' }
+			]));
+		});
+		await preview.openRoot({ server: { title: 'Mock Chat', description: 'Where **tests** talk.', avatar: GREEN } });
+		await expect(page.locator('.ap-shell-sidehead-name')).toHaveText('Mock Chat');
+		await expect(page.locator('.ap-shell-sidehead-host')).toHaveText('server.apron.chat');
+		await expect(page.locator('.ap-shell-sidehead-server')).toHaveAttribute('title', 'wss://server.apron.chat/');
+		await expect(page.locator('img.ap-shell-sidehead-avatar')).toHaveAttribute('src', GREEN);
+
+		await preview.openConnect();
+		const server = page.getByTestId('connect-server');
+		await expect(server).toContainText('Mock Chat');
+		await expect(server.locator('.ap-connect-address')).toHaveText('wss://server.apron.chat/');
+		await expect(server.locator('img')).toHaveAttribute('src', GREEN);
+		await expect(page.locator('.ap-connect-server-desc strong')).toHaveText('tests');
+		// Recent: this server once, by its address, with the title it sent last; the copycat with its own address.
+		const recent = page.getByRole('group', { name: 'Recent backends' }).getByRole('button');
+		await expect(recent).toHaveCount(2);
+		await expect(recent.nth(0)).toContainText('Mock Chat');
+		await expect(recent.nth(0).locator('.ap-connect-address')).toHaveText('wss://server.apron.chat/');
+		await expect(recent.nth(1)).toContainText('Mock Chat');
+		await expect(recent.nth(1).locator('.ap-connect-address')).toHaveText('wss://evil.example/');
+	});
+
+	test('without a title, names the server by its host', async ({ preview, page }) => {
+		await preview.openRoot();
+		await expect(page.locator('.ap-shell-sidehead-name')).toHaveText('server.apron.chat');
+		// Its host once, beside its initials.
+		await expect(page.locator('.ap-shell-sidehead-host')).toHaveCount(0);
+		await expect(page.locator('.ap-shell-sidehead-initials')).toHaveText('S');
+		await preview.openConnect();
+		await expect(page.getByTestId('connect-server')).toContainText('server.apron.chat');
+		await expect(page.getByTestId('connect-server').locator('.ap-connect-address')).toHaveText('wss://server.apron.chat/');
+	});
+});
 
 test.describe('ext:permissions and ext:settings', () => {
 	test.describe('a guest who may not write', () => {
