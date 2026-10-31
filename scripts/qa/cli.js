@@ -153,9 +153,10 @@ async function main() {
 			// `--shard 2/3`: this machine's share of the probes, checked against the same baseline; the first also
 			// checks the bundle's size.
 			const [index, count] = o.shard ? String(o.shard).split('/').map(Number) : [1, 1];
-			if (!(index >= 1 && index <= count)) throw new Error(`--shard takes <index>/<count>, e.g. 2/3, not ${o.shard}`);
+			if (!(Number.isInteger(index) && Number.isInteger(count) && index >= 1 && index <= count)) throw new Error(`--shard takes <index>/<count>, e.g. 2/3, not ${o.shard}`);
 			if (count > 1 && o.update) throw new Error('--update rewrites the whole baseline: run it without --shard');
 			const probes = shardOf(selectProbes(suite, list(o.only)).filter((p) => p.budget !== false), index, count);
+			if (!probes.length) throw new Error(`shard ${index}/${count} has no probes to check`);
 			const runs = int(o.runs, 3);
 			const cpu = int(o.cpu, 4);
 			const server = await serveDir(dir);
