@@ -31,7 +31,15 @@ function themeCss(fonts: { sans: string; chat: string; mono: string }): string {
 	--font-chat: ${fonts.chat};
 	/* Code, embeds and commands */
 	--font-mono: ${fonts.mono};
-	/* Any other token works too, such as --accent: #f28a3c; */
+	/* Colors, light and dark at once as light-dark(light, dark). Any token in tokens.css works.
+	--bg-100: light-dark(#f8f6f3, #15151f);
+	--ink: light-dark(#1c1f33, #ece9e4);
+	--ink-muted: light-dark(#5b5d6c, #a8a6b2);
+	--line-strong: light-dark(#7c776f, #6d6d80);
+	--accent: light-dark(#a83c14, #f28a3c);
+	--on-accent: light-dark(#ffffff, #1c0f07);
+	--denim: light-dark(#2c56b6, #8fb0f5);
+	*/
 }
 `;
 }
@@ -73,6 +81,17 @@ export class AppearanceSettings {
 	update(next: AppearancePreferences): void {
 		this.current = decodeAppearance(next);
 		saveAppearance({ ...this.current, vars: applyAppearance(this.current) });
+	}
+
+	/** Shows custom CSS as it is edited, without saving it; `revert` goes back to what is saved. False when it doesn't read. */
+	preview(css: string): boolean {
+		if (parseThemeCss(css).error) return false;
+		applyAppearance({ ...this.current, theme: 'custom', customCss: css });
+		return true;
+	}
+
+	revert(): void {
+		applyAppearance(this.current);
 	}
 }
 

@@ -195,6 +195,8 @@
 	function setThemeMode(mode: string): void {
 		if (mode !== 'system' && mode !== 'light' && mode !== 'dark') return;
 		appearanceSettings.update({ ...appearanceSettings.current, mode: mode as ThemeMode });
+		// Custom CSS being edited stays on show in the new mode.
+		if (themeEdited) appearanceSettings.preview(themeDraft);
 	}
 
 	/**
@@ -222,12 +224,21 @@
 		themeError = '';
 	}
 
+	/** The CSS shows as it's typed, whenever it reads; Apply saves it. */
+	function editTheme(): void {
+		themeError = '';
+		appearanceSettings.preview(themeDraft);
+	}
+
 	function discardTheme(): void {
 		themeDraft = cssForTheme(appearanceSettings.current);
 		themeError = '';
+		appearanceSettings.revert();
 	}
 
 	function preferencesClosed(): void {
+		// Edits not applied go with the dialog.
+		if (themeEdited) discardTheme();
 		onclosed?.();
 	}
 </script>
@@ -343,10 +354,10 @@
 			</SettingRow>
 			{#if appearanceSettings.current.theme === 'custom'}
 				<SettingRow title="Theme CSS" for="ap-theme-css" stacked class="ap-pref-theme-css">
-					<p class="ap-form-hint" id="ap-theme-css-hint">Edit the tokens, then apply them. Only <code>--token: value;</code> declarations are read, and nothing loads with <code>url()</code>.</p>
+					<p class="ap-form-hint" id="ap-theme-css-hint">Edits show as you type; Apply keeps them. Only <code>--token: value;</code> declarations are read, colors can be <code>light-dark(light, dark)</code>, and nothing loads with <code>url()</code>.</p>
 					{#snippet control()}
 						<form onsubmit={applyTheme}>
-							<textarea id="ap-theme-css" class="ap-field ap-pref-css" rows="12" spellcheck="false" autocomplete="off" maxlength={THEME_CSS_MAX} aria-describedby="ap-theme-css-hint" aria-invalid={themeError ? 'true' : undefined} bind:value={themeDraft} oninput={() => (themeError = '')} data-testid="theme-css"></textarea>
+							<textarea id="ap-theme-css" class="ap-field ap-pref-css" rows="12" spellcheck="false" autocomplete="off" maxlength={THEME_CSS_MAX} aria-describedby="ap-theme-css-hint" aria-invalid={themeError ? 'true' : undefined} bind:value={themeDraft} oninput={editTheme} data-testid="theme-css"></textarea>
 							{#if themeError}<p class="ap-pref-note ap-tone-danger" role="alert">{themeError}</p>{/if}
 							<div class="ap-pref-theme-actions">
 								<Button size="sm" variant="ghost" label="Discard changes" disabled={!themeEdited} onclick={discardTheme} />

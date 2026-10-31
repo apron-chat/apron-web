@@ -49,6 +49,8 @@ describe('theme CSS', () => {
 			vars: [['--accent', '#f00'], ['--font-sans', 'Inter']]
 		});
 		expect(parseThemeCss('--bg-100: #000;')).toEqual({ vars: [['--bg-100', '#000']] });
+		// A color for each mode: light-dark() reads like any other value.
+		expect(parseThemeCss('--ink: light-dark(#000000, #ffffff);')).toEqual({ vars: [['--ink', 'light-dark(#000000, #ffffff)']] });
 		expect(parseThemeCss('  /* nothing */  ')).toEqual({ vars: [] });
 	});
 

@@ -722,8 +722,11 @@ over the system's, and a theme: Apron (the system fonts), Ferrous (Recursive
 Sans Casual and Rec Mono Casual), Newsprint (serif messages), Terminal
 (monospace throughout), or Custom. Custom shows its CSS, starting from the
 theme chosen before: the interface, message and code fonts as design tokens
-(`--font-sans`, `--font-chat`, `--font-mono`), and any other token, in either
-mode, once applied. A premade theme hides it and keeps it for next time.
+(`--font-sans`, `--font-chat`, `--font-mono`), then the main colors, commented
+out, as `light-dark(light, dark)` pairs, and any other token. Edits show as
+they're typed, whenever they read, and Apply keeps them; Discard, or closing
+Preferences, goes back to what was kept. A premade theme hides it and keeps it
+for next time.
 Only `--token: value;` declarations are read, alone or in one `:root` block,
 and none may load anything (`url()`, `@import`), so a theme's fonts must be
 installed.

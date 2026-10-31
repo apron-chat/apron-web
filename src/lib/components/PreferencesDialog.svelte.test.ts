@@ -162,6 +162,18 @@ describe('PreferencesDialog', () => {
 		expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/url\(\)/);
 		expect(root.style.getPropertyValue('--font-mono')).not.toBe('');
 
+		// CSS that reads shows as it's typed, unsaved; Discard goes back.
+		css()!.value = '--accent: #123456;';
+		css()!.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('#123456');
+		expect(root.style.getPropertyValue('--font-mono')).toBe('');
+		expect(appearanceSettings.current.customCss).toContain('Recursive Sans Casual Static');
+		[...document.querySelectorAll<HTMLButtonElement>('.ap-pref-theme-actions button')].find((button) => button.textContent === 'Discard changes')!.click();
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('');
+		expect(root.style.getPropertyValue('--font-mono')).not.toBe('');
+
 		edit('--accent: #3cb4f2;');
 		expect(appearanceSettings.current).toEqual({ mode: 'system', theme: 'custom', customCss: '--accent: #3cb4f2;' });
 		expect(root.style.getPropertyValue('--accent')).toBe('#3cb4f2');
