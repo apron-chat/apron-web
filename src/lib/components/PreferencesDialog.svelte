@@ -67,12 +67,11 @@
 	let { open = $bindable(false), section: preferencesSection = $bindable('profile'), profile, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
 
 	const SECTIONS = [
-		// Its tab names it already: no heading over your status, but for screen readers.
-		{ value: 'profile', label: 'Profile', id: 'ap-pref-profile', heading: false },
-		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
-		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
-		{ value: 'media', label: 'Media', hint: 'Where images and avatars load from. Each site sees what you load.', id: 'ap-pref-media' },
-		{ value: 'history', label: 'History', hint: 'What this device keeps of your chats.', id: 'ap-pref-history' }
+		{ value: 'profile', label: 'Profile', id: 'ap-pref-profile' },
+		{ value: 'notifications', label: 'Notifications', id: 'ap-pref-notifications' },
+		{ value: 'appearance', label: 'Appearance', id: 'ap-pref-appearance' },
+		{ value: 'media', label: 'Media', id: 'ap-pref-media' },
+		{ value: 'history', label: 'History', id: 'ap-pref-history' }
 	];
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
@@ -115,18 +114,18 @@
 	 * (push, §4.9), with why not. `action` turns push on here when it could be.
 	 */
 	let notificationsNote = $derived.by((): Note & { action?: string } => {
-		if (notificationPermission === 'denied') return { text: 'Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.', tone: 'err' };
-		if (!notificationsSupported) return { text: 'Notifications aren’t available here. Use a supported browser over HTTPS or localhost.' };
-		if (!notificationsEnabled) return { text: notificationPermission === 'granted' ? 'Off.' : 'Turning this on will ask your browser for permission.' };
-		const open = 'On · alerts while Apron is open.';
-		if (!webPush) return { text: `${open} This server doesn’t alert when it’s closed.`, tone: 'ok' };
-		if (webPush.signIn) return { text: `${open} Sign in to be alerted when it’s closed, too.`, tone: 'ok' };
+		if (notificationPermission === 'denied') return { text: 'Blocked by your browser. Allow notifications in its site settings.', tone: 'err' };
+		if (!notificationsSupported) return { text: 'Not available here. Use a supported browser over HTTPS.' };
+		if (!notificationsEnabled) return { text: notificationPermission === 'granted' ? 'Off.' : 'Your browser will ask for permission.' };
+		const open = 'On while Apron is open.';
+		if (!webPush) return { text: `${open} This server can’t alert when it’s closed.`, tone: 'ok' };
+		if (webPush.signIn) return { text: `${open} Sign in to be alerted when it’s closed.`, tone: 'ok' };
 		if (webPush.error) return { text: webPush.error, tone: 'err' };
-		if (!webPush.supported) return { text: webPush.homeScreen ? `${open} To be alerted when it’s closed, add Apron to your Home Screen.` : `${open} This browser can’t alert when it’s closed.`, tone: 'ok' };
-		if (webPush.heldBy) return { text: `${open} When it’s closed, this browser alerts for one server at a time: now ${webPush.heldBy}.`, tone: 'ok', action: 'Alert for this server instead' };
-		if (webPush.enabled && pushesNothing) return { text: `${open} This server sends none of your choices above when it’s closed.`, tone: 'ok' };
-		if (webPush.enabled) return { text: 'On · alerts on this device, even when Apron is closed.', tone: 'ok' };
-		return { text: `${open} Not yet when it’s closed.`, tone: 'ok', action: 'Alert when it’s closed, too' };
+		if (!webPush.supported) return { text: webPush.homeScreen ? `${open} Add it to your Home Screen to be alerted when it’s closed.` : `${open} This browser can’t alert when it’s closed.`, tone: 'ok' };
+		if (webPush.heldBy) return { text: `${open} When it’s closed, this browser alerts only for ${webPush.heldBy}.`, tone: 'ok', action: 'Alert for this server instead' };
+		if (webPush.enabled && pushesNothing) return { text: `${open} None of your choices below alert when it’s closed.`, tone: 'ok' };
+		if (webPush.enabled) return { text: 'On, even when Apron is closed.', tone: 'ok' };
+		return { text: open, tone: 'ok', action: 'Alert when it’s closed, too' };
 	});
 	let notificationsLocked = $derived(!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied'));
 	/** What the test notification did. */
@@ -268,20 +267,7 @@
 			{/if}
 			{@render profile?.()}
 		{:else if preferencesSection === 'notifications'}
-			{#if pause}
-				<PauseNotifications until={pause.until} {onpause} {onresume} />
-			{/if}
-			<div class="ap-pref-scopes">
-				<CheckList
-					label="Notify me about"
-					options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
-					value={notifyScopes}
-					min={1}
-					onchange={onnotifyscopes}
-				/>
-				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch below turns notifications off.</p>
-			</div>
-			<SettingRow title="Notifications" hint="Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can." class="ap-pref-notifications">
+			<SettingRow title="Notifications" class="ap-pref-notifications">
 				<p class={['ap-pref-note', notificationsNote.tone === 'ok' && 'ap-tone-ok', notificationsNote.tone === 'err' && 'ap-tone-danger']} id="ap-pref-notifications-note">{notificationsNote.text}</p>
 				<p class="ap-pref-test">
 					{#if notificationsNote.action}<Button size="sm" variant="ghost" label={notificationsNote.action} onclick={onwebpush} />{/if}
@@ -310,6 +296,19 @@
 					</Callout>
 				</div>
 			{/if}
+			{#if pause}
+				<PauseNotifications until={pause.until} {onpause} {onresume} />
+			{/if}
+			<div class="ap-pref-scopes">
+				<CheckList
+					label="Notify me about"
+					options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
+					value={notifyScopes}
+					min={1}
+					onchange={onnotifyscopes}
+				/>
+				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch above turns notifications off.</p>
+			</div>
 		{:else if preferencesSection === 'media'}
 			<SettingRow title="Load images from" for="ap-media-policy" hint={mediaNote} hintTestid="media-note" class="ap-pref-media-setting">
 				{#snippet control()}
@@ -318,7 +317,7 @@
 					</select>
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com." stacked class="ap-pref-media-sites">
+			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com. Each site sees what you load." stacked class="ap-pref-media-sites">
 				{#if mediaHosts.length}<p class="ap-form-hint" data-testid="media-server-origins">Includes origins trusted by the server: {mediaHosts.join(', ')}</p>{/if}
 				{#snippet control()}
 					<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update(mediaSettings.policy, parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
