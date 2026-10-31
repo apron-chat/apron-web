@@ -113,6 +113,8 @@
 		const outside = (event: PointerEvent) => {
 			const path = event.composedPath();
 			if ((box && path.includes(box)) || path.includes(current.anchor)) return;
+			// The sheet's dimmed page closes it on its own click, so the press reaches nothing under it.
+			if (path.some((target) => target instanceof Element && target.classList.contains('ap-popover-scrim'))) return;
 			profileCard.close();
 		};
 		const reflow = () => {
@@ -236,6 +238,7 @@
 		bind:offsetHeight={measured}
 		onkeydown={keydown}
 		onfocusout={focusout}
+		onclose={() => profileCard.close()}
 	>
 		{#snippet bioBody()}{@html bioHtml}{/snippet}
 		{#snippet avatar()}<Avatar {name} hue={hueOf(userId)} src={directory.avatar(person)} size="lg" {status} statusLabel={me ? ownStatusLabel(status) : undefined} />{/snippet}

@@ -41,7 +41,7 @@ const KNOWN_BREAKS: Record<string, string> = {
 	'button /^Your profile on/': PROFILE_IN_PREFERENCES,
 	'dialog "Edit profile"': PROFILE_IN_PREFERENCES,
 	'dialog "Edit profile" (substring)': PROFILE_IN_PREFERENCES,
-	'button "Connect to a server…"': 'The connect screen is the server pane’s New server…, which the rooms list’s head (button /^Server: /) opens.',
+	'button "Connect to a server…"': 'The connect screen is the server pane’s Connect to another server…, which the rooms list’s head (button /^Server: /) opens.',
 	'switch "Notifications"': 'Preferences opens at Profile now: the switch is in its Notifications section, a press away (button "Notifications" in its navigation).',
 	'#ap-pref-notifications-note': 'Preferences opens at Profile now: the note is in its Notifications section, a press away.'
 };

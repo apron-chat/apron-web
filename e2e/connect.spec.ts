@@ -60,7 +60,7 @@ test.describe('the rooms list’s head', () => {
 test.describe('the server pane', () => {
 	test.use(DEVICES.desktop);
 
-	test('says what is known of the server, and New server… opens the connect screen, closing it', async ({ preview, page }) => {
+	test('says what is known of the server, and Connect to another server… opens the connect screen, closing it', async ({ preview, page }) => {
 		await preview.openRoot({ server: { title: 'Mock Chat', description: 'Where the **mock** team chats.' } });
 		const server = head(preview).getByRole('button', { name: /^Server: / });
 		await server.click();
@@ -70,15 +70,26 @@ test.describe('the server pane', () => {
 		await expect(pane.locator('.ap-servcard-name')).toHaveText('Mock Chat');
 		await expect(pane.locator('.ap-servcard-description strong')).toHaveText('mock');
 		await expect(pane.locator('.ap-servcard-address')).toHaveText('wss://server.apron.chat/');
-		await expect(pane.locator('.ap-servcard-details')).toContainText('ConnectionConnected');
-		await expect(pane.locator('.ap-servcard-details')).toContainText(/You.*guest/);
-		await pane.getByRole('button', { name: 'New server…', exact: true }).click();
+		await expect(pane.locator('.ap-servcard-state')).toContainText('Connected');
+		await expect(pane.locator('.ap-servcard-dot-ok')).toBeVisible();
+		await expect(pane.locator('.ap-servcard-you')).toHaveText(/^Signed in as .+ \(guest\)\s*·\s*Edit profile$/);
+		// The address, and a button that copies it.
+		await expect(pane.getByRole('button', { name: 'Copy the address' })).toBeVisible();
+		await pane.getByRole('button', { name: 'Connect to another server…', exact: true }).click();
 		await expect(page.getByRole('form', { name: 'Sign in' })).toBeVisible();
 		await expect(page.getByTestId('connect-server')).toContainText('Mock Chat');
 		await expect(pane).toHaveCount(0);
 		// Cancel goes back to the chat as it was.
 		await page.getByRole('form', { name: 'Sign in' }).getByRole('button', { name: 'Cancel', exact: true }).click();
 		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+	});
+
+	test('Edit profile opens Preferences at Profile', async ({ preview, page }) => {
+		await preview.openRoot({ token: 'account-session' });
+		await head(preview).getByRole('button', { name: /^Server: / }).click();
+		await page.getByTestId('server-pane').getByRole('button', { name: 'Edit profile', exact: true }).click();
+		await expect(page.getByTestId('server-pane')).toHaveCount(0);
+		await expect(page.getByRole('dialog', { name: 'Preferences' }).getByTestId('display-name-input')).toBeVisible();
 	});
 
 	test('opens and closes from the keyboard, Escape giving focus back', async ({ preview, page }) => {

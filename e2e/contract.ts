@@ -401,7 +401,7 @@ export const SCENES: Scene[] = [
 			// The connect screen as it is, from the server pane.
 			await page.getByRole('button', { name: /^Server: / }).click();
 			await look();
-			await page.getByTestId('server-pane').getByRole('button', { name: 'New server…', exact: true }).click();
+			await page.getByTestId('server-pane').getByRole('button', { name: 'Connect to another server…', exact: true }).click();
 			await expect(card).toBeVisible();
 			// Another server: Done becomes Connect.
 			await page.getByTestId('server-url-input').fill('ws://127.0.0.1:9/ws');

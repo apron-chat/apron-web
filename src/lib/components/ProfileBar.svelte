@@ -144,7 +144,7 @@
 	/** External sign-in on the server's page (§4.11.5), where the server offers it. */
 	let canUseExternal = $derived(!!session.server?.auth.includes('external'));
 	/** Why the server declined the handle, and what happens to it now: a guest who can sign in gets it applied once signed in. */
-	let declinedNote = $derived(`The server declined this handle${declinedReason ? ` (${declinedReason})` : ''}. ${(canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession ? 'Sign in and it’s applied once you’re signed in.' : 'Your old one is still in use.'}`);
+	let declinedNote = $derived(`The server declined this name${declinedReason ? ` (${declinedReason})` : ''}. ${(canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession ? 'Sign in and it’s applied once you’re signed in.' : 'Your old one is still in use.'}`);
 	/**
 	 * No way back into the account that the server signs in with, as far as
 	 * this browser knows: only a kept token (pasted, or an invite, §3.2), or an
@@ -160,7 +160,29 @@
 	 * `state`. A link of no proposal here never adds; it signs in.
 	 */
 	let addEmail = $state<{ scheme: 'email' | 'external'; step: 'address' | 'code'; email: string; code: string; page?: string; busy: boolean; error: string } | undefined>();
-	/** Profile's form starts from what the server keeps: your handle and bio, and no note from last time. */
+	/** The name or bio differs from what the server keeps: Save and Revert show. */
+	let dirty = $derived(draft.trim() !== openedWith.trim() || (canSetBio && bioDraft.trim() !== bioOpenedWith.trim()));
+	let savedTimer: ReturnType<typeof setTimeout> | undefined;
+	// "Saved." says so a moment, then goes.
+	$effect(() => {
+		if (status !== 'saved') return;
+		clearTimeout(savedTimer);
+		savedTimer = setTimeout(() => {
+			if (status === 'saved') status = 'idle';
+		}, 2000);
+		return () => clearTimeout(savedTimer);
+	});
+
+	/** Revert: back to what the server keeps. */
+	function revert(): void {
+		draft = openedWith;
+		bioDraft = bioOpenedWith;
+		bioError = '';
+		status = 'idle';
+		declinedReason = '';
+	}
+
+	/** Profile's form starts from what the server keeps: your name and bio, and no note from last time. */
 	function resetProfile(): void {
 		draft = you?.name || displayName;
 		openedWith = draft;
@@ -254,7 +276,7 @@
 			} else {
 				// Labelled with the account's name, so the passkey manager shows whose it is.
 				await client.usePasskey('register', you?.name);
-				passkeyNotice = 'Passkey saved · this backend will ask your device next time';
+				passkeyNotice = 'Passkey saved. This server will ask your device next time.';
 			}
 			resetDraft();
 		} catch (cause) {
@@ -393,58 +415,65 @@
 	<Avatar name={shownYou?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={shownStatus} statusLabel={ownLabel} />
 {/snippet}
 {#snippet face()}
-	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" status={shownStatus} statusLabel={ownLabel} />
+	<!-- No status dot: the status is chosen just above it. -->
+	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" />
 {/snippet}
 {#snippet signin()}
 	{#if snapshot.authBusy && !addEmail?.busy}
 		<span class="ap-form-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
 	{:else}
-		<span class="ap-profedit-row">
+		<!-- How this session signs in comes first, then what you can do about it. -->
+		{#if passkeyError}
+			<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
+		{:else if passkeyNotice}
+			<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
+		{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
+			<span class="ap-form-hint">{passkeyUnavailable}</span>
+		{:else if wayBack}
+			<span class="ap-form-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
+		{:else if session.passkeySession}
+			<span class="ap-form-hint">{canUseEmail || canUseExternal ? 'You can sign in to this account anywhere.' : 'You sign in to this account with a passkey.'}</span>
+		{:else}
+			<span class="ap-form-hint">You’re a guest here.{(canUseEmail || canUseExternal) && you ? ' Keep this identity by adding a way to sign in, or sign in to an account.' : ' Sign in to an account to keep your name and rooms.'}</span>
+		{/if}
+		{#if session.passkeySession}
+			<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
 			<span class="ap-profedit-buttons">
-				{#if session.passkeySession}
-					<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
-					{#if canUsePasskey && you}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
-					{/if}
-					{#if canUseEmail && you && !addEmail}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
-					{/if}
-					{#if canUseExternal && you && !addEmail}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
-					{/if}
-					<button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
-				{:else}
-					{#if canUsePasskey}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || status === 'saving'} onclick={() => signIn('webauthn')}>Sign in with a passkey</button>
-					{/if}
-					{#if canUseEmail}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
-						<!-- Adding an address to a guest asks and answers on this connection; whether that keeps the
-						     guest identity as an account is the server's call (§4.11). -->
-						{#if you && !addEmail}
-							<button class="ap-btn ap-btn-sm" type="button" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
-						{/if}
-					{/if}
-					{#if canUseExternal}
-						<button class="ap-btn ap-btn-sm" type="button" disabled={status === 'saving'} onclick={() => signIn('external')}>Sign in externally</button>
-						{#if you && !addEmail}
-							<button class="ap-btn ap-btn-sm" type="button" title="Keep this identity: add an external sign-in to it, if the server allows" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
-						{/if}
-					{/if}
+				{#if canUsePasskey && you}
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
+				{/if}
+				{#if canUseEmail && you && !addEmail}
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+				{/if}
+				{#if canUseExternal && you && !addEmail}
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
 				{/if}
 			</span>
-			{#if passkeyError}
-				<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
-			{:else if passkeyNotice}
-				<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
-			{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
-				<span class="ap-form-hint">{passkeyUnavailable}</span>
-			{:else if wayBack}
-				<span class="ap-form-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
-			{:else}
-				<span class="ap-form-hint">{session.passkeySession ? (canUseEmail || canUseExternal ? 'Signed in' : 'Signed in with a passkey') : 'Signed in as a guest'}</span>
+		{:else}
+			<!-- A guest: keeping this identity (adding an address to it, if the server allows, §4.11), apart from signing in to an account. -->
+			{#if you && !addEmail && (canUseEmail || canUseExternal)}
+				<span class="ap-profedit-buttons" role="group" aria-label="Keep this identity">
+					{#if canUseEmail}
+						<button class="ap-btn ap-btn-sm" type="button" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+					{/if}
+					{#if canUseExternal}
+						<button class="ap-btn ap-btn-sm" type="button" title="Keep this identity: add an external sign-in to it, if the server allows" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
+					{/if}
+				</span>
 			{/if}
-		</span>
+			<span class="ap-profedit-buttons ap-profedit-signin-account" role="group" aria-label="Sign in to an account">
+				<span class="ap-form-hint">Have an account?</span>
+				{#if canUsePasskey}
+					<button class="ap-btn ap-btn-sm ap-btn-ghost" type="button" disabled={!!passkeyUnavailable || status === 'saving'} onclick={() => signIn('webauthn')}>Sign in with a passkey</button>
+				{/if}
+				{#if canUseEmail}
+					<button class="ap-btn ap-btn-sm ap-btn-ghost" type="button" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
+				{/if}
+				{#if canUseExternal}
+					<button class="ap-btn ap-btn-sm ap-btn-ghost" type="button" disabled={status === 'saving'} onclick={() => signIn('external')}>Sign in externally</button>
+				{/if}
+			</span>
+		{/if}
 		{#if addEmail}
 			<span class="ap-profedit-add" role="group" aria-label={addEmail.scheme === 'email' ? 'Add email' : 'Add external sign-in'}>
 				{#if addEmail.scheme === 'external' && !addEmail.page}
@@ -463,6 +492,10 @@
 			{:else if addEmail.step === 'code' && addEmail.scheme === 'email'}<span class="ap-form-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
 		{/if}
 	{/if}
+{/snippet}
+{#snippet signout()}
+	<p class="ap-form-hint">Signed in to <bdi>{backendLabel}</bdi> as <bdi>{shownYou?.name || you?.user_id}</bdi>.</p>
+	<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
 {/snippet}
 {#snippet profileForm()}
 	<ProfileEditor
@@ -485,7 +518,10 @@
 		{serverName}
 		{declinedNote}
 		onsave={save}
+		{dirty}
+		onrevert={revert}
 		signin={canUsePasskey || canUseEmail || canUseExternal ? signin : undefined}
+		signout={session.passkeySession && you ? signout : undefined}
 		changeAvatarTestid="change-avatar" removeAvatarTestid="remove-avatar" avatarFileTestid="avatar-input" nameTestid="display-name-input" bioTestid="bio-input"
 	/>
 {/snippet}

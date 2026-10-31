@@ -1380,19 +1380,23 @@ URLs load only from the server's own origin, whatever the choice; links may
 point anywhere `http(s)`.
 
 The rooms list's head shows the server you're connected to (its avatar, title
-and host); pressing it opens the **server pane** beside it (a bottom sheet on
-phones): the server's avatar, title and host, its `description` rendered as
-CommonMark and sanitized like a message, its address, how the connection
-stands, who you are there (a guest or an account), and the protocol version it
-speaks. Escape or a press outside closes it. **New server…** there opens the
-connect screen, and **Disconnect** closes the connection, drops what the page
-held from it and opens the connect screen without a Cancel: connecting again,
-to it or to another server, is the way back. What this device kept for it (the
-saved session, its history) stays, so connecting to it again doesn't ask to
-sign in again; a reload connects to it again too. In the preview and an export
-read on `/archive`, the pane has neither button.
+and host, and a ▾ after the title); pressing it opens the **server pane** under
+it (a bottom sheet on phones, over the dimmed page, with a grabber): the
+server's avatar and title (on two lines if it needs them), how the connection
+stands (a green, amber or red dot) beside its host, its `description` rendered
+as CommonMark and sanitized like a message, who you are there ("Signed in as
+Ada", "(guest)" for a guest) with **Edit profile** (Preferences at Profile),
+its address with a copy button, and the protocol version it speaks. Escape, or
+a press outside or on the dimmed page, closes it. At its foot, **Connect to
+another server…** opens the connect screen, and **Disconnect**, at the other
+end in the danger tone, closes the connection, drops what the page held from it
+and opens the connect screen without a Cancel: connecting again, to it or to
+another server, is the way back. What this device kept for it (the saved
+session, its history) stays, so connecting to it again doesn't ask to sign in
+again; a reload connects to it again too. In the preview and an export read on
+`/archive`, the pane has neither.
 
-The connect screen (**New server…**, for guests and accounts alike) takes a WebSocket URL or an HTTP(S) server
+The connect screen (**Connect to another server…**, for guests and accounts alike) takes a WebSocket URL or an HTTP(S) server
 base URL, a display name, and a sign-in choice among the schemes the server
 advertises (Guest by default; Passkey, below; Email, External and Token, further down). Once the server in the field
 has answered, the top of the form shows it as it shows itself
@@ -1426,10 +1430,18 @@ server applies it with a `user` notification. **Remove** sends `me` with
 `avatar: ""`.
 
 Your profile is the first section of **Preferences**, which the profile bar at
-the foot of the sidebar opens (one button: your avatar, name and server, and a
-gear): your status at the top (with capability `status`), then your avatar,
-handle and bio, saved with **Save** (Preferences stays open; "Saved." says it
-was kept as asked), then its Sign-in row. That row offers, where the server's `auth` lists them,
+the foot of the sidebar opens (one button: your avatar and name, a line under it
+that says notifications are paused, else something to do such as "Add a
+sign-in", else your status, else your `@user_id`, and a gear). The section has
+your status at the top (with capability `status`), then rows like the other
+sections': your avatar; your **Display name** (the ID under it, "Your ID is
+@ada. It's permanent.") and bio, with **Revert** and **Save** only while they
+differ from what the server keeps (Preferences stays open; "Saved." says so a
+moment); the Sign-in row, which says how this session signs in first; and, for
+an account, "Signed in to … as …" with **Sign out** at the end, in the danger
+tone. For a guest, the Sign-in row keeps this identity (**Add email**, **Add
+external sign-in**) apart from signing in to an account ("Have an account?"
+then the ways the server signs in). That row offers, where the server's `auth` lists them,
 **Sign in with a passkey**, **Sign in with email**, **Sign in externally**,
 **Add email** and **Add external sign-in** to a guest, and **Add passkey**,
 **Add email**, **Add external sign-in** and **Sign out** to a registered

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Identity" height=420 subtitle="The server you're connected to, from the rooms list's head: its look, its description, how the connection stands, and New server… and Disconnect" -->
+<!-- @dsCard group="Identity" height=420 subtitle="The server you're connected to, from the rooms list's head: its look and how the connection stands, its description, who you are there, its address to copy, and Connect to another server… and Disconnect" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ServerCard</title></head>
@@ -11,7 +11,7 @@
     top: 16, left: 16, width: 320,
     name: 'Northwind Ops', address: 'wss://chat.northwind.example/',
     description: A.html('<p>Where the <strong>Northwind</strong> operations team chats. Be kind; page on-call in #incidents.</p>'),
-    details: [{ label: 'Connection', value: 'Connected' }, { label: 'You', value: 'Alice Chen @alice' }, { label: 'Protocol', value: 'Apron 9' }],
+    connection: { label: 'Connected', tone: 'ok' }, you: { name: 'Alice Chen' }, onprofile: noop, protocol: 'Apron 9', oncopyaddress: noop,
     onnewserver: noop, ondisconnect: noop
   });
 </script>

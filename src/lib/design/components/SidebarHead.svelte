@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { MediaSrc } from './types';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import type { ClassValue } from 'svelte/elements';
 	import { initials } from './util';
@@ -41,7 +42,7 @@
 {#snippet server()}
 	{#if avatar}<img class="ap-shell-sidehead-avatar" src={avatar} alt="" />{:else}<span class="ap-shell-sidehead-avatar ap-shell-sidehead-initials" aria-hidden="true">{initials(name)}</span>{/if}
 	<span class="ap-shell-sidehead-text">
-		<span class="ap-shell-sidehead-name">{name}</span>
+		<span class="ap-shell-sidehead-nameline"><span class="ap-shell-sidehead-name">{name}</span>{#if onopen}<ChevronDown class="ap-shell-sidehead-chevron" size={14} strokeWidth={2} aria-hidden="true" />{/if}</span>
 		{#if subline}<span class="ap-shell-sidehead-host">{subline}</span>{/if}
 	</span>
 {/snippet}
