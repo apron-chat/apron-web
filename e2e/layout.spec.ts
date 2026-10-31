@@ -101,17 +101,26 @@ async function showMembers(preview: Preview): Promise<void> {
 	await expect(list.locator('li').first()).toBeVisible();
 }
 
-/** Shuts the member list where it overlays the conversation, as a window that narrow opens with it. */
+/**
+ * Shuts the member list where it overlays the conversation, as a window that narrow opens with it. Again until it
+ * stays shut: just after a resize the list may still be changing from a column to an overlay, and a look then can
+ * find it hidden a moment before it shows.
+ */
 async function hideMembers(preview: Preview): Promise<void> {
 	const { page } = preview;
 	const list = page.getByTestId('room-member-list');
-	if (await list.isVisible()) await preview.press(page.getByRole('button', { name: 'Hide member list', exact: true }));
-	await expect(list).toBeHidden();
+	await expect(async () => {
+		if (await list.isVisible()) await preview.press(page.getByRole('button', { name: 'Hide member list', exact: true }));
+		await expect(list).toBeHidden({ timeout: 1_000 });
+	}).toPass();
 }
 
 /** Resizes the window to a device's viewport, its member list shut as a window that narrow opens with it. */
 async function resizeTo(preview: Preview, device: keyof typeof DEVICES): Promise<void> {
-	await preview.page.setViewportSize(DEVICES[device].viewport);
+	const { viewport } = DEVICES[device];
+	await preview.page.setViewportSize(viewport);
+	// The page has taken the new width before the list is looked at.
+	await expect.poll(() => preview.page.evaluate(() => innerWidth)).toBe(viewport.width);
 	await hideMembers(preview);
 }
 
