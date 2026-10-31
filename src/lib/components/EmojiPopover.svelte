@@ -3,6 +3,7 @@
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import { currentTheme, pickerColors, placePicker } from '$lib/ui/emoji';
 	import { emojiPicker, loadEmojiMart } from '$lib/ui/emoji-picker.svelte';
+	import { forMode } from '$lib/ui/theme-colors';
 	import { customEmoji } from '$lib/ui/custom-emoji.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { pickerCategories } from '$lib/ui/emoji';
@@ -41,7 +42,9 @@
 	/** emoji-mart's `--rgb-*` colors from the app's tokens, for the current theme. */
 	function paint(picker: HTMLElement): void {
 		const style = getComputedStyle(document.documentElement);
-		for (const [property, value] of Object.entries(pickerColors((token) => style.getPropertyValue(token)))) picker.style.setProperty(property, value);
+		const mode = theme();
+		// A theme's token may be light-dark(), which a custom property keeps as text: its half for this mode.
+		for (const [property, value] of Object.entries(pickerColors((token) => forMode(style.getPropertyValue(token), mode)))) picker.style.setProperty(property, value);
 	}
 
 	// Opening the picker is when the server's custom emoji are first needed.

@@ -116,6 +116,9 @@ const rows: Row[] = [
 	['ThreadList, folded', ThreadList, { room: 'General', others: 4, othersFolded: true, othersExpandTestid: 'others-expand' }, {
 		'others-expand': () => dom.button('Show all Other Threads')
 	}],
+	['ThreadList, inactive', ThreadList, { room: 'General', inactive: 2, inactiveRows: dom.html('<div>Retro</div>'), inactiveFolded: true, inactiveToggleTestid: 'inactive', inactiveExpandTestid: 'inactive-expand' }, {
+		inactive: () => dom.button(/^Inactive/), 'inactive-expand': () => dom.button('Show all Inactive')
+	}],
 	['SelectionBar', SelectionBar, { count: 2, onnewthread: vi.fn(), newThreadTestid: 'new-thread', testid: 'bar' }, {
 		bar: () => dom.byRole('toolbar', 'Selected messages'), 'new-thread': () => dom.button('New thread')
 	}],

@@ -726,11 +726,26 @@ push is on for it here. A pushed room that the listed rooms don't include, or
 that isn't open after 30 seconds, is dropped. Browsers without
 push say so; iPhone and iPad Safari say to add Apron to the Home Screen first.
 
-**Appearance** picks a light or dark theme
-over the system's, and an installed font for the interface, messages and code
-(suggested from installed fonts where the browser allows listing them); the
-font choice is marked experimental, to be replaced by a choice of themes. All
-of these stay on this device; settings aren't synced.
+**Appearance** picks a light or dark mode
+over the system's, and a theme: Apron (the system fonts and Apron's own
+palette), Ferrous (graphite and cream, in Recursive Sans Casual and Rec Mono
+Casual), Gumball (cotton-candy pink with a lavender sidebar, in Nunito),
+Linocut (high contrast, black on white or white on black, for e-ink too), or Custom. Apron
+carries those fonts (Recursive cut to those two faces, and Nunito) and loads
+one only for a theme that uses it, after a copy installed on the device. Custom shows its CSS, starting from the theme chosen
+before: the interface, message and code fonts as design tokens (`--font-sans`,
+`--font-chat`, `--font-mono`), then its base colors (`--base-ground`,
+`--base-ink`, `--base-accent`, `--base-link`), each `#hex` or
+`light-dark(#hex, #hex)` for light and dark mode at once. The rest of the
+palette (grounds, lines, muted text, the soft tints) is mixed from those, and
+any token set on its own wins. Edits show as they're typed, whenever they read,
+and Apply keeps them; Discard, or closing Preferences, goes back to what was
+kept. A premade theme hides it and keeps it for next time. Only
+`--token: value;` declarations are read, alone or in one `:root` block, and
+none may load anything (`url()`, `@import`): a font that isn't Apron's must be
+installed.
+Fonts chosen one by one before themes become a custom theme. All of these stay
+on this device; settings aren't synced.
 
 **History** keeps what a signed-in session has loaded on this device, for
 **30 days** unless **Retention** says otherwise (a day, a week, a year,
@@ -914,7 +929,15 @@ same bubble for its own unread messages (its threads count their own), with
 its name in bold, and none while you're reading it. The open room or thread has a neutral fill and an
 accent bar at its left (on the window's edge for a room, on the guide line for a thread), so it never looks
 unread. A row's fill, open or under the pointer, reaches the sidebar's outer edge and is square there, rounded
-inside; the member list's rows do the same at its far edge. A door on hover leaves the thread. Then **Other Threads · N**, a heading
+inside; the member list's rows do the same at its far edge. A door on hover leaves the thread. Past the five
+most recently active, a joined thread with no activity for three days (counted from now, to the hour) and
+nothing unread or mentioning you moves down under **Inactive · N**, a heading that folds as Other Threads does
+but starts folded: there to put quiet threads away, so a room of five or fewer joined threads never shows it,
+and nothing with news is hidden. Its rows keep the solid guide and their Leave, as they're still yours; folded,
+it shows only the one you're reading, and one that got news while the list was held. A thread stays on its side
+while the pointer or keyboard is on the list, and the one you're reading stays on the side it was on when you
+opened it, so reading an old thread with news doesn't move it under Inactive until you open another. A room
+folded to its threads with news lists them without it. Then **Other Threads · N**, a heading
 that folds as the sidebar's do, to the one you're reading if it's among them,
 with the **…** at its end (it stays as you left it, on this device): the
 threads you haven't joined, beside the guide line carried on dashed, their

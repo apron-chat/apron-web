@@ -2,7 +2,7 @@ import { serverAddress, type ServerLook } from '$lib/protocol/client-views';
 import { compareLogIds } from '$lib/protocol/reducer';
 import { isJsonObject, isLogId, type JsonObject } from '$lib/protocol/types';
 import { base64url } from '$lib/protocol/webauthn';
-import type { AppearancePreferences } from './appearance.svelte';
+import type { AppearancePreferences, ThemeVars } from './appearance.svelte';
 
 /** Everything this client remembers between visits lives under one prefix. */
 const KEY = {
@@ -25,6 +25,8 @@ const KEY = {
 	memberSections: 'apron.memberSections',
 	/** Whether Other Threads, the threads you haven't joined under the open room, is folded away. */
 	otherThreads: 'apron.otherThreads',
+	/** Whether Inactive, the joined threads quiet for a while under the open room, is unfolded. */
+	inactiveThreads: 'apron.inactiveThreads',
 	/** The sidebar's sections folded to their rows with news (`rooms`, `private`, `otherRooms`). */
 	sidebarFolds: 'apron.sidebarFolds',
 	/** The room and thread descriptions put away with their ×, each kept as the fingerprint of the text put away. Still stored under its old name, so what's put away stays put away. */
@@ -223,6 +225,15 @@ export function loadOtherThreadsOpen(): boolean {
 
 export function saveOtherThreadsOpen(open: boolean): void {
 	write(KEY.otherThreads, open ? 'open' : 'shut');
+}
+
+/** Inactive is folded until it's opened, as it's there to put quiet threads away, and stays as it was left. */
+export function loadInactiveThreadsOpen(): boolean {
+	return read(KEY.inactiveThreads) === 'open';
+}
+
+export function saveInactiveThreadsOpen(open: boolean): void {
+	write(KEY.inactiveThreads, open ? 'open' : 'shut');
 }
 
 /** The storage key of the descriptions put away: other tabs follow its `storage` events. */
@@ -478,7 +489,7 @@ export function saveWebPushOwner(owner: WebPushOwner | undefined): void {
 	else write(KEY.webPushOwner, JSON.stringify(owner));
 }
 
-/** The saved theme and fonts as stored; `decodeAppearance` checks them. */
+/** The saved mode and theme as stored; `decodeAppearance` checks them. */
 export function loadAppearance(): unknown {
 	try {
 		return JSON.parse(read(KEY.appearance) ?? 'null');
@@ -487,7 +498,8 @@ export function loadAppearance(): unknown {
 	}
 }
 
-export function saveAppearance(preferences: AppearancePreferences): void {
+/** With the theme's tokens, which app.html sets before the first paint. */
+export function saveAppearance(preferences: AppearancePreferences & { vars: ThemeVars }): void {
 	write(KEY.appearance, JSON.stringify(preferences));
 }
 

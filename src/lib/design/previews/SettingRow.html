@@ -20,10 +20,13 @@
   add(A.SettingRow, { title: 'Notifications', class: 'ap-pref-notifications',
     children: A.html('<p class="ap-pref-note" id="note-1">On, even when Apron is closed.</p><p class="ap-pref-test"><button class="ap-btn ap-btn-ghost ap-btn-sm" type="button">Send a test notification</button></p>'),
     control: A.part(A.Switch, { checked: true, label: 'Notifications', describedby: 'note-1', onchange: function () {} }) });
-  add(A.SettingRow, { title: 'Theme', for: 'theme-1', hint: 'System follows your operating system’s light or dark preference.', class: 'ap-pref-theme-setting',
-    control: A.html('<select id="theme-1" class="ap-field ap-pref-select"><option>System</option><option>Light</option><option>Dark</option></select>') });
-  add(A.SettingRow, { title: 'Fonts', badge: 'Experimental', hint: 'Customize the interface, chat, and monospace fonts on this device.', stacked: true, class: 'ap-pref-font-setting',
-    control: A.part(A.FontField, { id: 'font-1', label: 'Interface font', hint: 'Applies to the app interface. Leave blank for the browser’s system UI font.', placeholder: 'System UI stack', value: 'Inter', font: '"Inter", var(--font-sans)', fonts: [], fontState: 'idle', onloadfonts: function () {} }) });
+  add(A.SettingRow, { title: 'Mode', for: 'mode-1', hint: 'System follows your operating system’s light or dark preference.', class: 'ap-pref-theme-setting',
+    control: A.html('<select id="mode-1" class="ap-field ap-pref-select"><option>System</option><option>Light</option><option>Dark</option></select>') });
+  add(A.SettingRow, { title: 'Theme', for: 'theme-1', hint: 'Fonts and other design tokens, over either mode. The first time, Custom starts from the theme you had.', class: 'ap-pref-theme-setting',
+    control: A.html('<select id="theme-1" class="ap-field ap-pref-select"><option>Apron</option><option>Ferrous</option><option>Gumball</option><option>Linocut (high contrast)</option><option selected>Custom</option></select>') });
+  add(A.SettingRow, { title: 'Theme CSS', for: 'css-1', stacked: true, class: 'ap-pref-theme-css',
+    children: A.html('<p class="ap-form-hint">Edits show as you type; Apply keeps them. Only <code>--token: value;</code> declarations are read.</p>'),
+    control: A.html('<textarea id="css-1" class="ap-field ap-pref-css" rows="5" spellcheck="false">:root {\n\t--font-sans: &quot;Recursive Sans Casual Static&quot;, var(--font-sans-system);\n\t--font-chat: var(--font-sans);\n\t--font-mono: &quot;RecMonoCasual Nerd Font&quot;, var(--font-mono-system);\n}</textarea><div class="ap-pref-theme-actions"><button class="ap-btn ap-btn-ghost ap-btn-sm" type="button" disabled>Discard changes</button><button class="ap-btn ap-btn-primary ap-btn-sm" type="submit" disabled>Apply</button></div>') });
 </script>
 </body>
 </html>

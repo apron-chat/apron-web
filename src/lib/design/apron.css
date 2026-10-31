@@ -882,7 +882,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-threads-joined .ap-room:not(.ap-room-quiet) .ap-room-name { color: var(--ink); font-weight: 500; }
 .ap-threads-joined .ap-room.ap-room-active .ap-room-name { font-weight: 600; }
 .ap-threads-joined .ap-room.ap-room-unread .ap-room-name { font-weight: 600; }
-/* Other Threads, a FoldHeading: its words line up with the titles under it, its … with the room row's + above. */
+/* Inactive and Other Threads, FoldHeadings: their words line up with the titles under it, its … with the room row's + above. */
 .ap-threads-head { margin: var(--space-2) 0 1px; padding-inline: calc(var(--space-3) + var(--space-4)) var(--space-1); }
 .ap-threads-head .ap-sect-toggle { padding-inline-start: 0; }
 .ap-threads-more .ap-room-name { color: var(--denim); font-size: var(--text-sm); }
@@ -1439,7 +1439,7 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: pointer; }
 .ap-pref-experimental { display: inline-block; margin-inline-start: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-ui); font-weight: 500; vertical-align: 1px; }
 /* Its lines of text, set at a description's width. (A callout under it, Pause's or Status's, spaces itself.) */
-.ap-pref-setting-text > p, .ap-pref-setting > p, .ap-pref-fonts > .ap-pref-note { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
+.ap-pref-setting-text > p, .ap-pref-setting > p, .ap-pref-theme-css form > .ap-pref-note { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
 /* `stacked`: the control under the title. (With `below`, the title and control are a row of their own, above it.) */
 .ap-pref-setting-stacked { display: block; }
 /* Preferences' rows: a note on how a setting stands, and a row of buttons under it */
@@ -1455,9 +1455,10 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-pref-check .ap-checklist-box { margin: 0; }
 .ap-pref-check:has(.ap-checklist-box:disabled) { cursor: default; opacity: var(--opacity-disabled); }
 .ap-pref-sites { display: block; width: min(100%, var(--pref-note-w)); height: auto; min-height: calc(4lh + 2 * var(--space-2)); margin-top: var(--space-2); padding: var(--space-2); resize: vertical; font-family: var(--font-mono); font-size: var(--text-sm); }
-.ap-pref-theme-setting + .ap-pref-font-setting { border-top: 0; }
-.ap-pref-fonts { margin-top: var(--space-4); }
-.ap-pref-font-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
+/* Appearance: Mode, Theme and the theme's CSS share their rules. */
+.ap-pref-theme-setting + :is(.ap-pref-theme-setting, .ap-pref-theme-css) { border-top: 0; }
+.ap-pref-css { display: block; width: 100%; height: auto; margin-top: var(--space-3); padding: var(--space-2); resize: vertical; font-family: var(--font-mono); font-size: var(--text-ui); line-height: var(--leading-ui); tab-size: 2; }
+.ap-pref-theme-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-3); }
 /* Pause notifications and Status follow on from the section's heading, ruled below only. */
 .ap-pref-pause, .ap-status-pick { border-top: 0; }
 .ap-pref-paused { display: flex; align-items: center; gap: var(--space-1); }

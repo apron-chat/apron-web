@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { flushSync, tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
+import { appearanceSettings, DEFAULT_APPEARANCE } from '$lib/ui/appearance.svelte';
 import PreferencesDialog from './PreferencesDialog.svelte';
 import { render, cleanup } from '$lib/test/dom';
 
@@ -123,5 +124,88 @@ describe('PreferencesDialog', () => {
 		await tick();
 		flushSync();
 		expect(live.textContent).toBe('This server doesn’t offer Invisible. Your status is None.');
+	});
+
+	it('applies a premade theme at once, and shows the CSS only for Custom, starting from the theme before', () => {
+		appearanceSettings.update({ ...DEFAULT_APPEARANCE });
+		render(PreferencesDialog, notificationProps({ section: 'appearance' }));
+		const root = document.documentElement;
+		const select = document.querySelector<HTMLSelectElement>('#ap-theme')!;
+		const css = () => document.querySelector<HTMLTextAreaElement>('#ap-theme-css');
+		const apply = () => document.querySelector<HTMLButtonElement>('.ap-pref-theme-css button[type="submit"]')!;
+		const choose = (theme: string) => {
+			select.value = theme;
+			select.dispatchEvent(new Event('change', { bubbles: true }));
+			flushSync();
+		};
+		const edit = (text: string) => {
+			css()!.value = text;
+			css()!.dispatchEvent(new Event('input', { bubbles: true }));
+			flushSync();
+			apply().click();
+			flushSync();
+		};
+
+		expect(css()).toBeNull();
+		choose('ferrous');
+		expect(root.style.getPropertyValue('--font-mono')).toBe('"RecMonoCasual Nerd Font", "Rec Mono Casual", "Apron Rec Mono Casual", var(--font-mono-system)');
+		expect(css()).toBeNull();
+
+		choose('custom');
+		expect(appearanceSettings.current.theme).toBe('custom');
+		expect(css()!.value).toContain('Recursive Sans Casual Static');
+		expect(root.style.getPropertyValue('--font-mono')).toBe('"RecMonoCasual Nerd Font", "Rec Mono Casual", "Apron Rec Mono Casual", var(--font-mono-system)');
+		expect(apply().disabled).toBe(true);
+
+		// CSS that doesn't read says why, and changes nothing.
+		edit('--accent: url(x);');
+		expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/url\(\)/);
+		expect(root.style.getPropertyValue('--font-mono')).not.toBe('');
+
+		// CSS that reads shows as it's typed, unsaved; Discard goes back.
+		css()!.value = '--accent: #123456;';
+		css()!.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('#123456');
+		expect(root.style.getPropertyValue('--font-mono')).toBe('');
+		expect(appearanceSettings.current.customCss).toContain('Recursive Sans Casual Static');
+		[...document.querySelectorAll<HTMLButtonElement>('.ap-pref-theme-actions button')].find((button) => button.textContent === 'Discard changes')!.click();
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('light-dark(#2a2926, #f0e9d8)');
+		expect(root.style.getPropertyValue('--font-mono')).not.toBe('');
+
+		edit('--accent: #3cb4f2;');
+		expect(appearanceSettings.current).toEqual({ mode: 'system', theme: 'custom', customCss: '--accent: #3cb4f2;' });
+		expect(root.style.getPropertyValue('--accent')).toBe('#3cb4f2');
+		// The previous theme's tokens go.
+		expect(root.style.getPropertyValue('--font-mono')).toBe('');
+		expect(JSON.parse(localStorage.getItem('apron.appearance')!).vars).toEqual([['--accent', '#3cb4f2']]);
+
+		// A premade theme hides the CSS and keeps it for the next time Custom is chosen.
+		choose('apron');
+		expect(root.style.getPropertyValue('--accent')).toBe('');
+		expect(css()).toBeNull();
+		choose('custom');
+		expect(css()!.value).toBe('--accent: #3cb4f2;');
+
+		// CSS that stops reading as it's typed leaves the last that did on show, and says so quietly.
+		css()!.value = '--accent: #123456; --line: (';
+		css()!.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		expect(document.getElementById('ap-theme-css-error')?.textContent).toMatch(/^Not showing yet: --line/);
+		expect(document.getElementById('ap-theme-css-error')?.getAttribute('role')).toBeNull();
+		expect(css()!.getAttribute('aria-describedby')).toBe('ap-theme-css-hint ap-theme-css-error');
+		expect(root.style.getPropertyValue('--accent')).toBe('#3cb4f2');
+
+		// Closing Preferences with edits not applied puts back what's kept.
+		css()!.value = '--accent: #123456;';
+		css()!.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('#123456');
+		document.querySelector('dialog')!.dispatchEvent(new Event('close'));
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('#3cb4f2');
+		expect(appearanceSettings.current.customCss).toBe('--accent: #3cb4f2;');
+		appearanceSettings.update({ ...DEFAULT_APPEARANCE });
 	});
 });
