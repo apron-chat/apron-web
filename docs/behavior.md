@@ -920,7 +920,15 @@ same bubble for its own unread messages (its threads count their own), with
 its name in bold, and none while you're reading it. The open room or thread has a neutral fill and an
 accent bar at its left (on the window's edge for a room, on the guide line for a thread), so it never looks
 unread. A row's fill, open or under the pointer, reaches the sidebar's outer edge and is square there, rounded
-inside; the member list's rows do the same at its far edge. A door on hover leaves the thread. Then **Other Threads · N**, a heading
+inside; the member list's rows do the same at its far edge. A door on hover leaves the thread. Past the five
+most recently active, a joined thread with no activity for three days (counted from now, to the hour) and
+nothing unread or mentioning you moves down under **Inactive · N**, a heading that folds as Other Threads does
+but starts folded: there to put quiet threads away, so a room of five or fewer joined threads never shows it,
+and nothing with news is hidden. Its rows keep the solid guide and their Leave, as they're still yours; folded,
+it shows only the one you're reading, and one that got news while the list was held. A thread stays on its side
+while the pointer or keyboard is on the list, and the one you're reading stays on the side it was on when you
+opened it, so reading an old thread with news doesn't move it under Inactive until you open another. A room
+folded to its threads with news lists them without it. Then **Other Threads · N**, a heading
 that folds as the sidebar's do, to the one you're reading if it's among them,
 with the **…** at its end (it stays as you left it, on this device): the
 threads you haven't joined, beside the guide line carried on dashed, their

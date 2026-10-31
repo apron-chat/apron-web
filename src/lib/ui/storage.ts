@@ -25,6 +25,8 @@ const KEY = {
 	memberSections: 'apron.memberSections',
 	/** Whether Other Threads, the threads you haven't joined under the open room, is folded away. */
 	otherThreads: 'apron.otherThreads',
+	/** Whether Inactive, the joined threads quiet for a while under the open room, is unfolded. */
+	inactiveThreads: 'apron.inactiveThreads',
 	/** The sidebar's sections folded to their rows with news (`rooms`, `private`, `otherRooms`). */
 	sidebarFolds: 'apron.sidebarFolds',
 	/** The room and thread descriptions put away with their ×, each kept as the fingerprint of the text put away. Still stored under its old name, so what's put away stays put away. */
@@ -223,6 +225,15 @@ export function loadOtherThreadsOpen(): boolean {
 
 export function saveOtherThreadsOpen(open: boolean): void {
 	write(KEY.otherThreads, open ? 'open' : 'shut');
+}
+
+/** Inactive is folded until it's opened, as it's there to put quiet threads away, and stays as it was left. */
+export function loadInactiveThreadsOpen(): boolean {
+	return read(KEY.inactiveThreads) === 'open';
+}
+
+export function saveInactiveThreadsOpen(open: boolean): void {
+	write(KEY.inactiveThreads, open ? 'open' : 'shut');
 }
 
 /** The storage key of the descriptions put away: other tabs follow its `storage` events. */

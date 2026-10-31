@@ -549,7 +549,7 @@
 	{#if reordering}
 		<!-- While a room is carried, every room's threads are folded away. -->
 	{:else if active && !isFolded}
-		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} foldInactive {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
 		<!-- Under a room that isn't open (or is folded, when its row has a … that unfolds it), only its joined threads with news, so activity there isn't missed; and the one open in it, which stays while you read it. -->
 		{@const news = threadsWithNews(threadsOf.get(room.id) ?? [], room.id, unread, mentions)}

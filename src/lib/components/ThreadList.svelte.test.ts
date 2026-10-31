@@ -213,4 +213,110 @@ describe('ThreadList', () => {
 		expect(titles('button[data-other-thread]')).toEqual(['Linked', 'Offsite']);
 		expect(one('[data-testid="other-threads"]')!.textContent).toContain('2');
 	});
+
+	describe('Inactive', () => {
+		const ago = (days: number) => String(Date.now() - days * 24 * 60 * 60 * 1000);
+		/** Five joined threads active today, and the quiet ones after them. */
+		const busy = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ ...joined(id, id.toUpperCase()), activeId: ago(0.1) }));
+		const up = () => titles('.ap-threads-joined:not(.ap-threads-inactive) button[data-thread]');
+		const away = () => titles('.ap-threads-inactive button[data-thread]');
+
+		it('puts away joined threads quiet three days past the five most recent, folded until opened, keeping news and the open one in view', () => {
+			const threads = [
+				...busy,
+				{ ...joined('cert', 'Expired cert'), activeId: ago(4) },
+				{ ...joined('retro', 'Retro'), activeId: ago(10) },
+				{ ...joined('hiring', 'Hiring'), activeId: ago(5) },
+				{ ...joined('recent', 'Recent'), activeId: ago(2) },
+				joined('unknown', 'Unknown')
+			];
+			const { onleave } = render({ threads, foldInactive: true, unread: { hiring: 2 } });
+			// News keeps one up top however old; so does a recent one past the five, and one with no known time.
+			expect(up()).toEqual(['A', 'B', 'C', 'D', 'E', 'Hiring', 'Recent', 'Unknown']);
+			const heading = one('[data-testid="inactive-threads"]')!;
+			expect(heading.textContent).toContain('Inactive');
+			expect(heading.textContent).toContain('2');
+			expect(heading.getAttribute('aria-expanded')).toBe('false');
+			expect(away()).toEqual([]);
+			// Its … shows them, still yours, with Leave; and it stays open, and shut again once folded.
+			dom.button('Show all Inactive').click();
+			flushSync();
+			expect(away()).toEqual(['Expired cert', 'Retro']);
+			one('.ap-threads-inactive button[data-leave="retro"]')!.click();
+			expect(onleave).toHaveBeenCalledWith('retro');
+			expect(localStorage.getItem('apron.inactiveThreads')).toBe('open');
+			heading.click();
+			flushSync();
+			expect(localStorage.getItem('apron.inactiveThreads')).toBe('shut');
+			dom.unmount();
+			localStorage.clear();
+			// Folded, the open one stays in view.
+			render({ threads, foldInactive: true, activeThread: 'retro' });
+			expect(away()).toEqual(['Retro']);
+		});
+
+		it('keeps every thread up top in a room of five or fewer, and in a list folded to those with news', () => {
+			const quiet = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ ...joined(id, id.toUpperCase()), activeId: ago(30) }));
+			render({ threads: quiet, foldInactive: true });
+			expect(up()).toEqual(['A', 'B', 'C', 'D', 'E']);
+			expect(one('[data-testid="inactive-threads"]')).toBeNull();
+			dom.unmount();
+			// A room folded to its threads with news and the open one (`foldInactive` unset) lists them as they are.
+			render({ threads: [...busy, { ...joined('old', 'Old'), activeId: ago(9) }], activeThread: 'old', others: [] });
+			expect(one('[data-testid="inactive-threads"]')).toBeNull();
+			expect(titles('button[data-thread]')).toEqual(['A', 'B', 'C', 'D', 'E', 'Old']);
+		});
+
+		it('keeps a thread on its side while the list is held, and the open one where it was opened', () => {
+			const old = ago(5);
+			const props = $state({
+				roomId: 'general', roomTitle: 'General', foldInactive: true,
+				threads: [...busy, { ...joined('cert', 'Expired cert'), activeId: old }, { ...joined('retro', 'Retro'), activeId: old }],
+				others: [] as RoomListing[], mentions: {} as Record<string, number>, unread: { cert: 1 } as Record<string, number>, canJoin: true,
+				activeThread: undefined as string | undefined,
+				onthread: vi.fn(), onopen: vi.fn(), onjoin: vi.fn(), onleave: vi.fn()
+			});
+			dom.render(ThreadList, props);
+			expect(up()).toEqual(['A', 'B', 'C', 'D', 'E', 'Expired cert']);
+			const list = one<HTMLElement>('[data-testid="thread-list"]')!.parentElement!;
+			list.dispatchEvent(new Event('pointerenter'));
+			// Reading Expired cert clears its news.
+			props.activeThread = 'cert';
+			props.unread = {};
+			// A mention in a held-away one shows, though Inactive is folded.
+			props.mentions = { retro: 1 };
+			flushSync();
+			expect(up()).toEqual(['A', 'B', 'C', 'D', 'E', 'Expired cert']);
+			expect(away()).toEqual(['Retro']);
+			list.dispatchEvent(new Event('pointerleave'));
+			props.mentions = {};
+			flushSync();
+			// Open, it stays where it was opened; once another is open, it goes away.
+			expect(up()).toEqual(['A', 'B', 'C', 'D', 'E', 'Expired cert']);
+			props.activeThread = 'a';
+			flushSync();
+			expect(up()).toEqual(['A', 'B', 'C', 'D', 'E']);
+			expect(one('[data-testid="inactive-threads"]')!.textContent).toContain('2');
+		});
+
+		it('keeps an inactive thread opened by a link under Inactive while it’s read', () => {
+			const props = $state({
+				roomId: 'general', roomTitle: 'General', foldInactive: true,
+				threads: [...busy, { ...joined('retro', 'Retro'), activeId: ago(10) }],
+				others: [] as RoomListing[], mentions: {}, unread: {}, canJoin: true, activeThread: undefined as string | undefined,
+				onthread: vi.fn(), onopen: vi.fn(), onjoin: vi.fn(), onleave: vi.fn()
+			});
+			dom.render(ThreadList, props);
+			props.activeThread = 'retro';
+			flushSync();
+			expect(away()).toEqual(['Retro']);
+			// A reply of yours there doesn't move it while it's open.
+			props.threads = [...busy, { ...joined('retro', 'Retro'), activeId: String(Date.now()) }];
+			flushSync();
+			expect(away()).toEqual(['Retro']);
+			props.activeThread = undefined;
+			flushSync();
+			expect(up()).toEqual(['A', 'B', 'C', 'D', 'E', 'Retro']);
+		});
+	});
 });

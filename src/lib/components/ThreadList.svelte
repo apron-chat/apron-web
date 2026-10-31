@@ -3,12 +3,17 @@
 	import DesignThreadList from '$lib/design/components/ThreadList.svelte';
 	import type { RoomListing } from '$lib/protocol/client';
 	import { designTitle, inHeldOrder, threadLatest, threadDescriptionText, type ThreadEntry } from '$lib/ui/timeline';
-	import { loadOtherThreadsOpen, saveOtherThreadsOpen } from '$lib/ui/storage';
+	import { loadInactiveThreadsOpen, loadOtherThreadsOpen, saveInactiveThreadsOpen, saveOtherThreadsOpen } from '$lib/ui/storage';
 	import { minuteNow } from '$lib/ui/clock.svelte';
-	import { idAgo, idDateTime, idIso } from '$lib/ui/time';
+	import { idAgo, idDateTime, idIso, idMillis } from '$lib/ui/time';
 
 	/** How many of the threads you haven't joined show before "N more…". */
 	const OTHERS_SHOWN = 3;
+	/** How long a joined thread can go without activity before it may move down to Inactive: long enough to cover a weekend. */
+	const INACTIVE_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
+	const HOUR_MS = 60 * 60 * 1000;
+	/** How many of the most recently active joined threads stay up top however quiet: a room of a few keeps them all in view. */
+	const ACTIVE_KEPT = 5;
 
 	interface Props {
 		/** The room the threads belong to: its `room_id` and title. */
@@ -23,6 +28,8 @@
 		unread: Record<string, number>;
 		/** The rooms and threads you muted (§4.5 `mute` with its `room_id`), by `room_id`: a thread is muted by its own, or its room's. */
 		muted?: Record<string, number | true>;
+		/** Put quiet joined threads away under Inactive: the open room's full list, not one folded to its threads with news. */
+		foldInactive?: boolean;
 		/** Joining and leaving are offered (capability `rooms`, not read-only). */
 		canJoin: boolean;
 		onthread: (thread: string) => void;
@@ -31,7 +38,7 @@
 		onjoin: (thread: string) => void;
 		onleave: (thread: string) => void;
 	}
-	let { roomId, roomTitle, threads, others, activeThread, mentions, unread, muted = {}, canJoin, onthread, onopen, onjoin, onleave }: Props = $props();
+	let { roomId, roomTitle, threads, others, activeThread, mentions, unread, muted = {}, foldInactive = false, canJoin, onthread, onopen, onjoin, onleave }: Props = $props();
 
 	/** A thread you haven't joined: what its listing says, its description as text and when it was last active. */
 	type Other = { id: string; title: string; untitled?: true; private: boolean; description: string; latestLogId?: string };
@@ -40,6 +47,7 @@
 	const isMuted = (thread: string) => muted[thread] !== undefined || muted[roomId] !== undefined;
 
 	let othersFolded = $state(!loadOtherThreadsOpen());
+	let inactiveFolded = $state(!loadInactiveThreadsOpen());
 	/** The room whose other threads are all showing, past the first few; another room starts short again. */
 	let allFor = $state<string | undefined>();
 	/**
@@ -55,8 +63,13 @@
 	});
 	function hold(by: keyof typeof holding, on: boolean): void {
 		holding[by] = on;
-		if (holding.pointer || holding.focus) held ??= joined.map((entry) => entry.id);
-		else held = undefined;
+		if (holding.pointer || holding.focus) {
+			held ??= joined.map((entry) => entry.id);
+			heldQuiet ??= new Map(split.sides);
+		} else {
+			held = undefined;
+			heldQuiet = undefined;
+		}
 	}
 	function focusIn(event: FocusEvent): void {
 		// A click focuses the row too, and that focus can stay after the pointer leaves: only the keyboard's holds.
@@ -66,6 +79,45 @@
 		const list = event.currentTarget as HTMLElement;
 		if (!(event.relatedTarget instanceof Node && list.contains(event.relatedTarget))) hold('focus', false);
 	}
+	/**
+	 * Joined threads put away under Inactive: past the `ACTIVE_KEPT` most recently active, those quiet for
+	 * `INACTIVE_AFTER_MS` with nothing unread or mentioning you, so nothing is missed by putting them away, and a room
+	 * of a few threads keeps them all in view. One whose time isn't known stays up top. Each stays on its side while
+	 * the list is held, as a click that reads one with news would otherwise drop its row out from under the pointer,
+	 * and the open one stays on the side it was on when it was opened, until another is.
+	 */
+	const activeAt = (entry: ThreadEntry) => (entry.activeId !== undefined ? idMillis(entry.activeId) : undefined);
+	/** Counted from now, to the hour: what reads it is redone once an hour, not each minute. */
+	let quietSince = $derived(Math.floor((minuteNow() - INACTIVE_AFTER_MS) / HOUR_MS) * HOUR_MS);
+	let heldQuiet = $state.raw<Map<string, boolean> | undefined>();
+	/** The open thread and its side when it was opened; and each thread's side in the last split, to know that side. */
+	let opened: { id: string; quiet: boolean } | undefined;
+	let lastSides = new Map<string, boolean>();
+	const hasNews = (thread: string) => (unread[thread] ?? 0) > 0 || (mentions[thread] ?? 0) > 0;
+	let split = $derived.by(() => {
+		const sides = new Map<string, boolean>();
+		if (!foldInactive) {
+			for (const entry of joined) sides.set(entry.id, false);
+		} else {
+			const newest = new Set(threads.filter((entry) => entry.joined).toSorted((a, b) => (activeAt(b) ?? Number.MAX_SAFE_INTEGER) - (activeAt(a) ?? Number.MAX_SAFE_INTEGER)).slice(0, ACTIVE_KEPT).map((entry) => entry.id));
+			for (const entry of joined) {
+				const at = activeAt(entry);
+				let quiet = heldQuiet?.get(entry.id) ?? (!newest.has(entry.id) && at !== undefined && at < quietSince && !hasNews(entry.id));
+				if (entry.id === activeThread) {
+					if (opened?.id !== entry.id) opened = { id: entry.id, quiet: lastSides.get(entry.id) ?? quiet };
+					quiet = opened.quiet;
+				}
+				sides.set(entry.id, quiet);
+			}
+		}
+		if (activeThread === undefined || !sides.has(activeThread)) opened = undefined;
+		lastSides = sides;
+		return { sides, active: joined.filter((entry) => !sides.get(entry.id)), inactive: joined.filter((entry) => sides.get(entry.id)) };
+	});
+	let active = $derived(split.active);
+	let inactive = $derived(split.inactive);
+	/** All of them, or folded, the open one and any that had news while held there. */
+	let shownInactive = $derived(inactiveFolded ? inactive.filter((entry) => entry.id === activeThread || hasNews(entry.id)) : inactive);
 	/** The thread open without joining: it stays among the others, picked out, rather than looking joined. */
 	let reading = $derived(threads.find((entry) => !entry.joined && entry.id === activeThread));
 	let allOthers = $derived.by((): Other[] => {
@@ -91,7 +143,16 @@
 
 <!-- The design system's ThreadList holds the rows, each a ThreadItem; the app says which threads, and what picking one does. -->
 {#snippet joinedRows()}
-	{#each joined as entry (entry.id)}
+	{#each active as entry (entry.id)}
+		{@render joinedRow(entry)}
+	{/each}
+{/snippet}
+{#snippet inactiveRows()}
+	{#each shownInactive as entry (entry.id)}
+		{@render joinedRow(entry)}
+	{/each}
+{/snippet}
+{#snippet joinedRow(entry: ThreadEntry)}
 		{@const open = activeThread === entry.id}
 		<!-- Its description, then its latest message: both when it has both, each marked so either reads alone, as on its card. One bubble for what's new: unread replies in grey, orange with an @ when they include a mention. A thread with nothing new shows none, and steps back. -->
 		<!-- Leaving is the archive: the thread stops alerting and moves down to Other Threads, on every device. -->
@@ -101,7 +162,6 @@
 			description={threadDescriptionText(entry)} latest={threadLatest(entry)} linesTestid="thread-list" unreadTestid="thread-unread"
 			onselect={() => onthread(entry.id)} onleave={canJoin ? () => onleave(entry.id) : undefined}
 		/>
-	{/each}
 {/snippet}
 {#snippet otherRows()}
 	{#each shownOthers as other (other.id)}
@@ -124,7 +184,12 @@
 	<DesignThreadList
 		testid="thread-list"
 		room={roomTitle}
-		joined={joined.length > 0 ? joinedRows : undefined}
+		joined={active.length > 0 ? joinedRows : undefined}
+		inactive={inactive.length}
+		{inactiveRows}
+		bind:inactiveFolded
+		onfoldinactive={(folded) => saveInactiveThreadsOpen(!folded)}
+		inactiveToggleTestid="inactive-threads"
 		others={allOthers.length}
 		{otherRows}
 		bind:othersFolded

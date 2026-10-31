@@ -880,7 +880,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-threads-joined .ap-room:not(.ap-room-quiet) .ap-room-name { color: var(--ink); font-weight: 500; }
 .ap-threads-joined .ap-room.ap-room-active .ap-room-name { font-weight: 600; }
 .ap-threads-joined .ap-room.ap-room-unread .ap-room-name { font-weight: 600; }
-/* Other Threads, a FoldHeading: its words line up with the titles under it, its … with the room row's + above. */
+/* Inactive and Other Threads, FoldHeadings: their words line up with the titles under it, its … with the room row's + above. */
 .ap-threads-head { margin: var(--space-2) 0 1px; padding-inline: calc(var(--space-3) + var(--space-4)) var(--space-1); }
 .ap-threads-head .ap-sect-toggle { padding-inline-start: 0; }
 .ap-threads-more .ap-room-name { color: var(--denim); font-size: var(--text-sm); }
