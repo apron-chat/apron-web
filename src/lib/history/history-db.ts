@@ -440,7 +440,7 @@ export async function scanMessages(db: IDBDatabase, visit: (message: MessageReco
 	const read = (range?: IDBKeyRange) => done(db.transaction('records').objectStore('records').getAll(range, SCAN_BATCH)) as Promise<RecordRow[]>;
 	let reading: Promise<RecordRow[]> | undefined = read();
 	while (reading) {
-		const rows = await reading;
+		const rows: RecordRow[] = await reading;
 		// The next batch is read while this one is looked through, rather than after: the scan waits on each read
 		// about as long as it takes to look through one.
 		const last = rows.at(-1);
