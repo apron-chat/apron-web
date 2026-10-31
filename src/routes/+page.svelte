@@ -2484,6 +2484,12 @@
 
 	/** The picker the React action opened last, and on which message: it's open for that row while it is the open one. */
 	let reactPick: { id: string; request: EmojiPickerRequest } | undefined;
+	/**
+	 * A row on show has its React picker open: the timeline's `ap-timeline-picking`, so the other rows don't take the
+	 * hover look meanwhile. A class rather than `:has()` on the timeline, which the browser re-checks over every row
+	 * on each hover change (each step of a wheel scroll under the pointer).
+	 */
+	let pickingRow = $derived(emojiPicker.current !== undefined && emojiPicker.current === reactPick?.request && shownTimeline.some((item) => item.kind === 'message' && item.event.message_id === reactPick?.id));
 
 	/** One set of handlers for every row; each finds its message by the row's id. */
 	const messageHandlers: MessageHandlers = {
@@ -3162,7 +3168,7 @@
 
 			<!-- Outside the log, so it's announced once as a status rather than as an entry each time older messages load. -->
 			{#if olderLoading}<TimelineLoading top label={activeThread ? 'Loading earlier replies…' : 'Loading earlier messages…'} />{/if}
-			<div class="ap-timeline" bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
+			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
 				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown && !olderLoading} testid="floating-day" />
 				{#if snapshot.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
