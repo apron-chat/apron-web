@@ -1018,9 +1018,14 @@
 	// Not only after the frame: the list is the same element from pane to pane, kept where the last pane left it, and the
 	// browser's scroll anchoring can move it on the swap (to a day divider both panes have). That scroll's event
 	// comes before the frame, and against the last pane's position it would read as the reader scrolling up.
+	// By the count and the room's id, not the list and the room themselves, which are new with every snapshot (each
+	// room listed as the page loads, say): each time it scrolls it lays the page out, and what else changes in the
+	// pane is followed below.
+	let paneCount = $derived(messages.length);
+	let paneId = $derived(paneRoom?.id);
 	$effect(() => {
-		messages.length;
-		paneRoom?.id;
+		void paneCount;
+		void paneId;
 		if (!stickToBottom || !messageScroll) return;
 		scrollToLatest();
 		requestAnimationFrame(() => {
