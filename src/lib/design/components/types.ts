@@ -208,6 +208,13 @@ export interface PickerRoom {
 	title: string;
 }
 
+/** A role an `@` can name, in the MentionPicker: everyone else in the room who holds it (`@&role`). */
+export interface PickerRole {
+	role: string;
+	/** How many people it mentions. */
+	count: number;
+}
+
 /** An emoji a `:shortcode` can put in, in the MentionPicker. */
 export interface PickerEmoji {
 	/** The shortcode, without its colons. */
@@ -275,7 +282,7 @@ export interface MessageSender {
 }
 
 /** A mention in a reply's snippet (Appendix A.3), as a Mention that only reads: a user, or a room. */
-export type MessageMention = { user_id: string; name: string; me?: boolean } | { roomId: string; name?: string; thread?: boolean; hash?: boolean };
+export type MessageMention = { user_id: string; name: string; me?: boolean } | { roomId: string; name?: string; thread?: boolean; hash?: boolean } | { role: string };
 
 /** The message a reply quotes (§3.5), resolved by you, maybe in another room. Without `id` it couldn't be found: "Message unavailable". */
 export interface MessageReply {

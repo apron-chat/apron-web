@@ -175,7 +175,7 @@ emoji catalog (`ext:emoji`), fetched the first time a key shows or a picker
 opens, which `directory.resolveEmoji` draws keys in text with
 (`renderMarkdown`'s scan in `protocol/custom-emoji.ts`), `emoji.ts`
 places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
-picker and loads emoji-mart), `draft.ts` edits the composer's draft, `draft-field.svelte.ts` (`DraftField`) is the field both the composer and the message editor write in (chips, caret and autocomplete), `link-previews.ts` finds a draft's links and fetches previews for those on a site `link-sites.ts` maps (GitHub, YouTube, X, Bluesky, Wikipedia), `messages.ts`
+picker and loads emoji-mart), `draft.ts` edits the composer's draft, `draft-field.svelte.ts` (`DraftField`) is the field both the composer and the message editor write in (chips, caret and autocomplete), `role-mentions.ts` finds the roles an `@` can name (`@&role`) and who each one mentions, `link-previews.ts` finds a draft's links and fetches previews for those on a site `link-sites.ts` maps (GitHub, YouTube, X, Bluesky, Wikipedia), `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
 `commands.ts` maps the composer's `/` commands to requests (and picks the `ext:media` category a send's files fit: `emoji` for `/emoji add`),
 `sign-in-link.ts` reads and scrubs a sign-in link (emailed, or the return from an external sign-in page) from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,

@@ -432,8 +432,30 @@ rooms and threads, searchable by title or ID (a bare `#` lists them to browse, a
 Enter there still sends; Tab picks); choosing one inserts a chip
 showing `#title` that is sent as `#room_id`, and a typed `#room_id` naming a
 known room collapses into the same chip once finished (it mentions no one).
-Backspace right after either kind of chip turns it back into the text it
-showed (`@Ada Lovelace`, `#Deploy checklist`) to edit. A reply's quote above
+
+The `@` picker also lists the roles ([PROTOCOL.md §3.3.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#334-roles))
+held by someone in the room other than you, each with how many people it
+reaches: a role whose name is exactly what's typed comes right after whoever
+it names exactly, and roles whose names start with it come after the people,
+taking whatever room the list has left and keeping up to three places when the
+people fill it. A space after a role's name keeps the picker open only for the
+role it names exactly, as for people, so Enter after `@mo ` sends. `@&` lists
+roles alone, with the typed name highlighted as for people. A role whose name isn't one ID (one with a space, say) isn't
+offered. A picked role becomes a chip showing `@role` with a group outline,
+its tooltip saying how many it mentions, and is sent as `@&role`; a typed
+`@&role` naming such a role collapses into the same chip once finished. A role
+is a label for display, not something the server resolves, so the client
+lists everyone else in the room who holds it (the people the picker draws
+from, so a room whose member listing the server cut short reaches only those
+listed) one by one in `body.mentions`, after the people mentioned before the
+chip and once each, as they hold the role when it is sent or saved. `&` can't
+start an ID ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)),
+so `@&role` mentions no user to any client, and a client that knows nothing
+of it shows the text as written. A rendered body (never inside code), a reply's
+quote and the "Replying to" line show `@&role` as the same chip, which only
+reads, titled with who it's for.
+Backspace right after a chip turns it back into the text it
+showed (`@Ada Lovelace`, `#Deploy checklist`) to edit, a role's into `@&role`. A reply's quote above
 its message and the "Replying to" line above the composer show the replied
 message's first line with its mentions drawn the same way. A fenced
 code block that names a known language (` ```ts `, ` ```py `, ` ```diff `, …)

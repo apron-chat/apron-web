@@ -22,6 +22,15 @@ describe('MentionPicker', () => {
 		expect(onpick).toHaveBeenCalledWith({ user_id: 'amanda' }, 2);
 	});
 
+	it('lists roles among people, with how many each reaches, marking what follows a typed @&', () => {
+		let list = render({ query: '&mo', people: [{ role: 'moderator', count: 2 }, { role: 'mod', count: 1 }] });
+		expect(rows(list)).toEqual(['@moderator 2 people Tab', '@mod 1 person']);
+		expect([...list.querySelectorAll('mark')].map((mark) => mark.textContent)).toEqual(['mo', 'mo']);
+		dom.unmount();
+		list = render({ query: 'da', people: [{ user_id: 'dana', name: 'Dana' }, { role: 'data', count: 4 }] });
+		expect(rows(list)).toEqual(['D Dana @dana Tab', '@data 4 people']);
+	});
+
 	it('lists rooms or emoji instead when given them, and says what an empty list means for each kind', () => {
 		let list = render({ query: 'de', rooms: [{ id: 'deploy', title: 'Deploy' }] });
 		expect(list.getAttribute('aria-label')).toBe('Room suggestions');
@@ -36,6 +45,10 @@ describe('MentionPicker', () => {
 		expect(render({ query: '' }).textContent).toBe('People in this room');
 		dom.unmount();
 		expect(render({ query: 'Zed' }).textContent).toBe('No one here matches “Zed”');
+		dom.unmount();
+		expect(render({ query: '&zed' }).textContent).toBe('No role here matches “zed”');
+		dom.unmount();
+		expect(render({ query: '&' }).textContent).toBe('No one else here has a role');
 		dom.unmount();
 		expect(render({ query: '', rooms: [] }).textContent).toBe('No room matches “”');
 		dom.unmount();

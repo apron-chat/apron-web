@@ -133,6 +133,7 @@ function snippetOf(text: string): (string | MessageMention)[] {
 	return mentionSegments(text, directory.resolve, directory.resolveRoom).map((segment) => {
 		if (typeof segment === 'string') return segment;
 		const { target, hash } = segment;
+		if (target.kind === 'role') return { role: target.id };
 		if (target.kind === 'room') return { roomId: target.id, name: target.untitled ? undefined : target.title, thread: target.untitled, hash };
 		return { user_id: target.id, name: mentionLabel(segment).slice(1), me: target.me };
 	});
