@@ -1,8 +1,9 @@
 import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /**
- * The rooms list's head, which shows the server you're on and is no control, and the way to the connect screen,
- * the profile's Connect to a server…, for a guest and an account, on a desktop and a phone (§3.1, §1).
+ * The rooms list's head, which shows the server you're on and opens the server pane: what is known of it, New
+ * server… (the way to the connect screen) and Disconnect, for a guest and an account, on a desktop and a phone
+ * (§3.1, §1).
  */
 
 // A 2×2 green PNG, the server's avatar.
@@ -14,7 +15,7 @@ const head = (preview: Preview) => preview.page.locator('.ap-shell-sidehead');
 test.describe('the rooms list’s head', () => {
 	test.use(DEVICES.desktop);
 
-	test('shows the server’s avatar and title over its host, its address the tooltip, and nothing to press', async ({ preview }) => {
+	test('shows the server’s avatar and title over its host, its address the tooltip, and opens the server pane', async ({ preview }) => {
 		await preview.openRoot({ server: { title: 'Mock Chat', avatar: GREEN } });
 		const avatar = head(preview).locator('img.ap-shell-sidehead-avatar');
 		await expect(avatar).toHaveAttribute('src', GREEN);
@@ -27,7 +28,8 @@ test.describe('the rooms list’s head', () => {
 		await expect(host).toHaveCSS('direction', 'ltr');
 		await expect(host).toHaveCSS('unicode-bidi', 'isolate');
 		await expect(head(preview).locator('.ap-shell-sidehead-server')).toHaveAttribute('title', 'wss://server.apron.chat/');
-		await expect(head(preview).getByRole('button')).toHaveCount(0);
+		await expect(head(preview).getByRole('button')).toHaveCount(1);
+		await expect(head(preview).getByRole('button', { name: /^Server: / })).toHaveAttribute('aria-expanded', 'false');
 		await expect(preview.page.getByRole('button', { name: 'Connection settings' })).toHaveCount(0);
 	});
 
@@ -55,43 +57,62 @@ test.describe('the rooms list’s head', () => {
 	});
 });
 
-test.describe('Connect to a server…, in the profile', () => {
+test.describe('the server pane', () => {
 	test.use(DEVICES.desktop);
 
-	test('opens the connect screen for a guest, closing the profile', async ({ preview, page }) => {
-		await preview.openRoot({ server: { title: 'Mock Chat' } });
-		await page.getByRole('button', { name: /^Your profile on/ }).click();
-		const profile = page.getByRole('dialog', { name: 'Edit profile', exact: true });
-		await expect(profile.getByText('Signed in as a guest')).toBeVisible();
-		const connect = profile.getByRole('group', { name: 'Server' }).getByRole('button', { name: 'Connect to a server…', exact: true });
-		await connect.click();
+	test('says what is known of the server, and New server… opens the connect screen, closing it', async ({ preview, page }) => {
+		await preview.openRoot({ server: { title: 'Mock Chat', description: 'Where the **mock** team chats.' } });
+		const server = head(preview).getByRole('button', { name: /^Server: / });
+		await server.click();
+		const pane = page.getByTestId('server-pane');
+		await expect(pane).toBeFocused();
+		await expect(server).toHaveAttribute('aria-expanded', 'true');
+		await expect(pane.locator('.ap-servcard-name')).toHaveText('Mock Chat');
+		await expect(pane.locator('.ap-servcard-description strong')).toHaveText('mock');
+		await expect(pane.locator('.ap-servcard-address')).toHaveText('wss://server.apron.chat/');
+		await expect(pane.locator('.ap-servcard-details')).toContainText('ConnectionConnected');
+		await expect(pane.locator('.ap-servcard-details')).toContainText(/You.*guest/);
+		await pane.getByRole('button', { name: 'New server…', exact: true }).click();
 		await expect(page.getByRole('form', { name: 'Sign in' })).toBeVisible();
 		await expect(page.getByTestId('connect-server')).toContainText('Mock Chat');
-		await expect(profile).toHaveCount(0);
+		await expect(pane).toHaveCount(0);
 		// Cancel goes back to the chat as it was.
 		await page.getByRole('form', { name: 'Sign in' }).getByRole('button', { name: 'Cancel', exact: true }).click();
 		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
 	});
 
-	test('opens it for an account too, from the keyboard', async ({ preview, page }) => {
+	test('opens and closes from the keyboard, Escape giving focus back', async ({ preview, page }) => {
 		await preview.openRoot({ token: 'account-session' });
-		await page.getByRole('button', { name: /^Your profile on/ }).focus();
+		const server = head(preview).getByRole('button', { name: /^Server: / });
+		await server.focus();
 		await page.keyboard.press('Enter');
-		const profile = page.getByRole('dialog', { name: 'Edit profile', exact: true });
-		await expect(profile.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
-		const connect = profile.getByRole('button', { name: 'Connect to a server…', exact: true });
-		await connect.focus();
-		await expect(connect).toBeFocused();
-		await page.keyboard.press('Enter');
-		await expect(page.getByRole('form', { name: 'Sign in' })).toBeVisible();
+		const pane = page.getByTestId('server-pane');
+		await expect(pane).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(pane).toHaveCount(0);
+		await expect(server).toBeFocused();
+	});
+
+	test('Disconnect closes the connection, and the connect screen is the way back', async ({ preview, page }) => {
+		await preview.openRoot({ server: { title: 'Mock Chat' } });
+		await head(preview).getByRole('button', { name: /^Server: / }).click();
+		await page.getByTestId('server-pane').getByRole('button', { name: 'Disconnect', exact: true }).click();
+		const form = page.getByRole('form', { name: 'Sign in' });
+		await expect(form).toBeVisible();
+		// Nothing to cancel back to: the connection is closed, and stays closed.
+		await expect(form.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
 		await expect(page.getByTestId('server-url-input')).toHaveValue('wss://server.apron.chat/');
+		// Connecting again opens it, and the chat comes back.
+		await form.getByRole('button', { name: /^(Connect|Done|Continue as guest)$/ }).first().click();
+		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+		await expect(form).toHaveCount(0);
 	});
 });
 
 test.describe('on a phone', () => {
 	test.use(DEVICES.phone);
 
-	test('the head keeps the › back beside the server, and the profile reaches the connect screen', async ({ preview, page }) => {
+	test('the head keeps the › back beside the server, and the server pane reaches the connect screen', async ({ preview, page }) => {
 		await preview.openRoot({ server: { title: LONG, avatar: GREEN } });
 		await preview.openRoom('general');
 		await preview.roomsPane();

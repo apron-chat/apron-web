@@ -337,13 +337,10 @@ export const SCENES: Scene[] = [
 		knobs: { seed: 'rich', capabilities: ['embed:upload', 'status'] },
 		steps: async (preview, look) => {
 			const { page } = preview;
-			await page.getByRole('button', { name: /^Your profile on/ }).click();
-			await expect(page.getByRole('dialog', { name: 'Edit profile', exact: true })).toBeVisible();
-			await look();
-			await page.keyboard.press('Escape');
+			// One button: the preferences, at your profile, your status above it.
 			await page.getByRole('button', { name: /^Open preferences/ }).click();
 			const preferences = page.getByRole('dialog', { name: 'Preferences' });
-			await expect(preferences).toBeVisible();
+			await expect(preferences.getByTestId('display-name-input')).toBeVisible();
 			await look();
 			// With `status`, a status to choose, do not disturb among them.
 			await preferences.getByRole('button', { name: /status/i }).click();
@@ -391,9 +388,9 @@ export const SCENES: Scene[] = [
 		root: true,
 		steps: async (preview, look) => {
 			const { page } = preview;
-			await page.getByRole('button', { name: /^Your profile on/ }).click();
+			await page.getByRole('button', { name: /^Open preferences/ }).click();
 			await look();
-			await page.getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
+			await page.getByRole('dialog', { name: 'Preferences' }).getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
 			const card = page.getByRole('form', { name: 'Sign in' });
 			await expect(card).toBeVisible();
 			await look();
@@ -401,9 +398,10 @@ export const SCENES: Scene[] = [
 			await look();
 			await card.getByRole('button', { name: 'Cancel', exact: true }).click();
 			await expect(card).toBeHidden();
-			// The connect screen as it is, from the profile.
-			await page.getByRole('button', { name: /^Your profile on/ }).click();
-			await page.getByRole('dialog', { name: 'Edit profile' }).getByRole('button', { name: 'Connect to a server…', exact: true }).click();
+			// The connect screen as it is, from the server pane.
+			await page.getByRole('button', { name: /^Server: / }).click();
+			await look();
+			await page.getByTestId('server-pane').getByRole('button', { name: 'New server…', exact: true }).click();
 			await expect(card).toBeVisible();
 			// Another server: Done becomes Connect.
 			await page.getByTestId('server-url-input').fill('ws://127.0.0.1:9/ws');

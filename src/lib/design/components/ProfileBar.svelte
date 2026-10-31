@@ -20,44 +20,41 @@
 		statusLabel?: string;
 		/** Replaces the avatar, such as with one tinted by your `user_id`. */
 		avatar?: Snippet;
+		/** The bar's one button: your profile and the preferences, such as a dialog that opens at Profile. */
+		onopen?: () => void;
+		/** What it opens is open: the bar shows pressed. */
 		open?: boolean;
-		onedit?: () => void;
-		/** Usually a <ProfileEditor> (`dialog: false`); shown in a dialog popover above the bar while `open`. */
-		editor?: Snippet;
-		/** A gear beside the bar that opens the preferences. */
-		onpreferences?: () => void;
 		/** Notifications are paused (§4.5 `mute`), and until when, in words ("until 14:30"): a small bell-off on the gear's corner. */
 		paused?: string;
-		/** The gear, to return focus to as its dialog closes; bindable. */
-		preferencesButton?: HTMLButtonElement;
-		/** Rendered in the bar, such as the dialog the gear opens. */
+		/** The button, to return focus to as what it opened closes; bindable. */
+		button?: HTMLButtonElement;
+		/** Rendered in the bar, such as the dialog the button opens. */
 		children?: Snippet;
 		/** Classes for the bar, added to its own. */
 		class?: ClassValue;
 	}
-	let { you, placeholder, backend, note, status, statusLabel, avatar, open, onedit, editor, onpreferences, paused, preferencesButton = $bindable(), children, class: className }: Props = $props();
+	let { you, placeholder, backend, note, status, statusLabel, avatar, onopen, open, paused, button = $bindable(), children, class: className }: Props = $props();
 	const name = $derived(you?.name || uid(you) || placeholder || '');
 	/** The placeholder in a sentence: "Signing in…" says "signing in". */
 	const label = $derived(you?.name || uid(you) || (placeholder ?? '').replace(/…$/, '').toLowerCase());
 	const statusWords = $derived(status ? (statusLabel ?? presenceLabel(status) ?? '').toLowerCase() : '');
 </script>
 
+<!-- Your identity, and the one way to your profile and the preferences: the gear says where it leads. -->
 <div class={['ap-profile', className]}>
-	{#if open && editor}<div class="ap-profile-pop" role="dialog" aria-label="Edit profile">{@render editor()}</div>{/if}
 	{@render children?.()}
-	<button type="button" class={['ap-profile-me', open && 'ap-profile-open']} aria-haspopup="dialog" aria-expanded={!!open} aria-label="Your profile on {backend || 'this backend'}: {label}{statusWords ? `, ${statusWords}` : ''}. Edit" onclick={onedit}>
+	<button type="button" class={['ap-profile-me', open && 'ap-profile-open']} bind:this={button} aria-haspopup="dialog"
+		aria-label="Open preferences.{paused ? ` Notifications paused ${paused}.` : ''} Your profile on {backend || 'this backend'}: {label}{statusWords ? `, ${statusWords}` : ''}"
+		title={paused ? `Profile and preferences · notifications paused ${paused}` : 'Profile and preferences'} onclick={onopen}>
 		{#if avatar}{@render avatar()}{:else}<Avatar name={you?.name || uid(you) || '?'} src={you?.avatar} {status} {statusLabel} />{/if}
 		<span class="ap-profile-text">
 			<span class="ap-profile-name">{name}</span>
 			<!-- The separator is an expression: a space leading an {#if} block's text would be trimmed. -->
 			<span class="ap-profile-sub">{#if backend}{'on '}<bdi>{backend}</bdi>{:else}{uid(you)}{/if}{#if note}{' · '}{note}{/if}</span>
 		</span>
-		<span class="ap-profile-edit" aria-hidden="true">Edit</span>
+		<span class="ap-profile-gear" aria-hidden="true">
+			<Settings size={18} strokeWidth={1.6} />
+			{#if paused}<span class="ap-profile-paused"><BellOff size={10} strokeWidth={2.2} /></span>{/if}
+		</span>
 	</button>
-	{#if onpreferences}
-		<button class="ap-iconbtn ap-iconbtn-lg ap-profile-settings" bind:this={preferencesButton} type="button" aria-label={paused ? `Open preferences. Notifications paused ${paused}` : 'Open preferences'} aria-haspopup="dialog" title={paused ? `Preferences · notifications paused ${paused}` : 'Preferences'} onclick={onpreferences}>
-			<Settings size={18} strokeWidth={1.6} aria-hidden="true" />
-			{#if paused}<span class="ap-profile-paused" aria-hidden="true"><BellOff size={10} strokeWidth={2.2} /></span>{/if}
-		</button>
-	{/if}
 </div>

@@ -462,8 +462,8 @@ outside, or tabbing out closes it. Mentions inside a reply's quote only read,
 since the quote is the button that jumps to its message.
 
 A mention that lands while the tab is hidden or unfocused flashes the tab title
-and plays a soft chime. **Preferences** (the gear beside your profile) starts
-its Notifications section with **Notify me about**, one choice for desktop
+and plays a soft chime. **Preferences** (the profile bar's one button) has a
+Notifications section that starts with **Notify me about**, one choice for desktop
 notifications and push alike, one line per option: Mentions (messages whose
 `body.mentions` list you, or an edit that adds you), Replies to my messages
 (replies to one of your messages that is loaded here; with the replied-to
@@ -567,7 +567,7 @@ app window) where push works for the signed-in account, the same prompt is
 offered as soon as you're signed in, without the mention, since a phone that's
 rarely open may not see one arrive for days, and each device asks for its own
 permission. With the rooms list showing, it sits above the
-profile bar, pointing at the Preferences gear where the switch lives, and says
+profile bar, pointing at the button to Preferences where the switch lives, and says
 so; on phones, or with the list collapsed, it sits above the composer. It
 doesn't take focus from what you're typing; a screen reader reads it as it
 appears. While they're on, a notification replaces the chime (the chime
@@ -1379,8 +1379,20 @@ The choice is kept on this device, and another tab's applies at once. Stream
 URLs load only from the server's own origin, whatever the choice; links may
 point anywhere `http(s)`.
 
-**Connect to a server…** in the profile editor (the profile bar at the foot of
-the sidebar, for guests and accounts alike) opens the connect screen: a WebSocket URL or an HTTP(S) server
+The rooms list's head shows the server you're connected to (its avatar, title
+and host); pressing it opens the **server pane** beside it (a bottom sheet on
+phones): the server's avatar, title and host, its `description` rendered as
+CommonMark and sanitized like a message, its address, how the connection
+stands, who you are there (a guest or an account), and the protocol version it
+speaks. Escape or a press outside closes it. **New server…** there opens the
+connect screen, and **Disconnect** closes the connection, drops what the page
+held from it and opens the connect screen without a Cancel: connecting again,
+to it or to another server, is the way back. What this device kept for it (the
+saved session, its history) stays, so connecting to it again doesn't ask to
+sign in again; a reload connects to it again too. In the preview and an export
+read on `/archive`, the pane has neither button.
+
+The connect screen (**New server…**, for guests and accounts alike) takes a WebSocket URL or an HTTP(S) server
 base URL, a display name, and a sign-in choice among the schemes the server
 advertises (Guest by default; Passkey, below; Email, External and Token, further down). Once the server in the field
 has answered, the top of the form shows it as it shows itself
@@ -1413,7 +1425,11 @@ also sets your avatar: a `/avatar` command carrying one `upload` embed
 server applies it with a `user` notification. **Remove** sends `me` with
 `avatar: ""`.
 
-The profile editor's Sign-in row offers, where the server's `auth` lists them,
+Your profile is the first section of **Preferences**, which the profile bar at
+the foot of the sidebar opens (one button: your avatar, name and server, and a
+gear): your status at the top (with capability `status`), then your avatar,
+handle and bio, saved with **Save** (Preferences stays open; "Saved." says it
+was kept as asked), then its Sign-in row. That row offers, where the server's `auth` lists them,
 **Sign in with a passkey**, **Sign in with email**, **Sign in externally**,
 **Add email** and **Add external sign-in** to a guest, and **Add passkey**,
 **Add email**, **Add external sign-in** and **Sign out** to a registered
@@ -1563,7 +1579,7 @@ know, or none holds back by method, as without the extension.
 
 Passkeys use the browser's native WebAuthn JSON APIs, with no frontend dependency.
 An up-to-date browser is required; unsupported browsers can still chat as guests.
-Browser cancellation and verification errors appear in the profile editor. A
+Browser cancellation and verification errors appear in Preferences' Profile. A
 connection change cancels the active ceremony. Chat requests pause while a
 ceremony is active, preventing edits from crossing an identity change.
 

@@ -21,6 +21,7 @@
 	import ThreadList from './ThreadList.svelte';
 	import RoomItem from '$lib/design/components/RoomItem.svelte';
 	import SidebarHead from '$lib/design/components/SidebarHead.svelte';
+	import { serverPane } from '$lib/ui/server-pane.svelte';
 	import SidebarSection from '$lib/design/components/SidebarSection.svelte';
 
 	interface Props {
@@ -61,8 +62,6 @@
 		pause?: { until?: PausedUntil };
 		onpause: (until: PausedUntil) => Promise<void> | void;
 		onresume: () => Promise<void> | void;
-		/** The connect screen, from the profile editor's Connect to a server… button. */
-		onconnect: () => void;
 		/** The room or thread the phone's rooms list opened over, and the › back to it. */
 		returnTo?: string;
 		onreturn?: () => void;
@@ -84,7 +83,9 @@
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
-	let { client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onconnect, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
+	let { client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, onsignin }: Props = $props();
+	/** The head's server button: the server pane sits beside it. */
+	let serverHead = $state<HTMLButtonElement | undefined>();
 	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
 	let sections = $derived(sidebarSections(session.rooms));
 	/** Each in the order kept on this device: the order rooms arrive in is the server's, and may differ on each visit. */
@@ -556,7 +557,7 @@
 {/snippet}
 
 <aside class="ap-shell-side" aria-label="Rooms">
-	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={directory.avatarGate.src(serverLook?.avatar)} {returnTo} {onreturn} />
+	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={directory.avatarGate.src(serverLook?.avatar)} onopen={() => serverHead && serverPane.toggle(serverHead)} expanded={serverHead !== undefined && serverPane.anchor === serverHead} bind:button={serverHead} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
 		<SidebarSection title="Rooms" folded={folds.has('rooms')} onfold={(shut) => fold('rooms', shut)} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
 			{#if rooms.length === 0}
@@ -588,7 +589,7 @@
 		{/if}
 	</div>
 	<p class="ap-sr" role="status" aria-atomic="true">{moved}</p>
-	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} {onconnect} />
+	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {onsignin} />
 </aside>
 
 {#if createOpen && newRoomDialog.component}{@const NewRoomDialog = newRoomDialog.component}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}

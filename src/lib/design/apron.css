@@ -7,7 +7,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-profile-settings, .ap-shell-sidehead-return, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
@@ -30,9 +30,9 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
  * - A field it is typed into is dir="auto" (the composer, the message editor, name and title fields).
  * The design components carry these classes and elements, so every consumer gets the rule.
  */
-:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc), :where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc) :where(p, li, h1, h2, h3, h4, h5, h6, blockquote, th, td) { unicode-bidi: plaintext; text-align: start; }
-:where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-dmintro-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name, .ap-connect-server-name) { unicode-bidi: plaintext; text-align: left; }
-:where([dir='rtl']) :where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-dmintro-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name, .ap-connect-server-name) { text-align: right; }
+:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc, .ap-servcard-description), :where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc, .ap-servcard-description) :where(p, li, h1, h2, h3, h4, h5, h6, blockquote, th, td) { unicode-bidi: plaintext; text-align: start; }
+:where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-dmintro-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-servcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name, .ap-connect-server-name) { unicode-bidi: plaintext; text-align: left; }
+:where([dir='rtl']) :where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-dmintro-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-servcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name, .ap-connect-server-name) { text-align: right; }
 
 /* Button */
 .ap-btn { font: inherit; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; height: var(--control-lg); padding: 0 var(--space-4); border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--bg-200); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
@@ -72,7 +72,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* A menu's surface: a message's or member's menu, the mention picker, the font picker. */
 .ap-menu, .ap-mpick, .ap-font-options { margin: 0; padding: var(--space-1); list-style: none; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
 /* A floating card's surface: a profile card, the profile editor, a nudge. */
-.ap-popover, .ap-profedit, .ap-nudge { background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
+.ap-popover, .ap-profedit[role='dialog'], .ap-nudge { background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
 /* An icon button: a glyph with no frame, tinted under the pointer. ap-iconbtn-lg is a header's (--control-lg), ap-iconbtn-round a
    circle; a component's own class sets anything else (a smaller size, where it sits). */
 .ap-iconbtn { font: inherit; display: inline-grid; place-items: center; width: var(--control-md); height: var(--control-md); padding: 0; border: 0; border-radius: var(--radius-inner); background: transparent; color: var(--ink-muted); cursor: pointer; }
@@ -890,6 +890,9 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* SidebarHead — the rooms list's header (a pane header, in Shared looks): the server you're on, and on phones a › back to the pane */
 /* The server: its avatar (or initials), and its title over its host; who you're connected to, not a control. */
 .ap-shell-sidehead-server { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-2); }
+/* The server as a button (it opens the server pane): where it was, its hover and its pane's being open a ground a little wider than it. */
+.ap-shell-sidehead-open { font: inherit; padding: 2px 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; text-align: start; cursor: pointer; }
+.ap-shell-sidehead-open:hover, .ap-shell-sidehead-expanded { background: var(--hover); box-shadow: 0 0 0 6px var(--hover); }
 .ap-shell-sidehead-avatar { flex: none; width: var(--control-lg); height: var(--control-lg); border-radius: var(--radius-inner); object-fit: cover; }
 .ap-shell-sidehead-initials { display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: var(--text-ui); line-height: 1; font-weight: 600; user-select: none; }
 .ap-shell-sidehead-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -927,20 +930,19 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profile-sub { unicode-bidi: plaintext; text-align: left; }
 :where([dir='rtl']) .ap-profile-sub { text-align: right; }
 
-.ap-profile-edit { font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; color: var(--ink-muted); visibility: hidden; }
-.ap-profile-me:hover .ap-profile-edit, .ap-profile-me:focus-visible .ap-profile-edit, .ap-profile-open .ap-profile-edit { visibility: visible; }
-.ap-profile-pop { position: absolute; left: var(--space-2); right: var(--space-2); bottom: calc(100% + var(--space-2)); z-index: var(--z-menu); max-height: calc(100dvh - 96px); overflow-y: auto; }
-/* The gear beside the bar, for the preferences. */
-.ap-profile-settings { position: relative; flex: none; }
+/* The gear at the bar's end: the button opens the preferences, at your profile. */
+.ap-profile-gear { position: relative; flex: none; display: grid; place-items: center; width: 32px; height: 32px; color: var(--ink-muted); }
+.ap-profile-me:hover .ap-profile-gear, .ap-profile-open .ap-profile-gear { color: var(--ink); }
 /* Notifications paused (§4.5 `mute`): a small bell-off on the gear's corner. */
-.ap-profile-paused { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: var(--radius-full); background: var(--bg-100); color: var(--warn); box-shadow: 0 0 0 1px var(--line); }
+.ap-profile-paused { position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: 14px; height: 14px; border-radius: var(--radius-full); background: var(--bg-100); color: var(--warn); box-shadow: 0 0 0 1px var(--line); }
 
-/* ProfileEditor — the popover above the ProfileBar */
+/* ProfileEditor — your profile, in Preferences */
 .ap-profedit { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); }
+/* In another, such as Preferences' Profile: no card of its own, under the rows above it. */
+.ap-profedit:not([role='dialog']) { padding: var(--space-4) 0; }
 .ap-profedit-top { display: flex; align-items: center; gap: var(--space-3); }
 .ap-profedit-av { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); min-width: 0; }
 .ap-profedit-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
-.ap-profile-pop .ap-profedit-actions { flex-wrap: wrap; }
 
 /* Motion — short and soft; all of it off when the viewer asks */
 .ap-btn, .ap-room, .ap-thread, .ap-msg, .ap-rail-tile, .ap-actions-btn, .ap-profile-me, .ap-jumpbar-btn, .ap-composer, .ap-field { transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, border-radius var(--duration-slow) ease, color var(--duration-fast) ease; }
@@ -959,6 +961,25 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-popover-sheet { left: 0; right: 0; bottom: 0; border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: env(safe-area-inset-bottom); }
 
 /* ProfileCard — who someone is, from a mention, a sender or a member */
+/* ServerCard — the server you're connected to, from the rooms list's head */
+.ap-servcard { gap: var(--space-3); padding: var(--space-4); }
+.ap-servcard.ap-popover-sheet { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); }
+.ap-servcard-who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.ap-servcard-avatar { flex: none; width: 48px; height: 48px; border-radius: var(--radius-lg); object-fit: cover; }
+.ap-servcard-initials { display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: var(--text-title); line-height: 1; font-weight: 600; user-select: none; }
+.ap-servcard-names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ap-servcard-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; }
+.ap-servcard-host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); direction: ltr; unicode-bidi: plaintext; }
+.ap-servcard-description { font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); overflow-wrap: anywhere; }
+.ap-servcard-description > :first-child { margin-top: 0; }
+.ap-servcard-description > :last-child { margin-bottom: 0; }
+.ap-servcard-description a { color: var(--denim); }
+.ap-servcard-details { display: grid; gap: var(--space-1); margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-servcard-details > div { display: grid; grid-template-columns: 6em minmax(0, 1fr); gap: var(--space-2); }
+.ap-servcard-details dt { color: var(--ink-muted); }
+.ap-servcard-details dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.ap-servcard-address { font-family: var(--font-mono); direction: ltr; unicode-bidi: plaintext; user-select: all; }
+.ap-servcard-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .ap-profcard { gap: var(--space-3); padding: var(--space-4); }
 .ap-profcard.ap-popover-sheet { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); }
 .ap-profcard-who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }

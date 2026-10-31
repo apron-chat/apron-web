@@ -659,3 +659,33 @@ describe('after a reconnect', () => {
 		expect(general().recovering).toBe(false);
 	});
 });
+
+describe('disconnecting at the viewer’s asking', () => {
+	it('closes the connection and stays closed, until connecting again here or to another server starts it', async () => {
+		await socket.greet(['history', 'rooms']);
+		const opened = FakeSocket.instances.length;
+		client.disconnect();
+		await settle();
+		expect(snapshot.status).toBe('offline');
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(FakeSocket.instances.length).toBe(opened);
+		// Connecting again, to the same server: a restart starts it.
+		client.restart();
+		await settle();
+		expect(FakeSocket.instances.length).toBe(opened + 1);
+		expect(latest().url).toBe(socket.url);
+		// Disconnected again, then another server: setUrl starts it there.
+		client.disconnect();
+		await settle();
+		client.setUrl('wss://other.example/');
+		await settle();
+		expect(FakeSocket.instances.length).toBe(opened + 2);
+		expect(latest().url).toBe('wss://other.example/');
+		// Stopped as the page goes away, nothing starts it again.
+		client.stop();
+		client.restart();
+		client.setUrl('wss://third.example/');
+		await settle();
+		expect(FakeSocket.instances.length).toBe(opened + 2);
+	});
+});

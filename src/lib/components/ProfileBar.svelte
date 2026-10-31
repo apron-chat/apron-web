@@ -24,7 +24,7 @@
 	import TypingDots from '$lib/design/components/TypingDots.svelte';
 	import { exportArchive } from '$lib/archive/archive';
 
-	type Status = 'idle' | 'saving' | 'altered' | 'declined';
+	type Status = 'idle' | 'saving' | 'saved' | 'altered' | 'declined';
 
 	interface Props {
 		client: ChatClient;
@@ -54,17 +54,14 @@
 		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
 		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
-		/** Opens the connect screen as it is: another server, or another way to sign in. */
-		onconnect: () => void;
 	}
-	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin, onconnect }: Props = $props();
+	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin }: Props = $props();
 
-	let open = $state(false);
 	let preferencesOpen = $state(false);
 	/** Preferences mounts the first time it opens and then stays, so nothing of it renders or runs on a page that never opens it. */
 	let preferencesMounted = $state(false);
-	/** The section Preferences shows: the one last chosen, or the one asked for (`preferencesOpener`). */
-	let preferencesSection = $state('notifications');
+	/** The section Preferences shows: Profile from the bar, the one last chosen, or the one asked for (`preferencesOpener`). */
+	let preferencesSection = $state('profile');
 	let preferencesTrigger = $state<HTMLButtonElement | undefined>();
 	let draft = $state('');
 	let status = $state<Status>('idle');
@@ -163,11 +160,8 @@
 	 * `state`. A link of no proposal here never adds; it signs in.
 	 */
 	let addEmail = $state<{ scheme: 'email' | 'external'; step: 'address' | 'code'; email: string; code: string; page?: string; busy: boolean; error: string } | undefined>();
-	function toggle(): void {
-		if (open) {
-			close();
-			return;
-		}
+	/** Profile's form starts from what the server keeps: your handle and bio, and no note from last time. */
+	function resetProfile(): void {
 		draft = you?.name || displayName;
 		openedWith = draft;
 		bioDraft = bioOf(you) ?? '';
@@ -180,7 +174,6 @@
 		passkeyNotice = '';
 		avatarError = '';
 		addEmail = undefined;
-		open = true;
 	}
 
 	/** The server sets `avatar` and sends `user` once the image is written; `you` then carries it. */
@@ -211,19 +204,14 @@
 		}
 	}
 
-	function close(): void {
-		open = false;
-		status = 'idle';
-	}
-
-	/** The editor's Connect to a server…: the connect screen, in its place. */
-	function connect(): void {
-		close();
-		onconnect();
+	/** The bar's button: Preferences, at your profile. */
+	function openProfile(): void {
+		preferencesSection = 'profile';
+		showPreferences();
 	}
 
 	function showPreferences(): void {
-		open = false;
+		resetProfile();
 		preferencesMounted = true;
 		preferencesOpen = true;
 	}
@@ -251,7 +239,7 @@
 	 */
 	function signIn(scheme: 'webauthn' | 'email' | 'external' = 'webauthn'): void {
 		const chosen = chosenName();
-		close();
+		preferencesOpen = false;
 		onsignin(chosen, scheme);
 	}
 
@@ -337,18 +325,14 @@
 	}
 
 	/** Shows what the server kept for a `me` request carrying `requested`. */
-	async function track(handle: OperationHandle, requested: string, closeWhenKept: boolean): Promise<void> {
+	async function track(handle: OperationHandle, requested: string): Promise<void> {
 		status = 'saving';
 		declinedReason = '';
 		try {
 			const result = await handle.promise;
 			const kept = isJsonObject(result.you) && typeof result.you.name === 'string' ? result.you.name : requested;
 			if (kept === requested) {
-				if (closeWhenKept) {
-					close();
-					return;
-				}
-				status = 'idle';
+				status = 'saved';
 			} else {
 				serverName = kept;
 				status = 'altered';
@@ -397,14 +381,14 @@
 		saveDisplayName(requested);
 		const handle = client.setDisplayName(requested);
 		if (!handle) {
-			close();
+			status = 'saved';
 			return;
 		}
-		void track(handle, requested, true);
+		void track(handle, requested);
 	}
 </script>
 
-<!-- The design system's ProfileBar and ProfileEditor draw it; the app fills in its avatar, and the ways to sign in this server offers. -->
+<!-- The design system's ProfileBar and, in Preferences' Profile, ProfileEditor draw it; the app fills in its avatar, and the ways to sign in this server offers. -->
 {#snippet barAvatar()}
 	<Avatar name={shownYou?.name || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} status={shownStatus} statusLabel={ownLabel} />
 {/snippet}
@@ -480,7 +464,7 @@
 		{/if}
 	{/if}
 {/snippet}
-{#snippet editor()}
+{#snippet profileForm()}
 	<ProfileEditor
 		dialog={false}
 		userId={you?.user_id ?? '—'}
@@ -501,9 +485,7 @@
 		{serverName}
 		{declinedNote}
 		onsave={save}
-		oncancel={close}
 		signin={canUsePasskey || canUseEmail || canUseExternal ? signin : undefined}
-		onconnect={connect}
 		changeAvatarTestid="change-avatar" removeAvatarTestid="remove-avatar" avatarFileTestid="avatar-input" nameTestid="display-name-input" bioTestid="bio-input"
 	/>
 {/snippet}
@@ -516,18 +498,17 @@
 	status={ownStatus}
 	statusLabel={ownLabel}
 	avatar={barAvatar}
-	{open}
-	onedit={toggle}
-	{editor}
-	onpreferences={showPreferences}
+	open={preferencesOpen}
+	onopen={openProfile}
 	{paused}
-	bind:preferencesButton={preferencesTrigger}
+	bind:button={preferencesTrigger}
 >
 	{#if preferencesMounted && preferencesDialog.component}
 		{@const PreferencesDialog = preferencesDialog.component}
 		<PreferencesDialog
 			bind:open={preferencesOpen}
 			bind:section={preferencesSection}
+			profile={profileForm}
 			{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
 			{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}

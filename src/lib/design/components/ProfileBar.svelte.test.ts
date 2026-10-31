@@ -13,22 +13,22 @@ function render(props: Record<string, unknown>) {
 describe('ProfileBar', () => {
 	it('names you, your status and what to add in its label, or what it’s waiting for before there is a you', () => {
 		const me = render({ you: { user_id: 'alice', name: 'Alice' }, status: 'dnd', note: 'add a sign-in' });
-		expect(me.getAttribute('aria-label')).toBe('Your profile on Work: Alice, do not disturb. Edit');
+		expect(me.getAttribute('aria-label')).toBe('Open preferences. Your profile on Work: Alice, do not disturb');
 		expect(me.querySelector('.ap-profile-sub')?.textContent).toBe('on Work · add a sign-in');
 		dom.unmount();
 		const waiting = render({ placeholder: 'Signing in…' });
-		expect(waiting.getAttribute('aria-label')).toBe('Your profile on Work: signing in. Edit');
+		expect(waiting.getAttribute('aria-label')).toBe('Open preferences. Your profile on Work: signing in');
 		expect(waiting.querySelector('.ap-profile-name')?.textContent).toBe('Signing in…');
 	});
 
-	it('offers the preferences on a gear, marked while notifications are paused', () => {
-		const onpreferences = vi.fn();
-		render({ you: { user_id: 'alice' }, onpreferences, paused: 'until 14:30' });
-		const gear = document.querySelector<HTMLButtonElement>('.ap-profile-settings')!;
-		expect(gear.getAttribute('aria-label')).toBe('Open preferences. Notifications paused until 14:30');
-		expect(gear.querySelector('.ap-profile-paused')).not.toBeNull();
-		gear.click();
-		expect(onpreferences).toHaveBeenCalledOnce();
+	it('is one button to your profile and the preferences, its gear marked while notifications are paused', () => {
+		const onopen = vi.fn();
+		const me = render({ you: { user_id: 'alice' }, onopen, paused: 'until 14:30' });
+		expect(document.querySelectorAll('.ap-profile button')).toHaveLength(1);
+		expect(me.getAttribute('aria-label')).toBe('Open preferences. Notifications paused until 14:30. Your profile on Work: alice');
+		expect(me.querySelector('.ap-profile-gear .ap-profile-paused')).not.toBeNull();
+		me.click();
+		expect(onopen).toHaveBeenCalledOnce();
 	});
 });
 

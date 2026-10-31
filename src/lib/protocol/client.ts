@@ -372,6 +372,8 @@ export class ChatClient {
 	private connectionId = 0;
 	private reconnectAttempt = 0;
 	private running = false;
+	/** Disconnected at the viewer's asking (`disconnect`): connecting again starts it, as nothing does after `stop`. */
+	private disconnected = false;
 	private authenticated = false;
 	private authRequested = false;
 	/** A passkey ceremony is under way: other requests wait. */
@@ -517,6 +519,7 @@ export class ChatClient {
 		if (!nextUrl || nextUrl === this.serverUrl) return;
 		this.switchServer(nextUrl);
 		if (this.running) this.restart();
+		else if (this.disconnected) this.start();
 	}
 
 	/** Points the client at another server, with that server's kept session, without connecting. */
@@ -590,6 +593,7 @@ export class ChatClient {
 	start(): void {
 		if (this.running) return;
 		this.running = true;
+		this.disconnected = false;
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
 		this.showReconnectDivider = this.reconnectAttempt > 0;
@@ -636,8 +640,20 @@ export class ChatClient {
 		this.emit();
 	}
 
+	/**
+	 * Closes the connection at the viewer's asking (a server's Disconnect), as `stop` does, keeping the session kept
+	 * for this server: connecting again, here or to another server, or signing in, starts it again.
+	 */
+	disconnect(): void {
+		this.stop();
+		this.disconnected = true;
+	}
+
 	restart(): void {
-		if (!this.running) return;
+		if (!this.running) {
+			if (this.disconnected) this.start();
+			return;
+		}
 		this.connectionProbe?.abort();
 		this.connectionId += 1;
 		this.reconnectHeld = false;

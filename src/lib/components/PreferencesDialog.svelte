@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { historySettings, RETENTIONS, storageUsed } from '$lib/history/settings.svelte';
 	import { MEDIA_POLICIES, mediaSettings, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
@@ -23,8 +23,10 @@
 
 	interface Props {
 		open?: boolean;
-		/** The section shown: `notifications`, `appearance`, `media` or `history`. Bindable. */
+		/** The section shown: `profile`, `notifications`, `appearance`, `media` or `history`. Bindable. */
 		section?: string;
+		/** Profile's form, under your status: your avatar, handle and bio, and how you sign in. */
+		profile?: Snippet;
 		/** Notifications on this device: the one switch, for while Apron is open and, by push, while it's closed. */
 		notificationsEnabled: boolean;
 		notificationsSupported: boolean;
@@ -62,9 +64,10 @@
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), section: preferencesSection = $bindable('notifications'), notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
+	let { open = $bindable(false), section: preferencesSection = $bindable('profile'), profile, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
 
 	const SECTIONS = [
+		{ value: 'profile', label: 'Profile', hint: 'How you show on this server, and how you sign in.', id: 'ap-pref-profile' },
 		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
 		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
 		{ value: 'media', label: 'Media', hint: 'Where images and avatars load from. Each site sees what you load.', id: 'ap-pref-media' },
@@ -258,10 +261,12 @@
 <Dialog bind:open title="Preferences" size="lg" closeLabel="Close preferences" backdropCloses flush onclose={preferencesClosed}>
 	<SettingsSections sections={SECTIONS} bind:current={preferencesSection}>
 		<p class="ap-sr" aria-live="polite" aria-atomic="true">{announcement}</p>
-		{#if preferencesSection === 'notifications'}
+		{#if preferencesSection === 'profile'}
 			{#if status}
 				<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} onannounce={(text) => (statusAnswer = text)} disabled={status.disabled} />
 			{/if}
+			{@render profile?.()}
+		{:else if preferencesSection === 'notifications'}
 			{#if pause}
 				<PauseNotifications until={pause.until} {onpause} {onresume} />
 			{/if}

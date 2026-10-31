@@ -38,8 +38,8 @@
 		maxBio?: number;
 		/** Why the server didn't keep the bio. */
 		bioError?: string;
-		/** saving · altered: `you.name` differs from what you asked (`serverName`) · declined (`declinedNote`) */
-		status?: 'idle' | 'saving' | 'altered' | 'declined';
+		/** saving · saved: kept as asked · altered: `you.name` differs from what you asked (`serverName`) · declined (`declinedNote`) */
+		status?: 'idle' | 'saving' | 'saved' | 'altered' | 'declined';
 		serverName?: string;
 		/**
 		 * The declined note's words, in place of “The server declined this handle. Your old one is still in use.”,
@@ -47,6 +47,7 @@
 		 */
 		declinedNote?: string;
 		onsave?: () => void;
+		/** A Cancel beside Save (Close once the server altered the handle); without it, only Save. */
 		oncancel?: () => void;
 		/**
 		 * A Sign-in group under the handle: how this session signs in, and the ways to add or switch, such as
@@ -55,7 +56,7 @@
 		signin?: Snippet;
 		/** A Server group at the foot: Connect to a server…, the way to the connect screen, for another server or another way to sign in. */
 		onconnect?: () => void;
-		/** The form is the dialog (the default); off inside a <ProfileBar>, whose popover is. */
+		/** The form is the dialog (the default); off inside another, such as Preferences' Profile. */
 		dialog?: boolean;
 		/** `data-testid` on the Change avatar button, its Remove, the file picker and the Handle field. */
 		changeAvatarTestid?: string;
@@ -117,6 +118,7 @@
 	<!-- ap-profedit-hint: apron-server-go's interop suite reads your ID by `.ap-profedit-hint code` (e2e/interop-contract.json). -->
 	<p class="ap-form-hint ap-profedit-hint">ID <code>{userId}</code> · set by the server, can’t be changed</p>
 	{#if status === 'altered'}<p class="ap-form-note" role="status">The server saved your handle as “{serverName}”.</p>{/if}
+	{#if status === 'saved'}<p class="ap-form-note ap-tone-ok" role="status">Saved.</p>{/if}
 	{#if status === 'declined'}<p class="ap-form-note ap-tone-danger" role="alert">{declinedNote ?? 'The server declined this handle. Your old one is still in use.'}</p>{/if}
 	{#if maxBio !== undefined}
 		<label class="ap-fieldlabel"><span class="ap-fieldlabel-row"><span>Bio</span><span class={['ap-fieldlabel-hint', bioOver && 'ap-tone-danger']}>{bioLength}/{maxBio}</span></span>
@@ -139,7 +141,7 @@
 		</div>
 	{/if}
 	<div class="ap-profedit-actions">
-		<Button variant="ghost" size="sm" onclick={oncancel} disabled={saving} label={status === 'altered' ? 'Close' : 'Cancel'} />
+		{#if oncancel}<Button variant="ghost" size="sm" onclick={oncancel} disabled={saving} label={status === 'altered' ? 'Close' : 'Cancel'} />{/if}
 		<Button type="submit" variant="primary" size="sm" disabled={saving || !name.trim() || bioOver} label={saving ? 'Saving…' : 'Save'} />
 	</div>
 </form>
