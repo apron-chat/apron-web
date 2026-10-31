@@ -1,0 +1,67 @@
+{
+	"$comment": "Perf budget: medians of counts, not timings. `npm run qa -- budget` checks a build against it; `--update` rewrites it. See scripts/qa/README.md.",
+	"runs": 3,
+	"cpu": 4,
+	"probes": {
+		"load": {
+			"requests": 22,
+			"startupJsKB": 995.9,
+			"domNodes": 540,
+			"layouts": 15,
+			"styleRecalcs": 37,
+			"heapMB": 9.6
+		},
+		"load-busy": {
+			"requests": 20,
+			"startupJsKB": 968.5,
+			"domNodes": 1196,
+			"layouts": 54,
+			"styleRecalcs": 198,
+			"heapMB": 10.8
+		},
+		"switch-room-busy": {
+			"layouts": 6,
+			"styleRecalcs": 20
+		},
+		"send-message-busy": {
+			"layouts": 39,
+			"styleRecalcs": 24
+		},
+		"sidebar-collapse": {
+			"layouts": 4,
+			"styleRecalcs": 21
+		},
+		"member-list-hide": {
+			"layouts": 12,
+			"styleRecalcs": 16
+		},
+		"member-list-overlay-open": {
+			"layouts": 1,
+			"styleRecalcs": 4
+		},
+		"open-thread": {
+			"layouts": 5,
+			"styleRecalcs": 19
+		},
+		"open-preferences": {
+			"layouts": 1,
+			"styleRecalcs": 7
+		},
+		"scroll-timeline": {
+			"layouts": 9,
+			"styleRecalcs": 9
+		},
+		"type-composer": {
+			"layouts": 36,
+			"styleRecalcs": 8
+		},
+		"hover-messages": {
+			"layouts": 7,
+			"styleRecalcs": 10
+		}
+	},
+	"bundle": {
+		"jsGzipKB": 503.5,
+		"cssGzipKB": 21.6
+	}
+}

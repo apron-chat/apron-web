@@ -55,7 +55,28 @@ npm run qa -- sheet .qa/sheet.json                        # curated before/after
   ranges overlap (noise), and writes all samples as JSON. Use several runs (5–7) and read the spread:
   the machine may be busy, and it warns when its load average is high. `--only load,type-composer` picks
   probes; `qa ab --perf` runs it on both builds and adds bundle sizes.
+- Probes named `-busy` load an account at scale (the memory server's `manyRooms` and `filler` knobs: 40
+  more rooms, 1500 messages in general), where costs that grow with rooms or history show. A probe
+  without an `action` measures the load, which also counts `startupJsKB`: the JS the page parses to start.
 - `prof` CPU-profiles page load and lists the functions whose self time changed most.
+
+## `qa budget`: the perf budget in CI
+
+Timings swing by tens of percent between runs and machines; counts don't. `qa budget` loads a preview build
+and runs every perf probe (3 runs, medians, under reduced motion so animations don't count per frame), then checks the counts against `scripts/qa/perf-budget.json`:
+layouts and style recalcs per probe; requests, startup JS, DOM nodes and heap per load; gzipped bundle sizes.
+Each may go a little over its baseline (a few layouts or style recalcs, 1% of bytes), and no further. CI runs it
+on every pull request (`perf-budget` in `.github/workflows/ci.yml`).
+
+```sh
+APRON_PREVIEW=1 npm run build && npm run qa -- budget         # check the build in build/
+npm run qa -- budget --update                                  # a cost that's meant, or a gain: rewrite the baseline
+```
+
+When it fails, the table names the probe and count. Find the cause with `qa perf` and `qa prof` against
+`main`, or `qa ab --base main --perf`. If the cost is the price of a feature, `--update` and commit the
+baseline with the change, so the review sees it. After making something cheaper, `--update` too: the
+baseline is a ratchet, and a gain not written into it can be spent again unnoticed.
 - `sheet` takes `{ "panels": [{ "title", "note", "before", "after", "box": [l, t, r, b], "scale" }] }`
   (paths relative to the spec; `before` optional) and renders it with real text, for a PR description.
 
