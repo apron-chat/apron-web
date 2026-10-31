@@ -67,6 +67,8 @@ export interface PreviewKnobs {
 	historyDelayMs?: number;
 	/** That many more messages at the end of a room's history, by `room_id`, e.g. enough for older pages to load reading back. */
 	filler?: Record<string, number>;
+	/** That many more joined rooms, `room-1`…, each with a message, as a busy account has, for perf at scale (`qa perf`). */
+	manyRooms?: number;
 	/** `you.ext.permissions` (`ext:permissions`) in place of `PREVIEW_PERMISSIONS`, e.g. `{ write: false }` for a guest who only reads. */
 	permissions?: JsonObject;
 	/** Fields of the `server` frame (§3.1) to add or replace, e.g. `title` or `avatar`; `ext` merges by its keys, e.g. `emoji`. */
@@ -226,6 +228,12 @@ export class MemoryProtocolServer {
 			room.log_id = Number(n);
 		}
 		if (knobs.seed === 'rich') this.seedRich(general);
+		for (let n = 1; n <= (knobs.manyRooms ?? 0); n++) {
+			const room = this.makeRoom(`room-${n}`, `room ${n}`, ['preview_guest', 'ada', 'grace']);
+			const id = String(1720000000000 + n);
+			room.messages.push({ message_id: id, log_id: id, room_id: room.room_id, from: { ...people.ada }, body: { text: `Welcome to room ${n}.`, format: 'plain' } });
+			room.log_id = Number(id);
+		}
 		for (const [id, count] of Object.entries(knobs.filler ?? {})) for (let n = 1; n <= count; n++) this.post(id, 'ada', `Message ${n} of ${count}`);
 		if (this.hasStatus) this.seedPresence();
 		for (const [id, fields] of Object.entries(knobs.rooms ?? {})) {
