@@ -4,13 +4,14 @@
 	import { followLiveText, liveTextDecoder } from '$lib/protocol/live-text';
 	import type { Embed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { TerminalFeed, TerminalScreen } from '$lib/ui/terminal-screen';
+	import { TerminalFeed } from '$lib/ui/terminal-feed';
 	import { terminalViewer, type TerminalView } from '$lib/ui/terminal-viewer.svelte';
+	import { loadTerminalScreen } from '$lib/ui/xterm';
 
 	/**
 	 * A `terminal` embed (capability `embed:terminal`, §4.8.6), drawn as a
-	 * terminal would show it, on a `TerminalScreen` (xterm.js, loaded once one
-	 * is shown). While the embed has no `output` it is live: `GET url` is
+	 * terminal would show it, on a `TerminalScreen` (loaded with xterm.js once
+	 * one is shown). While the embed has no `output` it is live: `GET url` is
 	 * decoded and written to its `TerminalFeed` as it arrives, and a reconnect
 	 * starts the feed afresh with the new response. Once a snapshot carries
 	 * `output`, that is shown, from a fresh terminal. Live text loads only from
@@ -42,11 +43,20 @@
 	};
 
 	function attach(node: HTMLElement): () => void {
-		const screen = new TerminalScreen(node);
-		const detach = feed.attach(screen);
+		let detach: (() => void) | undefined;
+		let gone = false;
+		void loadTerminalScreen().then(({ TerminalScreen }) => {
+			if (gone) return;
+			const screen = new TerminalScreen(node);
+			const unfeed = feed.attach(screen);
+			detach = () => {
+				unfeed();
+				screen.dispose();
+			};
+		});
 		return () => {
-			detach();
-			screen.dispose();
+			gone = true;
+			detach?.();
 		};
 	}
 

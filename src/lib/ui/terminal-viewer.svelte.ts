@@ -4,7 +4,7 @@
  * embed's own `TerminalFeed`, so it follows the same live text without
  * reading it again. `TerminalViewerHost` (mounted once, in the page) draws it.
  */
-import type { TerminalFeed } from './terminal-screen';
+import type { TerminalFeed } from './terminal-feed';
 
 /** What the viewer shows of a terminal embed: read as it changes (live, then finished). */
 export interface TerminalView {

@@ -16,7 +16,13 @@ import Embed from './Embed.svelte';
 
 vi.mock('$lib/ui/xterm', async () => {
 	const { fakeXterm } = await import('$lib/test/fake-xterm');
-	return { loadXterm: vi.fn(async () => fakeXterm) };
+	const loadXterm = vi.fn(async () => fakeXterm);
+	// As the real one: the screen, with xterm loading beside it.
+	const loadTerminalScreen = async () => {
+		void loadXterm();
+		return import('$lib/ui/terminal-screen');
+	};
+	return { loadXterm, loadTerminalScreen };
 });
 vi.mock('$app/state', async () => ({ page: (await import('$lib/test/app-page.svelte')).page }));
 vi.mock('$app/navigation', async () => ({ pushState: (await import('$lib/test/app-page.svelte')).pushState }));
@@ -49,6 +55,8 @@ beforeEach(() => {
 beforeAll(stubDialog);
 
 afterEach(() => {
+	// Unmounted before the fakes are cleared: a screen loads a moment after its embed mounts.
+	unmount();
 	terminalViewer.open = false;
 	terminalViewer.view = undefined;
 	page.state = {};

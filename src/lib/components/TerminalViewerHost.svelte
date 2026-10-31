@@ -3,8 +3,8 @@
 	import { pushState } from '$app/navigation';
 	import { page } from '$app/state';
 	import TerminalViewer from '$lib/design/components/TerminalViewer.svelte';
-	import { TerminalScreen, VIEWER_FIT, VIEWER_SCROLLBACK } from '$lib/ui/terminal-screen';
 	import { terminalViewer } from '$lib/ui/terminal-viewer.svelte';
+	import { loadTerminalScreen } from '$lib/ui/xterm';
 
 	/**
 	 * The one terminal viewer, mounted once outside the timeline; a terminal embed's Expand opens it
@@ -55,11 +55,21 @@
 	function attach(box: HTMLElement): (() => void) | undefined {
 		const feed = view?.feed;
 		if (!feed) return undefined;
-		const screen = new TerminalScreen(box, { fit: VIEWER_FIT, space: box.parentElement ?? box, scrollback: VIEWER_SCROLLBACK, keys: box.closest('dialog') ?? undefined });
-		const detach = feed.attach(screen);
+		let detach: (() => void) | undefined;
+		let gone = false;
+		// Already loaded by the embed it expands.
+		void loadTerminalScreen().then(({ TerminalScreen, VIEWER_FIT, VIEWER_SCROLLBACK }) => {
+			if (gone) return;
+			const screen = new TerminalScreen(box, { fit: VIEWER_FIT, space: box.parentElement ?? box, scrollback: VIEWER_SCROLLBACK, keys: box.closest('dialog') ?? undefined });
+			const unfeed = feed.attach(screen);
+			detach = () => {
+				unfeed();
+				screen.dispose();
+			};
+		});
 		return () => {
-			detach();
-			screen.dispose();
+			gone = true;
+			detach?.();
 		};
 	}
 </script>
