@@ -123,7 +123,7 @@
 		if (webPush.error) return { text: webPush.error, tone: 'err' };
 		if (!webPush.supported) return { text: webPush.homeScreen ? `${open} To be alerted when it’s closed, add Apron to your Home Screen.` : `${open} This browser can’t alert when it’s closed.`, tone: 'ok' };
 		if (webPush.heldBy) return { text: `${open} When it’s closed, this browser alerts for one server at a time: now ${webPush.heldBy}.`, tone: 'ok', action: 'Alert for this server instead' };
-		if (webPush.enabled && pushesNothing) return { text: `${open} This server sends none of your choices above when it’s closed.`, tone: 'ok' };
+		if (webPush.enabled && pushesNothing) return { text: `${open} This server sends none of your choices below when it’s closed.`, tone: 'ok' };
 		if (webPush.enabled) return { text: 'On · alerts on this device, even when Apron is closed.', tone: 'ok' };
 		return { text: `${open} Not yet when it’s closed.`, tone: 'ok', action: 'Alert when it’s closed, too' };
 	});
@@ -267,19 +267,6 @@
 			{/if}
 			{@render profile?.()}
 		{:else if preferencesSection === 'notifications'}
-			{#if pause}
-				<PauseNotifications until={pause.until} {onpause} {onresume} />
-			{/if}
-			<div class="ap-pref-scopes">
-				<CheckList
-					label="Notify me about"
-					options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
-					value={notifyScopes}
-					min={1}
-					onchange={onnotifyscopes}
-				/>
-				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch below turns notifications off.</p>
-			</div>
 			<SettingRow title="Notifications" hint="Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can." class="ap-pref-notifications">
 				<p class={['ap-pref-note', notificationsNote.tone === 'ok' && 'ap-tone-ok', notificationsNote.tone === 'err' && 'ap-tone-danger']} id="ap-pref-notifications-note">{notificationsNote.text}</p>
 				<p class="ap-pref-test">
@@ -309,6 +296,19 @@
 					</Callout>
 				</div>
 			{/if}
+			{#if pause}
+				<PauseNotifications until={pause.until} {onpause} {onresume} />
+			{/if}
+			<div class="ap-pref-scopes">
+				<CheckList
+					label="Notify me about"
+					options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
+					value={notifyScopes}
+					min={1}
+					onchange={onnotifyscopes}
+				/>
+				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch above turns notifications off.</p>
+			</div>
 		{:else if preferencesSection === 'media'}
 			<SettingRow title="Load images from" for="ap-media-policy" hint={mediaNote} hintTestid="media-note" class="ap-pref-media-setting">
 				{#snippet control()}

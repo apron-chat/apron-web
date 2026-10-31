@@ -43,7 +43,7 @@ describe('PreferencesDialog', () => {
 		expect(notifications({ webPush: { ...push, signIn: true } }).note).toBe('On · alerts while Apron is open. Sign in to be alerted when it’s closed, too.');
 		expect(notifications({ webPush: { ...push, supported: false, homeScreen: true } }).note).toBe('On · alerts while Apron is open. To be alerted when it’s closed, add Apron to your Home Screen.');
 		expect(notifications({ webPush: { ...push, supported: false } }).note).toBe('On · alerts while Apron is open. This browser can’t alert when it’s closed.');
-		expect(notifications({ webPush: { ...push, enabled: true }, notifyScopes: ['joined'] }).note).toBe('On · alerts while Apron is open. This server sends none of your choices above when it’s closed.');
+		expect(notifications({ webPush: { ...push, enabled: true }, notifyScopes: ['joined'] }).note).toBe('On · alerts while Apron is open. This server sends none of your choices below when it’s closed.');
 		// Off, before and after permission; blocked.
 		expect(notifications({ notificationsEnabled: false, notificationPermission: 'default', webPush: push }).note).toBe('Turning this on will ask your browser for permission.');
 		expect(notifications({ notificationsEnabled: false, webPush: push }).note).toBe('Off.');
