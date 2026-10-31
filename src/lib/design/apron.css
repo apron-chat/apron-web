@@ -1292,6 +1292,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-preferences-content > h3 { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); }
 .ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
 /* On a phone the sections are tabs across the top, so a section has the dialog's whole width. */
+/* A choice is as wide as its longest option, beside what it does; on a phone, under it, full width (below). */
+.ap-pref-setting .ap-pref-select { flex: none; width: auto; max-width: 100%; }
 @media (max-width: 560px) {
 	.ap-preferences-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
 	.ap-preferences-nav { display: flex; gap: 0; overflow-x: auto; padding: var(--space-2); border-inline-end: 0; border-bottom: 1px solid var(--line); scrollbar-width: none; scroll-padding-inline: var(--space-2); }
@@ -1320,7 +1322,6 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-pref-push-more { max-width: var(--pref-panel-w); padding-bottom: var(--space-4); }
 .ap-pref-scopes { max-width: var(--pref-panel-w); padding: var(--space-4) 0; }
 .ap-pref-theme-setting select { flex: none; }
-.ap-pref-setting .ap-pref-select { width: min(100%, 320px); }
 /* Media's choice, under its title, and what it loads under that. */
 .ap-pref-media-setting .ap-pref-select { display: block; margin-top: var(--space-2); }
 .ap-pref-media-note { max-width: var(--pref-note-w); margin: var(--space-2) 0 0; }
