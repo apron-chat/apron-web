@@ -31,3 +31,7 @@ npm test && npm run check && npm run e2e && npm run qa -- budget --build build
   - Effects that read layout (`scrollHeight`, `getComputedStyle`, `getBoundingClientRect`) force a layout each time they run. Run them only when what they measure can have changed.
 - **CSS:** avoid `:has()` on large subtrees; a class set from state is cheaper. Keep `prefers-reduced-motion` rules specific enough to win.
 - **Startup:** new code loads with the app unless it is imported on demand (`src/lib/components/lazy.ts`). Watch `startupJsKB` in the budget.
+- **Proposing optimizations and tradeoffs:** a speed-up must not change what users see or do.
+  - When one would (a screen that loads late, a feature unavailable until something arrives), or when it costs much more code or storage than it saves, don't commit it.
+  - Propose it instead, with the measured before/after counts, what users would notice, and a recommendation.
+  - Report leads you found but didn't pursue, with numbers, rather than dropping them.
