@@ -183,7 +183,19 @@ screen box in a stage that scrolls) with a second `TerminalScreen`, fitted
 by `VIEWER_FIT` (`TerminalFit`: the columns in the stage's width and the
 rows in its height, no smaller than 13px for the rows or 9px for the
 columns) to the stage it sits in (`space`), attached to that feed while
-open. Opening it pushes a history entry (`page.state.terminal`), so Back
+open. The message's screen keeps no scrollback (`terminalOptions`'
+`scrollback`, 0); the viewer's keeps `VIEWER_SCROLLBACK` (5,000) lines,
+and the feed's replay of the text since the last reset fills them. With
+scrollback, `TerminalScreen` takes the wheel, vertical swipes (the stage
+is `touch-action: pan-x pinch-zoom`, so the browser pans only sideways)
+and the scrolling keys on its `keys` element (the dialog, so focus can
+stay on Close) away from xterm, whose key handler refuses every key on
+every screen, and `scrollBy` moves the lines kept and the stage as one
+scroll: back, the lines above first with the stage held at the screen's
+foot, then the stage; forward, the stage to the foot first, then the
+lines. xterm keeps a reader at the foot as output arrives and leaves one
+who scrolled back where they are; the stage, open at the foot, stays
+there as the screen grows until the reader scrolls it. Opening it pushes a history entry (`page.state.terminal`), so Back
 closes it, and closing it otherwise leaves that entry; an embed that goes
 closes the viewer showing it. An `append` embed has no component: `messageView` reads
 `liveAppend(url)` (`src/lib/ui/live-append.svelte.ts`, one per `url`, a

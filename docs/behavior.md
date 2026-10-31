@@ -1223,12 +1223,15 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   font is scaled so the 80 columns fit the message's width, at most 13px on a
   wide screen (about 6px on a 390px phone, 5.5px at 360px; the page never
   scrolls sideways), and only the rows down to the last one written show,
-  unless a program is on the alternate screen, which shows all 40; nothing
-  scrolls inside it (no scrollback: what scrolls off the top is gone, as on
-  the terminal), and a wheel or swipe over it scrolls the page. It only reads:
-  nothing typed reaches it, its cursor isn't drawn, and nothing a program
-  prints acts outside it: no window title, bell or clipboard (OSC 52), its
-  answers to queries go nowhere, and OSC 8 links show but open nothing.
+  unless a program is on the alternate screen, which shows all 40. In a
+  message it is a fixed glance: nothing scrolls inside it (it keeps no
+  scrollback: what scrolls off the top is gone there, as on a terminal's
+  screen), and a wheel or swipe over it scrolls the page. It only reads:
+  nothing typed reaches it, no key is the terminal's even once a click has
+  focused it (Escape, the arrows and Page Up go on to the page), its cursor
+  isn't drawn, and nothing a program prints acts outside it: no window
+  title, bell or clipboard (OSC 52), its answers to queries go nowhere, and
+  OSC 8 links show but open nothing.
   While the embed has no `output` it is live, under a Live badge: the client
   reads `url` with a streaming `GET` and writes each chunk as it arrives. A
   drop or a failure keeps what it shows and tries again (after 1 s, then
@@ -1248,8 +1251,26 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   inside the viewer; the page never does). It shows the same text as the
   message, live or finished, and keeps up with it as it arrives, without
   reading `url` a second time (a server caps how often a live text is
-  read). Escape, Close or Back closes it (opening it adds a history entry),
-  with focus back on Expand, and it closes if its message goes.
+  read). Unlike the message, it keeps the lines that scroll off the top,
+  up to 5,000 (`VIEWER_SCROLLBACK`): it replays the text since the last
+  reset (a reconnect's new response, or the finished `output`), so opened
+  after a long run it has all of it, at the foot, on the newest line. The
+  wheel or a vertical swipe over the viewer, and ↑ and ↓ (a line), Page Up
+  and Page Down (the rows in view less one), Home and End (all the way),
+  wherever focus is in the viewer (it opens on Close; no key types into the
+  terminal), scroll back and forth; a sideways wheel or swipe still scrolls
+  a screen wider than the viewer sideways. New output keeps a reader at the
+  foot there; one who scrolled back stays where they are, until they scroll
+  to the foot again (End). The lines kept and the 40 rows scroll as one:
+  where the rows fit the viewer's height, only the lines move and the stage
+  never scrolls up and down; where they don't (a phone on its side), the
+  stage opens at the screen's foot and stays there while going back through
+  the lines above, and only once at the first line does it scroll up to
+  the screen's top rows (going forward, the stage reaches the foot first),
+  so there is one scroll, never two that fight. xterm's own scrollbar,
+  slimmed, shows over the last column while there is something to scroll
+  back to. Escape, Close or Back closes it (opening it adds a history
+  entry), with focus back on Expand, and it closes if its message goes.
 - **Live text in the body** (`append` embeds, capability `embed:append`,
   [§4.8.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#485-embedappend)),
   such as a model's reply as it writes: no card. The message shows its
@@ -1279,7 +1300,9 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   load sandboxed (`allow-scripts`, never same-origin, no referrer), clamped to
   480px. **`html`** embeds are sanitized with DOMPurify before insertion.
 - Any other kind renders from its `og` as a link card, else as the fallback card
-  with its kind name and its `url` or `text`.
+  ([§3.5.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#352-rendering)):
+  its kind name, plus its `title` and a link to its `url` when it has them
+  (without a usable `url`, it says "This client can’t display this embed.").
 - **Link previews**: any link in a message is checked against a map of sites
   by host (`SITES` in `link-sites.ts`), and up to three links on those sites
   each get a `link` embed, with an `og` the sender builds from the site's
