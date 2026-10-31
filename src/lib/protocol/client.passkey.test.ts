@@ -107,7 +107,7 @@ describe('one explicit ceremony per tap', () => {
 		await ceremony(socket, { user_id: 'u_1', name: 'shazow' });
 		await pending;
 		// The browser labels the passkey with it too, whatever the server put in the options.
-		expect(vi.mocked(requestPasskey).mock.calls[0]?.[3]).toBe('shazow');
+		expect(vi.mocked(requestPasskey).mock.calls[0]?.[4]).toBe('shazow');
 	});
 
 	it('sends no name with a login, which signs in to an account that has one', async () => {

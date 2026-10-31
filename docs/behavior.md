@@ -1642,6 +1642,15 @@ sheet only ever opens for a tap:
   **Cancel**, it stops the ceremony, whether it is still waiting or the
   browser's sheet is up, and closes the panel.
 
+The client runs a ceremony only when its RP ID (`rp.id` when creating,
+`rpId` when signing in, else the page's host) is the server's host or a
+domain that the host is under, such as `apron.chat` for `server.apron.chat`.
+Otherwise it says "This server (<host>) asked for a passkey for <RP ID>,
+which is not its own." and opens no sheet. The browser binds a passkey to
+the page, which every server shares, so without this check a server could
+relay another server's challenge, under an RP ID that this page can use, and
+sign in there as the user.
+
 The client makes no WebAuthn request of its own: no conditional (autofill)
 or `immediate` mediation and no capability probes, which password-manager
 extensions don't always settle. It reads the credential's fields as soon as
