@@ -688,8 +688,9 @@ font choice is marked experimental, to be replaced by a choice of themes. All
 of these stay on this device; settings aren't synced.
 
 **History** keeps what a signed-in session has loaded on this device, for
-**30 days** unless changed (a day, a week, a year, everything loaded, or not at
-all), and with it how far each joined room is caught up. The next visit shows it
+**30 days** unless **Retention** says otherwise (a day, a week, a year,
+everything loaded, or not at all; its note says only that, and that signing out
+deletes it), and with it how far each joined room is caught up. The next visit shows it
 at once and goes on as a reconnect does: each room asks the server only for what
 came after its checkpoint (§4.3.5), and the joined listing only for rooms that
 changed since (`latest_log_id`, §4.2.1); a thread opened again goes on from
