@@ -31,10 +31,6 @@
 			"layouts": 4,
 			"styleRecalcs": 21
 		},
-		"member-list-hide": {
-			"layouts": 12,
-			"styleRecalcs": 16
-		},
 		"member-list-overlay-open": {
 			"layouts": 1,
 			"styleRecalcs": 4

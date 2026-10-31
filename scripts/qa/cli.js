@@ -150,7 +150,7 @@ async function main() {
 			const dir = o.build?.[0] ?? 'build';
 			if (!existsSync(join(dir, '__preview.html'))) throw new Error(`budget needs a preview build: no ${join(dir, '__preview.html')} (APRON_PREVIEW=1 npm run build)`);
 			const suite = await loadSuite('main');
-			const probes = selectProbes(suite, list(o.only));
+			const probes = selectProbes(suite, list(o.only)).filter((p) => p.budget !== false);
 			const runs = int(o.runs, 3);
 			const cpu = int(o.cpu, 4);
 			const server = await serveDir(dir);

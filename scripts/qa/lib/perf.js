@@ -11,9 +11,10 @@ const READY = '[data-testid=message-list] .ap-msg';
  * each URL once, rotating which goes first (AB, BA, AB… for two), so drift in machine load hits all sides
  * alike. Each measurement is a fresh context with the cache disabled and the CPU throttled.
  *
- * A probe is `{ name, viewport?, knobs?, setup?(page), action?(page), settle? }`: one without an `action`
+ * A probe is `{ name, viewport?, knobs?, setup?(page), action?(page), settle?, budget? }`: one without an `action`
  * measures the load, as the built-in `load` probe does. `knobs` set the preview's memory server
- * (`PreviewKnobs`), e.g. many rooms or long histories. Suites export theirs as `interactions`;
+ * (`PreviewKnobs`), e.g. many rooms or long histories; `budget: false` leaves a probe whose counts follow
+ * the machine's speed out of `qa budget`. Suites export theirs as `interactions`;
  * `selectProbes` picks them.
  */
 export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4, reducedMotion, probes, path = '/__preview', builds = [], log = console.log }) {

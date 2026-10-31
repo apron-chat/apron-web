@@ -337,7 +337,9 @@ export default {
 			}
 		},
 		{ name: 'sidebar-collapse', action: (p) => button(p, 'Collapse sidebar').click() },
-		{ name: 'member-list-hide', action: (p) => button(p, 'Hide member list').click() },
+		// Out of the budget: hiding the list sets off layout work that runs on for seconds, so its counts follow
+		// the machine's speed (8–15 layouts). That's worth finding out, and the budget can take it in after.
+		{ name: 'member-list-hide', budget: false, action: (p) => button(p, 'Hide member list').click() },
 		{ name: 'member-list-overlay-open', viewport: VIEWPORTS.tablet, action: (p) => p.getByRole('button', { name: /member list/i }).first().click() },
 		{ name: 'open-thread', settle: 1000, action: (p) => roomList(p).getByText('Deploy checklist', { exact: true }).first().click() },
 		{ name: 'open-preferences', settle: 800, action: (p) => button(p, 'Open preferences').click() },
