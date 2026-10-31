@@ -404,13 +404,15 @@ export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<{ f
 	const finished = committed(transaction);
 	const records = transaction.objectStore('records');
 	const rooms = await done(transaction.objectStore('rooms').getAll()) as RoomRow[];
-	let pruned = false;
-	for (const { room, sync } of rooms) {
-		if (!timeLike(sync)) continue;
+	// Every room's at once, not one after another: each request waits its turn on a busy page, as one loading does,
+	// and the transaction holds up every other read and write of what is kept until it is done.
+	const counts = rooms.filter(({ sync }) => timeLike(sync)).map(({ room }) => {
 		const range = roomRange(room, cutoff);
-		if (await done(records.count(range))) pruned = true;
+		const counted = done(records.count(range));
 		records.delete(range);
-	}
+		return counted;
+	});
+	const pruned = (await Promise.all(counts)).some((count) => count > 0);
 	// A new version, so another tab paging what it restored from here knows it changed.
 	const meta = transaction.objectStore('meta');
 	const row = pruned ? await done(meta.get(META)) as MetaRow | undefined : undefined;
