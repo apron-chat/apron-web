@@ -64,7 +64,7 @@ export class LiveAppend {
 }
 
 const nextFrame = (callback: () => void): number =>
-	typeof requestAnimationFrame === 'function' ? requestAnimationFrame(callback) : (setTimeout(callback, 16) as unknown as number);
+	typeof requestAnimationFrame === 'function' ? requestAnimationFrame(callback) : Number(setTimeout(callback, 16));
 const cancelFrame = (frame: number): void => (typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame(frame) : clearTimeout(frame));
 
 /** How many live texts are kept by `url`, for rows that scroll away and back: the most recently asked for. */

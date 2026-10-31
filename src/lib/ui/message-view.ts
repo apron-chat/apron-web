@@ -290,8 +290,8 @@ function embedProps(embed: Embed): EmbedProps {
 	const gate = directory.mediaGate;
 	const made = madeProps.get(embed);
 	if (made?.gate === gate) return made.props;
-	const { embed_id, kind, url, title, text, format, height, og } = embed;
-	const props: EmbedProps = { embed_id, kind, url, title, text, format, height, ...(og ? { og: loadableOg(og, gate) } : {}) };
+	const { embed_id, kind, url, title, height, og } = embed;
+	const props: EmbedProps = { embed_id, kind, url, title, height, ...(og ? { og: loadableOg(og, gate) } : {}) };
 	embedSources.set(props, embed);
 	madeProps.set(embed, { gate, props });
 	return props;

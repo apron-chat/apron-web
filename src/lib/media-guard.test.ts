@@ -18,9 +18,9 @@ describe('media loads only through the gate', () => {
 		expect(using(/as MediaSrc\b/)).toEqual(['lib/ui/media-gate.ts']);
 	});
 
-	it('asks where media may load from only in the gate (streams, their own: only from the server)', () => {
+	it('asks where media may load from only in the gate (live text, its own: only from the server)', () => {
 		expect(using(/\bembedMedia\(/)).toEqual(['lib/protocol/embeds.ts', 'lib/ui/media-gate.ts']);
-		expect(using(/\bsameOriginMedia\(/)).toEqual(['lib/components/embeds/EmbedStream.svelte', 'lib/protocol/embeds.ts', 'lib/ui/media-gate.ts']);
+		expect(using(/\bsameOriginMedia\(/)).toEqual(['lib/components/embeds/EmbedTerminal.svelte', 'lib/protocol/embeds.ts', 'lib/ui/media-gate.ts', 'lib/ui/message-view.ts']);
 	});
 
 	it('loads media only in the design components that take a MediaSrc for it', () => {
@@ -71,7 +71,6 @@ describe('markup from anyone else goes through the one sanitizer', () => {
 			'lib/components/ConnectScreen.svelte',
 			'lib/components/ProfileCard.svelte',
 			'lib/components/ThreadDescription.svelte',
-			'lib/components/embeds/EmbedStream.svelte',
 			'lib/design/components/EmbedHtml.svelte',
 			'lib/design/components/Message.svelte'
 		]);
