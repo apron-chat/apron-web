@@ -1040,7 +1040,7 @@ export class ChatClient {
 			stage = 'begin';
 			begun = await this.passkeyBegin(action, requested);
 			stage = 'browser';
-			credential = await requestPasskey(action, begun.options, controller.signal, requested);
+			credential = await requestPasskey(action, begun.options, controller.signal, this.serverUrl, requested);
 			stage = 'finish';
 			if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 			return await this.passkeyFinish(action, begun, credential, controller, connection, requested);
