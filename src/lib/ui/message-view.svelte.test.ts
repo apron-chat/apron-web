@@ -343,6 +343,23 @@ describe('a message with live text appended (§4.8.5)', () => {
 		}
 	});
 
+	it('stops at a definitive refusal of GET url, as at its end: keeps what it shows, without Writing…', async () => {
+		const urls: string[] = [];
+		setLiveFetch(async (url) => {
+			urls.push(url);
+			return new Response('Too many readers', { status: 403 });
+		});
+		const { views, stop } = follow(append('https://chat.example/a/3'));
+		try {
+			await vi.waitFor(() => expect(views.at(-1)!.writing).toBeUndefined());
+			expect(views.at(-1)!.body?.html).toContain('Here is the plan:');
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			expect(urls).toEqual(['https://chat.example/a/3']);
+		} finally {
+			stop();
+		}
+	});
+
 	it('loads live text only from the chat server, and then shows just the body', async () => {
 		const server = serve();
 		const { views, stop } = follow(append('https://elsewhere.example/a/1'));

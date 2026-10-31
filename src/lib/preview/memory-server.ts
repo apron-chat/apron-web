@@ -602,7 +602,7 @@ export class MemoryProtocolServer {
 	/**
 	 * A message request's live embeds (§4.8.2, §4.8.3): new ones get an `embed_id` and a `url`, listed with their write
 	 * URLs for the result; kept ones (sent back by `embed_id`) get their `url` or `output` back from the records; one a
-	 * save leaves out ends early, with nothing appended. At most one `append` per message (§4.8.5).
+	 * save leaves out ends early, with nothing appended. At most one `append` per message (§4.8.5): more is `invalid_params`.
 	 */
 	private liveEmbeds(body: JsonObject, previous: JsonObject | undefined): { body: JsonObject; results: JsonObject[]; created: LiveWrite[] } | string {
 		const embeds = Array.isArray(body.embeds) ? body.embeds : [];

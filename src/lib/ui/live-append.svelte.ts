@@ -56,7 +56,7 @@ export class LiveAppend {
 		return this.#text;
 	}
 
-	/** Still arriving: false once `GET url` ended, while the snapshot that finishes the message is on its way. */
+	/** Still arriving: false once `GET url` ended or was refused for good, while the snapshot that finishes the message is on its way. */
 	get live(): boolean {
 		this.#subscribe();
 		return this.#live;

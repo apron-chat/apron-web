@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { press } from '$lib/test/dom';
 import { deferredXterm, fakeBuffer, fakeLine, FakeTerminal, fakeXterm, HeadlessTerminal, headlessXterm } from '$lib/test/fake-xterm';
-import { TerminalFeed, type TerminalSink } from './terminal-feed';
+import { keepLast, TERMINAL_FEED_KEEP, TerminalFeed, type TerminalSink } from './terminal-feed';
 import { shownRows, TERMINAL_COLS, TERMINAL_FONT_MAX, TERMINAL_FONT_MIN, TERMINAL_ROWS, TERMINAL_VIEWER_FONT_MAX, TERMINAL_VIEWER_FONT_MIN, terminalFontSize, terminalOptions, TerminalScreen, VIEWER_FIT, VIEWER_SCROLLBACK } from './terminal-screen';
 
 const ESC_C = '\u001bc';
@@ -362,6 +362,47 @@ describe('TerminalFeed', () => {
 		expect(viewer.log).toHaveLength(5);
 		expect(inline.log.at(-1)).toBe('more');
 		expect(feed.text).toBe('donemore');
+	});
+
+	it('keeps about the last 256 KiB, cut at a control character, so a screen attached later starts from the cut', () => {
+		const feed = new TerminalFeed();
+		const inline = sink();
+		feed.attach(inline);
+		const line = `${'x'.repeat(1023)}\n`;
+		const cuts: string[] = [];
+		for (let i = 0; i < 1024; i++) {
+			const before = feed.text.length;
+			feed.write(i % 2 ? line : `\u001b[32m${i}\u001b[0m${line}`);
+			if (feed.text.length < before) cuts.push(feed.text);
+			// It may grow past the limit by a quarter before it cuts, never more.
+			expect(feed.text.length).toBeLessThanOrEqual(TERMINAL_FEED_KEEP * 1.25);
+		}
+		// A MiB went to the screen attached, while the feed cut its start a few times.
+		expect(inline.log).toHaveLength(1024);
+		expect(cuts.length).toBeGreaterThan(1);
+		for (const cut of cuts) {
+			// Cut as the server cuts output (§4.8.6): the last 256 KiB, from its first control character, here a line's end or an SGR.
+			expect(cut.length).toBeLessThanOrEqual(TERMINAL_FEED_KEEP);
+			expect(cut.length).toBeGreaterThan(TERMINAL_FEED_KEEP - 1024);
+			expect(['\n', '\u001b']).toContain(cut[0]);
+		}
+		const text = feed.text;
+		expect(text.endsWith(`\u001b[32m1022\u001b[0m${line}${line}`)).toBe(true);
+		const viewer = sink();
+		feed.attach(viewer);
+		expect(viewer.log).toEqual([`show ${text}`]);
+		// A finished output is kept the same way.
+		feed.show('y'.repeat(TERMINAL_FEED_KEEP) + '\r\nend');
+		expect(feed.text).toBe('\r\nend');
+	});
+
+	it('cuts as keep_last does: at the first control character of the last part, or else at a whole character', () => {
+		expect(keepLast('short', 10)).toBe('short');
+		expect(keepLast('abc\r\ndef\u001b[1mghi', 9)).toBe('\u001b[1mghi');
+		expect(keepLast('abcdefgh', 4)).toBe('efgh');
+		// No control character: a cut that would start with half of 😀 (D83D DE00) starts after it.
+		expect(keepLast('ab\u{1f600}cd', 3)).toBe('cd');
+		expect(keepLast('ab\u{1f600}cd', 4)).toBe('\u{1f600}cd');
 	});
 
 	it('gives a screen attached before anything is written nothing to show', () => {

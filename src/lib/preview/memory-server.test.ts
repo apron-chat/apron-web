@@ -409,8 +409,8 @@ describe('in-memory live text (§4.8.3, §4.8.5, §4.8.6)', () => {
 		expect(await reading.text()).toBe(' so far');
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(client.message(sent.message_id)!.body).toEqual({ text: 'Build (edited):', format: 'markdown', embeds: [terminal] });
-		// At most one append in a message.
-		await expect(client.send('general', 'Two', 'markdown', { embeds: [{ kind: 'append' }, { kind: 'append' }] }).promise).rejects.toThrow('at most one append');
+		// At most one append in a message: more is `invalid_params`.
+		await expect(client.send('general', 'Two', 'markdown', { embeds: [{ kind: 'append' }, { kind: 'append' }] }).promise).rejects.toMatchObject({ code: -32602, message: expect.stringContaining('at most one append') });
 	});
 
 	it('plays a demo into a live text, and a dropped reader that reconnects gets it all again, each read counted', async () => {

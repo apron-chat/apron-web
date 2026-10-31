@@ -72,6 +72,47 @@ describe('live text (§4.8.3)', () => {
 		expect(sink.calls).toEqual(['start', 'Here is ', 'start', 'Here is the plan', 'end']);
 	});
 
+	it.each([403, 404, 410])('stops at a definitive %i, as at the end of the text, without trying again', async (status) => {
+		const first = streamed();
+		const responses = [async () => first.response, async () => new Response('no', { status })];
+		const fetcher = vi.fn(() => responses.shift()!());
+		setLiveFetch(fetcher);
+		const sink = recorder();
+		const done = followLiveText('https://chat.example/t/1', sink, new AbortController().signal, [1]);
+		await settle();
+		first.push('so far');
+		await settle();
+		first.fail();
+		await done;
+		// What showed stays, and `end` tells the reader it is no longer live, while the snapshot that ends the text is on its way.
+		expect(sink.calls).toEqual(['start', 'so far', 'end']);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+	});
+
+	it('ends at once when the first GET is refused, telling the sink nothing else', async () => {
+		const fetcher = vi.fn(async () => new Response('Too many readers', { status: 403 }));
+		setLiveFetch(fetcher);
+		const sink = recorder();
+		await followLiveText('https://chat.example/t/1', sink, new AbortController().signal, [1]);
+		expect(sink.calls).toEqual(['end']);
+		expect(fetcher).toHaveBeenCalledOnce();
+	});
+
+	it.each([408, 429, 500, 503])('tries again after a %i, as after a network error', async (status) => {
+		const live = streamed();
+		const responses = [async () => new Response(null, { status }), async () => Promise.reject(new TypeError('network error')), async () => live.response];
+		const fetcher = vi.fn(() => responses.shift()!());
+		setLiveFetch(fetcher);
+		const sink = recorder();
+		const done = followLiveText('https://chat.example/t/1', sink, new AbortController().signal, [1]);
+		await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+		await settle();
+		live.push('ok');
+		live.end();
+		await done;
+		expect(sink.calls).toEqual(['start', 'ok', 'end']);
+	});
+
 	it('stops when aborted, waiting or reading, without ending', async () => {
 		const live = streamed();
 		setLiveFetch(async (_url, init) => {

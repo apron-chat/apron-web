@@ -23,7 +23,7 @@
 	let url = $derived(sameOriginMedia(embed.url, directory.origin));
 	let output = $derived(typeof embed.output === 'string' ? embed.output : undefined);
 	const feed = new TerminalFeed();
-	/** `GET url` ended: the output did, and the snapshot with it is on its way. */
+	/** `GET url` ended, or was refused for good: the output did, and the snapshot with it is on its way. */
 	let ended = $state(false);
 	let live = $derived(output === undefined && Boolean(url) && !ended);
 	let status = $derived(output !== undefined ? 'Finished' : url ? 'Ended' : 'Unavailable');
