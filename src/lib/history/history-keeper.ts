@@ -179,6 +179,8 @@ export class HistoryKeeper {
 	private leftover = false;
 	/** A write took what was waiting, since `flush` last looked. */
 	private progressed = false;
+	/** The restore under way, or the last: a prune waits for it (`prune`). */
+	private restoring: Promise<void> | undefined;
 	/** Why keeping stopped, such as a full disk, until the page reloads. */
 	failure: string | undefined;
 
@@ -234,7 +236,11 @@ export class HistoryKeeper {
 	 * the client. `watch` has the client run it for each new session; never throws, since without IndexedDB
 	 * there is nothing kept.
 	 */
-	async restore(client: HistoryClient): Promise<void> {
+	restore(client: HistoryClient): Promise<void> {
+		return (this.restoring = this.restoreFor(client));
+	}
+
+	private async restoreFor(client: HistoryClient): Promise<void> {
 		const server = client.url;
 		if (!this.keeping || !client.keptSessionFor(server)) return;
 		try {
@@ -426,7 +432,11 @@ export class HistoryKeeper {
 			if (cover.from === undefined || Number(cover.from) < cutoff) this.coverage.set(room, { from: String(cutoff), older: true });
 		}
 		try {
-			for (const entry of await listHistories(this.factory)) {
+			const entries = await listHistories(this.factory);
+			// After a restore under way: signing in waits on it (`FRESH_HOOK_MS` at most), and a prune's write, begun
+			// first, would hold up its read until done.
+			await this.restoring;
+			for (const entry of entries) {
 				const pruned = await pruneHistory(await this.openNamed(entry.name), cutoff);
 				// This tab's own prune leaves what it knows of what is kept as true as it was.
 				const known = this.known;
