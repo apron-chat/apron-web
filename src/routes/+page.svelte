@@ -21,7 +21,7 @@
 	import JumpBar from '$lib/components/JumpBar.svelte';
 	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
-	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
+	import type { Face, MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
 	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
@@ -45,6 +45,7 @@
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
 	import ThreadDescription from '$lib/components/ThreadDescription.svelte';
 	import TimelineDivider from '$lib/design/components/TimelineDivider.svelte';
+	import ReadReceipts from '$lib/design/components/ReadReceipts.svelte';
 	import TypingIndicator from '$lib/design/components/TypingIndicator.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
@@ -52,7 +53,8 @@
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
 	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
 	import { couldNotAdd } from '$lib/ui/members';
-	import { roomFaces } from '$lib/ui/faces';
+	import { faceOf, roomFaces } from '$lib/ui/faces';
+	import { receiptsByMessage } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -549,7 +551,16 @@
 	let timeline = $derived((lastTimeline = steady(lastTimeline, buildRoomTimeline({
 		messages, threads: activeThread ? [] : threads, renames: paneRoom?.renames, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships
 	}))));
+	const NO_RECEIPTS: ReadonlyMap<string, Face[]> = new Map();
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
+	/**
+	 * Read receipts (`ext.settings.read_receipts`, private rooms only): the other members' faces under the newest message
+	 * shown that each has read through, by `message_id`. Empty, and the same map, wherever there are none.
+	 */
+	let receipts = $derived.by(() => {
+		const placed = receiptsByMessage(shownTimeline, paneRoom?.private ? paneRoom : undefined, session.you?.user_id);
+		return placed.size ? new Map([...placed].map(([messageId, people]) => [messageId, people.map((person) => faceOf(person, false))])) : NO_RECEIPTS;
+	});
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
 	/** `paneReady`, or a quiet reconnect from it: what shows stays as it was, and what's asked waits for the connection. */
@@ -3227,6 +3238,8 @@
 								editor={(view) => (view.editing && messageEditor.component ? editMessage : undefined)}
 								embed={messageEmbed}
 							/>
+							{@const seenBy = receipts.get(event.message_id)}
+							{#if seenBy}<ReadReceipts people={seenBy} testid="read-receipts" />{/if}
 						{/if}
 					{/each}
 				{/if}

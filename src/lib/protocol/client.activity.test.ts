@@ -241,3 +241,34 @@ describe('read cursors', () => {
 		expect(snapshot.rooms.find((room) => room.id === 'general')?.readMessageId).toBe('31');
 	});
 });
+
+describe('read receipts', () => {
+	const account = { you: { user_id: 'ada', name: 'Ada' }, token: 'ada-token', auth: ['token', 'guest'] };
+	const secret = { room_id: 'private_1', log_id: '10', private: true, latest_log_id: '10', history_log_id: '10' };
+	const settings = (read_receipts: unknown) => ({ settings: { read_cursors: true, read_receipts } });
+
+	it('keeps the other members\' cursors of a private room as its readers, where the server shows read receipts', async () => {
+		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: secret, ext: settings('private') });
+		const room = () => snapshot.rooms.find((entry) => entry.id === 'private_1')!;
+		socket.receive({ method: 'activity', params: { room_id: 'private_1', from: { user_id: 'cy' }, read_message_id: '30' } });
+		socket.receive({ method: 'activity', params: { room_id: 'private_1', from: { user_id: 'bob', name: 'Bob' }, read_message_id: '25' } });
+		// Yours is the room's readMessageId, not a reader.
+		socket.receive({ method: 'activity', params: { room_id: 'private_1', from: { user_id: 'ada' }, read_message_id: '20' } });
+		expect(room().readers).toEqual([{ user_id: 'bob', message_id: '25' }, { user_id: 'cy', message_id: '30' }]);
+		expect(room().readMessageId).toBe('20');
+		// Forward only.
+		socket.receive({ method: 'activity', params: { room_id: 'private_1', from: { user_id: 'bob' }, read_message_id: '24' } });
+		expect(room().readers?.[0]).toEqual({ user_id: 'bob', message_id: '25' });
+	});
+
+	it('has no readers without the setting, nor in a public room', async () => {
+		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: secret, ext: settings(false) });
+		socket.receive({ method: 'activity', params: { room_id: 'private_1', from: { user_id: 'bob' }, read_message_id: '25' } });
+		expect(snapshot.rooms.find((entry) => entry.id === 'private_1')).not.toHaveProperty('readers');
+		const started = startClient({ url: 'ws://fake.test/ws', onSnapshot: (next) => (snapshot = next) });
+		await started.socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: { room_id: 'general', log_id: '10', title: 'General' }, ext: settings('private') });
+		started.socket.receive({ method: 'activity', params: { room_id: 'general', from: { user_id: 'bob' }, read_message_id: '25' } });
+		expect(snapshot.rooms.find((entry) => entry.id === 'general')).not.toHaveProperty('readers');
+		started.client.stop();
+	});
+});
