@@ -1,4 +1,4 @@
-<!-- @dsCard group="Layout" height=600 subtitle="Preferences: a large flush Dialog whose body is a nav of sections beside the open one, its heading, a line under it and its SettingRows" -->
+<!-- @dsCard group="Layout" height=600 subtitle="Preferences: a large flush Dialog whose body is a nav of sections beside the open one and its SettingRows" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>SettingsSections</title></head>
@@ -19,8 +19,8 @@
     children: A.part(A.SettingsSections, {
       current: 'notifications',
       sections: [
-        { value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'pref-notifications' },
-        { value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'pref-appearance' }
+        { value: 'notifications', label: 'Notifications', id: 'pref-notifications' },
+        { value: 'appearance', label: 'Appearance', id: 'pref-appearance' }
       ],
       children: rows
     })

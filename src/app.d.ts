@@ -13,6 +13,8 @@ declare global {
 			thread?: string;
 			/** The phone's rooms list is open over that room or thread: Back returns to it. */
 			rooms?: true;
+			/** Preferences is open, this many entries since it opened: closing it goes Back as many. */
+			preferences?: number;
 		}
 		// interface Platform {}
 	}

@@ -1392,10 +1392,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-preferences-nav button { padding-block: var(--space-2); }
 .ap-preferences-nav button[aria-current="page"] { color: var(--ink); background: var(--selected); }
 .ap-preferences-content { padding: var(--space-6); overflow-y: auto; }
-.ap-preferences-content > h3 { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); }
-.ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
-/* A section whose heading is for screen readers only starts with its first row, unruled above. */
-.ap-preferences-content > h3.ap-sr ~ div:first-of-type { border-top: 0; padding-top: 0; }
+/* Its heading is for screen readers only (the open tab says it), so a section starts with its first row, unruled above. */
+.ap-preferences-content > h3 ~ div:first-of-type { border-top: 0; padding-top: 0; }
 /* On a phone the sections are tabs across the top, so a section has the dialog's whole width. */
 /* A choice is as wide as its longest option, beside what it does; on a phone, under it, full width (below). */
 .ap-pref-setting .ap-pref-select { flex: none; width: auto; max-width: 100%; }

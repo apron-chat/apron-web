@@ -102,3 +102,43 @@ test.describe('the rooms list on a phone', () => {
 		await expect(page.getByTestId('room-list')).toBeHidden();
 	});
 });
+
+test.describe('Preferences in the address', () => {
+	test.use(DEVICES.desktop);
+
+	const section = (preview: Preview, name: string) =>
+		preview.page.getByRole('dialog', { name: 'Preferences' }).getByRole('button', { name, exact: true });
+
+	test('each section opened is an entry Back and Forward step through, and closing returns to the room', async ({ preview, page }) => {
+		await preview.open('#room=general');
+		await page.getByRole('button', { name: /^Open preferences/ }).click();
+		await expect(page).toHaveURL(/#room=general&preferences=profile$/);
+		await section(preview, 'Notifications').click();
+		await expect(page).toHaveURL(/#room=general&preferences=notifications$/);
+		await section(preview, 'Media').click();
+		await expect(page).toHaveURL(/#room=general&preferences=media$/);
+		await page.goBack();
+		await expect(page).toHaveURL(/#room=general&preferences=notifications$/);
+		await expect(section(preview, 'Notifications')).toHaveAttribute('aria-current', 'page');
+		await page.goForward();
+		await expect(section(preview, 'Media')).toHaveAttribute('aria-current', 'page');
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog', { name: 'Preferences' })).toHaveCount(0);
+		await at(preview, 'general', /#room=general$/);
+		// Closing went Back past them: Forward reopens the last section, Back closes it again.
+		await page.goForward();
+		await expect(section(preview, 'Profile')).toHaveAttribute('aria-current', 'page');
+		await page.goBack();
+		await expect(page.getByRole('dialog', { name: 'Preferences' })).toHaveCount(0);
+		await at(preview, 'general', /#room=general$/);
+	});
+
+	test('a link to a section opens it, and closing leaves the room in the address', async ({ preview, page }) => {
+		await preview.open('#room=engineering&preferences=history');
+		await expect(section(preview, 'History')).toHaveAttribute('aria-current', 'page');
+		await expect(page.getByRole('dialog', { name: 'Preferences' }).getByTestId('history-retention')).toBeVisible();
+		await page.getByRole('button', { name: 'Close preferences' }).click();
+		await expect(page.getByRole('dialog', { name: 'Preferences' })).toHaveCount(0);
+		await at(preview, 'engineering', /#room=engineering$/);
+	});
+});
