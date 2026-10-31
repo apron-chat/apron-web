@@ -1340,7 +1340,7 @@ first, since the server deletes its content. A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
-Media loads from where Preferences, under **Media**, says. **This server and
+Media loads from where Preferences, under **Media**, says. **Server and
 trusted sites**, the default, loads it from the chat server's own origin, the
 origins the server names with `ext:media` (Preferences names them, such as
 `media.apron.chat (trusted by the server)`), and the **Trusted origins** listed

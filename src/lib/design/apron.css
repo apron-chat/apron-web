@@ -1322,9 +1322,6 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-pref-push-more { max-width: var(--pref-panel-w); padding-bottom: var(--space-4); }
 .ap-pref-scopes { max-width: var(--pref-panel-w); padding: var(--space-4) 0; }
 .ap-pref-theme-setting select { flex: none; }
-/* Media's choice, under its title, and what it loads under that. */
-.ap-pref-media-setting .ap-pref-select { display: block; margin-top: var(--space-2); }
-.ap-pref-media-note { max-width: var(--pref-note-w); margin: var(--space-2) 0 0; }
 /* A choice that goes with a setting's action, such as Export's Include private rooms: a checkbox and its words. */
 .ap-pref-check { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); cursor: pointer; }
 .ap-pref-check .ap-checklist-box { margin: 0; }
