@@ -43,7 +43,7 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 			ask: (src) => (typeof src === 'string' && /^https?:/.test(src) ? { url: src, host: new URL(src).host, ...(src.startsWith('https:') ? { origin: new URL(src).origin } : {}) } : undefined)
 		};
 		const box = (what: string, url: string, host: string, origin?: string) =>
-			`<span class="ap-media-ask"><span class="ap-media-ask-label"><span class="ap-media-ask-what">${what}</span> <span class="ap-media-ask-host">${host}</span></span>` +
+			`<span class="ap-media-ask"><span class="ap-media-ask-label"><span class="ap-media-ask-what">${what}</span> <span class="ap-media-ask-url">${url}</span></span>` +
 			`<span class="ap-media-ask-actions"><button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-load="${url}" aria-label="Load ${what} from ${host}">Load</button>` +
 			(origin ? `<button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-trust="${origin}" title="Adds ${host} to Trusted origins">Always load from ${host}</button>` : '') +
 			'</span></span>';

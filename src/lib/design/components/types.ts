@@ -14,8 +14,10 @@ export interface OG {
 	audio?: { url?: MediaSrc; type?: string; ask?: MediaAskProps };
 }
 
-/** Media that waits for a click (MediaAsk): its site, and what Load and Always load do. */
+/** Media that waits for a click (MediaAsk): where it is, its site, and what Load and Always load do. */
 export interface MediaAskProps {
+	/** Where it is, in full, for the viewer to judge before loading it. */
+	url: string;
 	/** The site it is on, as its host. */
 	host: string;
 	/** Loads it, this once. */

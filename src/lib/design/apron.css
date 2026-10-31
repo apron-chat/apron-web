@@ -1612,7 +1612,7 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 .ap-media-ask { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); width: fit-content; max-width: 100%; margin-block: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); background: var(--bg-200); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); box-sizing: border-box; }
 .ap-media-ask-label { overflow-wrap: anywhere; }
 .ap-media-ask-what { font-weight: 600; }
-.ap-media-ask-host { color: var(--ink-muted); }
+.ap-media-ask-url { color: var(--ink-muted); }
 .ap-media-ask-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); max-width: 100%; }
 /* A long host wraps in its button rather than running out of the box. */
 .ap-media-ask-actions .ap-btn { max-width: 100%; height: auto; min-height: var(--control-md); white-space: normal; overflow-wrap: anywhere; text-align: start; background: var(--bg-100); }
