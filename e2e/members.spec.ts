@@ -23,7 +23,9 @@ test('Add member adds everyone picked, and keeps who the server refused picked, 
 	await expect(dialog.getByRole('alert')).toHaveText('Couldn’t add newcomer: Unknown user.');
 	await expect(dialog.locator('.ap-pick-chip-name')).toHaveText(['newcomer']);
 	await expect(page.getByRole('complementary', { name: 'Room member list' }).locator('li.ap-member[data-user="grace"]')).toBeVisible();
-	await expect(page.getByTestId('room-member-list').getByRole('status')).toHaveText('Added Grace Hopper.');
+	// Who was added is said in the timeline, at their join, not in the member list.
+	await expect(page.getByTestId('membership-line').last()).toHaveText(/Grace Hopper joined/);
+	await expect(page.getByTestId('room-member-list').getByRole('status')).toHaveCount(0);
 });
 
 test.describe('on a phone, signed in to an account', () => {

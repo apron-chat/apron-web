@@ -204,7 +204,7 @@ a room like any message; one for a room you haven't joined also shows as a
 notice where you are. `~server`, `~room`, and `~private` are sender scopes, not rooms (Appendix A.1); a
 room ID starting with `@` or `~` is an ordinary room.
 
-Joins and leaves show in a room's timeline as the quietest system line, at
+Joins and leaves show in a room's or thread's timeline, private or not, as the quietest system line, at
 each membership record's `log_id` among the messages: "Ada joined", with the
 time on hover. Records with nothing else between them (a message, a card, a
 notice, or a date divider) make one line, netted out per user, so someone who
@@ -215,7 +215,9 @@ everyone in the tooltip. A record joining more than 20 users at once is a
 baseline, not an event, and gets no line. Names render like any other user,
 with the `@user_id` when someone else shows under the same name. The lines
 never count as unread or mention you, and a message after one starts a new
-sender group.
+sender group. A title change, in a room or thread, private or not, gets a
+system line at its room record's `log_id`: "Room renamed to “Ops”" (or
+"Thread renamed to …", or "… name cleared"), which also ends a run of joins.
 
 On wide screens the rooms list is a column beside the conversation: drag its
 inner border (its right one, or its left under a right-to-left layout, where
@@ -250,7 +252,8 @@ who aren't members yet, but you and the system identities, narrowed by a name
 or `@user_id` typed; when none of them matches, the `@user_id` typed is offered
 to add by it. **Add** sends `room_join` with each picked `user_id` in turn; one
 the server refuses doesn't stop the rest, stays picked, and the dialog says
-why, while those added are said in the panel. Pressing a member's row
+why. Those added show in the room's timeline as any join does ("Ada joined"),
+not in the panel. Pressing a member's row
 anywhere drops down its menu beneath it (a right-click, the context menu key or a
 long press opens it where that was): **Profile** opens their profile card;
 **Direct message** (not to a system identity) opens the private conversation you
