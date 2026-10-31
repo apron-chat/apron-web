@@ -10,8 +10,6 @@ import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /** How long a way back says nothing (`RECONNECT_QUIET_MS`, `$lib/ui/session.svelte`). */
 const QUIET_MS = 1_500;
-/** How long a connection stays up before its next drop comes back as quickly as the first (`STABLE_CONNECTION_MS`, `$lib/protocol/client-internals`). */
-const STABLE_MS = 30_000;
 /** How long the timeline's pill waits before it shows, once there is something to show (`SHOW_AFTER_MS`, `$lib/ui/settle-flag`). */
 const PILL_AFTER_MS = 400;
 
@@ -103,76 +101,72 @@ async function expectUndisturbed(preview: Preview): Promise<void> {
 	await expect(page.getByTestId('connection-status')).toHaveText('');
 }
 
-test('a dropped connection says nothing while the tab is hidden nor for the way back\'s first moments, then says so until it is back', async ({ preview, page }) => {
+test('a connection dropped while the tab is hidden says nothing, there or once it is shown', async ({ preview, page }) => {
 	await openWithStatus(preview);
+	await stopClock(preview);
+	await hold(preview);
+	await setHidden(preview, true);
+	await drop(preview);
+	// Away, however long: only your own dot says it.
+	await expect(ownDot(preview, 'unknown')).toBeVisible();
+	await page.clock.runFor(60_000);
+	await expectUndisturbed(preview);
 
-	await test.step('a connection dropped while the tab is hidden says nothing, there or once it is shown', async () => {
-		await stopClock(preview);
-		await hold(preview);
-		await setHidden(preview, true);
-		await drop(preview);
-		// Away, however long: only your own dot says it.
-		await expect(ownDot(preview, 'unknown')).toBeVisible();
-		await page.clock.runFor(60_000);
-		await expectUndisturbed(preview);
+	// Shown again, while the way back is slow: still nothing, for its first moments, up to their last.
+	await setHidden(preview, false);
+	await expectUndisturbed(preview);
+	await page.clock.runFor(QUIET_MS - 1);
+	await expectUndisturbed(preview);
+	await expect(ownDot(preview, 'unknown')).toBeVisible();
+	await page.clock.resume();
+	await release(preview);
+	await expect(ownDot(preview, 'online')).toBeVisible();
+	await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+	await expect(preview.message('Welcome to Apron!')).toBeVisible();
+});
 
-		// Shown again, while the way back is slow: still nothing, for its first moments, up to their last.
-		await setHidden(preview, false);
-		await expectUndisturbed(preview);
-		await page.clock.runFor(QUIET_MS - 1);
-		await expectUndisturbed(preview);
-		await expect(ownDot(preview, 'unknown')).toBeVisible();
-		await page.clock.resume();
-		await release(preview);
-		await expect(ownDot(preview, 'online')).toBeVisible();
-		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
-		await expect(preview.message('Welcome to Apron!')).toBeVisible();
-		// Up long enough that the next drop comes back as soon as a first one would.
-		await page.clock.fastForward(STABLE_MS);
-	});
+test('a short drop while the tab shows keeps the page as it was, and what is typed meanwhile', async ({ preview, page }) => {
+	await openWithStatus(preview);
+	await preview.composer().click();
+	await page.keyboard.type('Back in');
+	await stopClock(preview);
+	await hold(preview);
+	await drop(preview);
+	await expect(ownDot(preview, 'unknown')).toBeVisible();
+	await expectUndisturbed(preview);
+	// Typing goes on through it; sending waits for the connection.
+	await page.keyboard.type(' a bit');
+	await expect(page.getByTestId('send-button')).toBeDisabled();
+	await page.clock.runFor(QUIET_MS - 1);
+	await expectUndisturbed(preview);
+	await page.clock.resume();
+	await release(preview);
+	await expect(ownDot(preview, 'online')).toBeVisible();
+	await expect(page.getByTestId('send-button')).toBeEnabled();
+	await expect(preview.composer()).toHaveText('Back in a bit');
+	await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+});
 
-	await test.step('a short drop while the tab shows keeps the page as it was, and what is typed meanwhile', async () => {
-		await preview.composer().click();
-		await page.keyboard.type('Back in');
-		await stopClock(preview);
-		await hold(preview);
-		await drop(preview);
-		await expect(ownDot(preview, 'unknown')).toBeVisible();
-		await expectUndisturbed(preview);
-		// Typing goes on through it; sending waits for the connection.
-		await page.keyboard.type(' a bit');
-		await expect(page.getByTestId('send-button')).toBeDisabled();
-		await page.clock.runFor(QUIET_MS - 1);
-		await expectUndisturbed(preview);
-		await page.clock.resume();
-		await release(preview);
-		await expect(ownDot(preview, 'online')).toBeVisible();
-		await expect(page.getByTestId('send-button')).toBeEnabled();
-		await expect(preview.composer()).toHaveText('Back in a bit');
-		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
-		await page.clock.fastForward(STABLE_MS);
-	});
-
-	await test.step('a way back that takes longer says so after its first moments, then goes quiet again', async () => {
-		await stopClock(preview);
-		await hold(preview);
-		await drop(preview);
-		await expect(ownDot(preview, 'unknown')).toBeVisible();
-		await expect(page.locator('.ap-tlstatus')).toHaveCount(0);
-		// Nothing up to the quiet moment's last instant.
-		await page.clock.runFor(QUIET_MS - 1);
-		await expectUndisturbed(preview);
-		// Then it is said, and the pill follows once it has stayed so a moment, as any of the timeline's pills does.
-		await page.clock.runFor(1);
-		await expect(page.getByTestId('connection-status')).toHaveText('Reconnecting…');
-		await page.clock.runFor(PILL_AFTER_MS - 1);
-		await expect(page.locator('.ap-tlstatus')).toHaveCount(0);
-		await page.clock.runFor(1);
-		await expect(page.locator('.ap-tlstatus-pill')).toContainText('Reconnecting');
-		await expect(page.locator('.ap-shell-banner')).toHaveCount(0);
-		await page.clock.resume();
-		await release(preview);
-		await expect(page.locator('.ap-tlstatus')).toHaveCount(0);
-		await expect(ownDot(preview, 'online')).toBeVisible();
-	});
+test('a way back that takes longer says so after its first moments, then goes quiet again', async ({ preview, page }) => {
+	await openWithStatus(preview);
+	await stopClock(preview);
+	await hold(preview);
+	await drop(preview);
+	await expect(ownDot(preview, 'unknown')).toBeVisible();
+	await expect(page.locator('.ap-tlstatus')).toHaveCount(0);
+	// Nothing up to the quiet moment's last instant.
+	await page.clock.runFor(QUIET_MS - 1);
+	await expectUndisturbed(preview);
+	// Then it is said, and the pill follows once it has stayed so a moment, as any of the timeline's pills does.
+	await page.clock.runFor(1);
+	await expect(page.getByTestId('connection-status')).toHaveText('Reconnecting…');
+	await page.clock.runFor(PILL_AFTER_MS - 1);
+	await expect(page.locator('.ap-tlstatus')).toHaveCount(0);
+	await page.clock.runFor(1);
+	await expect(page.locator('.ap-tlstatus-pill')).toContainText('Reconnecting');
+	await expect(page.locator('.ap-shell-banner')).toHaveCount(0);
+	await page.clock.resume();
+	await release(preview);
+	await expect(page.locator('.ap-tlstatus')).toHaveCount(0);
+	await expect(ownDot(preview, 'online')).toBeVisible();
 });
