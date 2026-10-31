@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { credentialSource } from './passkey-diagnostics';
 import webAuthn from '../../../protocol/tests/fixtures/webauthn.json';
-import { base64url, credentialJSON, labelledCreationOptions, passkeyPublicKeyOptions, requestPasskey, signalPasskeyLabel } from './webauthn';
+import { base64url, credentialJSON, labelledCreationOptions, passkeyPublicKeyOptions, passkeyRpIdError, requestPasskey, signalPasskeyLabel } from './webauthn';
 
 const bytes = (...values: number[]) => new Uint8Array(values).buffer;
 
@@ -150,7 +150,7 @@ describe('passkey labels', () => {
 		vi.stubGlobal('isSecureContext', true);
 		vi.stubGlobal('PublicKeyCredential', { parseCreationOptionsFromJSON: parse, parseRequestOptionsFromJSON: vi.fn() });
 		vi.stubGlobal('navigator', { credentials: { create: vi.fn(async () => proxiedAssertion()) } });
-		await requestPasskey('register', { public_key: options }, new AbortController().signal, 'Ada');
+		await requestPasskey('register', { public_key: { ...options, rp: { id: 'demo.example' } } }, new AbortController().signal, 'wss://demo.example/', 'Ada');
 		expect(parse).toHaveBeenCalledWith(expect.objectContaining({ user: { id: 'dXNlci0x', name: 'Ada', displayName: 'Ada' } }));
 	});
 
@@ -162,6 +162,44 @@ describe('passkey labels', () => {
 		// Without the Signal API, nothing.
 		vi.stubGlobal('PublicKeyCredential', {});
 		expect(() => signalPasskeyLabel('demo.example', 'dXNlci0x', 'Ada')).not.toThrow();
+	});
+});
+
+describe('passkey RP IDs', () => {
+	it('lets a server ask for its own host or a domain that its host is under', () => {
+		expect(passkeyRpIdError('register', { rp: { id: 'apron.chat' } }, 'wss://server.apron.chat/')).toBeUndefined();
+		expect(passkeyRpIdError('login', { rpId: 'apron.chat' }, 'wss://server.apron.chat/')).toBeUndefined();
+		expect(passkeyRpIdError('login', { rpId: 'Server.Apron.Chat' }, 'wss://server.apron.chat/')).toBeUndefined();
+		expect(passkeyRpIdError('login', { rpId: 'localhost' }, 'ws://localhost:8787/')).toBeUndefined();
+	});
+
+	it('refuses a server that asks for another domain, such as this client’s, so it cannot relay another server’s challenge', () => {
+		expect(passkeyRpIdError('login', { rpId: 'apron.chat' }, 'wss://evil.example/')).toBe('This server (evil.example) asked for a passkey for apron.chat, which is not its own.');
+		expect(passkeyRpIdError('register', { rp: { id: 'apron.chat' } }, 'wss://evil.example/')).toBeDefined();
+		// A host that only ends with the same letters is not under the domain.
+		expect(passkeyRpIdError('login', { rpId: 'apron.chat' }, 'wss://notapron.chat/')).toBeDefined();
+		// The RP ID of the other action does not count.
+		expect(passkeyRpIdError('login', { rp: { id: 'apron.chat' } }, 'wss://server.apron.chat/')).toBeDefined();
+		expect(passkeyRpIdError('login', { rpId: 'apron.chat' }, 'not a url')).toBeDefined();
+	});
+
+	it('takes this page’s host for options without an RP ID, as the browser does', () => {
+		vi.stubGlobal('location', { hostname: 'web.apron.chat' });
+		expect(passkeyRpIdError('login', {}, 'wss://server.apron.chat/')).toBe('This server (server.apron.chat) asked for a passkey for web.apron.chat, which is not its own.');
+		expect(passkeyRpIdError('login', {}, 'wss://web.apron.chat/ws')).toBeUndefined();
+	});
+
+	it('never opens the browser’s passkey sheet for a server that does not own the RP ID', async () => {
+		const create = vi.fn();
+		const get = vi.fn();
+		vi.stubGlobal('isSecureContext', true);
+		vi.stubGlobal('PublicKeyCredential', { parseCreationOptionsFromJSON: vi.fn(), parseRequestOptionsFromJSON: vi.fn() });
+		vi.stubGlobal('navigator', { credentials: { create, get } });
+		const signal = new AbortController().signal;
+		await expect(requestPasskey('login', { public_key: { challenge: 'x', rpId: 'apron.chat' } }, signal, 'wss://evil.example/')).rejects.toThrow('which is not its own');
+		await expect(requestPasskey('register', { public_key: { challenge: 'x', rp: { id: 'apron.chat' } } }, signal, 'wss://evil.example/')).rejects.toThrow('which is not its own');
+		expect(create).not.toHaveBeenCalled();
+		expect(get).not.toHaveBeenCalled();
 	});
 });
 
