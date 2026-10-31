@@ -275,7 +275,7 @@
 		passkeyNotice = '';
 		try {
 			if (action === 'logout') {
-				await signOutThen(client, onsignout);
+				if (!(await signOutThen(client, onsignout))) return;
 				passkeyNotice = 'Signed out.';
 			} else {
 				// Labelled with the account's name, so the passkey manager shows whose it is.
